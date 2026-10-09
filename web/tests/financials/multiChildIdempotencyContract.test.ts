@@ -33,6 +33,33 @@ vi.mock("@/lib/financials/policies/financialPolicyService", () => ({
     listFinancialPolicies: (...a: unknown[]) => listFinancialPolicies(...a),
 }));
 
+/*
+ * THE BILLING PERIOD, read without writing. This store answers only the charges table, so the
+ * period preview is supplied as the calendar would answer it for a monthly household: the calendar
+ * month containing the service date. The dedupe and due-date verdicts under test are still the
+ * product's, computed from what the store returns.
+ */
+vi.mock("@/lib/financials/billingPeriods/bindChargeBillingPeriod", async (importOriginal) => {
+    const real = await importOriginal<typeof import("@/lib/financials/billingPeriods/bindChargeBillingPeriod")>();
+    return {
+        ...real,
+        previewChargeBillingPeriod: async (_s: unknown, a: { placementDate: string }) => {
+            const ym = a.placementDate.slice(0, 7);
+            const [y, m] = ym.split("-").map(Number);
+            const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+            return {
+                kind: "resolved",
+                customerId: "cust-1",
+                period: {
+                    id: `bp-${ym}`, key: ym, label: ym, startsOn: `${ym}-01`, endsOn: `${ym}-${String(last).padStart(2, "0")}`,
+                    status: "open",
+                },
+                calendarSourceLocationId: null,
+            };
+        },
+    };
+});
+
 const { previewTemplateCharge } = await import("@/lib/financials/chargeLifecycle/chargeLifecycleService");
 const { resolveChargeFromTemplate } = await import("@/lib/financials/chargeLifecycle/resolveChargeFromTemplate");
 import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";

@@ -79,6 +79,10 @@ export type DueDateResolution = {
     strategy: string | null;
     /** Why there is no date, when there is none. */
     reason: "resolved" | "no_policy" | "missing_input" | "unknown_strategy";
+    /** Which scope's rule answered — org default, a location override, an account — for the explanation. */
+    sourceScope?: string | null;
+    /** The rule's offset, so a surface can say "10 days after the invoice date" without re-reading it. */
+    offsetDays?: number | null;
 };
 
 function addDays(ymd: string, days: number): string {
@@ -122,31 +126,35 @@ export function resolveDueDate(
     const value = (resolved.policy.value ?? {}) as { strategy?: string; offset_days?: unknown };
     const strategy = typeof value.strategy === "string" ? value.strategy.trim() : "";
     const offset = wholeDays(value.offset_days);
+    const provenance = { sourceScope: resolved.sourceScope, offsetDays: offset };
+    return { ...decide(), ...provenance };
 
-    switch (strategy) {
-        case "on_invoice":
-            return inputs.invoiceDate
-                ? { dueDate: inputs.invoiceDate, strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "days_after_invoice":
-            return inputs.invoiceDate
-                ? { dueDate: addDays(inputs.invoiceDate, offset), strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "on_period_start":
-            return inputs.periodStart
-                ? { dueDate: inputs.periodStart, strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "days_after_period_start":
-            return inputs.periodStart
-                ? { dueDate: addDays(inputs.periodStart, offset), strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        default:
-            /*
-             * A stored strategy this build does not know is REPORTED, never guessed at. It means the
-             * database permits a value the application has not caught up with — the same class of
-             * drift `vacation_credit` documents having had — and guessing would put a date on a
-             * family's obligation on the strength of a string nobody here understands.
-             */
-            return { dueDate: null, strategy: strategy || null, reason: "unknown_strategy" };
+    function decide(): DueDateResolution {
+        switch (strategy) {
+            case "on_invoice":
+                return inputs.invoiceDate
+                    ? { dueDate: inputs.invoiceDate, strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "days_after_invoice":
+                return inputs.invoiceDate
+                    ? { dueDate: addDays(inputs.invoiceDate, offset), strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "on_period_start":
+                return inputs.periodStart
+                    ? { dueDate: inputs.periodStart, strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "days_after_period_start":
+                return inputs.periodStart
+                    ? { dueDate: addDays(inputs.periodStart, offset), strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            default:
+                /*
+                 * A stored strategy this build does not know is REPORTED, never guessed at. It means the
+                 * database permits a value the application has not caught up with — the same class of
+                 * drift `vacation_credit` documents having had — and guessing would put a date on a
+                 * family's obligation on the strength of a string nobody here understands.
+                 */
+                return { dueDate: null, strategy: strategy || null, reason: "unknown_strategy" };
+        }
     }
 }

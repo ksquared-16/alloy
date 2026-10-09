@@ -29,7 +29,18 @@ import {
 } from "@/lib/financials/policies/resolveFinancialPolicyScope";
 import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
-import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
+import {
+    bindChargeBillingPeriodWithBounds,
+    previewChargeBillingPeriod,
+} from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
+import {
+    chargeDateProvenance,
+    resolveChargeDateChain,
+    resolveInvoiceTimingRule,
+    type ChargeDateChain,
+    type ChargeDatePeriod,
+} from "@/lib/financials/chargeDates/resolveChargeDateChain";
+import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
 import {
     resolveChargeFromTemplate,
     type ChargeIntent,
@@ -107,61 +118,38 @@ async function loadTemplate(supabase: SupabaseClient, orgId: string, templateId:
 /**
  * THE ORGANISATION'S FINANCIAL POLICIES, READ ONCE PER RESOLUTION.
  *
- * Posting review and the due date are two questions for the same set of rows, and loading them
- * twice would be two reads and two chances to disagree about the effective window.
+ * Posting review, invoice timing and the due date are three questions for the same set of rows, and
+ * loading them separately would be three reads and three chances to disagree about the window.
  */
-async function resolveChargePolicies(
-    supabase: SupabaseClient,
-    orgId: string,
-    serviceId: string | null,
-    today: string,
-): Promise<{ reviewRequired: boolean; policies: readonly FinancialPolicyRow[] }> {
-    const policies = await listFinancialPolicies(supabase, orgId);
-    const r = resolveFinancialPolicy(policies, "posting_review", { serviceId: serviceId ?? undefined }, today);
-    return { reviewRequired: r.resolved ? r.policy.value.required === true : false, policies };
+async function loadChargePolicies(supabase: SupabaseClient, orgId: string): Promise<readonly FinancialPolicyRow[]> {
+    return listFinancialPolicies(supabase, orgId);
 }
 
 /**
- * ── WHEN THIS OBLIGATION IS DUE, FROM THE ORGANISATION'S OWN TERMS ───────────────────────────
+ * POSTING REVIEW, NARROWED BY THE SUBJECT'S OWN SCOPE.
  *
- * `resolveDueDate` has existed since the due-date policy work, with four strategies and a
- * deliberate `null` for "no rule configured". It had NO CALLER: `ChargeResolutionContext.dueDate`
- * was declared and never supplied, so every charge recorded `due_date: null` and a tenant could
- * configure terms that nothing in the product consumed.
- *
- * It runs AFTER the intent, not inside it, because it needs the two dates the intent computes —
- * the invoice date (`billable_on`) and the period this obligation belongs to. Resolving it earlier
- * would mean guessing them, and the whole point of the five-date model is that they are separate
- * facts rather than one fact wearing different names.
- *
- * `null` still means LEAVE IT ALONE. An organisation that has stated no terms keeps exactly the
- * behaviour it has today; nothing here defaults to "due on the invoice date" or to "due today",
- * because a collections deadline nobody configured is a consequence nobody chose.
+ * This resolved with `serviceId` alone, so a review rule scoped to a location or to one account
+ * could never match on the write path, while consumption — which passes the location — honoured it.
+ * Two writers, two answers to "does this charge need a person?". It now narrows by the same scope
+ * the due date and invoice timing use.
  */
-function dueDateForIntent(
+function reviewRequiredByPolicy(
     policies: readonly FinancialPolicyRow[],
-    template: { service_id: string | null },
-    intent: { billableOn: string | null; occursOn: string | null },
-    servicePeriodStart: string | null,
-    /*
-     * ── THE SUBJECT'S OWN SCOPE, WHICH THIS PATH USED TO WITHHOLD ─────────────────────────────
-     *
-     * This passed `serviceId` alone. So an organisation could configure due-date terms for ONE
-     * ACCOUNT, or for ONE SITE, and a generated or manually added charge would resolve the org
-     * default while a prospective correction against the very same family resolved the account's —
-     * the same economic subject answering two different due dates depending on which writer created
-     * the charge. That is the inconsistency this slice exists to remove.
-     */
+    serviceId: string | null,
     scope: FinancialPolicyScope,
-): string | null {
-    return resolveDueDate(policies, {
-        invoiceDate: intent.billableOn,
-        /* The commercial period this obligation sits in — the caller's when it named one. */
-        periodStart: servicePeriodStart ?? intent.occursOn ?? null,
-        serviceId: template.service_id,
-        customerId: scope.customerId,
-        locationId: scope.locationId,
-    }).dueDate;
+    today: string,
+): boolean {
+    const r = resolveFinancialPolicy(
+        policies,
+        "posting_review",
+        {
+            serviceId: serviceId ?? undefined,
+            locationId: scope.locationId ?? undefined,
+            customerId: scope.customerId ?? undefined,
+        },
+        today,
+    );
+    return r.resolved ? r.policy.value.required === true : false;
 }
 
 /**
@@ -194,17 +182,105 @@ function isWritable(intent: ChargeIntent): boolean {
     return intent.eligible && intent.amountCents != null && intent.amountCents > 0;
 }
 
+/**
+ * THE DATE CHAIN FOR ONE INTENT, given the billing period it belongs to.
+ *
+ * Shared by preview (period read without writing) and commit (period read back from the binding),
+ * so the two run the same pure resolver over the same kind of input and cannot disagree about the
+ * invoice date, the due date or whether the charge waits for its period.
+ */
+function chainForIntent(args: {
+    intent: ChargeIntent;
+    template: ChargeTemplateRow;
+    policies: readonly FinancialPolicyRow[];
+    period: ChargeDatePeriod | null;
+    scope: FinancialPolicyScope;
+    /** Where invoice timing narrows by site: the enrolment's, else the location whose calendar governs. */
+    invoiceLocationId: string | null;
+    createdOn: string;
+    today: string;
+}): ChargeDateChain {
+    const serviceDate = args.intent.occursOn as string;
+    const invoiceRule = resolveInvoiceTimingRule({
+        policies: args.policies,
+        template: args.template,
+        locationId: args.invoiceLocationId,
+        customerId: args.scope.customerId,
+        serviceId: args.template.service_id,
+        asOf: args.period?.startsOn ?? serviceDate,
+    });
+    return resolveChargeDateChain({
+        serviceDate,
+        period: args.period,
+        invoiceRule,
+        policies: args.policies,
+        scope: {
+            serviceId: args.template.service_id,
+            customerId: args.scope.customerId,
+            locationId: args.scope.locationId,
+        },
+        createdOn: args.createdOn,
+        businessDate: args.today,
+    });
+}
+
+/** Apply a resolved chain to the intent: the chain is the authority for every date it decides. */
+function applyChain(intent: ChargeIntent, chain: ChargeDateChain): void {
+    intent.dateChain = chain;
+    intent.billableOn = chain.invoice.actual;
+    intent.dueDate = chain.due.actual;
+    intent.lifecycleStatus = chain.posting.gate === "awaits_period" ? "scheduled" : "draft";
+}
+
+/** The day this draft was first created, so a recalculation never re-dates its invoice forward. */
+function createdOnOf(existing: ChargeLifecycleRow | null, today: string): string {
+    const dates = (existing?.metadata as { charge_dates?: { created_on?: unknown } } | null)?.charge_dates;
+    const v = typeof dates?.created_on === "string" ? dates.created_on : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today;
+}
+
 /** Resolve a Charge intent + idempotency status for a template/context. No write. */
 export async function previewTemplateCharge(
     supabase: SupabaseClient,
     orgId: string,
     args: SimulateArgs,
 ): Promise<ChargePreviewResult> {
+    return (await resolveTemplateCharge(supabase, orgId, args)).result;
+}
+
+/** What the write path needs to re-run the chain against the period it actually binds. */
+type ResolutionContext = {
+    template: ChargeTemplateRow;
+    policies: readonly FinancialPolicyRow[];
+    existing: ChargeLifecycleRow | null;
+    /** The scope the chain narrowed by (the subject's, completed by the household the period resolved). */
+    chainScope: FinancialPolicyScope;
+    invoiceLocationId: string | null;
+};
+
+async function resolveTemplateCharge(
+    supabase: SupabaseClient,
+    orgId: string,
+    args: SimulateArgs,
+): Promise<{ result: ChargePreviewResult; ctx: ResolutionContext }> {
     const template = await loadTemplate(supabase, orgId, args.templateId);
-    const { reviewRequired: reviewByPolicy, policies } = await resolveChargePolicies(
-        supabase, orgId, template.service_id, args.today,
-    );
+    const policies = await loadChargePolicies(supabase, orgId);
     const source = billableSourceFor(args);
+    /*
+     * THE SUBJECT'S SCOPE, read only when some rule of a type this resolution consumes is scoped to an
+     * account or a site — otherwise it cannot change any answer and the round trip is skipped.
+     */
+    const scope = source && (
+        policyScopeNarrowingNeeded(policies, "due_date")
+        || policyScopeNarrowingNeeded(policies, "posting_review")
+        || policyScopeNarrowingNeeded(policies, "invoice_timing")
+    )
+        ? await resolveFinancialPolicyScope(supabase, {
+              orgId,
+              billableSourceType: source.type,
+              billableSourceId: source.id,
+          })
+        : EMPTY_FINANCIAL_POLICY_SCOPE;
     const intent = resolveChargeFromTemplate(template, {
         today: args.today,
         eventDate: args.eventDate,
@@ -213,7 +289,7 @@ export async function previewTemplateCharge(
         acceptedAmountCents: args.acceptedAmountCents,
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
-        reviewRequiredByPolicy: reviewByPolicy,
+        reviewRequiredByPolicy: reviewRequiredByPolicy(policies, template.service_id, scope, args.today),
         /*
          * THE SCOPE IS THE BILLABLE SOURCE, not the agreement.
          *
@@ -224,33 +300,49 @@ export async function previewTemplateCharge(
          */
         scopeKey: source?.id ?? "org",
     });
-    /*
-     * The organisation's due-date terms, applied to the dates this intent just produced. Only ever
-     * narrows from null to a real date — an unconfigured tenant keeps today's behaviour exactly.
-     */
-    if (intent.eligible) {
-        /*
-         * RESOLVED ONLY WHEN IT CAN CHANGE THE ANSWER. `previewTemplateCharge` runs once per
-         * consumption fact, so reading the subject's account and site unconditionally would add a
-         * round trip to every generated charge in a batch in order to narrow against dimensions
-         * most organisations never scope by. The policies are already in hand, so the question
-         * "does any due-date rule here name an account or a site?" is free — and when the answer is
-         * no, the scope cannot affect the outcome and the read is skipped.
-         */
-        const scope = source && policyScopeNarrowingNeeded(policies, "due_date")
-            ? await resolveFinancialPolicyScope(supabase, {
-                  orgId,
-                  billableSourceType: source.type,
-                  billableSourceId: source.id,
-              })
-            : EMPTY_FINANCIAL_POLICY_SCOPE;
-        const due = dueDateForIntent(policies, template, intent, args.servicePeriodStart ?? null, scope);
-        if (due) intent.dueDate = due;
-    }
 
     let existing: ChargeLifecycleRow | null = null;
     if (intent.eligible && source) {
         existing = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
+    }
+
+    /*
+     * ── SERVICE DATE → BILLING PERIOD → INVOICE → DUE → POSTING ──────────────────────────────
+     *
+     * The period is resolved from the SERVICE DATE (Director decision, W7): invoice timing decides
+     * when we bill, never which interval the obligation belongs to. Read without writing — a
+     * preview mints no billing period. A refusal (no calendar, an ambiguous household) is carried
+     * on the intent so the surface can say so; the write path will refuse the same way.
+     */
+    let invoiceLocationId = scope.locationId;
+    let chainScope = scope;
+    if (intent.eligible && intent.occursOn) {
+        let period: ChargeDatePeriod | null = null;
+        if (source) {
+            const found = await previewChargeBillingPeriod(supabase, {
+                orgId,
+                billableSourceType: source.type,
+                billableSourceId: source.id,
+                placementDate: intent.occursOn,
+            });
+            if (found.kind === "resolved") {
+                period = found.period;
+                invoiceLocationId = scope.locationId ?? found.calendarSourceLocationId;
+                chainScope = { customerId: scope.customerId ?? found.customerId, locationId: scope.locationId };
+            } else if (found.kind === "unresolved") {
+                intent.periodIssue = { code: found.code, message: found.message };
+            }
+        }
+        applyChain(intent, chainForIntent({
+            intent,
+            template,
+            policies,
+            period,
+            scope: chainScope,
+            invoiceLocationId,
+            createdOn: createdOnOf(existing, args.today),
+            today: args.today,
+        }));
     }
 
     let wouldWrite: DraftWriteIntent;
@@ -282,7 +374,10 @@ export async function previewTemplateCharge(
         wouldWrite = "unchanged";
     }
 
-    return { intent, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null };
+    return {
+        result: { intent, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null },
+        ctx: { template, policies, existing, chainScope, invoiceLocationId },
+    };
 }
 
 export type DraftWriteResult =
@@ -343,7 +438,8 @@ export async function writeTemplateDraftCharge(
      */
     const source = billableSourceFor(args);
     if (!source) fail("invalid_input", "a billable source is required to write a draft charge");
-    const { intent, existing, wouldWrite } = await previewTemplateCharge(supabase, orgId, args);
+    const { result, ctx } = await resolveTemplateCharge(supabase, orgId, args);
+    const { intent, existing, wouldWrite } = result;
     if (wouldWrite === "not_writable") {
         return { status: "not_writable", reason: intent.eligible ? "amount_not_resolvable" : intent.reason ?? "ineligible" };
     }
@@ -364,7 +460,7 @@ export async function writeTemplateDraftCharge(
         };
     }
 
-    const metadata = {
+    const metadataFor = (chain: ChargeDateChain | null | undefined) => ({
         resolution_key: intent.resolutionKey,
         charge_template_key: intent.templateKey,
         gl_mapping_key: intent.glMappingKey,
@@ -372,9 +468,19 @@ export async function writeTemplateDraftCharge(
         review_required: intent.reviewRequired,
         lifecycle_status: intent.lifecycleStatus,
         source: "charge_template",
-    };
+        /* How every date on this charge was reached, so it can be explained without re-resolving. */
+        ...(chain ? { charge_dates: chargeDateProvenance(chain) } : {}),
+    });
 
     if (wouldWrite === "recalculate") {
+        /*
+         * The prior metadata is kept and the resolution's keys laid over it, so a recalculation does
+         * not erase what other authorities recorded on the draft (a posting gate, a failed attempt).
+         */
+        const metadata = {
+            ...((ctx.existing?.metadata ?? {}) as Record<string, unknown>),
+            ...metadataFor(intent.dateChain),
+        };
         const { data, error } = await supabase
             .from(TABLE)
             .update({
@@ -401,6 +507,33 @@ export async function writeTemplateDraftCharge(
         };
     }
 
+    /*
+     * ── CREATE: BIND THE PERIOD FROM THE SERVICE DATE, THEN DATE THE CHARGE FROM THAT PERIOD ──
+     *
+     * The binder is the only function that turns a household and a date into a period id. The
+     * chain is re-run against the period it actually bound — the same pure resolver the preview
+     * ran — so the invoice and due dates written are derived from the row this charge references.
+     */
+    const bound = await bindChargeBillingPeriodWithBounds(supabase, {
+        orgId,
+        billableSourceType: source.type,
+        billableSourceId: source.id,
+        placementDate: intent.occursOn ?? args.today,
+    });
+    if (bound.period && intent.occursOn) {
+        applyChain(intent, chainForIntent({
+            intent,
+            template: ctx.template,
+            policies: ctx.policies,
+            period: bound.period,
+            scope: ctx.chainScope,
+            invoiceLocationId: ctx.invoiceLocationId,
+            createdOn: createdOnOf(ctx.existing, args.today),
+            today: args.today,
+        }));
+    }
+    const metadata = metadataFor(intent.dateChain);
+
     // create
     const { data, error } = await supabase
         .from(TABLE)
@@ -411,21 +544,8 @@ export async function writeTemplateDraftCharge(
             // agreement; a pre-enrolment family writes against the household.
             billable_source_type: source.type,
             billable_source_id: source.id,
-            /*
-             * The household's commercial period. `billable_on` is preferred over `occurs_on` for the
-             * same reason the period is derived from it everywhere else: it is the date that decides
-             * which cycle bills the charge.
-             */
-            ...(await resolveChargeBillingPeriodBinding(supabase, {
-                orgId,
-                billableSourceType: source.type,
-                billableSourceId: source.id,
-                /*
-                 * Both declared dates are nullable. Today is the last resort and the honest one —
-                 * the same final step the historical backfill used when a row declared nothing.
-                 */
-                placementDate: intent.billableOn ?? intent.occursOn ?? new Date().toISOString().slice(0, 10),
-            })),
+            /* The household's commercial period, bound from the SERVICE date above. */
+            ...bound.binding,
             charge_type: "fee",
             charge_category: intent.chargeCategory,
             status: "draft",

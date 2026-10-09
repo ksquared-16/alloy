@@ -45,6 +45,8 @@ import {
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
 import { periodNotStartedFacts } from "@/lib/financials/posting/postingPeriodGate";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import { chargeDateChainPreviewLines } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
@@ -217,8 +219,15 @@ function childIdsFrom(
     return one ? [one] : [];
 }
 
-function todayYmd(): string {
-    return new Date().toISOString().slice(0, 10);
+/**
+ * TODAY, AS THE ORGANISATION'S CALENDAR READS IT.
+ *
+ * This was the UTC date, so after 5pm in Los Angeles a charge entered "today" was dated tomorrow —
+ * and today is now what the invoice-date clamp and the posting gate measure against. One business
+ * date, the same `fetchOrgBusinessDate` the posting authority uses.
+ */
+async function todayYmd(supabase: SupabaseClient, orgId: string): Promise<string> {
+    return fetchOrgBusinessDate(supabase, orgId);
 }
 
 /**
@@ -350,7 +359,7 @@ async function executeMultiChildAdd(args: {
     correlationId: string;
 }): Promise<ActionResult> {
     const { supabase, ctx, invocation, payload, subjects, correlationId } = args;
-    const today = t(payload.today) || todayYmd();
+    const today = t(payload.today) || (await todayYmd(supabase, ctx.orgId));
 
     type PerChild = {
         customer_member_id: string;
@@ -591,7 +600,7 @@ const addCharge: RegisteredAction = {
                 servicePeriodStart: t(payload?.service_period_start) || null,
                 unitAmountCents:
                     payload?.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload?.today) || todayYmd(),
+                today: t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
             });
             if (!intent.eligible) {
                 return { summary: intent.reason ?? "This charge cannot be created right now.", changes: [] };
@@ -634,21 +643,21 @@ const addCharge: RegisteredAction = {
                 multi && totalCents != null ? `Total to create · ${money(totalCents)}` : null,
                 multi ? "Each child receives their own charge" : null,
                 intent.occursOn ? `Occurs ${intent.occursOn}` : null,
-                intent.billableOn ? `Billable ${intent.billableOn}` : null,
                 /*
-                 * ── THE DUE DATE THE PREVIEW ALREADY RESOLVED ───────────────────────────────
+                 * ── THE DATE CHAIN, FROM THE SAME RESOLVER THE WRITE USES ────────────────────
                  *
-                 * `previewTemplateCharge` runs `dueDateForIntent` and sets `intent.dueDate` from
-                 * the organisation's own `due_date` policy — the SAME resolver the write uses. It
-                 * was computed here and then dropped on the floor, so the command had nothing to
-                 * show and said "Configured policy" whether or not any terms were configured.
-                 *
-                 * Reported, not recomputed: there is one due-date engine and this is not a second
-                 * one. A null `dueDate` means the organisation has stated no terms, and that stays
-                 * an ABSENT line rather than a fabricated date — the card says what absent means.
+                 * Service date → billing period → invoice date → due date → posting, each line the
+                 * answer `resolveChargeDateChain` produced inside `previewTemplateCharge`, with the
+                 * rule and the scope it came from. Nothing here — and nothing in the card — derives
+                 * a date; the card places these lines. A household with no billing calendar says so.
                  */
-                intent.dueDate ? `Due ${intent.dueDate}` : null,
-                intent.lifecycleStatus === "scheduled" ? "Scheduled — a future billing context" : null,
+                ...(intent.dateChain
+                    ? chargeDateChainPreviewLines(intent.dateChain, intent.reviewRequired)
+                    : [
+                          intent.billableOn ? `Invoice date ${intent.billableOn}` : null,
+                          intent.dueDate ? `Due ${intent.dueDate}` : null,
+                      ]),
+                intent.periodIssue ? `Billing period · ${intent.periodIssue.message}` : null,
             ].filter((v): v is string => Boolean(v));
             return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
         } catch (err) {
@@ -741,7 +750,7 @@ const addCharge: RegisteredAction = {
                 eventDate: t(payload.event_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload.today) || todayYmd(),
+                today: t(payload.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
                 actorUserId: ctx.userId ?? null,
             });
             if (written.status === "not_writable") {
