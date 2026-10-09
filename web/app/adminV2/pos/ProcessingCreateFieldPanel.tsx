@@ -50,7 +50,9 @@ export async function createFieldDefinitionForQuestion(input: {
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "Couldn't create that field." };
     }
-    return { ok: true, destination: plan.choice.destination };
+    const destination = plan.choice.destination;
+    if (!destination) return { ok: false, error: "Alloy could not resolve where that field lives." };
+    return { ok: true, destination: { entity_type: destination.entity_type, field_key: destination.field_key } };
 }
 
 export default function ProcessingCreateFieldPanel({

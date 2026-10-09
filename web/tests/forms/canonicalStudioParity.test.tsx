@@ -65,8 +65,8 @@ const importedForm = (): FormSchemaV1 => {
         required: f.required,
         confidence: "high",
         evidence: `hosted_form:${f.id}`,
-        ...((f as { static_options?: Array<{ label: string }> }).static_options
-            ? { options: (f as { static_options: Array<{ label: string }> }).static_options.map((o) => o.label) }
+        ...((f as unknown as { static_options?: Array<{ label: string }> }).static_options
+            ? { options: (f as unknown as { static_options: Array<{ label: string }> }).static_options.map((o) => o.label) }
             : {}),
         ...(f.field_source ? { field_source: f.field_source } : {}),
     }));
@@ -130,13 +130,13 @@ describe.each(PATHS)("Forms Studio capabilities — %s", (_name, start, idOf) =>
 
     it("answer type: Yes / No → Dropdown keeps a usable Yes / No choice set", () => {
         const schema = changeAnswerKind(changeAnswerKind(start(), restraining, "boolean"), restraining, "select");
-        expect((field(schema, restraining) as { static_options: Array<{ label: string }> }).static_options.map((o) => o.label)).toEqual(["Yes", "No"]);
+        expect((field(schema, restraining) as unknown as { static_options: Array<{ label: string }> }).static_options.map((o) => o.label)).toEqual(["Yes", "No"]);
         valid(schema);
     });
 
     it("choices: add, rename (value kept), remove (releases a follow-up waiting for it)", () => {
         let schema = addFieldOption(start(), program, "Extended day");
-        const options = () => (field(schema, program) as { static_options: Array<{ value: string; label: string }> }).static_options;
+        const options = () => (field(schema, program) as unknown as { static_options: Array<{ value: string; label: string }> }).static_options;
         expect(options().map((o) => o.label)).toContain("Extended day");
         const halfValue = options().find((o) => o.label === "Half day")!.value;
         const halfIndex = options().findIndex((o) => o.label === "Half day");
