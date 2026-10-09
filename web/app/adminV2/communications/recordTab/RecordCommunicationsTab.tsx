@@ -12,6 +12,7 @@ import {
     type RecordTimelineEntry,
 } from "@/lib/communications/v2/recordTabModel";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 
 /**
  * Record-drawer Communications tab (PKG-13) — DARK (self-gated behind comms_v2_record_tab).
@@ -28,6 +29,8 @@ export default function RecordCommunicationsTab(props: {
     entryContext?: "current_work" | null;
     composeIntent?: FamilyComposeIntent | null;
     draftSeed?: FamilyComposeDraftSeed | null;
+    workConsequence?: FamilySendWorkConsequence | null;
+    onSendAcknowledged?: (() => void) | null;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -55,6 +58,8 @@ export default function RecordCommunicationsTab(props: {
                     entryContext={props.entryContext}
                     composeIntent={props.composeIntent}
                     draftSeed={props.draftSeed}
+                    workConsequence={props.workConsequence}
+                    onSendAcknowledged={props.onSendAcknowledged}
                 />
             </div>
         );

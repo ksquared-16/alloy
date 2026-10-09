@@ -10,6 +10,7 @@ import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessag
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
 import {
     supportsDrawerCommunicationsComposer,
@@ -137,6 +138,10 @@ export interface CommunicationsDrawerSectionProps {
     composeIntent?: FamilyComposeIntent | null;
     /** Prefill for New Message (Tour Invitation, etc.). */
     draftSeed?: FamilyComposeDraftSeed | null;
+    /** Explicit Business Process consequence of a confirmed send (Current Work only). */
+    workConsequence?: FamilySendWorkConsequence | null;
+    /** Host callback after a successful send is acknowledged (Done). */
+    onSendAcknowledged?: (() => void) | null;
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
@@ -1462,6 +1467,8 @@ export default function CommunicationsDrawerSection(props: CommunicationsDrawerS
                 entryContext={props.entryContext}
                 composeIntent={props.composeIntent}
                 draftSeed={props.draftSeed}
+                workConsequence={props.workConsequence}
+                onSendAcknowledged={props.onSendAcknowledged}
             />
         );
     }

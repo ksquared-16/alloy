@@ -46,6 +46,10 @@ import {
 import { provisionTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
 import { resolveFamilyComposeIntent } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { invalidateTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
+import {
+    FAMILY_SEND_WORK_CONSEQUENCE_FIELD,
+    type FamilySendWorkConsequence,
+} from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 
 export type FamilyRuntimeTimelineMessage = {
     id?: string | null;
@@ -196,6 +200,13 @@ export type FamilyCommunicationRuntimeInput = {
      */
     entryContext?: "current_work" | null;
     /**
+     * What a confirmed send means for open Business Process work, declared by the entry point
+     * that is performing it. Absent = a send and nothing else. Never derived from the entity.
+     */
+    workConsequence?: FamilySendWorkConsequence | null;
+    /** Host callback after the operator acknowledges a successful send (Done). */
+    onSendAcknowledged?: (() => void) | null;
+    /**
      * Command entry semantics. `new_message` skips Activity auto-select of an
      * existing thread (Send Message / Contact Family / Tour Invitation).
      * Activity browsing uses default `browse`.
@@ -269,6 +280,8 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         tour_invitation: boolean;
     } | null>(null);
     const confirmInFlightRef = useRef(false);
+    const onSendAcknowledgedRef = useRef(input.onSendAcknowledged ?? null);
+    onSendAcknowledgedRef.current = input.onSendAcknowledged ?? null;
     const [tourInvitationAck, setTourInvitationAck] = useState(Boolean(draftSeed?.tourInvitationId));
     const loadRequestSeqRef = useRef(0);
     const selectedThreadIdRef = useRef<string | null>(selectedThreadId);
@@ -523,6 +536,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             const opportunityId =
                 input.entity?.entityType === "opportunities" ? input.entity.entityId.trim() : "";
             const fromCurrentWork = input.entryContext === "current_work";
+            const workConsequence = input.workConsequence ?? null;
             try {
                 const res = await fetch("/api/admin/communications/family-send", {
                     method: "POST",
@@ -536,6 +550,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                         reply_to_thread_id: selectedThreadId,
                         confirm,
                         ...(opportunityId ? { opportunity_id: opportunityId } : {}),
+                        ...(workConsequence ? { [FAMILY_SEND_WORK_CONSEQUENCE_FIELD]: workConsequence } : {}),
                     }),
                 });
                 const data = (await res.json()) as FamilySendResult & {
@@ -569,34 +584,46 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     const wasTourInvitation = Boolean(tourInvitationId);
                     if (wasTourInvitation) setTourInvitationAck(true);
 
+                    /*
+                     * TOUR INVITATION IS A DOMAIN CONSEQUENCE OF THE DRAFT, NOT OF THE ENTRY POINT.
+                     *
+                     * The invitation id only exists because a caller prepared one (Send Tour
+                     * Invitation from Current Work or Manage, or Insert ▾ Tour Invitation Link), so
+                     * it is the explicit intent. It used to fire only inside the Current Work branch,
+                     * which meant the same prepared invitation sent from any other host was delivered
+                     * and never activated. Confirmed + at least one accepted recipient only.
+                     */
+                    if (tourInvitationId && opportunityId && sentRows.length > 0) {
+                        try {
+                            await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: "send_tour_invitation",
+                                    entity_type: "opportunity",
+                                    entity_id: opportunityId,
+                                    ...(fromCurrentWork
+                                        ? { context: { surface: "focus_panel", origin: "operator" } }
+                                        : {}),
+                                    payload: {
+                                        mode: "mark_sent",
+                                        invitation_id: tourInvitationId,
+                                        channel: liveChannel,
+                                        recipient_display_name: recipientLabel,
+                                    },
+                                    confirmation: { confirmed: true },
+                                }),
+                            });
+                        } catch {
+                            // Send already succeeded — invitation mark is best-effort; Activity still records outbound.
+                        }
+                        invalidateTourInvitationPrepare(opportunityId);
+                        tourInvitationIdRef.current = null;
+                    }
+
                     if (fromCurrentWork) {
                         // Keep success result for centered acknowledgement; close workspace on Done.
-                        if (tourInvitationId && opportunityId) {
-                            try {
-                                await fetch("/api/admin/actions/execute", {
-                                    method: "POST",
-                                    credentials: "include",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({
-                                        action_key: "send_tour_invitation",
-                                        entity_type: "opportunity",
-                                        entity_id: opportunityId,
-                                        context: { surface: "focus_panel", origin: "operator" },
-                                        payload: {
-                                            mode: "mark_sent",
-                                            invitation_id: tourInvitationId,
-                                            channel: liveChannel,
-                                            recipient_display_name: recipientLabel,
-                                        },
-                                        confirmation: { confirmed: true },
-                                    }),
-                                });
-                            } catch {
-                                // Send already succeeded — invitation mark is best-effort; Activity still records outbound.
-                            }
-                            invalidateTourInvitationPrepare(opportunityId);
-                            tourInvitationIdRef.current = null;
-                        }
                         setBodyDraft("");
                         if (!selectedThreadId) setSubjectDraft("");
                         if (opportunityId) {
@@ -626,13 +653,17 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     const priorThreadId = selectedThreadId;
                     const createdThreadId =
                         data.results.find((r) => r.status === "sent" && r.thread_id)?.thread_id ?? null;
-                    const threadToOpen = priorThreadId ?? createdThreadId;
+                    // A host that owns the acknowledgement (Manage → Send Message's modal) closes on
+                    // Done, so the composer stays put with its success dialog instead of navigating
+                    // into the new thread — which unmounts the composer and the dialog with it.
+                    const hostOwnsAcknowledgement = Boolean(onSendAcknowledgedRef.current);
+                    const threadToOpen = hostOwnsAcknowledgement ? null : (priorThreadId ?? createdThreadId);
                     if (threadToOpen) {
                         setSelectedThreadId(threadToOpen);
                         selectedThreadIdRef.current = threadToOpen;
                         const channel = resolveLoadComposerChannel(threadToOpen, vm, liveChannel);
                         await load(threadToOpen, false, { force: true, channel });
-                    } else {
+                    } else if (!hostOwnsAcknowledgement) {
                         await load(null, false, { force: true });
                     }
                     setBodyDraft("");
@@ -641,7 +672,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                         dispatchOperationalWorkRefresh({
                             opportunity_id: opportunityId,
                             task_id: data.contact_attempt_association?.task_id ?? null,
-                            kind: sentRows.length > 0 ? "complete" : "communications_reply",
+                            kind: data.contact_attempt_association?.associated ? "complete" : "communications_reply",
                         });
                         dispatchOpportunityDrawerScopedUpdate(opportunityId, "communications_send", [
                             "activity",
@@ -670,6 +701,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             input.entity?.entityType,
             input.entity?.entityId,
             input.entryContext,
+            input.workConsequence,
         ]
     );
 
@@ -724,6 +756,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             });
         }
         setTourInvitationAck(false);
+        onSendAcknowledgedRef.current?.();
     }, []);
 
     /**
