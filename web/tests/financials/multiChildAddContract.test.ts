@@ -27,6 +27,11 @@ vi.mock("@/lib/financials/chargeLifecycle/chargeLifecycleService", () => ({
     writeTemplateDraftCharge: (...a: unknown[]) => writeTemplateDraftCharge(...a),
     previewTemplateCharge: vi.fn(),
 }));
+/*
+ * "Today" is the organisation's business date now (it was the UTC date). The fake client has no
+ * org settings to read, so the business date is supplied the way the real resolver returns it.
+ */
+vi.mock("@/lib/financials/businessDate", () => ({ fetchOrgBusinessDate: async () => "2026-09-20" }));
 vi.mock("@/lib/financials/childcareChargeService", () => ({
     postChildcareCharge: (...a: unknown[]) => postChildcareCharge(...a),
     createChildcareCorrection: vi.fn(),

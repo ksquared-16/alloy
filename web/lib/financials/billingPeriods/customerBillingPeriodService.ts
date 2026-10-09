@@ -206,3 +206,66 @@ export async function materializeCustomerBillingPeriods(
         }),
     };
 }
+
+export type CustomerPeriodForDate =
+    | {
+          kind: "resolved";
+          /** Present when the period is already persisted — then its stored bounds are the answer. */
+          periodId: string | null;
+          periodKey: string;
+          startsOn: string;
+          endsOn: string;
+          status: "open" | "closed";
+          /** The calendar that governs the account now (null when only a persisted row answered). */
+          calendar: ResolvedCustomerBillingCalendar | null;
+      }
+    | { kind: "unresolved"; resolution: CustomerBillingCalendarResolution };
+
+/**
+ * THE PERIOD CONTAINING A DATE — READ ONLY.
+ *
+ * `materializeCustomerBillingPeriods` WRITES the period it finds, which is right for a charge being
+ * created and wrong for a preview: a hover or a "what would this do?" must not mint billing periods.
+ * This answers the same question without writing. A persisted period covering the date wins —
+ * exactly as the binder reads it back — so preview and commit name the same bounds; otherwise the
+ * bounds come from the calendar through the same tiling authority the materialiser uses.
+ */
+export async function resolveCustomerPeriodForDate(
+    supabase: SupabaseClient,
+    args: { orgId: string; customerId: string; onDate: string },
+): Promise<CustomerPeriodForDate> {
+    const { data, error } = await supabase
+        .from("financial_billing_periods")
+        .select("id, period_key, starts_on, ends_on, status")
+        .eq("org_id", args.orgId)
+        .eq("customer_id", args.customerId)
+        .lte("starts_on", args.onDate)
+        .gte("ends_on", args.onDate)
+        .maybeSingle();
+    if (error) throw new Error(`billing periods: reading the covering period failed — ${error.message}`);
+    const resolution = await resolveCustomerCalendar(supabase, args);
+    const calendar = resolution.kind === "resolved" ? resolution : null;
+    const row = data as { id: string; period_key: string; starts_on: string; ends_on: string; status: string } | null;
+    if (row) {
+        return {
+            kind: "resolved",
+            periodId: row.id,
+            periodKey: row.period_key,
+            startsOn: row.starts_on,
+            endsOn: row.ends_on,
+            status: row.status === "closed" ? "closed" : "open",
+            calendar,
+        };
+    }
+    if (!calendar) return { kind: "unresolved", resolution };
+    const { current } = currentAndNextPeriods(calendar, args.onDate);
+    return {
+        kind: "resolved",
+        periodId: null,
+        periodKey: current.key,
+        startsOn: current.start,
+        endsOn: current.end,
+        status: "open",
+        calendar,
+    };
+}

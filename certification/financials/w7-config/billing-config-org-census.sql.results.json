@@ -1,0 +1,699 @@
+{
+  "trusted_host_action_id": "tha_3d229c7d8bc222",
+  "query_hash": "47e6d4a51cd2822c3727665047d435509a4f6d640f08ca9f964a5fb116899213",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T02:42:41.285Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3d229c7d8bc222",
+    "query_hash": "47e6d4a51cd2822c3727665047d435509a4f6d640f08ca9f964a5fb116899213",
+    "authorization_id": "grnt_c4a8ef11ab764c5b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T02:42:47.135Z",
+    "question_ids": [
+      "o1",
+      "o2",
+      "o3",
+      "o4",
+      "o5",
+      "o6",
+      "o7"
+    ],
+    "questions": {
+      "o1": {
+        "question_id": "o1",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "name": "Firefly Early Learning",
+            "slug": "demo-childcare-co-c144769f",
+            "status": "active",
+            "customers": 13,
+            "demo_households": 4,
+            "charges": 143,
+            "policies": 10,
+            "templates": 8,
+            "accounting_calendars": 1,
+            "activation_schedules": 1
+          },
+          {
+            "org8": "7803388d",
+            "name": "Alloy Bend",
+            "slug": "alloy-bend",
+            "status": "retired",
+            "customers": 0,
+            "demo_households": 0,
+            "charges": 0,
+            "policies": 0,
+            "templates": 0,
+            "accounting_calendars": 0,
+            "activation_schedules": 0
+          },
+          {
+            "org8": "0bbaad43",
+            "name": "W-17 self-test",
+            "slug": "_w17_selftest_0bbaad43",
+            "status": "active",
+            "customers": 0,
+            "demo_households": 0,
+            "charges": 0,
+            "policies": 0,
+            "templates": 0,
+            "accounting_calendars": 0,
+            "activation_schedules": 0
+          }
+        ]
+      },
+      "o2": {
+        "question_id": "o2",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "id8": "99f9511b",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "location_label": null,
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "strategy": "on_invoice",
+              "offset_days": 0
+            },
+            "is_active": true,
+            "effective_start": "2026-09-18",
+            "effective_end": null,
+            "label": "QA due date — on invoice"
+          },
+          {
+            "org8": "93667019",
+            "id8": "71d6b7ed",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "location_label": null,
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "strategy": "days_after_invoice",
+              "offset_days": 10
+            },
+            "is_active": true,
+            "effective_start": "2026-09-19",
+            "effective_end": null,
+            "label": "QA due date — 10 days after invoice"
+          },
+          {
+            "org8": "93667019",
+            "id8": "9fd72758",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "location_label": null,
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "strategy": "days_after_invoice",
+              "offset_days": 10
+            },
+            "is_active": true,
+            "effective_start": "2026-08-01",
+            "effective_end": null,
+            "label": "Tuition terms — net 10"
+          },
+          {
+            "org8": "93667019",
+            "id8": "7582fe97",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "1a5644a7",
+            "location_label": "North Campus",
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — Location A monthly"
+          },
+          {
+            "org8": "93667019",
+            "id8": "32e75049",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "ae34d822",
+            "location_label": "West Campus",
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — Location B weekly from Monday"
+          },
+          {
+            "org8": "93667019",
+            "id8": "05fd372e",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "e9ed1883",
+            "location_label": "South Campus",
+            "customer8": null,
+            "customer_demo_name": null,
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-07"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — Location C weekly from Wednesday"
+          },
+          {
+            "org8": "93667019",
+            "id8": "0272bcf5",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "location_label": null,
+            "customer8": "29944d3e",
+            "customer_demo_name": null,
+            "value": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — explicit account calendar"
+          },
+          {
+            "org8": "93667019",
+            "id8": "d322a255",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "location_label": null,
+            "customer8": "fd000000",
+            "customer_demo_name": "Chen Household (demo)",
+            "value": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — account calendar daily"
+          },
+          {
+            "org8": "93667019",
+            "id8": "c4fa1265",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "location_label": null,
+            "customer8": "fd000000",
+            "customer_demo_name": "Okafor Household (demo)",
+            "value": {
+              "cadence": "annual",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "label": "S1 proof — account calendar annual"
+          },
+          {
+            "org8": "93667019",
+            "id8": "e984c03b",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "location_label": null,
+            "customer8": "e1c9afe0",
+            "customer_demo_name": null,
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2027-03-01"
+            },
+            "is_active": true,
+            "effective_start": "2027-03-01",
+            "effective_end": null,
+            "label": "S2 proof — configuration B, future-effective"
+          }
+        ]
+      },
+      "o3": {
+        "question_id": "o3",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "id8": "c03e638e",
+            "template_key": "registration_fee",
+            "label": "Registration fee",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": true
+          },
+          {
+            "org8": "93667019",
+            "id8": "315d8b1d",
+            "template_key": "late_pickup_fee",
+            "label": "Late pickup",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": true
+          },
+          {
+            "org8": "93667019",
+            "id8": "27055d7e",
+            "template_key": "materials_fee",
+            "label": "Materials",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "offset_days",
+            "billable_offset_days": 7,
+            "is_active": true
+          },
+          {
+            "org8": "93667019",
+            "id8": "e6f64079",
+            "template_key": "field_trip",
+            "label": "Field trip",
+            "occurs_on_strategy": "event_date",
+            "billable_on_strategy": "next_billing_cycle",
+            "billable_offset_days": null,
+            "is_active": true
+          },
+          {
+            "org8": "93667019",
+            "id8": "9a4d0578",
+            "template_key": "tuition",
+            "label": "Monthly tuition",
+            "occurs_on_strategy": "service_period_start",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": true
+          },
+          {
+            "org8": "93667019",
+            "id8": "bd131592",
+            "template_key": "enrollment_fee_waived",
+            "label": "Enrollment fee (waived)",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": false
+          },
+          {
+            "org8": "93667019",
+            "id8": "1d037f10",
+            "template_key": "cert_household_fee",
+            "label": "Certification household fee",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": false
+          },
+          {
+            "org8": "93667019",
+            "id8": "c1609adc",
+            "template_key": "waived_fee_1790630157816",
+            "label": "Enrollment fee (waived)",
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "is_active": true
+          }
+        ]
+      },
+      "o4": {
+        "question_id": "o4",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "customer8": "0658832a",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": null,
+            "active_location_labels": null,
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "UNCONFIGURED_REFUSED",
+            "charges": 3
+          },
+          {
+            "org8": "93667019",
+            "customer8": "29944d3e",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": [
+              "1a5644a7",
+              "e9ed1883"
+            ],
+            "active_location_labels": [
+              "North Campus",
+              "South Campus"
+            ],
+            "account_calendar": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            },
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "account",
+            "charges": 91
+          },
+          {
+            "org8": "93667019",
+            "customer8": "7796a568",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": null,
+            "active_location_labels": null,
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "UNCONFIGURED_REFUSED",
+            "charges": 7
+          },
+          {
+            "org8": "93667019",
+            "customer8": "fcaa839f",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": [
+              "1a5644a7"
+            ],
+            "active_location_labels": [
+              "North Campus"
+            ],
+            "account_calendar": null,
+            "location_calendar": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "org_calendar": null,
+            "resolves_to": "location",
+            "charges": 4
+          },
+          {
+            "org8": "93667019",
+            "customer8": "e1c9afe0",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": [
+              "1a5644a7"
+            ],
+            "active_location_labels": [
+              "North Campus"
+            ],
+            "account_calendar": null,
+            "location_calendar": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "org_calendar": null,
+            "resolves_to": "location",
+            "charges": 21
+          },
+          {
+            "org8": "93667019",
+            "customer8": "1d5fdd3b",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": null,
+            "active_location_labels": null,
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "UNCONFIGURED_REFUSED",
+            "charges": 0
+          },
+          {
+            "org8": "93667019",
+            "customer8": "610a1496",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": null,
+            "active_location_labels": null,
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "UNCONFIGURED_REFUSED",
+            "charges": 0
+          },
+          {
+            "org8": "93667019",
+            "customer8": "84ad457f",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": null,
+            "active_location_labels": null,
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "UNCONFIGURED_REFUSED",
+            "charges": 0
+          },
+          {
+            "org8": "93667019",
+            "customer8": "50b19065",
+            "demo_name": null,
+            "customer_type": null,
+            "active_locations": [
+              "1a5644a7",
+              "e9ed1883"
+            ],
+            "active_location_labels": [
+              "North Campus",
+              "South Campus"
+            ],
+            "account_calendar": null,
+            "location_calendar": null,
+            "org_calendar": null,
+            "resolves_to": "AMBIGUOUS_REFUSED",
+            "charges": 0
+          },
+          {
+            "org8": "93667019",
+            "customer8": "fd000000",
+            "demo_name": "Alvarez Household (demo)",
+            "customer_type": "residential",
+            "active_locations": [
+              "1a5644a7"
+            ],
+            "active_location_labels": [
+              "North Campus"
+            ],
+            "account_calendar": null,
+            "location_calendar": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "org_calendar": null,
+            "resolves_to": "location",
+            "charges": 16
+          },
+          {
+            "org8": "93667019",
+            "customer8": "fd000000",
+            "demo_name": "Brennan Household (demo)",
+            "customer_type": "residential",
+            "active_locations": [
+              "ae34d822"
+            ],
+            "active_location_labels": [
+              "West Campus"
+            ],
+            "account_calendar": null,
+            "location_calendar": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            },
+            "org_calendar": null,
+            "resolves_to": "location",
+            "charges": 1
+          },
+          {
+            "org8": "93667019",
+            "customer8": "fd000000",
+            "demo_name": "Chen Household (demo)",
+            "customer_type": "residential",
+            "active_locations": [
+              "1a5644a7"
+            ],
+            "active_location_labels": [
+              "North Campus"
+            ],
+            "account_calendar": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            },
+            "location_calendar": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "org_calendar": null,
+            "resolves_to": "account",
+            "charges": 0
+          },
+          {
+            "org8": "93667019",
+            "customer8": "fd000000",
+            "demo_name": "Okafor Household (demo)",
+            "customer_type": "residential",
+            "active_locations": [
+              "ae34d822"
+            ],
+            "active_location_labels": [
+              "West Campus"
+            ],
+            "account_calendar": {
+              "cadence": "annual",
+              "anchor_on": "2026-01-05"
+            },
+            "location_calendar": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            },
+            "org_calendar": null,
+            "resolves_to": "account",
+            "charges": 0
+          }
+        ]
+      },
+      "o5": {
+        "question_id": "o5",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "location8": "ae34d822",
+            "label": "West Campus",
+            "location_type": "site",
+            "is_active": true,
+            "live_agreements": 2
+          },
+          {
+            "org8": "93667019",
+            "location8": "1a5644a7",
+            "label": "North Campus",
+            "location_type": "site",
+            "is_active": true,
+            "live_agreements": 11
+          },
+          {
+            "org8": "93667019",
+            "location8": "e9ed1883",
+            "label": "South Campus",
+            "location_type": "site",
+            "is_active": true,
+            "live_agreements": 3
+          }
+        ]
+      },
+      "o6": {
+        "question_id": "o6",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "calendar8": "9522a4c7",
+            "period_style": "calendar_month",
+            "is_active": true,
+            "first_start": "2026-01-01",
+            "last_end": "2026-12-31",
+            "open": 11,
+            "closed": 1
+          }
+        ]
+      },
+      "o7": {
+        "question_id": "o7",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "id8": "a57b8725",
+            "status": "posted",
+            "source_type": "customer",
+            "source8": "e1c9afe0",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "period_key": "2026-12"
+          },
+          {
+            "org8": "93667019",
+            "id8": "540b87f6",
+            "status": "posted",
+            "source_type": "customer",
+            "source8": "fd000000",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "period_key": "2026-11-30~2026-12-06"
+          },
+          {
+            "org8": "93667019",
+            "id8": "3685fc71",
+            "status": "posted",
+            "source_type": "customer",
+            "source8": "29944d3e",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "period_key": "2026-11-23~2026-12-06"
+          },
+          {
+            "org8": "93667019",
+            "id8": "974ef27e",
+            "status": "posted",
+            "source_type": "customer",
+            "source8": "e1c9afe0",
+            "template8": "e6f64079",
+            "service_date": "2026-11-24",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "period_key": "2026-12"
+          },
+          {
+            "org8": "93667019",
+            "id8": "362146e2",
+            "status": "draft",
+            "source_type": "enrollment_agreement",
+            "source8": "6f409c2d",
+            "template8": "e6f64079",
+            "service_date": "2026-11-20",
+            "billable_on": "2026-12-01",
+            "due_date": null,
+            "period_key": null
+          }
+        ]
+      }
+    },
+    "row_count": 43
+  }
+}

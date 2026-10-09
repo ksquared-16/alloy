@@ -658,10 +658,21 @@ export type AddChargeSpecimen = {
     amount: string;
     /** `charges.service_date` — when the thing happened. */
     serviceDate: string;
-    /** The billing period the charge lands in, derived from billable_on unless overridden. */
+    /** The billing period CONTAINING the service date, as the server's date chain resolved it. */
     period: string;
+    /** `charges.billable_on` — when the obligation is invoiced. Never earlier than the day it is created. */
+    invoiceDate: string;
     /** `charges.due_date`. */
     due: string;
+    /**
+     * WHY EACH DATE IS WHAT IT IS — the rule and the scope it came from, in the server's words
+     * ("7 days before the billing period begins (organization default)"). Empty until previewed.
+     */
+    dateRules: { invoice: string | null; due: string | null };
+    /** What confirming does to posting: posts now, waits for the period, or waits for review. */
+    posting: string | null;
+    /** Set when the charge's billing period has not begun: the day it posts itself. Null otherwise. */
+    awaitsPeriodUntil: string | null;
     /** Which date the operator changed, if any. */
     overridden: string | null;
     chargeTo: string;

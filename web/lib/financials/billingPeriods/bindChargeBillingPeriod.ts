@@ -32,7 +32,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { materializeCustomerBillingPeriods } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
+import {
+    materializeCustomerBillingPeriods,
+    resolveCustomerPeriodForDate,
+} from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import type { ChargeDatePeriod } from "@/lib/financials/chargeDates/resolveChargeDateChain";
 
 /** The childcare billable sources. Job billing owns its own lifecycle and is not on this spine. */
 const CHILDCARE_SOURCES = new Set(["enrollment_agreement", "customer"]);
@@ -124,7 +129,23 @@ export async function resolveChargeBillingPeriodBinding(
         placementDate: string;
     },
 ): Promise<ChargeBillingPeriodBinding> {
-    if (!isChildcareBillableSource(args.billableSourceType)) return NOT_APPLICABLE_BINDING;
+    return (await bindChargeBillingPeriodWithBounds(supabase, args)).binding;
+}
+
+/**
+ * The binding AND the bounds of the period it bound — so a writer that derives dates from the period
+ * (the date chain) reads them from the row it is about to reference, not from a second resolution.
+ */
+export async function bindChargeBillingPeriodWithBounds(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        billableSourceType: string | null;
+        billableSourceId: string | null;
+        placementDate: string;
+    },
+): Promise<{ binding: ChargeBillingPeriodBinding; period: ChargeDatePeriod | null }> {
+    if (!isChildcareBillableSource(args.billableSourceType)) return { binding: NOT_APPLICABLE_BINDING, period: null };
 
     const customerId = await resolveChargeCustomerId(supabase, {
         orgId: args.orgId,
@@ -174,7 +195,7 @@ export async function resolveChargeBillingPeriodBinding(
         .gte("ends_on", args.placementDate)
         .maybeSingle();
     if (error) throw new BillingPeriodBindingError("period_read_failed", error.message, { customerId });
-    const period = data as { id: string; period_key: string; status: string } | null;
+    const period = data as { id: string; period_key: string; starts_on: string; ends_on: string; status: string } | null;
     if (!period) {
         throw new BillingPeriodBindingError(
             "period_not_materialized",
@@ -217,8 +238,86 @@ export async function resolveChargeBillingPeriodBinding(
     }
 
     return {
-        billing_period_id: period.id,
-        legacy_billing_period_key: null,
-        billing_period_generation: "canonical",
+        binding: {
+            billing_period_id: period.id,
+            legacy_billing_period_key: null,
+            billing_period_generation: "canonical",
+        },
+        period: {
+            id: period.id,
+            key: period.period_key,
+            label: billingPeriodLabel(period.period_key),
+            startsOn: period.starts_on,
+            endsOn: period.ends_on,
+            status: "open",
+        },
+    };
+}
+
+export type ChargePeriodPreview =
+    | { kind: "resolved"; customerId: string; period: ChargeDatePeriod; calendarSourceLocationId: string | null }
+    | { kind: "not_applicable" }
+    | { kind: "unresolved"; code: string; message: string };
+
+/**
+ * THE PERIOD A CHARGE WOULD BIND TO — WITHOUT BINDING IT.
+ *
+ * The preview half of `bindChargeBillingPeriodWithBounds`: same customer resolution, same calendar,
+ * same "a persisted period wins" rule, but it writes nothing and it REPORTS a refusal instead of
+ * throwing, so a preview can say "this household has no billing calendar" rather than failing.
+ */
+export async function previewChargeBillingPeriod(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        billableSourceType: string | null;
+        billableSourceId: string | null;
+        placementDate: string;
+    },
+): Promise<ChargePeriodPreview> {
+    if (!isChildcareBillableSource(args.billableSourceType)) return { kind: "not_applicable" };
+    const customerId = await resolveChargeCustomerId(supabase, {
+        orgId: args.orgId,
+        billableSourceType: String(args.billableSourceType),
+        billableSourceId: String(args.billableSourceId ?? ""),
+    });
+    if (!customerId) {
+        return {
+            kind: "unresolved",
+            code: "customer_unresolved",
+            message: "This charge does not reach a household, so it has no commercial billing period.",
+        };
+    }
+    const found = await resolveCustomerPeriodForDate(supabase, {
+        orgId: args.orgId,
+        customerId,
+        onDate: args.placementDate,
+    });
+    if (found.kind === "unresolved") {
+        const r = found.resolution;
+        return r.kind === "ambiguous_locations"
+            ? {
+                  kind: "unresolved",
+                  code: "billing_calendar_ambiguous",
+                  message: "This household attends more than one location and has no billing calendar of its own.",
+              }
+            : {
+                  kind: "unresolved",
+                  code: r.kind === "invalid_policy" ? "billing_calendar_invalid" : "billing_calendar_unconfigured",
+                  message: "This household has no usable billing calendar, so there is no billing period to bill into.",
+              };
+    }
+    return {
+        kind: "resolved",
+        customerId,
+        period: {
+            id: found.periodId,
+            key: found.periodKey,
+            label: billingPeriodLabel(found.periodKey),
+            startsOn: found.startsOn,
+            endsOn: found.endsOn,
+            status: found.status,
+        },
+        calendarSourceLocationId: found.calendar?.sourceLocationId ?? null,
     };
 }

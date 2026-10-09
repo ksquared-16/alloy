@@ -19,6 +19,7 @@ import {
     ISO_DATE_RE,
 } from "@/lib/childcareOperational/effectiveDating";
 import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
+import type { ChargeDateChain } from "@/lib/financials/chargeDates/resolveChargeDateChain";
 
 /** Add N calendar days to a YYYY-MM-DD date (UTC, pure). */
 export function addDays(ymd: string, days: number): string {
@@ -108,6 +109,14 @@ export type ChargeIntent = {
     reviewRequired: boolean;
     /** Where this charge sits on the lifecycle spine if written. */
     lifecycleStatus: "scheduled" | "draft";
+    /**
+     * THE RESOLVED DATE CHAIN — service date → billing period → invoice → due → posting — attached by
+     * the service layer once it has read the period and the policies. Absent from this pure function's
+     * own output; when present, `billableOn`, `dueDate` and `lifecycleStatus` above were taken from it.
+     */
+    dateChain?: ChargeDateChain | null;
+    /** Why no billing period could be resolved, when none could (e.g. no billing calendar). */
+    periodIssue?: { code: string; message: string } | null;
     /** True when this intent would produce a draft charge on write. */
     wouldCreateDraft: boolean;
     resolutionKey: string;
@@ -176,8 +185,14 @@ function resolveAmount(template: ChargeTemplateRow, ctx: ChargeResolutionContext
     }
 }
 
+/**
+ * The invoice date this template implies WITHOUT a billing period in hand — the fallback for a
+ * simulation with no billable source. When the service layer resolves the period it replaces this
+ * with the date chain's answer (`resolveChargeDateChain`), which is the authority.
+ */
 function resolveBillableOn(template: ChargeTemplateRow, occursOn: string): string {
     switch (template.billable_on_strategy) {
+        case "billing_policy":
         case "immediate":
             return occursOn;
         case "offset_days":

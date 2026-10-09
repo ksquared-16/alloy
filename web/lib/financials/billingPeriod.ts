@@ -10,6 +10,14 @@
  *   due_date     the date payment is due
  *   posted_at    the moment posting happened
  *
+ * ── SUPERSEDED FOR BOUND CHARGES (W7) ──
+ *
+ * A charge on the childcare spine now carries `billing_period_id`, bound from its SERVICE date
+ * (`resolveChargeDateChain`, Director decision): invoice timing decides when a charge is billed,
+ * never which interval it belongs to. What follows describes `placeInBillingPeriod`, which still
+ * places LEGACY rows that carry no binding, by the historical rule below — kept so history is not
+ * restated.
+ *
  * The period is `billable_on`. That is the column whose own comment defines the lifecycle — "a draft
  * with billable_on in the future is scheduled" — so it is already the platform's answer to "when does
  * this charge belong to the operator's billing work". Adding a `billing_period` column would be a
@@ -135,7 +143,10 @@ export type BillingPeriod = {
 };
 
 /** Which date placed a row in its period — declared, or inferred and which way. */
-export type BillingPeriodBasis = "billable_on" | "occurs_on" | "service_date" | "created_at" | "unplaceable";
+export type BillingPeriodBasis =
+    /* The period the charge was BOUND to at creation (W7 date chain, from its service date). */
+    | "bound"
+    | "billable_on" | "occurs_on" | "service_date" | "created_at" | "unplaceable";
 
 export type BillingPeriodPlacement = {
     key: BillingPeriodKey | null;
@@ -162,6 +173,7 @@ export function placeInBillingPeriod(
         occurs_on?: unknown;
         service_date?: unknown;
         created_at?: unknown;
+        metadata?: unknown;
     },
     /*
      * The organisation's commercial grain, when the caller knows it.
@@ -177,6 +189,22 @@ export function placeInBillingPeriod(
         grain && grain.cadence !== "monthly"
             ? billingPeriodFor(grain.cadence, grain.anchor, ymd).key
             : ymd.slice(0, 7);
+    /*
+     * ── A CHARGE WRITTEN BY THE DATE CHAIN NAMES ITS OWN PERIOD (W7) ────────────────────────
+     *
+     * Such a charge was bound from its SERVICE date and recorded the period in
+     * `metadata.charge_dates.period_key`. Placing it by `billable_on` would follow its invoice
+     * timing into another period — the defect the chain exists to remove — so its recorded period
+     * wins: verbatim at the monthly grain, or the grain's period containing its service date.
+     * Charges without that record are placed exactly as before, so no history is restated.
+     */
+    const chargeDates = ((row.metadata ?? null) as { charge_dates?: { period_key?: unknown } } | null)?.charge_dates;
+    const boundKey = typeof chargeDates?.period_key === "string" ? chargeDates.period_key.trim() : "";
+    if (boundKey) {
+        const serviceYmd = ymdOf(row.service_date) ?? ymdOf(row.occurs_on);
+        if ((!grain || grain.cadence === "monthly") && /^\d{4}-\d{2}$/.test(boundKey)) return { key: boundKey, basis: "bound" };
+        if (serviceYmd) return { key: place(serviceYmd), basis: "bound" };
+    }
     const declared = ymdOf(row.billable_on);
     if (declared) return { key: place(declared), basis: "billable_on" };
     const occurs = ymdOf(row.occurs_on);

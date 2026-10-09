@@ -482,11 +482,16 @@ describe("the due-date authority can express the account dimension", () => {
      */
     it("the generated path narrows by the same scope the correction path does", () => {
         const lifecycle = code("lib/financials/chargeLifecycle/chargeLifecycleService.ts");
-        const at = lifecycle.indexOf("function dueDateForIntent");
+        /*
+         * W7 billing configuration convergence: the due date is resolved inside the date chain
+         * (`chainForIntent` → `resolveChargeDateChain`), which narrows by the subject's account and
+         * site — the same two dimensions the correction path names.
+         */
+        const at = lifecycle.indexOf("function chainForIntent");
         expect(at).toBeGreaterThan(-1);
-        const fn = lifecycle.slice(at, at + 900);
-        expect(fn).toMatch(/customerId: scope\.customerId/);
-        expect(fn).toMatch(/locationId: scope\.locationId/);
+        const fn = lifecycle.slice(at, at + 1400);
+        expect(fn).toMatch(/customerId: args\.scope\.customerId/);
+        expect(fn).toMatch(/locationId: args\.scope\.locationId/);
         /* Through the one shared resolver, not a second idea of what the subject is. */
         expect(lifecycle).toMatch(/resolveFinancialPolicyScope/);
     });

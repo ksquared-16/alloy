@@ -49,7 +49,6 @@ import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
 
-import { billingPeriodForDate } from "@/lib/financials/billingPeriod";
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
@@ -729,6 +728,11 @@ export function adaptAddChargeSpecimen(input: {
     const rawLine = (prefix: string): string | null =>
         input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim() ?? null;
 
+    const sentence = (prefix: string): string | null => {
+        const raw = rawLine(prefix)?.replace(/^·\s*/, "");
+        return raw ? raw.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (iso) => displayDate(iso) ?? iso) : null;
+    };
+
     const line = (prefix: string): string | null => {
         const raw =
             input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim()
@@ -806,28 +810,34 @@ export function adaptAddChargeSpecimen(input: {
          */
         serviceDate: line("occurs") ?? "Resolved at commit",
         /*
-         * ── A BILLING PERIOD IS AN INTERVAL; `billable_on` IS A DATE ────────────────────────
+         * ── THE BILLING PERIOD IS THE SERVER'S, CONTAINING THE SERVICE DATE ─────────────────
          *
-         * This rendered `line("billable")` — the INVOICE DATE — under the label "Billing period",
-         * so the command showed "Oct 1, 2026" where the business concept is an interval. Measured
-         * mounted: one template read "Oct 1, 2026" (the billable date) and another "October 2026"
-         * (the account's period), because the first resolved a billable date and the second fell
-         * through. Two different kinds of answer under one label.
-         *
-         * `billingPeriodForDate` is the canonical derivation and is not a second one: it returns
-         * the period CONTAINING a date, labelled the way the rest of Financials labels periods —
-         * "October 2026" for a month, "Sep 15–21, 2026" for a shorter cadence. Deriving the period
-         * the charge actually lands in is also more correct than the account's current period,
-         * which is what the fallback gives and which is wrong for a scheduled future charge.
-         *
-         * No interval is invented: with no resolved billable date this still falls back to the
-         * account's own period label exactly as before.
+         * This used to derive the period HERE, from the invoice date, through a calendar-month
+         * helper — a second derivation that followed invoice timing into the next cycle (the W7
+         * "Nov 5 → December" defect) and ignored the household's own billing calendar. The period
+         * is now resolved once, by the date chain the write uses, and this only places its label.
+         * With no answer yet it falls back to the account's own period label as before.
          */
         period: (() => {
-            const billableIso = rawLine("billable");
-            return billableIso && /^\d{4}-\d{2}-\d{2}$/.test(billableIso)
-                ? billingPeriodForDate(billableIso).label
-                : input.period;
+            const raw = rawLine("billing period");
+            if (!raw) return input.period;
+            /* "November 2026 · 2026-11-01 → 2026-11-30" → the label; a refusal sentence is kept whole. */
+            const cleaned = raw.replace(/^·\s*/, "");
+            return cleaned.includes(" · ") ? cleaned.slice(0, cleaned.indexOf(" · ")) : cleaned;
+        })(),
+        invoiceDate:
+            input.previewSummary == null ? "\u2014"
+            : (line("invoice date") ?? "On the service date"),
+        /* The server's sentences, with its ISO dates rendered as dates an operator reads. */
+        dateRules: {
+            invoice: sentence("invoice timing"),
+            due: sentence("payment terms"),
+        },
+        posting: sentence("posting"),
+        /* The day a future-period charge posts itself, when the chain says it waits for its period. */
+        awaitsPeriodUntil: (() => {
+            const iso = rawLine("posting")?.match(/Draft until (\d{4}-\d{2}-\d{2})/)?.[1];
+            return iso ? (displayDate(iso) ?? iso) : null;
         })(),
         /*
          * ── DUE: A DATE, AN HONEST ABSENCE, OR NOT YET KNOWN — NEVER A MECHANISM ────────────

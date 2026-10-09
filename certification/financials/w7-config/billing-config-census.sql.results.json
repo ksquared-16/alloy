@@ -1,0 +1,594 @@
+{
+  "trusted_host_action_id": "tha_26224d1e955426",
+  "query_hash": "5ce6712150de01020da1c0343c29a0a80dc8e1c34c471ad0f918a2041ac38006",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T02:33:06.232Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_26224d1e955426",
+    "query_hash": "5ce6712150de01020da1c0343c29a0a80dc8e1c34c471ad0f918a2041ac38006",
+    "authorization_id": "grnt_5b879131b69e4354",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T02:33:12.037Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6",
+      "q7"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "id8": "99f9511b",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "strategy": "on_invoice",
+              "offset_days": 0
+            },
+            "is_active": true,
+            "effective_start": "2026-09-18",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-09-18"
+          },
+          {
+            "id8": "71d6b7ed",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "strategy": "days_after_invoice",
+              "offset_days": 10
+            },
+            "is_active": true,
+            "effective_start": "2026-09-19",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-09-18"
+          },
+          {
+            "id8": "9fd72758",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "strategy": "days_after_invoice",
+              "offset_days": 10
+            },
+            "is_active": true,
+            "effective_start": "2026-08-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-09-19"
+          },
+          {
+            "id8": "7582fe97",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "1a5644a7",
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "32e75049",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "ae34d822",
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "05fd372e",
+            "policy_type": "billing_calendar",
+            "scope_type": "location",
+            "location8": "e9ed1883",
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": null,
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-07"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "0272bcf5",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": "29944d3e",
+            "value": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "d322a255",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": "fd000000",
+            "value": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "c4fa1265",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": "fd000000",
+            "value": {
+              "cadence": "annual",
+              "anchor_on": "2026-01-05"
+            },
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          },
+          {
+            "id8": "e984c03b",
+            "policy_type": "billing_calendar",
+            "scope_type": "customer",
+            "location8": null,
+            "service8": null,
+            "rate_plan8": null,
+            "customer8": "e1c9afe0",
+            "value": {
+              "cadence": "weekly",
+              "anchor_on": "2027-03-01"
+            },
+            "is_active": true,
+            "effective_start": "2027-03-01",
+            "effective_end": null,
+            "supersedes8": null,
+            "created_on": "2026-10-02"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "id8": "c03e638e",
+            "template_key": "registration_fee",
+            "charge_category": "fee",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "id8": "315d8b1d",
+            "template_key": "late_pickup_fee",
+            "charge_category": "late_pickup",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "id8": "27055d7e",
+            "template_key": "materials_fee",
+            "charge_category": "consumable_fee",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "offset_days",
+            "billable_offset_days": 7,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "id8": "e6f64079",
+            "template_key": "field_trip",
+            "charge_category": "one_time",
+            "service8": null,
+            "occurs_on_strategy": "event_date",
+            "billable_on_strategy": "next_billing_cycle",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "id8": "9a4d0578",
+            "template_key": "tuition",
+            "charge_category": "tuition",
+            "service8": null,
+            "occurs_on_strategy": "service_period_start",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          },
+          {
+            "id8": "bd131592",
+            "template_key": "enrollment_fee_waived",
+            "charge_category": "one_time",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": false,
+            "effective_start": "2026-01-01",
+            "effective_end": "2026-09-25"
+          },
+          {
+            "id8": "1d037f10",
+            "template_key": "cert_household_fee",
+            "charge_category": "one_time",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": false,
+            "effective_start": "2026-01-01",
+            "effective_end": "2026-09-25"
+          },
+          {
+            "id8": "c1609adc",
+            "template_key": "waived_fee_1790630157816",
+            "charge_category": "one_time",
+            "service8": null,
+            "occurs_on_strategy": "now",
+            "billable_on_strategy": "immediate",
+            "billable_offset_days": null,
+            "amount_strategy": "fixed",
+            "review_required": false,
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": null
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "id8": "a57b8725",
+            "charge_type": "fee",
+            "status": "posted",
+            "source": "charge_template",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "occurs_on": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "period_key": "2026-12",
+            "period_starts_on": "2026-12-01",
+            "period_calendar_scope": "location",
+            "period_calendar_policy8": "7582fe97",
+            "period_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "post_gate": null,
+            "post_not_before": null,
+            "due_strategy": null
+          },
+          {
+            "id8": "540b87f6",
+            "charge_type": "fee",
+            "status": "posted",
+            "source": "charge_template",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "occurs_on": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "period_key": "2026-11-30~2026-12-06",
+            "period_starts_on": "2026-11-30",
+            "period_calendar_scope": "location",
+            "period_calendar_policy8": "32e75049",
+            "period_snapshot": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            },
+            "post_gate": null,
+            "post_not_before": null,
+            "due_strategy": null
+          },
+          {
+            "id8": "3685fc71",
+            "charge_type": "fee",
+            "status": "posted",
+            "source": "charge_template",
+            "template8": "e6f64079",
+            "service_date": "2026-11-18",
+            "occurs_on": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "period_key": "2026-11-23~2026-12-06",
+            "period_starts_on": "2026-11-23",
+            "period_calendar_scope": "customer",
+            "period_calendar_policy8": "0272bcf5",
+            "period_snapshot": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            },
+            "post_gate": null,
+            "post_not_before": null,
+            "due_strategy": null
+          },
+          {
+            "id8": "974ef27e",
+            "charge_type": "fee",
+            "status": "posted",
+            "source": "charge_template",
+            "template8": "e6f64079",
+            "service_date": "2026-11-24",
+            "occurs_on": "2026-11-24",
+            "billable_on": "2026-12-01",
+            "due_date": "2026-12-11",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "period_key": "2026-12",
+            "period_starts_on": "2026-12-01",
+            "period_calendar_scope": "location",
+            "period_calendar_policy8": "7582fe97",
+            "period_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            },
+            "post_gate": null,
+            "post_not_before": null,
+            "due_strategy": null
+          },
+          {
+            "id8": "362146e2",
+            "charge_type": "fee",
+            "status": "draft",
+            "source": "charge_template",
+            "template8": "e6f64079",
+            "service_date": "2026-11-20",
+            "occurs_on": "2026-11-20",
+            "billable_on": "2026-12-01",
+            "due_date": null,
+            "posted_on": null,
+            "created_on": "2026-08-27",
+            "period_key": null,
+            "period_starts_on": null,
+            "period_calendar_scope": null,
+            "period_calendar_policy8": null,
+            "period_snapshot": null,
+            "post_gate": null,
+            "post_not_before": null,
+            "due_strategy": null
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_type": "fee",
+            "source": "charge_template",
+            "billable_on_strategy": "offset_days",
+            "status": "posted",
+            "bound": 1,
+            "service_date_inside_period": 1,
+            "service_date_before_period": 0,
+            "service_date_after_period": 0,
+            "service_date_null": 0
+          },
+          {
+            "charge_type": "fee",
+            "source": "charge_template",
+            "billable_on_strategy": "immediate",
+            "status": "posted",
+            "bound": 6,
+            "service_date_inside_period": 6,
+            "service_date_before_period": 0,
+            "service_date_after_period": 0,
+            "service_date_null": 0
+          },
+          {
+            "charge_type": "fee",
+            "source": "charge_template",
+            "billable_on_strategy": "next_billing_cycle",
+            "status": "posted",
+            "bound": 4,
+            "service_date_inside_period": 0,
+            "service_date_before_period": 4,
+            "service_date_after_period": 0,
+            "service_date_null": 0
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "cadence": "annual",
+            "calendar_scope": "customer",
+            "calendar_policy8": "c4fa1265",
+            "status": "open",
+            "periods": 2,
+            "customers": 1,
+            "first_start": "2026-01-05",
+            "last_end": "2028-01-04"
+          },
+          {
+            "cadence": "biweekly",
+            "calendar_scope": "customer",
+            "calendar_policy8": "0272bcf5",
+            "status": "open",
+            "periods": 5,
+            "customers": 1,
+            "first_start": "2026-09-28",
+            "last_end": "2026-12-20"
+          },
+          {
+            "cadence": "daily",
+            "calendar_scope": "customer",
+            "calendar_policy8": "d322a255",
+            "status": "closed",
+            "periods": 2,
+            "customers": 1,
+            "first_start": "2026-10-03",
+            "last_end": "2026-10-04"
+          },
+          {
+            "cadence": "daily",
+            "calendar_scope": "customer",
+            "calendar_policy8": "d322a255",
+            "status": "open",
+            "periods": 2,
+            "customers": 1,
+            "first_start": "2026-11-12",
+            "last_end": "2026-11-13"
+          },
+          {
+            "cadence": "monthly",
+            "calendar_scope": "location",
+            "calendar_policy8": "7582fe97",
+            "status": "open",
+            "periods": 8,
+            "customers": 3,
+            "first_start": "2026-10-01",
+            "last_end": "2027-01-31"
+          },
+          {
+            "cadence": "weekly",
+            "calendar_scope": "location",
+            "calendar_policy8": "32e75049",
+            "status": "open",
+            "periods": 4,
+            "customers": 1,
+            "first_start": "2026-11-09",
+            "last_end": "2026-12-13"
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "calendar8": "9522a4c7",
+            "period_style": "calendar_month",
+            "is_active": true,
+            "periods": 12,
+            "open": 11,
+            "closed": 1,
+            "first_start": "2026-01-01",
+            "last_end": "2026-12-31"
+          }
+        ]
+      },
+      "q7": {
+        "question_id": "q7",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs": 3,
+            "locations": 37,
+            "customers": 13,
+            "charges": 143,
+            "charges_bound": 11,
+            "activation_schedules": 1
+          }
+        ]
+      }
+    },
+    "row_count": 34
+  }
+}

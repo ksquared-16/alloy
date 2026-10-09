@@ -38,6 +38,8 @@ import {
 } from "@/lib/financials/applicability/locationApplicability";
 import { summarizeLocationApplicability } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
 import FinancialPoliciesConfigurationPanel from "@/components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel";
+import BillingTimingConfigurationPanel from "@/components/adminV2/settings/financials/policies/BillingTimingConfigurationPanel";
+import { BILLING_TIMING_RULES } from "@/lib/financials/policies/billingTimingViewModel";
 
 type PolicyTab = "overview" | "rules" | "applies_to";
 
@@ -257,6 +259,17 @@ export default function PoliciesConfigurationPage({
 
     return (
         <div data-testid="policies-configuration-page">
+            {/*
+             * ── "HOW DOES THIS ORGANIZATION BILL?" FIRST ────────────────────────────────────────
+             *
+             * W7-F005. The billing rules were reachable only as raw effective-dated records at the
+             * bottom of this chapter, under discounts, with every location rendered "Location: —".
+             * They now lead the chapter, resolved: the organization default, then only the
+             * locations that override it, then history on request.
+             */}
+            <div className="mb-8">
+                <BillingTimingConfigurationPanel locations={locations} />
+            </div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-alloy-midnight/55 max-w-xl">
                     Policies are named rules that modify commercial pricing and billing behavior. Commercial products
@@ -545,20 +558,20 @@ export default function PoliciesConfigurationPage({
              */}
             <section className="mt-8" data-testid="financial-execution-policies">
                 <div className="mb-3">
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Financial execution policies</h2>
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Other financial policies</h2>
                     <p className="mt-1 max-w-xl text-sm text-alloy-midnight/55">
-                        How this organisation runs billing: proration, billing cadence, when payment is due, posting
-                        review and deposits. These are resolved by charge generation and the charge lifecycle —
-                        distinct from the commercial discount rules above.
+                        Proration, vacation credit and the remaining execution rules. Billing period, invoice timing,
+                        payment due and posting review are configured under Billing &amp; payment timing above.
                     </p>
                 </div>
                 <FinancialPoliciesConfigurationPanel
                     canMutate
-                    todayYmd={new Date().toISOString().slice(0, 10)}
-                    locationOptions={[]}
+                    todayYmd={new Date().toLocaleDateString("en-CA")}
+                    locationOptions={locations.map((l) => ({ value: l.id, label: l.name }))}
                     serviceOptions={[]}
                     ratePlanOptions={[]}
-                    labelFor={() => undefined}
+                    labelFor={(id) => locations.find((l) => l.id === id)?.name}
+                    excludeTypes={BILLING_TIMING_RULES}
                 />
             </section>
 
