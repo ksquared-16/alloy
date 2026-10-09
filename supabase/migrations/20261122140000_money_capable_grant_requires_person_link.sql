@@ -72,6 +72,7 @@ DECLARE
     v_after  text[];
     v_gained text[];
     v_actor  text[];
+    v_beyond text[];
 BEGIN
     -- An unattributed call is not bounded here. Each caller decides whether an
     -- unattributed change is legitimate at all; where it is not, the caller
@@ -95,26 +96,28 @@ BEGIN
         RETURN;
     END IF;
 
-    -- W7-F002: a capability that can move money is conferred only on a named human. The
-    -- gained keys are judged, so an existing holder is never stranded by an unrelated edit.
+
+    v_actor := public.effective_capability_keys(p_org_id, p_actor_user_id::uuid);
+
+    SELECT COALESCE(array_agg(k ORDER BY k), ARRAY[]::text[])
+      INTO v_beyond
+      FROM unnest(v_gained) AS k
+     WHERE NOT (k = ANY (v_actor));
+
+    IF array_length(v_beyond, 1) IS NOT NULL THEN
+        RAISE EXCEPTION 'assignment_ceiling:%', array_to_string(v_beyond, ',')
+            USING ERRCODE = '42501';
+    END IF;
+
+    -- W7-F002, judged only for a change the actor IS allowed to make: a capability that can move
+    -- money is conferred only on a named human. The gained keys are judged, so an existing holder
+    -- is never stranded by an unrelated edit.
     IF EXISTS (SELECT 1 FROM unnest(v_gained) AS k WHERE k = ANY (public.money_capable_capability_keys()))
         AND NOT public.user_has_active_person_link(p_org_id, p_target_user_id) THEN
         RAISE EXCEPTION 'money_capable_grant_requires_person_link:%',
             (SELECT array_to_string(array_agg(k ORDER BY k), ',')
                FROM unnest(v_gained) AS k
               WHERE k = ANY (public.money_capable_capability_keys()))
-            USING ERRCODE = '42501';
-    END IF;
-
-    v_actor := public.effective_capability_keys(p_org_id, p_actor_user_id::uuid);
-
-    SELECT COALESCE(array_agg(k ORDER BY k), ARRAY[]::text[])
-      INTO v_gained
-      FROM unnest(v_gained) AS k
-     WHERE NOT (k = ANY (v_actor));
-
-    IF array_length(v_gained, 1) IS NOT NULL THEN
-        RAISE EXCEPTION 'assignment_ceiling:%', array_to_string(v_gained, ',')
             USING ERRCODE = '42501';
     END IF;
 END;

@@ -162,8 +162,31 @@ describeLive("D2 access change audit — live", () => {
         return { people: new Map(), roles: roleMap, locations: locationMap };
     }
 
+
+    /*
+     * W7-F002: a money-capable capability is conferred only on a login linked to a named person.
+     * These principals stand for real staff, so each is linked — explicitly, never by email — and the
+     * person-link rule itself has its own suite (w7MoneyCapableGrantPersonLink).
+     */
+    async function linkPrincipals(org: string, userIds: readonly string[], marker: string) {
+        await supabase.from("user_person_links").delete().in("user_id", [...userIds]);
+        await supabase.from("persons").delete().eq("org_id", org).eq("last_name", marker);
+        for (const [i, userId] of userIds.entries()) {
+            const personId = crypto.randomUUID();
+            const p = await supabase.from("persons").insert({ id: personId, org_id: org, first_name: `Principal${i}`, last_name: marker });
+            expect(p.error, p.error?.message).toBeNull();
+            const l = await supabase.from("user_person_links").insert({ org_id: org, user_id: userId, person_id: personId, status: "active", note: `${marker} fixture` });
+            expect(l.error, l.error?.message).toBeNull();
+        }
+    }
+    async function unlinkPrincipals(org: string, userIds: readonly string[], marker: string) {
+        await supabase.from("user_person_links").delete().in("user_id", [...userIds]);
+        await supabase.from("persons").delete().eq("org_id", org).eq("last_name", marker);
+    }
+
     async function cleanup() {
         const ids = Object.values(P);
+        await unlinkPrincipals(ORG, ids, "D2AccessCert");
         await supabase.from("user_site_access").delete().in("user_id", ids);
         await supabase.from("user_department_access").delete().in("user_id", ids);
         await supabase.from("user_access_profiles").delete().in("user_id", ids);
@@ -220,6 +243,7 @@ describeLive("D2 access change audit — live", () => {
             { user_id: P.other, org_id: ORG, role: ROLE.target },
         ]);
         if (urErr) throw new Error(urErr.message);
+        await linkPrincipals(ORG, Object.values(P), "D2AccessCert");
     }, 120_000);
 
     afterAll(async () => {

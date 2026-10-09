@@ -100,6 +100,8 @@ describeLive("W-18 role-assignment ceiling — live", () => {
         [actor, target, second] = [ids[0]!, ids[1]!, ids[2]!];
 
         for (const org of [ORG, OTHER_ORG]) {
+            await supabase.from("user_person_links").delete().eq("org_id", org);
+            await supabase.from("persons").delete().eq("org_id", org);
             await supabase.from("user_roles").delete().eq("org_id", org);
             await supabase.from("role_permission_grants").delete().eq("org_id", org);
             await supabase.from("role_definitions").delete().eq("org_id", org);
@@ -111,6 +113,19 @@ describeLive("W-18 role-assignment ceiling — live", () => {
             // The seed trigger fires on insert; this file wants only its own roles.
             await supabase.from("role_permission_grants").delete().eq("org_id", org);
             await supabase.from("role_definitions").delete().eq("org_id", org);
+        }
+
+        /*
+         * W7-F002: a money-capable capability is conferred only on a login linked to a named person.
+         * This file measures the CEILING, so every principal it assigns to is linked — explicitly, in
+         * both tenants — and the person-link rule has its own suite (w7MoneyCapableGrantPersonLink).
+         */
+        for (const org of [ORG, OTHER_ORG]) {
+            for (const [i, userId] of [actor, target, second].entries()) {
+                const personId = crypto.randomUUID();
+                await supabase.from("persons").insert({ id: personId, org_id: org, first_name: `Ceiling${i}`, last_name: "Cert" });
+                await supabase.from("user_person_links").insert({ org_id: org, user_id: userId, person_id: personId, status: "active", note: "ceiling suite fixture" });
+            }
         }
 
         const defs = Object.values(ROLE).map((role_key) => ({
@@ -146,6 +161,8 @@ describeLive("W-18 role-assignment ceiling — live", () => {
 
     afterAll(async () => {
         for (const org of [ORG, OTHER_ORG]) {
+            await supabase.from("user_person_links").delete().eq("org_id", org);
+            await supabase.from("persons").delete().eq("org_id", org);
             await supabase.from("user_roles").delete().eq("org_id", org);
             await supabase.from("role_permission_grants").delete().eq("org_id", org);
             await supabase.from("role_definitions").delete().eq("org_id", org);
