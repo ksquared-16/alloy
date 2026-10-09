@@ -11,6 +11,7 @@ import {
 import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import { dbStoreFormDraftPreview, stampFormDraftPreview, parseStoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
+import { safeParseFormSchema } from "@/lib/forms/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +33,60 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
-    let body: { title?: unknown; form_name?: unknown; fields?: unknown; section_dispositions?: unknown };
+    let body: {
+        title?: unknown;
+        form_name?: unknown;
+        fields?: unknown;
+        section_dispositions?: unknown;
+        studio_schema?: unknown;
+    };
     try {
         body = (await request.json()) as typeof body;
     } catch {
         return jsonError("Invalid JSON body", 400);
+    }
+
+    /*
+     * FORMS STUDIO SAVE — the form exactly as the Studio has it.
+     *
+     * A document-originated form is edited in the same Forms Studio as a hand-built one, so it is saved
+     * the same way: the whole `FormSchemaV1`, validated by the same schema authority, stored as is. The
+     * importer's fields, sections, provenance, confidence and discovery are left untouched — they are the
+     * imported metadata, and nothing the operator does in Studio is rebuilt from them. `generated_at` is
+     * not restamped: this is an edit of the generated form, not a new generation.
+     */
+    if (body.studio_schema !== undefined) {
+        const parsed = safeParseFormSchema(body.studio_schema);
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: "Invalid form schema", validation_errors: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) },
+                { status: 422 },
+            );
+        }
+        const supabase = createAdminClient();
+        try {
+            const { data: caseMetaRow, error: caseErr } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", ctx.orgId)
+                .eq("id", caseId)
+                .maybeSingle();
+            if (caseErr) throw new Error(caseErr.message);
+            if (!caseMetaRow) return jsonError("Not found", 404);
+            const prior = parseStoredFormDraftPreview((caseMetaRow as { metadata?: unknown }).metadata);
+            if (!prior) return jsonError("This case has no form draft to edit yet.", 422);
+            const stored = await dbStoreFormDraftPreview(supabase, {
+                orgId: ctx.orgId,
+                caseId,
+                draft: { ...prior, studio_schema: parsed.data, studio_schema_saved_at: new Date().toISOString() },
+            });
+            return jsonData({ caseId, form_draft_preview: stored });
+        } catch (e) {
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Failed to save form" },
+                { status: 500 },
+            );
+        }
     }
 
     const rawFields = Array.isArray(body.fields) ? body.fields : [];
@@ -129,18 +179,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Operator-set section dispositions (control the emitted schema — not cosmetic).
     const rawDisp = Array.isArray(body.section_dispositions) ? body.section_dispositions : [];
-    const sectionDispositions: SectionDispositionInput[] = rawDisp
+    const parsedDispositions = rawDisp
         .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
         .map((d) => {
             const title = typeof d.title === "string" ? d.title.trim() : "";
+            const sectionId = typeof d.id === "string" ? d.id.trim() : "";
             const dispo = typeof d.disposition === "string" ? d.disposition : "";
             const disposition = (SECTION_DISPOSITIONS as string[]).includes(dispo)
                 ? (dispo as SectionDisposition)
                 : ("fields" as SectionDisposition);
             const static_text = typeof d.static_text === "string" ? d.static_text : undefined;
-            return { title, disposition, ...(static_text ? { static_text } : {}) };
-        })
-        .filter((d) => d.title.length > 0);
+            return { title, sectionId, disposition, ...(static_text ? { static_text } : {}) };
+        });
 
     const supabase = createAdminClient();
 
@@ -211,6 +261,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .map((f) => [f.label.trim().toLowerCase(), f.suppressed_by_collection!]),
         );
 
+        /*
+         * Both client payload builders name a section by its ID; only the generate path names it by
+         * title. Reading `title` alone dropped every disposition — and every static text — on every Studio
+         * save. An id resolves through the draft it names.
+         */
+        const priorTitleById = new Map((priorPreview?.sections ?? []).map((sec) => [sec.id, sec.title]));
+        const sectionDispositions: SectionDispositionInput[] = parsedDispositions
+            .map(({ sectionId, ...d }) => ({ ...d, title: d.title || (sectionId ? priorTitleById.get(sectionId)?.trim() ?? "" : "") }))
+            .filter((d) => d.title.length > 0);
+
         const rebuilt = buildManualFormDraft({ title, sourceDocumentId, fields, sectionDispositions });
         // Re-apply suppression to the rebuilt questions by label, so a question replaced by a
         // collection group does not reappear as a flat question after a save.
@@ -227,6 +287,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             ...(ocr ? { ocr } : {}),
             ...(priorDiscovery ? { configuration_discovery: priorDiscovery } : {}),
             ...(priorCollections?.length ? { collections: priorCollections } : {}),
+            // A field-list save rebuilds the importer's view; it never overwrites what Studio authored.
+            ...(priorPreview?.studio_schema ? { studio_schema: priorPreview.studio_schema } : {}),
+            ...(priorPreview?.studio_schema_saved_at ? { studio_schema_saved_at: priorPreview.studio_schema_saved_at } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });

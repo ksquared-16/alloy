@@ -1,43 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-    addField,
-    addRegistryField,
-    addSection,
-    removeField,
-    removeSection,
-    renameSection,
-    updateField,
-    type BuilderFieldType,
-    type BuilderFieldSpec,
-} from "@/lib/forms/formBuilderSchema";
-import {
-    groupFieldsIntoRows,
-    moveFieldBetweenSections,
-    reorderField,
-    reorderFieldAfter,
-    setFieldLayoutWidth,
-    fieldLayoutFlexClass,
-} from "@/lib/forms/formRowComposition";
-import {
-    resolveProcessingBuilderRegistryEntry,
-    type ProcessingBuilderCanonicalField,
-} from "@/lib/forms/processingFormBuilderLibrary";
-import {
-    registryEntryForOffer,
-    type ProcessingLibraryFieldOffer,
-    type ProcessingLibraryGroupOffer,
-} from "@/lib/forms/processingFormFieldLibrary";
+import { groupFieldsIntoRows, fieldLayoutFlexClass } from "@/lib/forms/formRowComposition";
+import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
-import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
+import ProcessingFormCanvas from "./ProcessingFormCanvas";
 import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
 import ProcessingFormPublishedBar from "./ProcessingFormPublishedBar";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
-import ProcessingSectionNameDialog from "./ProcessingSectionNameDialog";
+import { useFormStudioAuthoring } from "./useFormStudioAuthoring";
 import type { ProcessingFormRow, ProcessingFormPublicLinkRow } from "./useProcessingFormApi";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 import { DEFAULT_FORM_ACCENT, parseFormBranding, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
@@ -57,25 +30,6 @@ import { LIFECYCLE_STAGE_LABELS } from "@/lib/completion/lifecycleProgressionReq
 import { ENROLLMENT_PROCESS_DISPLAY_NAME } from "@/lib/lifecycle/businessProcessUiLabels";
 import { distributionIsPreviewLink, type DistributionLinkRow } from "@/lib/forms/distributionPresentation";
 import type { FormPublicLinkRow } from "@/components/forms/workspace/FormDistributionPanel";
-
-const QUESTION_TYPES: Array<{ type: BuilderFieldType; label: string; meta: string; category: string }> = [
-    { type: "short_text", label: "Short text", meta: "Single line answer", category: "basic" },
-    { type: "long_text", label: "Long text", meta: "Paragraph answer", category: "basic" },
-    { type: "text_block", label: "Text block", meta: "Authorization copy with Alloy tokens", category: "content" },
-    { type: "number", label: "Number", meta: "Numeric input", category: "basic" },
-    { type: "date", label: "Date", meta: "Calendar picker", category: "basic" },
-    { type: "select", label: "Dropdown", meta: "Select one option", category: "choice" },
-    { type: "boolean", label: "Yes / No", meta: "Boolean toggle", category: "choice" },
-    { type: "signature", label: "Signature", meta: "Draw or type signature", category: "capture" },
-    { type: "file_ref", label: "File upload", meta: "Attach a document", category: "capture" },
-];
-
-const CATEGORY_LABELS: Record<string, string> = {
-    basic: "Basic",
-    content: "Content",
-    choice: "Choice",
-    capture: "Capture",
-};
 
 type BuilderMode = "edit" | "preview" | "runtime";
 
@@ -106,16 +60,10 @@ export default function ProcessingFormBuilder({
     const [mode, setMode] = useState<BuilderMode>("edit");
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
-    const [librarySectionId, setLibrarySectionId] = useState<string | null>(null);
-    const [libraryOpen, setLibraryOpen] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [builderErr, setBuilderErr] = useState<string | null>(null);
-    const [dragFieldId, setDragFieldId] = useState<string | null>(null);
-    const [dropTarget, setDropTarget] = useState<CanvasDropTarget | null>(null);
-    const [sectionDialogOpen, setSectionDialogOpen] = useState(false);
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
     const [branding, setBranding] = useState<ProcessingFormBranding>(() =>
         parseFormBranding(formMeta)
     );
@@ -294,97 +242,16 @@ export default function ProcessingFormBuilder({
     const selectedField = selectedFieldId ? fieldById.get(selectedFieldId) ?? null : null;
     const selectedSection = selectedSectionId ? schema?.sections.find((s) => s.id === selectedSectionId) ?? null : null;
 
-    const libraryQuestionTypes = useMemo(() => QUESTION_TYPES, []);
-
-    const openLibrary = (sectionId: string) => {
-        setLibrarySectionId(sectionId);
-        setLibraryOpen(true);
-    };
-
-    const addQuestion = (type: BuilderFieldType) => {
-        if (!schema || !editable || !librarySectionId) return;
-        const label = QUESTION_TYPES.find((p) => p.type === type)?.label ?? "Question";
-        const spec: BuilderFieldSpec = {
-            type,
-            label: `Untitled ${label.toLowerCase()}`,
-            sectionId: librarySectionId,
-            ...(type === "select" ? { options: [{ value: "option_1", label: "Option 1" }] } : {}),
-        };
-        const { schema: next, fieldId } = addField(schema, spec);
-        setSchema(next);
-        setSelectedFieldId(fieldId);
-        setSelectedSectionId(null);
-        setDirty(true);
-        setLibraryOpen(false);
-    };
-
-    const addCanonicalField = (canonical: ProcessingBuilderCanonicalField) => {
-        if (!schema || !editable || !librarySectionId) return;
-        const entry = resolveProcessingBuilderRegistryEntry(canonical);
-        if (!entry) return;
-        const { schema: next, fieldId } = addRegistryField(schema, entry, librarySectionId, {
-            label: canonical.pickerLabel,
-        });
-        setSchema(next);
-        setSelectedFieldId(fieldId);
-        setSelectedSectionId(null);
-        setDirty(true);
-        setLibraryOpen(false);
-    };
-
-    /** Add a stage-derived library field — registry-backed where one exists, bound otherwise. */
-    const addLibraryField = (offer: ProcessingLibraryFieldOffer) => {
-        if (!schema || !editable || !librarySectionId || offer.captureUnsupported) return;
-
-        const registry = registryEntryForOffer(offer);
-        if (registry) {
-            const { schema: next, fieldId } = addRegistryField(schema, registry, librarySectionId, {
-                label: offer.label,
-            });
-            setSchema(next);
-            setSelectedFieldId(fieldId);
-            setSelectedSectionId(null);
-            setDirty(true);
-            setLibraryOpen(false);
-            return;
-        }
-
-        if (offer.add.kind !== "bound") return;
-        const spec: BuilderFieldSpec = {
-            type: offer.add.builderType,
-            label: offer.label,
-            sectionId: librarySectionId,
-            // Bind to the canonical entity field so coverage matches it by entity_field_key —
-            // an unbound custom field would never satisfy the rule it was added for.
-            field_source: { entity_type: offer.add.entityType, field_key: offer.add.fieldKey },
-            ...(offer.add.builderType === "select"
-                ? { options: [{ value: "option_1", label: "Option 1" }] }
-                : {}),
-        };
-        const { schema: next, fieldId } = addField(schema, spec);
-        setSchema(next);
-        setSelectedFieldId(fieldId);
-        setSelectedSectionId(null);
-        setDirty(true);
-        setLibraryOpen(false);
-    };
-
-    const handleDragDrop = () => {
-        if (!schema || !dragFieldId || !dropTarget) return;
-        let next = schema;
-        if (!dropTarget.fieldId) {
-            next = reorderField(schema, dragFieldId, dropTarget.sectionId, null);
-        } else if (dropTarget.position === "before") {
-            next = reorderField(schema, dragFieldId, dropTarget.sectionId, dropTarget.fieldId);
-        } else {
-            next = reorderFieldAfter(schema, dragFieldId, dropTarget.sectionId, dropTarget.fieldId);
-        }
-        next = setFieldLayoutWidth(next, dragFieldId, dropTarget.rowIntent === "same-line" ? "half" : "full");
-        setSchema(next);
-        setDirty(true);
-        setDragFieldId(null);
-        setDropTarget(null);
-    };
+    // Adding, arranging and removing questions and sections: the shared Forms Studio authoring, the
+    // same implementation a document-originated form uses. @see useFormStudioAuthoring
+    const authoring = useFormStudioAuthoring({
+        schema,
+        mutate,
+        editable,
+        fieldLibrary,
+        onSelectField: setSelectedFieldId,
+        onSelectSection: setSelectedSectionId,
+    });
 
     const saveDraft = async () => {
         if (!editVersionId || !schema) return;
@@ -443,8 +310,6 @@ export default function ProcessingFormBuilder({
     if (loadState === "error" || !schema) {
         return <div className="flex flex-1 items-center justify-center text-[12px] text-alloy-midnight/60">Couldn&apos;t load this form.</div>;
     }
-
-    const sectionTitle = librarySectionId ? schema.sections.find((s) => s.id === librarySectionId)?.title : null;
 
     // Live collapsed-state summaries for the six-section configuration rail.
     const purposeIntent = resolveEffectiveOperationalIntent({
@@ -564,15 +429,7 @@ export default function ProcessingFormBuilder({
                                 selectedFieldId={selectedFieldId}
                                 selectedSectionId={selectedSectionId}
                                 editable={editable}
-                                collapsedSectionIds={collapsedSections}
-                                onToggleSectionCollapse={(sectionId) => {
-                                    setCollapsedSections((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(sectionId)) next.delete(sectionId);
-                                        else next.add(sectionId);
-                                        return next;
-                                    });
-                                }}
+                                {...authoring.canvasProps}
                                 onSelectField={(id) => {
                                     setSelectedFieldId(id);
                                     setSelectedSectionId(null);
@@ -581,16 +438,6 @@ export default function ProcessingFormBuilder({
                                     setSelectedSectionId(id);
                                     setSelectedFieldId(null);
                                 }}
-                                onAddQuestion={openLibrary}
-                                onAddSection={() => setSectionDialogOpen(true)}
-                                dragFieldId={dragFieldId}
-                                dropTarget={dropTarget}
-                                onDragFieldStart={setDragFieldId}
-                                onDragFieldOver={setDropTarget}
-                                onDragFieldDrop={handleDragDrop}
-                                onSectionDragOver={(sectionId) =>
-                                    setDropTarget({ sectionId, fieldId: null, position: "after", rowIntent: "new-line" })
-                                }
                             />
                         </div>
                     )}
@@ -629,55 +476,14 @@ export default function ProcessingFormBuilder({
                                 editable={editable}
                                 mutate={mutate}
                                 fieldLibrary={fieldLibrary}
-                                onRemove={() => {
-                                    mutate((s) => removeField(s, selectedField.id));
-                                    setSelectedFieldId(null);
-                                }}
+                                onRemove={() => authoring.removeQuestion(selectedField.id)}
                                 onOpenDistribution={() => {
                                     setSelectedFieldId(null);
                                     setInspectorSection("distribution");
                                 }}
                             />
                         ) : selectedSection ? (
-                            <div className="space-y-3" data-surface-composer-inspector="section">
-                                <ProcessingCollapsibleInspectorSection title="Section" subtitle="Title and questions" defaultOpen accent>
-                                <div>
-                                    <p className="config-typo-sublabel mb-1">Section title</p>
-                                    {editable ? (
-                                        <input
-                                            type="text"
-                                            value={selectedSection.title}
-                                            onChange={(e) => mutate((s) => renameSection(s, selectedSection.id, e.target.value))}
-                                            className="w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
-                                        />
-                                    ) : (
-                                        <p className="text-sm font-medium">{selectedSection.title}</p>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={!editable}
-                                    className="config-secondary-btn w-full text-xs"
-                                    onClick={() => openLibrary(selectedSection.id)}
-                                >
-                                    + Add question to {selectedSection.title}
-                                </button>
-                                </ProcessingCollapsibleInspectorSection>
-                                {editable ? (
-                                <ProcessingCollapsibleInspectorSection title="Advanced" defaultOpen={false}>
-                                    <button
-                                        type="button"
-                                        className="text-[11px] font-semibold text-rose-600"
-                                        onClick={() => {
-                                            mutate((s) => removeSection(s, selectedSection.id));
-                                            setSelectedSectionId(null);
-                                        }}
-                                    >
-                                        Remove section
-                                    </button>
-                                </ProcessingCollapsibleInspectorSection>
-                                ) : null}
-                            </div>
+                            authoring.renderSectionInspector(selectedSection)
                         ) : (
                             <div data-surface-inspector-empty="true">
                                 {/* 1 — Form */}
@@ -879,31 +685,7 @@ export default function ProcessingFormBuilder({
                 ) : null}
             </div>
 
-            {libraryOpen && editable ? (
-                <ProcessingFormBuilderLibraryPanel
-                    open={libraryOpen}
-                    sectionLabel={`Add to ${sectionTitle ?? "section"}`}
-                    questionTypes={libraryQuestionTypes}
-                    questionCategoryLabels={CATEGORY_LABELS}
-                    onPickQuestionType={addQuestion}
-                    onPickCanonicalField={addCanonicalField}
-                    onPickLibraryField={addLibraryField}
-                    fieldLibrary={fieldLibrary}
-                    onClose={() => setLibraryOpen(false)}
-                />
-            ) : null}
-            <ProcessingSectionNameDialog
-                open={sectionDialogOpen}
-                onClose={() => setSectionDialogOpen(false)}
-                onContinue={(title) => {
-                    const r = addSection(schema, title);
-                    setSchema(r.schema);
-                    setSelectedSectionId(r.sectionId);
-                    setSelectedFieldId(null);
-                    setDirty(true);
-                    setSectionDialogOpen(false);
-                }}
-            />
+            {authoring.overlays}
         </div>
     );
 }

@@ -9,6 +9,7 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import { collectionGroupField } from "@/lib/forms/relationshipCollectionGroup";
 import type { DraftCollectionGroup, DraftFormField, StoredFormDraftPreview } from "./types";
 import {
     PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
@@ -93,27 +94,16 @@ function mapDraftField(f: DraftFormField): FormField {
  * time, so a client can never assert them. @see docs/platform/core/data/relationship-model.md
  */
 function collectionGroupToFormField(c: DraftCollectionGroup): FormField {
-    return {
+    // The same builder Forms Studio uses for a group the operator adds — one shape for both.
+    return collectionGroupField({
         id: c.id,
-        type: "group",
         label: c.label,
-        required: false,
-        // Cardinality comes from the definition; the document's repeated occurrences are evidence of
-        // how many instances to seed, not a cap.
-        repeat: c.cardinality === "many" ? { min: 0 } : { min: 0, max: 1 },
-        collection_binding: {
-            collection_provider_ref: c.collection_provider_ref,
-            iteration_entity_type: c.item_entity_type,
-            ...(c.iteration_alias ? { iteration_alias: c.iteration_alias } : {}),
-        },
-        fields: c.nested_fields.map((n) => ({
-            id: n.id,
-            type: n.type === "boolean" ? "boolean" : n.type === "date" ? "date" : n.type === "number" ? "number" : "text",
-            label: n.label,
-            required: n.required,
-            ...(n.field_source ? { field_source: n.field_source } : {}),
-        })) as FormField[],
-    };
+        cardinality: c.cardinality,
+        collection_provider_ref: c.collection_provider_ref,
+        item_entity_type: c.item_entity_type,
+        iteration_alias: c.iteration_alias,
+        nested_fields: c.nested_fields,
+    });
 }
 
 function sectionHasType(fields: FormField[], type: FormField["type"]): boolean {

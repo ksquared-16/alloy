@@ -11,6 +11,8 @@
 import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
+import { relationshipCollectionGroupField } from "@/lib/forms/relationshipCollectionGroup";
+import { addressComponentOf, collapseAddressRun } from "@/lib/pos/processingCase/formDraft/importedAddressGroups";
 
 /** Builder-facing field type menu (maps to FormField discriminants + a "section" pseudo-type). */
 export type BuilderFieldType =
@@ -641,4 +643,276 @@ export function nameCompositionParts(field: Pick<FormField, "label" | "required"
             ...(entity ? { field_source: { entity_type: entity, field_key: "last_name" } } : {}),
         },
     ];
+}
+
+
+/* ------------------------------------------------------------------ answer types and choices */
+
+/**
+ * WHAT A QUESTION ASKS FOR, AND CHANGING IT.
+ *
+ * A question's answer type was fixed the moment it was created: the inspector printed it and offered
+ * nothing. So an imported "Is there anyone who has a legal restraining order…?" stayed Short answer
+ * forever, and could never control the follow-up that depends on it. The type is an authoring decision
+ * like any other, and both Studio paths change it here.
+ *
+ * Changing it keeps everything that is not about the answer's shape — label, requiredness, help text,
+ * width, destination, provenance, and the question's OWN condition. What depends on the old shape is
+ * reconciled: choices appear or go away, and a follow-up whose rule can no longer be met by the new
+ * answer (a "Yes" when the answer is now a date) is returned to "always asked" rather than left hidden
+ * from every family.
+ */
+export type AnswerKind =
+    | "short_text"
+    | "long_text"
+    | "number"
+    | "date"
+    | "boolean"
+    | "select"
+    | "multiselect"
+    | "file_ref"
+    | "signature";
+
+export const ANSWER_KIND_OPTIONS: ReadonlyArray<{ value: AnswerKind; label: string }> = [
+    { value: "short_text", label: "Short answer" },
+    { value: "long_text", label: "Long answer" },
+    { value: "boolean", label: "Yes / No" },
+    { value: "select", label: "Dropdown (one choice)" },
+    { value: "multiselect", label: "Multiple choice (several)" },
+    { value: "number", label: "Number" },
+    { value: "date", label: "Date" },
+    { value: "file_ref", label: "File upload" },
+    { value: "signature", label: "Signature" },
+];
+
+/** The answer kind of a question, or null for a group / text block (they have no answer type). */
+export function answerKindOf(field: FormField): AnswerKind | null {
+    switch (field.type) {
+        case "text":
+            return (field as { multiline?: boolean }).multiline ? "long_text" : "short_text";
+        case "number":
+        case "date":
+        case "boolean":
+        case "select":
+        case "multiselect":
+        case "file_ref":
+        case "signature":
+            return field.type;
+        default:
+            return null;
+    }
+}
+
+/** Properties that only make sense for one answer shape — dropped when the shape changes. */
+const SHAPE_KEYS = ["static_options", "option_set_key", "multiline", "signature", "document_type", "placeholder"] as const;
+
+/** Follow-ups of `triggerId` whose rule the trigger can no longer satisfy go back to "always asked". */
+function pruneDependentsOf(schema: FormSchemaV1, triggerId: string): FormSchemaV1 {
+    let changed = false;
+    const fields = schema.fields.map((f) => {
+        const clause = f.visibility?.all?.[0];
+        if (!clause || clause.field_id !== triggerId) return f;
+        const trigger = eligibleConditionTriggers(schema, f.id).find((t) => t.id === triggerId);
+        if (trigger && answerFitsTrigger(trigger, clause.value)) return f;
+        changed = true;
+        return withoutVisibility(f);
+    });
+    return changed ? { ...schema, fields } : schema;
+}
+
+export function changeAnswerKind(schema: FormSchemaV1, fieldId: string, kind: AnswerKind): FormSchemaV1 {
+    const current = schema.fields.find((f) => f.id === fieldId);
+    if (!current) return schema;
+    const from = answerKindOf(current);
+    if (!from || from === kind) return schema;
+
+    const next = { ...current } as Record<string, unknown>;
+    const priorOptions = (current as { static_options?: StaticOption[] }).static_options ?? [];
+    for (const key of SHAPE_KEYS) delete next[key];
+
+    switch (kind) {
+        case "short_text":
+            next.type = "text";
+            break;
+        case "long_text":
+            next.type = "text";
+            next.multiline = true;
+            break;
+        case "select":
+        case "multiselect":
+            next.type = kind;
+            next.static_options = priorOptions.length
+                ? priorOptions
+                : from === "boolean"
+                  ? [
+                        { value: "yes", label: "Yes" },
+                        { value: "no", label: "No" },
+                    ]
+                  : [{ value: "option_1", label: "Option 1" }];
+            break;
+        default:
+            next.type = kind;
+    }
+
+    const fields = schema.fields.map((f) => (f.id === fieldId ? (next as unknown as FormField) : f));
+    return pruneDependentsOf({ ...schema, fields }, fieldId);
+}
+
+function optionsOf(schema: FormSchemaV1, fieldId: string): StaticOption[] | null {
+    const f = schema.fields.find((x) => x.id === fieldId);
+    if (!f || (f.type !== "select" && f.type !== "multiselect")) return null;
+    return [...((f as { static_options?: StaticOption[] }).static_options ?? [])];
+}
+
+function withOptions(schema: FormSchemaV1, fieldId: string, options: StaticOption[]): FormSchemaV1 {
+    const fields = schema.fields.map((f) => (f.id === fieldId ? ({ ...f, static_options: options } as FormField) : f));
+    return pruneDependentsOf({ ...schema, fields }, fieldId);
+}
+
+/**
+ * A choice's stored VALUE never changes when its label is edited — a condition or a submitted answer
+ * that names it keeps meaning the same choice. A new choice gets a fresh value from its label.
+ */
+export function renameFieldOption(schema: FormSchemaV1, fieldId: string, index: number, label: string): FormSchemaV1 {
+    const options = optionsOf(schema, fieldId);
+    if (!options || !options[index]) return schema;
+    const text = label.trim();
+    if (!text) return schema;
+    options[index] = { ...options[index]!, label: text };
+    return withOptions(schema, fieldId, options);
+}
+
+export function addFieldOption(schema: FormSchemaV1, fieldId: string, label = "New choice"): FormSchemaV1 {
+    const options = optionsOf(schema, fieldId);
+    if (!options) return schema;
+    const used = new Set(options.map((o) => o.value));
+    const base = slug(label);
+    let value = base;
+    for (let i = 2; used.has(value); i += 1) value = `${base}_${i}`;
+    return withOptions(schema, fieldId, [...options, { value, label: label.trim() || "New choice" }]);
+}
+
+/** Removing a choice also releases any follow-up that was waiting for it. The last choice stays. */
+export function removeFieldOption(schema: FormSchemaV1, fieldId: string, index: number): FormSchemaV1 {
+    const options = optionsOf(schema, fieldId);
+    if (!options || options.length <= 1 || !options[index]) return schema;
+    options.splice(index, 1);
+    return withOptions(schema, fieldId, options);
+}
+
+
+/* ------------------------------------------------------------------ repeatable groups */
+
+/**
+ * "Please provide at least two emergency contacts" is a MINIMUM, not instructional text. The schema has
+ * always carried `repeat.min` / `repeat.max` and the participant runtime enforces them on submit; what
+ * was missing was a way to set them in Forms Studio. Whole numbers only; a maximum below the minimum is
+ * refused rather than silently corrected.
+ */
+export function setGroupRepeat(
+    schema: FormSchemaV1,
+    groupId: string,
+    repeat: { readonly min: number; readonly max?: number | null },
+): FormSchemaV1 {
+    const group = schema.fields.find((f) => f.id === groupId);
+    if (!group || group.type !== "group") return schema;
+    const min = Math.trunc(repeat.min);
+    if (!Number.isFinite(min) || min < 0) return schema;
+    const max = repeat.max == null ? null : Math.trunc(repeat.max);
+    if (max != null && (!Number.isFinite(max) || max < 1 || max < min)) return schema;
+    const fields = schema.fields.map((f) =>
+        f.id === groupId ? ({ ...f, repeat: { min, ...(max != null ? { max } : {}) } } as FormField) : f,
+    );
+    return { ...schema, fields };
+}
+
+/** Add the repeatable group for a canonical relationship (Emergency contacts, Physicians, …). */
+export function addRelationshipGroup(
+    schema: FormSchemaV1,
+    definitionKey: string,
+    sectionId: string,
+): { schema: FormSchemaV1; fieldId: string } | null {
+    const id = uniqueFieldId(schema, `people_${definitionKey}`);
+    const group = relationshipCollectionGroupField(definitionKey, id);
+    if (!group) return null;
+    const targetSectionId = schema.sections.some((s) => s.id === sectionId) ? sectionId : schema.sections[0]?.id;
+    const sections = targetSectionId
+        ? schema.sections.map((s) => (s.id === targetSectionId ? { ...s, field_ids: [...s.field_ids, id] } : s))
+        : [{ id: uid("sec"), title: "Section 1", field_ids: [id] }];
+    return { schema: { ...schema, fields: [...schema.fields, group], sections }, fieldId: id };
+}
+
+
+/* ------------------------------------------------------------------ structured address */
+
+/**
+ * ONE ADDRESS CONCEPT, MANY LINES.
+ *
+ * The importer already collapses a run of address-line questions into one address group
+ * (`collapseAddressRun`). The SAME function does it here on the operator's request, so an address
+ * typed into a hand-built form, or one the importer did not recognise, becomes the same group: one
+ * address, each line still mapped to its own component, City | State | ZIP side by side.
+ */
+function sectionOfField(schema: FormSchemaV1, fieldId: string): FormSection | undefined {
+    return schema.sections.find((s) => s.field_ids.includes(fieldId));
+}
+
+function addressRunAround(schema: FormSchemaV1, fieldId: string) {
+    const section = sectionOfField(schema, fieldId);
+    if (!section) return null;
+    const byId = new Map(schema.fields.map((f) => [f.id, f] as const));
+    const sectionFields = section.field_ids.map((id) => byId.get(id)).filter((f): f is FormField => f != null);
+    const idx = sectionFields.findIndex((f) => f.id === fieldId);
+    if (idx < 0 || !addressComponentOf(sectionFields[idx]!.field_source)) return null;
+    let start = idx;
+    while (start > 0 && addressComponentOf(sectionFields[start - 1]!.field_source)) start -= 1;
+    const run = collapseAddressRun(sectionFields, start);
+    if (!run) return null;
+    const runIds = run.indices.map((i) => sectionFields[i]!.id);
+    if (!runIds.includes(fieldId)) return null;
+    return { section, run, runIds };
+}
+
+/** True when the question sits in a run of address lines that can become one address. */
+export function canStructureAddressAt(schema: FormSchemaV1, fieldId: string): boolean {
+    return addressRunAround(schema, fieldId) != null;
+}
+
+export function structureAddressAt(schema: FormSchemaV1, fieldId: string): FormSchemaV1 {
+    const found = addressRunAround(schema, fieldId);
+    if (!found) return schema;
+    const { section, run, runIds } = found;
+    const groupId = uniqueFieldId(schema, run.group.id);
+    const group = { ...run.group, id: groupId } as FormField;
+    const consumed = new Set(runIds);
+    const firstAt = schema.fields.findIndex((f) => consumed.has(f.id));
+    const fields = schema.fields.filter((f) => !consumed.has(f.id));
+    fields.splice(Math.min(firstAt, fields.length), 0, group);
+    const sections = schema.sections.map((s) => {
+        if (s.id !== section.id) return s;
+        const at = s.field_ids.findIndex((id) => consumed.has(id));
+        const ids = s.field_ids.filter((id) => !consumed.has(id));
+        ids.splice(at, 0, groupId);
+        return { ...s, field_ids: ids };
+    });
+    // Conditions on the address lines now hang off the address as a whole.
+    return { ...schema, fields, sections };
+}
+
+/** Undo `structureAddressAt`: the address's lines become individual questions again, in place. */
+export function ungroupAddress(schema: FormSchemaV1, groupId: string): FormSchemaV1 {
+    const group = schema.fields.find((f) => f.id === groupId);
+    if (!group || group.type !== "group" || !(group as { address_binding?: unknown }).address_binding) return schema;
+    const children = (group as { fields: FormField[] }).fields;
+    const at = schema.fields.findIndex((f) => f.id === groupId);
+    const fields = [...schema.fields];
+    fields.splice(at, 1, ...children);
+    const sections = schema.sections.map((s) => {
+        const i = s.field_ids.indexOf(groupId);
+        if (i < 0) return s;
+        const ids = [...s.field_ids];
+        ids.splice(i, 1, ...children.map((c) => c.id));
+        return { ...s, field_ids: ids };
+    });
+    return { ...schema, fields, sections };
 }
