@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 /**
  * W7-F002 — A USER WHO MOVES MONEY MUST RESOLVE TO A RECOGNISABLE HUMAN.
  *
@@ -13,7 +15,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    MONEY_CAPABLE_ORG_ROLES,
+    MONEY_CAPABLE_CAPABILITY_KEYS,
     financialActorIdentityGap,
     personDisplayName,
     resolveFinancialActorIdentity,
@@ -157,8 +159,14 @@ describe("personDisplayName", () => {
 });
 
 describe("the capability the requirement attaches to", () => {
-    it("names the roles that can move money, measured rather than assumed", () => {
-        /* The deployed census found `admin` and `ops` in use across 2 orgs, 13 users. */
-        expect([...MONEY_CAPABLE_ORG_ROLES]).toEqual(["owner", "admin", "ops"]);
+    it("is a capability set, the same one the grant-time rule enforces (W7-F002)", () => {
+        expect([...MONEY_CAPABLE_CAPABILITY_KEYS]).toEqual([
+            "fin.write", "fin.adjust", "fin.responsibility", "fin.subsidy", "fin.provider", "fin.post",
+        ]);
+        const sql = readFileSync(
+            resolve(__dirname, "../../../supabase/migrations/20261122140000_money_capable_grant_requires_person_link.sql"),
+            "utf8",
+        );
+        expect(sql).toContain("ARRAY['fin.write', 'fin.adjust', 'fin.responsibility', 'fin.subsidy', 'fin.provider', 'fin.post']");
     });
 });

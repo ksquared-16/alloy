@@ -12,6 +12,8 @@ import {
     UserPersonLinkError,
     createUserPersonLink,
     listUserPersonLinkState,
+    replaceUserPersonLink,
+    revokeUserPersonLink,
 } from "@/lib/access/userPersonLinkService";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -21,10 +23,20 @@ const PERSON = "44444444-4444-4444-8444-444444444444";
 
 type Row = Record<string, unknown>;
 
-function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[] }) {
+/* What each role allows, as `role_permission_grants` holds it — money capability is read from here. */
+const GRANTS: Row[] = [
+    { org_id: ORG, role_key: "admin", permission_key: "fin.write", allowed: true },
+    { org_id: ORG, role_key: "ops", permission_key: "fin.adjust", allowed: true },
+    { org_id: ORG, role_key: "viewer", permission_key: "fin.read", allowed: true },
+    { org_id: ORG, role_key: "bookkeeper", permission_key: "fin.write", allowed: true },
+    { org_id: ORG, role_key: "lapsed", permission_key: "fin.write", allowed: false },
+];
+
+function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[]; rpc?: (fn: string, p: Row) => unknown }) {
     const tables: Record<string, Row[]> = {
         user_person_links: (seed.links ?? []).map((r) => ({ ...r })),
         user_roles: (seed.roles ?? []).map((r) => ({ ...r })),
+        role_permission_grants: GRANTS.map((r) => ({ ...r })),
         persons: (seed.persons ?? []).map((r) => ({ ...r })),
     };
     const inserted: Row[] = [];
@@ -78,7 +90,12 @@ function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[] }) {
             Promise.resolve(resolve({ data: matching().map((r) => ({ ...r })), error: null }));
         return api;
     }
-    return { client: { from: (t: string) => builder(t) } as never, tables, inserted };
+    const rpcCalls: Array<[string, Row]> = [];
+    const rpc = async (fn: string, p: Row) => {
+        rpcCalls.push([fn, p]);
+        return seed.rpc ? seed.rpc(fn, p) : { data: null, error: { message: `unknown rpc ${fn}` } };
+    };
+    return { client: { from: (t: string) => builder(t), rpc } as never, tables, inserted, rpcCalls };
 }
 
 const namedPerson = { id: PERSON, org_id: ORG, full_name: "Dana Okonkwo", first_name: null, last_name: null, archived_at: null };
@@ -180,16 +197,29 @@ describe("listUserPersonLinkState", () => {
                 { org_id: ORG, user_id: USER, role: "ops" },
                 /* A role that cannot move money is not this route's business. */
                 { org_id: ORG, user_id: "viewer", role: "viewer" },
+                /* Nor is a role whose money grant is not allowed. */
+                { org_id: ORG, user_id: "lapsed-user", role: "lapsed" },
+                /* A custom role holding fin.write IS money-capable: a capability, not a role name. */
+                { org_id: ORG, user_id: "bookkeeper-user", role: "bookkeeper" },
                 /* Nor is another tenant's administrator. */
                 { org_id: OTHER_ORG, user_id: "elsewhere", role: "owner" },
             ],
-            persons: [namedPerson, { ...namedPerson, id: "unnamed-person", full_name: null }],
+            persons: [
+                namedPerson,
+                { ...namedPerson, id: "free-person", full_name: "Rae Lindqvist" },
+                { ...namedPerson, id: "unnamed-person", full_name: null },
+            ],
         });
         const state = await listUserPersonLinkState(db.client, { orgId: ORG });
-        expect(state.unresolvedMoneyCapableActors).toEqual([{ userId: USER, roles: ["admin", "ops"] }]);
+        expect(state.unresolvedMoneyCapableActors).toEqual([
+            { userId: USER, roles: ["admin", "ops"], capabilities: ["fin.adjust", "fin.write"] },
+            { userId: "bookkeeper-user", roles: ["bookkeeper"], capabilities: ["fin.write"] },
+        ]);
         expect(state.links).toHaveLength(1);
-        /* An unnamed person is not offered, because linking to one satisfies nothing. */
-        expect(state.linkCandidates.map((c) => c.personId)).toEqual([PERSON]);
+        /* The surface shows WHO a login is linked to, by name. */
+        expect(state.links[0]!.personName).toBe("Dana Okonkwo");
+        /* An unnamed person is not offered, nor one already answering to another login. */
+        expect(state.linkCandidates.map((c) => c.personId)).toEqual(["free-person"]);
     });
 
     it("returns no identifying detail about an unresolved account beyond its id and roles", async () => {
@@ -199,6 +229,43 @@ describe("listUserPersonLinkState", () => {
          */
         const db = makeDb({ roles: [{ org_id: ORG, user_id: USER, role: "admin" }] });
         const state = await listUserPersonLinkState(db.client, { orgId: ORG });
-        expect(Object.keys(state.unresolvedMoneyCapableActors[0]!).sort()).toEqual(["roles", "userId"]);
+        expect(Object.keys(state.unresolvedMoneyCapableActors[0]!).sort()).toEqual(["capabilities", "roles", "userId"]);
+    });
+});
+
+describe("revoke and replace (W7-F002)", () => {
+    it("refuses to revoke the link of someone who can still move money", async () => {
+        const db = makeDb({
+            rpc: () => ({ data: null, error: { message: "person_link_required_for_money_capability: this user holds a money-capable capability" } }),
+        });
+        await expect(
+            revokeUserPersonLink(db.client, { orgId: ORG, userId: USER, note: "left the org", revokedBy: null }),
+        ).rejects.toMatchObject({ status: 409 });
+    });
+
+    it("requires a recorded reason to revoke", async () => {
+        const db = makeDb({});
+        await expect(revokeUserPersonLink(db.client, { orgId: ORG, userId: USER, note: " ", revokedBy: null })).rejects.toBeInstanceOf(UserPersonLinkError);
+        expect(db.rpcCalls).toHaveLength(0);
+    });
+
+    it("replaces atomically, through the database, after checking the new person like any link", async () => {
+        const db = makeDb({
+            persons: [namedPerson],
+            rpc: (_fn, p) => ({ data: { id: "link-2", user_id: p.p_user_id, person_id: p.p_person_id, status: "active", linked_at: "2026-10-09" }, error: null }),
+        });
+        const link = await replaceUserPersonLink(db.client, { orgId: ORG, userId: USER, personId: PERSON, note: "wrong person before", linkedBy: "admin-1" });
+        expect(link).toMatchObject({ userId: USER, personId: PERSON, status: "active" });
+        expect(db.rpcCalls).toEqual([["replace_user_person_link", {
+            p_org_id: ORG, p_user_id: USER, p_person_id: PERSON, p_actor_user_id: "admin-1", p_note: "wrong person before",
+        }]]);
+    });
+
+    it("never replaces onto an unnamed person", async () => {
+        const db = makeDb({ persons: [{ ...namedPerson, full_name: null }], rpc: () => ({ data: {}, error: null }) });
+        await expect(
+            replaceUserPersonLink(db.client, { orgId: ORG, userId: USER, personId: PERSON, note: "wrong person", linkedBy: null }),
+        ).rejects.toMatchObject({ status: 409 });
+        expect(db.rpcCalls).toHaveLength(0);
     });
 });
