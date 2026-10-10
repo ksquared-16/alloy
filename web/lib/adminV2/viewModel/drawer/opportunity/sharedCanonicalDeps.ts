@@ -440,7 +440,13 @@ export async function resolveSharedCanonicalDeps(
         await missionLoadP,
         "drawer-mission",
     );
-    const missionContextStageKey = trimOrNull((recordWithEpp ?? record).stage_key);
+    // The CONTEXT ROW's stage — the same field the commit path reads. The composed record is
+    // layout-filtered and carries no `stage_key`, so this Mission ran with a null context stage while
+    // the commit Mission saw the family's real one (E2E-12, measured on deployed 55b4688f:
+    // commit "lead", settled "waitlist").
+    const missionContextStageKey =
+        trimOrNull((oppRow as Record<string, unknown> | null)?.stage_key)
+        ?? trimOrNull((recordWithEpp ?? record).stage_key);
     const trackedParticipantStageKeys = effectiveParticipantStageKeysFromRow(
         (recordWithEpp ?? record) as Record<string, unknown>,
     );

@@ -81,3 +81,16 @@ describe("childrenAtFamilyPositionForMission — reads only in the ambiguous cas
         expect(await childrenAtFamilyPositionForMission({ supabase: broken, orgId: "org", opportunityId: OPP, contextStageKey: "lead", trackedParticipantStageKeys: ["waitlist"] })).toBe(0);
     });
 });
+
+describe("both Mission callers ask the same question with the family's real stage", () => {
+    it("settled drawer reads the context ROW's stage_key (the composed record is layout-filtered) and the shared helper", async () => {
+        const { readFileSync } = await import("node:fs");
+        const src = readFileSync(`${process.cwd()}/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts`, "utf8");
+        // Measured on deployed 55b4688f: commit Mission "lead", settled "waitlist" — the settled
+        // Mission had a null context stage because it read the composed record.
+        expect(src).toMatch(/missionContextStageKey =\s*trimOrNull\(\(oppRow as Record<string, unknown> \| null\)\?\.stage_key\)/);
+        expect(src).toContain("participantsAtContextPosition: await childrenAtFamilyPositionForMission({");
+        const prov = readFileSync(`${process.cwd()}/lib/runtime/provisioning/workUnitProvisioningAnswer.ts`, "utf8");
+        expect(prov).toContain("participantsAtContextPosition: await childrenAtFamilyPositionForMission({");
+    });
+});
