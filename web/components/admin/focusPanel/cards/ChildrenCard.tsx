@@ -122,6 +122,7 @@ import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identit
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { prefetchOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import { prefetchInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
+import { findRecordAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -312,6 +313,27 @@ export default function ChildrenCard({
     const hasEditableChildFields = childFocusView.focusFields.some((field) => field.editable);
     const canMutateIdentity = Boolean(mutation?.canEdit && !composerPreview);
     const canEditChild = Boolean(canMutateIdentity && hasEditableChildFields);
+    /*
+     * E2E-07 — "+ Add Child" is ANOTHER PLACEMENT of the record's Add Child command, not a card form.
+     * It is the action Manage resolved for this record, invoked through the record action handler
+     * Manage uses — which hosts it in the Current Work workspace, the same panel the process card
+     * opens. No action resolved for this record (wrong stage, no access) → no button.
+     */
+    const addChildAction = useMemo(
+        () => (canMutateIdentity ? findRecordAction(context.recordHeaderActions, "add_child") : null),
+        [canMutateIdentity, context.recordHeaderActions],
+    );
+    const addChildButton =
+        addChildAction && coordination?.invokeHeaderAction ?
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => coordination.invokeHeaderAction?.(addChildAction)}
+                data-children-action="add-child"
+            >
+                + Add Child
+            </button>
+        :   null;
     const opportunityStartDate =
         context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
 
@@ -776,7 +798,7 @@ export default function ChildrenCard({
 
     let runtimeFooterAction: React.ReactNode;
     if (isEmpty) {
-        runtimeFooterAction = null;
+        runtimeFooterAction = addChildButton;
     } else if (editing && focused) {
         runtimeFooterAction = backToFocusButton("cancel-edit");
     } else if (relatedViewId && focused) {
@@ -831,7 +853,7 @@ export default function ChildrenCard({
                 />
             );
     } else {
-        runtimeFooterAction = (
+        const viewChildren = (
             <button
                 type="button"
                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
@@ -841,6 +863,13 @@ export default function ChildrenCard({
                 View children →
             </button>
         );
+        runtimeFooterAction =
+            addChildButton ?
+                <div className="alloy-os-card-nav">
+                    {addChildButton}
+                    {viewChildren}
+                </div>
+            :   viewChildren;
     }
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { findRecordAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -612,6 +613,37 @@ export default function HouseholdCard({
             })()
         : null;
 
+    /*
+     * E2E-08 — "+ Add Contact" is ANOTHER PLACEMENT of the record's Add Parent / Guardian command
+     * (`add_parent_guardian` — Manage → Add Parent), not a Household-card contact form. It invokes
+     * the action Manage resolved for this record through the record action handler Manage uses, so it
+     * opens the same command, in the same host, with the same writer. Not resolved here → no button.
+     */
+    const addContactAction =
+        canEdit && !showComposeCanvas ? findRecordAction(context.recordHeaderActions, "add_parent_guardian") : null;
+    const addContactButton =
+        addContactAction && coordination?.invokeHeaderAction ?
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => coordination.invokeHeaderAction?.(addContactAction)}
+                data-household-action="add-contact"
+            >
+                + Add Contact
+            </button>
+        :   null;
+    const viewHouseholdButton =
+        evidence.groups.length > 0 ?
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => enterContext()}
+                data-household-action="expand"
+            >
+                View household →
+            </button>
+        :   null;
+
     const runtimeFooterAction =
         isEmpty || editing ? null :
         disclosure.depth === "evidence" && selectedIdentityRecord ?
@@ -630,16 +662,12 @@ export default function HouseholdCard({
             </div>
         : disclosure.depth === "context" ?
             <IdentityDisclosureBackAction label="← Back to panel" onBack={backDisclosure} dataAction="back-to-summary" />
-        : evidence.groups.length > 0 ?
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={() => enterContext()}
-                data-household-action="expand"
-            >
-                View household →
-            </button>
-        : null;
+        : addContactButton && viewHouseholdButton ?
+            <div className="alloy-os-card-nav">
+                {addContactButton}
+                {viewHouseholdButton}
+            </div>
+        : addContactButton ?? viewHouseholdButton;
 
     const footerAction = showComposeCanvas
         ? composeFooterAction
