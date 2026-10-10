@@ -56,6 +56,12 @@ export type ComposeOpportunityDrawerViewModelParams = {
      */
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
     /**
+     * E2E-12 — the attention subject's own Enrollment track, resolved by the ROUTE (it reads the
+     * database). When present, the stage-work slice is keyed to THIS child's stage rather than the
+     * family Mission, so a child opened from its Work View shows its own work.
+     */
+    attentionTrack?: { processInstanceId: string; customerMemberId: string; ocmId: string | null; stageKey: string } | null;
+    /**
      * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE.
      *
      * Called at most once, the moment canonical action authority for this subject exists — roughly
@@ -231,8 +237,12 @@ export async function composeOpportunityDrawerViewModel(
             viewerUserId: gate.userId,
             departmentId,
             deptMetadata,
-            currentStageKey,
-            currentStageLabel,
+            currentStageKey: params.attentionTrack?.stageKey ?? currentStageKey,
+            currentStageLabel:
+                params.attentionTrack ?
+                    lifecycle_rail?.stages.find((st) => st.key === params.attentionTrack!.stageKey)?.label ?? null
+                :   currentStageLabel,
+            attentionTrack: params.attentionTrack ?? null,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
         }).then((r) => {
             phases.tier_deferred_leg_ms = Date.now() - tTiers0;
