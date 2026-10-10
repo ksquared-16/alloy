@@ -67,7 +67,10 @@ const action = (key: string, label: string): ResolvedActionForClient => ({
     workflow_id: null,
 });
 const ADD_CHILD = action("add_child", "Add Child");
-const ADD_PARENT = action("add_parent_guardian", "Add Parent");
+// Manage → "Add Parent" is `add_family_member` (measured on deployed staging from the Manage item's
+// own key). The relationship wizard's `add_parent_guardian` is a different command Manage does not offer.
+const ADD_PARENT = action("add_family_member", "Add Parent");
+const ADD_PARENT_GUARDIAN = action("add_parent_guardian", "Add Parent / Guardian");
 const slots = (...overflow: ResolvedActionForClient[]): ResolvedActionsBySlot => ({
     primary: [],
     secondary: [],
@@ -131,6 +134,7 @@ describe("the rule is registry metadata, scoped to relationship capabilities", (
         expect(isCurrentWorkHostedRecordAction({ key: "schedule_tour" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "change_lead_location" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "add_parent_guardian" })).toBe(false);
+        expect(isCurrentWorkHostedRecordAction({ key: "add_family_member" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "add_emergency_contact" })).toBe(false);
     });
 
@@ -268,6 +272,11 @@ describe("card placements invoke the action Manage resolved", () => {
         act(() => button!.click());
         expect(invoke).toHaveBeenCalledTimes(1);
         expect(invoke.mock.calls[0]![0]).toBe(ADD_PARENT);
+    });
+
+    it("Household + Add Contact does not bind the relationship wizard's add_parent_guardian", () => {
+        renderCard("household", { slots: slots(ADD_PARENT_GUARDIAN), canEdit: true });
+        expect(host!.querySelector('[data-household-action="add-contact"]')).toBeNull();
     });
 
     it("offers nothing when the record has no such action", () => {
