@@ -790,6 +790,10 @@ export function useOpportunityDrawerVmRegistryModals({
                             "header_actions",
                             "activity",
                         ]);
+                        // E2E-15: the Household card is a projection of the record's view model. Every
+                        // sibling relationship mutation here reloads it; Add Person only refreshed the
+                        // queue, so a new contact appeared only after a page reload.
+                        void reloadOpportunityDisplayVm?.();
                     }}
                 />
                 <AddInquiryChildModal

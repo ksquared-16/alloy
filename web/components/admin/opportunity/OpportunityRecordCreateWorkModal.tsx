@@ -125,14 +125,7 @@ export default function OpportunityRecordCreateWorkModal({
         applyDefinitionPrefill(initialKey);
     }, [applyDefinitionPrefill, open, prefill?.description, prefill?.due_local, prefill?.title, userId]);
 
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && !busy) onClose();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [busy, onClose, open]);
+    // Escape is owned by ActionModalOverlayShell (same "not while busy" rule) — E2E-13.
 
     const dispatchRefresh = useCallback(() => {
         if (typeof window === "undefined") return;

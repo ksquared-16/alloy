@@ -300,7 +300,8 @@ describe("the Add person form both Add Contact placements open is reachable", ()
         // measurement depends on, so a revert to an uncapped, unscrollable panel is caught here.
         const { readFileSync } = await import("node:fs");
         const src = readFileSync(`${process.cwd()}/components/admin/opportunity/actions/AddPersonModal.tsx`, "utf8");
-        expect(src).toMatch(/panelClassName="[^"]*\bmax-h-\[calc\(100dvh-2rem\)\][^"]*\bflex-col\b/);
+        // E2E-14: the cap is the height the shell publishes below the app chrome.
+        expect(src).toMatch(/panelClassName="[^"]*\bmax-h-\[var\(--alloy-action-modal-max-h\)\][^"]*\bflex-col\b/);
         expect(src).toMatch(/data-add-person-modal-body="true"/);
         expect(src).toMatch(/className="min-h-0 flex-1 space-y-3 overflow-y-auto[^"]*" data-add-person-modal-body/);
     });
