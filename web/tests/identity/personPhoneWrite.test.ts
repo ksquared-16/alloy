@@ -76,3 +76,29 @@ describe("findOrCreatePersonInOrgWithMeta — the shared write boundary", () => 
         expect(await create(f.client, "555-555-0146")).toEqual({ id: "canon", created: false });
     });
 });
+
+describe("Processing's person update writes the same stored form (E2E-16, deployed ed61cfc7)", () => {
+    it("update_person's patch stores the canonical phone, leaving other fields as given", async () => {
+        const { createDefaultIdentityCommandPorts } = await import("@/lib/pos/processingIdentity/commands/ports");
+        let updated: Record<string, unknown> | null = null;
+        const chain: Record<string, unknown> = {
+            update: (p: Record<string, unknown>) => ((updated = p), chain),
+            eq: () => chain,
+            select: async () => ({ data: [{ id: "p1" }], error: null }),
+        };
+        const supabase = { from: () => chain } as never;
+        const res = await createDefaultIdentityCommandPorts().updatePerson(
+            { supabase, orgId: "org" } as never,
+            { person_id: "p1", patch: { phone: "(555) 555-0151", first_name: "Yara" }, expected_version: null } as never,
+        );
+        expect(res).toEqual({ ok: true });
+        expect(updated).toMatchObject({ phone: "+15555550151", first_name: "Yara" });
+    });
+    it("a patch without a phone is untouched", async () => {
+        const { createDefaultIdentityCommandPorts } = await import("@/lib/pos/processingIdentity/commands/ports");
+        let updated: Record<string, unknown> | null = null;
+        const chain: Record<string, unknown> = { update: (p: Record<string, unknown>) => ((updated = p), chain), eq: () => chain, select: async () => ({ data: [{ id: "p1" }], error: null }) };
+        await createDefaultIdentityCommandPorts().updatePerson({ supabase: { from: () => chain }, orgId: "org" } as never, { person_id: "p1", patch: { first_name: "Yara" } } as never);
+        expect(updated).not.toHaveProperty("phone");
+    });
+});
