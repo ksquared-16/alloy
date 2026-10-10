@@ -7235,6 +7235,37 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex: 0 1 auto;
   min-height: 0;
 }
+/* E2E-03 — a hosted command panel (header + body) is a column inside the clipping host: the header
+ * stays put, the BODY scrolls, and the body's command footer stays pinned in view. The shell was
+ * display:block with visible overflow, so a long body (Add Child's configured fields) ran past the
+ * host's overflow:hidden edge and Cancel / Continue sat below the panel with nothing to scroll —
+ * measured at 1600×1000 and 1280×720. Scoped to the shared shell's own body, so capabilities that
+ * bring their own layout (the composer, the embedded tour form) are untouched. */
+.alloy-os-currentwork__focused-panel-host > .alloy-os-currentwork__action-panel:has(> .alloy-os-currentwork__action-panel-body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.alloy-os-currentwork__focused-panel-host > .alloy-os-currentwork__action-panel > .alloy-os-currentwork__action-panel-header {
+  flex: 0 0 auto;
+}
+.alloy-os-currentwork__focused-panel-host > .alloy-os-currentwork__action-panel > .alloy-os-currentwork__action-panel-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.alloy-os-currentwork__focused-panel-host
+  > .alloy-os-currentwork__action-panel
+  > .alloy-os-currentwork__action-panel-body
+  [data-command-surface-footer] {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-bottom: 2px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2%, #fff);
+}
 /* ── Per-child paths, inside the open work ────────────────────────────────
    Not a card: the workspace already names the work. This is the set of decisions the
    completion gate turns on, so it sits with the work and scrolls with it. */

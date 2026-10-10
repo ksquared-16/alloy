@@ -193,44 +193,31 @@ export default function CurrentWorkAddChildPanel({
         }
     };
 
+    /*
+     * E2E-03 — ONE SHELL. This panel is hosted inside `CurrentWorkActionPanel`, which already renders
+     * the command's header (eyebrow, title, Close) — the same chrome Move to Waitlist gets. It used to
+     * render a second complete action-panel shell of its own inside that one, so the operator saw the
+     * command named three times and the nested shell overflowed the host that clips it. It is now the
+     * host's body, like every other capability: the host scrolls it and pins its footer.
+     */
     return (
-        <aside
-            className="alloy-os-currentwork__action-panel"
-            data-work-action-panel="true"
+        <div
+            className="alloy-os-currentwork__action-panel-body space-y-3"
             data-work-action-panel-key={action.key}
-            data-work-action-surface="inline_form"
+            data-command-surface-section="add_child"
             data-testid="current-work-add-child"
             aria-label={action.label}
         >
-            <div className="alloy-os-currentwork__action-panel-header">
-                <div>
-                    <p className="alloy-os-currentwork__action-panel-eyebrow">Helpful action</p>
-                    <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
-                    <p className="alloy-os-currentwork__action-panel-desc">
-                        Add a child to this family. Primary contact stays on the household.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    className="alloy-os-currentwork__action-panel-close"
-                    onClick={onClose}
-                    disabled={busy}
-                    aria-label="Close action panel"
-                >
-                    Close
-                </button>
-            </div>
-
+            <p className="alloy-os-currentwork__action-panel-desc">
+                Add a child to this family. Primary contact stays on the household.
+            </p>
             {stage === "success" ?
-                <div className="alloy-os-currentwork__action-panel-body" data-command-surface-section="success">
+                <div className="space-y-1" data-command-surface-section="success">
                     <p className="text-sm font-medium text-alloy-midnight">Child added to this family.</p>
                     <p className="text-xs text-alloy-midnight/60">Updating Children and What's Next…</p>
                 </div>
             : stage === "preview" ?
-                <div
-                    className="alloy-os-currentwork__action-panel-body space-y-3"
-                    data-command-surface-section="preview"
-                >
+                <div className="space-y-3" data-command-surface-section="preview">
                     <p className="text-sm font-medium text-alloy-midnight">Review</p>
                     <ul className="space-y-1 text-sm text-alloy-midnight/80">
                         <li>
@@ -273,10 +260,7 @@ export default function CurrentWorkAddChildPanel({
                         </button>
                     </div>
                 </div>
-            :   <div
-                    className="alloy-os-currentwork__action-panel-body space-y-3"
-                    data-command-surface-section="input_fields"
-                >
+            :   <div className="space-y-3" data-command-surface-section="input_fields">
                     {fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/70">Loading child fields…</p>
                     :   null}
@@ -327,6 +311,6 @@ export default function CurrentWorkAddChildPanel({
                     <span className="sr-only">{allFields.length} fields</span>
                 </div>
             }
-        </aside>
+        </div>
     );
 }

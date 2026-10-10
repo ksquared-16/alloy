@@ -1,5 +1,9 @@
 "use client";
 
+import {
+    ADMIN_V2_OPEN_CURRENT_WORK_ACTION,
+    type OpenCurrentWorkActionDetail,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
@@ -356,6 +360,24 @@ export default function OpportunityFocusPanelModeGrid({
             setCurrentWorkWorkspace({ open: false, intent: null });
         }
     }, [mode]);
+    /*
+     * E2E-03 — a record action Manage carries in (Add Child) is hosted HERE, by the same workspace the
+     * process card opens, so both placements run one command. From Activity the panel returns to
+     * Work first; the mode effect above leaves an open workspace alone once the mode is Work.
+     */
+    const subjectId = model.subject.id;
+    useEffect(() => {
+        const onOpenAction = (event: Event) => {
+            const detail = (event as CustomEvent<OpenCurrentWorkActionDetail>).detail;
+            const key = detail?.action?.key?.trim();
+            if (!key || !detail.opportunity_id) return;
+            if (detail.opportunity_id !== drawerId && detail.opportunity_id !== subjectId) return;
+            if (mode !== "summary" && mode !== "work") onModeChange?.("summary");
+            openCurrentWorkWorkspace({ kind: "action", actionKey: key, resolved: detail.action });
+        };
+        window.addEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+    }, [drawerId, subjectId, mode, onModeChange, openCurrentWorkWorkspace]);
     // Attention identity (queue row / subject), not resolved family opportunity id.
     // Child Waitlist truth enrichment often flips drawerId process-instance → family
     // opportunity without changing Attention — resetting on drawerId was closing

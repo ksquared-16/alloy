@@ -73,7 +73,15 @@ export type FocusPanelDepthEntry = {
 export type FocusPanelCurrentWorkWorkspaceIntent =
     | { kind: "drill_in" }
     | { kind: "record_outcome" }
-    | { kind: "action"; actionKey: string };
+    | {
+          kind: "action";
+          actionKey: string;
+          /**
+           * The resolved action, when a placement outside the workspace (Manage) carried it in. The
+           * workspace hosts this action even where the stage's Work Template does not list it.
+           */
+          resolved?: ResolvedActionForClient | null;
+      };
 
 export type FocusPanelCurrentWorkWorkspaceState = {
     open: boolean;

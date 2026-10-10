@@ -348,6 +348,7 @@ export default function CurrentWorkCard({
                 ...surface.supportingActions,
                 ...surface.communicationActions,
                 ...surface.alternatePaths,
+                ...(surface.administrativeActions ?? []),
             ].filter(Boolean) as CurrentWorkActionVM[];
             const match = allActions.find(
                 (action) =>
@@ -355,13 +356,34 @@ export default function CurrentWorkCard({
                     || action.actionRef === workspaceIntentActionKey
                     || action.handlerKey === workspaceIntentActionKey,
             );
-            if (!match) {
+            /*
+             * E2E-03: Manage carries a resolved action in (Add Child). Where this stage's Work
+             * Template does not list it, host THAT action — the registry made it available, and its
+             * declared host is this workspace. Nothing here picks a substitute command.
+             */
+            const carried =
+                workspaceIntent?.kind === "action" && workspaceIntent.resolved?.key?.trim() === workspaceIntentActionKey ?
+                    workspaceIntent.resolved
+                :   null;
+            const hosted: CurrentWorkActionVM | null =
+                match
+                ?? (carried ?
+                    {
+                        key: carried.key,
+                        label: carried.label,
+                        category: "administrative",
+                        placement: "manage_overflow",
+                        handlerKey: carried.key,
+                        resolved: carried,
+                    }
+                :   null);
+            if (!hosted) {
                 coordination?.clearCurrentWorkWorkspaceIntent?.();
                 return;
             }
             // Keep intent until closeActionPanel clears it — cold-fetch remounts were
             // wiping local activePanelAction after a timed intent clear.
-            setActivePanelAction(match);
+            setActivePanelAction(hosted);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-apply intent across remounts
     }, [isWorkspace, workspaceIntentKind, workspaceIntentActionKey]);
