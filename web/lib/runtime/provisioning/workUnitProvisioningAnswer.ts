@@ -37,6 +37,7 @@
  * Identity alone is not operational: without current business state AND a truthful primary
  * action the answer does not claim `operational`.
  */
+import { childrenAtFamilyPositionForMission } from "@/lib/process/definitions/enrollment/loadChildrenAtFamilyPosition";
 import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
 import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
@@ -2148,10 +2149,20 @@ export async function composeWorkUnitProvisioningAnswer(
         // remains authority only when no participant stage signal exists.
         const subjectRecord = subjectRow as Record<string, unknown>;
         const contextStageKey = strOrNull(subjectRecord.stage_key);
+        const trackedParticipantStageKeys = effectiveParticipantStageKeysFromRow(subjectRecord);
         const mission = resolveContextMissionStages({
             contextStageKey,
-            effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(subjectRecord),
+            effectiveParticipantStageKeys: trackedParticipantStageKeys,
             workViewLensStageKeys: lensStageKeys(activeView),
+            // E2E-12: children with no track yet are at the family's stage — the same question the
+            // settled drawer asks, so the commit overlay and the settled Mission cannot disagree.
+            participantsAtContextPosition: await childrenAtFamilyPositionForMission({
+                supabase: req.supabase,
+                orgId: String(req.orgId ?? ""),
+                opportunityId: String(subjectRecord.id ?? ""),
+                contextStageKey,
+                trackedParticipantStageKeys,
+            }),
         });
         familyMissionParticipantCount = mission.contributingParticipantCount;
         familyMissionStageKeys = [...mission.missionStageKeys];

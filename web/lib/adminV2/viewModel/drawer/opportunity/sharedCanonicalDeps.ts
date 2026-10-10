@@ -12,6 +12,7 @@ import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
  * `composeOpportunityDrawerViewModel` — same fetches, same order, same `phases_ms` keys. `lifecycle_rail`
  * is computed here (it is a pure function of already-resolved inputs and is read nowhere earlier).
  */
+import { childrenAtFamilyPositionForMission } from "@/lib/process/definitions/enrollment/loadChildrenAtFamilyPosition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
@@ -439,13 +440,23 @@ export async function resolveSharedCanonicalDeps(
         await missionLoadP,
         "drawer-mission",
     );
+    const missionContextStageKey = trimOrNull((recordWithEpp ?? record).stage_key);
+    const trackedParticipantStageKeys = effectiveParticipantStageKeysFromRow(
+        (recordWithEpp ?? record) as Record<string, unknown>,
+    );
     const mission = resolveContextMissionStages({
-        contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
-        effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
-            (recordWithEpp ?? record) as Record<string, unknown>,
-        ),
+        contextStageKey: missionContextStageKey,
+        effectiveParticipantStageKeys: trackedParticipantStageKeys,
         // Drawer open has no Work View lens — Mission from effective tracks only.
         workViewLensStageKeys: [],
+        // E2E-12: children with no track yet are at the family's stage.
+        participantsAtContextPosition: await childrenAtFamilyPositionForMission({
+            supabase,
+            orgId,
+            opportunityId,
+            contextStageKey: missionContextStageKey,
+            trackedParticipantStageKeys,
+        }),
     });
     const missionStageKey = mission.primaryMissionStageKey;
     const railStageKey = lifecycle_rail?.current_stage_key ?? null;

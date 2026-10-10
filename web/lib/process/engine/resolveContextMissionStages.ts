@@ -26,7 +26,7 @@ export type ContextMissionResolution = {
     missionStageKeys: string[];
     /** True when exactly zero or one Mission stage key. */
     homogeneous: boolean;
-    /** Emphasized Mission stage (first key; callers may re-rank by due/priority). */
+    /** Emphasized Mission stage: the context stage when it is a Mission stage (rule 6), else the first key. */
     primaryMissionStageKey: string | null;
     /**
      * True when Mission came from effective participant stages rather than
@@ -66,17 +66,32 @@ function uniqueInOrder(values: readonly (string | null | undefined)[]): string[]
  * 3. If no participants contribute stages → Mission = shared context stage (shared still matters).
  * 4. Inventory / empty lens → Mission = all unique effective stages (never raw context alone
  *    when participants have branched away).
+ * 5. E2E-12 — participants that have no track yet sit AT the context stage
+ *    (`participantsAtContextPosition`): they contribute the context stage like any other
+ *    participant. A family with Alpha on Waitlist and Bravo untracked is MIXED, not all-Waitlist.
+ * 6. E2E-12 — when the context stage is one of several Mission stages, it is the case subject's
+ *    primary: that position is the case's own work, while a participant that branched away has its
+ *    own child-grain subject (`composeChildGrainSurface`) for its stage's work. The other Mission
+ *    stages stay in `missionStageKeys` and still render as secondary work. When every participant
+ *    has left the context stage, nothing changes (rule 4).
  */
 export function resolveContextMissionStages(args: {
     contextStageKey: string | null | undefined;
     effectiveParticipantStageKeys: readonly (string | null | undefined)[] | null | undefined;
     /** `lensStageKeys(view)` — empty/absent = inventory / stage-independent. */
     workViewLensStageKeys?: readonly string[] | null;
+    /**
+     * Participants with no track yet (see `loadChildrenAtFamilyPosition`). They are at the context
+     * stage. Absent/0 = every participant is tracked, which was the only case before E2E-12.
+     */
+    participantsAtContextPosition?: number | null;
 }): ContextMissionResolution {
     const contextStageKey = normKey(args.contextStageKey);
-    const participantKeys = (args.effectiveParticipantStageKeys ?? [])
-        .map(normKey)
-        .filter((k): k is string => Boolean(k));
+    const atContext = Math.max(0, Math.floor(Number(args.participantsAtContextPosition ?? 0)) || 0);
+    const participantKeys = [
+        ...(args.effectiveParticipantStageKeys ?? []).map(normKey),
+        ...(contextStageKey && atContext > 0 ? Array.from({ length: atContext }, () => contextStageKey) : []),
+    ].filter((k): k is string => Boolean(k));
     const contributingParticipantCount = participantKeys.length;
     const uniqueParticipantStages = uniqueInOrder(participantKeys);
     const lensKeys = uniqueInOrder(args.workViewLensStageKeys ?? []);
@@ -122,10 +137,16 @@ export function resolveContextMissionStages(args: {
     }
 
     const rollup = composeStageRollup(missionStageKeys);
+    // Rule 6: the case's own position leads when it is one of the Mission stages. A stage-scoped
+    // lens (rule 2) already chose its emphasis and is left alone.
+    const primaryMissionStageKey =
+        source !== "work_view_lens" && contextStageKey && missionStageKeys.includes(contextStageKey)
+            ? contextStageKey
+            : missionStageKeys[0] ?? null;
     return {
         missionStageKeys,
         homogeneous: rollup.homogeneous,
-        primaryMissionStageKey: missionStageKeys[0] ?? null,
+        primaryMissionStageKey,
         derivedFromEffectiveParticipants: true,
         source,
         contributingParticipantCount,
