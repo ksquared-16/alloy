@@ -1,22 +1,26 @@
 /**
- * E2E-12 — a child subject's Focus Panel shows that child's stage work, not the family Mission's.
+ * E2E-17 — one canonical child participation subject, both track shapes, no sibling leakage.
+ * (Also covers E2E-12's child-subject stage scoping, now derived from the same resolution.)
  *
- * Measured on deployed c081f862: with Charlie still at the family position the family Mission is
- * (correctly) Lead, and Alpha opened from the Waitlist view then showed Lead work — the settled
- * stage-work slice was keyed to the family Mission alone.
+ * Measured on deployed 59538995: a child opened from the Waitlist view settled with
+ * `selectedParticipant: null` because `resolveParticipationSubjectForOpportunity` accepted only
+ * tracks anchored to the opportunity, while the certified Add Child → Waitlist path anchors the
+ * track to the child's Enrollment Participation.
  */
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
 const { sliceSpy } = vi.hoisted(() => ({ sliceSpy: vi.fn() }));
 vi.mock("@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice", () => ({
     resolveOpportunityStageWorkSlice: (...a: unknown[]) => sliceSpy(...a),
 }));
 vi.mock("@/lib/communications/v2/familyWorkspace", () => ({ resolveFamilyCommunicationWorkspacePreview: vi.fn() }));
 
-import { resolveAttentionTrackForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveAttentionTrackForOpportunity";
+import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { buildDeferredDetailResource } from "@/lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource";
 
 const OPP = "opp-1";
+const ORG = "org";
 function fake(tables: Record<string, Array<Record<string, unknown>>>) {
     return {
         from(table: string) {
@@ -33,41 +37,64 @@ function fake(tables: Record<string, Array<Record<string, unknown>>>) {
         },
     } as never;
 }
-const TRACK = { id: "pi-alpha", org_id: "org", subject_type: "child", subject_id: "cm-alpha", stage_key: "waitlist", close_reason_key: null };
+const track = (id: string, member: string, ocm: string, stage: string, extra: Record<string, unknown> = {}) => ({
+    id, org_id: ORG, subject_type: "child", subject_id: member, context_type: "enrollment_participation", context_id: ocm, stage_key: stage, close_reason_key: null, ...extra,
+});
+const link = (id: string, member: string, opp = OPP) => ({ id, org_id: ORG, customer_member_id: member, opportunity_id: opp });
+const FAMILY = fake({
+    process_instances: [
+        track("pi-alpha", "cm-alpha", "ocm-alpha", "waitlist"),
+        track("pi-bravo", "cm-bravo", "ocm-bravo", "waitlist"),
+        { ...track("pi-legacy", "cm-legacy", OPP, "lead"), context_type: "opportunity" },
+        track("pi-foreign", "cm-foreign", "ocm-foreign", "waitlist"),
+        track("pi-closed", "cm-closed", "ocm-closed", "waitlist", { close_reason_key: "withdrawn" }),
+        track("pi-mismatch", "cm-someone-else", "ocm-alpha", "waitlist"),
+    ],
+    opportunity_customer_members: [
+        link("ocm-alpha", "cm-alpha"),
+        link("ocm-bravo", "cm-bravo"),
+        link("ocm-foreign", "cm-foreign", "opp-2"),
+        link("ocm-closed", "cm-closed"),
+    ],
+});
+const resolve = (participationId: string | null) =>
+    resolveParticipationSubjectForOpportunity({ supabase: FAMILY, orgId: ORG, opportunityId: OPP, participationId });
 
-describe("resolveAttentionTrackForOpportunity", () => {
-    it("resolves a track anchored to the child's participation in this opportunity (grain-crossing doctrine)", async () => {
-        const sb = fake({
-            process_instances: [{ ...TRACK, context_id: "ocm-alpha" }],
-            opportunity_customer_members: [{ id: "ocm-alpha", org_id: "org", opportunity_id: OPP }],
-        });
-        expect(await resolveAttentionTrackForOpportunity({ supabase: sb, orgId: "org", opportunityId: OPP, participationId: "pi-alpha" })).toEqual({
-            processInstanceId: "pi-alpha",
+describe("resolveParticipationSubjectForOpportunity — the canonical child participation subject", () => {
+    it("1. a participation-anchored track (the certified Add Child → Waitlist shape) resolves — was null", async () => {
+        expect(await resolve("pi-alpha")).toEqual({
+            participationId: "pi-alpha",
             customerMemberId: "cm-alpha",
-            ocmId: "ocm-alpha",
+            enrollmentParticipationId: "ocm-alpha",
             stageKey: "waitlist",
         });
     });
-    it("resolves a track anchored to the opportunity itself (older journeys)", async () => {
-        const sb = fake({ process_instances: [{ ...TRACK, context_id: OPP }] });
-        expect((await resolveAttentionTrackForOpportunity({ supabase: sb, orgId: "org", opportunityId: OPP, participationId: "pi-alpha" }))?.ocmId).toBeNull();
+    it("2. the older opportunity-anchored shape still resolves", async () => {
+        expect(await resolve("pi-legacy")).toMatchObject({ participationId: "pi-legacy", customerMemberId: "cm-legacy", stageKey: "lead" });
     });
-    it("refuses a track belonging to another family", async () => {
-        const sb = fake({
-            process_instances: [{ ...TRACK, context_id: "ocm-other" }],
-            opportunity_customer_members: [{ id: "ocm-other", org_id: "org", opportunity_id: "opp-2" }],
-        });
-        expect(await resolveAttentionTrackForOpportunity({ supabase: sb, orgId: "org", opportunityId: OPP, participationId: "pi-alpha" })).toBeNull();
+    it("3. siblings resolve distinctly — never each other", async () => {
+        const [a, b] = [await resolve("pi-alpha"), await resolve("pi-bravo")];
+        expect(a?.customerMemberId).toBe("cm-alpha");
+        expect(b?.customerMemberId).toBe("cm-bravo");
+        expect(await resolve("pi-alpha")).toEqual(a); // deterministic
     });
-    it("a family subject (attention = the opportunity) or a closed track is not a child subject", async () => {
-        const sb = fake({ process_instances: [{ ...TRACK, context_id: OPP, close_reason_key: "withdrawn" }] });
-        expect(await resolveAttentionTrackForOpportunity({ supabase: sb, orgId: "org", opportunityId: OPP, participationId: "pi-alpha" })).toBeNull();
-        expect(await resolveAttentionTrackForOpportunity({ supabase: sb, orgId: "org", opportunityId: OPP, participationId: OPP })).toBeNull();
+    it("4. a family subject names no child — null, never the first child", async () => {
+        expect(await resolve(OPP)).toBeNull();
+        expect(await resolve(null)).toBeNull();
+    });
+    it("5. another family's participation is refused", async () => {
+        expect(await resolve("pi-foreign")).toBeNull();
+    });
+    it("6. a track whose participation names a different child is refused", async () => {
+        expect(await resolve("pi-mismatch")).toBeNull();
+    });
+    it("7. a closed track keeps the existing policy (resolves the child) but carries no open stage", async () => {
+        expect(await resolve("pi-closed")).toMatchObject({ customerMemberId: "cm-closed", stageKey: null });
     });
 });
 
-describe("buildDeferredDetailResource — child subject", () => {
-    const base = { supabase: {} as never, orgId: "org", opportunityId: OPP, viewerUserId: "u", departmentId: "d", deptMetadata: null, deferCommunicationsPreview: true };
+describe("buildDeferredDetailResource — child subject stage work (E2E-12)", () => {
+    const base = { supabase: {} as never, orgId: ORG, opportunityId: OPP, viewerUserId: "u", departmentId: "d", deptMetadata: null, deferCommunicationsPreview: true };
     it("runs the stage-work slice child-scoped when a child track is the subject", async () => {
         sliceSpy.mockResolvedValue({ stage_work_runtime: null, published_stage_inputs: null, work_intent_runtime: null });
         await buildDeferredDetailResource({ ...base, currentStageKey: "waitlist", currentStageLabel: "Waitlist", attentionTrack: { processInstanceId: "pi-alpha", customerMemberId: "cm-alpha", ocmId: "ocm-alpha" } });

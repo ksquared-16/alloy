@@ -54,13 +54,14 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * database and this module is reachable from a client component — see the note at the context
      * build below. Absent means nothing was resolvable, and the candidate fallback stands.
      */
-    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
-    /**
-     * E2E-12 — the attention subject's own Enrollment track, resolved by the ROUTE (it reads the
-     * database). When present, the stage-work slice is keyed to THIS child's stage rather than the
-     * family Mission, so a child opened from its Work View shows its own work.
-     */
-    attentionTrack?: { processInstanceId: string; customerMemberId: string; ocmId: string | null; stageKey: string } | null;
+    resolvedParticipant?: {
+        participationId: string;
+        customerMemberId: string;
+        /** The child's Enrollment Participation (`opportunity_customer_members`), when resolved. */
+        enrollmentParticipationId?: string | null;
+        /** The track's open stage — a child subject's stage work is keyed to it (E2E-12/E2E-17). */
+        stageKey?: string | null;
+    } | null;
     /**
      * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE.
      *
@@ -203,6 +204,15 @@ export async function composeOpportunityDrawerViewModel(
      * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
      * compose still costs `max(A, B)` = A.
      */
+    const childTrack =
+        params.resolvedParticipant?.stageKey ?
+            {
+                processInstanceId: params.resolvedParticipant.participationId,
+                customerMemberId: params.resolvedParticipant.customerMemberId,
+                ocmId: params.resolvedParticipant.enrollmentParticipationId ?? null,
+                stageKey: params.resolvedParticipant.stageKey,
+            }
+        :   null;
     const tTiers0 = Date.now();
     const [initial, deferred] = await Promise.all([
         buildInitialPanelResource({
@@ -237,12 +247,14 @@ export async function composeOpportunityDrawerViewModel(
             viewerUserId: gate.userId,
             departmentId,
             deptMetadata,
-            currentStageKey: params.attentionTrack?.stageKey ?? currentStageKey,
+            // A child subject's stage work is ITS track's stage, from the same resolution that names
+            // the child (E2E-12, converged in E2E-17 — no second lookup).
+            currentStageKey: childTrack?.stageKey ?? currentStageKey,
             currentStageLabel:
-                params.attentionTrack ?
-                    lifecycle_rail?.stages.find((st) => st.key === params.attentionTrack!.stageKey)?.label ?? null
+                childTrack ?
+                    lifecycle_rail?.stages.find((st) => st.key === childTrack.stageKey)?.label ?? null
                 :   currentStageLabel,
-            attentionTrack: params.attentionTrack ?? null,
+            attentionTrack: childTrack,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
         }).then((r) => {
             phases.tier_deferred_leg_ms = Date.now() - tTiers0;

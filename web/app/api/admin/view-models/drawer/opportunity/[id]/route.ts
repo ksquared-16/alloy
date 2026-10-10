@@ -4,7 +4,6 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
-import { resolveAttentionTrackForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveAttentionTrackForOpportunity";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
@@ -187,13 +186,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 routePhases.participant_resolve_ms = Date.now() - t;
                 return r;
             })(),
-            // E2E-12: a child subject's stage work is keyed to that child's own track stage.
-            attentionTrack: await resolveAttentionTrackForOpportunity({
-                supabase,
-                orgId: gate.orgId,
-                opportunityId: opportunityId.trim(),
-                participationId: attentionSubjectId,
-            }),
         });
 
         /*
@@ -426,13 +418,6 @@ function streamPhasedDrawerViewModel(args: {
                         routePhases.participant_resolve_ms = Date.now() - t;
                         return r;
                     })(),
-                    // E2E-12: a child subject's stage work is keyed to that child's own track stage.
-                    attentionTrack: await resolveAttentionTrackForOpportunity({
-                        supabase,
-                        orgId: gate.orgId,
-                        opportunityId,
-                        participationId: attentionSubjectId,
-                    }),
                     onActionableCarrier: sendCarrier,
                     onCanonicalTruth: sendTruthPatch,
                 });
