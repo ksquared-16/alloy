@@ -255,3 +255,45 @@ describe("employment context", () => {
         expect(context?.operational_memberships).toBeNull();
     });
 });
+
+describe("E2E-17/E2E-18 — a participation-anchored journey keeps its host", () => {
+    const OCM = "ocm-lennon";
+    function buildAnchored(map?: Map<string, string>) {
+        const row = processRow({ context_type: "enrollment_participation", context_id: OCM });
+        return buildSubjectProcessContexts({
+            grain: "child",
+            subjectKeys: ["cm-lennon"],
+            processBySubject: new Map([["cm-lennon", [row]]]),
+            processConfig: CONFIG,
+            hostWorkUnitKeys: new Map([[CASE_ID, "enrollment-pipeline"]]),
+            stageWorkViewTargets: new Map([[stageWorkViewCacheKey(CASE_ID, "waitlist"), "view-waitlist"]]),
+            familyMembershipRows: new Map(),
+            locationId: null,
+            opportunityIdByContextId: map,
+        });
+    }
+
+    it("maps the participation back to its Opportunity: Work Unit, host and Work View resolve", () => {
+        const enrollment = buildAnchored(new Map([[OCM, CASE_ID]])).contexts[0]!;
+        expect(enrollment.destination_entity_type).toBe("opportunity");
+        expect(enrollment.destination_entity_id).toBe(CASE_ID);
+        expect(enrollment.destination_work_unit_key).toBe("enrollment-pipeline");
+        expect(enrollment.destination_work_view_id).toBe("view-waitlist");
+        const membership = enrollment.operational_memberships?.[0];
+        expect(membership?.host_entity_id).toBe(CASE_ID);
+        expect(membership?.host_work_unit_key).toBe("enrollment-pipeline");
+        expect(membership?.operational_member_id).toBe(PARTICIPATION_ID);
+    });
+
+    it("without the map (the measured defect) the membership loses its Work Unit and names the participation as host", () => {
+        const membership = buildAnchored().contexts[0]!.operational_memberships?.[0];
+        expect(membership?.host_work_unit_key).toBeNull();
+        expect(membership?.host_entity_id).toBe(OCM);
+    });
+
+    it("an Opportunity-anchored journey is unchanged by the map", () => {
+        const membership = build([processRow()]).contexts[0]!.operational_memberships?.[0];
+        expect(membership?.host_entity_id).toBe(CASE_ID);
+        expect(membership?.host_work_unit_key).toBe("enrollment-pipeline");
+    });
+});
