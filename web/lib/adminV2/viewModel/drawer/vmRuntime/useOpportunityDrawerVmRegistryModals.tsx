@@ -114,7 +114,7 @@ type Params = {
     actionHost: OpportunityDrawerVmRegistryModalHost;
     workspaceWorkUnitId?: string | null;
     workspaceDepartmentId?: string | null;
-    reloadOpportunityDisplayVm?: () => Promise<void>;
+    reloadOpportunityDisplayVm?: (opts?: { forceFresh?: boolean }) => Promise<void>;
 };
 
 function readStringField(record: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -790,10 +790,12 @@ export function useOpportunityDrawerVmRegistryModals({
                             "header_actions",
                             "activity",
                         ]);
-                        // E2E-15: the Household card is a projection of the record's view model. Every
-                        // sibling relationship mutation here reloads it; Add Person only refreshed the
-                        // queue, so a new contact appeared only after a page reload.
-                        void reloadOpportunityDisplayVm?.();
+                        // E2E-15: the Household card is a projection of the record's view model, so a new
+                        // person must reload it — FRESH. A plain reload is served from the view-model
+                        // session cache and returns the record without the person (measured on deployed
+                        // ed61cfc7: saved, persisted, invisible until a page reload). `forceFresh` is the
+                        // runtime's own invalidate-then-reload, the one its queue-update path uses.
+                        void reloadOpportunityDisplayVm?.({ forceFresh: true });
                     }}
                 />
                 <AddInquiryChildModal
