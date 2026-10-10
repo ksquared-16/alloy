@@ -881,6 +881,13 @@ export default function ChildrenCard({
                     </button>
                 :   null}
                 {childWorkControl}
+                {/*
+                  * E2E-24 — a tracked child's own surface opens this card at DETAILS depth on the
+                  * attention child (measured on deployed 89a004ba), so a return placed only in the
+                  * summary footer was never on screen. Same control, same canonical truth
+                  * (`child.family_opportunity_id` from the child-grain answer); null off a child view.
+                  */}
+                {familyWorkButton}
             </div>
         );
     } else if (disclosure.depth === "context") {
