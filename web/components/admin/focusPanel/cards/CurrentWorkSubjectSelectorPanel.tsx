@@ -2,9 +2,14 @@
  * Related-subject selector for Current Work (Command Surface subject_selector).
  *
  * Used when a family-context command (e.g. Move to Waitlist) must resolve an
- * enrollment child before execute. Always: select → preview → confirm → execute.
+ * enrollment child before execute: select → confirm → execute.
  * Supports single and multi-select (select all eligible). Zero eligible shows a
  * block — never auto-executes, never invents subjects.
+ *
+ * E2E-05 — THE SELECTION IS THE CONFIRMATION BOUNDARY. There used to be a second "Moving: …
+ * Destination: Waitlist" screen between Continue and the commit. It repeated the selection and
+ * asked no new question. The primary button now names exactly who will move and where, and
+ * pressing it is the confirmation the command records (`confirmation.confirmed`).
  *
  * Shell chrome mounts immediately in CurrentWorkActionPanel; this body hydrates
  * inside the visible shell (warm peek when available, otherwise compact loading).
@@ -43,7 +48,7 @@ type LoadState =
     | { phase: "ready"; subjects: EligibleChildOption[] }
     | { phase: "error"; message: string };
 
-type Stage = "select" | "preview" | "success";
+type Stage = "select" | "success";
 
 function formatChildNames(labels: string[]): string {
     const names = labels.map((label) => label.split(" · ")[0]?.trim() || label).filter(Boolean);
@@ -348,62 +353,6 @@ export default function CurrentWorkSubjectSelectorPanel({
         );
     }
 
-    if (stage === "preview") {
-        return (
-            <div
-                className="alloy-os-currentwork__action-panel-body space-y-3"
-                data-work-action-panel-state="subject-preview"
-                data-command-surface-section="preview"
-                data-testid="current-work-subject-preview"
-            >
-                <div className="space-y-1">
-                    <p className="text-sm font-medium text-alloy-midnight">Moving:</p>
-                    <ul className="list-inside list-disc space-y-0.5 text-sm text-alloy-midnight/80">
-                        {selectedSubjects.map((child) => (
-                            <li key={child.id}>{child.label.split(" · ")[0] ?? child.label}</li>
-                        ))}
-                    </ul>
-                </div>
-                <p className="text-sm text-alloy-midnight/80">
-                    Destination: <span className="font-semibold text-alloy-midnight">Waitlist</span>
-                </p>
-                {error ?
-                    <p className="text-sm text-red-700" role="alert">
-                        {error}
-                    </p>
-                :   null}
-                <div className="flex items-center justify-end gap-2 pt-1" data-command-surface-footer>
-                    <button
-                        type="button"
-                        className="rounded-md px-3 py-1.5 text-sm text-alloy-midnight/70 hover:bg-alloy-midnight/5"
-                        onClick={() => {
-                            setError(null);
-                            setStage("select");
-                        }}
-                        disabled={busy}
-                    >
-                        Back
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                        disabled={busy || selectedSubjects.length === 0}
-                        data-testid="current-work-subject-selector-confirm"
-                        data-command-surface-primary
-                        onClick={() =>
-                            void executeForChildren(
-                                selectedSubjects.map((s) => s.id),
-                                selectedSubjects.map((s) => s.label),
-                            )
-                        }
-                    >
-                        {busy ? "Working…" : "Move to Waitlist"}
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div
             className="alloy-os-currentwork__action-panel-body space-y-3"
@@ -475,17 +424,21 @@ export default function CurrentWorkSubjectSelectorPanel({
                 <button
                     type="button"
                     className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                    disabled={busy || selectedIds.length === 0}
-                    data-testid="current-work-subject-selector-continue"
+                    disabled={busy || selectedSubjects.length === 0}
+                    data-testid="current-work-subject-selector-confirm"
                     data-command-surface-primary
-                    onClick={() => {
-                        setError(null);
-                        commandTimingMark(commandKey, "continue");
-                        commandTimingMeasure(commandKey, "continue_to_preview", "continue", "continue");
-                        setStage("preview");
-                    }}
+                    onClick={() =>
+                        void executeForChildren(
+                            selectedSubjects.map((s) => s.id),
+                            selectedSubjects.map((s) => s.label),
+                        )
+                    }
                 >
-                    Continue
+                    {busy ?
+                        "Moving…"
+                    : selectedSubjects.length === 0 ?
+                        "Move to Waitlist"
+                    :   `Move ${formatChildNames(selectedSubjects.map((s) => s.label))} to Waitlist`}
                 </button>
             </div>
         </div>
