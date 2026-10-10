@@ -293,3 +293,15 @@ describe("card placements invoke the action Manage resolved", () => {
         expect(host!.querySelector('[data-household-action="add-contact"]')).toBeNull();
     });
 });
+
+describe("the Add person form both Add Contact placements open is reachable", () => {
+    it("caps the panel to the viewport and scrolls the fields between a fixed header and footer", async () => {
+        // Layout is measured on deployed staging (jsdom has none); this pins the structure that
+        // measurement depends on, so a revert to an uncapped, unscrollable panel is caught here.
+        const { readFileSync } = await import("node:fs");
+        const src = readFileSync(`${process.cwd()}/components/admin/opportunity/actions/AddPersonModal.tsx`, "utf8");
+        expect(src).toMatch(/panelClassName="[^"]*\bmax-h-\[calc\(100dvh-2rem\)\][^"]*\bflex-col\b/);
+        expect(src).toMatch(/data-add-person-modal-body="true"/);
+        expect(src).toMatch(/className="min-h-0 flex-1 space-y-3 overflow-y-auto[^"]*" data-add-person-modal-body/);
+    });
+});
