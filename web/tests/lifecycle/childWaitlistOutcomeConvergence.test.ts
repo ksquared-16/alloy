@@ -21,7 +21,10 @@ vi.mock("@/lib/lifecycle/stageOutcomeRuleTargetExecutor", () => ({
 }));
 
 describe("applyChildWaitlistViaOutcomeRuntime", () => {
-    it("applies waitlisted disposition then waitlist stage for the selected child only", async () => {
+    // The stage move crosses the child-grain boundary (and establishes the track); the disposition is
+    // then recorded on that track. The reverse order refused for every child still in the family
+    // segment (E2E-06). @see childTrackBeginsAtGrainCrossing.test.ts
+    it("moves the selected child to the waitlist stage, then records the waitlisted disposition", async () => {
         (globalThis as { __waitlistCalls?: unknown[] }).__waitlistCalls = [];
         const result = await applyChildWaitlistViaOutcomeRuntime({
             supabase: {} as never,
@@ -38,15 +41,15 @@ describe("applyChildWaitlistViaOutcomeRuntime", () => {
         expect(calls).toEqual([
             {
                 child: "child-A",
-                kind: "update_child_enrollment_status",
-                disposition: CHILD_WAITLIST_DISPOSITION_KEY,
-                stage: undefined,
-            },
-            {
-                child: "child-A",
                 kind: "move_to_stage",
                 disposition: undefined,
                 stage: CHILD_WAITLIST_STAGE_KEY,
+            },
+            {
+                child: "child-A",
+                kind: "update_child_enrollment_status",
+                disposition: CHILD_WAITLIST_DISPOSITION_KEY,
+                stage: undefined,
             },
         ]);
         expect(calls.every((c) => c.child === "child-A")).toBe(true);

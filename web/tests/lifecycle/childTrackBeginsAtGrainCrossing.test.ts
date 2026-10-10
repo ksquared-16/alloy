@@ -445,6 +445,70 @@ describe("first child-grain transition, through applyStageOutcomeRuleTarget", ()
         expect(state.process_instances.map((r) => r.subject_id)).toEqual(["child-A"]);
     });
 
+    /*
+     * E2E-06 — THE WAITLIST COMMAND ITSELF, end to end.
+     *
+     * The tests above drive the `move_to_stage` target alone. The operator's Move to Waitlist runs the
+     * `waitlist_child` command, which also records the `waitlisted` disposition — and it used to write
+     * that FIRST, onto a track that does not exist for a child still in the family segment. It refused
+     * with "no enrollment track was found for them on this lead" before the boundary was reached.
+     */
+    async function waitlistCommand(
+        state: { process_instances: PiRow[]; ocm: OcmRow[] },
+        childId: string,
+        ocmId: string,
+        bootstrap: ReturnType<typeof bootstrapInto>,
+    ) {
+        vi.doMock("@/lib/lifecycle/ensureChildEnrollmentTrack", () => ({
+            ensureChildEnrollmentTrack: bootstrap,
+            CHILD_TRACK_BOOTSTRAP_SOURCE: "child_stage_entry",
+        }));
+        vi.resetModules();
+        const { applyChildWaitlistViaOutcomeRuntime } = await import("@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime");
+        return applyChildWaitlistViaOutcomeRuntime({
+            supabase: makeSupabase(state),
+            orgId: ORG,
+            userId: "user-1",
+            departmentId: "dept-1",
+            opportunityId: LEAD,
+            customerMemberId: childId,
+            opportunityCustomerMemberId: ocmId,
+            sourceStageKey: "lead",
+            departmentMetadata: {},
+        });
+    }
+
+    it("Move to Waitlist for a child with no track: the track begins, at Waitlist, waitlisted", async () => {
+        const state = { process_instances: [] as PiRow[], ocm: [ocmRow("ocm-A", "child-A")] };
+        const bootstrap = bootstrapInto(state);
+        const res = await waitlistCommand(state, "child-A", "ocm-A", bootstrap);
+        expect(res.ok ? "ok" : res.error).toBe("ok");
+        expect(bootstrap).toHaveBeenCalledTimes(1);
+        expect(state.process_instances).toHaveLength(1);
+        expect(state.process_instances[0]).toMatchObject({ subject_id: "child-A", stage_key: "waitlist", state: "waitlisted" });
+    });
+
+    it("Move to Waitlist moves only the selected child — the sibling keeps no track and no position", async () => {
+        const state = {
+            process_instances: [] as PiRow[],
+            ocm: [ocmRow("ocm-A", "child-A"), ocmRow("ocm-B", "child-B")],
+        };
+        const bootstrap = bootstrapInto(state);
+        const res = await waitlistCommand(state, "child-B", "ocm-B", bootstrap);
+        expect(res.ok ? "ok" : res.error).toBe("ok");
+        expect(state.process_instances.map((r) => [r.subject_id, r.stage_key, r.state])).toEqual([["child-B", "waitlist", "waitlisted"]]);
+    });
+
+    it("Move to Waitlist twice: still one track, no duplicate participation", async () => {
+        const state = { process_instances: [] as PiRow[], ocm: [ocmRow("ocm-A", "child-A")] };
+        const bootstrap = bootstrapInto(state);
+        await waitlistCommand(state, "child-A", "ocm-A", bootstrap);
+        const again = await waitlistCommand(state, "child-A", "ocm-A", bootstrap);
+        expect(again.ok ? "ok" : again.error).toBe("ok");
+        expect(state.process_instances).toHaveLength(1);
+        expect(state.process_instances[0]).toMatchObject({ stage_key: "waitlist", state: "waitlisted" });
+    });
+
     it("a refused bootstrap refuses the move — no stage is written", async () => {
         const state = { process_instances: [] as PiRow[], ocm: [ocmRow("ocm-A", "child-A")] };
         const bootstrap = vi.fn(async () => ({ ok: false as const, error: "two open journeys" }));
