@@ -8,6 +8,7 @@
  * CreateLeadCommandSurface modal when `NEXT_PUBLIC_BOS_CREATE_LEAD_SESSION=0`.
  */
 
+import { openCreatedLead } from "@/lib/platform/commands/createLead/openCreatedLead";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -77,10 +78,13 @@ export function CreateLeadEventHost() {
             onClose={close}
             onOpenCreatedRecord={(opportunityId, focusPanelHref) => {
                 close();
-                router.push(
-                    focusPanelHref ??
-                        resolveCreatedLeadFocusPanelHref({ recordId: opportunityId }),
-                );
+                // Same opener as BOS Open Lead (E2E-02): an attention movement inside the workspace.
+                openCreatedLead({
+                    href: focusPanelHref ?? resolveCreatedLeadFocusPanelHref({ recordId: opportunityId }),
+                    opportunityId,
+                    pathname: typeof window !== "undefined" ? window.location.pathname : null,
+                    push: (h) => router.push(h),
+                });
             }}
             onRefresh={() => router.refresh()}
         />

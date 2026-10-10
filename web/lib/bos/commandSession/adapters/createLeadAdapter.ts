@@ -1,4 +1,5 @@
 import { parseCreateLeadIntakeText } from "@/lib/lifecycle/parseCreateLeadIntakeText";
+import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { ActionRequiredInput } from "@/lib/adminV2/actions/actionTypes";
 import type { IntakeSelectOption } from "@/lib/intake/types";
@@ -203,7 +204,7 @@ export function buildCreateLeadBosPreview(
         summaryLines.unshift(`Primary contact: ${name}`);
     }
     if (payload.email) summaryLines.push(`Email: ${String(payload.email)}`);
-    if (payload.phone) summaryLines.push(`Phone: ${String(payload.phone)}`);
+    if (payload.phone) summaryLines.push(`Phone: ${formatPhoneUS(String(payload.phone))}`);
     if (
         entities.has("child") &&
         (payload.child_first_name || payload.child_last_name)

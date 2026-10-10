@@ -4,6 +4,7 @@
  * or IntakeHouseholdCandidate from Conversation parse (converted on read).
  */
 
+import { formatPhoneUS } from "@/lib/adminFormatters";
 import {
     buildCreateLeadCommitSelection,
     createEmptyCreateLeadCommitSelection,
@@ -343,7 +344,10 @@ export function summarizeCommitParents(selection: CreateLeadCommitSelection): st
     return selection.parents.map((p) => {
         const emptyLabel = p.primary ? "Primary" : "Additional";
         const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || emptyLabel;
-        const contact = [p.email, p.phone].filter(Boolean).join(" · ");
+        // E2E-01: the review shows the phone the way every other Alloy surface does (the platform
+        // formatter the Household card uses for this same stored value). Presentation only — the
+        // draft and the committed value are exactly what the operator typed.
+        const contact = [p.email, p.phone ? formatPhoneUS(p.phone) : ""].filter(Boolean).join(" · ");
         return contact ? `${name} · ${contact}` : name;
     });
 }
