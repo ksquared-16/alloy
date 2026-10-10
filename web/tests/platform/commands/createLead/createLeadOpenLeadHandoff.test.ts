@@ -75,7 +75,9 @@ describe("Create Lead Open Lead handoff descriptor", () => {
         expect(host).toContain("data-bos-command-session-open-lead");
         expect(host).toContain("onOpenLead");
         expect(host).toContain("discardSession");
-        expect(host).toContain("router.push");
+        // E2E-02: the resolved address is opened as an attention movement inside the workspace
+        // (router.push from the shell blanks the surface); a push remains only for a cold entry.
+        expect(host).toContain("openCreatedLead({");
         expect(host).toContain("resolveOpenLeadFocusPanelHref");
         expect(host).toContain('type="button"');
         expect(host).toContain("data-bos-command-session-open-lead");

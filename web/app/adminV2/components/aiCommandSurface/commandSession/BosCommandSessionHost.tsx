@@ -27,6 +27,7 @@ import { getBosCommandAdapterRegistration } from "@/lib/bos/commandSession/adapt
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { resolveOpenLeadFocusPanelHref } from "@/lib/platform/commands/createLead/resolveOpenLeadFocusPanelHref";
+import { openCreatedLead } from "@/lib/platform/commands/createLead/openCreatedLead";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import {
     WS_ACTION_PRIMARY,
@@ -346,7 +347,13 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                     statusKey: statusKey || null,
                                     stageKey: "lead",
                                 });
-                                if (target) router.push(target);
+                                // E2E-02: open it as an attention movement from here — see openCreatedLead.
+                                openCreatedLead({
+                                    href: target,
+                                    opportunityId: createdId,
+                                    pathname: typeof window !== "undefined" ? window.location.pathname : null,
+                                    push: (h) => router.push(h),
+                                });
                             })();
                         }}
                         onCreateAnother={() => {
@@ -406,7 +413,7 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                         controller.resolution.readyForPreview || controller.resolution.readyToExecute
                     }
                     onReview={() => controller.onBuildPreview()}
-                    onConfirmPreview={() => controller.onConfirmPreview()}
+                    onConfirmPreview={() => void controller.onConfirmAndExecute()}
                     onExecute={() => void controller.onExecute()}
                     onBackGather={() => ctx?.dispatch({ type: "SET_PHASE", phase: "gathering" })}
                     onDiscard={discardWithRestore}
@@ -805,14 +812,16 @@ function CommandFooter(props: {
                         Review
                     </button>
                 ) : null}
+                {/* E2E-01: Review's primary is Confirm — one press confirms and runs the command. */}
                 {session.phase === "preview" ? (
                     <button
                         type="button"
                         className={`${WS_ACTION_PRIMARY} ${touch}`}
                         data-bos-command-session-confirm
+                        data-bos-command-session-execute
                         onClick={props.onConfirmPreview}
                     >
-                        Continue
+                        Confirm
                     </button>
                 ) : null}
                 {session.phase === "confirming" ? (
