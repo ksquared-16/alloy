@@ -440,13 +440,16 @@ export async function resolveSharedCanonicalDeps(
         await missionLoadP,
         "drawer-mission",
     );
-    // The CONTEXT ROW's stage — the same field the commit path reads. The composed record is
-    // layout-filtered and carries no `stage_key`, so this Mission ran with a null context stage while
-    // the commit Mission saw the family's real one (E2E-12, measured on deployed 55b4688f:
-    // commit "lead", settled "waitlist").
+    // The FAMILY's own stage. The composed record is layout-filtered and carries no `stage_key`, and
+    // on these leads the row's `stage_key` is empty too — the family's stage lives in its status,
+    // which the lifecycle rail resolves (`current_stage_key`). That is the same stage this Mission
+    // already fell back to when nothing else resolved, so with no tracked participant nothing
+    // changes. Measured on deployed 7cd17a7c (E2E-12): rail "lead", Mission still "waitlist",
+    // because the untracked-child gate needs the family stage and saw none.
     const missionContextStageKey =
         trimOrNull((oppRow as Record<string, unknown> | null)?.stage_key)
-        ?? trimOrNull((recordWithEpp ?? record).stage_key);
+        ?? trimOrNull((recordWithEpp ?? record).stage_key)
+        ?? trimOrNull(lifecycle_rail?.current_stage_key);
     const trackedParticipantStageKeys = effectiveParticipantStageKeysFromRow(
         (recordWithEpp ?? record) as Record<string, unknown>,
     );

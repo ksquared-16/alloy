@@ -89,6 +89,9 @@ describe("both Mission callers ask the same question with the family's real stag
         // Measured on deployed 55b4688f: commit Mission "lead", settled "waitlist" — the settled
         // Mission had a null context stage because it read the composed record.
         expect(src).toMatch(/missionContextStageKey =\s*trimOrNull\(\(oppRow as Record<string, unknown> \| null\)\?\.stage_key\)/);
+        // …and, when the row carries no stage, the family stage the rail resolves from status
+        // (measured on deployed 7cd17a7c: rail "lead", settled Mission still "waitlist").
+        expect(src).toContain("?? trimOrNull(lifecycle_rail?.current_stage_key);");
         expect(src).toContain("participantsAtContextPosition: await childrenAtFamilyPositionForMission({");
         const prov = readFileSync(`${process.cwd()}/lib/runtime/provisioning/workUnitProvisioningAnswer.ts`, "utf8");
         expect(prov).toContain("participantsAtContextPosition: await childrenAtFamilyPositionForMission({");
