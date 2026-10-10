@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizeEmailForFindOrCreate,
-  normalizePhoneForFindOrCreate,
+  normalizePhoneForPersonWrite,
+  personPhoneMatchValues,
 } from "@/lib/identity";
 
 type MinimalSupabase = Pick<SupabaseClient, "from">;
@@ -12,8 +13,9 @@ export type FindOrCreatePersonInOrgResult = { id: string; created: boolean };
  * Find or create a person scoped by org. Match email (ilike) first, then phone.
  * Mirrors quote-start behavior for consistent public flows.
  * `created` is true only when this call inserted the row (for transactional rollback).
- * Normalization: email via canonical `lib/identity`; phone remains legacy trim-only
- * (compat adapter) so B1a does not change stored/matched phone strings.
+ * Normalization: email via canonical `lib/identity`. Phone (E2E-16) is STORED canonically (E.164 via
+ * `normalizePhoneForPersonWrite`) and MATCHED against every legacy shape (`personPhoneMatchValues`),
+ * so a number typed differently finds the same person instead of creating a second one.
  */
 export async function findOrCreatePersonInOrgWithMeta(
   supabase: MinimalSupabase,
@@ -29,7 +31,8 @@ export async function findOrCreatePersonInOrgWithMeta(
 ): Promise<FindOrCreatePersonInOrgResult | null> {
   const { email, phone, first_name, last_name, org_id } = params;
   const emailNorm = normalizeEmailForFindOrCreate(email);
-  const phoneNorm = normalizePhoneForFindOrCreate(phone);
+  const phoneNorm = normalizePhoneForPersonWrite(phone);
+  const phoneMatches = personPhoneMatchValues(phone);
 
   if (!emailNorm && !phoneNorm) return null;
 
@@ -42,7 +45,7 @@ export async function findOrCreatePersonInOrgWithMeta(
     }
   }
   if (phoneNorm) {
-    let q = supabase.from("persons").select("id").eq("phone", phoneNorm).limit(1);
+    let q = supabase.from("persons").select("id").in("phone", phoneMatches).limit(1);
     if (org_id) q = q.eq("org_id", org_id);
     const { data: byPhone } = await q.maybeSingle();
     if (byPhone && typeof (byPhone as { id?: string }).id === "string") {
@@ -85,7 +88,7 @@ export async function findOrCreatePersonInOrgWithMeta(
         }
       }
       if (phoneNorm) {
-        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).eq("phone", phoneNorm).limit(1).maybeSingle();
+        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).in("phone", phoneMatches).limit(1).maybeSingle();
         if (again && typeof (again as { id?: string }).id === "string") {
           return { id: (again as { id: string }).id, created: false };
         }

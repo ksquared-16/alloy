@@ -88,8 +88,10 @@ export function normalizeEmailForFindOrCreate(email: string | null | undefined):
 }
 
 /**
- * `findOrCreatePersonInOrg` phone norm — **legacy trim-only** (not E.164, not digits).
- * Preserved byte-identical for B1a; callers must not assume canonical storage yet.
+ * Legacy trim-only phone norm (not E.164, not digits), kept byte-identical for its remaining callers.
+ * `findOrCreatePersonInOrg` no longer uses it: since E2E-16 the person writer stores
+ * `normalizePhoneForPersonWrite` (E.164) and matches `personPhoneMatchValues` (every legacy shape).
+ * Rows written before that rule are not rewritten, so readers must still not assume canonical storage.
  */
 export function normalizePhoneForFindOrCreate(phone: string | null | undefined): string | null {
     if (phone == null) return null;
