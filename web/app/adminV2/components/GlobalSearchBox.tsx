@@ -12,7 +12,7 @@ import {
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
-import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import { dispatchOperatorFocusSelection, operatorFocusSelectionFromDestination } from "@/lib/runtime/focus/operatorFocusSelection";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import {
     durableRecordEntityType,
@@ -299,33 +299,13 @@ export default function GlobalSearchBox() {
                 });
                 return;
             }
-            const hostType = (destination.host_entity_type ?? "").trim();
-            const hostId = (destination.host_entity_id ?? "").trim();
-            if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
+            // The one destination → selection mapping, shared with every other opener (E2E-18).
+            const selection = operatorFocusSelectionFromDestination(destination);
+            if (!selection) return;
 
             // Dismiss FIRST — the click is acknowledged immediately even though the
             // destination is not revealed until it is Operational.
             dismiss();
-
-            const selection = {
-                entity_type: hostType,
-                entity_id: hostId,
-                host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
-                // The participant's own Work View, when their stage has one. The listener prefers
-                // it over the case unit above — a waitlisted child must not be sent to the family's
-                // Lead queue, which does not contain them.
-                host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
-                // The Work View's own ROW identity, kept apart from the host above. A child-grain
-                // lens evaluates participations, so the case that hosts the panel is not a row in it
-                // — sending the case as the subject is what produced "That record isn't in this
-                // Work View" over a destination whose membership was perfectly truthful.
-                operational_member_id: (destination.operational_member_id ?? "").trim() || null,
-                card_focus: {
-                    card_key: destination.card_key,
-                    item_id: destination.item_id ?? null,
-                    context_key: destination.context_key ?? null,
-                },
-            };
 
             // ── A SEARCH CLICK IS AN ATTENTION MOVEMENT, NOT A NAVIGATION ──
             //

@@ -163,6 +163,7 @@ export async function loadSubjectContexts(
         stageWorkViewTargets,
         familyMembershipRows,
         locationId: null,
+        opportunityIdByContextId,
     });
 
     const scheduleLocationId = scheduleRow?.site_location_id ?? locationId ?? null;

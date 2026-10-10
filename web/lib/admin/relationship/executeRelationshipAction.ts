@@ -1,4 +1,5 @@
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { normalizePhoneForPersonWrite } from "@/lib/identity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     applyChildScopedContactAssignments,
@@ -144,7 +145,8 @@ async function resolvePersonId(
             first_name: trim(draft.first_name),
             last_name: trim(draft.last_name),
             email: trim(draft.email) || null,
-            phone: trim(draft.phone) || null,
+            // Same stored form as the find-or-create writer above (E2E-16).
+            phone: normalizePhoneForPersonWrite(draft.phone),
         })
         .select("id")
         .single();

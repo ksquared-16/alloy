@@ -98,6 +98,8 @@ export function hasInnerDismissibleLayer(doc: Document | null | undefined): bool
     if (!doc) return false;
     if (hasOpenTransientPopup(doc)) return true;
     if (doc.querySelector(COMPOSER_LAYER_SELECTOR)) return true;
+    // A registry action modal (ActionModalOverlayShell) closes itself on Escape (E2E-13).
+    if (doc.querySelector('[data-opportunity-drawer-action-overlay="true"]')) return true;
     const active = doc.activeElement;
     if (!active || typeof active.closest !== "function") return false;
     return Boolean(active.closest(INLINE_EDIT_SELECTOR) || active.closest(FINANCIALS_DEPTH_CARD_SELECTOR));

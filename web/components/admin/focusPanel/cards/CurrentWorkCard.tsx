@@ -284,7 +284,8 @@ export default function CurrentWorkCard({
         closeActionPanel();
         setActivityPreviewOpen(false);
         coordination?.closeCurrentWorkWorkspace?.();
-        queueMicrotask(() => openWorkspaceTriggerRef.current?.focus());
+        // Focus returns through the workspace host (E2E-11): this ref lived in the summary instance,
+        // which is not the one closing, so focusing it here always fell through to <body>.
     }, [closeActionPanel, coordination, resetCompletion]);
 
     const handleActionPanelComplete = useCallback(() => {

@@ -113,7 +113,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
              * scrolls — the operator could neither submit nor dismiss it. The panel is capped to the
              * viewport; the header and footer stay put and the fields scroll between them.
              */
-            panelClassName="flex max-h-[calc(100dvh-2rem)] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
+            panelClassName="flex max-h-[var(--alloy-action-modal-max-h)] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
             data-testid="add-person-modal"
         >
             <div role="dialog" aria-modal="true" aria-label={title} data-add-person-modal="true" className="flex min-h-0 flex-1 flex-col">
