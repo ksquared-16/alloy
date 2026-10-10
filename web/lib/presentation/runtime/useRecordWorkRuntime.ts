@@ -28,10 +28,8 @@ import {
 import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerViewModelHardCutoverFailureMessage } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
-import {
-    invalidateDrawerViewModelCacheForEntity,
-    putDrawerViewModelCacheEntry,
-} from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { invalidateRecordRuntimeVmCache } from "@/lib/presentation/runtime/invalidateRecordRuntimeVmCache";
 import { dispatchDrawerLayoutRuntimeBodyInvalidate } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
 import {
     invalidateDrawerLayoutRuntimeBodyCacheForEntity,
@@ -424,12 +422,10 @@ export function useRecordWorkRuntime(
     );
 
     const invalidateVmCachesForSubject = useCallback((opportunityId: string) => {
-        const vm = displayVmRef.current;
-        const departmentId = vm?.workspace.department_id ?? null;
-        const workUnitId = vm?.workspace.work_unit_id ?? null;
-        invalidateDrawerViewModelCacheForEntity("opportunities", opportunityId, {
-            departmentId,
-            workUnitId,
+        invalidateRecordRuntimeVmCache({
+            opportunityId,
+            readContext: transportContext,
+            vmWorkspace: displayVmRef.current?.workspace ?? null,
         });
         invalidateDrawerLayoutRuntimeBodyCacheForEntity(
             "/api/admin/layout-runtime/opportunity-drawer-body",
@@ -439,7 +435,7 @@ export function useRecordWorkRuntime(
             entityType: "opportunities",
             entityId: opportunityId,
         });
-    }, []);
+    }, [transportContext]);
 
     const reloadDisplayVm = useCallback(async (opts?: { forceFresh?: boolean }) => {
         if (!validSubject) return;

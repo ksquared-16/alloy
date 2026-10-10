@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { normalizePhoneForPersonWrite, personPhoneMatchValues } from "@/lib/identity";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { canonicalAtomicIdentityPayload, createAtomicGroupRunner } from "@/lib/pos/processingIdentity/executor/executorPorts";
 
 function fakePersons(existing: Array<{ id: string; org_id: string; phone: string | null; email: string | null }>) {
     const inserts: Array<Record<string, unknown>> = [];
@@ -100,5 +102,40 @@ describe("Processing's person update writes the same stored form (E2E-16, deploy
         const chain: Record<string, unknown> = { update: (p: Record<string, unknown>) => ((updated = p), chain), eq: () => chain, select: async () => ({ data: [{ id: "p1" }], error: null }) };
         await createDefaultIdentityCommandPorts().updatePerson({ supabase: { from: () => chain }, orgId: "org" } as never, { person_id: "p1", patch: { first_name: "Yara" } } as never);
         expect(updated).not.toHaveProperty("phone");
+    });
+});
+
+describe("E2E-16 — the atomic identity group stores the canonical phone", () => {
+    it("create_person crosses the RPC with E.164, as typed in BOS Create Lead", async () => {
+        const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+        const supabase = {
+            rpc: async (fn: string, args: Record<string, unknown>) => {
+                calls.push({ fn, args });
+                return { data: { ok: true, refs: { p1: "person-1" } }, error: null };
+            },
+        } as unknown as SupabaseClient;
+        const result = await createAtomicGroupRunner(supabase).run({
+            orgId: "org-1",
+            actorId: "actor-1",
+            idempotencyKey: "k",
+            operations: [
+                { opId: "p1", commandKey: "create_person", payload: { first_name: "Yara", last_name: "ZZQA", email: "y@test.invalid", phone: "555-555-0153" } },
+                { opId: "h1", commandKey: "create_household", payload: { name: "ZZQA", phone: "555-555-0153" } },
+            ],
+        });
+        expect(result.ok).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].fn).toBe("execute_processing_identity_group");
+        const ops = calls[0].args.p_operations as Array<{ command_key: string; payload: Record<string, unknown> }>;
+        expect(ops[0].payload.phone).toBe("+15555550153");
+        expect(ops[0].payload.first_name).toBe("Yara");
+        // Only a person write is canonicalised; no other command's payload is touched.
+        expect(ops[1].payload.phone).toBe("555-555-0153");
+    });
+
+    it("no phone, no digits — unchanged from before", () => {
+        expect(canonicalAtomicIdentityPayload("create_person", { first_name: "A", phone: null }).phone).toBeNull();
+        expect(canonicalAtomicIdentityPayload("create_person", { first_name: "A", phone: "ext" }).phone).toBe("ext");
+        expect("phone" in canonicalAtomicIdentityPayload("create_person", { first_name: "A" })).toBe(false);
     });
 });
