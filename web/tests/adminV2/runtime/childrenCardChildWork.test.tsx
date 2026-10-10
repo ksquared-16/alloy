@@ -104,6 +104,24 @@ describe("Children card — a tracked child's own work", () => {
         expect(focusSpy).toHaveBeenCalledWith({ entity_type: "opportunities", entity_id: "opp-family" });
     });
 
+    it("E2E-24: on a child view the card opens at DETAILS depth on the child — the return is there too", () => {
+        // Measured on deployed 89a004ba: a tracked child's surface renders this card focused on the
+        // child (lifecycle=focus, depth=details). The return lived only in the summary footer.
+        render(demo({ "child.customer_member_id": "cm-alpha", "child.family_opportunity_id": "opp-family" }));
+        focusFirstChild();
+        expect(host!.querySelector('[data-identity-depth="details"], [data-children-edit-trigger], [data-action="back"]')).not.toBeNull();
+        const back = host!.querySelector<HTMLButtonElement>('[data-children-action="family-work"]');
+        expect(back).not.toBeNull();
+        act(() => back!.click());
+        expect(focusSpy).toHaveBeenCalledWith({ entity_type: "opportunities", entity_id: "opp-family" });
+    });
+
+    it("fails closed without both canonical coordinates — no invented family", () => {
+        render(demo({ "child.family_opportunity_id": "opp-family" }));
+        focusFirstChild();
+        expect(host!.querySelector('[data-children-action="family-work"]')).toBeNull();
+    });
+
     it("on the family view there is no family-return control", () => {
         render(demo());
         expect(host!.querySelector('[data-children-action="family-work"]')).toBeNull();
