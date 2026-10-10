@@ -9,6 +9,7 @@
  * (OCM / process_instances) in their contract.
  */
 
+import { normalizePhoneForPersonWrite } from "@/lib/identity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
@@ -182,9 +183,17 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async updatePerson(ctx, input) {
+            // E2E-16: an update writes the same stored phone form as a create. Processing's plan
+            // creates the person (canonical, via find-or-create) and then patches it from the intake
+            // facts — which carried the phone as typed, so the patch overwrote the canonical value
+            // (measured on deployed ed61cfc7: Create Lead "(555) 555-0151" persisted as typed).
+            const patch =
+                "phone" in input.patch ?
+                    { ...input.patch, phone: normalizePhoneForPersonWrite(input.patch.phone as string | null | undefined) }
+                :   input.patch;
             let q = ctx.supabase
                 .from("persons")
-                .update({ ...input.patch, updated_at: new Date().toISOString() })
+                .update({ ...patch, updated_at: new Date().toISOString() })
                 .eq("id", input.person_id)
                 .eq("org_id", ctx.orgId);
             if (input.expected_version) q = q.eq("updated_at", input.expected_version);

@@ -123,7 +123,8 @@ describe("E2E-15 — Add Person reloads the record the Household card projects",
         const src = readFileSync(resolve(process.cwd(), "lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals.tsx"), "utf8");
         const block = src.slice(src.indexOf("<AddPersonModal"), src.indexOf("<AddInquiryChildModal"));
         expect(block).toContain("submitAddPersonFromDrawer(");
-        expect(block).toContain("void reloadOpportunityDisplayVm?.();");
-        expect(block.indexOf("submitAddPersonFromDrawer(")).toBeLessThan(block.indexOf("void reloadOpportunityDisplayVm?.();"));
+        // FRESH: a cached reload returned the record without the new person (deployed ed61cfc7).
+        expect(block).toContain("void reloadOpportunityDisplayVm?.({ forceFresh: true });");
+        expect(block.indexOf("submitAddPersonFromDrawer(")).toBeLessThan(block.indexOf("reloadOpportunityDisplayVm?.({ forceFresh: true })"));
     });
 });
