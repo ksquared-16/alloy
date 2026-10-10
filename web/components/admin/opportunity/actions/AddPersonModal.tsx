@@ -106,11 +106,18 @@ export function AddPersonModal(props: AddPersonModalProps) {
             open={open}
             onClose={onClose}
             busy={busy}
-            panelClassName="w-[92vw] max-w-[520px] overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
+            /*
+             * E2E-08 — reachable at any viewport. Manage → Add Parent and Household + Add Contact open
+             * this form, and with an org's configured person fields it measured 2,136px tall, centred:
+             * Close at y=-551 and Cancel / Add person at y=1513 in a 1000px window, with nothing that
+             * scrolls — the operator could neither submit nor dismiss it. The panel is capped to the
+             * viewport; the header and footer stay put and the fields scroll between them.
+             */
+            panelClassName="flex max-h-[calc(100dvh-2rem)] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-2xl border border-admin-border bg-white shadow-xl"
             data-testid="add-person-modal"
         >
-            <div role="dialog" aria-modal="true" aria-label={title} data-add-person-modal="true">
-                <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
+            <div role="dialog" aria-modal="true" aria-label={title} data-add-person-modal="true" className="flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
                         <div className="text-sm font-semibold text-alloy-midnight">{title}</div>
                         <div className="mt-0.5 text-[12px] text-alloy-midnight/60">
@@ -127,7 +134,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                     </button>
                 </div>
 
-                <div className="space-y-3 px-5 py-4">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4" data-add-person-modal-body="true">
                     {fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/60">Loading configured fields…</p>
                     :   null}
@@ -160,7 +167,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                     :   null}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
                     <button
                         type="button"
                         disabled={busy}

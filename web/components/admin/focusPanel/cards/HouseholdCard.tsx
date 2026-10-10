@@ -614,13 +614,16 @@ export default function HouseholdCard({
         : null;
 
     /*
-     * E2E-08 — "+ Add Contact" is ANOTHER PLACEMENT of the record's Add Parent / Guardian command
-     * (`add_parent_guardian` — Manage → Add Parent), not a Household-card contact form. It invokes
-     * the action Manage resolved for this record through the record action handler Manage uses, so it
-     * opens the same command, in the same host, with the same writer. Not resolved here → no button.
+     * E2E-08 — "+ Add Contact" is ANOTHER PLACEMENT of Manage → Add Parent, not a Household-card
+     * contact form. Manage's "Add Parent" is the `add_family_member` action (the lifecycle base action
+     * `add_person` binds that definition; it opens the Add person form and writes through
+     * `submitAddPersonFromDrawer`). This first looked for `add_parent_guardian` — the relationship
+     * wizard's key, which Manage does not offer — so on deployed staging the record never resolved it
+     * and the button never rendered. It invokes the action Manage resolved for this record through
+     * the handler Manage uses: same command, host and writer. Not resolved here → no button.
      */
     const addContactAction =
-        canEdit && !showComposeCanvas ? findRecordAction(context.recordHeaderActions, "add_parent_guardian") : null;
+        canEdit && !showComposeCanvas ? findRecordAction(context.recordHeaderActions, "add_family_member") : null;
     const addContactButton =
         addContactAction && coordination?.invokeHeaderAction ?
             <button

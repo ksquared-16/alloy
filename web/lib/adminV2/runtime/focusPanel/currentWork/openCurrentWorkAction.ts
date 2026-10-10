@@ -54,7 +54,7 @@ export function dispatchOpenCurrentWorkAction(detail: OpenCurrentWorkActionDetai
 
 /**
  * The record's resolved action for `key` — from the same registry-resolved slots Manage is built
- * from. A card placement (Children "+ Add Child", Household "+ Add Contact") invokes THIS action
+ * from. A card placement (Children "+ Add Child" → `add_child`, Household "+ Add Contact" → `add_family_member`) invokes THIS action
  * through the record action handler Manage uses, so its availability, permission and host are
  * Manage's, never a card's own. Absent → the card offers nothing.
  */

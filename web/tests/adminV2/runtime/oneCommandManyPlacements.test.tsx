@@ -67,7 +67,10 @@ const action = (key: string, label: string): ResolvedActionForClient => ({
     workflow_id: null,
 });
 const ADD_CHILD = action("add_child", "Add Child");
-const ADD_PARENT = action("add_parent_guardian", "Add Parent");
+// Manage → "Add Parent" is `add_family_member` (measured on deployed staging from the Manage item's
+// own key). The relationship wizard's `add_parent_guardian` is a different command Manage does not offer.
+const ADD_PARENT = action("add_family_member", "Add Parent");
+const ADD_PARENT_GUARDIAN = action("add_parent_guardian", "Add Parent / Guardian");
 const slots = (...overflow: ResolvedActionForClient[]): ResolvedActionsBySlot => ({
     primary: [],
     secondary: [],
@@ -131,6 +134,7 @@ describe("the rule is registry metadata, scoped to relationship capabilities", (
         expect(isCurrentWorkHostedRecordAction({ key: "schedule_tour" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "change_lead_location" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "add_parent_guardian" })).toBe(false);
+        expect(isCurrentWorkHostedRecordAction({ key: "add_family_member" })).toBe(false);
         expect(isCurrentWorkHostedRecordAction({ key: "add_emergency_contact" })).toBe(false);
     });
 
@@ -270,6 +274,11 @@ describe("card placements invoke the action Manage resolved", () => {
         expect(invoke.mock.calls[0]![0]).toBe(ADD_PARENT);
     });
 
+    it("Household + Add Contact does not bind the relationship wizard's add_parent_guardian", () => {
+        renderCard("household", { slots: slots(ADD_PARENT_GUARDIAN), canEdit: true });
+        expect(host!.querySelector('[data-household-action="add-contact"]')).toBeNull();
+    });
+
     it("offers nothing when the record has no such action", () => {
         renderCard("children", { slots: slots(ADD_PARENT), canEdit: true });
         expect(host!.querySelector('[data-children-action="add-child"]')).toBeNull();
@@ -282,5 +291,17 @@ describe("card placements invoke the action Manage resolved", () => {
         expect(host!.querySelector('[data-children-action="add-child"]')).toBeNull();
         renderCard("household", { slots: slots(ADD_PARENT), canEdit: false });
         expect(host!.querySelector('[data-household-action="add-contact"]')).toBeNull();
+    });
+});
+
+describe("the Add person form both Add Contact placements open is reachable", () => {
+    it("caps the panel to the viewport and scrolls the fields between a fixed header and footer", async () => {
+        // Layout is measured on deployed staging (jsdom has none); this pins the structure that
+        // measurement depends on, so a revert to an uncapped, unscrollable panel is caught here.
+        const { readFileSync } = await import("node:fs");
+        const src = readFileSync(`${process.cwd()}/components/admin/opportunity/actions/AddPersonModal.tsx`, "utf8");
+        expect(src).toMatch(/panelClassName="[^"]*\bmax-h-\[calc\(100dvh-2rem\)\][^"]*\bflex-col\b/);
+        expect(src).toMatch(/data-add-person-modal-body="true"/);
+        expect(src).toMatch(/className="min-h-0 flex-1 space-y-3 overflow-y-auto[^"]*" data-add-person-modal-body/);
     });
 });
