@@ -148,6 +148,19 @@ do $$ begin
 end $$;
 \endif
 
+-- ── THE LEGACY HOUSEHOLDS ARE REBUILT ONLY WHERE THAT DESTROYS NOTHING ANYONE IS USING ────────
+--
+-- The teardown below deletes these households' charges, payments and journal entries with the
+-- money triggers suspended. On the shared LOCAL stack that is the point: `demo-tenant.sh` passes
+-- `-v legacy_reset=1` and gets the proving state back. On deployed staging these households carry
+-- QA history the Director has asked to keep — residue is resolved through governed corrections,
+-- never by hard deletion — so where they already exist and no reset was asked for, the whole
+-- legacy block is skipped and the W7 section below still runs. (W7-F012)
+select (:{?legacy_reset} or not exists (
+  select 1 from customers where id = :'hh_a'::uuid and org_id = :'org'::uuid)) as legacy_rebuild
+\gset
+\if :legacy_rebuild
+
 -- ── TEARDOWN ────────────────────────────────────────────────────────────────────────────────────
 --
 -- SET LOCAL, not SET: the suspension is bounded by this transaction and is restored by COMMIT or
@@ -382,6 +395,195 @@ insert into financial_subsidy_authorizations
    authorized_amount_cents, family_copay_cents, state, source_key) values
   ('fd000000-0000-4000-8000-0000000f0003'::uuid, :'org'::uuid, :'program'::uuid, :'hh_c'::uuid,
    :'kid_c'::uuid, current_date - 90, current_date + 180, 90000, 15000, 'active', 'demo_tenant');
+
+\else
+\echo 'legacy demo households already present: left untouched (pass -v legacy_reset=1 to rebuild them)'
+\endif
+
+-- =============================================================================
+-- W7 QA HOUSEHOLDS — PURPOSE-BUILT FOR THE FINANCIALS + PAYMENTS HUMAN WALKTHROUGH (W7-F012)
+--
+-- The Director's W7 walkthrough used to run against Alvarez and whatever else staging happened to
+-- hold: households carrying months of prior QA charges, payments and overrides nobody could
+-- explain. These five exist ONLY for W7. Each has one job, a name that says so, a known campus, a
+-- known billing resolution and a known responsibility arrangement — and no money at all until the
+-- Director creates it.
+--
+--   W7 QA · Monthly Family     North Campus            monthly (no account override)   100% Mara
+--   W7 QA · Weekly Family      South Campus            weekly location override        100% Wes
+--   W7 QA · West Family        West Campus             weekly, a different anchor      100% Wren
+--   W7 QA · Multi-Site Family  North + South Campus    explicit ACCOUNT calendar       50/50
+--   W7 QA · Split Family       North Campus            monthly                         50/50 + Gale
+--
+-- ── CONVERGE, NEVER RESET ──
+--
+-- Every write is insert-if-absent and nothing here deletes. Re-running restores a missing row and
+-- leaves an existing one — including whatever money the walkthrough has since created — exactly as
+-- it is. Residue a walkthrough leaves behind is resolved through the governed correction path, not
+-- by rebuilding the household. No `session_replication_role` window: every row faces the same
+-- triggers an operator's would.
+--
+-- ── CAMPUSES BY NAME, FROM THIS TENANT ──
+--
+-- The walkthrough is about North, South and West Campus specifically, because their billing
+-- calendars differ. They are resolved by name inside the governed organization; a tenant without
+-- all three (the local cert stack has Riverside and Lakeside) skips this section and says so, it
+-- never substitutes a different campus.
+-- =============================================================================
+\set w7_hh_monthly  'fd000000-0000-4000-8000-0000007c0001'
+\set w7_hh_weekly   'fd000000-0000-4000-8000-0000007c0002'
+\set w7_hh_west     'fd000000-0000-4000-8000-0000007c0003'
+\set w7_hh_multi    'fd000000-0000-4000-8000-0000007c0004'
+\set w7_hh_split    'fd000000-0000-4000-8000-0000007c0005'
+\set w7_kid_milo    'fd000000-0000-4000-8000-0000007d0001'
+\set w7_kid_willa   'fd000000-0000-4000-8000-0000007d0002'
+\set w7_kid_wyatt   'fd000000-0000-4000-8000-0000007d0003'
+\set w7_kid_mika    'fd000000-0000-4000-8000-0000007d0004'
+\set w7_kid_max     'fd000000-0000-4000-8000-0000007d0005'
+\set w7_kid_sasha   'fd000000-0000-4000-8000-0000007d0006'
+\set w7_mara        'fd000000-0000-4000-8000-0000007b0001'
+\set w7_wes         'fd000000-0000-4000-8000-0000007b0002'
+\set w7_wren        'fd000000-0000-4000-8000-0000007b0003'
+\set w7_morgan      'fd000000-0000-4000-8000-0000007b0004'
+\set w7_sam         'fd000000-0000-4000-8000-0000007b0005'
+\set w7_dana        'fd000000-0000-4000-8000-0000007b0006'
+\set w7_rosa        'fd000000-0000-4000-8000-0000007b0007'
+\set w7_gale        'fd000000-0000-4000-8000-0000007b0008'
+\set w7_agr_milo    'fd000000-0000-4000-8000-0000007a0001'
+\set w7_agr_willa   'fd000000-0000-4000-8000-0000007a0002'
+\set w7_agr_wyatt   'fd000000-0000-4000-8000-0000007a0003'
+\set w7_agr_mika    'fd000000-0000-4000-8000-0000007a0004'
+\set w7_agr_max     'fd000000-0000-4000-8000-0000007a0005'
+\set w7_agr_sasha   'fd000000-0000-4000-8000-0000007a0006'
+\set w7_arr_monthly 'fd000000-0000-4000-8000-0000007e0001'
+\set w7_arr_weekly  'fd000000-0000-4000-8000-0000007e0002'
+\set w7_arr_west    'fd000000-0000-4000-8000-0000007e0003'
+\set w7_arr_multi   'fd000000-0000-4000-8000-0000007e0004'
+\set w7_arr_split   'fd000000-0000-4000-8000-0000007e0005'
+\set w7_cal_multi   'fd000000-0000-4000-8000-0000007f0001'
+-- One fixed, known start for every W7 enrolment, arrangement and calendar.
+\set w7_start '2026-09-01'
+
+select
+  (select l.id from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active and l.label = 'North Campus'
+    order by l.id limit 1) as w7_north,
+  (select l.id from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active and l.label = 'South Campus'
+    order by l.id limit 1) as w7_south,
+  (select l.id from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active and l.label = 'West Campus'
+    order by l.id limit 1) as w7_west,
+  (select count(distinct l.label) = 3 from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active
+      and l.label in ('North Campus', 'South Campus', 'West Campus')) as w7_sites_ok
+\gset
+
+\if :w7_sites_ok
+
+insert into customers (id, org_id, name, customer_type, status_key) values
+  (:'w7_hh_monthly'::uuid, :'org'::uuid, 'W7 QA · Monthly Family',    'residential', 'active'),
+  (:'w7_hh_weekly'::uuid,  :'org'::uuid, 'W7 QA · Weekly Family',     'residential', 'active'),
+  (:'w7_hh_west'::uuid,    :'org'::uuid, 'W7 QA · West Family',       'residential', 'active'),
+  (:'w7_hh_multi'::uuid,   :'org'::uuid, 'W7 QA · Multi-Site Family', 'residential', 'active'),
+  (:'w7_hh_split'::uuid,   :'org'::uuid, 'W7 QA · Split Family',      'residential', 'active')
+on conflict (id) do nothing;
+
+insert into customer_members (id, org_id, customer_id, display_name, first_name, last_name, is_active) values
+  (:'w7_kid_milo'::uuid,  :'org'::uuid, :'w7_hh_monthly'::uuid, 'Milo Monthly',    'Milo',  'Monthly',   true),
+  (:'w7_kid_willa'::uuid, :'org'::uuid, :'w7_hh_weekly'::uuid,  'Willa Weekly',    'Willa', 'Weekly',    true),
+  (:'w7_kid_wyatt'::uuid, :'org'::uuid, :'w7_hh_west'::uuid,    'Wyatt Westbrook', 'Wyatt', 'Westbrook', true),
+  (:'w7_kid_mika'::uuid,  :'org'::uuid, :'w7_hh_multi'::uuid,   'Mika Multisite',  'Mika',  'Multisite', true),
+  (:'w7_kid_max'::uuid,   :'org'::uuid, :'w7_hh_multi'::uuid,   'Max Multisite',   'Max',   'Multisite', true),
+  (:'w7_kid_sasha'::uuid, :'org'::uuid, :'w7_hh_split'::uuid,   'Sasha Split',     'Sasha', 'Split',     true)
+on conflict (id) do nothing;
+
+-- Record numbers are omitted: the org-scoped BEFORE INSERT trigger assigns the next free one, so
+-- these can never collide with a number some other fixture or operator already holds.
+insert into persons (id, org_id, first_name, last_name, full_name, status_key) values
+  (:'w7_mara'::uuid,   :'org'::uuid, 'Mara',   'Monthly',   'Mara Monthly',     'active'),
+  (:'w7_wes'::uuid,    :'org'::uuid, 'Wes',    'Weekly',    'Wes Weekly',       'active'),
+  (:'w7_wren'::uuid,   :'org'::uuid, 'Wren',   'Westbrook', 'Wren Westbrook',   'active'),
+  (:'w7_morgan'::uuid, :'org'::uuid, 'Morgan', 'Multisite', 'Morgan Multisite', 'active'),
+  (:'w7_sam'::uuid,    :'org'::uuid, 'Sam',    'Multisite', 'Sam Multisite',    'active'),
+  (:'w7_dana'::uuid,   :'org'::uuid, 'Dana',   'Split',     'Dana Split',       'active'),
+  (:'w7_rosa'::uuid,   :'org'::uuid, 'Rosa',   'Split',     'Rosa Split',       'active'),
+  (:'w7_gale'::uuid,   :'org'::uuid, 'Gale',   'Split',     'Gale Split',       'active')
+on conflict (id) do nothing;
+
+-- Every adult is an ACTIVE member of their household, so every one of them is an eligible party.
+-- Gale is the point of the Split Family: eligible, on the account, and NOT responsible — the
+-- person "+ Add responsible member" exists to add.
+insert into customer_persons (org_id, customer_id, person_id, role_type, is_primary, status)
+select :'org'::uuid, v.customer_id, v.person_id, v.role_type, v.is_primary, 'active'
+  from (values
+    (:'w7_hh_monthly'::uuid, :'w7_mara'::uuid,   'parent',   true),
+    (:'w7_hh_weekly'::uuid,  :'w7_wes'::uuid,    'parent',   true),
+    (:'w7_hh_west'::uuid,    :'w7_wren'::uuid,   'parent',   true),
+    (:'w7_hh_multi'::uuid,   :'w7_morgan'::uuid, 'parent',   true),
+    (:'w7_hh_multi'::uuid,   :'w7_sam'::uuid,    'parent',   false),
+    (:'w7_hh_split'::uuid,   :'w7_dana'::uuid,   'parent',   true),
+    (:'w7_hh_split'::uuid,   :'w7_rosa'::uuid,   'parent',   false),
+    (:'w7_hh_split'::uuid,   :'w7_gale'::uuid,   'guardian', false)
+  ) as v(customer_id, person_id, role_type, is_primary)
+ where not exists (
+   select 1 from customer_persons cp
+    where cp.org_id = :'org'::uuid and cp.customer_id = v.customer_id and cp.person_id = v.person_id);
+
+-- One enrolment per child, at the campus the family exists to exercise. The Multi-Site Family's
+-- two children attend DIFFERENT campuses with different calendars — the case only an account
+-- billing calendar can resolve.
+insert into child_enrollment_agreements
+  (id, org_id, customer_member_id, customer_id, site_location_id, status, start_date, source_key) values
+  (:'w7_agr_milo'::uuid,  :'org'::uuid, :'w7_kid_milo'::uuid,  :'w7_hh_monthly'::uuid, :'w7_north'::uuid, 'active', :'w7_start'::date, 'w7_qa_fixture'),
+  (:'w7_agr_willa'::uuid, :'org'::uuid, :'w7_kid_willa'::uuid, :'w7_hh_weekly'::uuid,  :'w7_south'::uuid, 'active', :'w7_start'::date, 'w7_qa_fixture'),
+  (:'w7_agr_wyatt'::uuid, :'org'::uuid, :'w7_kid_wyatt'::uuid, :'w7_hh_west'::uuid,    :'w7_west'::uuid,  'active', :'w7_start'::date, 'w7_qa_fixture'),
+  (:'w7_agr_mika'::uuid,  :'org'::uuid, :'w7_kid_mika'::uuid,  :'w7_hh_multi'::uuid,   :'w7_north'::uuid, 'active', :'w7_start'::date, 'w7_qa_fixture'),
+  (:'w7_agr_max'::uuid,   :'org'::uuid, :'w7_kid_max'::uuid,   :'w7_hh_multi'::uuid,   :'w7_south'::uuid, 'active', :'w7_start'::date, 'w7_qa_fixture'),
+  (:'w7_agr_sasha'::uuid, :'org'::uuid, :'w7_kid_sasha'::uuid, :'w7_hh_split'::uuid,   :'w7_north'::uuid, 'active', :'w7_start'::date, 'w7_qa_fixture')
+on conflict (id) do nothing;
+
+-- ── RESPONSIBILITY — the same rows `configureResponsibilityArrangement` writes ─────────────────
+--
+-- A standing HOUSEHOLD arrangement (no child, no charge) per family, effective from the W7 start,
+-- named people only, shares totalling exactly 100%. The shape is the service's own insert,
+-- including its defaults (`responsible_party_type = 'person'`, priority 100).
+insert into financial_responsibility_arrangements
+  (id, org_id, customer_id, customer_member_id, effective_start, state, source_key, source_reference) values
+  (:'w7_arr_monthly'::uuid, :'org'::uuid, :'w7_hh_monthly'::uuid, null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: 100% Mara'),
+  (:'w7_arr_weekly'::uuid,  :'org'::uuid, :'w7_hh_weekly'::uuid,  null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: 100% Wes'),
+  (:'w7_arr_west'::uuid,    :'org'::uuid, :'w7_hh_west'::uuid,    null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: 100% Wren'),
+  (:'w7_arr_multi'::uuid,   :'org'::uuid, :'w7_hh_multi'::uuid,   null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: Morgan 50% / Sam 50%'),
+  (:'w7_arr_split'::uuid,   :'org'::uuid, :'w7_hh_split'::uuid,   null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: Dana 50% / Rosa 50%')
+on conflict (id) do nothing;
+
+insert into financial_responsibility_shares
+  (id, org_id, arrangement_id, responsible_party_type, responsible_party_id, method, percent_basis_points, priority) values
+  ('fd000000-0000-4000-8000-0000007e1001'::uuid, :'org'::uuid, :'w7_arr_monthly'::uuid, 'person', :'w7_mara'::uuid,   'percentage', 10000, 100),
+  ('fd000000-0000-4000-8000-0000007e1002'::uuid, :'org'::uuid, :'w7_arr_weekly'::uuid,  'person', :'w7_wes'::uuid,    'percentage', 10000, 100),
+  ('fd000000-0000-4000-8000-0000007e1003'::uuid, :'org'::uuid, :'w7_arr_west'::uuid,    'person', :'w7_wren'::uuid,   'percentage', 10000, 100),
+  ('fd000000-0000-4000-8000-0000007e1004'::uuid, :'org'::uuid, :'w7_arr_multi'::uuid,   'person', :'w7_morgan'::uuid, 'percentage',  5000, 100),
+  ('fd000000-0000-4000-8000-0000007e1005'::uuid, :'org'::uuid, :'w7_arr_multi'::uuid,   'person', :'w7_sam'::uuid,    'percentage',  5000, 100),
+  ('fd000000-0000-4000-8000-0000007e1006'::uuid, :'org'::uuid, :'w7_arr_split'::uuid,   'person', :'w7_dana'::uuid,   'percentage',  5000, 100),
+  ('fd000000-0000-4000-8000-0000007e1007'::uuid, :'org'::uuid, :'w7_arr_split'::uuid,   'person', :'w7_rosa'::uuid,   'percentage',  5000, 100)
+on conflict (id) do nothing;
+
+-- ── THE ONE ACCOUNT OVERRIDE, AND IT IS THE POINT ──────────────────────────────────────────────
+--
+-- The Multi-Site Family's children bill on two different location calendars; the binder refuses to
+-- guess between them. An explicit account-level MONTHLY calendar is the resolution the walkthrough
+-- exercises. No other W7 household carries an account override.
+insert into financial_policies
+  (id, org_id, scope_type, customer_id, policy_type, label, value, is_active, effective_start, source_key, metadata) values
+  (:'w7_cal_multi'::uuid, :'org'::uuid, 'customer', :'w7_hh_multi'::uuid, 'billing_calendar',
+   'W7 QA · Multi-Site Family account calendar', '{"cadence":"monthly","anchor_on":null}'::jsonb, true,
+   :'w7_start'::date, 'w7_qa_fixture', '{"fixture":"w7_qa"}'::jsonb)
+on conflict (id) do nothing;
+
+\echo 'w7_fixture: converged (5 households, 6 children, 8 adults, 6 agreements, 5 arrangements, 1 account calendar)'
+\else
+\echo 'w7_fixture: skipped: this tenant does not have all of North, South and West Campus as active sites'
+\endif
 
 -- All of it, or none of it.
 commit;

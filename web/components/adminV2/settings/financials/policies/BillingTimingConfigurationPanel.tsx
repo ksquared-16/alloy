@@ -16,10 +16,10 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
 import { useFinancialPolicies } from "@/components/adminV2/settings/financials/useFinancialPolicies";
 import { buildVersionTimeline } from "@/lib/adminV2/operationalConfig/effectiveDatedVersioning";
-import { formatEffectiveRange, formatYmd } from "@/lib/adminV2/operationalConfig/configReadPresentation";
+import { formatYmd } from "@/lib/adminV2/operationalConfig/configReadPresentation";
+import { humanRange } from "@/lib/financials/dates/humanDates";
 import {
     BILLING_TIMING_FALLBACK,
-    BILLING_TIMING_RULE_DERIVES,
     BILLING_TIMING_RULE_LABEL,
     BILLING_TIMING_RULES,
     buildBillingTimingModel,
@@ -108,20 +108,44 @@ export default function BillingTimingConfigurationPanel({
             }
         });
 
+    const openEditor = (rule: BillingTimingRule, scope: Scope, mode: "now" | "schedule", reading: RuleReading | null) =>
+        setEditor({ rule, scope, mode, reading });
+    const toggleHistory = (key: string) => setHistoryOpen((h) => (h === key ? null : key));
+
+    /* The open history panel, found wherever its rule lives — rendered once, below its grid. */
+    const orgHistory = model.orgDefault.find((r) => historyOpen === `org:${r.rule}`) ?? null;
+    const overrideHistory = (() => {
+        for (const o of model.overrides) {
+            for (const r of o.rules) {
+                if (r.overridden && historyOpen === `${o.locationId}:${r.rule}`) {
+                    return { locationName: o.locationName ?? "Location", reading: r.reading };
+                }
+            }
+        }
+        return null;
+    })();
+
+    /*
+     * ── W7-F011: ONE GRID, NOT FOUR STACKED SECTIONS ────────────────────────────────────────
+     *
+     * The model is unchanged and accepted; the presentation was too vertical and word-heavy. The
+     * organization default is one row of four rules, the overrides are one table with every
+     * location in it, and inheritance is explained ONCE, at the top. Each rule keeps its actions
+     * (Edit · Schedule change · History), CURRENT / SCHEDULED / HISTORY stay three distinct things,
+     * and history stays secondary and expandable. Every value is the same resolver's answer.
+     */
     return (
         <section className="space-y-3" data-testid="billing-timing">
             <div>
                 <h2 className="text-sm font-semibold text-alloy-midnight">Billing &amp; payment timing</h2>
-                <p className="mt-1 max-w-2xl text-sm text-alloy-midnight/60">
-                    How this organization bills. Every charge&apos;s billing period, invoice date, due date and posting are
-                    derived from these four rules — in this order:
-                </p>
-                <p className="mt-1 text-xs font-medium text-alloy-midnight/70" data-testid="billing-timing-chain">
-                    Service date → Billing period → Invoice date → Due date → Posting
-                </p>
-                <p className="mt-1 text-xs text-alloy-midnight/55">
-                    Accounting periods are separate — configured under Accounting, attributed from each entry&apos;s
-                    effective date, never from the billing period.
+                <p className="mt-1 max-w-3xl text-[13px] text-alloy-midnight/60">
+                    Every charge&apos;s dates follow from these four rules:{" "}
+                    <span className="font-medium text-alloy-midnight/75" data-testid="billing-timing-chain">
+                        Service date → Billing period → Invoice date → Due date → Posting
+                    </span>
+                    . Locations <strong className="font-medium">inherit</strong> the organization default unless they
+                    override a rule; a household attending more than one location uses its own account billing period.
+                    Accounting periods are separate.
                 </p>
             </div>
 
@@ -136,24 +160,26 @@ export default function BillingTimingConfigurationPanel({
             ) : (
                 <>
                     <ConfigurationDetailCard title="Organization default" testId="billing-timing-org-default">
-                        <ul className="divide-y divide-alloy-stone/25">
+                        <div
+                            className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4"
+                            data-testid="billing-timing-org-summary"
+                        >
                             {model.orgDefault.map((reading) => (
-                                <RuleRow
+                                <OrgRuleCell
                                     key={reading.rule}
                                     reading={reading}
-                                    scope={{ type: "org" }}
-                                    todayYmd={todayYmd}
                                     canMutate={canMutate}
                                     busy={busy}
                                     historyOpen={historyOpen === `org:${reading.rule}`}
-                                    onToggleHistory={() =>
-                                        setHistoryOpen((h) => (h === `org:${reading.rule}` ? null : `org:${reading.rule}`))
-                                    }
-                                    onEdit={(mode) => setEditor({ rule: reading.rule, scope: { type: "org" }, mode, reading })}
+                                    onToggleHistory={() => toggleHistory(`org:${reading.rule}`)}
+                                    onEdit={(mode) => openEditor(reading.rule, { type: "org" }, mode, reading)}
                                     onCancelScheduled={(id) => void run(() => voidPolicy(id))}
                                 />
                             ))}
-                        </ul>
+                        </div>
+                        {orgHistory ? (
+                            <RuleHistory reading={orgHistory} todayYmd={todayYmd} title={`${BILLING_TIMING_RULE_LABEL[orgHistory.rule]} · organization default`} />
+                        ) : null}
                         {editor && editor.scope.type === "org" ? (
                             <RuleEditor
                                 state={editor}
@@ -172,83 +198,95 @@ export default function BillingTimingConfigurationPanel({
 
                     <ConfigurationDetailCard title="Overrides" testId="billing-timing-overrides">
                         {model.overrides.length === 0 ? (
-                            <p className="text-sm text-alloy-midnight/60" data-testid="billing-timing-no-overrides">
+                            <p className="mb-2 text-[13px] text-alloy-midnight/60" data-testid="billing-timing-no-overrides">
                                 No location overrides — every location bills on the organization default.
                             </p>
-                        ) : (
-                            <ul className="space-y-4">
-                                {model.overrides.map((o) => (
-                                    <li key={o.locationId} data-testid={`billing-timing-override-${o.locationId}`}>
-                                        {o.locationName != null ? (
-                                            <p className="text-sm font-semibold text-alloy-midnight">{o.locationName}</p>
-                                        ) : (
-                                            <p
-                                                className="h-5 w-40 animate-pulse rounded bg-alloy-stone/25"
-                                                aria-busy="true"
-                                                aria-label="Loading location"
-                                                data-testid="billing-timing-override-name-pending"
-                                            />
-                                        )}
-                                        <ul className="mt-1 divide-y divide-alloy-stone/20">
-                                            {o.rules.map((r) =>
-                                                r.overridden ? (
-                                                    <RuleRow
+                        ) : null}
+                        {model.overrides.length + model.inheritingLocations.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[640px] text-left text-[13px]" data-testid="billing-timing-overrides-table">
+                                    <thead>
+                                        <tr className="text-[11px] uppercase tracking-[0.06em] text-alloy-forge/60">
+                                            <th scope="col" className="py-1.5 pr-4 font-semibold">Scope</th>
+                                            {BILLING_TIMING_RULES.map((rule) => (
+                                                <th key={rule} scope="col" className="py-1.5 pr-4 font-semibold">{BILLING_TIMING_RULE_LABEL[rule]}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-alloy-stone/25">
+                                        {model.overrides.map((o) => {
+                                            const scope: Scope = { type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" };
+                                            return (
+                                                <tr key={o.locationId} className="align-top" data-testid={`billing-timing-override-${o.locationId}`}>
+                                                    <th scope="row" className="py-2 pr-4 font-medium text-alloy-midnight">
+                                                        {o.locationName != null ? (
+                                                            o.locationName
+                                                        ) : (
+                                                            <span
+                                                                className="inline-block h-4 w-28 animate-pulse rounded bg-alloy-stone/25"
+                                                                aria-busy="true"
+                                                                aria-label="Loading location"
+                                                                data-testid="billing-timing-override-name-pending"
+                                                            />
+                                                        )}
+                                                    </th>
+                                                    {o.rules.map((r) =>
+                                                        r.overridden ? (
+                                                            <OverrideCell
+                                                                key={r.rule}
+                                                                reading={r.reading}
+                                                                scopeKey={o.locationId}
+                                                                canMutate={canMutate}
+                                                                busy={busy}
+                                                                historyOpen={historyOpen === `${o.locationId}:${r.rule}`}
+                                                                onToggleHistory={() => toggleHistory(`${o.locationId}:${r.rule}`)}
+                                                                onEdit={(mode) => openEditor(r.rule, scope, mode, r.reading)}
+                                                                onReturnToDefault={() => void returnToDefault(r.reading)}
+                                                                onCancelScheduled={(id) => void run(() => voidPolicy(id))}
+                                                            />
+                                                        ) : (
+                                                            <InheritsCell
+                                                                key={r.rule}
+                                                                testId={`billing-timing-inherits-${o.locationId}-${r.rule}`}
+                                                                inheritedSentence={r.inheritedSentence}
+                                                                canMutate={canMutate}
+                                                                busy={busy}
+                                                                onOverride={() => openEditor(r.rule, scope, "now", null)}
+                                                            />
+                                                        ),
+                                                    )}
+                                                </tr>
+                                            );
+                                        })}
+                                        {model.inheritingLocations.map((l) => (
+                                            <tr key={l.locationId} className="align-top" data-testid={`billing-timing-inheriting-${l.locationId}`}>
+                                                <th scope="row" className="py-2 pr-4 font-medium text-alloy-midnight/80">{l.locationName}</th>
+                                                {model.orgDefault.map((r) => (
+                                                    <InheritsCell
                                                         key={r.rule}
-                                                        reading={r.reading}
-                                                        scope={{ type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" }}
-                                                        todayYmd={todayYmd}
+                                                        testId={`billing-timing-inherits-${l.locationId}-${r.rule}`}
+                                                        inheritedSentence={r.sentence}
                                                         canMutate={canMutate}
                                                         busy={busy}
-                                                        historyOpen={historyOpen === `${o.locationId}:${r.rule}`}
-                                                        onToggleHistory={() =>
-                                                            setHistoryOpen((h) =>
-                                                                h === `${o.locationId}:${r.rule}` ? null : `${o.locationId}:${r.rule}`,
-                                                            )
+                                                        onOverride={() =>
+                                                            openEditor(r.rule, { type: "location", locationId: l.locationId, locationName: l.locationName }, "now", null)
                                                         }
-                                                        onEdit={(mode) =>
-                                                            setEditor({
-                                                                rule: r.rule,
-                                                                scope: { type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" },
-                                                                mode,
-                                                                reading: r.reading,
-                                                            })
-                                                        }
-                                                        onReturnToDefault={() => void returnToDefault(r.reading)}
-                                                        onCancelScheduled={(id) => void run(() => voidPolicy(id))}
                                                     />
-                                                ) : (
-                                                    <li
-                                                        key={r.rule}
-                                                        className="flex flex-wrap items-baseline justify-between gap-2 py-1.5 text-[13px]"
-                                                        data-testid={`billing-timing-inherits-${o.locationId}-${r.rule}`}
-                                                    >
-                                                        <span className="w-36 shrink-0 text-alloy-forge/70">{BILLING_TIMING_RULE_LABEL[r.rule]}</span>
-                                                        <span className="flex-1 text-alloy-midnight/60">
-                                                            Inherits organization default · {r.inheritedSentence}
-                                                        </span>
-                                                        {canMutate ? (
-                                                            <ConfigurationInlineButton
-                                                                onClick={() =>
-                                                                    setEditor({
-                                                                        rule: r.rule,
-                                                                        scope: { type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" },
-                                                                        mode: "now",
-                                                                        reading: null,
-                                                                    })
-                                                                }
-                                                                disabled={busy}
-                                                            >
-                                                                Override
-                                                            </ConfigurationInlineButton>
-                                                        ) : null}
-                                                    </li>
-                                                ),
-                                            )}
-                                        </ul>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : null}
+
+                        {overrideHistory ? (
+                            <RuleHistory
+                                reading={overrideHistory.reading}
+                                todayYmd={todayYmd}
+                                title={`${BILLING_TIMING_RULE_LABEL[overrideHistory.reading.rule]} · ${overrideHistory.locationName}`}
+                            />
+                        ) : null}
 
                         {editor && editor.scope.type === "location" ? (
                             <RuleEditor
@@ -300,10 +338,10 @@ export default function BillingTimingConfigurationPanel({
     );
 }
 
-function RuleRow({
+/** The quiet action links under a rule — never four full-width buttons. */
+function RuleActions({
     reading,
-    scope,
-    todayYmd,
+    scopeKey,
     canMutate,
     busy,
     historyOpen,
@@ -313,8 +351,7 @@ function RuleRow({
     onCancelScheduled,
 }: {
     reading: RuleReading;
-    scope: Scope;
-    todayYmd: string;
+    scopeKey: string;
     canMutate: boolean;
     busy: boolean;
     historyOpen: boolean;
@@ -323,78 +360,191 @@ function RuleRow({
     onReturnToDefault?: () => void;
     onCancelScheduled?: (rowId: string) => void;
 }) {
-    const scopeKey = scope.type === "org" ? "org" : scope.locationId;
-    const fallback = reading.isFallback && scope.type === "org";
     return (
-        <li className="py-2" data-testid={`billing-timing-rule-${scopeKey}-${reading.rule}`}>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="w-36 shrink-0 text-[13px] text-alloy-forge/70">{BILLING_TIMING_RULE_LABEL[reading.rule]}</span>
-                <span className="min-w-0 flex-1">
-                    <span
-                        className={`text-[13px] font-medium ${fallback ? (BILLING_TIMING_FALLBACK[reading.rule].blocksBilling ? "text-red-700" : "text-amber-700") : "text-alloy-midnight"}`}
-                        data-testid={`billing-timing-value-${scopeKey}-${reading.rule}`}
-                    >
-                        {reading.current || !reading.scheduled ? reading.sentence : "Not in force yet"}
-                    </span>
-                    {reading.current && reading.through ? (
-                        <span className="ml-2 text-xs text-alloy-midnight/55">through {formatYmd(reading.through)}</span>
-                    ) : null}
-                    {reading.scheduled ? (
-                        <span className="mt-0.5 block text-xs text-alloy-midnight/70" data-testid={`billing-timing-scheduled-${scopeKey}-${reading.rule}`}>
-                            Scheduled · {reading.scheduled.sentence} · effective {formatYmd(reading.scheduled.row.effective_start)}
-                        </span>
-                    ) : null}
-                    <span className="mt-0.5 block text-xs text-alloy-midnight/50">{BILLING_TIMING_RULE_DERIVES[reading.rule]}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                    {canMutate ? (
-                        <>
-                            <ConfigurationInlineButton onClick={() => onEdit("now")} disabled={busy}>
-                                {reading.isFallback ? "Set" : "Edit"}
-                            </ConfigurationInlineButton>
-                            <ConfigurationInlineButton onClick={() => onEdit("schedule")} disabled={busy}>
-                                Schedule change
-                            </ConfigurationInlineButton>
-                            {reading.scheduled && onCancelScheduled ? (
-                                <ConfigurationInlineButton
-                                    onClick={() => onCancelScheduled(reading.scheduled!.row.id)}
-                                    disabled={busy}
-                                    data-testid={`billing-timing-cancel-scheduled-${scopeKey}-${reading.rule}`}
-                                >
-                                    Cancel scheduled change
-                                </ConfigurationInlineButton>
-                            ) : null}
-                            {onReturnToDefault ? (
-                                <ConfigurationInlineButton onClick={onReturnToDefault} disabled={busy}>
-                                    Return to organization default
-                                </ConfigurationInlineButton>
-                            ) : null}
-                        </>
-                    ) : null}
-                    {reading.history.length > 0 ? (
-                        <ConfigurationInlineButton onClick={onToggleHistory}>
-                            {historyOpen ? "Hide history" : "View history"}
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+            {canMutate ? (
+                <>
+                    <ConfigurationInlineButton onClick={() => onEdit("now")} disabled={busy}>
+                        {reading.isFallback ? "Set" : "Edit"}
+                    </ConfigurationInlineButton>
+                    <ConfigurationInlineButton onClick={() => onEdit("schedule")} disabled={busy}>
+                        Schedule change
+                    </ConfigurationInlineButton>
+                    {reading.scheduled && onCancelScheduled ? (
+                        <ConfigurationInlineButton
+                            onClick={() => onCancelScheduled(reading.scheduled!.row.id)}
+                            disabled={busy}
+                            data-testid={`billing-timing-cancel-scheduled-${scopeKey}-${reading.rule}`}
+                        >
+                            Cancel scheduled
                         </ConfigurationInlineButton>
                     ) : null}
-                </span>
-            </div>
-            {historyOpen ? <RuleHistory reading={reading} todayYmd={todayYmd} /> : null}
-        </li>
+                    {onReturnToDefault ? (
+                        <ConfigurationInlineButton onClick={onReturnToDefault} disabled={busy}>
+                            Return to default
+                        </ConfigurationInlineButton>
+                    ) : null}
+                </>
+            ) : null}
+            {reading.history.length > 0 ? (
+                <ConfigurationInlineButton onClick={onToggleHistory} aria-expanded={historyOpen}>
+                    {historyOpen ? "Hide history" : "History"}
+                </ConfigurationInlineButton>
+            ) : null}
+        </span>
     );
 }
 
-function RuleHistory({ reading, todayYmd }: { reading: RuleReading; todayYmd: string }) {
+/** CURRENT, then SCHEDULED — two distinct lines, never merged into one reading. */
+function RuleValue({ reading, scopeKey, fallbackTone }: { reading: RuleReading; scopeKey: string; fallbackTone: boolean }) {
+    return (
+        <>
+            <span
+                className={`block text-[13px] font-medium ${fallbackTone ? (BILLING_TIMING_FALLBACK[reading.rule].blocksBilling ? "text-red-700" : "text-amber-700") : "text-alloy-midnight"}`}
+                title={reading.current || !reading.scheduled ? reading.sentence : undefined}
+                data-testid={`billing-timing-value-${scopeKey}-${reading.rule}`}
+            >
+                {reading.current || !reading.scheduled ? reading.short : "Not in force yet"}
+            </span>
+            {reading.current && reading.through ? (
+                <span className="block text-xs text-alloy-midnight/55">through {formatYmd(reading.through)}</span>
+            ) : null}
+            {reading.scheduled ? (
+                <span
+                    className="mt-0.5 block text-xs text-alloy-midnight/70"
+                    title={reading.scheduled.sentence}
+                    data-testid={`billing-timing-scheduled-${scopeKey}-${reading.rule}`}
+                >
+                    <span className="font-semibold uppercase tracking-[0.05em] text-[10px] text-alloy-forge/70">Scheduled</span>{" "}
+                    {reading.scheduled.short} · from {formatYmd(reading.scheduled.row.effective_start)}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function OrgRuleCell({
+    reading,
+    canMutate,
+    busy,
+    historyOpen,
+    onToggleHistory,
+    onEdit,
+    onCancelScheduled,
+}: {
+    reading: RuleReading;
+    canMutate: boolean;
+    busy: boolean;
+    historyOpen: boolean;
+    onToggleHistory: () => void;
+    onEdit: (mode: "now" | "schedule") => void;
+    onCancelScheduled?: (rowId: string) => void;
+}) {
+    return (
+        <div className="min-w-0" data-testid={`billing-timing-rule-org-${reading.rule}`}>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-forge/60">
+                {BILLING_TIMING_RULE_LABEL[reading.rule]}
+            </span>
+            <RuleValue reading={reading} scopeKey="org" fallbackTone={reading.isFallback} />
+            <RuleActions
+                reading={reading}
+                scopeKey="org"
+                canMutate={canMutate}
+                busy={busy}
+                historyOpen={historyOpen}
+                onToggleHistory={onToggleHistory}
+                onEdit={onEdit}
+                onCancelScheduled={onCancelScheduled}
+            />
+        </div>
+    );
+}
+
+function OverrideCell({
+    reading,
+    scopeKey,
+    canMutate,
+    busy,
+    historyOpen,
+    onToggleHistory,
+    onEdit,
+    onReturnToDefault,
+    onCancelScheduled,
+}: {
+    reading: RuleReading;
+    scopeKey: string;
+    canMutate: boolean;
+    busy: boolean;
+    historyOpen: boolean;
+    onToggleHistory: () => void;
+    onEdit: (mode: "now" | "schedule") => void;
+    onReturnToDefault: () => void;
+    onCancelScheduled?: (rowId: string) => void;
+}) {
+    return (
+        <td className="py-2 pr-4" data-testid={`billing-timing-rule-${scopeKey}-${reading.rule}`}>
+            <RuleValue reading={reading} scopeKey={scopeKey} fallbackTone={false} />
+            <RuleActions
+                reading={reading}
+                scopeKey={scopeKey}
+                canMutate={canMutate}
+                busy={busy}
+                historyOpen={historyOpen}
+                onToggleHistory={onToggleHistory}
+                onEdit={onEdit}
+                onReturnToDefault={onReturnToDefault}
+                onCancelScheduled={onCancelScheduled}
+            />
+        </td>
+    );
+}
+
+/** "Inherits" — one word. What it inherits is the organization default row above, and a tooltip. */
+function InheritsCell({
+    testId,
+    inheritedSentence,
+    canMutate,
+    busy,
+    onOverride,
+}: {
+    testId: string;
+    inheritedSentence: string;
+    canMutate: boolean;
+    busy: boolean;
+    onOverride: () => void;
+}) {
+    return (
+        <td className="py-2 pr-4" data-testid={testId}>
+            <span className="block text-[13px] text-alloy-midnight/50" title={`Inherits the organization default: ${inheritedSentence}`}>
+                Inherits
+            </span>
+            {canMutate ? (
+                <span className="mt-1 block text-xs">
+                    <ConfigurationInlineButton onClick={onOverride} disabled={busy}>
+                        Override
+                    </ConfigurationInlineButton>
+                </span>
+            ) : null}
+        </td>
+    );
+}
+
+/** HISTORY — secondary, expandable, every version with its effective dates in words. */
+function RuleHistory({ reading, todayYmd, title }: { reading: RuleReading; todayYmd: string; title: string }) {
     const timeline = buildVersionTimeline(reading.history, todayYmd);
     return (
-        <ul className="mt-2 space-y-1 rounded-md bg-alloy-stone/10 px-3 py-2" data-testid={`billing-timing-history-${reading.rule}`}>
-            {timeline.map(({ row, status }) => (
-                <li key={row.id} className="flex flex-wrap items-center gap-2 text-xs text-alloy-midnight/75">
-                    <ConfigVersionBadge status={status} />
-                    <span className="font-medium">{ruleSentence(reading.rule, row.value)}</span>
-                    <span className="text-alloy-midnight/50">{formatEffectiveRange(row)}</span>
-                </li>
-            ))}
-        </ul>
+        <div className="mt-3 rounded-md bg-alloy-stone/10 px-3 py-2" data-testid={`billing-timing-history-${reading.rule}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-forge/60">History · {title}</p>
+            <ul className="mt-1 space-y-1">
+                {timeline.map(({ row, status }) => (
+                    <li key={row.id} className="flex flex-wrap items-center gap-2 text-xs text-alloy-midnight/75">
+                        <ConfigVersionBadge status={status} />
+                        <span className="font-medium">{ruleSentence(reading.rule, row.value)}</span>
+                        <span className="text-alloy-midnight/50">{humanRange(row.effective_start, row.effective_end)}</span>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 

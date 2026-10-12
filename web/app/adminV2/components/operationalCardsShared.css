@@ -3595,3 +3595,77 @@
     line-height: 1.35;
     color: var(--alloy-os-text-secondary, #4b5563);
 }
+
+/*
+ * ══ W7-F011 — ADD CHARGE, A COMPACT FINANCIAL FORM ══════════════════════════════════════════════
+ *
+ * Applies to + Responsibility are one group; Amount + Note share a row; the four dates share a
+ * row on desktop and collapse to two, then one, column as the modal narrows.
+ */
+.alloy-os-addcharge__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+}
+.alloy-os-addcharge__pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 0 16px;
+}
+.alloy-os-addcharge__pair > .alloy-os-addcharge__field {
+    grid-template-columns: 64px minmax(0, 1fr);
+}
+.alloy-os-addcharge__dates {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 4px 0 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+.alloy-os-addcharge__datecell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.alloy-os-addcharge__datecell[data-readonly="true"] .alloy-os-addcharge__field-value {
+    color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__posting {
+    margin: 2px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__sublabel {
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+@media (max-width: 760px) {
+    .alloy-os-addcharge__dates {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .alloy-os-addcharge__pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 420px) {
+    .alloy-os-addcharge__dates {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

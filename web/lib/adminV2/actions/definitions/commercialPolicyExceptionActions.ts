@@ -28,6 +28,7 @@ import {
     endPolicyException,
     readExceptionHistory,
 } from "@/lib/financials/reductions/commercialPolicyExceptionService";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 export const POLICY_EXCEPTION_ACTION_KEY = "billing.except_commercial_policy";
 export const POLICY_EXCEPTION_END_ACTION_KEY = "billing.end_commercial_policy_exception";
@@ -238,7 +239,7 @@ const endAction: RegisteredAction = {
             summary: target
                 ? "The policy may apply again to obligations effective after this date."
                 : "End this exception.",
-            changes: target ? [`Policy ${target.policyId}`, `In force from ${target.effectiveStart}`, `Reason: ${target.reason}`] : [],
+            changes: target ? [`Policy ${target.policyId}`, `In force from ${humanDay(target.effectiveStart)}`, `Reason: ${target.reason}`] : [],
         };
     },
 

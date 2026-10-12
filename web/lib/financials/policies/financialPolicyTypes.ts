@@ -10,6 +10,7 @@
  */
 
 import type { ConfigRuleEffectiveColumns } from "@/lib/childcareOperational/config/configRuleTypes";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 /*
  * `customer` is the ACCOUNT scope, and it is a different dimension from the three that precede it.
@@ -432,6 +433,8 @@ export function policyValueSummary(policyType: FinancialPolicyType, value: Recor
                 const opt = (f.options ?? []).find((o) => o.value === v);
                 return `${f.label}: ${opt?.label ?? String(v ?? "—")}`;
             }
+            // A date field reads as a date an operator reads, never year-first ISO (W7-F011).
+            if (f.control === "date") return `${f.label}: ${v ? humanDay(String(v)) : "—"}`;
             return `${f.label}: ${v ?? "—"}${f.suffix ? ` ${f.suffix}` : ""}`;
         })
         .join(" · ");

@@ -7,6 +7,7 @@
  * same sentence. Pure; reads nothing; renders only what the resolvers already decided.
  */
 import type { ChargeDateChain, InvoiceTimingRule } from "@/lib/financials/chargeDates/resolveChargeDateChain";
+import { humanDay, humanDayNoYear, weekdayShort } from "@/lib/financials/dates/humanDates";
 
 const SCOPE_WORDS: Record<string, string> = {
     org: "organization default",
@@ -69,21 +70,86 @@ export function dueRuleSentence(strategy: string | null | undefined, offsetDays:
     }
 }
 
-/** "Monthly · 1st → last day of each month" — a billing calendar, in words. */
+/** "Wed–Tue" — the weekday span of a weekly/biweekly period anchored on `anchorOn`. */
+export function weekdaySpan(anchorOn: string): string {
+    const t = Date.parse(`${anchorOn}T00:00:00Z`);
+    if (Number.isNaN(t)) return "";
+    const last = new Date(t - 86_400_000).toISOString().slice(0, 10);
+    return `${weekdayShort(anchorOn)}–${weekdayShort(last)}`;
+}
+
+/** "Monthly · 1st → last day of each month" — a billing calendar, in words. Dates read as dates. */
 export function billingCalendarSentence(cadence: string | null | undefined, anchorOn: string | null | undefined): string {
     switch ((cadence ?? "").trim()) {
         case "monthly":
             return "Monthly · 1st → last day of each month";
         case "weekly":
-            return anchorOn ? `Weekly · 7-day periods starting from ${anchorOn}` : "Weekly · anchor missing";
+            return anchorOn ? `Weekly · ${weekdaySpan(anchorOn)} periods, starting ${humanDay(anchorOn)}` : "Weekly · anchor missing";
         case "biweekly":
-            return anchorOn ? `Every two weeks · 14-day periods starting from ${anchorOn}` : "Every two weeks · anchor missing";
+            return anchorOn ? `Every two weeks · ${weekdaySpan(anchorOn)} periods, starting ${humanDay(anchorOn)}` : "Every two weeks · anchor missing";
         case "daily":
             return "Daily";
         case "annual":
-            return anchorOn ? `Annual · each year from ${anchorOn.slice(5)}` : "Annual · anchor missing";
+            return anchorOn ? `Annual · each year from ${humanDayNoYear(anchorOn)}` : "Annual · anchor missing";
         default:
             return "No billing calendar configured";
+    }
+}
+
+/*
+ * ── THE SHORT FORMS — one cell of a summary grid (W7-F011) ──────────────────────────────────────
+ *
+ * The full sentences above explain a rule; these NAME it, for the compact organization summary and
+ * the overrides table. Same inputs, same rules — a different length, never a different answer.
+ */
+
+/** "Monthly · 1st–last day", "Weekly · Wed–Tue". */
+export function billingCalendarShort(cadence: string | null | undefined, anchorOn: string | null | undefined): string {
+    switch ((cadence ?? "").trim()) {
+        case "monthly":
+            return "Monthly · 1st–last day";
+        case "weekly":
+            return anchorOn ? `Weekly · ${weekdaySpan(anchorOn)}` : "Weekly · anchor missing";
+        case "biweekly":
+            return anchorOn ? `Every 2 weeks · ${weekdaySpan(anchorOn)}` : "Every 2 weeks · anchor missing";
+        case "daily":
+            return "Daily";
+        case "annual":
+            return anchorOn ? `Annual · from ${humanDayNoYear(anchorOn)}` : "Annual · anchor missing";
+        default:
+            return "Not set";
+    }
+}
+
+/** "7 days before period", "1st day of period", "On service date". */
+export function invoiceRuleShort(strategy: string, offsetDays: number): string {
+    switch (strategy) {
+        case "days_before_period_start":
+            return offsetDays === 0 ? "1st day of period" : `${days(offsetDays)} before period`;
+        case "days_after_service_date":
+            return offsetDays === 0 ? "On service date" : `${days(offsetDays)} after service`;
+        case "next_period_start":
+            return "Next period start";
+        case "on_service_date":
+        default:
+            return "On service date";
+    }
+}
+
+/** "1st day of period", "On invoice date", "14 days after invoice". */
+export function dueRuleShort(strategy: string | null | undefined, offsetDays: number | null | undefined): string {
+    const n = offsetDays ?? 0;
+    switch ((strategy ?? "").trim()) {
+        case "on_invoice":
+            return "On invoice date";
+        case "days_after_invoice":
+            return n === 0 ? "On invoice date" : `${days(n)} after invoice`;
+        case "on_period_start":
+            return "1st day of period";
+        case "days_after_period_start":
+            return n === 0 ? "1st day of period" : `${days(n)} after period start`;
+        default:
+            return "Not set";
     }
 }
 

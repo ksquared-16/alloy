@@ -379,7 +379,8 @@ async function executeMultiChildAdd(args: {
             const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
                 templateId: t(payload.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload.event_date) || null,
+                eventDate: t(payload.event_date) || t(payload.service_date) || null,
+                operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 /*
                  * THE AMOUNT IS PER CHILD. It is passed to each write unchanged and is never divided
@@ -596,7 +597,8 @@ const addCharge: RegisteredAction = {
             const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload?.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload?.event_date) || null,
+                eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
+                operatorServiceDate: t(payload?.service_date) || null,
                 servicePeriodStart: t(payload?.service_period_start) || null,
                 unitAmountCents:
                     payload?.amount_cents == null ? null : Number(payload.amount_cents),
@@ -747,7 +749,8 @@ const addCharge: RegisteredAction = {
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload.event_date) || null,
+                eventDate: t(payload.event_date) || t(payload.service_date) || null,
+                operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
                 today: t(payload.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),

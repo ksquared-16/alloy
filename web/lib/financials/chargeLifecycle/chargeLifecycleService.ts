@@ -83,6 +83,8 @@ export type SimulateArgs = {
     occursDate?: string | null;
     eventDate?: string | null;
     servicePeriodStart?: string | null;
+    /** Add Charge's operator-chosen service date — see `ChargeResolutionContext.operatorServiceDate`. */
+    operatorServiceDate?: string | null;
     quantity?: number | null;
     unitAmountCents?: number | null;
     /**
@@ -285,6 +287,7 @@ async function resolveTemplateCharge(
         today: args.today,
         eventDate: args.eventDate,
         servicePeriodStart: args.servicePeriodStart,
+        operatorServiceDate: args.operatorServiceDate,
         resolvedAmountCents: args.resolvedAmountCents,
         acceptedAmountCents: args.acceptedAmountCents,
         quantity: args.quantity,

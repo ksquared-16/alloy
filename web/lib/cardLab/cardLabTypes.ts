@@ -658,6 +658,11 @@ export type AddChargeSpecimen = {
     amount: string;
     /** `charges.service_date` — when the thing happened. */
     serviceDate: string;
+    /**
+     * The resolved service date as `YYYY-MM-DD`, for the editable control's value. The display
+     * string above is for reading; a date input needs the canonical value.
+     */
+    serviceDateIso?: string | null;
     /** The billing period CONTAINING the service date, as the server's date chain resolved it. */
     period: string;
     /** `charges.billable_on` — when the obligation is invoiced. Never earlier than the day it is created. */
