@@ -21,7 +21,9 @@ import {
     readSubject,
     readVmExtras,
     resolveReadiness,
+    readW7Fixtures,
 } from "@/lib/qa/financialsDirectorQa/readiness";
+import { fixtureForScenario, fixtureLabel, W7_FIXTURES } from "@/lib/qa/financialsDirectorQa/w7Fixtures";
 
 /**
  * GET  /api/admin/qa/financials-director   — readiness, subject truth and this build's results
@@ -79,10 +81,19 @@ export async function GET() {
      * run at and the widest the cohort admits. A site-restricted operator sees a narrower rail; this
      * answer is about the Director's own path and says which scope it was asked under.
      */
-    const [subject, extras, navigation] = await Promise.all([
+    const [subject, extras, navigation, fixtureReadings] = await Promise.all([
         readSubject(supabase, ctx.orgId),
         readVmExtras(supabase, ctx.orgId),
         readNavigation(supabase, { orgId: ctx.orgId, siteScope: "all", activeSiteLocationId: null }),
+        /*
+         * EVERY W7 HOUSEHOLD, READ THE SAME WAY (W7-F012). Each scenario's preconditions are
+         * measured against the household it names, not against one representative account.
+         */
+        readW7Fixtures(
+            supabase,
+            { orgId: ctx.orgId, siteScope: "all", activeSiteLocationId: null },
+            W7_FIXTURES.map((f) => f.key),
+        ),
     ]);
 
     /*
@@ -141,11 +152,34 @@ export async function GET() {
          * scenario means that answer arrives with the question instead of living in a second list
          * the surface would have to join.
          */
-        scenarios: SCENARIOS.map((s) => ({ ...s, evidence: scenarioEvidence(s.key) })),
+        scenarios: SCENARIOS.map((s) => ({
+            ...s,
+            evidence: scenarioEvidence(s.key),
+            /* The household this scenario is run against — the Director never has to guess. */
+            fixture: { key: fixtureForScenario(s.key), label: fixtureLabel(fixtureForScenario(s.key)) },
+        })),
+        /*
+         * THE W7 FIXTURE MATRIX, with what each household holds right now. Read, never cached:
+         * "no money" is a claim about today, so it is measured today.
+         */
+        w7Fixtures: W7_FIXTURES.map((f) => {
+            const r = fixtureReadings[f.key];
+            return {
+                ...f,
+                resolved: r?.subject.resolved ?? false,
+                unresolvedReason: r?.subject.unresolvedReason ?? null,
+                reachable: r?.navigation.reachable ?? false,
+                postedCount: r?.subject.postedCount ?? 0,
+                draftCount: r?.subject.draftCount ?? 0,
+                paymentCount: r?.subject.paymentCount ?? 0,
+                outstandingCents: r?.subject.outstandingCents ?? 0,
+                namedParties: r?.subject.namedParties ?? [],
+            };
+        }),
         noAutomaticPass: NO_AUTOMATIC_PASS,
         evidenceBoundaries: EVIDENCE_BOUNDARIES,
         fixtureDoctrine: FIXTURE_DOCTRINE,
-        readiness: resolveReadiness(subject, extras, accepted, navigation),
+        readiness: resolveReadiness(subject, extras, accepted, navigation, fixtureReadings),
         results: results ?? [],
         baselineChanged: priorRevisions.length > 0,
         priorRevisions,

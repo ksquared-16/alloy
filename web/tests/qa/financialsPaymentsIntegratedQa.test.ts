@@ -260,10 +260,13 @@ describe("the QA surface's own chrome", () => {
 /* ── WHICH ACCOUNT MAY BE SPENT ───────────────────────────────────────────────────────────── */
 
 describe("the fixture doctrine is on the surface, not only in a document", () => {
-    it("names the two protected fixtures, the disposable one, and everything else", () => {
+    it("names the W7 households first, then the two protected fixtures, the disposable one, and everything else", () => {
         expect(FIXTURE_DOCTRINE.map((f) => f.fixture)).toEqual([
+            "The W7 QA households",
             "Certhouse", "Certopp", "A disposable household you create", "Everything else on staging",
         ]);
+        /* W7-F012: the Director is told to use the household each scenario names, never another. */
+        expect(FIXTURE_DOCTRINE[0]!.rule).toMatch(/Fixture line/);
     });
 
     /**

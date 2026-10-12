@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { humanRange } from "@/lib/financials/dates/humanDates";
 
 /**
  * WHERE MONEY POSTS, AND WHEN — the two configuration facts Financials enforced and showed nobody.
@@ -485,7 +486,7 @@ function AccountingCalendarPanel() {
                                                                         name,
                                                                         summary: (pv?.blockers?.length ?? 0) > 0 ? `Cannot close ${name}` : `Ready to close ${name}`,
                                                                         changes: [
-                                                                            `${pv?.startsOn} to ${pv?.endsOn} · currently ${pv?.status}`,
+                                                                            `${pv?.startsOn && pv?.endsOn ? humanRange(pv.startsOn, pv.endsOn) : "—"} · currently ${pv?.status}`,
                                                                             `${pv?.attributedEntries ?? 0} posted ${(pv?.attributedEntries ?? 0) === 1 ? "entry stays" : "entries stay"} attributed here`,
                                                                             pv?.defersTo
                                                                                 ? `Later entries effective in it will post to ${pv.defersTo.periodKey}`

@@ -1,0 +1,57 @@
+{
+  "trusted_host_action_id": "tha_83ebd88b35399a",
+  "query_hash": "becfe024e6310074857157c20336403067707fd08702c7cb560bd6f68c5cb055",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T22:00:34.647Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_83ebd88b35399a",
+    "query_hash": "becfe024e6310074857157c20336403067707fd08702c7cb560bd6f68c5cb055",
+    "authorization_id": "grnt_a6c03657990b4ce4",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T22:00:40.435Z",
+    "question_ids": [
+      "f",
+      "l"
+    ],
+    "questions": {
+      "f": {
+        "question_id": "f",
+        "row_count": null,
+        "rows": [
+          {
+            "present": true,
+            "def_md5": "e80d7d55df8440c3d49f5957ad1b8648",
+            "carries": {
+              "fin.provider": true,
+              "integrations.read": true,
+              "integrations.manage": true,
+              "staff.compensation.read": true,
+              "staff.compensation.write": true,
+              "attendance.record.assigned_only": false
+            }
+          }
+        ]
+      },
+      "l": {
+        "question_id": "l",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20261122170000",
+            "in_ledger": true,
+            "head": "20261122170000",
+            "total": 523
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

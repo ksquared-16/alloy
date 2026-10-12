@@ -19,8 +19,11 @@
  */
 import {
     billingCalendarSentence,
+    billingCalendarShort,
     dueRuleSentence,
+    dueRuleShort,
     invoiceRuleSentence,
+    invoiceRuleShort,
 } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import type { FinancialPolicyRow, FinancialPolicyType } from "@/lib/financials/policies/financialPolicyTypes";
 import { isWithdrawnPolicy, resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
@@ -76,18 +79,43 @@ export function ruleSentence(rule: BillingTimingRule, value: Record<string, unkn
     }
 }
 
+/** The FALLBACK, named for a summary cell. The full fallback sentence stays the explanation. */
+export const BILLING_TIMING_FALLBACK_SHORT: Record<BillingTimingRule, string> = {
+    billing_calendar: "Not set — billing blocked",
+    invoice_timing: "On service date (default)",
+    due_date: "No due date",
+    posting_review: "None",
+};
+
+/** One configured rule value, NAMED — one cell of the compact summary (W7-F011). */
+export function ruleShort(rule: BillingTimingRule, value: Record<string, unknown> | null | undefined): string {
+    const v = value ?? {};
+    switch (rule) {
+        case "billing_calendar":
+            return billingCalendarShort(String(v.cadence ?? ""), v.anchor_on == null ? null : String(v.anchor_on));
+        case "invoice_timing":
+            return invoiceRuleShort(String(v.strategy ?? ""), Number(v.offset_days ?? 0) || 0);
+        case "due_date":
+            return dueRuleShort(String(v.strategy ?? ""), Number(v.offset_days ?? 0) || 0);
+        case "posting_review":
+            return v.required === true ? "Every charge" : "None";
+    }
+}
+
 export type RuleReading = {
     rule: BillingTimingRule;
     /** The row in force today at this scope, or null. */
     current: FinancialPolicyRow | null;
     /** What an operator reads: the configured sentence, or the fallback sentence. */
     sentence: string;
+    /** The same answer, named for a summary cell. */
+    short: string;
     /** True when nothing is configured at this scope (or, for the org, at all). */
     isFallback: boolean;
     /** The day the current rule stops, when a stop is recorded. */
     through: string | null;
     /** The next scheduled version at this scope, if any. */
-    scheduled: { row: FinancialPolicyRow; sentence: string } | null;
+    scheduled: { row: FinancialPolicyRow; sentence: string; short: string } | null;
     /** Every version at this scope, newest first — for "View history". */
     history: FinancialPolicyRow[];
 };
@@ -126,9 +154,10 @@ function readAt(
         rule,
         current,
         sentence: current ? ruleSentence(rule, current.value) : BILLING_TIMING_FALLBACK[rule].sentence,
+        short: current ? ruleShort(rule, current.value) : BILLING_TIMING_FALLBACK_SHORT[rule],
         isFallback: !current,
         through: current?.effective_end ?? (future ? dayBefore(future.effective_start) : null),
-        scheduled: future ? { row: future, sentence: ruleSentence(rule, future.value) } : null,
+        scheduled: future ? { row: future, sentence: ruleSentence(rule, future.value), short: ruleShort(rule, future.value) } : null,
         history,
     };
 }
@@ -156,6 +185,11 @@ export type BillingTimingModel = {
     orgDefault: RuleReading[];
     /** ONLY locations that override at least one rule (now or scheduled). No empty blocks. */
     overrides: LocationOverride[];
+    /**
+     * Every OTHER listed location — it inherits all four rules. Carried so the compact overrides
+     * table can show the whole location topology in one grid (W7-F011), one "Inherits" row each.
+     */
+    inheritingLocations: Array<{ locationId: string; locationName: string }>;
     /** Accounts with their own billing calendar — shown as a count, managed on the account. */
     accountCalendarCount: number;
     /** True when a missing rule would stop billing (no billing period configured anywhere usable). */
@@ -200,9 +234,15 @@ export function buildBillingTimingModel(args: {
             .map((p) => p.customer_id),
     ).size;
 
+    const inheritingLocations = args.locations
+        .filter((l) => !overridingLocationIds.has(l.id))
+        .map((l) => ({ locationId: l.id, locationName: l.name }))
+        .sort((a, b) => a.locationName.localeCompare(b.locationName));
+
     return {
         orgDefault,
         overrides,
+        inheritingLocations,
         accountCalendarCount,
         blocksBilling: byRule.get("billing_calendar")!.isFallback,
     };

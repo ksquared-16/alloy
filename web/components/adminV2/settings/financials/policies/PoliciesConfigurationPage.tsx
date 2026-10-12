@@ -40,6 +40,7 @@ import { summarizeLocationApplicability } from "@/components/adminV2/settings/co
 import FinancialPoliciesConfigurationPanel from "@/components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel";
 import BillingTimingConfigurationPanel from "@/components/adminV2/settings/financials/policies/BillingTimingConfigurationPanel";
 import { BILLING_TIMING_RULES } from "@/lib/financials/policies/billingTimingViewModel";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 type PolicyTab = "overview" | "rules" | "applies_to";
 
@@ -376,7 +377,7 @@ export default function PoliciesConfigurationPage({
                                                       */}
                                                     {` · ${scopeLabelFor(row)}`}
                                                     {row.effective_start && row.effective_start !== "2000-01-01"
-                                                        ? ` · from ${row.effective_start}`
+                                                        ? ` · from ${humanDay(row.effective_start)}`
                                                         : ""}
                                                 </span>
                                             </span>
@@ -497,10 +498,10 @@ export default function PoliciesConfigurationPage({
                                                     <dt className="text-[11px] font-medium text-alloy-midnight/40">Effective</dt>
                                                     <dd className="mt-0.5">
                                                         {selected.effective_start && selected.effective_start !== "2000-01-01"
-                                                            ? selected.effective_start
+                                                            ? humanDay(selected.effective_start)
                                                             : "Open"}
                                                         {" – "}
-                                                        {selected.effective_end ?? "Present"}
+                                                        {selected.effective_end ? humanDay(selected.effective_end) : "Present"}
                                                     </dd>
                                                 </div>
                                             </dl>

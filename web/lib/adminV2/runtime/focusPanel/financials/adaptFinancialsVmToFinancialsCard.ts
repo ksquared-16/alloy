@@ -809,6 +809,10 @@ export function adaptAddChargeSpecimen(input: {
          * labels-not-keys rule broken in the one place an operator is about to commit money.
          */
         serviceDate: line("occurs") ?? "Resolved at commit",
+        serviceDateIso: (() => {
+            const raw = rawLine("occurs");
+            return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+        })(),
         /*
          * ── THE BILLING PERIOD IS THE SERVER'S, CONTAINING THE SERVICE DATE ─────────────────
          *

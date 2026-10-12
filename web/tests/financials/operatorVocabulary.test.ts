@@ -112,9 +112,16 @@ describe("Add Charge answers who owes exactly once", () => {
         const src = read(ADD_CHARGE)
             .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
             .replace(/\/\*[\s\S]*?\*\//g, "");
-        expect((src.match(/<SectionHead[^>]*>Charge to<\/SectionHead>/g) ?? []).length).toBe(1);
-        expect(src, "no Responsibility field restates it")
-            .not.toMatch(/<Field label="Responsibility">/);
+        /*
+         * W7-F011: the one answer now sits inside "Charge applies to", labelled Responsibility,
+         * beside the subject it is for — still ONE rendering, never a heading plus a field.
+         */
+        expect((src.match(/<Field label="Responsibility">/g) ?? []).length).toBe(1);
+        expect(src, "no second Charge to heading restates it")
+            .not.toMatch(/<SectionHead[^>]*>Charge to<\/SectionHead>/);
+        const section = src.slice(src.indexOf('data-addcharge-applies-section="true"'), src.indexOf("</section>"));
+        expect(section, "the subject and the responsibility are one visual section").toMatch(/Applies to/);
+        expect(section).toMatch(/<Field label="Responsibility">/);
         expect(src, "and there is one way to change it")
             .toMatch(/data-addcharge-change-charge-to="true"/);
     });

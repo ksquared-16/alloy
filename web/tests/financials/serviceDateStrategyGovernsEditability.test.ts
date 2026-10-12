@@ -65,20 +65,61 @@ describe("exactly one strategy takes the date from the operator", () => {
     });
 });
 
-describe("the control is editable exactly where the operator authors the date", () => {
+/*
+ * ── W7-F011 SUPERSEDES THE CONTROL GATE, NOT THE STRATEGIES ─────────────────────────────────────
+ *
+ * The Director ruled that in Add Charge the service date is THE operator-controlled date for every
+ * charge type, with billing period, invoice date and due date derived from it. The strategies above
+ * are unchanged — generation, consumption and enrollment fees still date `now` charges today and
+ * period charges from the placement, and `eventDate` is still ignored outside `event_date`.
+ * What changed is one explicit, narrow input: `operatorServiceDate`, which only the manual
+ * Add Charge path sets.
+ */
+describe("W7-F011 — Add Charge's operator service date governs every strategy", () => {
+    for (const occurs of ["now", "event_date", "service_period_start"]) {
+        it(`${occurs}: the operator's service date is the occurrence date`, () => {
+            const intent = resolveChargeFromTemplate(
+                template(occurs),
+                ctx({ operatorServiceDate: "2026-11-04", servicePeriodStart: "2026-10-01", eventDate: null }),
+            );
+            expect(intent.eligible).toBe(true);
+            expect(intent.occursOn).toBe("2026-11-04");
+        });
+    }
+
+    it("a malformed operator date is refused, never coerced", () => {
+        const intent = resolveChargeFromTemplate(template("now"), ctx({ operatorServiceDate: "11/04/2026" }));
+        expect(intent.eligible).toBe(false);
+        expect(intent.reason).toBe("invalid_service_date");
+    });
+});
+
+describe("the control: Service date editable, the other three dates read-only, one row", () => {
     const src = readFileSync(path.join(process.cwd(), "components/operationalCards/AddChargeCommand.tsx"), "utf8")
         .replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    const row = src.slice(src.indexOf('data-addcharge-dates="row"'), src.indexOf("data-addcharge-posting-rule"));
 
-    it("offers the date control only for event_date", () => {
-        expect(/controls && t\.occursOn === "event_date" \?/.test(src)).toBe(true);
+    it("offers the date control whenever the command is live, whatever the template's strategy", () => {
+        expect(row).toMatch(/<DateCell label="Service date" required>\s*\{controls \? \(/);
+        expect(src).not.toMatch(/t\.occursOn === "event_date" \?/);
     });
 
-    it("marks it required exactly there too", () => {
-        expect(/label="Service date" required=\{t\.occursOn === "event_date"\}/.test(src)).toBe(true);
+    it("places the four dates in one row, in order", () => {
+        const order = ["Service date", "Billing period", "Invoice date", "Due date"].map((l) => row.indexOf(`label="${l}"`));
+        expect(order.every((n) => n >= 0)).toBe(true);
+        expect([...order].sort((a, b) => a - b)).toEqual(order);
     });
 
-    it("and states the derived value otherwise, rather than an empty or disabled control", () => {
-        const field = src.slice(src.indexOf('label="Service date"'));
-        expect(field.slice(0, 900)).toMatch(/<Value>\{specimen\.serviceDate\}<\/Value>/);
+    it("billing period, invoice date and due date are read-only stated values", () => {
+        for (const label of ["Billing period", "Invoice date", "Due date"]) {
+            const cell = row.slice(row.indexOf(`label="${label}"`)).split("</DateCell>")[0]!;
+            expect(cell, label).toMatch(/readOnly/);
+            expect(cell, label).not.toMatch(/<input|AlloyDateInput|AlloySelect/);
+        }
+    });
+
+    it("the host sends the operator's date as service_date to preview AND commit", () => {
+        const host = readFileSync(path.join(process.cwd(), "components/admin/focusPanel/cards/FinancialsCard.tsx"), "utf8");
+        expect(host.match(/service_date: chargeEventDate/g)?.length).toBe(2);
     });
 });

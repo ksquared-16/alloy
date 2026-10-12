@@ -211,16 +211,23 @@ describe("scenario readiness", () => {
         expect(fn, "and no fixture id is pinned there either").not.toMatch(/fd000000-/);
     });
 
-    it("reads the sibling precondition as an absence of billing, not an absence of the child", () => {
-        // Rio is on the household and is deliberately NOT a billable subject.
-        expect(checkAccountState("has_second_child_without_agreement", emptySubject(), noExtras)).toBe(true);
-        const bothBillable = emptySubject({
+    it("W7-F012: multi-child attribution needs two BILLABLE children, read from the account", () => {
+        // W7 QA · Multi-Site Family: Mika at North Campus, Max at South Campus, both enrolled.
+        const one = emptySubject({
+            resolved: true,
+            billableChildren: [{ customerMemberId: QA_SUBJECT.childWithAgreement.id, displayName: "Milo Monthly" }],
+        });
+        const two = emptySubject({
+            resolved: true,
             billableChildren: [
-                { customerMemberId: QA_SUBJECT.childWithAgreement.id, displayName: "Ana Alvarez" },
-                { customerMemberId: QA_SUBJECT.siblingWithoutAgreement.id, displayName: "Rio Alvarez" },
+                { customerMemberId: "fd000000-0000-4000-8000-0000007d0004", displayName: "Mika Multisite" },
+                { customerMemberId: "fd000000-0000-4000-8000-0000007d0005", displayName: "Max Multisite" },
             ],
         });
-        expect(checkAccountState("has_second_child_without_agreement", bothBillable, noExtras)).toBe(false);
+        expect(checkAccountState("has_two_billable_children", one, noExtras)).toBe(false);
+        expect(checkAccountState("has_two_billable_children", two, noExtras)).toBe(true);
+        // The retired Alvarez check never reads true for a family with two billable children.
+        expect(checkAccountState("has_second_child_without_agreement", two, noExtras)).toBe(false);
     });
 
     it("offers no walkthrough for a capability this environment cannot reach", () => {

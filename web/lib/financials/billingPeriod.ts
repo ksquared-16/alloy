@@ -245,7 +245,11 @@ export function addDaysYmd(ymd: string, days: number): string {
  * year written on both sides only when the period crosses a new year, because "Dec 28–Jan 3, 2027"
  * would silently date the December end to the wrong year.
  */
-function intervalLabel(start: string, end: string): string {
+/**
+ * A human interval for two `YYYY-MM-DD` days — "Oct 12–25, 2026", "Oct 26–Nov 8, 2026",
+ * "Dec 28, 2026–Jan 3, 2027". The one interval format operator-facing Financials uses (W7-F011).
+ */
+export function intervalLabel(start: string, end: string): string {
     const [sy, sm, sd] = start.split("-").map(Number);
     const [ey, em, ed] = end.split("-").map(Number);
     const sMon = MONTHS_SHORT[sm - 1] ?? String(sm);

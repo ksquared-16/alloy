@@ -66,6 +66,7 @@ import {
 import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
 import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
 import { directionFromSignedCents, type AdjustmentDirection } from "@/lib/financials/corrections/correctionIntent";
+import { humanDay, humanRange } from "@/lib/financials/dates/humanDates";
 
 /** What the correction does to the family's position, said rather than signed. */
 export type CorrectionDirection = "reduces" | "increases";
@@ -544,7 +545,7 @@ export async function previewProspectiveCorrection(
     if (resolution.source) {
         const s = resolution.source;
         const what = s.description?.trim() || s.chargeCategory || "a charge";
-        changes.push(`Corrects: ${what} of ${money(s.amountCents)}${s.serviceDate ? ` from ${s.serviceDate}` : ""}`);
+        changes.push(`Corrects: ${what} of ${money(s.amountCents)}${s.serviceDate ? ` from ${humanDay(s.serviceDate)}` : ""}`);
         if (s.periodLabel) {
             /*
              * ── FINALIZED HISTORY IS NAMED, AND SAID TO BE UNCHANGED ─────────────────────────
@@ -576,10 +577,10 @@ export async function previewProspectiveCorrection(
      */
     changes.push(
         `Recorded in ${billingPeriodLabel(resolution.destination.periodKey)}`
-        + ` (${resolution.destination.startsOn} to ${resolution.destination.endsOn})`
+        + ` (${humanRange(resolution.destination.startsOn, resolution.destination.endsOn)})`
         + (resolution.destination.willBeCreated ? ", which will be opened" : ""),
     );
-    changes.push(`Effective ${input.effectiveDate}`);
+    changes.push(`Effective ${humanDay(input.effectiveDate)}`);
     changes.push(resolution.responsibility.sentence);
 
     /*
@@ -588,7 +589,7 @@ export async function previewProspectiveCorrection(
      * was attached — silence there reads as "there is one and I did not see it".
      */
     if (resolution.due.applicable) {
-        changes.push(resolution.due.dueDate ? `Due ${resolution.due.dueDate}` : "No due date");
+        changes.push(resolution.due.dueDate ? `Due ${humanDay(resolution.due.dueDate)}` : "No due date");
     }
 
     return {

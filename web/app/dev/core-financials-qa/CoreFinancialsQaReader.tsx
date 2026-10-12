@@ -57,7 +57,16 @@ type Subject = {
     postedCount: number; draftCount: number; reductionCount: number; paymentCount: number;
     billableChildren: Array<{ customerMemberId: string; displayName: string }>;
 };
-type WalkScenario = Scenario & { evidence?: readonly string[] };
+type WalkScenario = Scenario & { evidence?: readonly string[]; fixture?: { key: string; label: string } };
+/** One W7 QA household, with what it holds right now (W7-F012). */
+type W7FixtureRow = {
+    key: string; householdLabel: string; campuses: string[]; billingResolution: string;
+    responsibility: string; purpose: string;
+    children: Array<{ name: string; campus: string }>;
+    eligibleNotResponsible: Array<{ name: string }>;
+    resolved: boolean; reachable: boolean; postedCount: number; draftCount: number;
+    paymentCount: number; outstandingCents: number; namedParties: string[];
+};
 type Payload = {
     suiteKey?: string;
     catalogVersion: string; environment: string; deployedRevision: string;
@@ -70,6 +79,8 @@ type Payload = {
     evidenceBoundaries?: { key: string; scenarioKey: string; statement: string }[];
     /** Which account may be spent and which may only be read. Stated before the walk starts. */
     fixtureDoctrine?: { fixture: string; rule: string; why: string }[];
+    /** The purpose-built W7 households, measured now. */
+    w7Fixtures?: W7FixtureRow[];
     baselineChanged: boolean; priorRevisions: string[];
 };
 
@@ -180,6 +191,8 @@ export default function CoreFinancialsQaReader() {
     const current = walkthrough[index];
     const readiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
     const currentBoundary = (data?.evidenceBoundaries ?? []).find((b) => b.scenarioKey === current?.key);
+    /* The W7 household this scenario names, measured now — its starting state, not the default's. */
+    const currentFixture = (data?.w7Fixtures ?? []).find((f) => f.key === current?.fixture?.key) ?? null;
     /*
      * WHAT WAS ALREADY SAID ABOUT THIS SCENARIO, not just how it was scored. The route has always
      * served `observation` on a result row and this surface never showed it: a note was written to
@@ -499,6 +512,52 @@ export default function CoreFinancialsQaReader() {
                         ) : null}
 
                         {/*
+                          * THE W7 FIXTURE MATRIX — which household is for what, and that it holds
+                          * nothing nobody can explain. Measured when this page loaded.
+                          */}
+                        {data?.w7Fixtures?.length ? (
+                            <Section label="W7 QA households">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-[12px]" data-qa-w7-fixtures="true">
+                                        <thead className="text-[11px] uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                            <tr>
+                                                <th className="py-1 pr-3 font-semibold">Household</th>
+                                                <th className="py-1 pr-3 font-semibold">Location(s)</th>
+                                                <th className="py-1 pr-3 font-semibold">Billing resolution</th>
+                                                <th className="py-1 pr-3 font-semibold">Responsibility</th>
+                                                <th className="py-1 pr-3 font-semibold">Purpose</th>
+                                                <th className="py-1 font-semibold">Now</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-alloy-midnight/10 text-alloy-midnight/80">
+                                            {data.w7Fixtures.map((f) => (
+                                                <tr key={f.key} data-qa-w7-fixture={f.key}>
+                                                    <td className="py-1.5 pr-3 font-medium text-alloy-midnight">{f.householdLabel}</td>
+                                                    <td className="py-1.5 pr-3">{f.children.map((c) => `${c.name} · ${c.campus}`).join("; ")}</td>
+                                                    <td className="py-1.5 pr-3">{f.billingResolution}</td>
+                                                    <td className="py-1.5 pr-3">
+                                                        {f.responsibility}
+                                                        {f.eligibleNotResponsible.length
+                                                            ? ` · eligible, not responsible: ${f.eligibleNotResponsible.map((p) => p.name).join(", ")}`
+                                                            : ""}
+                                                    </td>
+                                                    <td className="py-1.5 pr-3">{f.purpose}</td>
+                                                    <td className="py-1.5" data-qa-w7-fixture-state={f.resolved && f.reachable ? "ready" : "missing"}>
+                                                        {!f.resolved || !f.reachable
+                                                            ? "Not found — not yet seeded"
+                                                            : f.postedCount + f.draftCount + f.paymentCount === 0
+                                                              ? "Clean — no charges or payments"
+                                                              : `${f.postedCount} posted · ${f.draftCount} draft · ${f.paymentCount} payments · ${money(f.outstandingCents)} outstanding`}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Section>
+                        ) : null}
+
+                        {/*
                           * ONE RULE FOR WHERE THIS OPENS, shared with the reload path: the place you
                           * were, if this browser remembers one; otherwise the first scenario that is
                           * not yet accepted, which is the work remaining.
@@ -570,8 +629,22 @@ export default function CoreFinancialsQaReader() {
                             </div>
                         ) : null}
 
+                        {/* WHICH HOUSEHOLD — said before anything else the Director does (W7-F012). */}
+                        {current.fixture ? (
+                            <p className="rounded-lg border border-alloy-midnight/15 px-3 py-2 text-[13px] text-alloy-midnight"
+                                data-qa-scenario-fixture={current.fixture.key}>
+                                <strong className="font-semibold">Fixture:</strong> {current.fixture.label}
+                            </p>
+                        ) : null}
+
                         <Section label="Starting state, read live just now">
-                            <Facts rows={[
+                            <Facts rows={currentFixture ? [
+                                ["Household", currentFixture.householdLabel],
+                                ["Outstanding", money(currentFixture.outstandingCents)],
+                                ["Posted / draft", `${currentFixture.postedCount} / ${currentFixture.draftCount}`],
+                                ["Payments", String(currentFixture.paymentCount)],
+                                ["Responsibility", currentFixture.namedParties.join(", ") || "none named"],
+                            ] : [
                                 /* Read live when the scenario opens. Never cached — a cached balance
                                    is a stale balance, and the starting state is the whole point. */
                                 ["Household", data?.subject.householdLabel ?? "reading…"],

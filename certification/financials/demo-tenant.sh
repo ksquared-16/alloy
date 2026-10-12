@@ -69,7 +69,9 @@ pg() {
 
 seed_demo_tenant() {
   echo "── installing the representative demo subjects (households, children, agreements, agency)"
-  pg -v ON_ERROR_STOP=1 -v org="$ORG" -q -f - < "$CERT_DIR/fixtures/financials-demo-tenant.sql" \
+  # legacy_reset=1: the LOCAL stack is disposable, so the legacy households are torn down and rebuilt
+  # to the proving state. The governed staging runner never passes it (W7-F012).
+  pg -v ON_ERROR_STOP=1 -v org="$ORG" -v legacy_reset=1 -q -f - < "$CERT_DIR/fixtures/financials-demo-tenant.sql" \
     || die "structural demo fixture failed"
   green "four households across two campuses, a funding agency and an authorization"
 

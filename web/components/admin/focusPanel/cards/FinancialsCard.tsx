@@ -2404,7 +2404,13 @@ export default function FinancialsCard({
                             // An `event_date` template is REFUSED without one — the preview returns
                             // `missing_event_date` — so the operator's date has to travel with the
                             // preview, not only with the commit.
-                            ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
+                            /*
+                             * W7-F011: THE SERVICE DATE IS THE OPERATOR'S. Sent as `service_date` for
+                             * every template (and still as `event_date` for the templates that require
+                             * one), so the preview's date chain — period, invoice, due, posting — is
+                             * recomputed by the server from the date the operator chose.
+                             */
+                            ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                             ...(chargeNote ? { note: chargeNote } : {}),
                         },
                     }),
@@ -2757,7 +2763,8 @@ export default function FinancialsCard({
                         ...(selectedChildIds.length > 1
                             ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
                             : {}),
-                        ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
+                        // The same service date the preview was asked about — preview equals commit.
+                        ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),
                     },
                 }),

@@ -98,7 +98,13 @@
  *
  * W7-F001, W7-F004 and W7-F005 are carried OPEN. Nothing here marks them accepted.
  */
-export const CATALOG_VERSION = "2026-10-08.1";
+/*
+ * 2026-10-12.1 — W7-F012: every scenario names its W7 fixture household (`w7Fixtures.ts`), the
+ * Alvarez-specific wording is gone, and multi-child attribution is run against two billable
+ * children at two campuses rather than a child with no agreement. A different subject is a
+ * different question, so earlier results do not carry over.
+ */
+export const CATALOG_VERSION = "2026-10-12.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -200,6 +206,8 @@ export type AccountStateCheck =
     | "has_named_responsibility"
     | "has_expected_funding"
     | "has_second_child_without_agreement"
+    /** W7 QA · Multi-Site Family: two children, each with their own enrolment and campus. */
+    | "has_two_billable_children"
     /*
      * THE ACCOUNT EXISTS AND READS. Deliberately NOT "has an enrolment agreement": the canonical
      * account reader settled that an enrolment is one billable source and not eligibility for
@@ -480,7 +488,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "An account with no financial history is an ordinary, fully supported state. The product must say so plainly rather than implying the family is unknown to it, because that is the difference between an empty account and a broken one.",
         requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the account to resolve" }],
-        navigate: ["Open /workspace.", "Click Financials in the left sidebar.", "Open the Accounts tab.", "Select Alvarez Household (demo)."],
+        navigate: ["Open /workspace.", "Click Financials in the left sidebar.", "Open the Accounts tab.", "Select W7 QA · West Family."],
         doThis: ["Read the account pane, headed Account-wide financial detail.", "Reload the browser and open the same account again."],
         expectChanges: [],
         expectUnchanged: ["The household name and its figures survive a reload."],
@@ -670,7 +678,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         order: 18,
         title: "Naming who owes it changes no money",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Make Dana Alvarez responsible for the obligation and confirm nothing financial moved.",
+        purpose: "On W7 QA · Split Family, read the standing 50/50 between Dana Split and Rosa Split, add Gale Split as a responsible member, and confirm nothing financial moved.",
         whyItMatters:
             "Who owes and how much is owed are separate questions. Deciding a parent carries a bill must never quietly change the bill.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to divide" }],
@@ -720,11 +728,11 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         order: 20,
         title: "Expected Funding is an expectation, not a payment",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Record that an employer is expected to cover part of Dana's share.",
+        purpose: "Record that an employer is expected to cover part of Dana Split's share.",
         whyItMatters:
             "Money somebody has promised is not money that has arrived. Until it does, the family is still responsible for it, and the product must not quietly treat a promise as a payment.",
         requires: [{ kind: "scenario_passed", scenarioKey: "manage_responsibility" }],
-        navigate: ["Under Dana's share, click Manage expected funding →."],
+        navigate: ["Under Dana Split's share, click Manage expected funding →."],
         doThis: ["Choose an employer sponsorship type, not a government subsidy.", "Name the funding source.", "Enter Expected to cover.", "Preview, then Confirm."],
         expectChanges: ["The share reads Expected from <source> · <amount>, with the remainder shown as still their responsibility."],
         expectUnchanged: ["What is owed.", "Collectible now.", "Payments received — no payment is created."],
@@ -1130,18 +1138,18 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         order: 39,
         title: "Which child, and what belongs to the household",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Use the second child to tell child-level money apart from household-level responsibility.",
+        purpose: "On W7 QA · Multi-Site Family, tell each child's money apart from the household's responsibility — two children, two campuses, one account.",
         whyItMatters:
             "Families have more than one child and one bill. An operator must be able to say which child generated a charge, and separately who in the household is responsible for paying it — those are different questions with different answers.",
         dispositionReason:
-            "Alvarez deliberately carries a second child, Rio, with NO enrolment agreement. So the fixture proves the GRAIN — obligations are per child, responsibility is per household — rather than two parallel billing streams. The harness states that plainly so the absence of Rio's charges is not read as a defect.",
-        requires: [{ kind: "account_state", check: "has_second_child_without_agreement", describe: "the household has a second child with no enrolment agreement" }],
+            "Mika Multisite attends North Campus and Max Multisite attends South Campus, which bill on different calendars, so the account carries its own monthly billing calendar. The fixture proves the GRAIN — obligations are per child, responsibility is per household — with two real billing streams on one account.",
+        requires: [{ kind: "account_state", check: "has_two_billable_children", describe: "the household has two children with enrolments" }],
         navigate: ["Open the account and read the ledger rows and the Responsibility section."],
-        doThis: ["For each posted charge, identify which child it belongs to.", "Identify who is responsible for the household's money.", "Note that the second child has no obligations of their own, and why."],
+        doThis: ["For each posted charge, identify which child it belongs to.", "Identify who is responsible for the household's money.", "Add a charge for each child and confirm each charge names its own child and lands in the account's monthly billing period."],
         expectChanges: [],
         expectUnchanged: ["Charges name their child.", "Responsibility names an adult, at household grain."],
         invariant: MONEY_INVARIANTS.RESPONSIBILITY_MOVES_NO_CASH,
-        failSymptoms: ["A charge that cannot be attributed to a child.", "The second child appearing to owe money they were never billed for.", "Responsibility shown per child when it is a household arrangement."],
+        failSymptoms: ["A charge that cannot be attributed to a child.", "One child's charge appearing on the other child.", "Responsibility shown per child when it is a household arrangement."],
     }),
     S({
         key: "subsidy_exclusion",
@@ -2891,6 +2899,12 @@ export const NO_AUTOMATIC_PASS =
  */
 export const FIXTURE_DOCTRINE: readonly { fixture: string; rule: string; why: string }[] = Object.freeze([
     {
+        fixture: "The W7 QA households",
+        rule: "Use the household each scenario names. Its Fixture line says which — never pick another account.",
+        why:
+            "Five purpose-built households (W7 QA · Monthly, Weekly, West, Multi-Site and Split Family) exist only for this walkthrough: known campus, known billing calendar, known responsibility, and no money until you create it. Their starting figures are read when a scenario opens, so nothing you see was left there by somebody else's test.",
+    },
+    {
         fixture: "Certhouse",
         rule: "READ ONLY, unless a scenario explicitly says otherwise.",
         why:
@@ -2912,7 +2926,7 @@ export const FIXTURE_DOCTRINE: readonly { fixture: string; rule: string; why: st
         fixture: "Everything else on staging",
         rule: "Not protected. Old staging activity you did not create is not evidence and does not need preserving.",
         why:
-            "Only the two fixtures above are protected, and each is protected because a NAMED scenario reads its current state — not because it is old. Staging also carries ordinary residue: drafts from superseded runs, households seeded by engineering, figures from builds that no longer exist. None of it is production history, none of it is yours to curate, and you are not expected to reconcile it. If something looks wrong on a household no scenario names, note it and move on rather than investigating it as a defect.",
+            "Only Certhouse and Certopp are protected, and each is protected because a NAMED scenario reads its current state — not because it is old. Staging also carries ordinary residue: drafts from superseded runs, households seeded by engineering, figures from builds that no longer exist. None of it is production history, none of it is yours to curate, and you are not expected to reconcile it. If something looks wrong on a household no scenario names, note it and move on rather than investigating it as a defect.",
     },
 ]);
 

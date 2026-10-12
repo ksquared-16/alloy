@@ -19,17 +19,34 @@ import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 import { CATALOG_VERSION, SCENARIOS, type AccountStateCheck, type Scenario } from "./scenarioCatalog";
+import { fixtureForScenario, isW7FixtureKey, w7Fixture, W7_DEFAULT_FIXTURE, type W7FixtureKey } from "./w7Fixtures";
 
-/** The representative household this acceptance program is written against. */
+/**
+ * THE DEFAULT W7 HOUSEHOLD — W7 QA · Monthly Family (W7-F012).
+ *
+ * This was Alvarez Household (demo), a household carrying months of earlier QA charges and payments
+ * that no scenario could account for. Every scenario now names its own W7 fixture
+ * (`w7Fixtures.ts`); this is the one a scenario that names no other is read against, and the
+ * subject the route reports first.
+ */
 export const QA_SUBJECT = Object.freeze({
-    customerId: "fd000000-0000-4000-8000-0000000c0001",
-    householdLabel: "Alvarez Household (demo)",
-    childWithAgreement: Object.freeze({ id: "fd000000-0000-4000-8000-0000000d0001", name: "Ana Alvarez" }),
-    siblingWithoutAgreement: Object.freeze({ id: "fd000000-0000-4000-8000-0000000d0005", name: "Rio Alvarez" }),
-    responsibleAdult: Object.freeze({ id: "fd000000-0000-4000-8000-0000000b0002", name: "Dana Alvarez" }),
+    customerId: w7Fixture(W7_DEFAULT_FIXTURE).customerId,
+    householdLabel: w7Fixture(W7_DEFAULT_FIXTURE).householdLabel,
+    childWithAgreement: Object.freeze({
+        id: w7Fixture(W7_DEFAULT_FIXTURE).children[0]!.id,
+        name: w7Fixture(W7_DEFAULT_FIXTURE).children[0]!.name,
+    }),
+    responsibleAdult: Object.freeze(w7Fixture(W7_DEFAULT_FIXTURE).responsibleAdults[0]!),
     site: "North Campus",
     fixturePath: "certification/fixtures/financials-demo-tenant.sql",
 });
+
+/** One W7 household's readings — what its scenarios' preconditions are measured against. */
+export type FixtureReading = {
+    subject: SubjectSnapshot;
+    extras: VmExtras;
+    navigation: NavigationSnapshot;
+};
 
 export type SubjectSnapshot = {
     resolved: boolean;
@@ -135,11 +152,12 @@ export async function readSubject(
     supabase: SupabaseClient,
     orgId: string,
     customerId: string = QA_SUBJECT.customerId,
+    householdLabel: string = QA_SUBJECT.householdLabel,
 ): Promise<SubjectSnapshot> {
     const empty = (reason: string): SubjectSnapshot => ({
         resolved: false,
         unresolvedReason: reason,
-        householdLabel: QA_SUBJECT.householdLabel,
+        householdLabel,
         periodKey: "",
         periodLabel: "",
         grossCents: 0,
@@ -172,7 +190,7 @@ export async function readSubject(
     return {
         resolved: true,
         unresolvedReason: null,
-        householdLabel: QA_SUBJECT.householdLabel,
+        householdLabel,
         periodKey: String(vm.period?.key ?? ""),
         periodLabel: String(vm.period?.label ?? ""),
         grossCents: n(vm.reconciliation?.grossCents),
@@ -289,8 +307,15 @@ export function checkAccountState(check: AccountStateCheck, s: SubjectSnapshot, 
         case "has_expected_funding":
             return s.expectedFunding.length > 0;
         case "has_second_child_without_agreement":
-            // The sibling exists on the household and is deliberately NOT a billable subject.
-            return !s.billableChildren.some((c) => c.customerMemberId === QA_SUBJECT.siblingWithoutAgreement.id);
+            /*
+             * RETIRED FROM THE W7 CATALOG (W7-F012). It described Alvarez's Rio, a child with no
+             * agreement; no W7 scenario asks it now. Kept answerable — "no more than one billable
+             * child" — so a stored precondition never silently reads true for a family of two.
+             */
+            return s.resolved && s.billableChildren.length <= 1;
+        case "has_two_billable_children":
+            // W7 QA · Multi-Site Family: two children, each with their own enrolment and campus.
+            return s.resolved && s.billableChildren.length >= 2;
         default:
             return false;
     }
@@ -369,48 +394,92 @@ export function resolveReadiness(
     extras: VmExtras,
     acceptedScenarioKeys: ReadonlySet<string>,
     navigation: NavigationSnapshot,
+    /**
+     * EACH SCENARIO IS MEASURED AGAINST ITS OWN FIXTURE (W7-F012). When supplied, a scenario whose
+     * fixture is a W7 household reads that household's facts; organization and evidence scenarios,
+     * and any household not supplied, read the default subject above.
+     */
+    byFixture?: Partial<Record<W7FixtureKey, FixtureReading>>,
 ): ScenarioReadiness[] {
-    return SCENARIOS.map((scenario: Scenario) => {
-        const unmet: string[] = [];
-        for (const req of scenario.requires) {
-            if (req.kind === "scenario_passed") {
-                if (!acceptedScenarioKeys.has(req.scenarioKey)) {
-                    unmet.push(`Requires scenario "${req.scenarioKey}" to be accepted first.`);
-                }
-                continue;
-            }
-            if (!checkAccountState(req.check, subject, extras)) {
-                unmet.push(`Requires ${req.describe}.`);
-            }
-        }
-        if (!subject.resolved) {
-            unmet.push(subject.unresolvedReason ?? "The account could not be read.");
-        }
-
-        /*
-         * NAVIGATION IS A SEPARATE ANSWER, AND IT GATES THE SAME BUTTON.
-         *
-         * A scenario that names no product path cannot be blocked by one — the deferred and
-         * out-of-scope entries declare `navigate: []` and are left alone. Every walkthrough enters
-         * through the account the first scenario opens, so reachability of the subject is
-         * reachability of the scenario.
-         */
-        const unreachable: string[] = [];
-        if (scenario.navigate.length > 0 && !navigation.reachable) {
-            unreachable.push(navigation.unreachableReason ?? `${navigation.surface} cannot be reached.`);
-        }
-
-        const dataReady = unmet.length === 0;
-        const navigationReady = unreachable.length === 0;
-        return {
-            scenarioKey: scenario.key,
-            ready: dataReady && navigationReady,
-            dataReady,
-            navigationReady,
-            unmet,
-            unreachable,
-        };
+    return SCENARIOS.map((base: Scenario) => {
+        const fixtureKey = fixtureForScenario(base.key);
+        const reading = isW7FixtureKey(fixtureKey) ? byFixture?.[fixtureKey] : undefined;
+        return readinessFor(
+            base,
+            reading?.subject ?? subject,
+            reading?.extras ?? extras,
+            acceptedScenarioKeys,
+            reading?.navigation ?? navigation,
+        );
     });
+}
+
+function readinessFor(
+    scenario: Scenario,
+    subject: SubjectSnapshot,
+    extras: VmExtras,
+    acceptedScenarioKeys: ReadonlySet<string>,
+    navigation: NavigationSnapshot,
+): ScenarioReadiness {
+    const unmet: string[] = [];
+    for (const req of scenario.requires) {
+        if (req.kind === "scenario_passed") {
+            if (!acceptedScenarioKeys.has(req.scenarioKey)) {
+                unmet.push(`Requires scenario "${req.scenarioKey}" to be accepted first.`);
+            }
+            continue;
+        }
+        if (!checkAccountState(req.check, subject, extras)) {
+            unmet.push(`Requires ${req.describe}.`);
+        }
+    }
+    if (!subject.resolved) {
+        unmet.push(subject.unresolvedReason ?? "The account could not be read.");
+    }
+
+    /*
+     * NAVIGATION IS A SEPARATE ANSWER, AND IT GATES THE SAME BUTTON.
+     *
+     * A scenario that names no product path cannot be blocked by one — the deferred and
+     * out-of-scope entries declare `navigate: []` and are left alone. Every walkthrough enters
+     * through the account the first scenario opens, so reachability of the subject is
+     * reachability of the scenario.
+     */
+    const unreachable: string[] = [];
+    if (scenario.navigate.length > 0 && !navigation.reachable) {
+        unreachable.push(navigation.unreachableReason ?? `${navigation.surface} cannot be reached.`);
+    }
+
+    const dataReady = unmet.length === 0;
+    const navigationReady = unreachable.length === 0;
+    return {
+        scenarioKey: scenario.key,
+        ready: dataReady && navigationReady,
+        dataReady,
+        navigationReady,
+        unmet,
+        unreachable,
+    };
+}
+
+/** Read one W7 household the way the route reads the default subject: facts, extras, reachability. */
+export async function readW7Fixtures(
+    supabase: SupabaseClient,
+    args: { orgId: string; siteScope?: "all" | "restricted"; allowedSiteLocationIds?: readonly string[]; activeSiteLocationId?: string | null },
+    keys: readonly W7FixtureKey[],
+): Promise<Partial<Record<W7FixtureKey, FixtureReading>>> {
+    const entries = await Promise.all(
+        keys.map(async (key) => {
+            const f = w7Fixture(key);
+            const [subject, extras, navigation] = await Promise.all([
+                readSubject(supabase, args.orgId, f.customerId, f.householdLabel),
+                readVmExtras(supabase, args.orgId, f.customerId),
+                readNavigation(supabase, { ...args, customerId: f.customerId }),
+            ]);
+            return [key, { subject, extras, navigation }] as const;
+        }),
+    );
+    return Object.fromEntries(entries);
 }
 
 export { CATALOG_VERSION };

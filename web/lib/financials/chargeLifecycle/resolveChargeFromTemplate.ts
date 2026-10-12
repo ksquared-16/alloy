@@ -48,6 +48,18 @@ export type ChargeResolutionContext = {
     eventDate?: string | null;
     /** Service period start for a `service_period_start` template. */
     servicePeriodStart?: string | null;
+    /**
+     * THE SERVICE DATE AN OPERATOR CHOSE IN ADD CHARGE (W7-F011).
+     *
+     * In Add Charge the service date is the one operator-controlled date: billing period, invoice
+     * date, due date and posting all follow from it through the date chain. Present, it IS the
+     * occurrence date whatever the template's `occurs_on_strategy` — `now` and
+     * `service_period_start` only say what the date defaults to when nobody chose one.
+     *
+     * Only the manual Add Charge path sets it. Generation, consumption and enrollment fees never
+     * do, so their occurrence rules are exactly what they were.
+     */
+    operatorServiceDate?: string | null;
     /** Amount resolved by Rate Resolution for a rate_derived template (cents). */
     resolvedAmountCents?: number | null;
     /**
@@ -146,6 +158,8 @@ function notEligible(template: ChargeTemplateRow, reason: string, resolutionKey:
 }
 
 function resolveOccursOn(template: ChargeTemplateRow, ctx: ChargeResolutionContext): { occursOn: string } | { error: string } {
+    const chosen = ctx.operatorServiceDate?.trim();
+    if (chosen) return ISO_DATE_RE.test(chosen) ? { occursOn: chosen } : { error: "invalid_service_date" };
     switch (template.occurs_on_strategy) {
         case "now":
             return { occursOn: ctx.today };
