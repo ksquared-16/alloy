@@ -58,6 +58,11 @@ On W7 QA · Split Family (standing 50/50, no charges) Add Charge showed **no** R
 control was gated on allocation payers, which exist only after a first charge. PR #1430 reads the
 household arrangement while Add Charge is open and offers it from the standing shares.
 
+**Proven on deployed `d580e590` (PR #1430 merge), 2026-10-12 19:55 UTC:** W7 QA · Split Family's Add
+Charge reads `CHARGE APPLIES TO · Household · RESPONSIBILITY · Dana Split 50% · Rosa Split 50% ·
+household responsibility · Change →`, four date cells unchanged, no execute call issued.
+Screenshot `deployed/addcharge-w7split-responsibility-d580e59.png`.
+
 ## 5. Open — QA actor identity (blocker)
 
 `w7-actor-link-census.sql`: **no** role-holding login in the staging organization has an active
