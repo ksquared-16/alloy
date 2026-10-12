@@ -1,0 +1,407 @@
+{
+  "trusted_host_action_id": "tha_84b71d303631b8",
+  "query_hash": "39b51a3b0d45be701f028dc81bdb170badb04987d58aafb39b1e8124db8c82fd",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-12T19:26:45.923Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_84b71d303631b8",
+    "query_hash": "39b51a3b0d45be701f028dc81bdb170badb04987d58aafb39b1e8124db8c82fd",
+    "authorization_id": "grnt_97383efe0e4a416a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-12T19:26:52.534Z",
+    "question_ids": [
+      "campus_calendar",
+      "legacy_alvarez",
+      "mygrant_charge",
+      "org_billing_calendar",
+      "w7_household"
+    ],
+    "questions": {
+      "campus_calendar": {
+        "question_id": "campus_calendar",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "North Campus",
+            "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "billing_calendar": [
+              {
+                "end": null,
+                "start": "2026-01-01",
+                "value": {
+                  "cadence": "monthly",
+                  "anchor_on": null
+                },
+                "active": true
+              }
+            ]
+          },
+          {
+            "label": "South Campus",
+            "location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "billing_calendar": [
+              {
+                "end": null,
+                "start": "2026-01-01",
+                "value": {
+                  "cadence": "weekly",
+                  "anchor_on": "2026-01-07"
+                },
+                "active": true
+              }
+            ]
+          },
+          {
+            "label": "West Campus",
+            "location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "billing_calendar": [
+              {
+                "end": null,
+                "start": "2026-01-01",
+                "value": {
+                  "cadence": "weekly",
+                  "anchor_on": "2026-01-05"
+                },
+                "active": true
+              }
+            ]
+          }
+        ]
+      },
+      "legacy_alvarez": {
+        "question_id": "legacy_alvarez",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "fd000000-0000-4000-8000-0000000c0001",
+            "charges": 16,
+            "present": true,
+            "payments": 17,
+            "journal_entries": 50
+          }
+        ]
+      },
+      "mygrant_charge": {
+        "question_id": "mygrant_charge",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "01590d6e-52b1-42f0-8e48-c5d867c3ab84",
+            "status": "posted",
+            "category": "credit",
+            "household": "Mygrant Family",
+            "posted_at": "2026-10-09T13:43:12.045+00:00",
+            "voided_at": null,
+            "created_at": "2026-10-09T13:43:12.232581+00:00",
+            "billable_on": null,
+            "description": "reversal of charge be3c16f3-c724-480f-8ecd-41b8bc6d8f71",
+            "amount_cents": -4000,
+            "service_date": "2026-10-09",
+            "source_charge_id": "be3c16f3-c724-480f-8ecd-41b8bc6d8f71",
+            "billable_source_type": "customer"
+          },
+          {
+            "label": "72b98081-38e0-4e85-b462-1ae5bd1ed90c",
+            "status": "draft",
+            "category": "one_time",
+            "household": "Mygrant Family",
+            "posted_at": null,
+            "voided_at": null,
+            "created_at": "2026-10-09T10:57:48.607095+00:00",
+            "billable_on": "2026-10-25",
+            "description": "field_trip",
+            "amount_cents": 4000,
+            "service_date": "2026-11-05",
+            "source_charge_id": null,
+            "billable_source_type": "customer"
+          },
+          {
+            "label": "be3c16f3-c724-480f-8ecd-41b8bc6d8f71",
+            "status": "posted",
+            "category": "one_time",
+            "household": "Mygrant Family",
+            "posted_at": "2026-10-09T10:58:01.677+00:00",
+            "voided_at": null,
+            "created_at": "2026-10-09T10:58:01.558968+00:00",
+            "billable_on": "2026-10-09",
+            "description": "field_trip",
+            "amount_cents": 4000,
+            "service_date": "2026-10-09",
+            "source_charge_id": null,
+            "billable_source_type": "customer"
+          }
+        ]
+      },
+      "org_billing_calendar": {
+        "question_id": "org_billing_calendar",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "org",
+            "calendars": [
+              {
+                "end": null,
+                "start": "2026-10-08",
+                "value": {
+                  "cadence": "monthly",
+                  "anchor_on": null
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "w7_household": {
+        "question_id": "w7_household",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "W7 QA · Monthly Family",
+            "adults": [
+              {
+                "role": "parent",
+                "person": "Mara Monthly",
+                "status": "active"
+              }
+            ],
+            "charges": 0,
+            "children": [
+              {
+                "child": "Milo Monthly",
+                "start": "2026-09-01",
+                "campus": "North Campus",
+                "agreement_status": "active"
+              }
+            ],
+            "payments": 0,
+            "customer_id": "fd000000-0000-4000-8000-0000007c0001",
+            "arrangements": [
+              {
+                "end": null,
+                "start": "2026-09-01",
+                "state": "active",
+                "shares": [
+                  {
+                    "bp": 10000,
+                    "method": "percentage",
+                    "person": "Mara Monthly"
+                  }
+                ],
+                "charge_scoped": false,
+                "member_scoped": false
+              }
+            ],
+            "journal_entries": 0,
+            "account_policies": []
+          },
+          {
+            "label": "W7 QA · Multi-Site Family",
+            "adults": [
+              {
+                "role": "parent",
+                "person": "Morgan Multisite",
+                "status": "active"
+              },
+              {
+                "role": "parent",
+                "person": "Sam Multisite",
+                "status": "active"
+              }
+            ],
+            "charges": 0,
+            "children": [
+              {
+                "child": "Max Multisite",
+                "start": "2026-09-01",
+                "campus": "South Campus",
+                "agreement_status": "active"
+              },
+              {
+                "child": "Mika Multisite",
+                "start": "2026-09-01",
+                "campus": "North Campus",
+                "agreement_status": "active"
+              }
+            ],
+            "payments": 0,
+            "customer_id": "fd000000-0000-4000-8000-0000007c0004",
+            "arrangements": [
+              {
+                "end": null,
+                "start": "2026-09-01",
+                "state": "active",
+                "shares": [
+                  {
+                    "bp": 5000,
+                    "method": "percentage",
+                    "person": "Morgan Multisite"
+                  },
+                  {
+                    "bp": 5000,
+                    "method": "percentage",
+                    "person": "Sam Multisite"
+                  }
+                ],
+                "charge_scoped": false,
+                "member_scoped": false
+              }
+            ],
+            "journal_entries": 0,
+            "account_policies": [
+              {
+                "end": null,
+                "type": "billing_calendar",
+                "start": "2026-09-01",
+                "value": {
+                  "cadence": "monthly",
+                  "anchor_on": null
+                },
+                "active": true
+              }
+            ]
+          },
+          {
+            "label": "W7 QA · Split Family",
+            "adults": [
+              {
+                "role": "parent",
+                "person": "Dana Split",
+                "status": "active"
+              },
+              {
+                "role": "guardian",
+                "person": "Gale Split",
+                "status": "active"
+              },
+              {
+                "role": "parent",
+                "person": "Rosa Split",
+                "status": "active"
+              }
+            ],
+            "charges": 0,
+            "children": [
+              {
+                "child": "Sasha Split",
+                "start": "2026-09-01",
+                "campus": "North Campus",
+                "agreement_status": "active"
+              }
+            ],
+            "payments": 0,
+            "customer_id": "fd000000-0000-4000-8000-0000007c0005",
+            "arrangements": [
+              {
+                "end": null,
+                "start": "2026-09-01",
+                "state": "active",
+                "shares": [
+                  {
+                    "bp": 5000,
+                    "method": "percentage",
+                    "person": "Dana Split"
+                  },
+                  {
+                    "bp": 5000,
+                    "method": "percentage",
+                    "person": "Rosa Split"
+                  }
+                ],
+                "charge_scoped": false,
+                "member_scoped": false
+              }
+            ],
+            "journal_entries": 0,
+            "account_policies": []
+          },
+          {
+            "label": "W7 QA · Weekly Family",
+            "adults": [
+              {
+                "role": "parent",
+                "person": "Wes Weekly",
+                "status": "active"
+              }
+            ],
+            "charges": 0,
+            "children": [
+              {
+                "child": "Willa Weekly",
+                "start": "2026-09-01",
+                "campus": "South Campus",
+                "agreement_status": "active"
+              }
+            ],
+            "payments": 0,
+            "customer_id": "fd000000-0000-4000-8000-0000007c0002",
+            "arrangements": [
+              {
+                "end": null,
+                "start": "2026-09-01",
+                "state": "active",
+                "shares": [
+                  {
+                    "bp": 10000,
+                    "method": "percentage",
+                    "person": "Wes Weekly"
+                  }
+                ],
+                "charge_scoped": false,
+                "member_scoped": false
+              }
+            ],
+            "journal_entries": 0,
+            "account_policies": []
+          },
+          {
+            "label": "W7 QA · West Family",
+            "adults": [
+              {
+                "role": "parent",
+                "person": "Wren Westbrook",
+                "status": "active"
+              }
+            ],
+            "charges": 0,
+            "children": [
+              {
+                "child": "Wyatt Westbrook",
+                "start": "2026-09-01",
+                "campus": "West Campus",
+                "agreement_status": "active"
+              }
+            ],
+            "payments": 0,
+            "customer_id": "fd000000-0000-4000-8000-0000007c0003",
+            "arrangements": [
+              {
+                "end": null,
+                "start": "2026-09-01",
+                "state": "active",
+                "shares": [
+                  {
+                    "bp": 10000,
+                    "method": "percentage",
+                    "person": "Wren Westbrook"
+                  }
+                ],
+                "charge_scoped": false,
+                "member_scoped": false
+              }
+            ],
+            "journal_entries": 0,
+            "account_policies": []
+          }
+        ]
+      }
+    },
+    "row_count": 13
+  }
+}
