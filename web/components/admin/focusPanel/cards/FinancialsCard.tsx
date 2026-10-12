@@ -574,6 +574,23 @@ export default function FinancialsCard({
     /* Kept so the discount row can be RE-LABELLED when the subjects land, without re-reading. */
     const [responsibilityPositionBody, setResponsibilityPositionBody] = useState<Record<string, unknown> | null>(null);
 
+    /* Who may be named on THIS charge: allocation payers, plus the standing household shares. */
+    const chargeResponsibilityParties = useMemo(() => {
+        const out = new Map<string, string>();
+        for (const party of vm?.payers ?? []) {
+            if (party.name.trim().length > 0) out.set(party.personId, party.name);
+        }
+        const standing = (responsibilityPositionBody as {
+            household?: { shares?: Array<{ responsiblePartyId?: string | null; name?: string | null }> } | null;
+        } | null)?.household?.shares ?? [];
+        for (const share of standing) {
+            const id = (share.responsiblePartyId ?? "").trim();
+            const name = (share.name ?? "").trim();
+            if (id && name && !out.has(id)) out.set(id, name);
+        }
+        return [...out].map(([id, label]) => ({ id, label }));
+    }, [vm?.payers, responsibilityPositionBody]);
+
     useEffect(() => {
         /*
          * ── ONLY WHEN THE SURFACE THAT USES IT IS IN PLAY ────────────────────────────────────
@@ -587,7 +604,11 @@ export default function FinancialsCard({
          * NO request for the initial account: the reads made it fail, and the reason it failed was
          * the reason they should not have been there.
          */
-        const detailInPlay = overlay === "detail" || detailsAreTheSurface;
+        /*
+         * W7-F011: Add Charge states the standing responsibility beside the subject, so the
+         * household arrangement is read when that command is open too — not only for Details.
+         */
+        const detailInPlay = overlay === "detail" || overlay === "add_charge" || detailsAreTheSurface;
         if (!customerId || !detailInPlay) return;
         let cancelled = false;
         setAdminPositionsLoading(true);
@@ -5024,16 +5045,17 @@ export default function FinancialsCard({
                              * to divide it between. With none, the account has no arrangement to
                              * depart from and the control would be an empty form.
                              */
-                            ...((vm.payers ?? []).length > 0
+                            /*
+                             * W7-F011: a STANDING arrangement is a party on record too. A household
+                             * whose arrangement names Dana 50% · Rosa 50% and that has not been
+                             * charged yet has no allocations, and gating on those alone hid who owes
+                             * the very first charge. The parties are the union of both answers.
+                             */
+                            ...(chargeResponsibilityParties.length > 0
                                 ? {
                                       chargeResponsibility: {
                                           standingSummary: standingResponsibilitySummary,
-                                          parties: (vm.payers ?? [])
-                                              .filter((party) => party.name.trim().length > 0)
-                                              .map((party) => ({
-                                                  id: party.personId,
-                                                  label: party.name,
-                                              })),
+                                          parties: chargeResponsibilityParties,
                                           changing: chargeToChanging,
                                           onChanging: (changing: boolean) => {
                                               setChargeToChanging(changing);
