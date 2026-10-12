@@ -139,3 +139,18 @@ describe("the panel's shape", () => {
         expect(src).not.toContain("BILLING_TIMING_RULE_DERIVES");
     });
 });
+
+describe("Add Charge states the standing responsibility before the first charge exists", () => {
+    const host = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+
+    it("is offered from the standing household arrangement, not only from allocations", () => {
+        expect(host).toMatch(/\.\.\.\(chargeResponsibilityParties\.length > 0/);
+        expect(host).not.toMatch(/\.\.\.\(\(vm\.payers \?\? \[\]\)\.length > 0\s*\?\s*\{\s*chargeResponsibility/);
+        const parties = host.slice(host.indexOf("const chargeResponsibilityParties"));
+        expect(parties.slice(0, 1200)).toMatch(/household\?\.shares/);
+    });
+
+    it("and the household arrangement is read while Add Charge is open", () => {
+        expect(host).toMatch(/overlay === "detail" \|\| overlay === "add_charge" \|\| detailsAreTheSurface/);
+    });
+});
