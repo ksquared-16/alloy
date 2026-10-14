@@ -83,7 +83,10 @@ export default function AddChargeCommand({
     templates,
     controls,
     modeSlot,
+    editing = false,
 }: {
+    /** W7-F016: editing a draft — the same command, re-titled; saving replaces the draft. */
+    editing?: boolean;
     specimen: AddChargeSpecimen;
     templates: ChargeTemplateOption[];
     /**
@@ -251,7 +254,7 @@ export default function AddChargeCommand({
     return (
         <div className="alloy-os-addcharge-host">
             <UniversalCard
-                title="Add"
+                title={editing ? "Edit draft" : "Add"}
                 insight=""
                 iconName="Receipt"
                 tier="work"
@@ -578,6 +581,11 @@ export default function AddChargeCommand({
                     <span data-addcharge-invoice-date title={specimen.dateRules.invoice ?? undefined}>
                         <Value locked>{specimen.invoiceDate}</Value>
                     </span>
+                    {specimen.invoiceOverride ? (
+                        <span data-addcharge-invoice-override className="alloy-os-addcharge__date-rule">
+                            Charge-type override · {specimen.invoiceOverride}
+                        </span>
+                    ) : null}
                     {specimen.dateRules.invoice ? (
                         <span data-addcharge-invoice-rule className="alloy-os-addcharge__sr-only">
                             {specimen.dateRules.invoice}
@@ -867,7 +875,7 @@ export default function AddChargeCommand({
                     data-addcharge-submit
                     onClick={controls?.onSubmit}
                 >
-                    {controls?.running ? "Adding…" : "Add charge"}
+                    {controls?.running ? (editing ? "Saving…" : "Adding…") : editing ? "Save changes" : "Add charge"}
                 </Action>
                 <Action onClick={controls?.onCancel}>Cancel</Action>
             </ActionRow>

@@ -37,11 +37,11 @@ describe("financial charge actions — the operator can complete the lifecycle",
      * central question — what is owed — could only ever answer zero; and immutability without a
      * correction path enforces a mistake rather than protecting a record.
      */
-    it("registers add, post and reverse", () => {
+    it("registers add, post, reverse and (W7-F016) cancel draft", () => {
         expect(financialChargeActions.map((a) => a.actionKey).sort()).toEqual(
-            [CHARGE_ADD_ACTION_KEY, CHARGE_POST_ACTION_KEY, CHARGE_REVERSE_ACTION_KEY].sort(),
+            [CHARGE_ADD_ACTION_KEY, CHARGE_POST_ACTION_KEY, CHARGE_REVERSE_ACTION_KEY, "charge.cancel_draft"].sort(),
         );
-        for (const key of [CHARGE_ADD_ACTION_KEY, CHARGE_POST_ACTION_KEY, CHARGE_REVERSE_ACTION_KEY]) {
+        for (const key of [CHARGE_ADD_ACTION_KEY, CHARGE_POST_ACTION_KEY, CHARGE_REVERSE_ACTION_KEY, "charge.cancel_draft"]) {
             expect(REGISTERED_ACTION_CAPABILITY_KEYS as readonly string[]).toContain(key);
         }
     });

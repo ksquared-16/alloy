@@ -44,7 +44,8 @@ export function invoiceRuleSentence(strategy: string, offsetDays: number): strin
 export function invoiceRuleSource(rule: InvoiceTimingRule): string {
     switch (rule.source.kind) {
         case "template":
-            return "this charge type's own timing";
+            // W7-F017: named as what it is — an override of the organisation's invoice timing.
+            return "charge-type override";
         case "policy":
             return scopeWords(rule.source.scope);
         case "platform_default":

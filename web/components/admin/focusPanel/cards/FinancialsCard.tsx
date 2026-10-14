@@ -77,7 +77,7 @@ import {
     rowInFinancialsSubjectScope,
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
-import FinancialsChargeDetail from "@/app/adminV2/financials/FinancialsChargeDetail";
+import FinancialsChargeDetail, { type ChargeDetailFacts } from "@/app/adminV2/financials/FinancialsChargeDetail";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -755,6 +755,21 @@ export default function FinancialsCard({
         summary: string;
         changes: string[];
     } | null>(null);
+
+    /*
+     * ── W7-F016: THE DRAFT LIFECYCLE, FROM THE CHARGE'S OWN RECORD ─────────────────────────────
+     *
+     * `chargeDetailFacts` is what the open record reported about itself (status, template, amount,
+     * service date, subject) — the projection's answer, not the ledger row's. A draft offers Edit
+     * and Cancel draft; a posted charge offers only the correction path. `replacingDraftId` is set
+     * while Add Charge is open as an EDIT of a draft: on a successful save the new draft stands and
+     * the old one is withdrawn through `charge.cancel_draft`, retained as replaced.
+     */
+    const [chargeDetailFacts, setChargeDetailFacts] = useState<ChargeDetailFacts | null>(null);
+    const [replacingDraftId, setReplacingDraftId] = useState<string | null>(null);
+    const [cancelDraftConfirm, setCancelDraftConfirm] = useState(false);
+    const [draftActionError, setDraftActionError] = useState<string | null>(null);
+    const [chargeDetailRefresh, setChargeDetailRefresh] = useState(0);
 
     /*
      * THE CHARGE A PAYMENT IS BEING RECORDED AGAINST.
@@ -2929,6 +2944,26 @@ export default function FinancialsCard({
                 return;
             }
 
+            /*
+             * W7-F016: AN EDIT REPLACES THE DRAFT. The new draft is written first (above), so the
+             * charge is never lost; only then is the original withdrawn, retained as replaced by
+             * this one. Where the save re-resolved the SAME draft in place (an amount-only edit on
+             * the same service date recalculates it), there is nothing to withdraw.
+             */
+            if (replacingDraftId && createdChargeIds[0] && createdChargeIds[0] !== replacingDraftId) {
+                const withdrawn = await executeFinancialCommand({
+                    action: "cancelDraft",
+                    entity: { entityType: "customer", entityId: customerId ?? "" },
+                    mode: "execute",
+                    payload: { charge_id: replacingDraftId, replaced_by_charge_id: createdChargeIds[0] },
+                });
+                if (!withdrawn.ok) {
+                    setReplacingDraftId(null);
+                    setCommandError(`The edited charge was saved, but the original draft could not be withdrawn: ${withdrawn.error}`);
+                    return;
+                }
+            }
+            setReplacingDraftId(null);
             setPending(null);
             resetChargeDecisions();
             // The command card closes on success only. A refusal keeps it open with the domain's
@@ -2950,6 +2985,8 @@ export default function FinancialsCard({
         // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
     }, [
         applyChargeDecisions,
+        replacingDraftId,
+        customerId,
         chargeEventDate,
         chargeNote,
         chargeInvocation,
@@ -3448,6 +3485,9 @@ export default function FinancialsCard({
         pop();
         setPending(null);
         setCommandError(null);
+        setReplacingDraftId(null);
+        setCancelDraftConfirm(false);
+        setDraftActionError(null);
         closeMovePanels();
         closeAdjustPanels();
         setReverseCharge(null);
@@ -4752,6 +4792,51 @@ export default function FinancialsCard({
      * on deployed staging — opening Add from an account drew the command over an empty pane, with
      * `data-financials-detail-account` absent from the document and the ledger at zero rows.
      */
+    /* W7-F016: open Add Charge as an EDIT of this draft, pre-filled from its own record. */
+    const openEditDraft = (facts: ChargeDetailFacts) => {
+        /*
+         * The CURRENT version of the charge type. A draft keeps the template version it was written
+         * under; if that version has since been superseded (W7-F017 moved Materials onto the
+         * organisation's timing), the edit is made under the version in force now.
+         */
+        const current =
+            (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === facts.chargeTemplateId)
+            ?? (vm?.chargeTemplates ?? []).find((tpl) => tpl.label === facts.label)
+            ?? null;
+        if (!current) {
+            setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
+            return;
+        }
+        setReplacingDraftId(facts.chargeId);
+        setCancelDraftConfirm(false);
+        setDraftActionError(null);
+        setChargeEventDate(facts.serviceDate ?? "");
+        setChargeAmount(facts.amountCents > 0 ? (facts.amountCents / 100).toFixed(2) : "");
+        setSubjectFilter(facts.customerMemberId ?? "all");
+        setPending({ templateId: current.id, label: current.label, summary: "", changes: [] });
+        push({ kind: "add_charge" });
+    };
+
+    /* W7-F016: withdraw a never-posted draft — retained as cancelled, never deleted. */
+    const cancelDraft = async (facts: ChargeDetailFacts) => {
+        setRunning(true);
+        setDraftActionError(null);
+        const result = await executeFinancialCommand({
+            action: "cancelDraft",
+            entity: { entityType: "customer", entityId: customerId ?? "" },
+            mode: "execute",
+            payload: { charge_id: facts.chargeId, charge_label: facts.label },
+        });
+        setRunning(false);
+        setCancelDraftConfirm(false);
+        if (!result.ok) {
+            setDraftActionError(result.error);
+            return;
+        }
+        setChargeDetailRefresh((n) => n + 1);
+        await load();
+    };
+
     const commandSurface = (() => {
         /*
          * ── THE CHARGE'S OWN RECORD, FROM EITHER HOST ───────────────────────────────────────
@@ -4774,7 +4859,7 @@ export default function FinancialsCard({
                     data-financials-charge-detail-for={surface.chargeId}
                 >
                     <UniversalCard
-                        title={surface.label}
+                        title="Charge details"
                         insight=""
                         iconName="Receipt"
                         tier="work"
@@ -4785,7 +4870,11 @@ export default function FinancialsCard({
                         data-universal-card-key="charge_detail"
                         footerAction={null}
                     >
-                        <FinancialsChargeDetail chargeId={surface.chargeId} />
+                        <FinancialsChargeDetail
+                            chargeId={surface.chargeId}
+                            refreshKey={chargeDetailRefresh}
+                            onLoaded={setChargeDetailFacts}
+                        />
                         <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
                             {/*
                               * ── CORRECT THIS, FROM THE RECORD OF THIS ──────────────────────
@@ -4808,7 +4897,52 @@ export default function FinancialsCard({
                               * that can only be refused, and asking a second authority whether it
                               * is correctable would be a second opinion.
                               */}
-                            {adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
+                            {/*
+                              * W7-F016: A DRAFT IS EDITED OR CANCELLED; POSTED MONEY IS CORRECTED.
+                              * The two sets never appear together — the record's own status decides.
+                              */}
+                            {chargeDetailFacts?.chargeId === surface.chargeId && chargeDetailFacts.status === "draft" ? (
+                                cancelDraftConfirm ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            data-financials-charge-detail-cancel-draft-confirm="true"
+                                            disabled={running}
+                                            onClick={() => void cancelDraft(chargeDetailFacts)}
+                                        >
+                                            {running ? "Cancelling…" : "Confirm cancel draft"}
+                                        </button>
+                                        <button type="button" onClick={() => setCancelDraftConfirm(false)} disabled={running}>
+                                            Keep draft
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            data-financials-charge-detail-edit-draft="true"
+                                            disabled={running}
+                                            onClick={() => openEditDraft(chargeDetailFacts)}
+                                        >
+                                            Edit draft
+                                        </button>
+                                        <button
+                                            type="button"
+                                            data-financials-charge-detail-cancel-draft="true"
+                                            disabled={running}
+                                            onClick={() => setCancelDraftConfirm(true)}
+                                        >
+                                            Cancel draft
+                                        </button>
+                                    </>
+                                )
+                            ) : null}
+                            {draftActionError ? (
+                                <p className="alloy-os-addcharge__error" role="alert" data-financials-charge-detail-action-error="true">
+                                    {draftActionError}
+                                </p>
+                            ) : null}
+                            {chargeDetailFacts?.status !== "draft" && adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
                                 <button
                                     type="button"
                                     data-financials-charge-detail-correct="true"
@@ -4904,6 +5038,7 @@ export default function FinancialsCard({
                     </div>
                 ) : selected ? (
                     <AddChargeCommand
+                        editing={Boolean(replacingDraftId)}
                         modeSlot={entryModes}
                         templates={templates}
                         specimen={adaptAddChargeSpecimen({

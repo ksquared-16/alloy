@@ -3677,3 +3677,17 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/*
+ * W7-F018 — A DRAFT ROW IS UPCOMING, NOT POSTED MONEY. Same columns as a posted row (so it can be
+ * opened, edited or cancelled where it sits), visibly set apart: a dashed rule and a softened amount,
+ * because it is not part of the balance the summary states.
+ */
+.alloy-os-billingdetail__row--upcoming {
+    border-left: 2px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+    background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2.5%, transparent);
+}
+.alloy-os-billingdetail__row--upcoming .alloy-os-billingdetail__amount {
+    color: var(--alloy-os-text-secondary, #4b5563);
+    font-style: italic;
+}

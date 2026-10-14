@@ -32,6 +32,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { cancelDraftCharge, CancelDraftChargeError } from "@/lib/financials/chargeLifecycle/cancelDraftCharge";
 
 import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import {
@@ -77,6 +78,8 @@ const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
 export const CHARGE_POST_ACTION_KEY = "charge.post";
 export const CHARGE_REVERSE_ACTION_KEY = "charge.reverse";
+/** W7-F016: withdraw a never-posted draft — retained as `void`, attributed, never deleted. */
+export const CHARGE_CANCEL_DRAFT_ACTION_KEY = "charge.cancel_draft";
 
 /**
  * ── WHO MAY MOVE THIS MONEY ──
@@ -1061,7 +1064,99 @@ const reverseCharge: RegisteredAction = {
     },
 };
 
-export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge];
+/**
+ * W7-F016 — CANCEL A DRAFT.
+ *
+ * A draft that never posted may be withdrawn. It is retained as `void` with who, when and why
+ * (`cancelDraftCharge`), so the account still shows that it existed; a posted charge is refused and
+ * pointed at the correction path. `replaced_by_charge_id` is how Edit records that a new draft took
+ * this one's place.
+ */
+const cancelDraft: RegisteredAction = {
+    actionKey: CHARGE_CANCEL_DRAFT_ACTION_KEY,
+    defaultLabel: "Cancel draft",
+    description: "Withdraw a draft charge that has not posted. The draft is kept, marked cancelled.",
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.charge_id)) {
+            return { ok: false, blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }] };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ supabase, ctx, payload }) {
+        const chargeId = t(payload?.charge_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
+        return {
+            eligible: Boolean(chargeId) && allowed,
+            blockers: [
+                ...(chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }]),
+                ...(allowed ? [] : [{ code: "charge_permission_required", message: `Cancelling a draft requires ${CHARGE_WRITE_PERMISSION}.` }]),
+            ],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: `Cancel draft ${t(payload?.charge_label) || t(payload?.charge_id)}`,
+            changes: ["The draft is withdrawn and kept on the account as cancelled. Nothing was owed, so no balance changes."],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
+            return denied(correlationId, "Cancelling a draft", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
+        try {
+            const replacedBy = t(payload.replaced_by_charge_id) || null;
+            const out = await cancelDraftCharge(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                chargeId: t(payload.charge_id),
+                actorUserId: ctx.userId ?? null,
+                reason: replacedBy ? "replaced_by_edit" : "operator_cancelled",
+                note: t(payload.note) || null,
+                replacedByChargeId: replacedBy,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: CHARGE_CANCEL_DRAFT_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: out.chargeId,
+                    detail: {
+                        status: out.status,
+                        already_cancelled: out.alreadyCancelled,
+                        withdrawn_reductions: out.withdrawnReductions,
+                    },
+                },
+            };
+        } catch (err) {
+            if (err instanceof CancelDraftChargeError) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: err.code === "charge_not_found" ? 404 : err.code === "charge_not_draft" ? 409 : 500,
+                    error: err.message,
+                };
+            }
+            return { ok: false, correlationId, status: 500, error: err instanceof Error ? err.message : "The draft could not be cancelled." };
+        }
+    },
+};
+
+export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge, cancelDraft];
 
 /**
  * Exposed for the multi-child operation's locks.
