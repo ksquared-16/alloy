@@ -190,8 +190,12 @@ describe.each(PATHS)("Forms Studio authoring — %s", (_name, start) => {
             const result = validateFormPayload({
                 schemaJson: schema,
                 payload: { values: { ...values, ...computed }, signatures: {}, groups: {} },
+                mode: "submit",
             } as never);
-            expect((result as { ok: boolean }).ok).toBe(true);
+            // Other questions on this fixture are deliberately unanswered; the claim is that the
+            // calculated age itself raises no error once the submit path has filled it.
+            const errors = ((result as { errors?: Array<{ path: string[] }> }).errors ?? []).filter((e) => e.path.includes(age));
+            expect(errors).toEqual([]);
         });
 
         it("waits for its dates instead of guessing 'today'", () => {

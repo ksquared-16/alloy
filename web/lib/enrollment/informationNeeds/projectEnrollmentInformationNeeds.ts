@@ -20,6 +20,7 @@ import {
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
+import { fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
     resolveEnrollmentNeedIdentity,
@@ -139,6 +140,33 @@ export function projectEnrollmentInformationNeeds(
 
         const sourceFieldNames = sourceFieldNamesByFieldId(form.pdfMapping as SourceFieldMapping);
 
+        /*
+         * A QUESTION HIDDEN BY ITS CONDITION IS NOT ASKED.
+         *
+         * Forms Studio authors "Show this question when …" and the generic runtime honours it; this
+         * conversation did not, so a follow-up the family should never see was asked anyway — and
+         * once answered, the submit refused it as a hidden question with a value. Each field's
+         * current answer is read through the same identity and precedence the needs below use
+         * (session value over canonical prefill), and the shared rule decides what is shown.
+         */
+        const valueByFieldId = new Map<string, unknown>();
+        walkScalarFormFields(form.schema, (field) => {
+            const id = resolveEnrollmentNeedIdentity({
+                field,
+                subjectId: input.subjectId,
+                formDefinitionId: form.form_definition_id,
+                insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
+                inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
+                formDefinitionVersionId: form.form_definition_version_id,
+                sessionItemId: form.session_item_id,
+            });
+            const sessionValue = id.session_value_key ? input.sharedValues[id.session_value_key] : undefined;
+            const canonicalValue = id.shared_value_key ? input.canonicalValues?.[id.shared_value_key] : undefined;
+            const value = usableValue(sessionValue) ? sessionValue : canonicalValue;
+            if (value !== undefined) valueByFieldId.set(field.id, value);
+        });
+        const shown = (fieldId: string) => fieldShownForAnswers(form.schema, fieldId, (id) => valueByFieldId.get(id));
+
         walkScalarFormFields(form.schema, (field) => {
             // Not a participant need unless the participant is the one who supplies it. Display-only
             // prose was the first case — without it a handbook paragraph became an artifact-specific
@@ -146,6 +174,8 @@ export function projectEnrollmentInformationNeeds(
             // derived values are the same mistake at scale: 100 boxes the family never fills and 7
             // the platform writes itself were being counted as work they had to do.
             if (!formFieldAsksParticipant(field)) return;
+
+            if (!shown(field.id)) return;
 
             /*
              * A CONVERSATION CANNOT ASK A QUESTION IT HAS NO WORDS FOR.
