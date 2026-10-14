@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import { describeCondition, removeField, updateField } from "@/lib/forms/formBuilderSchema";
+import { describeCondition, findFieldDeep, removeField, updateField } from "@/lib/forms/formBuilderSchema";
 import { studioSchemaForDraft } from "@/lib/pos/processingCase/formDraft/studioSchemaForDraft";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
@@ -162,7 +162,8 @@ export default function ProcessingImportedFormStudio({
     }, [draft.fields, schema]);
 
     const selectedField: FormField | null = useMemo(
-        () => schema?.fields.find((f) => f.id === selectedFieldId) ?? null,
+        // A group's line (an address's City, a contact's Phone) is selectable too.
+        () => (schema && selectedFieldId ? findFieldDeep(schema, selectedFieldId)?.field ?? null : null),
         [schema, selectedFieldId],
     );
     const selectedMapping = selectedFieldId ? mappings.get(selectedFieldId) ?? null : null;
@@ -443,6 +444,8 @@ export default function ProcessingImportedFormStudio({
                                 editable
                                 mutate={mutate}
                                 onRemove={() => authoring.removeQuestion(selectedField.id)}
+                                onDuplicate={() => authoring.duplicateQuestion(selectedField.id)}
+                                onSelectField={setSelectedFieldId}
                                 fieldLibrary={fieldLibrary}
                             />
                         </>

@@ -65,8 +65,17 @@ export function createBlankSchema(title: string): FormSchemaV1 {
     return { schema_version: 1, title: t, sections: [{ id: sectionId, title: "Section 1", field_ids: [] }], fields: [] };
 }
 
+/** Every field id in the schema, including those inside groups — a payload is keyed by field id. */
+function allFieldIds(fields: readonly FormField[], into = new Set<string>()): Set<string> {
+    for (const f of fields) {
+        into.add(f.id);
+        if (f.type === "group") allFieldIds(f.fields, into);
+    }
+    return into;
+}
+
 function uniqueFieldId(schema: FormSchemaV1, base: string): string {
-    const existing = new Set(schema.fields.map((f) => f.id));
+    const existing = allFieldIds(schema.fields);
     if (!existing.has(base)) return base;
     let i = 2;
     while (existing.has(`${base}_${i}`)) i += 1;
@@ -144,8 +153,7 @@ export function addField(schema: FormSchemaV1, spec: BuilderFieldSpec): { schema
 
 /** Patch a field's editable props (label/required/description/options/field_source). */
 export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partial<BuilderFieldSpec>): FormSchemaV1 {
-    const fields = schema.fields.map((f) => {
-        if (f.id !== fieldId) return f;
+    return mapFieldById(schema, fieldId, (f) => {
         const next: FormField = { ...f };
         if (patch.label !== undefined) next.label = patch.label.trim() || next.label;
         if (patch.required !== undefined) next.required = Boolean(patch.required);
@@ -175,7 +183,6 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
         }
         return next;
     });
-    return { ...schema, fields };
 }
 
 /** Remove a field (and its section reference). */
@@ -189,9 +196,12 @@ export function removeField(schema: FormSchemaV1, fieldId: string): FormSchemaV1
          * the question above it. Clearing the rule means the follow-up is simply always asked, which is
          * the safe direction to fail in.
          */
-        fields: schema.fields
-            .filter((f) => f.id !== fieldId)
-            .map((f) => (conditionTriggerOf(f) === fieldId ? withoutVisibility(f) : f)),
+        fields: releaseCalculationsOn(
+            schema.fields
+                .filter((f) => f.id !== fieldId)
+                .map((f) => (conditionTriggerOf(f) === fieldId ? withoutVisibility(f) : f)),
+            fieldId,
+        ),
         sections: schema.sections.map((s) => ({ ...s, field_ids: s.field_ids.filter((id) => id !== fieldId) })),
     };
 }
@@ -721,8 +731,11 @@ function pruneDependentsOf(schema: FormSchemaV1, triggerId: string): FormSchemaV
 }
 
 export function changeAnswerKind(schema: FormSchemaV1, fieldId: string, kind: AnswerKind): FormSchemaV1 {
-    const current = schema.fields.find((f) => f.id === fieldId);
-    if (!current) return schema;
+    const located = findFieldDeep(schema, fieldId);
+    if (!located || !groupChildAuthoring(schema, fieldId).canChangeAnswerType) return schema;
+    const current = located.field;
+    // A calculated answer has no answer type of its own to choose — it is what the calculation makes.
+    if (current.derived) return schema;
     const from = answerKindOf(current);
     if (!from || from === kind) return schema;
 
@@ -754,8 +767,10 @@ export function changeAnswerKind(schema: FormSchemaV1, fieldId: string, kind: An
             next.type = kind;
     }
 
-    const fields = schema.fields.map((f) => (f.id === fieldId ? (next as unknown as FormField) : f));
-    return pruneDependentsOf({ ...schema, fields }, fieldId);
+    let changed = mapFieldById(schema, fieldId, () => next as unknown as FormField);
+    // A calculation that read this question as a DATE can no longer read it.
+    if (kind !== "date") changed = { ...changed, fields: releaseCalculationsOn(changed.fields, fieldId) };
+    return pruneDependentsOf(changed, fieldId);
 }
 
 function optionsOf(schema: FormSchemaV1, fieldId: string): StaticOption[] | null {
@@ -915,4 +930,226 @@ export function ungroupAddress(schema: FormSchemaV1, groupId: string): FormSchem
         return { ...s, field_ids: ids };
     });
     return { ...schema, fields, sections };
+}
+
+
+/* ------------------------------------------------------------------ fields inside groups */
+
+/**
+ * A GROUP'S LINES ARE QUESTIONS TOO.
+ *
+ * An address's City, or a people group's Phone, is an ordinary field that happens to live inside a
+ * group. Every editing helper here used to look only at `schema.fields`, so a line inside a group could
+ * not be renamed, re-mapped or resized even through code, and the Studio could only select the group as
+ * a whole. These helpers find and replace a field wherever it lives.
+ */
+export type FieldLocation = {
+    readonly field: FormField;
+    /** The group the field sits in, or null for a top-level question. */
+    readonly parent: (FormField & { type: "group" }) | null;
+};
+
+export function findFieldDeep(schema: FormSchemaV1, fieldId: string): FieldLocation | null {
+    const walk = (fields: readonly FormField[], parent: FieldLocation["parent"]): FieldLocation | null => {
+        for (const f of fields) {
+            if (f.id === fieldId) return { field: f, parent };
+            if (f.type === "group") {
+                const hit = walk(f.fields, f);
+                if (hit) return hit;
+            }
+        }
+        return null;
+    };
+    return walk(schema.fields, null);
+}
+
+/** Replace one field, top-level or inside a group, leaving everything else untouched. */
+export function mapFieldById(schema: FormSchemaV1, fieldId: string, fn: (field: FormField) => FormField): FormSchemaV1 {
+    let hit = false;
+    const walk = (fields: FormField[]): FormField[] =>
+        fields.map((f) => {
+            if (f.id === fieldId) {
+                hit = true;
+                return fn(f);
+            }
+            if (f.type === "group") {
+                const inner = walk(f.fields);
+                return inner === f.fields ? f : ({ ...f, fields: inner } as FormField);
+            }
+            return f;
+        });
+    const fields = walk(schema.fields);
+    return hit ? { ...schema, fields } : schema;
+}
+
+/**
+ * What an operator may change on a field, given the group it sits in.
+ *
+ * A PEOPLE group's lines are the relationship definition's own fields: the definition decides that an
+ * Emergency Contact has a Phone and where it is stored, and persistence writes them through it. Re-mapping
+ * or re-typing one of them in Studio would write an answer the relationship cannot store, so those lines
+ * keep their label, requiredness and width editable and say where they are stored instead. An address
+ * line, or a line of a plain group, is an ordinary field and is fully editable.
+ */
+export type GroupChildAuthoring = {
+    readonly groupKind: "address" | "people" | "group" | null;
+    readonly canChangeAnswerType: boolean;
+    readonly canChangeDestination: boolean;
+};
+
+export function groupChildAuthoring(schema: FormSchemaV1, fieldId: string): GroupChildAuthoring {
+    const located = findFieldDeep(schema, fieldId);
+    const parent = located?.parent ?? null;
+    if (!parent) return { groupKind: null, canChangeAnswerType: true, canChangeDestination: true };
+    const g = parent as { collection_binding?: unknown; address_binding?: unknown };
+    if (g.collection_binding) return { groupKind: "people", canChangeAnswerType: false, canChangeDestination: false };
+    if (g.address_binding) return { groupKind: "address", canChangeAnswerType: true, canChangeDestination: true };
+    return { groupKind: "group", canChangeAnswerType: true, canChangeDestination: true };
+}
+
+/** Width of any field, wherever it lives. A group's line has no neighbours to re-balance. */
+export function setAnyFieldLayoutWidth(schema: FormSchemaV1, fieldId: string, width: FormFieldLayoutWidth): FormSchemaV1 {
+    return mapFieldById(schema, fieldId, (f) => {
+        const next = { ...f } as FormField & { layout_width?: FormFieldLayoutWidth };
+        if (width === "full") delete next.layout_width;
+        else next.layout_width = width;
+        return next;
+    });
+}
+
+
+/* ------------------------------------------------------------------ duplicate */
+
+/**
+ * "Parent name" → copy → "Parent first name", without building the question again.
+ *
+ * The copy is a NEW question: a new id (so its answers, conditions and mapping are its own), placed
+ * directly below the original. It keeps how the question is ASKED — answer type, choices, requiredness,
+ * help text, width and the condition that reveals it — because that is what makes copying faster than
+ * starting over.
+ *
+ * It does NOT keep where the answer is STORED. Two questions writing the same canonical field is a
+ * conflict nobody chose: if "Parent first name" were copied with its destination, the copy would write
+ * First name too. The copy starts as a Form field until the operator gives it its own destination. A
+ * calculation is not copied either — it describes the original's value, not the copy's.
+ *
+ * Refused for a group (its lines' identities and relationship binding cannot be duplicated as one
+ * question) and for a field inside a group.
+ */
+export function duplicateField(schema: FormSchemaV1, fieldId: string): { schema: FormSchemaV1; fieldId: string } | null {
+    const located = findFieldDeep(schema, fieldId);
+    if (!located || located.parent || located.field.type === "group") return null;
+    const original = located.field;
+    const id = uniqueFieldId(schema, `${original.id}_copy`);
+    const copy = { ...original, id, label: `${original.label} (copy)` } as Record<string, unknown>;
+    for (const key of ["field_source", "derived", "read_only", "pdf_slot", "entity_hint"]) delete copy[key];
+    const made = copy as unknown as FormField;
+
+    const at = schema.fields.findIndex((f) => f.id === fieldId);
+    const fields = [...schema.fields.slice(0, at + 1), made, ...schema.fields.slice(at + 1)];
+    const sections = schema.sections.map((section) => {
+        const i = section.field_ids.indexOf(fieldId);
+        if (i < 0) return section;
+        return { ...section, field_ids: [...section.field_ids.slice(0, i + 1), id, ...section.field_ids.slice(i + 1)] };
+    });
+    return { schema: { ...schema, fields, sections }, fieldId: id };
+}
+
+
+/* ------------------------------------------------------------------ calculated answers */
+
+/**
+ * AN ANSWER ALLOY WORKS OUT, INSTEAD OF ASKING FOR.
+ *
+ * "Student Age Upon Enrolling" is not a question: the family already gives the child's date of birth,
+ * and the form already asks when enrollment starts. The schema has always been able to say so — a field's
+ * `derived` declaration, which the submit path and the enrollment artifact both resolve through the
+ * platform derived-field doctrine — but nothing in Forms Studio could set it, so an operator could only
+ * leave the box for the family to fill.
+ *
+ * Two calculations exist, because two exist in the platform doctrine:
+ *   - an AGE, from a date-of-birth question, as of another date question in the form (the enrollment
+ *     start date). The as-of is required: an age is only ever an age on a date, and the platform refuses
+ *     to substitute "today" for the date that was meant;
+ *   - the DATE THE FORM IS SIGNED, which exists only once the family submits.
+ *
+ * A calculated field is shown to the family, never asked. Its type follows the calculation — an age is words
+ * ("5 years 4 months"), a signing date is a date — because that is what the resolver stores and what
+ * validation enforces.
+ */
+export type FieldCalculation =
+    | { readonly kind: "age_from_date_of_birth"; readonly source_key: string; readonly as_of_key: string }
+    | { readonly kind: "execution_date" };
+
+/** Date questions a calculation on `fieldId` may read: top-level, not itself calculated, not the field. */
+export function calculationDateSources(schema: FormSchemaV1, fieldId: string): Array<{ id: string; label: string }> {
+    return schema.fields
+        .filter((f) => f.id !== fieldId && f.type === "date" && !f.derived)
+        .map((f) => ({ id: f.id, label: f.label }));
+}
+
+export function calculationOf(field: FormField): FieldCalculation | null {
+    const d = field.derived;
+    if (!d) return null;
+    if (d.kind === "execution_date") return { kind: "execution_date" };
+    return { kind: "age_from_date_of_birth", source_key: d.source_key ?? "", as_of_key: d.as_of_key ?? "" };
+}
+
+/** Set or clear a field's calculation. Refuses anything it cannot honestly compute. */
+export function setFieldCalculation(schema: FormSchemaV1, fieldId: string, calculation: FieldCalculation | null): FormSchemaV1 {
+    const located = findFieldDeep(schema, fieldId);
+    if (!located || located.parent) return schema;
+    const field = located.field;
+    if (field.type === "group" || field.type === "text_block" || field.type === "signature" || field.type === "file_ref") return schema;
+
+    if (calculation === null) {
+        if (!field.derived) return schema;
+        return mapFieldById(schema, fieldId, (f) => {
+            const next = { ...f } as Record<string, unknown>;
+            delete next.derived;
+            delete next.read_only;
+            return next as unknown as FormField;
+        });
+    }
+
+    if (calculation.kind === "age_from_date_of_birth") {
+        const sources = new Set(calculationDateSources(schema, fieldId).map((s) => s.id));
+        if (!sources.has(calculation.source_key) || !sources.has(calculation.as_of_key)) return schema;
+        if (calculation.source_key === calculation.as_of_key) return schema;
+    }
+
+    const type = calculation.kind === "execution_date" ? "date" : "text";
+    const derived =
+        calculation.kind === "execution_date"
+            ? { kind: "execution_date" as const }
+            : { kind: "age_from_date_of_birth" as const, source_key: calculation.source_key, as_of_key: calculation.as_of_key };
+
+    const next = mapFieldById(schema, fieldId, (f) => {
+        const out = { ...f } as Record<string, unknown>;
+        for (const key of SHAPE_KEYS) delete out[key];
+        out.type = type;
+        out.derived = derived;
+        /*
+         * Not `read_only`. The declaration is `derived`, and the participant renderer shows a derived
+         * field read-only on its own. `read_only` means something else to the runtime — a placement-only
+         * destination, hidden from the family until it holds a value — and setting it hid the age the
+         * family should see being worked out.
+         */
+        delete out.read_only;
+        return out as unknown as FormField;
+    });
+    // Nothing a calculation produces is a Yes/No or a choice, so rules that waited for one go back to always asked.
+    return pruneDependentsOf(next, fieldId);
+}
+
+/** Calculations that read `removedId` stop being calculations (they cannot be computed any more). */
+function releaseCalculationsOn(fields: FormField[], removedId: string): FormField[] {
+    return fields.map((f) => {
+        const d = f.derived;
+        if (!d || (d.source_key !== removedId && d.as_of_key !== removedId)) return f;
+        const next = { ...f } as Record<string, unknown>;
+        delete next.derived;
+        delete next.read_only;
+        return next as unknown as FormField;
+    });
 }

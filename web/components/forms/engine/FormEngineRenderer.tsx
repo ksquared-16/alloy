@@ -16,7 +16,8 @@ import type {
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { isPlacementOnlyForParticipant } from "@/lib/forms/placementOnlyFields";
-import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
+import { composeRuntimeRows, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
 import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
@@ -105,6 +106,20 @@ export function FormEngineRenderer({
     );
     const loose = variant === "embed";
 
+    /*
+     * CALCULATED ANSWERS ARE SHOWN, NOT ASKED.
+     *
+     * A field the schema declares `derived` (an age from a date of birth, the date the form is signed) is
+     * filled by the platform — the submit path resolves it before validation. Rendering it as an input
+     * asked the family for a number Alloy works out itself. It renders read-only here, with the value as
+     * far as it can be known while the family is still answering. Nothing is written to the payload: the
+     * submit path remains the one writer.
+     */
+    const derivedPreview = useMemo(
+        () => resolveFormDerivedValues(schema, payload.values ?? {}, {}),
+        [schema, payload.values],
+    );
+
     const sectionModels = useMemo(() => {
         return schema.sections.map((s) => ({
             section: s,
@@ -134,6 +149,26 @@ export function FormEngineRenderer({
             const helpText = desc ? (
                 <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{desc}</p>
             ) : null;
+
+            if (field.derived && !readonly) {
+                const value = derivedPreview[field.id];
+                const pending =
+                    field.derived.kind === "execution_date"
+                        ? "Filled in when you sign and submit."
+                        : "Calculated once the dates it depends on are answered.";
+                return (
+                    <div className="space-y-1" data-form-field-calculated={field.id}>
+                        <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
+                            {field.label}
+                        </label>
+                        {helpText}
+                        <div className="rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-800">
+                            {value ?? <span className="text-neutral-500">{pending}</span>}
+                        </div>
+                        <p className="text-[11px] text-neutral-500">Calculated automatically.</p>
+                    </div>
+                );
+            }
 
             if (readonly) {
                 const display =
@@ -341,7 +376,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview]
     );
 
     const renderSignatureControl = useCallback(
@@ -646,10 +681,11 @@ export function FormEngineRenderer({
                             <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                                 {field.label} #{idx + 1}
                             </div>
-                            {field.fields.map((child) => {
+                            {composeRuntimeRows(field.fields.filter((child) => shows(child))).map((childRow) => (
+                            <div key={childRow.map((c) => c.id).join("|")} className={runtimeRowClass(childRow)}>
+                            {childRow.map((child) => {
                                 const getVal = (fid: string) =>
                                     fid in row.values ? row.values[fid] : payload.values[fid];
-                                if (!shows(child)) return null;
                                 if (child.type === "group") {
                                     return renderNestedGroup(child, row, idx, rows);
                                 }
@@ -657,7 +693,7 @@ export function FormEngineRenderer({
                                     const sig = row.signatures?.[child.id];
                                     const sigErrPrefix = [field.id, String(idx), "signatures", child.id];
                                     return (
-                                        <div key={child.id}>
+                                        <div key={child.id} className={childRow.length > 1 ? runtimeCellSpanClass(child) : undefined}>
                                             {renderSignatureControl(child, sig, (nextSig) => {
                                                 const next = [...rows];
                                                 next[idx] = {
@@ -670,7 +706,7 @@ export function FormEngineRenderer({
                                     );
                                 }
                                 return (
-                                    <div key={child.id}>
+                                    <div key={child.id} className={childRow.length > 1 ? runtimeCellSpanClass(child) : undefined}>
                                         {renderScalarControl(
                                             child,
                                             row.values,
@@ -684,6 +720,8 @@ export function FormEngineRenderer({
                                     </div>
                                 );
                             })}
+                            </div>
+                            ))}
                             {!readonly && rows.length > rep.min ? (
                                 <button
                                     type="button"
@@ -734,12 +772,12 @@ export function FormEngineRenderer({
 
     const renderFieldList = useCallback(
         (fields: FormField[]) =>
-            chunkFieldsForHalfRowLayout(
+            composeRuntimeRows(
                 fields.filter((field) => shows(field))
             ).map((row, ri) => (
                 <div
                     key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
-                    className={row.length === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" : "block"}
+                    className={runtimeRowClass(row)}
                 >
                     {row.map((field) => {
                         if (field.type === "group") {
@@ -756,7 +794,7 @@ export function FormEngineRenderer({
                             );
                         }
                         return (
-                            <div key={field.id}>
+                            <div key={field.id} className={row.length > 1 ? runtimeCellSpanClass(field) : undefined}>
                                 {renderScalarControl(
                                     field,
                                     payload.values,

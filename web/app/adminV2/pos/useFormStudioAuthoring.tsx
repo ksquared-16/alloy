@@ -6,6 +6,7 @@ import {
     addRegistryField,
     addRelationshipGroup,
     addSection,
+    duplicateField,
     removeField,
     removeSection,
     renameSection,
@@ -81,6 +82,8 @@ export type FormStudioAuthoring = {
     };
     readonly openLibrary: (sectionId: string) => void;
     readonly removeQuestion: (fieldId: string) => void;
+    /** Copy a question below itself as a new question with its own id and no destination. */
+    readonly duplicateQuestion: (fieldId: string) => void;
     /** The add-question library and the new-section dialog. Render once, anywhere in the surface. */
     readonly overlays: ReactElement;
     /** The section inspector: title, add a question to it, remove it. */
@@ -179,11 +182,29 @@ export function useFormStudioAuthoring({
                 : target.position === "before"
                   ? reorderField(s, fieldId, target.sectionId, target.fieldId)
                   : reorderFieldAfter(s, fieldId, target.sectionId, target.fieldId);
-            next = setFieldLayoutWidth(next, fieldId, target.rowIntent === "same-line" ? "half" : "full");
+            /*
+             * Dropping beside another question puts it on that row; dropping on its own line makes it
+             * full width. A field that is ALREADY narrower than half (a third, a quarter — City | State |
+             * ZIP) keeps its width when it lands on a row: forcing it to half undid a layout decision
+             * the operator had made and silently re-flowed the row.
+             */
+            const current = next.fields.find((f) => f.id === fieldId);
+            const narrow = current?.layout_width === "third" || current?.layout_width === "quarter";
+            if (target.rowIntent !== "same-line") next = setFieldLayoutWidth(next, fieldId, "full");
+            else if (!narrow) next = setFieldLayoutWidth(next, fieldId, "half");
             return next;
         });
         setDragFieldId(null);
         setDropTarget(null);
+    };
+
+    const duplicateQuestion = (fieldId: string) => {
+        if (!schema || !editable) return;
+        const result = duplicateField(schema, fieldId);
+        if (!result) return;
+        mutate(() => result.schema);
+        onSelectField(result.fieldId);
+        onSelectSection(null);
     };
 
     const removeQuestion = (fieldId: string) => {
@@ -290,6 +311,7 @@ export function useFormStudioAuthoring({
         },
         openLibrary,
         removeQuestion,
+        duplicateQuestion,
         overlays,
         renderSectionInspector,
     };
