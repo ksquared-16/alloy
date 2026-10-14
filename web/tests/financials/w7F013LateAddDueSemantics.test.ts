@@ -151,6 +151,8 @@ describe("not due is not past due, and not 'Due'", () => {
     it("the card's Due excludes it, and states it beside Due rather than hiding it", () => {
         const adapter = readFileSync(path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts"), "utf8");
         expect(adapter).toMatch(/currentlyCollectibleCents - \(vm\.notYetDue\?\.amountCents \?\? 0\)/);
+        // Measured on deployed: Due $0.00 beside Past due $40.00. What is past due is always due.
+        expect(adapter).toMatch(/Math\.min\(vm\.pastDue\?\.amountCents \?\? 0, vm\.collectible\.currentlyCollectibleCents\)/);
         const card = readFileSync(path.join(process.cwd(), "components/operationalCards/FinancialsCard.tsx"), "utf8");
         expect(card).toContain("Not yet due ·");
     });
