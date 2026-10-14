@@ -135,7 +135,8 @@ describe("Overview answers who, what and where without a second click", () => {
     const src = code(USERS_PAGE);
 
     it("shows the name as a name — never the email standing in for one", () => {
-        expect(src).toContain("access-user-overview-name");
+        // W7-F002 (corrected): the name renders through the editable account-name control.
+        expect(src).toContain("AccountNameControl");
         expect(src).toContain("identityOf(selected).name");
         // The pair that makes an unnamed account read as unnamed in both places.
         expect(src).toContain("identityHeadline");

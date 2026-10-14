@@ -32,7 +32,7 @@ const GRANTS: Row[] = [
     { org_id: ORG, role_key: "lapsed", permission_key: "fin.write", allowed: false },
 ];
 
-function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[]; rpc?: (fn: string, p: Row) => unknown }) {
+function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[]; rpc?: (fn: string, p: Row) => unknown; accountNames?: Record<string, string> }) {
     const tables: Record<string, Row[]> = {
         user_person_links: (seed.links ?? []).map((r) => ({ ...r })),
         user_roles: (seed.roles ?? []).map((r) => ({ ...r })),
@@ -95,7 +95,16 @@ function makeDb(seed: { links?: Row[]; roles?: Row[]; persons?: Row[]; rpc?: (fn
         rpcCalls.push([fn, p]);
         return seed.rpc ? seed.rpc(fn, p) : { data: null, error: { message: `unknown rpc ${fn}` } };
     };
-    return { client: { from: (t: string) => builder(t), rpc } as never, tables, inserted, rpcCalls };
+    /* W7-F002 (corrected): the login's own account name, as auth user metadata carries it. */
+    const auth = {
+        admin: {
+            getUserById: async (id: string) => ({
+                data: { user: { id, user_metadata: seed.accountNames?.[id] ? { full_name: seed.accountNames[id] } : {} } },
+                error: null,
+            }),
+        },
+    };
+    return { client: { from: (t: string) => builder(t), rpc, auth } as never, tables, inserted, rpcCalls };
 }
 
 const namedPerson = { id: PERSON, org_id: ORG, full_name: "Dana Okonkwo", first_name: null, last_name: null, archived_at: null };
@@ -201,6 +210,8 @@ describe("listUserPersonLinkState", () => {
                 { org_id: ORG, user_id: "lapsed-user", role: "lapsed" },
                 /* A custom role holding fin.write IS money-capable: a capability, not a role name. */
                 { org_id: ORG, user_id: "bookkeeper-user", role: "bookkeeper" },
+                /* W7-F002 (corrected): a NAMED login with no Person link is valid and not reported. */
+                { org_id: ORG, user_id: "named-unlinked-user", role: "admin" },
                 /* Nor is another tenant's administrator. */
                 { org_id: OTHER_ORG, user_id: "elsewhere", role: "owner" },
             ],
@@ -209,6 +220,7 @@ describe("listUserPersonLinkState", () => {
                 { ...namedPerson, id: "free-person", full_name: "Rae Lindqvist" },
                 { ...namedPerson, id: "unnamed-person", full_name: null },
             ],
+            accountNames: { "named-unlinked-user": "Kelly Kurzman" },
         });
         const state = await listUserPersonLinkState(db.client, { orgId: ORG });
         expect(state.unresolvedMoneyCapableActors).toEqual([

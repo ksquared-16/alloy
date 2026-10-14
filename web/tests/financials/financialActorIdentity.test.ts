@@ -26,7 +26,7 @@ const ORG = "org-1";
 type Link = { user_id: string; person_id: string; status: string; org_id: string };
 type Person = { id: string; org_id: string; full_name?: string | null; first_name?: string | null; last_name?: string | null };
 
-function makeDb(seed: { links?: Link[]; persons?: Person[]; failLinks?: boolean; failPersons?: boolean }) {
+function makeDb(seed: { links?: Link[]; persons?: Person[]; failLinks?: boolean; failPersons?: boolean; accountNames?: Record<string, string>; failAccount?: boolean }) {
     function builder(table: string) {
         const eqs: Array<[string, unknown]> = [];
         const api: Record<string, unknown> = {
@@ -50,7 +50,25 @@ function makeDb(seed: { links?: Link[]; persons?: Person[]; failLinks?: boolean;
         };
         return api;
     }
-    return { from: (t: string) => builder(t) } as never;
+    /* W7-F002 (corrected): the login's own account name (auth user metadata). Never the email. */
+    const auth = {
+        admin: {
+            getUserById: async (id: string) =>
+                seed.failAccount
+                    ? { data: null, error: { message: "boom" } }
+                    : {
+                          data: {
+                              user: {
+                                  id,
+                                  email: `${id}@example.com`,
+                                  user_metadata: seed.accountNames?.[id] ? { full_name: seed.accountNames[id] } : {},
+                              },
+                          },
+                          error: null,
+                      },
+        },
+    };
+    return { from: (t: string) => builder(t), auth } as never;
 }
 
 describe("resolveFinancialActorIdentity", () => {
@@ -80,9 +98,10 @@ describe("resolveFinancialActorIdentity", () => {
         /* The deployed census: 4 financial actors, 0 with an active link, 0 resolving to a name. */
         const db = makeDb({ links: [], persons: [] });
         const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        /* W7-F002 (corrected): unlinked AND unnamed — the gap is the missing account NAME. */
         expect(identity.status).toBe("not_linked");
         expect(identity.requirementMet).toBe(false);
-        expect(financialActorIdentityGap(identity)).toContain("Access");
+        expect(financialActorIdentityGap(identity)).toMatch(/no name on file[\s\S]*Access/);
     });
 
     it("a REVOKED link is not a link", async () => {
@@ -168,5 +187,49 @@ describe("the capability the requirement attaches to", () => {
             "utf8",
         );
         expect(sql).toContain("ARRAY['fin.write', 'fin.adjust', 'fin.responsibility', 'fin.subsidy', 'fin.provider', 'fin.post']");
+    });
+});
+
+describe("W7-F002 (corrected) — a named LOGIN is accountable without a Person link", () => {
+    it("named account, no Person link → named by the ACCOUNT", async () => {
+        const db = makeDb({ links: [], persons: [], accountNames: { u1: "Kelly Kurzman" } });
+        const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        expect(identity).toEqual({ status: "named_account", name: "Kelly Kurzman", personId: null, requirementMet: true });
+        expect(financialActorIdentityGap(identity)).toBeNull();
+    });
+
+    it("linked named Person AND a named account → the Person's name wins", async () => {
+        const db = makeDb({
+            links: [{ user_id: "u1", person_id: "p1", status: "active", org_id: ORG }],
+            persons: [{ id: "p1", org_id: ORG, full_name: "Dana Okonkwo" }],
+            accountNames: { u1: "D. Okonkwo (login)" },
+        });
+        const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        expect(identity.status).toBe("named");
+        expect(identity.name).toBe("Dana Okonkwo");
+    });
+
+    it("an email is never a name — an account with only an address stays unnamed", async () => {
+        const db = makeDb({ links: [], persons: [] });
+        const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        expect(identity.name).toBeNull();
+        expect(identity.requirementMet).toBe(false);
+        expect(JSON.stringify(identity)).not.toContain("@example.com");
+    });
+
+    it("a linked Person with no name falls back to the account's name", async () => {
+        const db = makeDb({
+            links: [{ user_id: "u1", person_id: "p1", status: "active", org_id: ORG }],
+            persons: [{ id: "p1", org_id: ORG, full_name: "  ", first_name: null, last_name: null }],
+            accountNames: { u1: "Kelly Kurzman" },
+        });
+        const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        expect(identity).toMatchObject({ status: "named_account", name: "Kelly Kurzman", requirementMet: true });
+    });
+
+    it("an unreadable account is not reported as a missing name", async () => {
+        const db = makeDb({ links: [], persons: [], failAccount: true });
+        const identity = await resolveFinancialActorIdentity(db, { orgId: ORG, actorUserId: "u1" });
+        expect(identity.status).toBe("unreadable");
     });
 });

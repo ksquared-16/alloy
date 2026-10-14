@@ -58,6 +58,11 @@ export { MONEY_CAPABLE_CAPABILITY_KEYS } from "@/lib/access/personLinkRequiremen
 export type FinancialActorIdentityStatus =
     /** Resolved through the canonical bridge to a person with a usable human name. Requirement met. */
     | "named"
+    /**
+     * W7-F002 (corrected): not linked to a usable Person, but the LOGIN carries its own account
+     * name. A Person link is optional — a named account is accountable on its own. Requirement met.
+     */
+    | "named_account"
     /** No actor was recorded at all — an automatic charge. Not a gap in identity. */
     | "no_actor"
     /** No active link exists for this user in this org. The ordinary unmet case. */
@@ -71,10 +76,10 @@ export type FinancialActorIdentityStatus =
 
 export type FinancialActorIdentity = {
     status: FinancialActorIdentityStatus;
-    /** The canonical human name, present only when `status === "named"`. */
+    /** The human name — the linked Person's (`named`) or the account's own (`named_account`). */
     name: string | null;
     personId: string | null;
-    /** True only for `named`. Every other status is an unmet requirement or an absent actor. */
+    /** True for `named` and `named_account`. Every other status is an unnamed operator or no actor. */
     requirementMet: boolean;
 };
 
@@ -103,7 +108,52 @@ export function personDisplayName(person: {
  * administrative omission someone can close; a link pointing at a missing person is a fault; and an
  * unreadable lookup is a question we could not answer, which must never be presented as either.
  */
+/**
+ * The login's OWN account name (auth user metadata `full_name`, else `name`), or null. Never the
+ * email: an address identifies a login, it does not name the human who used it.
+ */
+export async function resolveAccountName(
+    supabase: SupabaseClient,
+    actorUserId: string,
+): Promise<{ read: boolean; name: string | null }> {
+    try {
+        const { data, error } = await supabase.auth.admin.getUserById(actorUserId);
+        if (error) return { read: false, name: null };
+        const md = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+        const raw = (typeof md.full_name === "string" && md.full_name) || (typeof md.name === "string" && md.name) || null;
+        return { read: true, name: operatorIdentity({ display_name: raw, email: null }).name };
+    } catch {
+        return { read: false, name: null };
+    }
+}
+
+/**
+ * W7-F002 (corrected) — WHO ACTED, IN ORDER:
+ *
+ *   1. an active link to a named Person      → that Person's name   (`named`)
+ *   2. otherwise the login's own account name → that name            (`named_account`)
+ *   3. otherwise                              → unnamed, with the reason the link step gave
+ *
+ * Provenance (`created_by` = auth.users.id) is never rewritten; this is read-time presentation,
+ * so a login linked to a Person later is shown by that Person's name on its earlier rows too.
+ */
 export async function resolveFinancialActorIdentity(
+    supabase: SupabaseClient,
+    args: { orgId: string; actorUserId: string | null | undefined },
+): Promise<FinancialActorIdentity> {
+    const viaPerson = await resolveFinancialActorIdentityViaPerson(supabase, args);
+    if (viaPerson.status === "named" || viaPerson.status === "no_actor") return viaPerson;
+    const account = await resolveAccountName(supabase, String(args.actorUserId ?? "").trim());
+    if (account.name) {
+        return { status: "named_account", name: account.name, personId: viaPerson.personId, requirementMet: true };
+    }
+    if (!account.read && viaPerson.status === "not_linked") {
+        return { status: "unreadable", name: null, personId: null, requirementMet: false };
+    }
+    return viaPerson;
+}
+
+async function resolveFinancialActorIdentityViaPerson(
     supabase: SupabaseClient,
     args: { orgId: string; actorUserId: string | null | undefined },
 ): Promise<FinancialActorIdentity> {
@@ -155,14 +205,15 @@ export async function resolveFinancialActorIdentity(
 export function financialActorIdentityGap(identity: FinancialActorIdentity): string | null {
     switch (identity.status) {
         case "named":
+        case "named_account":
         case "no_actor":
             return null;
         case "not_linked":
-            return "This operator's account is not linked to a person record, so the audit trail cannot name who did this. An owner or admin links the account to its person in Access.";
+            return "This operator's account has no name on file, so the audit trail cannot name who did this. An owner or admin adds a name to the account in Access → Users.";
         case "person_missing":
-            return "This operator's account is linked to a person record that no longer exists, so the audit trail cannot name who did this. Re-link the account in Access.";
+            return "This operator's account has no name on file and is linked to a person record that no longer exists, so the audit trail cannot name who did this. Add a name to the account in Access → Users.";
         case "person_unnamed":
-            return "This operator's account is linked to a person record that carries no name, so the audit trail cannot name who did this. Add the person's name, or re-link the account, in Access.";
+            return "This operator's account has no name on file and its linked person carries no name either, so the audit trail cannot name who did this. Add a name to the account in Access → Users.";
         case "unreadable":
             return "Who this operator is could not be read just now, so this line is not evidence that the identity is missing. Reload before concluding anything from it.";
     }
