@@ -1,0 +1,62 @@
+{
+  "trusted_host_action_id": "tha_45f07095bf4281",
+  "query_hash": "85f7d1e7611a9db6debcb0326dc0f1cc0f9aa98f8a268a773b97c655d2a54c41",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T22:13:22.003Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_45f07095bf4281",
+    "query_hash": "85f7d1e7611a9db6debcb0326dc0f1cc0f9aa98f8a268a773b97c655d2a54c41",
+    "authorization_id": "grnt_b8448eaa4ec743df",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T22:13:27.276Z",
+    "question_ids": [
+      "director",
+      "audit"
+    ],
+    "questions": {
+      "director": {
+        "question_id": "director",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "director_login",
+            "account_name": "Kelly Kurzman",
+            "active_person_links": 0,
+            "any_person_links_ever": 0,
+            "persons_named_like_account_created_today": 0,
+            "named_operator_identity": true,
+            "roles": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "audit": {
+        "question_id": "audit",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "account_name_changed",
+            "command_key": "access.user.account_name_changed",
+            "domain": "access",
+            "origin": "operator",
+            "subject_is_director": true,
+            "operator_id": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "previous_state": "",
+            "new_state": "Kelly Kurzman",
+            "person_link_changed": false,
+            "committed_at": "2026-10-14T22:09:53.776991+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}
