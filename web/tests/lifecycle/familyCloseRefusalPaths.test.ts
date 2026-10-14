@@ -81,7 +81,7 @@ function fakeDb(tables: Rows, opts: { failTable?: string } = {}) {
 function familyWithWaitlistedChild(childState: string | null = "waitlisted"): Rows {
     return {
         opportunities: [{ id: OPP, org_id: ORG, status_key: "open" }],
-        opportunity_customer_members: [{ id: PARTICIPATION, org_id: ORG, opportunity_id: OPP }],
+        opportunity_customer_members: [{ id: PARTICIPATION, org_id: ORG, opportunity_id: OPP, customer_member_id: "cust-child" } as Record<string, unknown>],
         process_instances: [
             {
                 id: "pi-1",
@@ -133,6 +133,33 @@ describe("familyCloseRefusal — the shared rule", () => {
         const refusal = await familyCloseRefusal(client, {
             orgId: ORG, opportunityId: OPP, targetStatusKey: "withdrawn", closesCase: true,
         });
+        expect(refusal?.blocked_reasons.map((r) => r.code)).toEqual(["child_track_active_pre_enrollment"]);
+    });
+
+    it("the durable owner speaks first: a withdrawn participation over a lagging journey allows the close", async () => {
+        // Measured on deployed staging: the canonical child transition wrote the participation
+        // `withdrawn` and left the journey `enrolling`; the family could then never close.
+        const rows = familyWithWaitlistedChild("enrolling");
+        rows.opportunity_customer_members![0]!.outcome_status_key = "withdrawn";
+        const { client } = fakeDb(rows);
+        await expect(
+            familyCloseRefusal(client, { orgId: ORG, opportunityId: OPP, targetStatusKey: "closed" }),
+        ).resolves.toBeNull();
+    });
+
+    it("the durable owner speaks first: a waitlisted participation blocks even over a concluded journey", async () => {
+        const rows = familyWithWaitlistedChild("not_enrolling");
+        rows.opportunity_customer_members![0]!.outcome_status_key = "waitlisted";
+        const { client } = fakeDb(rows);
+        const refusal = await familyCloseRefusal(client, { orgId: ORG, opportunityId: OPP, targetStatusKey: "closed" });
+        expect(refusal?.blocked_reasons.map((r) => r.code)).toEqual(["child_track_active_pre_enrollment"]);
+    });
+
+    it("a participation outcome outside the Enrollment answers (new_inquiry) defers to the journey", async () => {
+        const rows = familyWithWaitlistedChild("waitlisted");
+        rows.opportunity_customer_members![0]!.outcome_status_key = "new_inquiry";
+        const { client } = fakeDb(rows);
+        const refusal = await familyCloseRefusal(client, { orgId: ORG, opportunityId: OPP, targetStatusKey: "closed" });
         expect(refusal?.blocked_reasons.map((r) => r.code)).toEqual(["child_track_active_pre_enrollment"]);
     });
 

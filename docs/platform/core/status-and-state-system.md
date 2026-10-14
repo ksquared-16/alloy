@@ -115,6 +115,13 @@ would close the case is refused while any child track on it is still operational
   failure mode, for the same reason as the transition-policy gate above.
 - **Blocking child states:** `waitlisted`, `enrolling`, an in-process child (`null` state) and
   `enrolled`. **Allowed:** `withdrawn`, `not_enrolling`. An unrecognised state blocks.
+- **The durable owner speaks first.** A child's state is read from its participation
+  (`outcome_status_key`, the durable owner — table above) whenever that carries an Enrollment answer
+  (`waitlisted` · `enrolling` · `enrolled` · `withdrawn` · `not_enrolling`); the journey's own
+  `process_instances.state` decides only when it does not (`new_inquiry`, null). Reading the journey
+  alone read a non-owner the exit paths do not converge: on deployed staging a child withdrawn
+  through the canonical child transition kept an `enrolling` journey, and its family could never
+  close.
 - **Fails closed.** A child list that cannot be read refuses the close. "Could not read" is never
   "no children".
 - **Both journey anchors.** A child's journey is found whether its process instance is anchored to the

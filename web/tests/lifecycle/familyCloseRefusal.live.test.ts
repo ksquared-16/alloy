@@ -297,6 +297,33 @@ describeLive("E2E-09 family close — real database", () => {
         expect(again.status).toBe("blocked");
     }, 120_000);
 
+    it("Scenario 4b — a child withdrawn through the canonical child transition no longer blocks the close", async () => {
+        // Deployed staging measured the defect: the child transition writes the participation (the
+        // durable owner) and leaves the journey `enrolling`. The rule must read the owner.
+        const f = await buildFamily("Withdrawn", [{ name: "Kilo", state: "enrolling", anchor: "participation" }]);
+        const child = f.children[0]!;
+        const exit = await executeEnrollmentStatusTransition({
+            supabase: db, orgId: ORG, userId: ACTOR || null,
+            request: {
+                actionKey: "update_enrollment_status",
+                scope: { grain: "child", opportunityId: f.opportunityId, opportunityCustomerMemberId: child.ocmId },
+                destinationKey: "closed_withdrawn",
+                targetStatusKey: "withdrawn",
+                confirmationRequired: true,
+            },
+        } as never);
+        const journey = await db.from("process_instances").select("state").eq("id", child.instanceId).single();
+        const close = await executeMutation({ supabase: db, orgId: ORG } as never, {
+            commandKey: "close_lead", subjectId: f.opportunityId, subjectType: "opportunity", domain: "lead_status",
+            targetState: "closed", origin: "operator" as never, operatorId: ACTOR || undefined,
+        });
+        const after = await snapshot(db, f);
+        console.info("E2E09_EVIDENCE scenario4b", JSON.stringify({ exit, journey_state: journey.data, close: close.status, after: caseFacts(after), participations: after.participations }));
+        expect(exit.ok).toBe(true);
+        expect(close.status).toBe("committed");
+        expect(after.case.status_key).toBe("closed");
+    }, 120_000);
+
     it("legacy definition-driven executor refuses too (QA-scoped action definition, removed after)", async () => {
         const f = await buildFamily("Legacy Exec", [{ name: "Juliet", state: "waitlisted", anchor: "participation" }]);
         const key = `zzqa_e2e09_close_${RUN}`;
