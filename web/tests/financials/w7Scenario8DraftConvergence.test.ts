@@ -180,3 +180,11 @@ describe("W7-F018 — drafts are upcoming, never balance, Due or Past due", () =
         expect(read("app/adminV2/components/operationalCardsShared.css")).toContain(".alloy-os-billingdetail__row--upcoming");
     });
 });
+
+describe("W7-F016 — an edit leaves the account view as it found it", () => {
+    const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+    it("the child filter is saved when Edit draft scopes the form, and restored on save and on dismissal", () => {
+        expect(card).toMatch(/setFilterBeforeEdit\(subjectFilter\);\s*setReplacingDraftId\(facts\.chargeId\);/);
+        expect(card.match(/if \(replacingDraftId && filterBeforeEdit !== null\) setSubjectFilter\(filterBeforeEdit\);/g)?.length).toBe(2);
+    });
+});

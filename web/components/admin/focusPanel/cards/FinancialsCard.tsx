@@ -770,6 +770,12 @@ export default function FinancialsCard({
     const [cancelDraftConfirm, setCancelDraftConfirm] = useState(false);
     const [draftActionError, setDraftActionError] = useState<string | null>(null);
     const [chargeDetailRefresh, setChargeDetailRefresh] = useState(0);
+    /*
+     * The account's child filter as it stood before Edit draft scoped the form to the draft's
+     * subject. Measured on deployed 5d74f41e: after an edit the strip stayed scoped to that child
+     * (Current balance $18.00 instead of the household's $98.00). Restored when the edit ends.
+     */
+    const [filterBeforeEdit, setFilterBeforeEdit] = useState<string | null>(null);
 
     /*
      * THE CHARGE A PAYMENT IS BEING RECORDED AGAINST.
@@ -2963,6 +2969,8 @@ export default function FinancialsCard({
                     return;
                 }
             }
+            if (replacingDraftId && filterBeforeEdit !== null) setSubjectFilter(filterBeforeEdit);
+            setFilterBeforeEdit(null);
             setReplacingDraftId(null);
             setPending(null);
             resetChargeDecisions();
@@ -2986,6 +2994,7 @@ export default function FinancialsCard({
     }, [
         applyChargeDecisions,
         replacingDraftId,
+        filterBeforeEdit,
         customerId,
         chargeEventDate,
         chargeNote,
@@ -3485,6 +3494,8 @@ export default function FinancialsCard({
         pop();
         setPending(null);
         setCommandError(null);
+        if (replacingDraftId && filterBeforeEdit !== null) setSubjectFilter(filterBeforeEdit);
+        setFilterBeforeEdit(null);
         setReplacingDraftId(null);
         setCancelDraftConfirm(false);
         setDraftActionError(null);
@@ -3493,7 +3504,7 @@ export default function FinancialsCard({
         setReverseCharge(null);
         setReverseChargePreview(null);
         setReverseChargeError(null);
-    }, [closeAdjustPanels, closeMovePanels, pop]);
+    }, [closeAdjustPanels, closeMovePanels, pop, replacingDraftId, filterBeforeEdit]);
 
     useDismissSignal(coordination, "financials", dismissOneLevel);
 
@@ -4807,6 +4818,7 @@ export default function FinancialsCard({
             setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
             return;
         }
+        setFilterBeforeEdit(subjectFilter);
         setReplacingDraftId(facts.chargeId);
         setCancelDraftConfirm(false);
         setDraftActionError(null);
