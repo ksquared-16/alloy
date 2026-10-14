@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { groupFieldsIntoRows, fieldLayoutFlexClass } from "@/lib/forms/formRowComposition";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { findFieldDeep } from "@/lib/forms/formBuilderSchema";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas from "./ProcessingFormCanvas";
 import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
@@ -239,7 +240,8 @@ export default function ProcessingFormBuilder({
         return map;
     }, [schema]);
 
-    const selectedField = selectedFieldId ? fieldById.get(selectedFieldId) ?? null : null;
+    // A group's line is selectable too, so the lookup walks into groups.
+    const selectedField = selectedFieldId && schema ? findFieldDeep(schema, selectedFieldId)?.field ?? null : null;
     const selectedSection = selectedSectionId ? schema?.sections.find((s) => s.id === selectedSectionId) ?? null : null;
 
     // Adding, arranging and removing questions and sections: the shared Forms Studio authoring, the
@@ -477,6 +479,8 @@ export default function ProcessingFormBuilder({
                                 mutate={mutate}
                                 fieldLibrary={fieldLibrary}
                                 onRemove={() => authoring.removeQuestion(selectedField.id)}
+                                onDuplicate={() => authoring.duplicateQuestion(selectedField.id)}
+                                onSelectField={setSelectedFieldId}
                                 onOpenDistribution={() => {
                                     setSelectedFieldId(null);
                                     setInspectorSection("distribution");

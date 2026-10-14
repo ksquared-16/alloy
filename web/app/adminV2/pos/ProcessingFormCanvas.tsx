@@ -140,6 +140,8 @@ function GroupBlock({
     field,
     selected,
     onSelect,
+    selectedChildId,
+    onSelectChild,
     mappingState,
     showMapping,
     dimmed,
@@ -147,6 +149,10 @@ function GroupBlock({
     field: FormField & { type: "group" };
     selected: boolean;
     onSelect: () => void;
+    /** The selected line inside this group, if any. */
+    selectedChildId?: string | null;
+    /** Select one line of the group — its own label, mapping and width — rather than the whole group. */
+    onSelectChild?: (childId: string) => void;
     mappingState?: CanvasMappingState;
     showMapping?: boolean;
     dimmed?: boolean;
@@ -201,14 +207,53 @@ function GroupBlock({
                     </p>
                 ) : null}
             </div>
+            {/*
+              * The group's lines, in the rows their own widths make — the same row authority the
+              * section uses, so an address reads City | State | ZIP here exactly as the family sees it.
+              * Each line is its own selection: an address's City has its own destination and width.
+              */}
             <div className="mt-2 space-y-1.5 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.05] p-2">
-                {field.fields.map((child) => (
-                    <div key={child.id} data-canvas-group-child={child.id}>
-                        <p className="text-[10px] font-medium text-alloy-midnight/70">
-                            {child.label}
-                            {child.required ? <span className="text-alloy-ember"> *</span> : null}
-                        </p>
-                        <div className="mt-0.5 h-6 rounded-md border border-alloy-stone/20 bg-white" aria-hidden />
+                {groupFieldsIntoRows(
+                    field.fields.map((c) => c.id),
+                    new Map(field.fields.map((c) => [c.id, c] as const)),
+                ).map((row) => (
+                    <div key={row.join("|")} className="flex flex-wrap gap-2">
+                        {row.map((childId) => {
+                            const child = field.fields.find((c) => c.id === childId)!;
+                            const childSelected = selectedChildId === child.id;
+                            return (
+                                <div
+                                    key={child.id}
+                                    role={onSelectChild ? "button" : undefined}
+                                    tabIndex={onSelectChild ? 0 : undefined}
+                                    data-canvas-group-child={child.id}
+                                    data-canvas-group-child-selected={childSelected ? true : undefined}
+                                    data-testid={`form-canvas-group-child-${child.id}`}
+                                    onClick={(e) => {
+                                        if (!onSelectChild) return;
+                                        e.stopPropagation();
+                                        onSelectChild(child.id);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (!onSelectChild || (e.key !== "Enter" && e.key !== " ")) return;
+                                        e.stopPropagation();
+                                        onSelectChild(child.id);
+                                    }}
+                                    className={clsx(
+                                        "min-w-0 rounded-md px-1 py-0.5",
+                                        fieldLayoutFlexClass(layoutWidthFromField(child)),
+                                        onSelectChild ? "cursor-pointer hover:bg-alloy-bend-pine/[0.05]" : null,
+                                        childSelected ? "ring-2 ring-alloy-bend-pine/35" : null,
+                                    )}
+                                >
+                                    <p className="text-[10px] font-medium text-alloy-midnight/70">
+                                        {child.label}
+                                        {child.required ? <span className="text-alloy-ember"> *</span> : null}
+                                    </p>
+                                    <div className="mt-0.5 h-6 rounded-md border border-alloy-stone/20 bg-white" aria-hidden />
+                                </div>
+                            );
+                        })}
                     </div>
                 ))}
             </div>
@@ -383,7 +428,7 @@ function QuestionBlock({
             ) : null}
             <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
-                    {field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
+                    {field.derived ? "Calculated" : field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
                 </p>
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
                     {field.required ? "Required" : "Optional"}
@@ -621,6 +666,8 @@ export default function ProcessingFormCanvas({
                                                                 field={field}
                                                                 selected={selectedFieldId === fid}
                                                                 onSelect={() => onSelectField(fid)}
+                                                                selectedChildId={selectedFieldId}
+                                                                onSelectChild={(childId) => onSelectField(childId)}
                                                                 mappingState={mapping?.byFieldId.get(fid)}
                                                                 showMapping={mapping?.show ?? false}
                                                                 dimmed={mapping?.dimFieldIds?.has(fid) ?? false}

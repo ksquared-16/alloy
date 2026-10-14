@@ -6,7 +6,16 @@ import {
     type ProcessingLibraryGroupOffer,
 } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
-import { updateField } from "@/lib/forms/formBuilderSchema";
+import {
+    calculationDateSources,
+    calculationOf,
+    findFieldDeep,
+    groupChildAuthoring,
+    setAnyFieldLayoutWidth,
+    setFieldCalculation,
+    updateField,
+    type FieldCalculation,
+} from "@/lib/forms/formBuilderSchema";
 import {
     moveFieldBetweenSections,
     moveFieldWithinSection,
@@ -508,6 +517,106 @@ function ChoicesEditor({
  * never a key typed here. The minimum and maximum are the schema's own `repeat` rules, which the
  * participant runtime enforces on submit, so "at least two emergency contacts" is a rule, not prose.
  */
+/**
+ * WHERE THE ANSWER COMES FROM: the family, or Alloy.
+ *
+ * Business language only — "Age", "as of", "Date the form is signed". No formula, no field id: the
+ * operator picks the questions the calculation reads from the questions on this form.
+ */
+function CalculationEditor({
+    field,
+    schema,
+    editable,
+    mutate,
+}: {
+    field: FormField;
+    schema: FormSchemaV1;
+    editable: boolean;
+    mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
+}) {
+    const current = calculationOf(field);
+    const dates = calculationDateSources(schema, field.id);
+    const [kind, setKind] = useState<"" | FieldCalculation["kind"]>(current?.kind ?? "");
+    const [dob, setDob] = useState(current?.kind === "age_from_date_of_birth" ? current.source_key : "");
+    const [asOf, setAsOf] = useState(current?.kind === "age_from_date_of_birth" ? current.as_of_key : "");
+    const dateOptions = dates.map((d) => ({ value: d.id, label: d.label }));
+    const applyAge = (nextDob: string, nextAsOf: string) => {
+        if (!nextDob || !nextAsOf || nextDob === nextAsOf) return;
+        mutate((s) => setFieldCalculation(s, field.id, { kind: "age_from_date_of_birth", source_key: nextDob, as_of_key: nextAsOf }));
+    };
+    return (
+        <div data-inspector-calculation className="space-y-2">
+            <AlloyFieldLabel>Answer comes from</AlloyFieldLabel>
+            <AlloySelect
+                value={kind}
+                disabled={!editable}
+                onChange={(v) => {
+                    const next = v as "" | FieldCalculation["kind"];
+                    setKind(next);
+                    if (next === "") mutate((s) => setFieldCalculation(s, field.id, null));
+                    else if (next === "execution_date") mutate((s) => setFieldCalculation(s, field.id, { kind: "execution_date" }));
+                    else applyAge(dob, asOf);
+                }}
+                options={[
+                    { value: "", label: "The family answers it" },
+                    { value: "age_from_date_of_birth", label: "Calculated — age from a date of birth" },
+                    { value: "execution_date", label: "Calculated — the date the form is signed" },
+                ]}
+                allowEmpty={false}
+                testId="form-builder-calculation-kind"
+            />
+            {kind === "age_from_date_of_birth" ? (
+                dates.length < 2 ? (
+                    <p className="text-[11px] leading-snug text-alloy-ember" data-testid="form-builder-calculation-needs-dates">
+                        An age needs two date questions on this form: the date of birth, and the date the age is taken
+                        as of (usually the enrollment start date). Add them, then come back.
+                    </p>
+                ) : (
+                    <>
+                        <div>
+                            <AlloyFieldLabel>Date of birth</AlloyFieldLabel>
+                            <AlloySelect
+                                value={dob}
+                                disabled={!editable}
+                                placeholder="Choose the date-of-birth question…"
+                                onChange={(v) => {
+                                    setDob(v);
+                                    applyAge(v, asOf);
+                                }}
+                                options={dateOptions.filter((o) => o.value !== asOf)}
+                                testId="form-builder-calculation-source"
+                            />
+                        </div>
+                        <div>
+                            <AlloyFieldLabel>As of</AlloyFieldLabel>
+                            <AlloySelect
+                                value={asOf}
+                                disabled={!editable}
+                                placeholder="Choose the enrollment date question…"
+                                onChange={(v) => {
+                                    setAsOf(v);
+                                    applyAge(dob, v);
+                                }}
+                                options={dateOptions.filter((o) => o.value !== dob)}
+                                testId="form-builder-calculation-as-of"
+                            />
+                        </div>
+                    </>
+                )
+            ) : null}
+            {current ? (
+                <p className="text-[10px] leading-snug text-alloy-midnight/50" data-testid="form-builder-calculation-summary">
+                    {current.kind === "execution_date"
+                        ? "Filled in by Alloy when the family signs. Families are not asked for it."
+                        : `Alloy works out the age from “${dates.find((d) => d.id === current.source_key)?.label ?? "date of birth"}” as of “${
+                              dates.find((d) => d.id === current.as_of_key)?.label ?? "the enrollment date"
+                          }”. Families are not asked for it.`}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 function GroupPanel({
     field,
     schema,
@@ -603,6 +712,10 @@ type Props = {
     editable: boolean;
     mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
     onRemove: () => void;
+    /** Copy this question below itself, as a new question with its own destination. */
+    onDuplicate?: () => void;
+    /** Select another field (used to return from a group's line to its group). */
+    onSelectField?: (fieldId: string) => void;
     onOpenDistribution?: () => void;
     /** Stage-derived library so destinations cover everything the process can require. */
     fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
@@ -614,9 +727,15 @@ export default function ProcessingFormQuestionInspector({
     editable,
     mutate,
     onRemove,
+    onDuplicate,
+    onSelectField,
     onOpenDistribution,
     fieldLibrary,
 }: Props) {
+    const parentGroup = findFieldDeep(schema, field.id)?.parent ?? null;
+    const childAuthoring = groupChildAuthoring(schema, field.id);
+    const peopleRelationship = parentGroup ? relationshipLabelForGroup(parentGroup) : null;
+    const calculated = Boolean(field.derived);
     const storeSubject = storeSubjectFromField(field);
     const storeFieldOptions = destinationOptionsForSubject(storeSubject, fieldLibrary);
     const selectedCanonicalId = selectedDestinationId(field);
@@ -631,6 +750,24 @@ export default function ProcessingFormQuestionInspector({
             <header className="pb-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40">Question</p>
                 <h3 className="mt-0.5 text-[15px] font-semibold leading-snug text-alloy-midnight">{field.label}</h3>
+                {parentGroup ? (
+                    <p className="mt-1 text-[11px] text-alloy-midnight/55" data-inspector-parent-group={parentGroup.id}>
+                        A line of <span className="font-medium text-alloy-midnight/75">{parentGroup.label}</span>
+                        {onSelectField ? (
+                            <>
+                                {" · "}
+                                <button
+                                    type="button"
+                                    className="font-semibold text-alloy-bend-pine hover:underline"
+                                    onClick={() => onSelectField(parentGroup.id)}
+                                    data-testid="form-builder-select-parent-group"
+                                >
+                                    Edit the whole group
+                                </button>
+                            </>
+                        ) : null}
+                    </p>
+                ) : null}
             </header>
 
             <AlloyInspectorDivider />
@@ -686,7 +823,7 @@ export default function ProcessingFormQuestionInspector({
                 )}
             </AlloyInspectorGroup>
 
-            {editable && suggestsNameComposition(field) ? (
+            {editable && !parentGroup && suggestsNameComposition(field) ? (
                 <>
                     <AlloyInspectorDivider />
                     {/*
@@ -723,7 +860,7 @@ export default function ProcessingFormQuestionInspector({
                     <AlloyInspectorGroup title="Answer">
                         <div data-inspector-answer-type>
                             <AlloyFieldLabel>Answer type</AlloyFieldLabel>
-                            {editable && answerKindOf(field) ? (
+                            {editable && answerKindOf(field) && !calculated && childAuthoring.canChangeAnswerType ? (
                                 <AlloySelect
                                     value={answerKindOf(field) ?? ""}
                                     onChange={(kind) => mutate((s) => changeAnswerKind(s, field.id, kind as AnswerKind))}
@@ -732,9 +869,14 @@ export default function ProcessingFormQuestionInspector({
                                     testId="form-builder-answer-type"
                                 />
                             ) : (
-                                <p className="text-[12px] font-medium text-alloy-midnight/75">{answerTypeLabel(field)}</p>
+                                <p className="text-[12px] font-medium text-alloy-midnight/75">
+                                    {calculated ? "Calculated" : answerTypeLabel(field)}
+                                </p>
                             )}
                         </div>
+                        {!parentGroup && field.type !== "signature" && field.type !== "file_ref" ? (
+                            <CalculationEditor key={field.id} field={field} schema={schema} editable={editable} mutate={mutate} />
+                        ) : null}
                         {field.type === "select" || field.type === "multiselect" ? (
                             <ChoicesEditor field={field} editable={editable} mutate={mutate} />
                         ) : null}
@@ -764,6 +906,13 @@ export default function ProcessingFormQuestionInspector({
 
                     <AlloyInspectorDivider />
                     <AlloyInspectorGroup title="Store answer in">
+                        {!childAuthoring.canChangeDestination ? (
+                            <p className="text-[12px] text-alloy-midnight/70" data-inspector-destination-owned-by-relationship>
+                                Stored on each person in {peopleRelationship ?? parentGroup?.label ?? "this group"}. Where a
+                                person&apos;s details are kept is decided by that relationship, so it is not changed here.
+                            </p>
+                        ) : (
+                        <>
                         <div data-inspector-destination>
                             <AlloyFieldLabel>Record</AlloyFieldLabel>
                             {editable ? (
@@ -771,7 +920,7 @@ export default function ProcessingFormQuestionInspector({
                                     value={storeSubject}
                                     onChange={(subject) =>
                                         mutate((s) => {
-                                            const cur = s.fields.find((f) => f.id === field.id);
+                                            const cur = findFieldDeep(s, field.id)?.field;
                                             if (!cur) return s;
                                             const fs = fieldSourceForSubjectAndDestination(cur, subject, "", storeFieldOptions);
                                             return updateField(s, field.id, { field_source: fs });
@@ -794,7 +943,7 @@ export default function ProcessingFormQuestionInspector({
                                         value={selectedCanonicalId}
                                         onChange={(canonicalId) =>
                                             mutate((s) => {
-                                                const cur = s.fields.find((f) => f.id === field.id);
+                                                const cur = findFieldDeep(s, field.id)?.field;
                                                 if (!cur) return s;
                                                 const fs = fieldSourceForSubjectAndDestination(cur, storeSubject, canonicalId, storeFieldOptions);
                                                 return updateField(s, field.id, { field_source: fs });
@@ -825,11 +974,13 @@ export default function ProcessingFormQuestionInspector({
                                 onCreated={(destination) => mutate((s) => updateField(s, field.id, { field_source: destination }))}
                             />
                         ) : null}
+                        </>
+                        )}
                     </AlloyInspectorGroup>
                 </>
             ) : null}
 
-            {field.type !== "text_block" ? (
+            {field.type !== "text_block" && !parentGroup ? (
                 <>
                     <AlloyInspectorDivider />
                     {/*
@@ -853,13 +1004,16 @@ export default function ProcessingFormQuestionInspector({
                         <AlloyFieldLabel>Width</AlloyFieldLabel>
                         <AlloySegmentControl
                             value={layoutWidth}
-                            onChange={(width) => mutate((s) => setFieldLayoutWidth(s, field.id, width))}
+                            onChange={(width) =>
+                                mutate((s) => (parentGroup ? setAnyFieldLayoutWidth(s, field.id, width) : setFieldLayoutWidth(s, field.id, width)))
+                            }
                             options={LAYOUT_WIDTH_OPTIONS}
                             disabled={!editable}
                             testId="form-builder-layout-width"
                         />
                     </div>
                 ) : null}
+                {parentGroup ? null : (
                 <div data-inspector-section>
                     <AlloyFieldLabel>Section</AlloyFieldLabel>
                     <div className="flex flex-wrap gap-1">
@@ -884,6 +1038,7 @@ export default function ProcessingFormQuestionInspector({
                         })}
                     </div>
                 </div>
+                )}
             </AlloyInspectorGroup>
 
             <AlloyInspectorDivider />
@@ -898,9 +1053,20 @@ export default function ProcessingFormQuestionInspector({
                 ) : null}
             </AlloyInspectorGroup>
 
-            {editable ? (
+            {editable && !parentGroup ? (
                 <>
                     <AlloyInspectorDivider />
+                    {onDuplicate && field.type !== "group" ? (
+                        <div className="mb-2" data-inspector-duplicate>
+                            <AlloySecondaryButton onClick={onDuplicate} testId="form-builder-duplicate-field">
+                                Duplicate question
+                            </AlloySecondaryButton>
+                            <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/45">
+                                Adds a copy below with its own answers. Choose where the copy is stored — it does not
+                                share this question&apos;s destination.
+                            </p>
+                        </div>
+                    ) : null}
                     <div className="flex flex-wrap gap-2">
                         <AlloySecondaryButton
                             onClick={() => mutate((s) => moveFieldWithinSection(s, field.id, -1))}
