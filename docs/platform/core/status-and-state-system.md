@@ -99,6 +99,33 @@ progress is **Stage + Work**, never status (see `stage-membership-and-outcomes.m
 
 Status definitions live in org config (`status_definitions`) with `entity_type` discriminating opportunity vs OCM.
 
+### A case cannot close out from under its children (October 2026)
+
+The two grains stay separate — closing a case writes **only** `opportunities`, and never cascades into a
+child's enrollment state. What crosses the grain is a **refusal**, not a write: a case-status write that
+would close the case is refused while any child track on it is still operationally unresolved.
+
+- **One rule.** `familyCloseRefusal` (`web/lib/lifecycle/familyCloseRefusal.ts`) is the only
+  implementation. Every path that can close a case asks it before writing: the outcome-rule target
+  executor (and so outcome rules, status-entry automation, domain-signal automation and the governed
+  family close), the `close_lead` / `update_lead_status` commands, the Action runtime's `update_status`,
+  and the case grain of the canonical enrollment-status transition. A second copy of the rule is the
+  failure mode, for the same reason as the transition-policy gate above.
+- **Blocking child states:** `waitlisted`, `enrolling`, an in-process child (`null` state) and
+  `enrolled`. **Allowed:** `withdrawn`, `not_enrolling`. An unrecognised state blocks.
+- **Fails closed.** A child list that cannot be read refuses the close. "Could not read" is never
+  "no children".
+- **Both journey anchors.** A child's journey is found whether its process instance is anchored to the
+  case (`context_id` = opportunity id) or to the child's Enrollment Participation. Matching the
+  opportunity id alone returns fewer rows and no error, and reads a family with a waitlisted child as
+  childless.
+- **Refused before any write.** The rule is asked after the transition-policy gate and before prior-stage
+  reconciliation, the status write or any outcome consequence, so a refused close leaves nothing behind.
+- **Closing status.** The rule treats the case status `closed` as a close, matching the collapsed case
+  vocabulary (`open` \| `closed`). Ending a family with live children is the governed family close
+  (`executeGovernedFamilyClose`), which ends the eligible children first and so passes the rule on the
+  evidence.
+
 ### Stage membership declares grain — never status lists
 
 A stage's **`queue_membership_v1`** declares subject grain, count unit, and location scope. Membership
