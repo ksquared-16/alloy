@@ -30,7 +30,53 @@ import {
     type FamilyCloseBlockedReason,
 } from "@/lib/lifecycle/familyCloseGuard";
 import { isConfiguredClosedStatus } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
-import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import { readEnrollmentInstancesForLead, type ProcessInstanceRow } from "@/lib/process/processInstances";
+import { TERMINAL_CHILD_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+
+/** Participation outcomes that are themselves a live Enrollment answer for the child. */
+const ACTIVE_PARTICIPATION_OUTCOMES: readonly string[] = ["waitlisted", "enrolling", "enrolled"];
+
+/**
+ * Each journey's state as the DURABLE OWNER states it.
+ *
+ * The child's durable Enrollment state is the participation's `outcome_status_key`; the process
+ * instance owns execution state (`status-and-state-system.md`, `enrollmentDurableStateOwnership`).
+ * Reading only the instance read a non-owner that the exit paths do not converge: measured on
+ * deployed staging, a child withdrawn through the canonical child transition kept an `enrolling`
+ * journey, and the family could then never close. So the owner speaks first — a concluded or live
+ * participation outcome is the child's state — and the journey's own state decides only when the
+ * participation carries neither (`new_inquiry`, null). A participation read that fails refuses.
+ */
+async function withOwnerState(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    rows: readonly ProcessInstanceRow[],
+): Promise<{ ok: true; rows: ProcessInstanceRow[] } | { ok: false; error: string }> {
+    if (!rows.length) return { ok: true, rows: [] };
+    const { data, error } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id, outcome_status_key")
+        .eq("org_id", orgId)
+        .eq("opportunity_id", opportunityId);
+    if (error) return { ok: false, error: `participation read failed: ${error.message}` };
+    if (!Array.isArray(data)) return { ok: false, error: "participations unreadable" };
+    const byId = new Map<string, string | null>();
+    const byMember = new Map<string, string | null>();
+    for (const p of data as { id: string; customer_member_id: string | null; outcome_status_key: string | null }[]) {
+        byId.set(String(p.id), p.outcome_status_key ?? null);
+        if (p.customer_member_id) byMember.set(String(p.customer_member_id), p.outcome_status_key ?? null);
+    }
+    return {
+        ok: true,
+        rows: rows.map((row) => {
+            const outcome = (byId.get(String(row.context_id ?? "")) ?? byMember.get(String(row.subject_id ?? "")) ?? "")
+                .trim();
+            const owned = TERMINAL_CHILD_STATUS_KEYS.includes(outcome) || ACTIVE_PARTICIPATION_OUTCOMES.includes(outcome);
+            return owned ? { ...row, state: outcome } : row;
+        }),
+    };
+}
 
 /**
  * Does this family case status close the case?
@@ -83,10 +129,13 @@ export async function familyCloseRefusal(
     },
 ): Promise<FamilyCloseRefusal | null> {
     if (args.closesCase !== true && !familyCaseStatusCloses(args.targetStatusKey)) return null;
-    const read = await readEnrollmentInstancesForLead(supabase, {
+    const journeys = await readEnrollmentInstancesForLead(supabase, {
         orgId: args.orgId,
         opportunityId: args.opportunityId,
     });
+    const read = journeys.ok
+        ? await withOwnerState(supabase, args.orgId, args.opportunityId, journeys.rows)
+        : journeys;
     const decision = evaluateFamilyCloseGuard(read);
     if (decision.allowed) return null;
     return {
