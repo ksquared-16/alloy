@@ -14,6 +14,8 @@
 export const FINANCIAL_TRANSACTION_ACTIONS = {
     post: "charge.post",
     reverse: "charge.reverse",
+    /** W7-F016: a draft only — withdrawn and retained as void. */
+    cancelDraft: "charge.cancel_draft",
     adjust: "billing.adjust_account",
     reverseAdjustment: "billing.reverse_adjustment",
     movePayment: "payment.reverse_application",

@@ -426,7 +426,7 @@ export default function FinancialsCharges({
                              * through its own canonical read — the queue row supplies identity and
                              * nothing else, because a row is a preview and not authority.
                              */}
-                            <FinancialsChargeDetail key={`${selected.chargeId}-${detailNonce}`} chargeId={selected.chargeId} />
+                            <FinancialsChargeDetail key={selected.chargeId} chargeId={selected.chargeId} refreshKey={detailNonce} />
                             {/* THREAD 2, UNFORKED. Its own read model, its own numbers. */}
                             <FinancialsAccountDetail
                                 key={`${selected.customerId ?? selected.customerMemberId}-${cardNonce}`}

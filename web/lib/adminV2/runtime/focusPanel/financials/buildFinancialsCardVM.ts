@@ -334,6 +334,25 @@ export type FinancialsPastDue = {
 };
 
 /**
+ * W7-F018: drafts on the account — visible, not posted, and so not balance, Due, Past due or
+ * posted responsibility. The SAME lifecycle classifier the reconciliation uses decides membership
+ * (`scheduled` = waiting for its billing period; `draft` = waiting for something else), summed
+ * across every period, because a draft for next month is still on this account.
+ */
+export type FinancialsUpcoming = {
+    amountCents: number;
+    count: number;
+};
+
+export function upcomingFor(rows: readonly AccountChargeLedgerRow[]): FinancialsUpcoming | null {
+    const drafts = rows.filter(
+        (r) => (r.lifecycleStatus === "scheduled" || r.lifecycleStatus === "draft") && r.amountCents > 0,
+    );
+    if (drafts.length === 0) return null;
+    return { amountCents: drafts.reduce((sum, r) => sum + r.amountCents, 0), count: drafts.length };
+}
+
+/**
  * W7-F013: posted money whose due date is still ahead — collectible (it may be paid early), not due.
  * The mirror of past due: same rows, same residual, the other side of today.
  */
@@ -408,6 +427,8 @@ export type FinancialsCardVM = {
     pastDue: FinancialsPastDue | null;
     /** W7-F013: posted, collectible, and not due until a later payment event. */
     notYetDue: FinancialsNotYetDue | null;
+    /** W7-F018: drafts across the account — never balance, Due or posted responsibility. */
+    upcoming: FinancialsUpcoming | null;
     pastDueBySubject: Record<string, FinancialsPastDue | null>;
     ledgerPeriods: FinancialsPeriodGroup[];
     /**
@@ -654,6 +675,7 @@ function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardV
         reconciliationBySubject: {},
         pastDue: null,
         notYetDue: null,
+        upcoming: null,
         pastDueBySubject: {},
         ledgerPeriods: [],
         payments: [],
@@ -2156,6 +2178,7 @@ async function buildFinancialsCardVMInner(
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
     vm.pastDue = pastDueFor(rows, today, appliedByChargeId);
     vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId);
+    vm.upcoming = upcomingFor(rows);
     vm.pastDueBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,

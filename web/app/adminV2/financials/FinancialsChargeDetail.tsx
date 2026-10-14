@@ -23,11 +23,12 @@
  * guessing a plausible family — and it is never shown as "Household", which would be a claim about
  * the charge rather than an admission about the record.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { invoiceRuleShort } from "@/lib/financials/chargeDates/describeChargeDateChain";
 
 type Application = {
     paymentId: string;
@@ -55,6 +56,10 @@ type ChargeDetail = {
     serviceDate: string | null;
     invoiceDate: string | null;
     dueDate: string | null;
+    amountCents?: number;
+    chargeTemplateId?: string | null;
+    /** W7-F017: stored invoice-timing provenance; source "template" is a charge-type override. */
+    invoiceRule?: { source: string; strategy: string; offsetDays: number } | null;
     postedAt: string | null;
     /*
      * PROVENANCE, from the canonical projection. `originDescription` is the resolver's own
@@ -212,14 +217,58 @@ function Group(props: { children: React.ReactNode }) {
     );
 }
 
-export default function FinancialsChargeDetail({ chargeId }: { chargeId: string }) {
+/** What the host needs to offer the draft lifecycle (W7-F016), read from the same projection. */
+export type ChargeDetailFacts = {
+    chargeId: string;
+    status: string;
+    label: string;
+    chargeTemplateId: string | null;
+    amountCents: number;
+    serviceDate: string | null;
+    customerMemberId: string | null;
+};
+
+export default function FinancialsChargeDetail({
+    chargeId,
+    refreshKey = 0,
+    onLoaded,
+}: {
+    chargeId: string;
+    /** Bumped by the host after an action; re-reads WITHOUT unmounting, so nothing swaps. */
+    refreshKey?: number;
+    onLoaded?: (facts: ChargeDetailFacts) => void;
+}) {
     const [detail, setDetail] = useState<ChargeDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const shownChargeRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!detail || !onLoaded) return;
+        onLoaded({
+            chargeId: detail.chargeId,
+            status: detail.status,
+            label: detail.label || detail.description || "Charge",
+            chargeTemplateId: detail.chargeTemplateId ?? null,
+            amountCents: Number(detail.amountCents ?? 0),
+            serviceDate: detail.serviceDate,
+            customerMemberId: detail.customerMemberId,
+        });
+    }, [detail, onLoaded]);
 
     useEffect(() => {
         let live = true;
-        setLoading(true);
+        /*
+         * W7-F014: ONE STABLE SHELL. The first read shows a skeleton inside this same card; a
+         * re-read (after Post, Cancel, Reverse) keeps the record on screen while it refreshes —
+         * nothing is unmounted, so the card never swaps for a "Loading…" card and back.
+         */
+        if (shownChargeRef.current !== chargeId) {
+            /* A DIFFERENT charge never shows the previous one's facts while it loads. */
+            shownChargeRef.current = chargeId;
+            setDetail(null);
+            setLoading(true);
+        }
         setError(null);
         void (async () => {
             try {
@@ -243,7 +292,8 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         return () => {
             live = false;
         };
-    }, [chargeId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read on identity or an explicit refresh only
+    }, [chargeId, refreshKey]);
 
     const reload = useCallback(async () => {
         /* Committed truth, re-read. The panel never hands back a figure for this to display. */
@@ -252,11 +302,23 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         if (res.ok && body.ok && body.detail) setDetail(body.detail);
     }, [chargeId]);
 
-    if (loading) {
+    if (loading && !detail) {
         return (
-            <p className="text-xs text-alloy-midnight/50" data-financials-charge-detail-loading="true">
-                Loading charge…
-            </p>
+            <section
+                className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
+                data-financials-charge-detail-loading="true"
+                aria-busy="true"
+                aria-label="Loading charge"
+            >
+                <span className="block h-4 w-40 animate-pulse rounded bg-alloy-stone/25" />
+                <span className="mt-1.5 block h-3 w-28 animate-pulse rounded bg-alloy-stone/20" />
+                <span className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                    {[0, 1, 2, 3].map((i) => (
+                        <span key={i} className="block h-8 animate-pulse rounded bg-alloy-stone/15" />
+                    ))}
+                </span>
+                <span className="mt-4 block h-16 animate-pulse rounded bg-alloy-stone/10" />
+            </section>
         );
     }
     if (error || !detail) {
@@ -314,7 +376,9 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     }
                   : detail.awaiting
                     ? { text: detail.awaiting.label, tone: "attention", explain: detail.awaiting.explanation }
-                    : { text: detail.status.charAt(0).toUpperCase() + detail.status.slice(1), tone: "plain", explain: null };
+                    : detail.status === "void"
+                      ? { text: "Cancelled — never posted", tone: "plain", explain: null }
+                      : { text: detail.status.charAt(0).toUpperCase() + detail.status.slice(1), tone: "plain", explain: null };
 
     /* Who owes it, compactly: this charge's allocation, else the account's standing shares. */
     const responsibilitySummary =
@@ -344,7 +408,13 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 {detail.label || detail.description || "Charge"}
             </p>
             <p className="truncate text-xs text-alloy-midnight/65">
-                <span data-financials-charge-status={detail.status}>{posting.text}</span>
+                <span data-financials-charge-status={detail.status} data-financials-charge-state="true">
+                    {detail.status === "draft"
+                        ? "Draft charge"
+                        : detail.status === "void"
+                          ? "Cancelled draft"
+                          : "Posted charge"}
+                </span>
                 {detail.householdName ? ` · ${detail.householdName}` : ""}
             </p>
 
@@ -474,7 +544,18 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
             <span className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4" data-financials-charge-dates="row">
                 <DateCell label="Service date" value={day(detail.serviceDate) ?? "—"} testId="service-date" />
                 <DateCell label="Billing period" value={detail.billingPeriodLabel ?? "Unplaced"} testId="billing-period" />
-                <DateCell label="Invoice date" value={formatDisplayDate(detail.invoiceDate) || "—"} testId="invoice-date" />
+                <span className="flex min-w-0 flex-col">
+                    <DateCell label="Invoice date" value={formatDisplayDate(detail.invoiceDate) || "—"} testId="invoice-date" />
+                    {/*
+                      * W7-F017: a charge type that overrides the organisation's invoice timing says
+                      * so where the date it changed is read — visibly, because it is the exception.
+                      */}
+                    {detail.invoiceRule?.source === "template" ? (
+                        <span className="text-[10px] text-alloy-ember/90" data-financials-charge-invoice-override="true">
+                            Charge-type override · {invoiceRuleShort(detail.invoiceRule.strategy, detail.invoiceRule.offsetDays)}
+                        </span>
+                    ) : null}
+                </span>
                 <DateCell
                     label="Due date"
                     value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}

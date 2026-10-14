@@ -309,6 +309,8 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 ),
                 currency,
             ),
+            /* W7-F018: drafts, stated beside the balance they are not part of. */
+            upcoming: vm.upcoming && vm.upcoming.amountCents > 0 ? money(vm.upcoming.amountCents, currency) : null,
             notYetDue: vm.notYetDue && vm.notYetDue.amountCents > 0
                 ? `${money(vm.notYetDue.amountCents, currency)} on ${displayDate(vm.notYetDue.nextDueDate) ?? vm.notYetDue.nextDueDate}`
                 : null,
@@ -858,6 +860,16 @@ export function adaptAddChargeSpecimen(input: {
             invoice: sentence("invoice timing"),
             due: sentence("payment terms"),
         },
+        /*
+         * W7-F017: a charge type that overrides the organisation's invoice timing is stated on the
+         * form, not left in a tooltip — it is the exception an operator would otherwise have to
+         * reverse-engineer from the dates.
+         */
+        invoiceOverride: (() => {
+            const raw = sentence("invoice timing");
+            if (!raw || !/\(charge-type override\)/.test(raw)) return null;
+            return raw.slice(0, raw.indexOf(" (charge-type override)")).trim() || null;
+        })(),
         posting: sentence("posting"),
         /* The day a future-period charge posts itself, when the chain says it waits for its period. */
         awaitsPeriodUntil: (() => {

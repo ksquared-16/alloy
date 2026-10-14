@@ -219,6 +219,11 @@ export default function FinancialsCard({
                                 Not yet due · {period.notYetDue}
                             </p>
                         ) : null}
+                        {period.upcoming ? (
+                            <p className="alloy-os-billing__clear" data-financials-upcoming="true">
+                                Upcoming · not yet posted · {period.upcoming}
+                            </p>
+                        ) : null}
                         {/*
                          * DUE AND PAST DUE IN ONE PLACE. They were two stacked sections with two
                          * headings; they are two readings of the same question — what should be
@@ -404,6 +409,7 @@ function FinancialsAccountSummaryCard({
                             <Stat label="Current balance" value={period.currentBalance} />
                             <Stat label="Due" value={period.dueNow} />
                             {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
+                            {period.upcoming ? <Stat label="Upcoming · not yet posted" value={period.upcoming} /> : null}
                             <Stat
                                 label="Past due"
                                 value={pastDue ? pastDue.amount : "None"}

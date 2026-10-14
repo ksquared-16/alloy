@@ -100,6 +100,9 @@ export type ChargeDetail = {
     serviceDate: string | null;
     /** When the obligation is issued — `billable_on`. */
     invoiceDate: string | null;
+    amountCents: number;
+    /** W7-F017: the stored invoice-timing provenance; `source` "template" = a charge-type override. */
+    invoiceRule: { source: string; strategy: string; offsetDays: number } | null;
     /** When payment is expected. Null where the organisation has configured no terms. */
     dueDate: string | null;
     postedAt: string | null;
@@ -838,6 +841,22 @@ export async function resolveChargeDetail(
          */
         invoiceDate: charge.billable_on,
         dueDate: charge.due_date,
+        /* W7-F016: what Edit pre-fills, read from the row — never re-derived on the card. */
+        amountCents: Number(charge.amount_cents ?? 0),
+        /*
+         * W7-F017: WHERE THE INVOICE DATE CAME FROM, from the provenance written with the charge.
+         * A charge type that overrides the organisation's invoice timing must say so on its own
+         * record rather than leave an operator to reverse-engineer it from the dates.
+         */
+        invoiceRule: (() => {
+            const cd = ((charge.metadata ?? {}) as Record<string, unknown>).charge_dates as Record<string, unknown> | undefined;
+            if (!cd) return null;
+            return {
+                source: String(cd.invoice_rule_source ?? ""),
+                strategy: String(cd.invoice_rule ?? ""),
+                offsetDays: Number(cd.invoice_offset_days ?? 0) || 0,
+            };
+        })(),
         billingPeriodKey: billing.key,
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,

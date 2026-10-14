@@ -386,6 +386,8 @@ export type FinancialsPeriod = {
      * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
      */
     dueNow: string;
+    /** W7-F018: drafts — not yet posted, not balance, not Due. */
+    upcoming?: string | null;
     /** W7-F013: collectible but not due until a later payment event — "$40.00 on Nov 1, 2026". */
     notYetDue?: string | null;
     /**
@@ -665,6 +667,8 @@ export type AddChargeSpecimen = {
      * string above is for reading; a date input needs the canonical value.
      */
     serviceDateIso?: string | null;
+    /** W7-F017: the charge type's own invoice timing, when it overrides the organisation's. */
+    invoiceOverride?: string | null;
     /** The billing period CONTAINING the service date, as the server's date chain resolved it. */
     period: string;
     /** `charges.billable_on` — when the obligation is invoiced. Never earlier than the day it is created. */

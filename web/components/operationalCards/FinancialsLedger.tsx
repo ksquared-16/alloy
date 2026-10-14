@@ -50,7 +50,7 @@ import type { ReactNode } from "react";
  * `tone` and is set by a caller that actually knows the state — never inferred here from a number.
  */
 
-export type FinancialsLedgerTone = "attention" | "muted";
+export type FinancialsLedgerTone = "attention" | "muted" | "upcoming";
 
 export type FinancialsLedgerRowView = {
     /** Stable across re-renders. The charge, payment or application id — never an array index. */
