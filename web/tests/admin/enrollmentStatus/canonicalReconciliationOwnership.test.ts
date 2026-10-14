@@ -65,6 +65,14 @@ vi.mock("@/lib/lifecycle/validateStageTransitionReconciliationPayload", () => ({
     validateStageTransitionReconciliationPayload: (...a: unknown[]) => validatePayload(...a),
 }));
 
+const familyRefusal = vi.fn();
+vi.mock("@/lib/lifecycle/familyCloseRefusal", () => ({
+    familyCloseRefusal: (...a: unknown[]) => {
+        calls.push("family-close-guard");
+        return familyRefusal(...a);
+    },
+}));
+
 const caseStatusWrite = vi.fn();
 vi.mock("@/lib/opportunities/updateOpportunityStatusWithEvent", () => ({
     updateOpportunityStatusWithEvent: (...a: unknown[]) => {
@@ -119,6 +127,7 @@ beforeEach(() => {
     validatePayload.mockReset();
     validateTransition.mockReset().mockResolvedValue({ ok: true });
     caseStatusWrite.mockReset().mockResolvedValue({ error: null });
+    familyRefusal.mockReset().mockResolvedValue(null);
 });
 
 describe("prior-stage reconciliation is owned by the canonical path", () => {
@@ -134,7 +143,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         // The operator is mid-decision. A status write here is the partial state the move must avoid.
         preflightReconciliation.mockResolvedValue(REQUIRED_PREFLIGHT);
         await run();
-        expect(calls).toEqual(["transition-policy", "preflight"]);
+        expect(calls).toEqual(["transition-policy", "family-close-guard", "preflight"]);
         expect(caseStatusWrite).not.toHaveBeenCalled();
         expect(applyReconciliation).not.toHaveBeenCalled();
     });
@@ -149,7 +158,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         validatePayload.mockReturnValue({ ok: true, reconciliation: { work: [{ work_id: "w1", resolution: "completed" }] } });
         const r = (await run({ reconciliation: { work: [{ work_id: "w1", resolution: "completed" }] } })) as { ok: boolean };
         expect(r.ok).toBe(true);
-        expect(calls).toEqual(["transition-policy", "preflight", "apply-reconciliation", "status-write"]);
+        expect(calls).toEqual(["transition-policy", "family-close-guard", "preflight", "apply-reconciliation", "status-write"]);
     });
 
     it("revalidates against its OWN preflight, not the one the client echoed back", async () => {
@@ -167,7 +176,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         const r = (await run({ reconciliation: { work: [{ work_id: "nope", resolution: "completed" }] } })) as { ok: boolean; error?: string };
         expect(r.ok).toBe(false);
         expect(r.error).toContain("unknown work item");
-        expect(calls).toEqual(["transition-policy", "preflight"]);
+        expect(calls).toEqual(["transition-policy", "family-close-guard", "preflight"]);
         expect(caseStatusWrite).not.toHaveBeenCalled();
     });
 
@@ -185,7 +194,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         preflightReconciliation.mockResolvedValue({ required: false, work: [], attention: null });
         const r = (await run()) as { ok: boolean };
         expect(r.ok).toBe(true);
-        expect(calls).toEqual(["transition-policy", "preflight", "status-write"]);
+        expect(calls).toEqual(["transition-policy", "family-close-guard", "preflight", "status-write"]);
         expect(applyReconciliation).not.toHaveBeenCalled();
     });
 });
@@ -241,5 +250,35 @@ describe("one transition-policy gate governs every lifecycle status change (D-BP
         expect(src).toMatch(/from "@\/lib\/admin\/statusTransitionRules"/);
         // No inline re-query of the rules table: the gate is the imported function, not a second reader.
         expect(src).not.toMatch(/from\("status_transition_rules"\)/);
+    });
+});
+
+describe("a family case cannot close out from under its children (E2E-09)", () => {
+    const REFUSAL = {
+        error: "This lead cannot be closed while child enrollment tracks are still active (child_track_active_pre_enrollment(1)).",
+        blocked_reasons: [{ code: "child_track_active_pre_enrollment", tracks: [] }],
+    };
+
+    it("asks the shared rule with the case and its target status", async () => {
+        preflightReconciliation.mockResolvedValue({ required: false, work: [], attention: null });
+        await run();
+        expect(familyRefusal.mock.calls[0]?.[1]).toEqual({
+            orgId: "org-1",
+            opportunityId: "opp-1",
+            targetStatusKey: "closed",
+        });
+    });
+
+    it("refuses BEFORE reconciliation or the status write, carrying the structured reasons", async () => {
+        // Reconciliation writes. A refused close must leave nothing behind, so the rule is asked first.
+        familyRefusal.mockResolvedValue(REFUSAL);
+        preflightReconciliation.mockResolvedValue(REQUIRED_PREFLIGHT);
+        const r = (await run({ reconciliation: {} })) as { ok: boolean; error?: string; blocked_reasons?: unknown };
+        expect(r.ok).toBe(false);
+        expect(r.error).toBe(REFUSAL.error);
+        expect(r.blocked_reasons).toEqual(REFUSAL.blocked_reasons);
+        expect(calls).toEqual(["transition-policy", "family-close-guard"]);
+        expect(applyReconciliation).not.toHaveBeenCalled();
+        expect(caseStatusWrite).not.toHaveBeenCalled();
     });
 });

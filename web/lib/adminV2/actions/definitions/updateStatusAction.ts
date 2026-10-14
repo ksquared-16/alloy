@@ -20,6 +20,7 @@ import { randomUUID } from "crypto";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateOpportunityStatusTransitionForAction } from "@/lib/admin/actions/entryLifecycleActions";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { ENROLLMENT_DECIDE } from "@/lib/access/enrollmentAuthority";
 import { emitEvent } from "@/lib/emitEvent";
@@ -225,6 +226,23 @@ export const updateStatusAction: RegisteredAction = {
                 status: 400,
                 error: allowed.message,
                 blockers: [{ code: "invalid_transition", message: allowed.message, field: "status_key" }],
+            };
+        }
+
+        // A family case cannot close out from under its children (E2E-09): the same rule every other
+        // close path asks. Closing the children first is the governed family close's job.
+        const refusal = await familyCloseRefusal(supabase, {
+            orgId: ctx.orgId,
+            opportunityId: entityId,
+            targetStatusKey: target,
+        });
+        if (refusal) {
+            return {
+                ok: false,
+                correlationId,
+                status: 409,
+                error: refusal.error,
+                blockers: [{ code: "family_close_blocked", message: refusal.error, field: "status_key" }],
             };
         }
 
