@@ -67,9 +67,22 @@ export type FamilyCloseRefusal = {
  */
 export async function familyCloseRefusal(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; targetStatusKey: string },
+    args: {
+        orgId: string;
+        opportunityId: string;
+        targetStatusKey: string;
+        /**
+         * The caller's action IS a close, whatever status string it writes. Case-grain "Lost /
+         * Withdrawn" resolves `withdrawn`, legacy `mark_lost` writes `lost`, and `close_lead` lets
+         * the operator pick any active status — each closes the case, and keying the refusal on the
+         * status string alone let them through on a tenant where those keys are active (measured on
+         * the certification tenant: case-grain Lost / Withdrawn wrote `withdrawn` over a waitlisted
+         * child). The refusal follows the close INTENT; what each path writes is unchanged.
+         */
+        closesCase?: boolean;
+    },
 ): Promise<FamilyCloseRefusal | null> {
-    if (!familyCaseStatusCloses(args.targetStatusKey)) return null;
+    if (args.closesCase !== true && !familyCaseStatusCloses(args.targetStatusKey)) return null;
     const read = await readEnrollmentInstancesForLead(supabase, {
         orgId: args.orgId,
         opportunityId: args.opportunityId,

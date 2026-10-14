@@ -68,6 +68,8 @@ export const leadStatusHandler: DomainHandler = {
             orgId: ctx.orgId,
             opportunityId: intent.subjectId,
             targetStatusKey: intent.targetState,
+            // `close_lead` is a close whichever status the operator picks.
+            closesCase: intent.commandKey === CLOSE_LEAD_COMMAND_KEY,
         });
         if (!refusal) return [];
         return [{ code: "family_close_blocked", message: refusal.error, severity: "warn" }];

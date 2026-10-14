@@ -124,6 +124,18 @@ describe("familyCloseRefusal — the shared rule", () => {
         ).resolves.toBeNull();
     });
 
+    it("a caller whose action IS a close is asked whatever status it writes", async () => {
+        // Case-grain Lost / Withdrawn resolves `withdrawn`; legacy mark_lost writes `lost`.
+        const { client } = fakeDb(familyWithWaitlistedChild());
+        await expect(
+            familyCloseRefusal(client, { orgId: ORG, opportunityId: OPP, targetStatusKey: "withdrawn" }),
+        ).resolves.toBeNull();
+        const refusal = await familyCloseRefusal(client, {
+            orgId: ORG, opportunityId: OPP, targetStatusKey: "withdrawn", closesCase: true,
+        });
+        expect(refusal?.blocked_reasons.map((r) => r.code)).toEqual(["child_track_active_pre_enrollment"]);
+    });
+
     it("fails closed: an unreadable participation list is never 'no children'", async () => {
         const { client } = fakeDb(familyWithWaitlistedChild(), { failTable: "opportunity_customer_members" });
         const refusal = await familyCloseRefusal(client, { orgId: ORG, opportunityId: OPP, targetStatusKey: "closed" });
@@ -147,6 +159,13 @@ describe("close_lead / update_lead_status (Mutation Runtime)", () => {
         expect(result.status).toBe("blocked");
         expect(result).toMatchObject({ blockedCode: "readiness_blocked" });
         expect((result as { blockedReason: string }).blockedReason).toMatch(/child enrollment tracks/);
+        expect(rpc).not.toHaveBeenCalled();
+    });
+
+    it("close_lead is a close whichever status the operator picks", async () => {
+        const { client, rpc } = fakeDb(familyWithWaitlistedChild());
+        const result = await executeMutation({ supabase: client, orgId: ORG } as never, intent("close_lead", "lost"));
+        expect(result.status).toBe("blocked");
         expect(rpc).not.toHaveBeenCalled();
     });
 

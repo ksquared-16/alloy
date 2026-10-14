@@ -266,6 +266,8 @@ describe("a family case cannot close out from under its children (E2E-09)", () =
             orgId: "org-1",
             opportunityId: "opp-1",
             targetStatusKey: "closed",
+            // `run()` uses destination `closed`; only "Lost / Withdrawn" declares a close intent.
+            closesCase: false,
         });
     });
 

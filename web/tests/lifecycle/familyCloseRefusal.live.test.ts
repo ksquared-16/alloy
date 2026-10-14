@@ -17,7 +17,7 @@ import { resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
+import { createDefaultIdentityCommandPorts } from "@/lib/pos/processingIdentity/commands/ports";
 import { addChild } from "@/lib/records/addChildService";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import {
@@ -87,22 +87,33 @@ describeLive("E2E-09 family close — real database", () => {
     const evidence: Record<string, unknown> = {};
 
     async function buildFamily(label: string, children: ChildSpec[]): Promise<Family> {
-        const lead = await executeCreateLeadAction(db, { orgId: ORG, userId: ACTOR || undefined }, {
-            merged: {
-                first_name: "ZZQA",
-                last_name: `E2E09 ${label} ${RUN}`,
-                email: `zzqa.e2e09.${label.toLowerCase()}.${RUN}@example.test`,
-                phone: `+1555${Math.floor(1_000_000 + Math.random() * 8_999_999)}`,
-            },
-            context: { surface: "e2e09_family_close_certification" },
-        } as never);
-        if (!lead.ok || lead.mode !== "committed") throw new Error(`create_lead: ${JSON.stringify(lead)}`);
-        const opportunityId = String(lead.opportunity_id);
-        let customerId = String((lead as { customer_id?: string }).customer_id ?? "");
-        if (!customerId) {
-            const { data } = await db.from("opportunities").select("customer_id").eq("id", opportunityId).single();
-            customerId = String((data as { customer_id: string }).customer_id);
-        }
+        /*
+         * The identity command ports — the same initialization path the certification fixture uses.
+         * The cert tenant binds no lifecycle work unit, so the Create Lead COMMAND refuses there
+         * ("not configured for this process/location"); Create Lead itself is re-checked on deployed
+         * staging in the regression pass.
+         */
+        const ports = createDefaultIdentityCommandPorts();
+        const pctx = { supabase: db, orgId: ORG, actorId: ACTOR || null } as never;
+        const person = await ports.createPerson(pctx, {
+            first_name: "ZZQA",
+            last_name: `E2E09 ${label} ${RUN}`,
+            email: `zzqa.e2e09.${label.toLowerCase().replace(/\s+/g, "")}.${RUN}@example.test`,
+            phone: null,
+        });
+        if (!person?.id) throw new Error("createPerson returned nothing");
+        const household = await ports.createHousehold(pctx, { household_name: `ZZQA E2E09 ${label} ${RUN}` });
+        await ports.linkPersonToHousehold(pctx, { person_id: person.id, household_id: household.id, role_type: "" });
+        const lead = await ports.createLead(pctx, {
+            household_id: household.id,
+            primary_person_id: person.id,
+            name: `ZZQA E2E09 ${label} ${RUN}`,
+            status_key: "open",
+            stage_key: "lead",
+            work_unit_id: null,
+        });
+        const opportunityId = lead.id;
+        const customerId = household.id;
         const out: Family = { label, opportunityId, customerId, children: [] };
         for (const c of children) {
             const added = await addChild(db, { orgId: ORG, customerId, firstName: c.name, lastName: `E2E09 ${RUN}`, createNewChild: true, createNewReason: "e2e09 certification" });
@@ -174,6 +185,18 @@ describeLive("E2E-09 family close — real database", () => {
                 return { refused: !r.ok, detail: r };
             });
         }
+        await record("close_lead.lost", async () => {
+            const r = await executeMutation({ supabase: db, orgId: ORG } as never, { ...intent("close_lead"), targetState: "lost" });
+            return { refused: r.status === "blocked", detail: r };
+        });
+        await record("legacy.mark_lost", async () => {
+            // The REAL global `mark_lost` definition (open_form → update_status, status `lost`).
+            const r = await executeAdminAction(db, { orgId: ORG, userId: ACTOR || undefined } as never, {
+                actionKey: "mark_lost", entityType: "opportunity", entityId: f.opportunityId,
+                payload: { lost_reason: "e2e09 certification" },
+            } as never);
+            return { refused: !r.ok, detail: r };
+        });
         await record("outcome.update_family_case_status", async () => {
             const r = await applyStageOutcomeRuleTarget(db, {
                 orgId: ORG, userId: ACTOR, departmentId: "", stageKey: "lead",

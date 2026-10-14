@@ -88,8 +88,9 @@ async function refuseFamilyCloseOrNull(
     opportunityId: string,
     targetStatusKey: string,
     correlationId: string,
+    closesCase = false,
 ): Promise<{ ok: false; correlation_id: string; error: string; status: number } | null> {
-    const refusal = await familyCloseRefusal(supabase, { orgId, opportunityId, targetStatusKey });
+    const refusal = await familyCloseRefusal(supabase, { orgId, opportunityId, targetStatusKey, closesCase });
     if (!refusal) return null;
     return { ok: false, correlation_id: correlationId, error: refusal.error, status: 409 };
 }
@@ -808,8 +809,10 @@ export async function executeAdminAction(
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
 
+                // `mark_lost` writes `lost`: a close, whatever the status string.
                 const formFamilyRefusal = await refuseFamilyCloseOrNull(
                     supabase, ctx.orgId, entityId, statusKey, correlationId,
+                    formKey === "mark_lost" || actionKey === "mark_lost",
                 );
                 if (formFamilyRefusal) return formFamilyRefusal;
                 const _openFormStatusPatch: Record<string, unknown> = { status_key: statusKey, metadata: nextMd };
@@ -1079,6 +1082,7 @@ export async function executeAdminAction(
 
             const statusFamilyRefusal = await refuseFamilyCloseOrNull(
                 supabase, ctx.orgId, entityId, statusKey, correlationId,
+                actionKey === "mark_lost",
             );
             if (statusFamilyRefusal) return statusFamilyRefusal;
 

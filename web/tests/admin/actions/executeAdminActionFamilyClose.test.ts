@@ -113,12 +113,20 @@ const OPEN_FORM_AFTER_DEF = {
     payload_schema: { form_key: "close_family", after: { update_status_key: "closed" } },
 };
 
-function run(client: never, actionKey: string) {
+const MARK_LOST_DEF = {
+    id: "def-4",
+    key: "mark_lost",
+    action_type: "open_form",
+    entity_type: "opportunity",
+    payload_schema: { form_key: "mark_lost", status_key: "lost", submit_action_type: "update_status", required_fields: ["lost_reason"] },
+};
+
+function run(client: never, actionKey: string, payload: Record<string, unknown> = {}) {
     return executeAdminAction(client, { orgId: ORG, userId: "user-1" } as never, {
         actionKey,
         entityType: "opportunity",
         entityId: OPP,
-        payload: {},
+        payload,
     } as never);
 }
 
@@ -138,6 +146,13 @@ describe("executeAdminAction legacy case-status writes ask the family-close rule
         expect(result.ok).toBe(false);
         expect(result).toMatchObject({ status: 409 });
         expect((result as { error: string }).error).toMatch(/child enrollment tracks are still active/);
+        expect(caseStatusWrites(writes)).toEqual([]);
+    });
+
+    it("mark_lost writes `lost`, and is still refused as the close it is", async () => {
+        const { client, writes } = fakeDb(family("enrolled", [MARK_LOST_DEF]));
+        const result = await run(client, "mark_lost", { lost_reason: "moved away" });
+        expect(result).toMatchObject({ ok: false, status: 409 });
         expect(caseStatusWrites(writes)).toEqual([]);
     });
 

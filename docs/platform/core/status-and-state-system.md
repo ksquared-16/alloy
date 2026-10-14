@@ -123,8 +123,13 @@ would close the case is refused while any child track on it is still operational
   childless.
 - **Refused before any write.** The rule is asked after the transition-policy gate and before prior-stage
   reconciliation, the status write or any outcome consequence, so a refused close leaves nothing behind.
-- **Closing status.** The rule treats the case status `closed` as a close, matching the collapsed case
-  vocabulary (`open` \| `closed`). Ending a family with live children is the governed family close
+- **Closing status, and close intent.** The rule treats the case status `closed` as a close, matching
+  the collapsed case vocabulary (`open` \| `closed`). A path whose action **is** a close is asked
+  whatever status string it writes: case-grain "Lost / Withdrawn" (`closed_withdrawn`, which resolves
+  `withdrawn`), legacy `mark_lost` (`lost`) and the `close_lead` command (any picked status). Measured
+  on the certification tenant, where `lost` / `withdrawn` are active case statuses, case-grain
+  Lost / Withdrawn otherwise wrote `withdrawn` over a waitlisted child. A generic status picker that
+  writes some other tenant-defined terminal key is not yet recognised — see the E2E-09 debt item. Ending a family with live children is the governed family close
   (`executeGovernedFamilyClose`), which ends the eligible children first and so passes the rule on the
   evidence.
 

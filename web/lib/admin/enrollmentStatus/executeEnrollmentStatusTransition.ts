@@ -281,6 +281,8 @@ export async function executeEnrollmentStatusTransition(
         orgId,
         opportunityId: scope.opportunityId,
         targetStatusKey,
+        // "Lost / Withdrawn" closes the case even when it resolves a status other than `closed`.
+        closesCase: request.destinationKey === "closed_withdrawn",
     });
     if (familyRefusal) {
         return { ok: false, error: familyRefusal.error, blocked_reasons: familyRefusal.blocked_reasons };
