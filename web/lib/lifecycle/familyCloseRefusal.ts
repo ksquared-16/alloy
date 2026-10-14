@@ -2,13 +2,18 @@
  * A FAMILY CASE CANNOT CLOSE OUT FROM UNDER ITS CHILDREN — ONE RULE FOR EVERY CLOSE PATH (E2E-09).
  *
  * The invariant used to be enforced in exactly one place, the `update_family_case_status` branch of
- * the outcome target executor. Three other paths write the same "close this lead" meaning and did
- * not ask:
+ * the outcome target executor. Other paths write the same "close this lead" meaning and did not
+ * ask:
  *
  *   - the Mutation Runtime `update_lead_status` / `close_lead` commands (BOS, and Manage), which
  *     write `opportunities.status_key` through `execute_lead_status_mutation`;
  *   - the case grain of the enrollment-status transition ("Update Status" → Closed Lost), which
- *     writes through `updateOpportunityStatusWithEvent`.
+ *     writes through `updateOpportunityStatusWithEvent`;
+ *   - the Action runtime's `update_status`, which writes through the same helper;
+ *   - the legacy definition-driven executor (`executeAdminAction` — `update_status` and `open_form`
+ *     with a status submit or `after.update_status_key`), which `POST /api/admin/actions/execute`
+ *     falls back to for any key that is not a registered capability, and which writes
+ *     `opportunities.status_key` directly from a tenant `action_definitions` row.
  *
  * Each could close a family whose waitlisted or enrolled child tracks were still live. The governed
  * family close (`executeGovernedFamilyClose`) closes those children FIRST, so it passes this rule on

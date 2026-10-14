@@ -109,7 +109,9 @@ would close the case is refused while any child track on it is still operational
   implementation. Every path that can close a case asks it before writing: the outcome-rule target
   executor (and so outcome rules, status-entry automation, domain-signal automation and the governed
   family close), the `close_lead` / `update_lead_status` commands, the Action runtime's `update_status`,
-  and the case grain of the canonical enrollment-status transition. A second copy of the rule is the
+  the case grain of the canonical enrollment-status transition, and the legacy definition-driven
+  executor (`executeAdminAction`'s `update_status` / `open_form` status writes, reached through
+  `POST /api/admin/actions/execute` for keys that are not registered capabilities). A second copy of the rule is the
   failure mode, for the same reason as the transition-policy gate above.
 - **Blocking child states:** `waitlisted`, `enrolling`, an in-process child (`null` state) and
   `enrolled`. **Allowed:** `withdrawn`, `not_enrolling`. An unrecognised state blocks.

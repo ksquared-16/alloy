@@ -55,6 +55,7 @@ import { preflightOpportunityActionOrNull } from "@/lib/admin/actions/adminActio
 import { applyMetadataAutoPopulate } from "@/lib/completion/applyAutoPopulateInstructions";
 import { autoPopulateForLifecycleAction } from "@/lib/completion/lifecycleActionRequirementCatalog";
 import { WAITLISTED_STATUS_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 
 export type ExecuteAdminActionCtx = {
     orgId: string;
@@ -75,6 +76,23 @@ export type ExecuteAdminActionInput = {
     };
     payload?: Record<string, unknown>;
 };
+
+/**
+ * A family case cannot close out from under its children (E2E-09). The legacy definition-driven
+ * branches below write `opportunities.status_key` directly, so they ask the same shared rule every
+ * other close path asks — after transition validation, before any write.
+ */
+async function refuseFamilyCloseOrNull(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    targetStatusKey: string,
+    correlationId: string,
+): Promise<{ ok: false; correlation_id: string; error: string; status: number } | null> {
+    const refusal = await familyCloseRefusal(supabase, { orgId, opportunityId, targetStatusKey });
+    if (!refusal) return null;
+    return { ok: false, correlation_id: correlationId, error: refusal.error, status: 409 };
+}
 
 export type ExecuteAdminActionResult =
     | {
@@ -616,6 +634,10 @@ export async function executeAdminAction(
                 if (!transition.ok) {
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
+                const afterFamilyRefusal = await refuseFamilyCloseOrNull(
+                    supabase, ctx.orgId, entityId, afterUpdateStatusKey, correlationId,
+                );
+                if (afterFamilyRefusal) return afterFamilyRefusal;
                 const _afterStatusPatch: Record<string, unknown> = { status_key: afterUpdateStatusKey };
                 await normalizeOpportunityWritePayload(supabase, _afterStatusPatch, "executeAdminAction:open_form.after");
                 const { data: updated, error: upErr } = await supabase
@@ -786,6 +808,10 @@ export async function executeAdminAction(
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
 
+                const formFamilyRefusal = await refuseFamilyCloseOrNull(
+                    supabase, ctx.orgId, entityId, statusKey, correlationId,
+                );
+                if (formFamilyRefusal) return formFamilyRefusal;
                 const _openFormStatusPatch: Record<string, unknown> = { status_key: statusKey, metadata: nextMd };
                 if (formKey === "mark_lost" || actionKey === "mark_lost") {
                     const lostCheck = await validateMarkLostPayload(merged);
@@ -1050,6 +1076,11 @@ export async function executeAdminAction(
             }
             const existing = transitionCtx.existing;
             const oldStatusKey = transitionCtx.oldStatusKey;
+
+            const statusFamilyRefusal = await refuseFamilyCloseOrNull(
+                supabase, ctx.orgId, entityId, statusKey, correlationId,
+            );
+            if (statusFamilyRefusal) return statusFamilyRefusal;
 
             let operationalEnrollmentHandoff: OperationalEnrollmentHandoffResult | null = null;
             if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
