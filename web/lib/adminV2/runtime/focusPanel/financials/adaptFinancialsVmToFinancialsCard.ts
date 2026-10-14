@@ -290,7 +290,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             currentBalance: money(reconciliation.balanceCents, currency),
             /* The SAME canonical figure `collectibleNow` reads, stated unconditionally. See the
                field's note in `cardLabTypes`: one authority, two rendering policies. */
-            dueNow: money(vm.collectible.currentlyCollectibleCents, currency),
+            /*
+             * W7-F013: DUE is what is collectible AND due today or earlier. Money whose due date is
+             * still ahead (a late add rolled to the next payment event) stays collectible — it can be
+             * paid early — but is stated beside Due, never inside it.
+             */
+            dueNow: money(
+                Math.max(0, vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0)),
+                currency,
+            ),
+            notYetDue: vm.notYetDue && vm.notYetDue.amountCents > 0
+                ? `${money(vm.notYetDue.amountCents, currency)} on ${displayDate(vm.notYetDue.nextDueDate) ?? vm.notYetDue.nextDueDate}`
+                : null,
             /*
              * ZERO IS SILENCE. The metric appears only when the organisation actually holds
              * spendable money for this family — the information-density rule the rest of this strip

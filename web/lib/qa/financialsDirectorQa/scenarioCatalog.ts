@@ -104,7 +104,11 @@
  * children at two campuses rather than a child with no agreement. A different subject is a
  * different question, so earlier results do not carry over.
  */
-export const CATALOG_VERSION = "2026-10-12.1";
+/*
+ * 2026-10-14.1 — W7-F013: a charge added after its period's payment date is due with the NEXT
+ * standard payment (Scenario 7 rewritten); W7-F014/F015 change what Scenarios 7 and 8 read.
+ */
+export const CATALOG_VERSION = "2026-10-14.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -417,18 +421,18 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "late_current_period_charge",
         order: 7,
-        title: "A charge added late is invoiced and due the day it exists",
+        title: "A charge added late is invoiced today and due with the next payment",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Add a charge dated inside the CURRENT billing period and confirm it is invoiced today, due today, posts now, and says why.",
+        purpose: "Add a charge dated inside the CURRENT billing period, after its payment date, and confirm it stays in this period, is invoiced today, posts now, and is due on the NEXT standard payment date — not today.",
         whyItMatters:
             "A charge added after its period’s normal invoice date must not pretend it was on that invoice, and must not be due on a day before it was billed. The card states what the rule would have produced and what it did instead.",
         requires: [{ kind: "scenario_passed", scenarioKey: "due_date_derivation" }],
         navigate: ["The household’s Financials card → Add → Charge."],
-        doThis: ["Set the service date to today.", "Read Billing period, Invoice date, Due and Posting with their explanations.", "Confirm."],
-        expectChanges: ["The charge posts: what is owed rises by exactly its amount."],
+        doThis: ["Set the service date to today.", "Read Billing period, Invoice date, Due date and Posting. Hover Due date to read its rule.", "Confirm."],
+        expectChanges: ["The charge posts: what is owed rises by exactly its amount.", "Due does not rise; the card shows it as Not yet due, with the next payment date.", "It can still be paid now."],
         expectUnchanged: ["Every other charge."],
         invariant: MONEY_INVARIANTS.NEVER_BILLED_BEFORE_IT_EXISTED,
-        failSymptoms: ["An invoice date before today.", "A due date before the invoice date.", "No explanation of why the rule’s dates were not used."],
+        failSymptoms: ["An invoice date before today.", "A due date of today — the charge presented as due merely because it exists.", "The charge counted under Due or Past due before its due date.", "A billing period other than the current one."],
     }),
     S({
         key: "add_charge_preview_commit_parity",

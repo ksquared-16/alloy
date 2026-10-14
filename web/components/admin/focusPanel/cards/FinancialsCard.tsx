@@ -3514,6 +3514,31 @@ export default function FinancialsCard({
     }, [overlay, dismissOneLevel]);
 
     /*
+     * ── W7-F014: CHARGE DETAILS CLOSES ON AN OUTSIDE CLICK, IN EVERY HOST ─────────────────────
+     *
+     * Measured on deployed staging (Financials → Accounts → Alvarez): Escape and Close dismissed
+     * Charge Details, a click outside the card did nothing. That host draws the record over the
+     * account pane with no backdrop, so the grid's dismissal signal never fires there. A pointer-down
+     * outside the record's card — and outside any open menu or popover, which closes itself first —
+     * runs the same one-level dismissal Escape does. Where a backdrop also announces the click,
+     * `dismissOneLevel` coalesces the two into one gesture. Clicks inside the card never dismiss.
+     */
+    useEffect(() => {
+        if (overlay !== "charge_detail") return;
+        const onPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target || typeof target.closest !== "function") return;
+            const card = document.querySelector('[data-financials-overlay="charge_detail"] .alloy-os-ucard');
+            if (!card || card.contains(target)) return;
+            if (target.closest('[role="listbox"], [role="menu"], [data-radix-popper-content-wrapper]')) return;
+            if (hasInnerDismissibleLayer(document)) return;
+            dismissOneLevel();
+        };
+        document.addEventListener("pointerdown", onPointerDown, true);
+        return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    }, [overlay, dismissOneLevel]);
+
+    /*
      * ── ADD CHARGE — the approved command card, over the domain's own preview ──
      *
      * The template catalog, the preview and the write are all unchanged: `mode: "preview"` runs the

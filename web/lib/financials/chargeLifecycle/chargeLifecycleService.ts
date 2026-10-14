@@ -17,6 +17,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { addDaysYmd } from "@/lib/financials/billingPeriod";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
@@ -201,6 +202,8 @@ function chainForIntent(args: {
     invoiceLocationId: string | null;
     createdOn: string;
     today: string;
+    /** The period after `period`, for a late add's payment event (W7-F013). */
+    nextPeriod?: ChargeDatePeriod | null;
 }): ChargeDateChain {
     const serviceDate = args.intent.occursOn as string;
     const invoiceRule = resolveInvoiceTimingRule({
@@ -223,7 +226,28 @@ function chainForIntent(args: {
         },
         createdOn: args.createdOn,
         businessDate: args.today,
+        nextPeriod: args.nextPeriod ?? null,
     });
+}
+
+/**
+ * THE NEXT BILLING PERIOD, from the same calendar authority the charge's own period came from —
+ * asked only when the charge's period had already begun at creation, which is the only case whose
+ * payment event can already have passed (W7-F013). Persisted period rows win over the calendar,
+ * exactly as they do for the charge's own period. Unresolvable is null, never a guess.
+ */
+async function nextPeriodAfter(
+    supabase: SupabaseClient,
+    args: { orgId: string; source: { type: string; id: string } | null; period: ChargeDatePeriod | null; createdOn: string },
+): Promise<ChargeDatePeriod | null> {
+    if (!args.source || !args.period || args.period.startsOn > args.createdOn) return null;
+    const found = await previewChargeBillingPeriod(supabase, {
+        orgId: args.orgId,
+        billableSourceType: args.source.type,
+        billableSourceId: args.source.id,
+        placementDate: addDaysYmd(args.period.endsOn, 1),
+    });
+    return found.kind === "resolved" ? found.period : null;
 }
 
 /** Apply a resolved chain to the intent: the chain is the authority for every date it decides. */
@@ -336,6 +360,7 @@ async function resolveTemplateCharge(
                 intent.periodIssue = { code: found.code, message: found.message };
             }
         }
+        const createdOn = createdOnOf(existing, args.today);
         applyChain(intent, chainForIntent({
             intent,
             template,
@@ -343,8 +368,9 @@ async function resolveTemplateCharge(
             period,
             scope: chainScope,
             invoiceLocationId,
-            createdOn: createdOnOf(existing, args.today),
+            createdOn,
             today: args.today,
+            nextPeriod: await nextPeriodAfter(supabase, { orgId, source, period, createdOn }),
         }));
     }
 
@@ -524,6 +550,7 @@ export async function writeTemplateDraftCharge(
         placementDate: intent.occursOn ?? args.today,
     });
     if (bound.period && intent.occursOn) {
+        const createdOn = createdOnOf(ctx.existing, args.today);
         applyChain(intent, chainForIntent({
             intent,
             template: ctx.template,
@@ -531,8 +558,9 @@ export async function writeTemplateDraftCharge(
             period: bound.period,
             scope: ctx.chainScope,
             invoiceLocationId: ctx.invoiceLocationId,
-            createdOn: createdOnOf(ctx.existing, args.today),
+            createdOn,
             today: args.today,
+            nextPeriod: await nextPeriodAfter(supabase, { orgId, source, period: bound.period, createdOn }),
         }));
     }
     const metadata = metadataFor(intent.dateChain);

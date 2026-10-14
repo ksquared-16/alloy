@@ -386,6 +386,8 @@ export type FinancialsPeriod = {
      * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
      */
     dueNow: string;
+    /** W7-F013: collectible but not due until a later payment event — "$40.00 on Nov 1, 2026". */
+    notYetDue?: string | null;
     /**
      * MONEY THE FAMILY HAS ALREADY GIVEN THAT IS NOT YET SPENT — and only the spendable part.
      *

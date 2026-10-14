@@ -19,7 +19,7 @@ describe("awaitingPostingReason", () => {
     it("a charge waiting for its billing period is nobody's work, and names the day", () => {
         const r = awaitingPostingReason({ post_gate: "period_not_started", post_not_before: "2026-11-01" });
         expect(r.key).toBe("period_not_started");
-        expect(r.label).toBe("Posts 2026-11-01");
+        expect(r.label, "W7-F015: a human date, never ISO").toBe("Posts Nov 1, 2026");
         expect(r.postsOn).toBe("2026-11-01");
         expect(r.operatorActionable).toBe(false);
         expect(r.explanation).toContain("Nothing to do");

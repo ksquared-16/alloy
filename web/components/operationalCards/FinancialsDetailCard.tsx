@@ -537,6 +537,7 @@ export default function FinancialsDetailCard({
                       */}
                     <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Due" value={period.dueNow} />
+                    {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
                     <Stat
                         label="Past due"
                         value={hydrating ? "—" : pastDue ? pastDue.amount : "None"}

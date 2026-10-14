@@ -1,3 +1,4 @@
+import { humanDay } from "@/lib/financials/dates/humanDates";
 /**
  * WHY IS THIS DRAFT WAITING? FOUR ANSWERS, AND THEY ARE NOT THE SAME WORK.
  *
@@ -110,9 +111,9 @@ export function awaitingPostingReason(
         const postsOn = text(md["post_not_before"]);
         return {
             key: "period_not_started",
-            label: postsOn ? `Posts ${postsOn}` : "Waiting for its billing period",
+            label: postsOn ? `Posts ${humanDay(postsOn)}` : "Waiting for its billing period",
             explanation: postsOn
-                ? `Not owed yet. Its billing period begins on ${postsOn}, and it posts on its own that day. Nothing to do.`
+                ? `Not owed yet. Its billing period begins on ${humanDay(postsOn)}, and it posts on its own that day. Nothing to do.`
                 : "Not owed yet — its billing period has not begun. It posts on its own when the period starts. Nothing to do.",
             operatorActionable: false,
             postsOn,
