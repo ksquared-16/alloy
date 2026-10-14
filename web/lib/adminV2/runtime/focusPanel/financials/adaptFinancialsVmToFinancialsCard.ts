@@ -295,8 +295,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              * still ahead (a late add rolled to the next payment event) stays collectible — it can be
              * paid early — but is stated beside Due, never inside it.
              */
+            /*
+             * Measured on deployed b48d684b: Due $0.00 beside Past due $40.00. The collectible
+             * figure is NET of account credits while not-yet-due is a per-charge residual, so the
+             * subtraction alone can undershoot. What is past due is always due, so Due never reads
+             * below it (bounded by what is collectible at all).
+             */
             dueNow: money(
-                Math.max(0, vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0)),
+                Math.max(
+                    0,
+                    vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0),
+                    Math.min(vm.pastDue?.amountCents ?? 0, vm.collectible.currentlyCollectibleCents),
+                ),
                 currency,
             ),
             notYetDue: vm.notYetDue && vm.notYetDue.amountCents > 0
