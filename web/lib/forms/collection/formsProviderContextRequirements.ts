@@ -5,6 +5,7 @@
 import type { FormField } from "@/lib/forms/schema";
 import {
     fieldDefinitionEntityTypeFromFormsEntity,
+    providerRefToCanonicalRef,
     systemFieldIdToCanonicalRef,
     type CanonicalRegistryRef,
 } from "@/lib/fields/fieldRegistryReferenceMatrix";
@@ -32,6 +33,10 @@ export function canonicalRefFromFormField(field: FormField): CanonicalRegistryRe
         const fromId = systemFieldIdToCanonicalRef(legacyEntry.id);
         if (fromId) return fromId;
     }
+    // An edge-owned relationship answer (Relationship type on an Emergency Contact) — the registry's
+    // own resolver names it; this adapter simply never asked it.
+    const edgeRef = providerRefToCanonicalRef(`${source.entity_type}.${source.field_key ?? ""}`);
+    if (edgeRef && edgeRef.entity_type === "person_child_relationship") return edgeRef;
     const defEntity = fieldDefinitionEntityTypeFromFormsEntity(source.entity_type ?? "");
     if (!defEntity) return null;
     return { entity_type: defEntity, field_key: source.field_key?.trim() ?? field.id };
