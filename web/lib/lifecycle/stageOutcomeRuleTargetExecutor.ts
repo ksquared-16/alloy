@@ -12,13 +12,8 @@ import {
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
-import { isConfiguredClosedStatus } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
-import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
-import {
-    describeFamilyCloseBlock,
-    evaluateFamilyCloseGuard,
-    type FamilyCloseBlockedReason,
-} from "@/lib/lifecycle/familyCloseGuard";
+import type { FamilyCloseBlockedReason } from "@/lib/lifecycle/familyCloseGuard";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 import { reconcileBusinessProcessWorkAcrossStageMove } from "@/lib/lifecycle/reconcileBusinessProcessWorkAcrossStageMove";
 import {
     ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
@@ -158,29 +153,6 @@ async function resolveParticipationIdForSubject(
         (r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key),
     );
     return activeContextFree?.id ?? null;
-}
-
-/**
- * Does this family case status close the case?
- *
- * Uses the SHARED closed-status predicate rather than a local `=== "closed"`, so the guard agrees
- * with Organization → Statuses and the Business Process editor by construction.
- *
- * Deliberately pure. An earlier version read the org's status catalog first, which was more
- * configurable in theory and wrong in practice: it pulled `createAdminClient` onto a code path
- * that outcome execution reaches with an injected client, and it charged every family status write
- * — including the `open` ones — an extra query to answer a question the canonical case domain
- * already settles. `opportunities.status_key` is `open | closed` by migration doctrine, which is
- * exactly the key-level resolution this predicate applies for the opportunity grain.
- */
-function familyCaseStatusCloses(statusKey: string): boolean {
-    return isConfiguredClosedStatus({
-        status_key: statusKey,
-        status_label: statusKey,
-        entity_type: "opportunities",
-        is_active: true,
-        metadata: null,
-    });
 }
 
 export type ApplyStageOutcomeRuleTargetResult = {
@@ -329,33 +301,25 @@ export async function applyStageOutcomeRuleTarget(
             /**
              * A family case cannot close out from under its children.
              *
-             * The guard lives HERE, on the target executor, rather than on the `close_lead`
-             * command or its placement, because this is the invariant-owning path: outcome rules,
-             * status-entry automation and domain-signal automation all resolve to this executor.
-             * Guarding a command would leave every configured rule free to close a family with a
-             * waitlisted or enrolled child still riding on it.
+             * The guard lives on the target executor because outcome rules, status-entry automation
+             * and domain-signal automation all resolve here; guarding only a command would leave
+             * every configured rule free to close a family with a waitlisted or enrolled child still
+             * riding on it. It is the SAME rule (`familyCloseRefusal`) the command paths that write
+             * case status directly now ask (E2E-09), so no path closes a family another refuses.
              *
              * Only closes are guarded. A write that leaves the case open is untouched, so
              * `reached_qualified` (status `open`) never pays for this.
              */
-            if (familyCaseStatusCloses(statusKey)) {
-                const read = await readEnrollmentInstancesForLead(supabase, {
-                    orgId,
-                    opportunityId: familyCaseId,
-                });
-                const decision = evaluateFamilyCloseGuard(read);
-                if (!decision.allowed) {
-                    // Nothing has been written, so there is nothing to compensate — the
-                    // surrounding transaction aborts clean. The structured reasons travel out for
-                    // the command layer to turn into operator language and a named preview.
-                    return {
-                        error:
-                            "This lead cannot be closed while child enrollment tracks are still active ("
-                            + describeFamilyCloseBlock(decision)
-                            + ").",
-                        blocked_reasons: decision.reasons,
-                    };
-                }
+            const refusal = await familyCloseRefusal(supabase, {
+                orgId,
+                opportunityId: familyCaseId,
+                targetStatusKey: statusKey,
+            });
+            if (refusal) {
+                // Nothing has been written, so there is nothing to compensate — the surrounding
+                // transaction aborts clean. The structured reasons travel out for the command layer
+                // to turn into operator language and a named preview.
+                return refusal;
             }
 
             // Read the prior value BEFORE the write so the transaction has an inverse.

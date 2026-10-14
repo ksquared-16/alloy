@@ -235,7 +235,9 @@ The canonical transition is
 `POST /api/admin/enrollment-status-transition/execute`, which takes a **configured transition
 reference** and resolves it server-side against the transitions the subject's current stage actually
 offers — configuration expresses intent, code owns executable semantics, and a configured string is
-never authority by itself. Closing a family case as lost is `executeGovernedFamilyClose`.
+never authority by itself. Closing a family case as lost is `executeGovernedFamilyClose`. No path
+closes a case while a child track on it is still live — every close path asks one shared rule; see
+`status-and-state-system.md` § *A case cannot close out from under its children*.
 
 That path owns the whole transition, which is what made closing the record route possible:
 

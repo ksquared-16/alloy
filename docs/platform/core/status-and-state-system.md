@@ -99,6 +99,40 @@ progress is **Stage + Work**, never status (see `stage-membership-and-outcomes.m
 
 Status definitions live in org config (`status_definitions`) with `entity_type` discriminating opportunity vs OCM.
 
+### A case cannot close out from under its children (October 2026)
+
+The two grains stay separate — closing a case writes **only** `opportunities`, and never cascades into a
+child's enrollment state. What crosses the grain is a **refusal**, not a write: a case-status write that
+would close the case is refused while any child track on it is still operationally unresolved.
+
+- **One rule.** `familyCloseRefusal` (`web/lib/lifecycle/familyCloseRefusal.ts`) is the only
+  implementation. Every path that can close a case asks it before writing: the outcome-rule target
+  executor (and so outcome rules, status-entry automation, domain-signal automation and the governed
+  family close), the `close_lead` / `update_lead_status` commands, the Action runtime's `update_status`,
+  the case grain of the canonical enrollment-status transition, and the legacy definition-driven
+  executor (`executeAdminAction`'s `update_status` / `open_form` status writes, reached through
+  `POST /api/admin/actions/execute` for keys that are not registered capabilities). A second copy of the rule is the
+  failure mode, for the same reason as the transition-policy gate above.
+- **Blocking child states:** `waitlisted`, `enrolling`, an in-process child (`null` state) and
+  `enrolled`. **Allowed:** `withdrawn`, `not_enrolling`. An unrecognised state blocks.
+- **Fails closed.** A child list that cannot be read refuses the close. "Could not read" is never
+  "no children".
+- **Both journey anchors.** A child's journey is found whether its process instance is anchored to the
+  case (`context_id` = opportunity id) or to the child's Enrollment Participation. Matching the
+  opportunity id alone returns fewer rows and no error, and reads a family with a waitlisted child as
+  childless.
+- **Refused before any write.** The rule is asked after the transition-policy gate and before prior-stage
+  reconciliation, the status write or any outcome consequence, so a refused close leaves nothing behind.
+- **Closing status, and close intent.** The rule treats the case status `closed` as a close, matching
+  the collapsed case vocabulary (`open` \| `closed`). A path whose action **is** a close is asked
+  whatever status string it writes: case-grain "Lost / Withdrawn" (`closed_withdrawn`, which resolves
+  `withdrawn`), legacy `mark_lost` (`lost`) and the `close_lead` command (any picked status). Measured
+  on the certification tenant, where `lost` / `withdrawn` are active case statuses, case-grain
+  Lost / Withdrawn otherwise wrote `withdrawn` over a waitlisted child. A generic status picker that
+  writes some other tenant-defined terminal key is not yet recognised — see the E2E-09 debt item. Ending a family with live children is the governed family close
+  (`executeGovernedFamilyClose`), which ends the eligible children first and so passes the rule on the
+  evidence.
+
 ### Stage membership declares grain — never status lists
 
 A stage's **`queue_membership_v1`** declares subject grain, count unit, and location scope. Membership

@@ -1,0 +1,260 @@
+{
+  "trusted_host_action_id": "tha_e282da0c9c58c3",
+  "query_hash": "82b0e3631d4f4e7679865ce6995638228e2deb9d29ff264e2fe4dcfc05143f28",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T19:13:26.396Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e282da0c9c58c3",
+    "query_hash": "82b0e3631d4f4e7679865ce6995638228e2deb9d29ff264e2fe4dcfc05143f28",
+    "authorization_id": "grnt_36d44a657a194837",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T19:13:31.882Z",
+    "question_ids": [
+      "e2e09_family_close_writers"
+    ],
+    "questions": {
+      "e2e09_family_close_writers": {
+        "question_id": "e2e09_family_close_writers",
+        "row_count": null,
+        "rows": [
+          {
+            "q1_legacy_status_actions": [
+              {
+                "key": "approve_enrollment",
+                "action_type": "update_status",
+                "entity_type": "opportunity",
+                "status_key": "enrolled",
+                "submit_action_type": null,
+                "after_update_status_key": null,
+                "orgs": 0,
+                "global_rows": 1
+              },
+              {
+                "key": "contact_attempted",
+                "action_type": "open_form",
+                "entity_type": "opportunity",
+                "status_key": null,
+                "submit_action_type": "update_status",
+                "after_update_status_key": "contact_attempted",
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "key": "mark_lost",
+                "action_type": "open_form",
+                "entity_type": "opportunity",
+                "status_key": "lost",
+                "submit_action_type": "update_status",
+                "after_update_status_key": null,
+                "orgs": 0,
+                "global_rows": 1
+              },
+              {
+                "key": "move_to_qualification",
+                "action_type": "update_status",
+                "entity_type": "opportunity",
+                "status_key": "qualification",
+                "submit_action_type": null,
+                "after_update_status_key": null,
+                "orgs": 0,
+                "global_rows": 1
+              },
+              {
+                "key": "reschedule_tour",
+                "action_type": "open_form",
+                "entity_type": "opportunity",
+                "status_key": null,
+                "submit_action_type": "start_workflow",
+                "after_update_status_key": "tour_scheduled",
+                "orgs": 2,
+                "global_rows": 0
+              },
+              {
+                "key": "schedule_tour",
+                "action_type": "open_form",
+                "entity_type": "opportunity",
+                "status_key": null,
+                "submit_action_type": "start_workflow",
+                "after_update_status_key": "tour_scheduled",
+                "orgs": 2,
+                "global_rows": 0
+              },
+              {
+                "key": "update_status_add_note",
+                "action_type": "open_form",
+                "entity_type": "opportunity",
+                "status_key": null,
+                "submit_action_type": "update_status",
+                "after_update_status_key": null,
+                "orgs": 1,
+                "global_rows": 0
+              }
+            ],
+            "q2_case_status_vocabulary": {
+              "open": 2,
+              "new_inquiry": 1,
+              "new": 18
+            },
+            "q3_opportunity_status_definitions": [
+              {
+                "status_key": "application_in_progress",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "archived",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "booked",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "booked",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "closed",
+                "active": true,
+                "terminal": "true",
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "closed",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "conversation_had",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "enrolled",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "enrolling",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "inactive",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "needs_a_quote",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "needs_a_quote",
+                "active": true,
+                "terminal": null,
+                "orgs": 0,
+                "global_rows": 1
+              },
+              {
+                "status_key": "new",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "new",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "open",
+                "active": true,
+                "terminal": null,
+                "orgs": 2,
+                "global_rows": 0
+              },
+              {
+                "status_key": "quote_started",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 1
+              },
+              {
+                "status_key": "scheduled",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "scheduled",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "waitlisted",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "won",
+                "active": false,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              },
+              {
+                "status_key": "won",
+                "active": true,
+                "terminal": null,
+                "orgs": 1,
+                "global_rows": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

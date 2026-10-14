@@ -6,6 +6,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
+import type { FamilyCloseBlockedReason } from "@/lib/lifecycle/familyCloseGuard";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 import type {
     EnrollmentStatusDestinationKey,
     EnrollmentStatusTransitionExecutionRequest,
@@ -46,7 +48,13 @@ export type ExecuteEnrollmentStatusTransitionResult =
           placementHook?: { attempted: boolean; created: boolean; skipped_reason?: string } | null;
           outcomeEffects?: Awaited<ReturnType<typeof applyEnrollmentStatusTransitionOutcomeEffects>>;
       }
-    | { ok: false; error: string; validation?: RequirementValidationResult }
+    | {
+          ok: false;
+          error: string;
+          validation?: RequirementValidationResult;
+          /** Why a case close was refused: live child tracks remain (E2E-09). */
+          blocked_reasons?: FamilyCloseBlockedReason[];
+      }
     /*
      * The operator has to answer for the work being left behind before the transition may proceed.
      * Distinct from a requirement failure: nothing is wrong, the caller simply has not yet supplied
@@ -264,6 +272,22 @@ export async function executeEnrollmentStatusTransition(
      * must not do is make it worse, and it does not: the two operations stay adjacent and in the same
      * order they had. The ordering test pins that.
      */
+    /*
+     * A family case cannot close out from under its children (E2E-09) — the same rule the outcome
+     * target executor and the governed family close obey. Asked BEFORE reconciliation, which writes,
+     * so a refused close leaves nothing behind.
+     */
+    const familyRefusal = await familyCloseRefusal(supabase, {
+        orgId,
+        opportunityId: scope.opportunityId,
+        targetStatusKey,
+        // "Lost / Withdrawn" closes the case even when it resolves a status other than `closed`.
+        closesCase: request.destinationKey === "closed_withdrawn",
+    });
+    if (familyRefusal) {
+        return { ok: false, error: familyRefusal.error, blocked_reasons: familyRefusal.blocked_reasons };
+    }
+
     const reconciliationPreflight = await preflightStageTransitionReconciliation({
         supabase,
         orgId,
