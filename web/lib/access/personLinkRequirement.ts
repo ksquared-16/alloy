@@ -22,13 +22,18 @@ export function isMoneyCapableCapability(key: string): boolean {
     return (MONEY_CAPABLE_CAPABILITY_KEYS as readonly string[]).includes(key);
 }
 
-/** The operator's sentence for a `money_capable_grant_requires_person_link` refusal, or null. */
+/**
+ * The operator's sentence for a money-capable grant refused because the login cannot be NAMED, or
+ * null. W7-F002 (corrected): the prerequisite is a name on the account (or a link to a named
+ * Person) — a Person link is optional. `…requires_person_link` is the pre-20261122180000 code and
+ * is still recognised for a database that has not taken the correction yet.
+ */
 export function moneyCapableGrantRefusal(message: string | null | undefined): string | null {
-    const match = (message ?? "").match(/money_capable_grant_requires_person_link:([^\s"(]+)/);
+    const match = (message ?? "").match(/money_capable_grant_requires_(?:named_operator|person_link):([^\s"(]+)/);
     if (!match) return null;
     const keys = match[1].split(",").filter(Boolean).join(", ");
     return (
-        `Financial access (${keys}) can only be given to someone linked to a named person, so every `
-        + "financial act can say who did it. Link this user to their person record under Users › Account first."
+        `Financial access (${keys}) can only be given to an account with a name on file, so every `
+        + "financial act can say who did it. Add a name to this user under Users › Account first."
     );
 }

@@ -27,7 +27,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isMoneyCapableCapability } from "@/lib/access/personLinkRequirement";
-import { personDisplayName } from "@/lib/financials/identity/financialActorIdentity";
+import { personDisplayName, resolveAccountName } from "@/lib/financials/identity/financialActorIdentity";
 
 export class UserPersonLinkError extends Error {
     readonly status: number;
@@ -151,9 +151,18 @@ export async function listUserPersonLinkState(
 
     return {
         links,
-        unresolvedMoneyCapableActors: [...moneyByUser.entries()]
-            .filter(([userId]) => !linkedUserIds.has(userId))
-            .map(([userId, held]) => ({ userId, roles: [...held.roles].sort(), capabilities: [...held.capabilities].sort() })),
+        /*
+         * W7-F002 (corrected): a money-capable login is UNRESOLVED only when it can be named neither
+         * way — no link to a named Person AND no name on the account. A named, unlinked login is a
+         * valid state and is not reported.
+         */
+        unresolvedMoneyCapableActors: (await Promise.all(
+            [...moneyByUser.entries()]
+                .filter(([userId]) => !linkedUserIds.has(userId))
+                .map(async ([userId, held]) => ({ userId, held, account: await resolveAccountName(supabase, userId) })),
+        ))
+            .filter((r) => r.account.read && !r.account.name)
+            .map(({ userId, held }) => ({ userId, roles: [...held.roles].sort(), capabilities: [...held.capabilities].sort() })),
         /* A person already answering to another login is not a candidate: the index would refuse it. */
         linkCandidates: linkCandidates.filter((c) => !linkedPersonIds.has(c.personId)),
     };
@@ -276,9 +285,9 @@ export async function revokeUserPersonLink(
         p_note: note,
     });
     if (error) {
-        if (/person_link_required_for_money_capability/.test(error.message)) {
+        if (/account_name_required_for_money_capability|person_link_required_for_money_capability/.test(error.message)) {
             throw new UserPersonLinkError(
-                "This user can move money, so their link cannot simply be removed — the ledger must always be able to name them. Replace the link with the correct person, or remove their financial access first.",
+                "This user can move money and has no name on their account, so removing the link would leave their financial activity unnamed. Add a name to the account first, then remove the link.",
                 409,
             );
         }

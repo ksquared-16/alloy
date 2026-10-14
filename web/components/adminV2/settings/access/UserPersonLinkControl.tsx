@@ -62,10 +62,6 @@ export default function UserPersonLinkControl({ userId, canManage }: { userId: s
     }, [load]);
 
     const link = useMemo(() => state?.links.find((l) => l.userId === userId) ?? null, [state, userId]);
-    const unresolved = useMemo(
-        () => state?.unresolvedMoneyCapableActors.find((a) => a.userId === userId) ?? null,
-        [state, userId],
-    );
 
     const reset = () => {
         setMode("idle");
@@ -126,16 +122,21 @@ export default function UserPersonLinkControl({ userId, canManage }: { userId: s
                     ) : null}
                 </p>
             ) : (
-                <p className="text-sm text-alloy-midnight/70" data-testid="access-user-person-link-none">
-                    Not linked to a person
-                </p>
+                <>
+                    <p className="text-sm text-alloy-midnight/70" data-testid="access-user-person-link-none">
+                        Not linked
+                    </p>
+                    {/* W7-F002 (corrected): a Person link is an optional relationship, not a requirement. */}
+                    <p className="mt-0.5 text-xs text-alloy-midnight/50" data-testid="access-user-person-link-optional">
+                        Optional. Link this login when it corresponds to a Person managed in Alloy.
+                    </p>
+                </>
             )}
-            {!link && unresolved ? (
-                <p className="mt-1 text-xs text-amber-800" data-testid="access-user-person-link-money-gap">
-                    This login can move money ({unresolved.capabilities.join(", ")}), so its financial activity cannot
-                    name who acted until it is linked to a named person.
-                </p>
-            ) : null}
+            {/*
+              * W7-F002 (corrected): NO financial-integrity warning for an unlinked login. Attribution
+              * needs a NAME, which the account carries itself (see Account › Name); an unnamed account
+              * is warned about there, where it is fixed.
+              */}
 
             {canManage && mode === "idle" ? (
                 <div className="mt-2 flex flex-wrap gap-2">

@@ -188,6 +188,14 @@
         "reason": "The access-change audit feed. It used to require the authority to CHANGE access, on the reasoning that reading who changed it should need the power to change it. The split makes that unsatisfiable \u2014 the feed spans users, roles and scope, and no single write key covers all three \u2014 so it moves to the user READ authority, which preserves exactly today's audience (admin and ops) and lets a read-only auditor see it."
       }
     },
+    "app/api/admin/access/account-name/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "note": "W7-F002 (corrected): edits a login's own account name - the user identity Access shows and financial attribution falls back to when the login is not linked to a Person. Scoped to a login in the caller's organisation and recorded as an access mutation event; never touches the email and never creates, links or unlinks a Person."
+      }
+    },
     "app/api/admin/access/person-links/route.ts": {
       "GET": {
         "status": "declared",

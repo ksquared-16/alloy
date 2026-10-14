@@ -1,11 +1,12 @@
 /**
- * W7-F002 — FINANCIAL CAPABILITY IS GRANTED ONLY TO A LOGIN LINKED TO A NAMED PERSON, LIVE.
+ * W7-F002 (corrected) — FINANCIAL CAPABILITY IS GRANTED ONLY TO A NAMED OPERATOR, LIVE.
  *
- * Against the certification database with migration 20261122140000 applied: the assignment ceiling
- * refuses newly conferring a money-capable capability on an unlinked user and accepts it once the user
- * is linked; re-saving an already-allowed money grant passes; newly allowing one on a role with an
- * unlinked holder is refused; and a money-capable user's link cannot be revoked. Every change made
- * here is undone in afterAll.
+ * Against the certification database with migration 20261122180000 applied: the assignment ceiling
+ * refuses newly conferring a money-capable capability on an UNNAMED login, and accepts a login with an
+ * account name (no Person link needed) or one linked to a named Person; re-saving an already-allowed
+ * money grant passes; newly allowing one on a role with an unnamed holder is refused; and a Person link
+ * can be removed unless that would leave a money-capable login unnamed. Every change made here is
+ * undone in afterAll.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -46,7 +47,7 @@ let TARGET = "";
 let HOLDER = "";
 const UNLINKED_HOLDER_ROLE = `w7_f002_probe_${RUN}`; // allows no fin.* key; held by an unlinked user
 
-describeLive("W7-F002 — money-capable grants require a named person, live", () => {
+describeLive("W7-F002 — money-capable grants require a named operator, live", () => {
     let db: SupabaseClient;
     let personId: string;
 
@@ -76,46 +77,56 @@ describeLive("W7-F002 — money-capable grants require a named person, live", ()
         for (const id of [TARGET, HOLDER].filter(Boolean)) await db.auth.admin.deleteUser(id).catch(() => undefined);
     }, 120_000);
 
-    it("refuses to confer money capability on an unlinked login, and confers it once linked", async () => {
-        const refused = await db.rpc("assert_assignment_delegation_ceiling", {
+    const nameAccount = async (userId: string, fullName: string | null) => {
+        const r = await db.auth.admin.updateUserById(userId, { user_metadata: fullName === null ? { full_name: "" } : { full_name: fullName } });
+        expect(r.error, r.error?.message).toBeNull();
+    };
+
+    it("refuses an UNNAMED login; a named login needs no Person link; a linked login is accepted too", async () => {
+        const ceiling = () => db.rpc("assert_assignment_delegation_ceiling", {
             p_org_id: ORG, p_actor_user_id: ACTOR, p_target_user_id: TARGET, p_next_role_keys: ["ops"],
         });
-        expect(refused.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:/);
+        expect((await ceiling()).error?.message ?? "").toMatch(/money_capable_grant_requires_named_operator:/);
 
+        await nameAccount(TARGET, `F002 Account ${RUN}`);
+        expect((await ceiling()).error, "named but unlinked is a valid operator").toBeNull();
+
+        await nameAccount(TARGET, null);
         const link = await db.from("user_person_links").insert({ org_id: ORG, user_id: TARGET, person_id: personId, status: "active", note: "W7-F002 live" });
         expect(link.error).toBeNull();
-        const allowed = await db.rpc("assert_assignment_delegation_ceiling", {
-            p_org_id: ORG, p_actor_user_id: ACTOR, p_target_user_id: TARGET, p_next_role_keys: ["ops"],
-        });
-        expect(allowed.error).toBeNull();
+        expect((await ceiling()).error, "linked to a named Person").toBeNull();
     });
 
-    it("refuses to revoke the link of a login that can move money; replace is the path", async () => {
+    it("refuses to unlink a money-capable login only while it has no account name", async () => {
         await db.from("user_roles").upsert({ org_id: ORG, user_id: TARGET, role: "ops" });
-        const revoke = await db.rpc("revoke_user_person_link", { p_org_id: ORG, p_user_id: TARGET, p_actor_user_id: ACTOR, p_note: "W7-F002 live revoke" });
-        expect(revoke.error?.message ?? "").toMatch(/person_link_required_for_money_capability/);
+        const revoke = () => db.rpc("revoke_user_person_link", { p_org_id: ORG, p_user_id: TARGET, p_actor_user_id: ACTOR, p_note: "W7-F002 live revoke" });
+        expect((await revoke()).error?.message ?? "").toMatch(/account_name_required_for_money_capability/);
         const { data } = await db.from("user_person_links").select("status").eq("org_id", ORG).eq("user_id", TARGET).eq("status", "active");
         expect(data).toHaveLength(1);
+
+        await nameAccount(TARGET, `F002 Account ${RUN}`);
+        expect((await revoke()).error, "a named account may drop its optional Person link").toBeNull();
+        await nameAccount(TARGET, null);
     });
 
-    it("judges only a NEW money grant on a role: re-saving an allowed one passes, a new one with unlinked holders is refused", async () => {
+    it("judges only a NEW money grant on a role: re-saving an allowed one passes, a new one with UNNAMED holders is refused", async () => {
         const resave = await db.from("role_permission_grants")
             .upsert({ org_id: ORG, role_key: "admin", permission_key: "fin.write", allowed: true }, { onConflict: "org_id,role_key,permission_key" });
         expect(resave.error).toBeNull();
         const fresh = await db.from("role_permission_grants")
             .insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, permission_key: "fin.write", allowed: true });
-        expect(fresh.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:fin\.write/);
+        expect(fresh.error?.message ?? "").toMatch(/money_capable_grant_requires_named_operator:fin\.write/);
     });
 
     /* 20261122150000 — the invariant lives where a user acquires a role. */
     describe("user_roles invariant (20261122150000)", () => {
         const UNLINKED_ADMIN = "72f10cc6-fbd2-4b3c-a107-8a5c196da384"; // an existing unlinked admin: must never be stranded
 
-        it("refuses a direct money-role write for an unlinked user, and allows a non-money one", async () => {
+        it("refuses a direct money-role write for an unnamed user, and allows a non-money one", async () => {
             await db.from("user_person_links").delete().eq("org_id", ORG).eq("user_id", TARGET);
             await db.from("user_roles").delete().eq("org_id", ORG).eq("user_id", TARGET).eq("role", "admin");
             const money = await db.from("user_roles").insert({ org_id: ORG, user_id: TARGET, role: "admin" });
-            expect(money.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:/);
+            expect(money.error?.message ?? "").toMatch(/money_capable_grant_requires_named_operator:/);
             const plain = await db.from("user_roles").upsert({ org_id: ORG, user_id: TARGET, role: UNLINKED_HOLDER_ROLE });
             expect(plain.error).toBeNull();
         });
@@ -124,7 +135,7 @@ describeLive("W7-F002 — money-capable grants require a named person, live", ()
             const r = await db.rpc("assign_member_role_audited", {
                 p_org_id: ORG, p_user_id: TARGET, p_role_key: "admin", p_actor_user_id: null, p_origin: "operator", p_correlation_id: `w7-f002-${Date.now()}`,
             });
-            expect(r.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:/);
+            expect(r.error?.message ?? "").toMatch(/money_capable_grant_requires_named_operator:/);
         });
 
         it("does not strand an existing unlinked holder when the governed replace re-saves the same role", async () => {
