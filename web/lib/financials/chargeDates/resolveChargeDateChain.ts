@@ -186,6 +186,14 @@ export type ChargeDateChain = {
         actual: string | null;
         /** True when the rule's date preceded the actual invoice date and was moved to it. */
         clampedToInvoice: boolean;
+        /**
+         * W7-F013: true when this period's payment date had already passed when the charge was
+         * invoiced, so the charge is due at the NEXT standard payment event — the same rule applied
+         * to the next billing period — while it still belongs to its own period.
+         */
+        rolledToNextPeriod: boolean;
+        /** The next billing period whose payment event it rolled into, when it rolled. */
+        nextPeriod: ChargeDatePeriod | null;
         resolution: DueDateResolution;
     };
     posting: {
@@ -214,6 +222,12 @@ export function resolveChargeDateChain(args: {
     scope: { serviceId: string | null; customerId: string | null; locationId: string | null };
     createdOn: string;
     businessDate: string;
+    /**
+     * The billing period AFTER `period`, from the same calendar authority. Supplied by callers
+     * when the period had already begun at creation; used only to place a late-added charge's
+     * payment event (W7-F013). Absent, the historical clamp-to-invoice applies.
+     */
+    nextPeriod?: ChargeDatePeriod | null;
 }): ChargeDateChain {
     const intended = intendedInvoiceDate(args.invoiceRule, args.serviceDate, args.period);
     const actual = intended < args.createdOn ? args.createdOn : intended;
@@ -227,8 +241,37 @@ export function resolveChargeDateChain(args: {
         locationId: args.scope.locationId,
     });
     const ruleDate = resolution.dueDate;
-    const clampedToInvoice = ruleDate != null && ruleDate < actual;
-    const dueActual = ruleDate == null ? null : clampedToInvoice ? actual : ruleDate;
+    /*
+     * ── W7-F013: A LATE ADD IS DUE AT THE NEXT PAYMENT EVENT, NOT THE DAY IT EXISTS ──────────
+     *
+     * Payments are not re-due continuously through a period. A period-relative rule (due on, or N
+     * days after, the period's first day) whose date for THIS period has already passed when the
+     * charge is invoiced is applied to the NEXT period instead: an Oct 14 add to October is due
+     * Nov 1 with November's payment. The charge still belongs to October — membership is the
+     * service date's, and nothing here touches `period`. It may be paid early; it is not due yet.
+     *
+     * Invoice-relative rules cannot precede the invoice, so they never roll. With no next period
+     * resolvable, the historical clamp (due on the invoice date) still applies.
+     */
+    const periodRelative = resolution.strategy === "on_period_start" || resolution.strategy === "days_after_period_start";
+    const passed = ruleDate != null && ruleDate < actual;
+    let rolledToNextPeriod = false;
+    let rolledDate: string | null = null;
+    if (passed && periodRelative && args.nextPeriod) {
+        const next = resolveDueDate(args.policies, {
+            invoiceDate: actual,
+            periodStart: args.nextPeriod.startsOn,
+            serviceId: args.scope.serviceId,
+            customerId: args.scope.customerId,
+            locationId: args.scope.locationId,
+        });
+        if (next.dueDate && next.dueDate >= actual) {
+            rolledToNextPeriod = true;
+            rolledDate = next.dueDate;
+        }
+    }
+    const clampedToInvoice = passed && !rolledToNextPeriod;
+    const dueActual = ruleDate == null ? null : rolledToNextPeriod ? rolledDate : clampedToInvoice ? actual : ruleDate;
 
     const posting: ChargeDateChain["posting"] = !args.period
         ? { gate: "period_unknown", notBefore: null }
@@ -240,7 +283,14 @@ export function resolveChargeDateChain(args: {
         serviceDate: args.serviceDate,
         period: args.period,
         invoice: { rule: args.invoiceRule, intended, actual, late: actual !== intended, createdOn: args.createdOn },
-        due: { ruleDate, actual: dueActual, clampedToInvoice, resolution },
+        due: {
+            ruleDate,
+            actual: dueActual,
+            clampedToInvoice,
+            rolledToNextPeriod,
+            nextPeriod: rolledToNextPeriod ? (args.nextPeriod ?? null) : null,
+            resolution,
+        },
         posting,
     };
 }
@@ -264,5 +314,7 @@ export function chargeDateProvenance(chain: ChargeDateChain): Record<string, unk
         due_rule_scope: chain.due.resolution.sourceScope ?? null,
         due_rule_date: chain.due.ruleDate,
         due_clamped_to_invoice: chain.due.clampedToInvoice,
+        due_rolled_to_next_period: chain.due.rolledToNextPeriod,
+        due_next_period_key: chain.due.nextPeriod?.key ?? null,
     };
 }

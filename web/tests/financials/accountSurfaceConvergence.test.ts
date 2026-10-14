@@ -1762,7 +1762,8 @@ describe("F38 · the entry command previews the act it will perform", () => {
     it("says draft only when a draft is what happens", () => {
         const cmd = code("components/operationalCards/AddChargeCommand.tsx");
         expect(cmd, "the posting line is a decision, not a constant").toMatch(
-            /t\.reviewRequired[\s\S]{0,200}Creates a draft/,
+            /* W7-F015: the compact state names the review hold rather than narrating it. */
+            /t\.reviewRequired[\s\S]{0,400}Saved for review before posting/,
         );
         /*
          * THE RULE IS "NO UNCONDITIONAL DRAFT CLAIM", NOT A PARTICULAR SENTENCE.
@@ -1776,18 +1777,21 @@ describe("F38 · the entry command previews the act it will perform", () => {
          * What must hold: every draft claim sits inside the boundary fork, and the balance line
          * forks too, so an unchanged balance is never shown for a charge that posts on confirm.
          */
-        const draftClaims = [...cmd.matchAll(/Creates a draft/g)].map((m) => m.index ?? -1);
-        expect(draftClaims.length, "the draft sentence exists").toBeGreaterThan(0);
+        /*
+         * W7-F015: the draft claims are now the compact states "Saved for review before posting"
+         * and "Saved as a draft · Posts automatically …", and the same rule holds — each sits inside
+         * the fork that decides it, and the balance projection appears only on the branch that
+         * actually posts now.
+         */
+        const draftClaims = [...cmd.matchAll(/Saved for review before posting|Saved as a draft/g)].map((m) => m.index ?? -1);
+        expect(draftClaims.length, "the draft states exist").toBe(2);
         for (const at of draftClaims) {
-            const enclosing = cmd.lastIndexOf("t.reviewRequired ? (", at);
-            expect(enclosing, "every draft claim is inside a boundary fork").toBeGreaterThan(-1);
+            const enclosing = cmd.lastIndexOf("t.reviewRequired", at);
+            expect(enclosing, "every draft claim is inside the boundary fork").toBeGreaterThan(-1);
+            expect(at - enclosing, "and close to it").toBeLessThan(400);
         }
-        /* Both arms are authored: the fork is a real decision, not a conditional with one answer. */
-        expect(cmd, "the balance preview forks on the same boundary").toMatch(
-            /t\.reviewRequired \? \([\s\S]{0,900}\) : \(/,
-        );
-        expect(cmd, "and no draft is claimed outside the fork").not.toMatch(
-            /reviewRequired[\s\S]{0,40}\?[\s\S]{0,40}null[\s\S]{0,120}Creates a draft/,
+        expect(cmd, "the balance projection appears only where the charge posts now").toMatch(
+            /!t\.reviewRequired && !specimen\.awaitsPeriodUntil && specimen\.previewPostedBalance/,
         );
     });
 });

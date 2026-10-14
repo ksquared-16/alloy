@@ -570,35 +570,48 @@ export default function AddChargeCommand({
                     </span>
                 </DateCell>
                 <DateCell label="Invoice date" readOnly>
-                    <span data-addcharge-invoice-date>
+                    {/*
+                      * W7-F015: the rule that produced this date is a tooltip, not a paragraph —
+                      * an ordinary date does not need explaining in the form. It stays in the
+                      * accessibility tree for screen-reader users.
+                      */}
+                    <span data-addcharge-invoice-date title={specimen.dateRules.invoice ?? undefined}>
                         <Value locked>{specimen.invoiceDate}</Value>
                     </span>
                     {specimen.dateRules.invoice ? (
-                        <span data-addcharge-invoice-rule className="alloy-os-addcharge__date-rule">
+                        <span data-addcharge-invoice-rule className="alloy-os-addcharge__sr-only">
                             {specimen.dateRules.invoice}
                         </span>
                     ) : null}
                 </DateCell>
                 <DateCell label="Due date" readOnly>
-                    <span data-addcharge-due-date>
+                    <span data-addcharge-due-date title={specimen.dateRules.due ?? undefined}>
                         <Value locked>{specimen.due}</Value>
                     </span>
                     {specimen.dateRules.due ? (
-                        <span data-addcharge-due-rule className="alloy-os-addcharge__date-rule">
+                        <span data-addcharge-due-rule className="alloy-os-addcharge__sr-only">
                             {specimen.dateRules.due}
                         </span>
                     ) : null}
                 </DateCell>
             </div>
-            {specimen.posting ? (
-                <p className="alloy-os-addcharge__posting" data-addcharge-posting-rule>
-                    <span className="alloy-os-addcharge__sublabel">Posting</span> {specimen.posting}
-                </p>
-            ) : t.reviewRequired ? (
-                <p className="alloy-os-addcharge__posting">
-                    <span className="alloy-os-addcharge__sublabel">Posting</span> Creates a draft — not yet owed
-                </p>
-            ) : null}
+            {/*
+              * W7-F015: ONE compact state line, not a narrated consequence. The three states are the
+              * server's answer (review flag, the date chain's posting gate) — named, not explained.
+              */}
+            <p
+                className="alloy-os-addcharge__posting"
+                data-addcharge-posting-rule
+                data-addcharge-posting={t.reviewRequired ? "draft" : specimen.awaitsPeriodUntil ? "awaits_period" : "posts"}
+                title={specimen.posting ?? undefined}
+            >
+                <span className="alloy-os-addcharge__sublabel">Posting</span>{" "}
+                {t.reviewRequired
+                    ? "Saved for review before posting"
+                    : specimen.awaitsPeriodUntil
+                      ? `Saved as a draft · Posts automatically ${specimen.awaitsPeriodUntil}`
+                      : "Posts when saved"}
+            </p>
 
             {/*
                 ── DISCOUNT — ONE DECISION, ONE CONTROL ─────────────────────────────────────────
@@ -790,44 +803,21 @@ export default function AddChargeCommand({
                     <span className="alloy-os-billing__line-label">Current balance</span>
                     <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
                 </p>
-                <p className="alloy-os-billingdetail__group" data-addcharge-preview-consequence="true">
-                    On confirm
-                </p>
-                {t.reviewRequired ? (
-                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="draft">
-                        Creates a draft charge for review. The balance does not change until it is posted.
+                {/*
+                  * W7-F015: the posting state is stated once, beside the dates. What remains here is
+                  * the one figure that changes when it posts now — and only then.
+                  */}
+                {!t.reviewRequired && !specimen.awaitsPeriodUntil && specimen.previewPostedBalance ? (
+                    <p
+                        className="alloy-os-billing__line alloy-os-billing__line--emphasis"
+                        data-addcharge-preview-consequence="true"
+                    >
+                        <span className="alloy-os-billing__line-label">Balance after posting</span>
+                        <span className="alloy-os-billing__line-value" data-addcharge-posted-balance="true">
+                            {specimen.previewPostedBalance}
+                        </span>
                     </p>
-                ) : specimen.awaitsPeriodUntil ? (
-                    /*
-                     * A FUTURE-PERIOD CHARGE IS WRITTEN AND NOT OWED. The posting authority keeps it a
-                     * draft until its billing period begins and posts it then; saying "posts it" here
-                     * with a moved balance contradicted the Posting line above (seen mounted, W7).
-                     */
-                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="awaits_period">
-                        Saves this charge. It is not owed until its billing period begins on{" "}
-                        {specimen.awaitsPeriodUntil}, when it posts automatically — the balance does not change now.
-                    </p>
-                ) : (
-                    <>
-                        <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="posts">
-                            Creates this charge and posts it.
-                            {specimen.previewDiscountAmount
-                                ? " The discount is recorded separately when discounts run, and lowers the balance then."
-                                : ""}
-                        </p>
-                        {specimen.previewPostedBalance ? (
-                            <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                                <span className="alloy-os-billing__line-label">Balance after posting</span>
-                                <span
-                                    className="alloy-os-billing__line-value"
-                                    data-addcharge-posted-balance="true"
-                                >
-                                    {specimen.previewPostedBalance}
-                                </span>
-                            </p>
-                        ) : null}
-                    </>
-                )}
+                ) : null}
             </div>
 
             {controls?.error ? (

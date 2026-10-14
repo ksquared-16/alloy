@@ -173,6 +173,8 @@ export function chargeDateChainPreviewLines(chain: ChargeDateChain, reviewRequir
     lines.push(
         dueRule.reason === "no_policy"
             ? "Payment terms · No payment terms configured — no due date is set"
+            : chain.due.rolledToNextPeriod
+              ? `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)}) — this period's payment date had passed, so it is due with the next payment`
             : chain.due.clampedToInvoice
                 ? `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)}) would be ${chain.due.ruleDate}, before this charge is invoiced, so it is due on the invoice date`
                 : `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)})`,

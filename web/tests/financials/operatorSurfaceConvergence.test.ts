@@ -141,7 +141,8 @@ describe("Add Charge asks only what it needs", () => {
     it("the posting prose is gone, and the review case still speaks", () => {
         expect(src).not.toContain("Posts on confirm");
         expect(src, "a review requirement changes what Confirm does, so it is still said")
-            .toContain("Creates a draft — not yet owed");
+            /* W7-F015: said as a compact state rather than a sentence. */
+            .toContain("Saved for review before posting");
     });
 
     it("the posting SEMANTICS are untouched", () => {

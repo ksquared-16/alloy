@@ -333,6 +333,15 @@ export type FinancialsPastDue = {
     agingDays: number;
 };
 
+/**
+ * W7-F013: posted money whose due date is still ahead — collectible (it may be paid early), not due.
+ * The mirror of past due: same rows, same residual, the other side of today.
+ */
+export type FinancialsNotYetDue = {
+    amountCents: number;
+    nextDueDate: string;
+};
+
 export type FinancialsPeriodGroup = {
     period: BillingPeriod;
     rows: FinancialsLedgerRow[];
@@ -397,6 +406,8 @@ export type FinancialsCardVM = {
     /** The same reconciliation, narrowed per child — keyed by `customer_members.id`. */
     reconciliationBySubject: Record<string, FinancialsReconciliation>;
     pastDue: FinancialsPastDue | null;
+    /** W7-F013: posted, collectible, and not due until a later payment event. */
+    notYetDue: FinancialsNotYetDue | null;
     pastDueBySubject: Record<string, FinancialsPastDue | null>;
     ledgerPeriods: FinancialsPeriodGroup[];
     /**
@@ -642,6 +653,7 @@ function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardV
         reconciliation: emptyReconciliation(),
         reconciliationBySubject: {},
         pastDue: null,
+        notYetDue: null,
         pastDueBySubject: {},
         ledgerPeriods: [],
         payments: [],
@@ -2143,6 +2155,7 @@ async function buildFinancialsCardVMInner(
 
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
     vm.pastDue = pastDueFor(rows, today, appliedByChargeId);
+    vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId);
     vm.pastDueBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,
@@ -2428,6 +2441,39 @@ export function reconcileRows(
  * the first time an application was reversed the two would disagree. The applications are the
  * record; how much is outstanding is read from them.
  */
+/**
+ * W7-F013 — WHAT IS OWED BUT NOT YET DUE.
+ *
+ * A charge added after its period's payment date is due at the NEXT payment event; until then it
+ * is collectible and may be paid early, but it is not due and must not be presented as due. Same
+ * owed rows and the same residual as `pastDueFor`, on the other side of today.
+ */
+export function notYetDueFor(
+    rows: readonly AccountChargeLedgerRow[],
+    today: string,
+    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+): FinancialsNotYetDue | null {
+    const outstanding = (r: AccountChargeLedgerRow): number =>
+        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
+    const ahead = rows.filter(
+        (r) =>
+            OWED_STATUSES.has(r.status)
+            && r.status !== "paid"
+            && r.lifecycleStatus !== "reversed"
+            && r.correctionKind !== "reversal"
+            && r.dueDate != null
+            && r.dueDate > today
+            && r.amountCents > 0
+            && outstanding(r) > 0,
+    );
+    if (ahead.length === 0) return null;
+    const next = ahead.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
+    return {
+        amountCents: ahead.reduce((sum, r) => sum + outstanding(r), 0),
+        nextDueDate: next.dueDate as string,
+    };
+}
+
 export function pastDueFor(
     rows: readonly AccountChargeLedgerRow[],
     today: string,

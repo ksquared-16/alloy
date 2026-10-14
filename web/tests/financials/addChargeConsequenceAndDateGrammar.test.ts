@@ -178,8 +178,11 @@ describe("the posting language follows what the writer actually does", () => {
     it("the card says which of the two consequences confirming causes", () => {
         const cmd = code(ADD_CHARGE);
         expect(cmd, "the branch is the template's own review flag").toMatch(/t\.reviewRequired/);
-        expect(cmd).toMatch(/data-addcharge-posting="draft"/);
-        expect(cmd).toMatch(/data-addcharge-posting="posts"/);
+        // W7-F015: one compact state line carries all three states.
+        expect(cmd).toMatch(/data-addcharge-posting=\{t\.reviewRequired \? "draft" : specimen\.awaitsPeriodUntil \? "awaits_period" : "posts"\}/);
+        expect(cmd).toContain("Saved for review before posting");
+        expect(cmd).toContain("Saved as a draft · Posts automatically");
+        expect(cmd).toContain("Posts when saved");
         expect(cmd, "the posted figure is the projection, never previewBefore again").toMatch(
             /data-addcharge-posted-balance="true"[\s\S]{0,200}specimen\.previewPostedBalance/,
         );

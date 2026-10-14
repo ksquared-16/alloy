@@ -3618,8 +3618,13 @@
 }
 .alloy-os-addcharge__dates {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    /*
+     * W7-F015: the Service date cell holds a date CONTROL whose calendar glyph reserves 34px, so an
+     * equal quarter (~131px in the command modal) clipped "Oct 12, 2026". It gets a floor wide
+     * enough for the longest formatted date; the three read-only cells share the rest.
+     */
+    grid-template-columns: minmax(160px, 1.25fr) repeat(3, minmax(0, 1fr));
+    gap: 8px;
     padding: 4px 0 6px;
     border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
 }
@@ -3628,6 +3633,9 @@
     flex-direction: column;
     gap: 3px;
     min-width: 0;
+}
+.alloy-os-addcharge__datecell .alloy-date-input {
+    width: 100%;
 }
 .alloy-os-addcharge__datecell[data-readonly="true"] .alloy-os-addcharge__field-value {
     color: var(--alloy-os-text-secondary, #4b5563);
