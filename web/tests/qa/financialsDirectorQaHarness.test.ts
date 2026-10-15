@@ -211,16 +211,23 @@ describe("scenario readiness", () => {
         expect(fn, "and no fixture id is pinned there either").not.toMatch(/fd000000-/);
     });
 
-    it("reads the sibling precondition as an absence of billing, not an absence of the child", () => {
-        // Rio is on the household and is deliberately NOT a billable subject.
-        expect(checkAccountState("has_second_child_without_agreement", emptySubject(), noExtras)).toBe(true);
-        const bothBillable = emptySubject({
+    it("W7-F012: multi-child attribution needs two BILLABLE children, read from the account", () => {
+        // W7 QA · Multi-Site Family: Mika at North Campus, Max at South Campus, both enrolled.
+        const one = emptySubject({
+            resolved: true,
+            billableChildren: [{ customerMemberId: QA_SUBJECT.childWithAgreement.id, displayName: "Milo Monthly" }],
+        });
+        const two = emptySubject({
+            resolved: true,
             billableChildren: [
-                { customerMemberId: QA_SUBJECT.childWithAgreement.id, displayName: "Ana Alvarez" },
-                { customerMemberId: QA_SUBJECT.siblingWithoutAgreement.id, displayName: "Rio Alvarez" },
+                { customerMemberId: "fd000000-0000-4000-8000-0000007d0004", displayName: "Mika Multisite" },
+                { customerMemberId: "fd000000-0000-4000-8000-0000007d0005", displayName: "Max Multisite" },
             ],
         });
-        expect(checkAccountState("has_second_child_without_agreement", bothBillable, noExtras)).toBe(false);
+        expect(checkAccountState("has_two_billable_children", one, noExtras)).toBe(false);
+        expect(checkAccountState("has_two_billable_children", two, noExtras)).toBe(true);
+        // The retired Alvarez check never reads true for a family with two billable children.
+        expect(checkAccountState("has_second_child_without_agreement", two, noExtras)).toBe(false);
     });
 
     it("offers no walkthrough for a capability this environment cannot reach", () => {
@@ -245,8 +252,19 @@ describe("scenario readiness", () => {
          * Asserted only so a scenario cannot be QUIETLY dropped: losing one is a capability nobody
          * is asked to accept. Raising it when scenarios are deliberately added is correct
          * maintenance; lowering it needs a reason written beside it.
+         *
+         * 61 after W7 slice 1: `future_period_charge` and `awaiting_posting_says_why`, both added
+         * because the Director's F001 decision made a charge's billing period part of its lifecycle.
+         * Neither replaces anything — `post_charge` stayed, rewritten so it no longer asks for an
+         * ordinary draft to be manufactured and posted by hand.
+         *
+         * 71 after W7 billing configuration convergence (catalog 2026-10-08.1): ten scenarios added
+         * at the front — configuration read resolved, override inheritance, a scheduled change,
+         * billing-period membership, invoice and due derivation, a late current-period charge,
+         * preview/commit parity, generated-billing parity, accounting independence. None replaces
+         * anything.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(59);
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(71);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

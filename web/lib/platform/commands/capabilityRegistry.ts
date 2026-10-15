@@ -92,6 +92,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "charge.add",
     "charge.post",
     "charge.reverse",
+    "charge.cancel_draft",
     "payment.record",
     "payment.refund",
     "payment.collect_card",
@@ -872,6 +873,24 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "The lawful way posted money changes. Writes a NEW corrective row referencing the original "
             + "through source_charge_id; the original stays exactly as posted. Immutability without a "
             + "correction path is a dead end, not a guarantee.",
+    }),
+    def({
+        capabilityKey: "charge.cancel_draft",
+        canonicalCommandKey: "charge.cancel_draft",
+        operatorLabel: "Cancel draft",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "charge.cancel_draft",
+        implementationStatus: "production",
+        reason:
+            "W7-F016. A draft is not financial history yet, so it may be withdrawn — retained as void "
+            + "with who, when and why, never deleted. A posted charge is refused here and changes only "
+            + "through charge.reverse or a correction.",
     }),
     // Money RECEIVED, and given back. The counterpart to charge.post: posting says what is owed,
     // this says what has been paid, and the balance is the difference. Both write to the substrate

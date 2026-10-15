@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-11m-w7-f010-deployed.spec.ts:46:5 › W7-F010 — deployed: a signed-in session cannot write money tables
+[1A[2K[chromium] › playwright/tests/zz-11m-w7-f010-deployed.spec.ts:46:5 › W7-F010 — deployed: a signed-in session cannot write money tables
+{"build":"78680a40f2a291d88da4e8ad50db88286be0a6a8","probes":[["insert charge (posted)",403,"42501"],["update charge draft->posted",403,"42501"],["update charge amount",403,"42501"],["insert payment",403,"42501"],["update resolved_obligations",403,"42501"],["rpc stamp_payment_posted_to_ledger_at",403,"42501"],["rpc post_ledger_transaction",403,"42501"]],"read":[200,null]}
+
+[1A[2K  1 passed (11.4s)

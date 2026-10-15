@@ -145,7 +145,14 @@ describe("declared choices survive into a publishable form", () => {
         // 5 choices: gender, account type, the annual fee, and the two Yes/No questions.
         expect(byType.select).toBe(5);
         expect(byType.signature).toBe(3);
-        expect(byType.text + byType.select + byType.signature).toBe(95);
+        /*
+         * 94, not 95. The 95th was `subject_line` — the page's own structural control, labelled with its
+         * own machine name, which the importer now leaves off the form (importMappingIntegrity). It is
+         * pinned by name so this count cannot quietly absorb the loss of a real question instead.
+         */
+        expect(byType.text + byType.select + byType.signature).toBe(94);
+        expect(draft.fields.some((f) => f.label === "subject_line")).toBe(false);
+        expect(draft.warnings.join(" ")).toContain("Left out of the form: subject_line");
     });
 });
 

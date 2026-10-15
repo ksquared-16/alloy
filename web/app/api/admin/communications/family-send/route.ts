@@ -10,6 +10,10 @@ import { resolveFamilyCommunicationWorkspace } from "@/lib/communications/v2/fam
 import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from "@/lib/communications/v2/familyWorkspace";
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
 import {
+    FAMILY_SEND_WORK_CONSEQUENCE_FIELD,
+    parseFamilySendWorkConsequence,
+} from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
+import {
     composerMarkupToEmailHtml,
     composerMarkupToPlainText,
 } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
@@ -118,6 +122,8 @@ export async function POST(req: Request) {
     const replyToThreadId = UUID_RE.test(replyToThreadIdRaw) ? replyToThreadIdRaw : null;
     const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
     const opportunityId = UUID_RE.test(opportunityIdRaw) ? opportunityIdRaw : null;
+    // Declared by the caller, never inferred from `opportunity_id` — see familySendWorkConsequence.
+    const workConsequence = parseFamilySendWorkConsequence(body[FAMILY_SEND_WORK_CONSEQUENCE_FIELD]);
 
     // ---- SUBJECT, PART 1: the refusal that needs no database ---------------
     // A NEW email with no subject is refused on the request alone. Deciding it
@@ -248,9 +254,13 @@ export async function POST(req: Request) {
             | undefined;
 
         // After a confirmed send with at least one accepted recipient, satisfy open Contact Family
-        // work on the opportunity via the existing communications→work seam (no new framework).
+        // work on the opportunity via the existing communications→work seam (no new framework) —
+        // ONLY when the caller declared it is performing that work. A generic message composed
+        // against the same opportunity (Manage → Send Message, Activity) is a send, not a
+        // completion, even while a Contact Family item happens to be open.
         if (
             confirm &&
+            workConsequence === "contact_family_work" &&
             opportunityId &&
             ctx.userId &&
             result.mode === "sent" &&
@@ -304,6 +314,7 @@ export async function POST(req: Request) {
                 confirm,
                 consent_enforced: enforceConsent,
                 opportunity_id: opportunityId,
+                work_consequence: workConsequence,
                 reply_to_thread_id: replyToThreadId,
             },
         });

@@ -735,12 +735,25 @@ export async function readEnrollmentInstancesForLead(
     if (!opportunityId) return { ok: false, error: "opportunity id required" };
 
     try {
+        /*
+         * BOTH TRACK SHAPES. A journey now anchors to the child's Enrollment Participation
+         * (`context_type = enrollment_participation`), so the Opportunity id is not in its
+         * `context_id` at all — the certified Add Child → Waitlist shape. Matching the Opportunity
+         * id alone returned FEWER rows and no error, so this guard read a family with waitlisted
+         * children as having none and allowed the close it exists to refuse. The journey owner's
+         * widening is the one answer to "which journeys belong to this Opportunity" (imported at
+         * call time: that module already imports this one's constants).
+         */
+        const { enrollmentContextIdsForOpportunities } = await import(
+            "@/lib/enrollment/completion/resolveEnrollmentJourneyContext"
+        );
+        const { contextIds } = await enrollmentContextIdsForOpportunities(supabase, args.orgId, [opportunityId]);
         const { data, error } = await supabase
             .from(PROCESS_INSTANCES_TABLE)
             .select("*")
             .eq("org_id", args.orgId)
             .eq("process_key", ENROLLMENT_PROCESS_KEY)
-            .eq("context_id", opportunityId);
+            .in("context_id", contextIds);
         if (error) return { ok: false, error: error.message };
         // `null` data with no error is not "zero rows" — it is a response this code cannot vouch
         // for, and the caller is about to make an irreversible decision with it.

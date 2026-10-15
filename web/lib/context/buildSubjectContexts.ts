@@ -69,6 +69,14 @@ export type BuildProcessContextsInput = {
     familyMembershipRows: ReadonlyMap<string, Record<string, unknown>>;
     /** Location resolved so far; a participation may supply the first one. */
     locationId: string | null;
+    /**
+     * E2E-17/E2E-18 — a participation's `context_id` → its Opportunity. A journey anchored to its
+     * Enrollment Participation carries the PARTICIPATION id in `context_id`, while every map above is
+     * keyed by Opportunity id, so reading them by `context_id` found nothing: the membership lost its
+     * Work Unit (no `Go to`, no Search destination) and named the participation as its host. Absent
+     * entries map to themselves, so journeys anchored to the Opportunity are unchanged.
+     */
+    opportunityIdByContextId?: ReadonlyMap<string, string>;
 };
 
 export type BuildProcessContextsResult = {
@@ -99,6 +107,8 @@ export function buildSubjectProcessContexts(
             seenProcessKeys.add(row.process_key);
 
             if (!locationId && row.location_id) locationId = row.location_id;
+            const contextId = (row.context_id ?? "").trim() || null;
+            const hostOpportunityId = contextId ? input.opportunityIdByContextId?.get(contextId) ?? contextId : null;
 
             const memberships: SubjectOperationalMembershipRef[] | null = configured
                 ? resolveOperationalMemberships({
@@ -107,23 +117,23 @@ export function buildSubjectProcessContexts(
                           grain: input.grain,
                           stageKey: row.stage_key,
                           row:
-                              input.grain === "child" || !row.context_id
+                              input.grain === "child" || !hostOpportunityId
                                   ? null
-                                  : input.familyMembershipRows.get(row.context_id) ?? null,
+                                  : input.familyMembershipRows.get(hostOpportunityId) ?? null,
                           // THE ROW IDENTITY, at the grain the lens actually rows at. A child-grain
                           // lens selects PARTICIPATIONS, so the participation this membership was
                           // evaluated from IS the member — not the durable child (one child, two
                           // leads, two rows) and not the case.
-                          memberRowId: input.grain === "child" ? row.id : row.context_id,
+                          memberRowId: input.grain === "child" ? row.id : hostOpportunityId,
                       },
                   }).map((m) => ({
                       work_view_id: m.workViewId,
                       label: m.workViewLabel,
                       row_grain: m.rowGrain,
-                      host_work_unit_key: row.context_id
-                          ? input.hostWorkUnitKeys.get(row.context_id) ?? null
+                      host_work_unit_key: hostOpportunityId
+                          ? input.hostWorkUnitKeys.get(hostOpportunityId) ?? null
                           : null,
-                      host_entity_id: row.context_id ?? null,
+                      host_entity_id: hostOpportunityId,
                       operational_member_id: m.operationalMemberId,
                   }))
                 : null;
@@ -134,19 +144,21 @@ export function buildSubjectProcessContexts(
                 label: configured?.label ?? row.process_key,
                 detail: resolveProcessDetail(configured, row.stage_key, row.state),
                 // The process runs IN a context; that context entity owns the authoritative surface.
-                destination_entity_type: row.context_type,
-                destination_entity_id: row.context_id,
+                // A participation-anchored journey is hosted by the Opportunity it maps back to.
+                destination_entity_type:
+                    hostOpportunityId && hostOpportunityId !== contextId ? "opportunity" : row.context_type,
+                destination_entity_id: hostOpportunityId,
                 // Where that context is WORKED. Read from the host record's own queue membership —
                 // never from the process key, which names a different namespace.
-                destination_work_unit_key: row.context_id
-                    ? input.hostWorkUnitKeys.get(row.context_id) ?? null
+                destination_work_unit_key: hostOpportunityId
+                    ? input.hostWorkUnitKeys.get(hostOpportunityId) ?? null
                     : null,
                 // …and where THIS PARTICIPANT is worked. A sibling in the same case can sit in a
                 // different stage, so the family answer above cannot be right for both.
                 destination_work_view_id:
-                    row.context_id && row.stage_key
+                    hostOpportunityId && row.stage_key
                         ? input.stageWorkViewTargets.get(
-                              stageWorkViewCacheKey(row.context_id, row.stage_key),
+                              stageWorkViewCacheKey(hostOpportunityId, row.stage_key),
                           ) ?? null
                         : null,
                 // The ADDRESSING axes, carried raw. `detail` above is a renameable sentence; a

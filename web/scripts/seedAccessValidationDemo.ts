@@ -518,11 +518,39 @@ async function ensureSchedule(
     return (created as { id: string }).id;
 }
 
+
+/**
+ * W7-F002: a seeded staff login is a named human before it holds a role that can move money —
+ * Person → explicit link → role. The person is a keyed seed fixture (external_source/external_id),
+ * named by the call site, never matched from an email. An existing active link is left as it is.
+ */
+async function ensureSeedPersonLink(supabase: ReturnType<typeof createAdminClient>, orgId: string, userId: string, personLabel: string): Promise<void> {
+    const { data: linked } = await supabase.from("user_person_links").select("person_id").eq("org_id", orgId).eq("user_id", userId).eq("status", "active").maybeSingle();
+    if (linked) return;
+    const { data: existing } = await supabase.from("persons").select("id").eq("org_id", orgId)
+        .eq("external_source", "alloy_seed_fixture").eq("external_id", userId).maybeSingle();
+    let personId = (existing as { id: string } | null)?.id ?? null;
+    if (!personId) {
+        const [first, ...rest] = personLabel.split(" ");
+        const { data: created, error } = await supabase.from("persons").insert({
+            org_id: orgId, first_name: first, last_name: rest.join(" ") || "Staff", full_name: personLabel,
+            external_source: "alloy_seed_fixture", external_id: userId,
+        } as never).select("id").single();
+        if (error) throw new Error(`seed person ${personLabel}: ${error.message}`);
+        personId = (created as { id: string }).id;
+    }
+    const { error: linkErr } = await supabase.from("user_person_links").insert({
+        org_id: orgId, user_id: userId, person_id: personId, status: "active", note: `seed fixture: ${personLabel}`,
+    } as never);
+    if (linkErr) throw new Error(`seed person link ${personLabel}: ${linkErr.message}`);
+}
+
 async function ensureUserRoleIfAbsent(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
     userId: string,
-    role: string
+    role: string,
+    personLabel: string
 ): Promise<{ inserted: boolean }> {
     const { data: row } = await supabase
         .from("user_roles")
@@ -533,6 +561,7 @@ async function ensureUserRoleIfAbsent(
         .maybeSingle();
     if (row) return { inserted: false };
 
+    await ensureSeedPersonLink(supabase, orgId, userId, personLabel);
     const { error } = await supabase.from("user_roles").insert({ org_id: orgId, user_id: userId, role } as never);
     if (error) throw new Error(`user_roles insert ${userId} role=${role}: ${error.message}`);
     return { inserted: true };
@@ -755,13 +784,13 @@ async function main() {
         const directorId = process.env.ACCESS_VALIDATION_DIRECTOR_USER_ID?.trim();
 
         if (corporateId) {
-            await ensureUserRoleIfAbsent(supabase, orgId, corporateId, "admin");
+            await ensureUserRoleIfAbsent(supabase, orgId, corporateId, "admin", "Corporate Admin");
             await applyUserAccessProfile(supabase, orgId, corporateId, "all", "all", [], []);
             console.log("\nCorporate user: role admin (admin shell); profile all/all for", corporateId);
         }
         if (regionalId) {
-            const rOps = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "ops");
-            const rLead = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead");
+            const rOps = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "ops", "Regional Lead");
+            const rLead = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead", "Regional Lead");
             await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthCampusId, siteSouthCampusId]);
             console.log(
                 "Regional user: roles ops + regional_lead (admin shell + persona); scope = all departments, both seeded campuses. inserted:",
@@ -770,8 +799,8 @@ async function main() {
             );
         }
         if (directorId) {
-            const dOps = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "ops");
-            const dDir = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director");
+            const dOps = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "ops", "School Director");
+            const dDir = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director", "School Director");
             await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptEnrollmentId], [siteNorthCampusId]);
             console.log(
                 "Director user: roles ops + school_director; scope = Enrollment dept + North Campus only. inserted:",

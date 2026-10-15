@@ -80,10 +80,17 @@ describe("THE GATE — a child-grain arrangement is operator-authorable (§7C)",
 });
 
 describe("THE GATE — configurable is not capability (§7F)", () => {
-    /* Every authorable type was traced to a real resolveFinancialPolicy consumer. */
+    /*
+     * Every authorable type was traced to a real resolveFinancialPolicy consumer. W7 billing
+     * configuration convergence added the two the date chain consumes: `billing_calendar` (the
+     * billing-period binder) and `invoice_timing` (`resolveChargeDateChain`).
+     */
     it("offers only the policy types something actually consumes", () => {
         expect([...OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES].sort()).toEqual(
-            ["billing_cadence", "due_date", "grace_period", "posting_review", "proration", "vacation_credit"].sort(),
+            [
+                "billing_cadence", "billing_calendar", "due_date", "grace_period", "invoice_timing",
+                "posting_review", "proration", "vacation_credit",
+            ].sort(),
         );
     });
 

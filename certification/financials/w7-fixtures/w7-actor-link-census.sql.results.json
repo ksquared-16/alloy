@@ -1,0 +1,159 @@
+{
+  "trusted_host_action_id": "tha_e060f9d96c85e1",
+  "query_hash": "908a8976762d6c3a312fa3ce34d879649b43aba0a329c9026ad07a75ffdf823d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-12T19:44:17.170Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e060f9d96c85e1",
+    "query_hash": "908a8976762d6c3a312fa3ce34d879649b43aba0a329c9026ad07a75ffdf823d",
+    "authorization_id": "grnt_3bfd4a777ac64386",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-12T19:44:24.440Z",
+    "question_ids": [
+      "actor_link"
+    ],
+    "questions": {
+      "actor_link": {
+        "question_id": "actor_link",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 73
+          },
+          {
+            "label": "4ed75eb0-834d-490a-a2ea-c55505452bb4",
+            "managed_qa_identity": false,
+            "roles": [
+              {
+                "role": "regional_lead"
+              },
+              {
+                "role": "ops"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "5843386c-9fc1-4e17-9ed7-903764e6dd8a",
+            "managed_qa_identity": false,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "600e1703-1226-46f4-9a8f-8a038459d736",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "87945998-0246-4e6e-804a-8dcbce737875",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "94950d52-1306-4cc1-a171-9d47d42aba45",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 22
+          },
+          {
+            "label": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 26
+          },
+          {
+            "label": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "managed_qa_identity": false,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 2
+          },
+          {
+            "label": "ef27a325-56ba-458e-b419-7e63e112c989",
+            "managed_qa_identity": false,
+            "roles": [
+              {
+                "role": "school_director"
+              },
+              {
+                "role": "ops"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "f3a3ef57-43f8-40a9-b72f-20c85ad44929",
+            "managed_qa_identity": false,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          },
+          {
+            "label": "fe7b8a7c-fe36-46c1-bd90-9e9b21fc7edb",
+            "managed_qa_identity": true,
+            "roles": [
+              {
+                "role": "admin"
+              }
+            ],
+            "active_links": null,
+            "financial_rows_created": 0
+          }
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

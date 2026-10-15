@@ -52,6 +52,19 @@ import {
     type ChargeOrigin,
 } from "@/lib/financials/workspace/chargeOrigin";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
+import {
+    awaitingPostingReason,
+    type AwaitingPostingReason,
+} from "@/lib/financials/posting/awaitingPostingReason";
+import {
+    financialActorIdentityGap,
+    resolveFinancialActorIdentity,
+    type FinancialActorIdentity,
+} from "@/lib/financials/identity/financialActorIdentity";
+import {
+    directionFromSignedCents,
+    type AdjustmentDirection,
+} from "@/lib/financials/corrections/correctionIntent";
 /** One payment that satisfied part of this charge, as the operator needs to read it. */
 export type ChargeDetailApplication = {
     paymentId: string;
@@ -87,6 +100,9 @@ export type ChargeDetail = {
     serviceDate: string | null;
     /** When the obligation is issued — `billable_on`. */
     invoiceDate: string | null;
+    amountCents: number;
+    /** W7-F017: the stored invoice-timing provenance; `source` "template" = a charge-type override. */
+    invoiceRule: { source: string; strategy: string; offsetDays: number } | null;
     /** When payment is expected. Null where the organisation has configured no terms. */
     dueDate: string | null;
     postedAt: string | null;
@@ -108,6 +124,23 @@ export type ChargeDetail = {
     updatedAt: string | null;
     postedBy: string | null;
     postedByName: string | null;
+    /**
+     * WHETHER THE AUDIT TRAIL CAN NAME WHO CREATED THIS, and if not, why.
+     *
+     * Separate from `createdByName` on purpose. A name may be present from the weaker source (the
+     * auth account's own display name) while the identity requirement is unmet, and a financial
+     * surface must be able to say both things at once.
+     */
+    createdByIdentityStatus: FinancialActorIdentity["status"];
+    /** The unmet requirement in one sentence, naming where it is closed. Null when there is none. */
+    createdByIdentityGap: string | null;
+    /**
+     * WHY this charge is still a draft, when it is one (W7-F001).
+     *
+     * Null for anything that is not a draft. The same classifier the work queue uses, so a row and
+     * the panel it opens cannot describe one charge differently.
+     */
+    awaiting: AwaitingPostingReason | null;
     correctionOfChargeId: string | null;
     chargeTemplateId: string | null;
     origin: ChargeOrigin;
@@ -152,8 +185,9 @@ export type ChargeDetail = {
      * billing period because that is the customer-facing month, and a second permanent period
      * column would cost scan density to answer a question asked occasionally.
      *
-     *   billingPeriod     DERIVED from the charge's own dates — `billable_on`, then `occurs_on`,
-     *                     `service_date`, `created_at`. No table and no configuration, by design.
+     *   billingPeriod     the charge's BOUND commercial period (`billing_period_id`, bound from the
+     *                     service date). A legacy charge with no binding is placed by the
+     *                     historical derivation (`billable_on`, then `occurs_on`, …).
      *
      *   accountingPeriod  CONFIGURED, and decided by the database when the journal entry was
      *                     written: `attribute_financial_journal_entry` resolves it at INSERT
@@ -188,6 +222,56 @@ export type ChargeDetail = {
      * arrangement that there isn't one.
      */
     accountArrangement: AccountArrangement | null;
+
+    /**
+     * ── WHEN THIS CHARGE IS SOMEBODY'S CORRECTION ────────────────────────────────────────────
+     *
+     * Null for an ordinary charge, which is almost all of them. Present when this charge IS the
+     * contra charge of a manual adjustment or correction, and then it answers §15's questions from
+     * the record rather than from inference:
+     *
+     *   what changed, and which way   `direction` — stated, not read off a sign
+     *   how much                      the charge's own amount, above
+     *   effective date                the charge's service date, above
+     *   commercial period             `billingPeriodLabel`, above
+     *   the source fact               `sourceChargeId` and its own historical period
+     *   who and when                  `createdByName` / `createdAt`, above
+     *   why                           `reason` — the durable one, see below
+     *
+     * ── THE REASON IS THE EXISTING CANONICAL FIELD ───────────────────────────────────────────
+     *
+     * §16 asks whether a durable reason exists before anything invents one. It does, in two places
+     * that agree because one writer populates both: `financial_reduction_applications.reason` is
+     * NOT NULL for a manual reduction — the table's own CHECK refuses one without it — and
+     * `applyManualReduction` also stores it in the contra charge's metadata. The application row is
+     * read here because it is the constrained one; no parallel notes store is created.
+     */
+    adjustment: ChargeDetailAdjustment | null;
+};
+
+/** The provenance of one manual adjustment, as the operator needs to read it. */
+export type ChargeDetailAdjustment = {
+    applicationId: string;
+    /** `reduce` or `increase`. The sign is never the operator's to interpret. */
+    direction: AdjustmentDirection;
+    /** Always positive — the magnitude a person reads. */
+    magnitudeCents: number;
+    /** Why the account changed. Durable, constrained NOT NULL for a manual reduction. */
+    reason: string | null;
+    /** Any further human note. Separate from the reason, and ordinarily absent. */
+    note: string | null;
+    /** The historical fact this corrects, when it corrects one. Account-level ones name none. */
+    sourceChargeId: string | null;
+    sourceDescription: string | null;
+    sourceServiceDate: string | null;
+    /** The source's OWN period label, whichever generation it belongs to. */
+    sourcePeriodLabel: string | null;
+    /** `closed` where the source's period is finalized. Null for a legacy source — it has none. */
+    sourcePeriodStatus: string | null;
+    /** True when this adjustment is itself the reversal of another. */
+    reversesApplicationId: string | null;
+    /** True when this adjustment has been reversed by a later one. */
+    reversedByApplicationId: string | null;
 };
 
 function t(v: unknown): string {
@@ -216,7 +300,9 @@ export async function resolveChargeDetail(
             /* PROVENANCE. Read because Details must answer "where did this come from" from stored
                evidence alone; the census that bounds what may be SAID from them is recorded in
                `chargeOrigin`. */
-            + "created_by, updated_at, updated_by, posted_by, job_id, source_charge_id",
+            + "created_by, updated_at, updated_by, posted_by, job_id, source_charge_id, "
+            /* The BOUND commercial period — the answer, when the charge carries one (W7). */
+            + "billing_period_id",
         )
         .eq("org_id", args.orgId)
         .eq("id", chargeId)
@@ -248,6 +334,7 @@ export async function resolveChargeDetail(
         updated_at: string | null;
         updated_by: string | null;
         posted_by: string | null;
+        billing_period_id?: string | null;
         job_id: string | null;
         source_charge_id: string | null;
     };
@@ -330,7 +417,26 @@ export async function resolveChargeDetail(
      * Each is independently tolerant: a charge whose journal entry or GL mapping cannot be read is
      * still a charge an operator must be able to open.
      */
-    const billing = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
+    /*
+     * ── THE BOUND PERIOD IS THE ANSWER (W7) ──────────────────────────────────────────────────
+     *
+     * A charge on the childcare spine carries `billing_period_id`, bound from its SERVICE date.
+     * Re-deriving the period here from `billable_on` gave a second answer that followed invoice
+     * timing: a Nov 5 charge invoiced Oct 25 would read "October" on the detail while it is a
+     * November obligation everywhere that matters. The bound row is read; only a legacy charge with
+     * no binding is placed by the historical derivation.
+     */
+    let billing: { key: string | null } = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
+    if (t(charge.billing_period_id)) {
+        const { data: bound } = await supabase
+            .from("financial_billing_periods")
+            .select("period_key")
+            .eq("org_id", args.orgId)
+            .eq("id", t(charge.billing_period_id))
+            .maybeSingle();
+        const key = t((bound as { period_key?: unknown } | null)?.period_key);
+        if (key) billing = { key };
+    }
 
     /* Configuration owns the word an operator reads. See the note on `label` below. */
     let templateLabel = "";
@@ -508,20 +614,169 @@ export async function resolveChargeDetail(
      * At most two ids, looked up once each, on a surface that is already one charge.
      */
     const actorNames = new Map<string, string>();
+    /*
+     * ── AND WHETHER THE LEDGER IS ENTITLED TO A NAME AT ALL (W7-F002) ─────────────────────────
+     *
+     * The name and the REQUIREMENT are two different answers and the panel needs both. An operator
+     * whose auth account happens to carry a `full_name` renders with a name, and the tenant still
+     * has not met the requirement — the attribution rests on whatever the account was created with
+     * rather than on a recorded decision about who this login is. Reporting only the name would
+     * close the gap on screen while leaving it open in the data, which is the shape of defect that
+     * produced F002 in the first place.
+     */
+    const actorIdentities = new Map<string, FinancialActorIdentity>();
     for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
-        try {
-            const { data } = await supabase.auth.admin.getUserById(actorId);
-            const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
-            const name = operatorIdentity({
-                display_name:
-                    typeof meta.full_name === "string" ? meta.full_name
-                    : typeof meta.name === "string" ? meta.name
-                    : null,
-                email: data?.user?.email ?? null,
-            }).name;
-            if (name) actorNames.set(actorId, name);
-        } catch {
-            /* An unreadable account is an unknown name, which is already the default. */
+        /*
+         * ── THE PERSON THIS OPERATOR IS, BEFORE THE ACCOUNT THEY SIGN IN WITH ─────────────────
+         *
+         * `resolveFinancialActorIdentity` is the one statement of the requirement: the canonical
+         * bridge `user_person_links` → `persons` → a human name, with no email anywhere in it. This
+         * surface used to read the auth account's `user_metadata` and nothing else, so an operator
+         * whose account carried no `full_name` rendered as "Created by a person whose name is not
+         * on file" on a FINANCIAL AUDIT LINE while their actual name sat one join away.
+         */
+        const identity = await resolveFinancialActorIdentity(supabase, { orgId: args.orgId, actorUserId: actorId });
+        actorIdentities.set(actorId, identity);
+        let name: string | null = identity.name;
+
+        /*
+         * The account's own display name, for DISPLAY only. A weak name beats no name on a screen,
+         * and it is what this read did before. It does NOT satisfy the requirement and deliberately
+         * does not touch `identity.requirementMet`, so the gap stays visible beside it. Still no
+         * email fallback: an unknown name stays unknown rather than printing an address in a
+         * person's place.
+         */
+        if (!name) {
+            try {
+                const { data } = await supabase.auth.admin.getUserById(actorId);
+                const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+                name = operatorIdentity({
+                    display_name:
+                        typeof meta.full_name === "string" ? meta.full_name
+                        : typeof meta.name === "string" ? meta.name
+                        : null,
+                    email: data?.user?.email ?? null,
+                }).name;
+            } catch {
+                /* An unreadable account is an unknown name, which is already the default. */
+            }
+        }
+
+        if (name) actorNames.set(actorId, name);
+    }
+
+    /*
+     * ── IS THIS CHARGE SOMEBODY'S CORRECTION? ────────────────────────────────────────────────
+     *
+     * One read, keyed on `charge_id`, because the contra charge IS the join: `reductionCore` writes
+     * the application rows pointing at the charge it created. A charge with no application is an
+     * ordinary charge and this stays null — which is the common case and costs one indexed miss.
+     *
+     * MANUAL ONLY. A policy reduction's contra charge is also a reduction, and it is not an
+     * operator's adjustment: its reason is the policy, it is not reversible through this surface,
+     * and presenting it with a "why did somebody decide this" block would invite an answer that
+     * does not exist. `reduction_kind` is what tells them apart.
+     *
+     * A FAILED READ IS NOT "NOT AN ADJUSTMENT". Swallowing the error would make a correction look
+     * like a plain charge — stripping the operator of the source fact, the reason and the reversal
+     * lineage with no sign that anything was missing — so it propagates like every other read here.
+     */
+    let adjustment: ChargeDetailAdjustment | null = null;
+    {
+        const { data: appRow, error: appError } = await supabase
+            .from("financial_reduction_applications")
+            .select(
+                "id, reduction_kind, amount_cents, reason, explanation, source_charge_id, reverses_id, reversed_by_id",
+            )
+            .eq("org_id", args.orgId)
+            .eq("charge_id", charge.id)
+            .eq("reduction_kind", "manual")
+            .maybeSingle();
+        if (appError) {
+            throw new Error(`charge detail: the adjustment record could not be read (${appError.message.trim()})`);
+        }
+        const app = appRow as unknown as {
+            id: string;
+            amount_cents: number;
+            reason: string | null;
+            explanation: string | null;
+            source_charge_id: string | null;
+            reverses_id: string | null;
+            reversed_by_id: string | null;
+        } | null;
+        if (app) {
+            /*
+             * THE SOURCE'S OWN PERIOD, read from the source rather than assumed from this charge.
+             * §12: a legacy source carries a key and no period row, so its label comes from the key
+             * and its status is genuinely null — there is no row to have a status. That absence is
+             * reported as absence; no fake historical canonical period is materialized to fill it.
+             */
+            let sourceDescription: string | null = null;
+            let sourceServiceDate: string | null = null;
+            let sourcePeriodLabel: string | null = null;
+            let sourcePeriodStatus: string | null = null;
+            if (app.source_charge_id) {
+                const { data: srcRow, error: srcError } = await supabase
+                    .from("charges")
+                    .select("description, service_date, billing_period_id, legacy_billing_period_key")
+                    .eq("org_id", args.orgId)
+                    .eq("id", app.source_charge_id)
+                    .maybeSingle();
+                if (srcError) {
+                    throw new Error(`charge detail: the corrected charge could not be read (${srcError.message.trim()})`);
+                }
+                const src = srcRow as unknown as {
+                    description: string | null;
+                    service_date: string | null;
+                    billing_period_id: string | null;
+                    legacy_billing_period_key: string | null;
+                } | null;
+                if (src) {
+                    sourceDescription = t(src.description) || null;
+                    sourceServiceDate = src.service_date;
+                    sourcePeriodLabel = src.legacy_billing_period_key
+                        ? billingPeriodLabel(src.legacy_billing_period_key)
+                        : null;
+                    if (src.billing_period_id) {
+                        const { data: periodRow, error: periodError } = await supabase
+                            .from("financial_billing_periods")
+                            .select("period_key, status")
+                            .eq("org_id", args.orgId)
+                            .eq("id", src.billing_period_id)
+                            .maybeSingle();
+                        if (periodError) {
+                            throw new Error(
+                                `charge detail: the corrected charge's period could not be read (${periodError.message.trim()})`,
+                            );
+                        }
+                        const period = periodRow as unknown as { period_key: string; status: string } | null;
+                        if (period) {
+                            sourcePeriodLabel = billingPeriodLabel(period.period_key);
+                            sourcePeriodStatus = period.status;
+                        }
+                    }
+                }
+            }
+            const metadata = (charge.metadata ?? {}) as Record<string, unknown>;
+            adjustment = {
+                applicationId: app.id,
+                direction: directionFromSignedCents(app.amount_cents),
+                magnitudeCents: Math.abs(app.amount_cents),
+                /*
+                 * The application row's reason is the constrained one and wins. The charge
+                 * metadata copy is the fallback for a row written before the column was populated,
+                 * not a second authority.
+                 */
+                reason: t(app.reason) || t(metadata.reason) || null,
+                note: t(app.explanation) || t(metadata.note) || null,
+                sourceChargeId: app.source_charge_id,
+                sourceDescription,
+                sourceServiceDate,
+                sourcePeriodLabel,
+                sourcePeriodStatus,
+                reversesApplicationId: app.reverses_id,
+                reversedByApplicationId: app.reversed_by_id,
+            };
         }
     }
 
@@ -558,6 +813,13 @@ export async function resolveChargeDetail(
         createdAt: charge.created_at ?? null,
         createdBy: charge.created_by ?? null,
         createdByName: actorNames.get(charge.created_by ?? "") ?? null,
+        awaiting: charge.status === "draft" ? awaitingPostingReason(charge.metadata) : null,
+        createdByIdentityStatus:
+            actorIdentities.get(charge.created_by ?? "")?.status ?? "no_actor",
+        createdByIdentityGap: financialActorIdentityGap(
+            actorIdentities.get(charge.created_by ?? "")
+            ?? { status: "no_actor", name: null, personId: null, requirementMet: false },
+        ),
         updatedAt: charge.updated_at ?? null,
         postedBy: charge.posted_by ?? null,
         postedByName: actorNames.get(charge.posted_by ?? "") ?? null,
@@ -579,6 +841,22 @@ export async function resolveChargeDetail(
          */
         invoiceDate: charge.billable_on,
         dueDate: charge.due_date,
+        /* W7-F016: what Edit pre-fills, read from the row — never re-derived on the card. */
+        amountCents: Number(charge.amount_cents ?? 0),
+        /*
+         * W7-F017: WHERE THE INVOICE DATE CAME FROM, from the provenance written with the charge.
+         * A charge type that overrides the organisation's invoice timing must say so on its own
+         * record rather than leave an operator to reverse-engineer it from the dates.
+         */
+        invoiceRule: (() => {
+            const cd = ((charge.metadata ?? {}) as Record<string, unknown>).charge_dates as Record<string, unknown> | undefined;
+            if (!cd) return null;
+            return {
+                source: String(cd.invoice_rule_source ?? ""),
+                strategy: String(cd.invoice_rule ?? ""),
+                offsetDays: Number(cd.invoice_offset_days ?? 0) || 0,
+            };
+        })(),
         billingPeriodKey: billing.key,
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,
@@ -603,6 +881,7 @@ export async function resolveChargeDetail(
             })),
         },
         accountArrangement,
+        adjustment,
         expectedFunding: responsibilityRead.expectedFunding.map((f) => ({
             label: f.label,
             sourceType: f.sourceType,

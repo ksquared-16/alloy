@@ -43,7 +43,7 @@ function pickWorking<T extends EffectiveDatedVersionRow>(lineage: T[], todayYmd:
 }
 
 function lineageKey(p: FinancialPolicyRow): string {
-    return [p.policy_type, p.scope_type, p.location_id ?? "", p.service_id ?? "", p.rate_plan_id ?? ""].join("|");
+    return [p.policy_type, p.scope_type, p.location_id ?? "", p.service_id ?? "", p.rate_plan_id ?? "", p.customer_id ?? ""].join("|");
 }
 
 export default function FinancialPoliciesConfigurationPanel({
@@ -53,6 +53,7 @@ export default function FinancialPoliciesConfigurationPanel({
     serviceOptions,
     ratePlanOptions,
     labelFor,
+    excludeTypes = [],
 }: {
     canMutate: boolean;
     todayYmd: string;
@@ -61,6 +62,8 @@ export default function FinancialPoliciesConfigurationPanel({
     ratePlanOptions: Option[];
     /** Resolve a scope-target id (location/service/rate plan) to a label. */
     labelFor: (id: string) => string | undefined;
+    /** Types configured on a dedicated surface (Billing & payment timing), left out of this list. */
+    excludeTypes?: readonly string[];
 }) {
     const { policies, loading, error, busy, createPolicy, versionPolicy, retirePolicy, voidPolicy } = useFinancialPolicies();
     const [creating, setCreating] = useState(false);
@@ -68,17 +71,18 @@ export default function FinancialPoliciesConfigurationPanel({
     const lineages = useMemo(() => {
         const groups = new Map<string, FinancialPolicyRow[]>();
         for (const p of policies) {
+            if (excludeTypes.includes(p.policy_type)) continue;
             const key = lineageKey(p);
             const list = groups.get(key) ?? [];
             list.push(p);
             groups.set(key, list);
         }
         return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    }, [policies]);
+    }, [policies, excludeTypes]);
 
     function describeScope(p: FinancialPolicyRow): string {
         if (p.scope_type === "org") return "Org default";
-        const id = p.location_id ?? p.service_id ?? p.rate_plan_id ?? "";
+        const id = p.location_id ?? p.service_id ?? p.rate_plan_id ?? p.customer_id ?? "";
         return `${POLICY_SCOPE_LABEL[p.scope_type]}: ${labelFor(id) ?? "—"}`;
     }
 
@@ -100,7 +104,7 @@ export default function FinancialPoliciesConfigurationPanel({
             </p>
             <ul className="space-y-0.5">
                 {/* The resolved-today panel lists what an operator can actually act on. */}
-                {OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES.map((t) => {
+                {OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES.filter((t) => !excludeTypes.includes(t)).map((t) => {
                     const r = resolveFinancialPolicy(policies, t, {}, todayYmd);
                     return (
                         <li key={t} className="flex items-center justify-between gap-3 text-[13px]" data-testid={`financials-policies-resolved-${t}`}>
@@ -112,7 +116,7 @@ export default function FinancialPoliciesConfigurationPanel({
                                         <span className="text-alloy-forge/55">({r.sourceScopeLabel})</span>
                                     </>
                                 ) : (
-                                    <span className="text-amber-700">no policy — fallback</span>
+                                    <span className="text-amber-700">Not configured — the platform default applies</span>
                                 )}
                             </span>
                         </li>

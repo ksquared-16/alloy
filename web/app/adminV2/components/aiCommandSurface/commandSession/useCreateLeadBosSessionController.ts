@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
@@ -407,10 +407,21 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         });
     }, [ctx, session.draft, session.preview]);
 
-    const onExecute = useCallback(async () => {
-        if (!ctx || !session.preview || !session.confirmation?.confirmedByOperator || !effectiveSpec) {
+    /*
+     * E2E-01 — ONE CONFIRMATION. Review showed the plan; the operator then had to press Continue and
+     * then Confirm. Continue called nothing — it re-checked the draft fingerprint and recorded the
+     * confirmation, then the same review screen asked again. The review's primary button is now
+     * Confirm, and pressing it is that confirmation: the stale-draft check and the recorded
+     * confirmation still precede the one create_lead execute, exactly as before.
+     */
+    const executeInFlight = useRef(false);
+    const runExecute = useCallback(async (confirmedByOperator: boolean) => {
+        if (!ctx || !session.preview || !confirmedByOperator || !effectiveSpec) {
             return;
         }
+        // Double-press protection: the footer hides Confirm once the phase is `executing`, but a
+        // second press can land before that render.
+        if (executeInFlight.current) return;
         const currentFp = fingerprintBosCommandDraft(session.draft);
         if (currentFp !== session.preview.draftFingerprint) {
             ctx.dispatch({
@@ -423,15 +434,21 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             });
             return;
         }
+        executeInFlight.current = true;
         ctx.dispatch({ type: "BEGIN_EXECUTE" });
-        const result = await executeCreateLeadFromBosDraft(session.draft, {
-            departmentId: workspace.departmentId,
-            workUnitId: workspace.workUnitId,
-            surface: workspace.surface,
-            spec: effectiveSpec.actionIntakeSpec,
-            fieldOptions: effectiveSpec.fieldOptions,
-            configRequiredInputs: effectiveSpec.configRequiredInputs,
-        });
+        let result: Awaited<ReturnType<typeof executeCreateLeadFromBosDraft>>;
+        try {
+            result = await executeCreateLeadFromBosDraft(session.draft, {
+                departmentId: workspace.departmentId,
+                workUnitId: workspace.workUnitId,
+                surface: workspace.surface,
+                spec: effectiveSpec.actionIntakeSpec,
+                fieldOptions: effectiveSpec.fieldOptions,
+                configRequiredInputs: effectiveSpec.configRequiredInputs,
+            });
+        } finally {
+            executeInFlight.current = false;
+        }
         if (!result.ok) {
             ctx.dispatch({
                 type: "EXECUTE_FAILURE",
@@ -469,7 +486,24 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
         }
     }, [ctx, effectiveSpec, session, workspace]);
 
+    const onExecute = useCallback(
+        () => runExecute(Boolean(session.confirmation?.confirmedByOperator)),
+        [runExecute, session.confirmation?.confirmedByOperator],
+    );
+
+    /** Review's Confirm: record the operator's confirmation and run the command in one press. */
+    const onConfirmAndExecute = useCallback(async () => {
+        if (!ctx || !session.preview) return;
+        if (fingerprintBosCommandDraft(session.draft) !== session.preview.draftFingerprint) {
+            onConfirmPreview(); // dispatches the same stale_preview failure the Continue step did
+            return;
+        }
+        onConfirmPreview();
+        await runExecute(true);
+    }, [ctx, onConfirmPreview, runExecute, session.draft, session.preview]);
+
     return {
+        onConfirmAndExecute,
         pasteText,
         setPasteText,
         analyzing,

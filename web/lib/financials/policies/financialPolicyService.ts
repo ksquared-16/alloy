@@ -214,6 +214,13 @@ export async function createFinancialPolicyVersion(
             location_id: prior.location_id,
             service_id: prior.service_id,
             rate_plan_id: prior.rate_plan_id,
+            /*
+             * The ACCOUNT dimension. Omitted, a new version of a customer-scoped rule (an account's
+             * own billing calendar) inserted `scope_type: 'customer'` with no customer and failed
+             * `financial_policies_scope_shape` — an account-level rule could be created and never
+             * changed.
+             */
+            customer_id: prior.customer_id ?? null,
             policy_type: prior.policy_type,
             label: input.label !== undefined ? trimOrNull(input.label) : prior.label,
             description: input.description !== undefined ? trimOrNull(input.description) : prior.description,
@@ -257,8 +264,12 @@ export async function retireFinancialPolicy(
     if (rangeError) fail("validation_failed", rangeError.message);
     const actor = trimOrNull(input.actorUserId);
 
+    /*
+     * Retiring records the rule's last day and nothing else. It stays `is_active`: a retired rule
+     * decided every date in its window, and the resolver must keep answering for those dates. The
+     * end date alone takes it out of present and future resolution.
+     */
     const update: Record<string, unknown> = { effective_end: end, updated_by: actor };
-    if (compareIsoDates(end, input.todayYmd) <= 0) update.is_active = false;
 
     const { data, error } = await supabase
         .from(TABLE)
@@ -279,7 +290,8 @@ function sameLineage(a: FinancialPolicyRow, b: FinancialPolicyRow): boolean {
         a.scope_type === b.scope_type &&
         (a.location_id ?? null) === (b.location_id ?? null) &&
         (a.service_id ?? null) === (b.service_id ?? null) &&
-        (a.rate_plan_id ?? null) === (b.rate_plan_id ?? null)
+        (a.rate_plan_id ?? null) === (b.rate_plan_id ?? null) &&
+        (a.customer_id ?? null) === (b.customer_id ?? null)
     );
 }
 

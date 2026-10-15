@@ -61,8 +61,7 @@ function render(over: Partial<React.ComponentProps<typeof ProcessingImportedForm
             draft={draft}
             sourceDocumentName="Admissions_Packet.html"
             sourcePreviewUrl="/api/admin/documents/doc-1/source-preview"
-            onSaveFieldEdits={async () => {}}
-            onCreateFieldAndMap={async () => {}}
+            onSaveStudioSchema={async () => {}}
             {...over}
         />,
     );

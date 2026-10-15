@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
@@ -85,6 +86,8 @@ export async function PATCH(
              * owner as the grants route, so the same refusal surfaces here and means the same thing:
              * the actor asked to introduce authority they do not hold, and nothing was written.
              */
+            const unlinked = moneyCapableGrantRefusal(message);
+            if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
             const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
             if (beyond) {
                 return NextResponse.json(

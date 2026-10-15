@@ -105,7 +105,11 @@ describe("4 — identifier semantics: a PARTICIPATION crosses the wire, never a 
         const resolver = readFileSync(
             join(process.cwd(), "lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity.ts"), "utf8");
         expect(resolver).toContain('.eq("org_id", orgId)');
-        expect(resolver).toContain('.eq("context_id", opportunityId)');
+        // E2E-17: ownership is "this track's journey leads back to THIS opportunity", resolved by the
+        // journey owner for both track shapes — no longer a `context_id = opportunity` filter, which
+        // refused every participation-anchored track the current writer creates.
+        expect(resolver).toContain("resolveEnrollmentJourneyContext(");
+        expect(resolver).toContain("if (journey.opportunityId !== opportunityId) return null;");
         expect(resolver).toContain('.eq("id", participationId)');
         expect(resolver).toContain("subject_id");
     });

@@ -56,8 +56,25 @@ function matchesContext(policy: FinancialPolicyRow, context: PolicyResolutionCon
     }
 }
 
+/**
+ * A WITHDRAWN rule never applied, on any date. `is_active` alone is not a lifecycle: a version that
+ * stopped being current — superseded, or retired with no successor — still decided every date
+ * inside its window, and a charge dated then must keep resolving it. Its recorded `effective_end`
+ * is what retires it, so `is_active === false` withdraws a rule only when it carries no window end.
+ *
+ *   scheduled    effective_start after the date
+ *   current      the date inside [effective_start, effective_end]
+ *   superseded   effective_end before the date — and still resolvable for the dates it covered
+ *
+ * Rows retired before this rule were written `is_active = false` WITH an end, so they read as
+ * superseded again: history is restored without rewriting a row.
+ */
+export function isWithdrawnPolicy(policy: Pick<FinancialPolicyRow, "is_active" | "effective_end">): boolean {
+    return policy.is_active === false && policy.effective_end == null;
+}
+
 function isEffectiveOn(policy: FinancialPolicyRow, dateYmd: string): boolean {
-    if (policy.is_active === false) return false;
+    if (isWithdrawnPolicy(policy)) return false;
     if (compareIsoDates(policy.effective_start, dateYmd) > 0) return false;
     if (policy.effective_end != null && compareIsoDates(dateYmd, policy.effective_end) > 0) return false;
     return true;

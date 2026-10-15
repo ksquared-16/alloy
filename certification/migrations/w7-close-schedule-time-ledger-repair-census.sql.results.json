@@ -1,0 +1,60 @@
+{
+  "trusted_host_action_id": "tha_f627de578309c6",
+  "query_hash": "6e278d4039e10d72fd56eef01d59bf9005d58669e2a7c3d572498b593c4b0fa1",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T22:18:31.752Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f627de578309c6",
+    "query_hash": "6e278d4039e10d72fd56eef01d59bf9005d58669e2a7c3d572498b593c4b0fa1",
+    "authorization_id": "grnt_fa71d261fcc44597",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T22:18:38.049Z",
+    "question_ids": [
+      "m120000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m120000": {
+        "question_id": "m120000",
+        "row_count": null,
+        "rows": [
+          "close_schedule ~ registered ~ at_least_one ~ true",
+          "close_schedule ~ next_due_at ~ all_at_1200_utc ~ true",
+          "close_schedule ~ off_hour_rows ~ none ~ true",
+          "close_schedule ~ shape ~ daily_active_tenant ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20261119120000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20261119120000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          515
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

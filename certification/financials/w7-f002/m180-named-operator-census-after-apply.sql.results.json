@@ -1,0 +1,87 @@
+{
+  "trusted_host_action_id": "tha_887eb86c854d7c",
+  "query_hash": "8063e56e9b6e13611bf3e18049d85865df4a4966b63608f54fed9733292afb63",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T22:06:51.848Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_887eb86c854d7c",
+    "query_hash": "8063e56e9b6e13611bf3e18049d85865df4a4966b63608f54fed9733292afb63",
+    "authorization_id": "grnt_0fe283f85f0341ce",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T22:06:56.900Z",
+    "question_ids": [
+      "f",
+      "l"
+    ],
+    "questions": {
+      "f": {
+        "question_id": "f",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "user_account_display_name",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          },
+          {
+            "label": "user_has_named_operator_identity",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          },
+          {
+            "label": "assert_assignment_delegation_ceiling",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          },
+          {
+            "label": "enforce_user_roles_money_capable_person_link",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          },
+          {
+            "label": "enforce_money_capable_role_grant_person_links",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          },
+          {
+            "label": "revoke_user_person_link",
+            "exists": true,
+            "named_operator": true,
+            "service_role": true,
+            "authenticated": false
+          }
+        ]
+      },
+      "l": {
+        "question_id": "l",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "ledger",
+            "version": "20261122180000",
+            "in_ledger": true,
+            "head": "20261122180000"
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

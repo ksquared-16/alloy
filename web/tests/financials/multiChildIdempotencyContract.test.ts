@@ -33,6 +33,33 @@ vi.mock("@/lib/financials/policies/financialPolicyService", () => ({
     listFinancialPolicies: (...a: unknown[]) => listFinancialPolicies(...a),
 }));
 
+/*
+ * THE BILLING PERIOD, read without writing. This store answers only the charges table, so the
+ * period preview is supplied as the calendar would answer it for a monthly household: the calendar
+ * month containing the service date. The dedupe and due-date verdicts under test are still the
+ * product's, computed from what the store returns.
+ */
+vi.mock("@/lib/financials/billingPeriods/bindChargeBillingPeriod", async (importOriginal) => {
+    const real = await importOriginal<typeof import("@/lib/financials/billingPeriods/bindChargeBillingPeriod")>();
+    return {
+        ...real,
+        previewChargeBillingPeriod: async (_s: unknown, a: { placementDate: string }) => {
+            const ym = a.placementDate.slice(0, 7);
+            const [y, m] = ym.split("-").map(Number);
+            const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+            return {
+                kind: "resolved",
+                customerId: "cust-1",
+                period: {
+                    id: `bp-${ym}`, key: ym, label: ym, startsOn: `${ym}-01`, endsOn: `${ym}-${String(last).padStart(2, "0")}`,
+                    status: "open",
+                },
+                calendarSourceLocationId: null,
+            };
+        },
+    };
+});
+
 const { previewTemplateCharge } = await import("@/lib/financials/chargeLifecycle/chargeLifecycleService");
 const { resolveChargeFromTemplate } = await import("@/lib/financials/chargeLifecycle/resolveChargeFromTemplate");
 import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
@@ -256,7 +283,17 @@ describe("THE GATE — the due-date policy actually runs (§7E)", () => {
         const svc = readFileSync(join(process.cwd(), "lib/financials/chargeLifecycle/chargeLifecycleService.ts"), "utf8");
         const insertAt = svc.indexOf("        .insert({");
         expect(insertAt, "the create insert is findable").toBeGreaterThan(0);
-        expect(svc.slice(insertAt, insertAt + 1400), "the create writes it").toContain("due_date: intent.dueDate");
+        /*
+         * BOUNDED BY THE INSERT, NOT BY A CHARACTER COUNT.
+         *
+         * This read a fixed 1,400-character window and silently stopped reaching the column as the
+         * insert's payload grew — so the assertion failed for a reason that had nothing to do with
+         * the thing it guards. Slicing to the end of the insert call means the window tracks the
+         * code instead of needing to be re-tuned every time a field is added.
+         */
+        const insertEnd = svc.indexOf("\n        })", insertAt);
+        expect(insertEnd, "the create insert's end is findable").toBeGreaterThan(insertAt);
+        expect(svc.slice(insertAt, insertEnd), "the create writes it").toContain("due_date: intent.dueDate");
         expect(svc, "and a recalculated draft re-dates it").toMatch(/update\(\{[\s\S]{0,600}due_date: intent\.dueDate/);
     });
 });

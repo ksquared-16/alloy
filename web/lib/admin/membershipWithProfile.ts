@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 export type MembershipRow = {
     user_id: string;
@@ -38,6 +39,8 @@ function classify(code: string | undefined, message: string): MembershipWriteRes
      * with an initial role is a delegation, so a refusal here is 403 and says which authority the
      * actor could not confer — not a 500 that reads as a broken server.
      */
+    const unlinked = moneyCapableGrantRefusal(message);
+    if (unlinked) return { ok: false, kind: "forbidden", error: unlinked };
     const beyond = message.match(/assignment_ceiling:([^\s"]+)/);
     if (beyond) {
         return {

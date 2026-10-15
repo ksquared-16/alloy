@@ -4,6 +4,7 @@ import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /**
  * GET: list roles for org. Portal (admin/ops) or Users & Roles managers.
@@ -97,6 +98,8 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (error) {
+        const unlinked = moneyCapableGrantRefusal(error.message);
+        if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
         const status = error.code === "23505" ? 409 : 400;
         return NextResponse.json({ error: error.message }, { status });
     }

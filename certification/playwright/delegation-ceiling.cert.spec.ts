@@ -41,8 +41,11 @@ const SELF_ROLE = "mcert_ceiling_actor";
 const OTHER_ROLE = "mcert_ceiling_supply";
 /** Held by the actor's role. */
 const HELD = ["portal.access", "admin.roles.read", "admin.roles.write"];
-/** Not held by the actor by any path. */
-const UNHELD = "fin.post";
+/**
+ * Not held by the actor by any path: a FINANCIAL authority, since the actor holds no fin.* at all.
+ * Was `fin.post`, retired in 20261106120000; `fin.write` is the active key with the same meaning here.
+ */
+const UNHELD = "fin.write";
 
 const RESULT: Record<string, unknown> = {};
 

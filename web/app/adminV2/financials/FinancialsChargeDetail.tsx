@@ -23,11 +23,13 @@
  * guessing a plausible family — and it is never shown as "Household", which would be a claim about
  * the charge rather than an admission about the record.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Info } from "lucide-react";
 
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { invoiceRuleShort } from "@/lib/financials/chargeDates/describeChargeDateChain";
 
 type Application = {
     paymentId: string;
@@ -55,6 +57,10 @@ type ChargeDetail = {
     serviceDate: string | null;
     invoiceDate: string | null;
     dueDate: string | null;
+    amountCents?: number;
+    chargeTemplateId?: string | null;
+    /** W7-F017: stored invoice-timing provenance; source "template" is a charge-type override. */
+    invoiceRule?: { source: string; strategy: string; offsetDays: number } | null;
     postedAt: string | null;
     /*
      * PROVENANCE, from the canonical projection. `originDescription` is the resolver's own
@@ -65,6 +71,17 @@ type ChargeDetail = {
     createdByName?: string | null;
     postedByName?: string | null;
     originDescription?: string | null;
+    /**
+     * The unmet identity requirement for the creating operator, in one sentence (W7-F002).
+     *
+     * Null when there is nothing to say — a named operator, or a charge with no human actor. When
+     * it is present, the audit line still shows whatever name it has and this says, beside it, that
+     * the attribution does not rest on a recorded identity and where that is fixed.
+     */
+    createdByIdentityGap?: string | null;
+    createdByIdentityStatus?: string | null;
+    /** Why this charge is still a draft, when it is one (W7-F001). */
+    awaiting?: { key: string; label: string; explanation: string; operatorActionable: boolean; postsOn?: string | null } | null;
     correctionOfChargeId?: string | null;
     customerId: string | null;
     customerMemberId: string | null;
@@ -106,6 +123,24 @@ type ChargeDetail = {
                 percentBasisPoints: number | null;
             }[];
         }[];
+    } | null;
+    /*
+     * Present only when this charge IS somebody's correction. The projection's own block — every
+     * field is a stored fact, and the direction is STATED rather than read off a sign here.
+     */
+    adjustment?: {
+        applicationId: string;
+        direction: "reduce" | "increase";
+        magnitudeCents: number;
+        reason: string | null;
+        note: string | null;
+        sourceChargeId: string | null;
+        sourceDescription: string | null;
+        sourceServiceDate: string | null;
+        sourcePeriodLabel: string | null;
+        sourcePeriodStatus: string | null;
+        reversesApplicationId: string | null;
+        reversedByApplicationId: string | null;
     } | null;
 };
 
@@ -149,20 +184,130 @@ function Row(props: { label: string; value: string; strong?: boolean; muted?: bo
     );
 }
 
+/**
+ * ── RELATED FACTS AT THE SAME VISUAL LEVEL ───────────────────────────────────────────────────
+ *
+ * W7-F002: the detail was thirty label/value lines down a single column, so reading one charge
+ * meant travelling the whole screen, and facts that belong together — the two periods, the three
+ * dates, the GL account — were separated by nothing but their order.
+ *
+ * `Pair` lays its rows two to a line above phone width and collapses back to one column when there
+ * is no room. Nothing is removed and nothing is abbreviated: the same `Row` renders inside it, so
+ * every fact keeps its label, its value and its testId, and the block occupies half the height.
+ *
+ * Groups that are genuinely a LIST — applied payments, responsibility shares, expected funding —
+ * stay a list. Turning a variable-length list into columns makes it harder to scan, not easier.
+ */
+function Pair(props: { children: React.ReactNode }) {
+    return <span className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">{props.children}</span>;
+}
+
+/**
+ * One of the four date identities: label above value, mirroring Add Charge's read-only cells.
+ *
+ * W7 Scenario 8 final presentation: the row holds the four dates and nothing else. Where a date's
+ * provenance is worth knowing (a charge type overriding the organisation's invoice timing) it is an
+ * info mark beside the value — a tooltip and an accessible name, never a line of configuration
+ * mechanics under the date.
+ */
+function DateCell(props: { label: string; value: string; testId: string; hint?: string | null; hintAttr?: string }) {
+    return (
+        <span className="flex min-w-0 flex-col" data-financials-charge-line={props.testId} data-financials-charge-datecell="true">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.label}</span>
+            <span className="flex items-center gap-1 text-xs tabular-nums text-alloy-midnight/80">
+                <span className="truncate" title={props.value}>{props.value}</span>
+                {props.hint ? (
+                    <span
+                        role="img"
+                        aria-label={props.hint}
+                        title={props.hint}
+                        className="inline-flex shrink-0 cursor-help text-alloy-midnight/40 hover:text-alloy-midnight/70"
+                        {...(props.hintAttr ? { [props.hintAttr]: "true" } : {})}
+                    >
+                        <Info aria-hidden="true" className="h-3 w-3" />
+                    </span>
+                ) : null}
+            </span>
+        </span>
+    );
+}
+
+/** A label above its value — the header pair (Applies to · Responsibility), Add Charge's grammar. */
+function Fact(props: { label: string; value: string; testId: string; strong?: boolean }) {
+    return (
+        <span className="flex min-w-0 flex-col" data-financials-charge-line={props.testId}>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.label}</span>
+            <span className={`truncate text-sm ${props.strong ? "font-semibold text-alloy-midnight" : "text-alloy-midnight/85"}`} title={props.value}>
+                {props.value}
+            </span>
+        </span>
+    );
+}
+
 function Group(props: { children: React.ReactNode }) {
     return (
         <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.children}</p>
     );
 }
 
-export default function FinancialsChargeDetail({ chargeId }: { chargeId: string }) {
+/** What the host needs to offer the draft lifecycle (W7-F016), read from the same projection. */
+export type ChargeDetailFacts = {
+    chargeId: string;
+    status: string;
+    label: string;
+    chargeTemplateId: string | null;
+    amountCents: number;
+    serviceDate: string | null;
+    customerMemberId: string | null;
+};
+
+export default function FinancialsChargeDetail({
+    chargeId,
+    refreshKey = 0,
+    onLoaded,
+    bare = false,
+}: {
+    chargeId: string;
+    /**
+     * W7 Scenario 8 final presentation: hosted inside a command card (Charge details), the card IS
+     * the surface, so this record draws no second box inside it. The Charges section keeps its frame.
+     */
+    bare?: boolean;
+    /** Bumped by the host after an action; re-reads WITHOUT unmounting, so nothing swaps. */
+    refreshKey?: number;
+    onLoaded?: (facts: ChargeDetailFacts) => void;
+}) {
     const [detail, setDetail] = useState<ChargeDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const shownChargeRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!detail || !onLoaded) return;
+        onLoaded({
+            chargeId: detail.chargeId,
+            status: detail.status,
+            label: detail.label || detail.description || "Charge",
+            chargeTemplateId: detail.chargeTemplateId ?? null,
+            amountCents: Number(detail.amountCents ?? 0),
+            serviceDate: detail.serviceDate,
+            customerMemberId: detail.customerMemberId,
+        });
+    }, [detail, onLoaded]);
 
     useEffect(() => {
         let live = true;
-        setLoading(true);
+        /*
+         * W7-F014: ONE STABLE SHELL. The first read shows a skeleton inside this same card; a
+         * re-read (after Post, Cancel, Reverse) keeps the record on screen while it refreshes —
+         * nothing is unmounted, so the card never swaps for a "Loading…" card and back.
+         */
+        if (shownChargeRef.current !== chargeId) {
+            /* A DIFFERENT charge never shows the previous one's facts while it loads. */
+            shownChargeRef.current = chargeId;
+            setDetail(null);
+            setLoading(true);
+        }
         setError(null);
         void (async () => {
             try {
@@ -186,7 +331,8 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         return () => {
             live = false;
         };
-    }, [chargeId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read on identity or an explicit refresh only
+    }, [chargeId, refreshKey]);
 
     const reload = useCallback(async () => {
         /* Committed truth, re-read. The panel never hands back a figure for this to display. */
@@ -195,11 +341,23 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         if (res.ok && body.ok && body.detail) setDetail(body.detail);
     }, [chargeId]);
 
-    if (loading) {
+    if (loading && !detail) {
         return (
-            <p className="text-xs text-alloy-midnight/50" data-financials-charge-detail-loading="true">
-                Loading charge…
-            </p>
+            <section
+                className={bare ? "mb-1" : "mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"}
+                data-financials-charge-detail-loading="true"
+                aria-busy="true"
+                aria-label="Loading charge"
+            >
+                <span className="block h-4 w-40 animate-pulse rounded bg-alloy-stone/25" />
+                <span className="mt-1.5 block h-3 w-28 animate-pulse rounded bg-alloy-stone/20" />
+                <span className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                    {[0, 1, 2, 3].map((i) => (
+                        <span key={i} className="block h-8 animate-pulse rounded bg-alloy-stone/15" />
+                    ))}
+                </span>
+                <span className="mt-4 block h-16 animate-pulse rounded bg-alloy-stone/10" />
+            </section>
         );
     }
     if (error || !detail) {
@@ -231,239 +389,376 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
     const applied = detail.applications.filter((a) => (a.status ?? "active") !== "reversed");
     const reversedApplications = detail.applications.filter((a) => (a.status ?? "active") === "reversed");
 
-    /* Ordered oldest-first: an account of the obligation reads forwards. */
-    const history: { key: string; label: string; when: string | null }[] = [
-        ...(detail.serviceDate ? [{ key: "service", label: "Charge is for", when: day(detail.serviceDate) }] : []),
-        ...(detail.postedAt ? [{ key: "posted", label: "Posted", when: day(detail.postedAt) }] : []),
-        ...detail.applications.map((a, i) => ({
-            key: `applied-${a.paymentId}-${i}`,
-            label:
-                (a.status ?? "active") === "reversed"
-                    ? `${money(a.allocatedAmountCents, detail.currencyCode)} applied, then reversed`
-                    : `${money(a.allocatedAmountCents, detail.currencyCode)} applied${a.method ? ` · ${a.method}` : ""}`,
-            when: day(a.receivedAt),
-        })),
-    ];
+    /*
+     * ── W7-F014: ONE COMPACT POSTING LINE ─────────────────────────────────────────────────────
+     *
+     * The state, named — "Posted Oct 14, 2026", "Draft · Posts Nov 1, 2026", "Waiting for review",
+     * "Posting failed · Needs attention" — from the canonical awaiting-posting vocabulary. Only a
+     * failure, or an unclassified draft, also carries its sentence, because only those need action.
+     */
+    const posting: { text: string; tone: "plain" | "attention"; explain: string | null } =
+        detail.status === "posted" || detail.postedAt
+            ? { text: detail.postedAt ? `Posted ${day(detail.postedAt)}` : "Posted", tone: "plain", explain: null }
+            : detail.awaiting?.key === "period_not_started"
+              ? {
+                    text: detail.awaiting.postsOn ? `Draft · Posts ${day(detail.awaiting.postsOn)}` : "Draft · Posts when its period begins",
+                    tone: "plain",
+                    explain: null,
+                }
+              : detail.awaiting?.key === "review_required"
+                ? { text: "Waiting for review", tone: "plain", explain: null }
+                : detail.awaiting?.key === "post_failed"
+                  ? {
+                        text: detail.awaiting.operatorActionable ? "Posting failed · Needs attention" : "Posting failed · Will retry",
+                        tone: "attention",
+                        explain: detail.awaiting.explanation,
+                    }
+                  : detail.awaiting
+                    ? { text: detail.awaiting.label, tone: "attention", explain: detail.awaiting.explanation }
+                    : detail.status === "void"
+                      ? { text: "Cancelled — never posted", tone: "plain", explain: null }
+                      : { text: detail.status.charAt(0).toUpperCase() + detail.status.slice(1), tone: "plain", explain: null };
 
-    const dates = [
-        detail.serviceDate ? `Service ${day(detail.serviceDate)}` : null,
-        detail.postedAt ? `Posted ${day(detail.postedAt)}` : null,
-    ].filter(Boolean);
+    /*
+     * WHO OWES IT, in one line: "Mara Monthly · 100%". The arrangement's shares say it as the
+     * operator set it up; a charge billed before any arrangement still names its allocated parties.
+     */
+    const shareTerm = (sh: { percentBasisPoints: number | null; amountCents: number | null }) =>
+        sh.percentBasisPoints != null
+            ? `${sh.percentBasisPoints / 100}%`
+            : sh.amountCents != null
+              ? money(sh.amountCents, currency)
+              : "remainder";
+    const shares = detail.accountArrangement?.shares ?? [];
+    const responsibilitySummary =
+        shares.length > 0
+            ? shares.map((sh) => `${sh.name} · ${shareTerm(sh)}`).join(", ")
+            : detail.responsibility.parties.length > 0
+              ? detail.responsibility.parties.map((p) => `${p.name} · ${money(p.assignedCents, currency)}`).join(", ")
+              : "No responsibility on record";
+    /* This charge's own allocation, by party name — shown beside the share it was allocated under. */
+    const allocatedByName = new Map(detail.responsibility.parties.map((p) => [p.name, p.assignedCents] as const));
+    const unmatchedParties =
+        shares.length > 0 ? detail.responsibility.parties.filter((p) => !shares.some((sh) => sh.name === p.name)) : detail.responsibility.parties;
 
     return (
         <section
-            className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
+            className={bare ? "mb-1" : "mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"}
             data-financials-charge-detail={detail.chargeId}
         >
+            {/* HEADER — what it is, and whose. */}
             <p className="truncate text-sm font-semibold text-alloy-midnight" data-financials-charge-label="true">
                 {detail.label || detail.description || "Charge"}
             </p>
-            <p
-                className="truncate text-xs text-alloy-midnight/65"
-                data-financials-charge-attribution={attribution.state}
-            >
-                {attribution.text}
-                {detail.householdName && attribution.state === "child" ? ` · ${detail.householdName}` : ""}
-            </p>
-            <p className="mt-0.5 text-xs text-alloy-midnight/55">
-                <span data-financials-charge-status={detail.status}>
-                    {detail.status.charAt(0).toUpperCase() + detail.status.slice(1)}
+            <p className="truncate text-xs text-alloy-midnight/65">
+                <span data-financials-charge-status={detail.status} data-financials-charge-state="true">
+                    {detail.status === "draft"
+                        ? "Draft charge"
+                        : detail.status === "void"
+                          ? "Cancelled draft"
+                          : "Posted charge"}
                 </span>
-                {/* THE CHARGE'S OWN TIME, never the operating month. */}
-                {dates.length ? ` · ${dates.join(" · ")}` : ""}
+                {detail.householdName ? ` · ${detail.householdName}` : ""}
             </p>
 
             {/*
-             * ── WHEN WAS THIS BILLED, AND WHERE DID IT POST ────────────────────────────────────
-             *
-             * Three facts the ledger deliberately does not carry as permanent columns, because a
-             * ledger is scanned and these are asked about one row at a time. Billing period and
-             * accounting period are DIFFERENT PERIODS with different owners — one derived from the
-             * charge's own dates, one decided by the database when the journal entry was written —
-             * and they are stated side by side so an operator can see that they are two answers.
-             *
-             * A charge that has not posted has no accounting period, and that is said rather than
-             * left blank. An unmapped GL is a configuration fact and is toned as attention.
-             */}
-            <Group>Posting</Group>
-            <Row
-                label="Billing period"
-                value={detail.billingPeriodLabel ?? "Unplaced"}
-                testId="billing-period"
-            />
-            {/*
-              * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
-              * when the obligation was issued; the due date is when payment is expected and is
-              * blank for an organisation that has configured no terms — which is a real answer,
-              * not a missing one, so it is stated rather than hidden.
+              * ── APPLIES TO · RESPONSIBILITY — ONE COMPACT PAIR (W7 Scenario 8 final) ──────────
+              * Who or what the charge is for, and who owes it: two facts from two models, side by
+              * side, each label said once. No group heading restates the first label.
               */}
-            <Row
-                label="Invoice date"
-                value={formatDisplayDate(detail.invoiceDate) || "—"}
-                muted={!detail.invoiceDate}
-                testId="invoice-date"
-            />
-            <Row
-                label="Due date"
-                value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
-                muted={!detail.dueDate}
-                testId="due-date"
-            />
-            <Row
-                label="Accounting period"
-                value={
-                    detail.accountingPeriod
-                        ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
-                              detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
-                          }`
-                        : "Not posted to a period yet"
-                }
-                muted={!detail.accountingPeriod}
-                testId="accounting-period"
-            />
-            {/*
-              * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
-              *
-              * Closing a period does not refuse the money effective in it — the entry is
-              * attributed to the next open period instead. Shown alone, an October attribution on
-              * a September charge is indistinguishable from a charge that was always October's.
-              * The trigger records where it came from; this says so, so the operator can tell a
-              * deferral from an ordinary posting without reading the journal.
-              */}
-            {detail.accountingDeferredFrom ? (
-                <Row
-                    label="Deferred from"
-                    value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
-                    testId="accounting-deferred-from"
-                />
+            <span className="mt-2 grid grid-cols-2 gap-x-6" data-financials-charge-applies="true">
+                <Fact label="Applies to" value={attribution.text} testId="applies-to" strong />
+                <span data-financials-charge-attribution={attribution.state} className="hidden" />
+                <Fact label="Responsibility" value={responsibilitySummary} testId="responsibility-summary" strong />
+            </span>
+            {detail.adjustment ? (
+                <>
+                    <Group>Correction</Group>
+                    <Row
+                        label="What changed"
+                        value={
+                            detail.adjustment.direction === "reduce"
+                                ? `Reduced what the family owes by ${money(detail.adjustment.magnitudeCents, detail.currencyCode)}`
+                                : `Increased what the family owes by ${money(detail.adjustment.magnitudeCents, detail.currencyCode)}`
+                        }
+                        strong
+                        testId="correction-direction"
+                    />
+                    {/*
+                      * THE SOURCE FACT, OR THE TRUTH THAT THERE ISN'T ONE. An account-level
+                      * adjustment legitimately corrects no single historical charge, and saying
+                      * so is better than an empty row that reads as a lookup that failed.
+                      */}
+                    <Row
+                        label="Corrects"
+                        value={
+                            detail.adjustment.sourceChargeId
+                                ? [
+                                      detail.adjustment.sourceDescription || "a charge",
+                                      detail.adjustment.sourceServiceDate
+                                          ? formatDisplayDate(detail.adjustment.sourceServiceDate)
+                                          : null,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" · ")
+                                : "The account as a whole — not one charge"
+                        }
+                        muted={!detail.adjustment.sourceChargeId}
+                        testId="correction-source"
+                    />
+                    {/*
+                      * ── THE SOURCE'S PERIOD, AND WHETHER IT IS FINISHED ─────────────────────
+                      *
+                      * The sentence an operator needs for a closed source is that the historical
+                      * period DID NOT CHANGE. Showing the label alone leaves them to wonder
+                      * whether correcting a November charge moved November, which is the one
+                      * question commercial finality exists to answer.
+                      *
+                      * A legacy source has a label and no status, because it has no period row —
+                      * §12's case. It is presented as history rather than as a missing field.
+                      */}
+                    {detail.adjustment.sourceChargeId ? (
+                        <Row
+                            label="Corrected period"
+                            value={
+                                detail.adjustment.sourcePeriodStatus === "closed"
+                                    ? `${detail.adjustment.sourcePeriodLabel ?? "The original period"} · finalized, unchanged`
+                                    : detail.adjustment.sourcePeriodLabel
+                                      ?? "Before the account's commercial periods"
+                            }
+                            muted={!detail.adjustment.sourcePeriodLabel}
+                            testId="correction-source-period"
+                        />
+                    ) : null}
+                    <Row
+                        label="Why"
+                        value={detail.adjustment.reason ?? "No reason recorded"}
+                        muted={!detail.adjustment.reason}
+                        testId="correction-reason"
+                    />
+                    {detail.adjustment.note ? (
+                        <Row label="Note" value={detail.adjustment.note} testId="correction-note" />
+                    ) : null}
+                    {/*
+                      * REVERSAL LINEAGE, IN WORDS. `reverses_id` and `reversed_by_id` are the
+                      * canonical record; an operator needs the consequence, not the pointer.
+                      */}
+                    {detail.adjustment.reversesApplicationId ? (
+                        <Row
+                            label="This is a reversal"
+                            value="It undoes an earlier correction on this account."
+                            testId="correction-is-reversal"
+                        />
+                    ) : null}
+                    {detail.adjustment.reversedByApplicationId ? (
+                        <Row
+                            label="Reversed"
+                            value="A later correction has undone this one."
+                            testId="correction-reversed"
+                        />
+                    ) : null}
+                </>
             ) : null}
-            <Row
-                label="GL account"
-                value={
-                    detail.glAccount
-                        ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
-                        : "Unmapped"
-                }
-                muted={!detail.glAccount}
-                testId="gl-account"
-            />
 
             {e ? (
                 <>
                     <Group>Amount</Group>
-                    <Row label="Gross charge" value={money(e.grossCents, currency)} testId="gross" />
+                    {/*
+                      * Gross, reductions and net only when a reduction makes them differ. With none,
+                      * "Gross $18.00 / Net obligation $18.00" says one figure twice (W7 Scenario 8 final).
+                      */}
                     {e.reductionsCents !== 0 ? (
-                        <Row label="Reductions" value={money(-Math.abs(e.reductionsCents), currency)} testId="reductions" />
-                    ) : null}
-                    <Row label="Net obligation" value={money(e.netCents, currency)} strong testId="net" />
+                        <>
+                            <Row label="Gross charge" value={money(e.grossCents, currency)} testId="gross" />
+                            <Row label="Reductions" value={money(-Math.abs(e.reductionsCents), currency)} testId="reductions" />
+                            <Row label="Net obligation" value={money(e.netCents, currency)} strong testId="net" />
+                        </>
+                    ) : (
+                        <Row label="Charge" value={money(e.netCents, currency)} strong testId="net" />
+                    )}
                 </>
             ) : (
                 /* A draft owes nothing yet, and saying $0 outstanding would read as settled. */
-                <p className="mt-2 text-xs text-alloy-midnight/55" data-financials-charge-no-position="true">
-                    This charge does not owe anything yet.
-                </p>
+                <>
+                    <Group>Amount</Group>
+                    <Row label="Owed" value="Not yet — a draft owes nothing" muted testId="no-position" />
+                </>
             )}
 
+
             {/*
-             * THE INTENT SITS WITH THE STATE IT CHANGES, at the grain the capability actually has.
+              * ── THE FOUR DATES, ONE ROW (W7-F014) ────────────────────────────────────────────
+              * The same four identities, in the same order, as Add Charge — read-only here.
+              * Nothing else sits in this row, so no label can drift under the wrong date.
+              */}
+            <Group>Dates</Group>
+            <span className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4" data-financials-charge-dates="row">
+                <DateCell label="Service date" value={day(detail.serviceDate) ?? "—"} testId="service-date" />
+                <DateCell label="Billing period" value={detail.billingPeriodLabel ?? "Unplaced"} testId="billing-period" />
+                {/*
+                  * W7-F017 provenance, kept but no longer prose: a charge type that overrides the
+                  * organisation's invoice timing carries an info mark whose tooltip says so.
+                  */}
+                <DateCell
+                    label="Invoice date"
+                    value={formatDisplayDate(detail.invoiceDate) || "—"}
+                    testId="invoice-date"
+                    hint={
+                        detail.invoiceRule?.source === "template"
+                            ? `Charge-type override · ${invoiceRuleShort(detail.invoiceRule.strategy, detail.invoiceRule.offsetDays)}`
+                            : null
+                    }
+                    hintAttr="data-financials-charge-invoice-override"
+                />
+                <DateCell
+                    label="Due date"
+                    value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
+                    testId="due-date"
+                />
+            </span>
+
+            {/* POSTING — one line; a sentence only when someone has to act. */}
+            <p
+                className={`mt-2 text-xs ${posting.tone === "attention" ? "text-alloy-ember" : "text-alloy-midnight/75"}`}
+                data-financials-charge-posting="true"
+                data-financials-charge-awaiting={detail.awaiting?.key}
+            >
+                <span className="mr-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Posting</span>
+                {posting.text}
+            </p>
+            {posting.explain ? (
+                <p className="text-[11px] leading-snug text-alloy-ember/90" data-financials-charge-posting-explain="true">
+                    {posting.explain}
+                </p>
+            ) : null}
+
+            {/*
+              * ACCOUNTING — only where it applies: a posted charge has an accounting period and a
+              * GL account; a draft has neither yet, and says nothing rather than a placeholder row.
+              */}
+            {detail.accountingPeriod || (detail.postedAt && detail.glAccount) ? (
+                <>
+                    <Group>Accounting</Group>
+                    <Pair>
+                        <Row
+                            label="Accounting period"
+                            value={
+                                detail.accountingPeriod
+                                    ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
+                                          detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
+                                      }`
+                                    : "Not posted to a period yet"
+                            }
+                            muted={!detail.accountingPeriod}
+                            testId="accounting-period"
+                        />
+                        <Row
+                            label="GL account"
+                            value={
+                                detail.glAccount
+                                    ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
+                                    : "Unmapped"
+                            }
+                            muted={!detail.glAccount}
+                            testId="gl-account"
+                        />
+                        {detail.accountingDeferredFrom ? (
+                            <Row
+                                label="Deferred from"
+                                value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
+                                testId="accounting-deferred-from"
+                            />
+                        ) : null}
+                    </Pair>
+                </>
+            ) : null}
+
+            {/*
+             * ── RESPONSIBILITY & FUNDING — ONE COMPACT SECTION (W7 Scenario 8 final) ─────────────
+             *
+             * Two distinct concepts, kept distinct in the model and read together:
+             *
+             *   RESPONSIBILITY    who owes the obligation — the arrangement's share ("100%
+             *                     responsible") with this charge's own allocation beside it.
+             *   EXPECTED FUNDING  outside money expected to cover part of a share. It attaches to
+             *                     a SHARE (`billing.configure_expected_funding`), so it is stated
+             *                     under the share it funds, and never as money received.
+             *
+             * These were three stacked blocks (arrangement, funding, allocation) restating the same
+             * party. The arrangement and the allocation still differ when a charge was billed before
+             * the arrangement existed, so an allocated party with no share is listed on its own.
              *
              * `billing.configure_responsibility` records an ARRANGEMENT for a household or child
-             * from a date — it is not a decision about this one charge. The parties shown here are
-             * the account's arrangement as it applies to this obligation, which is why the control
-             * is offered beside them and why it says "account" rather than implying the charge.
+             * from a date — not a decision about this one charge — which is why the control is
+             * offered for the account here rather than implying the charge.
              */}
-            {detail.customerId || detail.customerMemberId ? (
-                <FinancialsResponsibilityPanel
-                    customerId={detail.customerId}
-                    customerMemberId={detail.customerMemberId}
-                    chargeId={detail.chargeId}
-                    chargeStatus={detail.status}
-                    subjectLabel={detail.childName}
-                    arrangement={detail.accountArrangement}
-                    parties={detail.responsibility.parties}
-                    onCommitted={reload}
-                />
-            ) : null}
-
-            {/*
-             * ── THE ARRANGEMENT'S OWN SHARES, AND WHAT IS EXPECTED TO FUND THEM ─────────────────
-             *
-             * `billing.configure_expected_funding` attaches to a SHARE. So the shares have to be
-             * visible and named: an operator cannot say "this agency covers $650 of this" while
-             * looking at a list that does not say whose responsibility "this" is.
-             *
-             * Shown beside the charge's own allocation rather than instead of it. The arrangement
-             * says who bears the account from a date; the allocation says who bears THIS obligation
-             * once it was resolved. A posted charge billed before the arrangement has the second
-             * and not the first, and conflating them would claim a division that never happened.
-             */}
-            {detail.accountArrangement && detail.accountArrangement.shares.length > 0 ? (
+            {detail.customerId || detail.customerMemberId || shares.length > 0 || detail.responsibility.parties.length > 0
+                || detail.responsibility.unassignedCents !== 0 || detail.expectedFunding.length > 0 ? (
                 <>
-                    <Group>Responsibility arrangement</Group>
-                    {detail.accountArrangement.shares.map((share) => (
-                        <div key={share.id} data-financials-arrangement-share={share.id}>
+                    <Group>Responsibility &amp; funding</Group>
+                    <div data-financials-charge-responsibility-funding="true">
+                        {shares.map((share) => {
+                            const allocated = allocatedByName.get(share.name);
+                            return (
+                                <div key={share.id} data-financials-arrangement-share={share.id}>
+                                    <Row
+                                        label={share.name}
+                                        value={`${shareTerm(share)} responsible${allocated != null ? ` · ${money(allocated, currency)}` : ""}`}
+                                        testId="arrangement-share"
+                                    />
+                                    <FinancialsExpectedFundingPanel
+                                        shareId={share.id}
+                                        arrangementId={detail.accountArrangement!.id}
+                                        customerMemberId={detail.customerMemberId}
+                                        partyName={share.name}
+                                        responsibleCents={share.amountCents}
+                                        currency={currency}
+                                        funding={share.expectedFunding}
+                                        onCommitted={reload}
+                                        compact
+                                    />
+                                </div>
+                            );
+                        })}
+                        {unmatchedParties.map((party) => (
                             <Row
-                                label={share.name}
-                                value={
-                                    share.amountCents != null
-                                        ? money(share.amountCents, currency)
-                                        : share.percentBasisPoints != null
-                                          ? `${share.percentBasisPoints / 100}%`
-                                          : "Remainder"
-                                }
-                                testId="arrangement-share"
+                                key={party.personId ?? party.name}
+                                label={party.name}
+                                value={money(party.assignedCents, currency)}
+                                testId="responsibility-party"
                             />
-                            <FinancialsExpectedFundingPanel
-                                shareId={share.id}
-                                arrangementId={detail.accountArrangement!.id}
+                        ))}
+                        {detail.responsibility.unassignedCents !== 0 ? (
+                            <Row
+                                label="Unassigned"
+                                value={money(detail.responsibility.unassignedCents, currency)}
+                                testId="responsibility-unassigned"
+                            />
+                        ) : null}
+                        {detail.expectedFunding.map((f) => (
+                            /* An expectation is not a payment, and never reduces what is owed. */
+                            <Row
+                                key={f.label}
+                                label={`Expected from ${f.label} · not yet received`}
+                                value={f.expectedCents != null ? money(f.expectedCents, currency) : "Amount not yet known"}
+                                muted
+                                testId="expected-funding"
+                            />
+                        ))}
+                        {detail.customerId || detail.customerMemberId ? (
+                            <FinancialsResponsibilityPanel
+                                customerId={detail.customerId}
                                 customerMemberId={detail.customerMemberId}
-                                partyName={share.name}
-                                responsibleCents={share.amountCents}
-                                currency={currency}
-                                funding={share.expectedFunding}
+                                chargeId={detail.chargeId}
+                                chargeStatus={detail.status}
+                                subjectLabel={detail.childName}
+                                arrangement={detail.accountArrangement}
+                                parties={detail.responsibility.parties}
                                 onCommitted={reload}
+                                compact
                             />
-                        </div>
-                    ))}
-                </>
-            ) : null}
-
-            {detail.responsibility.parties.length > 0 || detail.responsibility.unassignedCents !== 0 ? (
-                <>
-                    <Group>Responsibility</Group>
-                    {detail.responsibility.parties.map((party) => (
-                        <Row
-                            key={party.personId ?? party.name}
-                            label={party.name}
-                            value={money(party.assignedCents, currency)}
-                            testId="responsibility-party"
-                        />
-                    ))}
-                    {detail.responsibility.unassignedCents !== 0 ? (
-                        <Row
-                            label="Unassigned"
-                            value={money(detail.responsibility.unassignedCents, currency)}
-                            testId="responsibility-unassigned"
-                        />
-                    ) : null}
-                </>
-            ) : null}
-
-            {detail.expectedFunding.length > 0 ? (
-                <>
-                    <Group>Expected funding</Group>
-                    {detail.expectedFunding.map((f) => (
-                        <Row
-                            key={f.label}
-                            label={f.label}
-                            value={f.expectedCents != null ? money(f.expectedCents, currency) : "Amount not yet known"}
-                            testId="expected-funding"
-                        />
-                    ))}
-                    {/* An expectation is not a payment, and never reduces what is owed. */}
-                    <p className="text-[11px] text-alloy-midnight/50" data-financials-charge-funding-note="true">
-                        Not yet received
-                    </p>
+                        ) : null}
+                    </div>
                 </>
             ) : null}
 
@@ -504,29 +799,6 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
             ) : null}
 
             {/*
-             * WHAT HAPPENED TO IT, from facts this composition already carries.
-             *
-             * Deliberately not a new event store. The charge knows when it was for and when it was
-             * posted, and each application knows when its money arrived — that is a real, ordered
-             * account of the obligation without inventing a second ledger or deriving events by
-             * diffing present state against itself.
-             *
-             * THE LIMIT, STATED RATHER THAN PAPERED OVER: reductions, responsibility changes and
-             * reversals are not listed here. They are recorded in the financial journal, whose feed
-             * is org-wide and keyed by source rather than by charge, so scoping it to one
-             * obligation is its own read and its own certification. The Activity section remains
-             * the canonical place to see them until then.
-             */}
-            {history.length > 0 ? (
-                <>
-                    <Group>History</Group>
-                    {history.map((h) => (
-                        <Row key={h.key} label={h.label} value={h.when ?? ""} muted testId="history" />
-                    ))}
-                </>
-            ) : null}
-
-            {/*
               * ── WHERE THIS CAME FROM ────────────────────────────────────────────────────────
               *
               * The question an operator asks of a charge they did not expect, and the one the
@@ -540,7 +812,8 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
               */}
             {detail.originDescription || detail.createdAt ? (
                 <>
-                    <Group>Origin</Group>
+                    {/* W7-F014: origin is the history — who, when created, when posted. Payments are listed above. */}
+                    <Group>History</Group>
                     {detail.originDescription ? (
                         /*
                          * A resolved person is named under "Created by"; anything else states the
@@ -567,6 +840,24 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     ) : null}
                     {detail.correctionOfChargeId ? (
                         <Row label="Corrects" value="another charge on this account" muted testId="corrects" />
+                    ) : null}
+                    {/*
+                      * ── THE ATTRIBUTION IS INCOMPLETE, AND SAYS SO (W7-F002) ─────────────────
+                      *
+                      * Not an error, and deliberately not styled as one: nothing failed and the
+                      * charge is correct. What is missing is the recorded link between the account
+                      * that acted and the human it belongs to, and the sentence names where that is
+                      * closed. It renders even when a name IS shown from the weaker source, because
+                      * the requirement is about the data and not about whether the screen managed
+                      * to find something to print.
+                      */}
+                    {detail.createdByIdentityGap ? (
+                        <p
+                            className="px-3 pb-2 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-financials-charge-actor-identity-gap={detail.createdByIdentityStatus ?? "unmet"}
+                        >
+                            {detail.createdByIdentityGap}
+                        </p>
                     ) : null}
                 </>
             ) : null}

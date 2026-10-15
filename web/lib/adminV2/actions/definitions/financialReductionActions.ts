@@ -39,6 +39,13 @@ import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import { billingPeriodBindingHttpAnswer } from "@/lib/financials/billingPeriods/billingPeriodBindingHttp";
 import { previewProspectiveCorrection } from "@/lib/financials/corrections/prospectiveCorrection";
 import {
+    ADJUSTMENT_DIRECTIONS,
+    chargeCategoryForDirection,
+    directionFromSignedCents,
+    signedCentsForIntent,
+    type AdjustmentDirection,
+} from "@/lib/financials/corrections/correctionIntent";
+import {
     MANUAL_REDUCTION_CATEGORIES,
     ManualReductionError,
     applyManualReduction,
@@ -266,6 +273,83 @@ const applyDiscounts: RegisteredAction = {
     },
 };
 
+/**
+ * ── THE OPERATOR'S INTENT BECOMES SIGNED CENTS HERE, ONCE ────────────────────────────────────
+ *
+ * §4: an operator states WHICH WAY the family's balance moves and HOW MUCH. They do not state a
+ * sign, and they are not asked whether the thing they are recording is called a credit or an
+ * adjustment — that was the storage taxonomy wearing an operator label, and the two controls
+ * disagreed about which one decided the sign.
+ *
+ * So this action accepts the intent shape — `direction` + `magnitude_cents` — and converts it
+ * through the one canonical conversion. `charge_category` is DERIVED, and a category sent
+ * alongside a direction is ignored rather than honoured: honouring it would restore exactly the
+ * two-controls-one-decision conflict, and refusing it would break a caller for sending a field it
+ * has always sent.
+ *
+ * ── WHY THE SIGNED SHAPE STILL WORKS ─────────────────────────────────────────────────────────
+ *
+ * `amount_cents` is the canonical SERVICE contract and has non-operator callers — subsidy
+ * remittance writes through the same reduction authority, and the live suites drive it directly.
+ * Those are not people reasoning about signs; they are code expressing an already-signed economic
+ * fact. So the legacy shape is preserved unchanged and the intent shape takes precedence when
+ * present. One normalizer answers for validate, preview and execute, which is what keeps a preview
+ * from describing one direction while execute writes the other.
+ */
+type NormalizedAdjustment =
+    | { ok: true; amountCents: number; chargeCategory: ManualReductionCategory; direction: AdjustmentDirection | null }
+    | { ok: false; code: string; message: string; field: string };
+
+function normalizeAdjustmentIntent(payload: Record<string, unknown> | null | undefined): NormalizedAdjustment {
+    const direction = t(payload?.direction);
+    if (direction) {
+        if (!(ADJUSTMENT_DIRECTIONS as readonly string[]).includes(direction)) {
+            return {
+                ok: false,
+                code: "invalid_direction",
+                message: "Say whether this reduces or increases what the family owes.",
+                field: "direction",
+            };
+        }
+        const magnitude = Number(payload?.magnitude_cents);
+        if (!Number.isInteger(magnitude) || magnitude <= 0) {
+            return {
+                ok: false,
+                code: "invalid_amount",
+                message: "Enter an amount greater than zero.",
+                field: "magnitude_cents",
+            };
+        }
+        const typed = direction as AdjustmentDirection;
+        return {
+            ok: true,
+            amountCents: signedCentsForIntent({ direction: typed, magnitudeCents: magnitude }),
+            chargeCategory: chargeCategoryForDirection(typed),
+            direction: typed,
+        };
+    }
+
+    const amount = Number(payload?.amount_cents);
+    if (!Number.isInteger(amount) || amount === 0) {
+        return {
+            ok: false,
+            code: "invalid_amount",
+            message: "A reduction needs a whole, non-zero amount in cents.",
+            field: "amount_cents",
+        };
+    }
+    const category = t(payload?.charge_category) || "credit";
+    if (!(MANUAL_REDUCTION_CATEGORIES as readonly string[]).includes(category)) {
+        return {
+            ok: false,
+            code: "invalid_category",
+            message: `Unknown reduction category: ${category}.`,
+            field: "charge_category",
+        };
+    }
+    return { ok: true, amountCents: amount, chargeCategory: category as ManualReductionCategory, direction: null };
+}
+
 const adjustAccount: RegisteredAction = {
     actionKey: BILLING_ADJUST_ACCOUNT_ACTION_KEY,
     defaultLabel: "Adjust account",
@@ -282,9 +366,9 @@ const adjustAccount: RegisteredAction = {
         if (!t(payload?.enrollment_agreement_id)) {
             blockers.push({ code: "missing_subject", message: "Name the enrolment this reduction is against.", field: "enrollment_agreement_id" });
         }
-        const amount = Number(payload?.amount_cents);
-        if (!Number.isInteger(amount) || amount === 0) {
-            blockers.push({ code: "invalid_amount", message: "A reduction needs a whole, non-zero amount in cents.", field: "amount_cents" });
+        const normalized = normalizeAdjustmentIntent(payload);
+        if (!normalized.ok) {
+            blockers.push({ code: normalized.code, message: normalized.message, field: normalized.field });
         }
         if (t(payload?.reason).length < 3) {
             blockers.push({
@@ -292,10 +376,6 @@ const adjustAccount: RegisteredAction = {
                 message: "Say why the account is being reduced. A manual credit with no reason cannot be explained later.",
                 field: "reason",
             });
-        }
-        const category = t(payload?.charge_category) || "credit";
-        if (!(MANUAL_REDUCTION_CATEGORIES as readonly string[]).includes(category)) {
-            blockers.push({ code: "invalid_category", message: `Unknown reduction category: ${category}.`, field: "charge_category" });
         }
         if (!/^\d{4}-\d{2}-\d{2}$/.test(t(payload?.effective_date))) {
             blockers.push({ code: "invalid_effective_date", message: "Name the date this reduction takes effect.", field: "effective_date" });
@@ -327,19 +407,22 @@ const adjustAccount: RegisteredAction = {
      * than thrown: being told why the action is unavailable is more useful than an empty preview.
      */
     async buildPreview({ supabase, ctx, payload }) {
-        const amount = Number(payload?.amount_cents);
-        if (!Number.isInteger(amount) || amount === 0) {
-            return {
-                summary: "A reduction needs a whole, non-zero amount in cents.",
-                changes: [],
-            };
+        const normalized = normalizeAdjustmentIntent(payload);
+        if (!normalized.ok) {
+            return { summary: normalized.message, changes: [] };
         }
         try {
             const preview = await previewProspectiveCorrection(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 enrollmentAgreementId: t(payload?.enrollment_agreement_id),
                 customerId: t(payload?.customer_id) || null,
-                amountCents: amount,
+                /*
+                 * THE GRAIN RESPONSIBILITY IS ASKED AT. Without it the preview asks strictly about
+                 * the household and would tell an operator correcting one child's charge that the
+                 * household bears it, while a child-scoped arrangement governs.
+                 */
+                customerMemberId: t(payload?.customer_member_id) || null,
+                amountCents: normalized.amountCents,
                 effectiveDate: t(payload?.effective_date),
                 sourceChargeId: t(payload?.source_charge_id) || null,
             });
@@ -369,13 +452,24 @@ const adjustAccount: RegisteredAction = {
             };
         }
         try {
+            const normalized = normalizeAdjustmentIntent(payload);
+            if (!normalized.ok) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: 400,
+                    error: normalized.message,
+                    blockers: [{ code: normalized.code, message: normalized.message }],
+                };
+            }
             const result = await applyManualReduction(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 enrollmentAgreementId: t(payload?.enrollment_agreement_id),
                 customerId: t(payload?.customer_id) || null,
                 customerMemberId: t(payload?.customer_member_id) || null,
-                chargeCategory: (t(payload?.charge_category) || "credit") as ManualReductionCategory,
-                amountCents: Number(payload?.amount_cents),
+                /* DERIVED from the direction when one was stated — see `normalizeAdjustmentIntent`. */
+                chargeCategory: normalized.chargeCategory,
+                amountCents: normalized.amountCents,
                 currencyCode: t(payload?.currency_code) || null,
                 reason: t(payload?.reason),
                 effectiveDate: t(payload?.effective_date),
@@ -397,7 +491,22 @@ const adjustAccount: RegisteredAction = {
                         application_id: result.applicationId,
                         charge_id: result.chargeId,
                         amount_cents: result.amountCents,
+                        /*
+                         * ── A TRUE OUTCOME THAT IS NOT A NEW WRITE ───────────────────────────
+                         *
+                         * §18: a repeat submit must have one economic consequence AND the surface
+                         * must be able to say so. The service has always answered this honestly;
+                         * the result carried it and every caller discarded it, so a resubmit
+                         * reported "Recorded" twice and an operator had no way to tell whether
+                         * they had just credited the family again.
+                         */
                         idempotent: result.idempotent,
+                        /*
+                         * The direction, stated rather than left to be inferred from the sign of
+                         * `amount_cents`. A surface that re-derives it is a second place for the
+                         * convention to be read backwards.
+                         */
+                        direction: directionFromSignedCents(result.amountCents),
                     },
                 },
             };

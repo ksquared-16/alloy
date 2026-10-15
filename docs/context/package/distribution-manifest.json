@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "c394cd3c4e22538afedf3706b3e38f5fec72b32e",
+      "blob_sha": "41159da9ed99cfc5e1a28bc1810f882eae4bd0aa",
       "exists": true
     },
     {
@@ -77,7 +77,7 @@
     {
       "path": "docs/platform/core/status-and-state-system.md",
       "tier": 2,
-      "blob_sha": "b1c2e54ad46c2bca82a51e639564a2cfb83fba1b",
+      "blob_sha": "35068b2af14275e867cf0c98bce3d3e7467b1985",
       "exists": true
     },
     {
@@ -119,13 +119,13 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "121d86b3f67145cff4531a7975ce57b890a716f0",
+      "blob_sha": "225e5896c2e3663dd899a8d2e3ee04f65b91dc85",
       "exists": true
     },
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "655463fc297fbc7e526a57c99fb59db54a3dd2c3",
+      "blob_sha": "06998343408c3cf6289db9d07b711edeb76146b6",
       "exists": true
     },
     {
@@ -191,7 +191,7 @@
     {
       "path": "docs/platform/core/stage-membership-and-outcomes.md",
       "tier": 3,
-      "blob_sha": "cdcec2f973740d6f52819746da078523b6c27b1a",
+      "blob_sha": "5b3a268132da58e57e8e08c0f2b7998870207654",
       "exists": true
     },
     {
@@ -215,7 +215,7 @@
     {
       "path": "docs/platform/governance/authentication-and-session-model.md",
       "tier": 3,
-      "blob_sha": "212f6e4dda697e5ddd7bbc010397f61291e342ad",
+      "blob_sha": "99cf5494eb1d1e0ef64da11df332354f3c4d6af4",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "5ad08eee02f4ba83b777e97659f89b947f99968f",
+      "blob_sha": "3b3601235007207545a3ade423f5e6c26a627e01",
       "exists": true
     },
     {

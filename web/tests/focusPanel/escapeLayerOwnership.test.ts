@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+    COMPOSER_LAYER_SELECTOR,
     hasInnerDismissibleLayer,
     FINANCIALS_DEPTH_CARD_SELECTOR,
     INLINE_EDIT_SELECTOR,
@@ -119,5 +120,31 @@ describe("a Financials depth card owns Escape while it holds focus", () => {
     it("the inline editor and the transient popup rules are untouched", () => {
         expect(hasInnerDismissibleLayer(docWith(TRANSIENT_POPUP_SELECTOR))).toBe(true);
         expect(hasInnerDismissibleLayer(docWith(null, focusedWithin(INLINE_EDIT_SELECTOR)))).toBe(true);
+    });
+});
+
+describe("the record New Message composer's layers own Escape before the workspace", () => {
+    it("yields while any composer layer that closes itself is open", () => {
+        const doc = (present: string) =>
+            ({
+                querySelector: (sel: string) => (sel === COMPOSER_LAYER_SELECTOR && present ? {} : null),
+                activeElement: null,
+            }) as unknown as Document;
+        expect(hasInnerDismissibleLayer(doc("open"))).toBe(true);
+        expect(hasInnerDismissibleLayer(doc(""))).toBe(false);
+    });
+
+    it("registers the preference popover, menus, Send later, BOS and the review dialog", () => {
+        for (const marker of [
+            "data-cc-recipient-preference-panel",
+            "data-cc-recipient-popover",
+            "data-cc-template-menu-panel",
+            "data-cc-insert-menu-panel",
+            "data-adminv2-composer-schedule-modal",
+            "data-adminv2-composer-bos-modal",
+            "data-cc-send-confirm-dialog",
+        ]) {
+            expect(COMPOSER_LAYER_SELECTOR).toContain(marker);
+        }
     });
 });

@@ -49,7 +49,6 @@ import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
 
-import { billingPeriodForDate } from "@/lib/financials/billingPeriod";
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
@@ -291,7 +290,30 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             currentBalance: money(reconciliation.balanceCents, currency),
             /* The SAME canonical figure `collectibleNow` reads, stated unconditionally. See the
                field's note in `cardLabTypes`: one authority, two rendering policies. */
-            dueNow: money(vm.collectible.currentlyCollectibleCents, currency),
+            /*
+             * W7-F013: DUE is what is collectible AND due today or earlier. Money whose due date is
+             * still ahead (a late add rolled to the next payment event) stays collectible — it can be
+             * paid early — but is stated beside Due, never inside it.
+             */
+            /*
+             * Measured on deployed b48d684b: Due $0.00 beside Past due $40.00. The collectible
+             * figure is NET of account credits while not-yet-due is a per-charge residual, so the
+             * subtraction alone can undershoot. What is past due is always due, so Due never reads
+             * below it (bounded by what is collectible at all).
+             */
+            dueNow: money(
+                Math.max(
+                    0,
+                    vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0),
+                    Math.min(vm.pastDue?.amountCents ?? 0, vm.collectible.currentlyCollectibleCents),
+                ),
+                currency,
+            ),
+            /* W7-F018: drafts, stated beside the balance they are not part of. */
+            upcoming: vm.upcoming && vm.upcoming.amountCents > 0 ? money(vm.upcoming.amountCents, currency) : null,
+            notYetDue: vm.notYetDue && vm.notYetDue.amountCents > 0
+                ? `${money(vm.notYetDue.amountCents, currency)} on ${displayDate(vm.notYetDue.nextDueDate) ?? vm.notYetDue.nextDueDate}`
+                : null,
             /*
              * ZERO IS SILENCE. The metric appears only when the organisation actually holds
              * spendable money for this family — the information-density rule the rest of this strip
@@ -729,6 +751,11 @@ export function adaptAddChargeSpecimen(input: {
     const rawLine = (prefix: string): string | null =>
         input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim() ?? null;
 
+    const sentence = (prefix: string): string | null => {
+        const raw = rawLine(prefix)?.replace(/^·\s*/, "");
+        return raw ? raw.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (iso) => displayDate(iso) ?? iso) : null;
+    };
+
     const line = (prefix: string): string | null => {
         const raw =
             input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim()
@@ -805,29 +832,49 @@ export function adaptAddChargeSpecimen(input: {
          * labels-not-keys rule broken in the one place an operator is about to commit money.
          */
         serviceDate: line("occurs") ?? "Resolved at commit",
+        serviceDateIso: (() => {
+            const raw = rawLine("occurs");
+            return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+        })(),
         /*
-         * ── A BILLING PERIOD IS AN INTERVAL; `billable_on` IS A DATE ────────────────────────
+         * ── THE BILLING PERIOD IS THE SERVER'S, CONTAINING THE SERVICE DATE ─────────────────
          *
-         * This rendered `line("billable")` — the INVOICE DATE — under the label "Billing period",
-         * so the command showed "Oct 1, 2026" where the business concept is an interval. Measured
-         * mounted: one template read "Oct 1, 2026" (the billable date) and another "October 2026"
-         * (the account's period), because the first resolved a billable date and the second fell
-         * through. Two different kinds of answer under one label.
-         *
-         * `billingPeriodForDate` is the canonical derivation and is not a second one: it returns
-         * the period CONTAINING a date, labelled the way the rest of Financials labels periods —
-         * "October 2026" for a month, "Sep 15–21, 2026" for a shorter cadence. Deriving the period
-         * the charge actually lands in is also more correct than the account's current period,
-         * which is what the fallback gives and which is wrong for a scheduled future charge.
-         *
-         * No interval is invented: with no resolved billable date this still falls back to the
-         * account's own period label exactly as before.
+         * This used to derive the period HERE, from the invoice date, through a calendar-month
+         * helper — a second derivation that followed invoice timing into the next cycle (the W7
+         * "Nov 5 → December" defect) and ignored the household's own billing calendar. The period
+         * is now resolved once, by the date chain the write uses, and this only places its label.
+         * With no answer yet it falls back to the account's own period label as before.
          */
         period: (() => {
-            const billableIso = rawLine("billable");
-            return billableIso && /^\d{4}-\d{2}-\d{2}$/.test(billableIso)
-                ? billingPeriodForDate(billableIso).label
-                : input.period;
+            const raw = rawLine("billing period");
+            if (!raw) return input.period;
+            /* "November 2026 · 2026-11-01 → 2026-11-30" → the label; a refusal sentence is kept whole. */
+            const cleaned = raw.replace(/^·\s*/, "");
+            return cleaned.includes(" · ") ? cleaned.slice(0, cleaned.indexOf(" · ")) : cleaned;
+        })(),
+        invoiceDate:
+            input.previewSummary == null ? "\u2014"
+            : (line("invoice date") ?? "On the service date"),
+        /* The server's sentences, with its ISO dates rendered as dates an operator reads. */
+        dateRules: {
+            invoice: sentence("invoice timing"),
+            due: sentence("payment terms"),
+        },
+        /*
+         * W7-F017: a charge type that overrides the organisation's invoice timing is stated on the
+         * form, not left in a tooltip — it is the exception an operator would otherwise have to
+         * reverse-engineer from the dates.
+         */
+        invoiceOverride: (() => {
+            const raw = sentence("invoice timing");
+            if (!raw || !/\(charge-type override\)/.test(raw)) return null;
+            return raw.slice(0, raw.indexOf(" (charge-type override)")).trim() || null;
+        })(),
+        posting: sentence("posting"),
+        /* The day a future-period charge posts itself, when the chain says it waits for its period. */
+        awaitsPeriodUntil: (() => {
+            const iso = rawLine("posting")?.match(/Draft until (\d{4}-\d{2}-\d{2})/)?.[1];
+            return iso ? (displayDate(iso) ?? iso) : null;
         })(),
         /*
          * ── DUE: A DATE, AN HONEST ABSENCE, OR NOT YET KNOWN — NEVER A MECHANISM ────────────

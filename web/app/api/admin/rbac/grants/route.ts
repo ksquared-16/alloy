@@ -3,6 +3,7 @@ import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContex
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
@@ -128,6 +129,8 @@ export async function PUT(request: NextRequest) {
          * partial grant set to explain. 403 rather than 400: the request was well-formed and the
          * answer is about who is asking.
          */
+        const unlinked = moneyCapableGrantRefusal(message);
+        if (unlinked) return NextResponse.json({ error: unlinked }, { status: 403 });
         const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
         if (beyond) {
             return NextResponse.json(

@@ -1,0 +1,67 @@
+{
+  "trusted_host_action_id": "tha_ba898b823f80a3",
+  "query_hash": "b64e684e8fd242558dbe2f7f700f033a83b7537206aadc5f0e8903c4b77b63e8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T16:15:18.465Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ba898b823f80a3",
+    "query_hash": "b64e684e8fd242558dbe2f7f700f033a83b7537206aadc5f0e8903c4b77b63e8",
+    "authorization_id": "grnt_678b2cf1db354cb2",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T16:15:24.482Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "iana": "America/Los_Angeles",
+            "orgs": 1,
+            "utc_offset_hours_now": -7,
+            "local_midnight_utc_hour_now": 7
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs_with_canonical_periods": 1,
+            "distinct_zones": 1,
+            "min_utc_offset_hours": -7,
+            "max_utc_offset_hours": -7
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "close_schedules": 1,
+            "active": 1,
+            "daily": 1,
+            "distinct_utc_hours": [
+              4
+            ],
+            "orgs_with_more_than_one": 0
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

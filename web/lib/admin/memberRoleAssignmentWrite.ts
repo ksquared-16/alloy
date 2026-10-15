@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AccessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { moneyCapableGrantRefusal } from "@/lib/access/personLinkRequirement";
 
 /**
  * The two additive membership-role operations, at their audited transaction owner.
@@ -60,6 +61,8 @@ async function callRoleRpc(fn: "assign_member_role_audited" | "remove_member_rol
          * mounted certification caught exactly that. 403 and the operator's own vocabulary, the same
          * shape W-18's grant route gives its refusal.
          */
+        const unlinked = moneyCapableGrantRefusal(error.message);
+        if (unlinked) return { ok: false, kind: "forbidden", error: unlinked };
         const beyond = error.message.match(/assignment_ceiling:([^\s"]+)/);
         if (beyond) {
             return {

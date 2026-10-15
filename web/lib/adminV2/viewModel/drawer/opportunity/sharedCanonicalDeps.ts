@@ -12,6 +12,7 @@ import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
  * `composeOpportunityDrawerViewModel` — same fetches, same order, same `phases_ms` keys. `lifecycle_rail`
  * is computed here (it is a pure function of already-resolved inputs and is read nowhere earlier).
  */
+import { childrenAtFamilyPositionForMission } from "@/lib/process/definitions/enrollment/loadChildrenAtFamilyPosition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
@@ -439,13 +440,32 @@ export async function resolveSharedCanonicalDeps(
         await missionLoadP,
         "drawer-mission",
     );
+    // The FAMILY's own stage. The composed record is layout-filtered and carries no `stage_key`, and
+    // on these leads the row's `stage_key` is empty too — the family's stage lives in its status,
+    // which the lifecycle rail resolves (`current_stage_key`). That is the same stage this Mission
+    // already fell back to when nothing else resolved, so with no tracked participant nothing
+    // changes. Measured on deployed 7cd17a7c (E2E-12): rail "lead", Mission still "waitlist",
+    // because the untracked-child gate needs the family stage and saw none.
+    const missionContextStageKey =
+        trimOrNull((oppRow as Record<string, unknown> | null)?.stage_key)
+        ?? trimOrNull((recordWithEpp ?? record).stage_key)
+        ?? trimOrNull(lifecycle_rail?.current_stage_key);
+    const trackedParticipantStageKeys = effectiveParticipantStageKeysFromRow(
+        (recordWithEpp ?? record) as Record<string, unknown>,
+    );
     const mission = resolveContextMissionStages({
-        contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
-        effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
-            (recordWithEpp ?? record) as Record<string, unknown>,
-        ),
+        contextStageKey: missionContextStageKey,
+        effectiveParticipantStageKeys: trackedParticipantStageKeys,
         // Drawer open has no Work View lens — Mission from effective tracks only.
         workViewLensStageKeys: [],
+        // E2E-12: children with no track yet are at the family's stage.
+        participantsAtContextPosition: await childrenAtFamilyPositionForMission({
+            supabase,
+            orgId,
+            opportunityId,
+            contextStageKey: missionContextStageKey,
+            trackedParticipantStageKeys,
+        }),
     });
     const missionStageKey = mission.primaryMissionStageKey;
     const railStageKey = lifecycle_rail?.current_stage_key ?? null;

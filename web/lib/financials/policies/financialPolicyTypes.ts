@@ -10,6 +10,7 @@
  */
 
 import type { ConfigRuleEffectiveColumns } from "@/lib/childcareOperational/config/configRuleTypes";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 /*
  * `customer` is the ACCOUNT scope, and it is a different dimension from the three that precede it.
@@ -88,6 +89,17 @@ export const FINANCIAL_POLICY_TYPES = [
      * to a cadence the period authority cannot produce would be configuration that fails at use.
      */
     "billing_calendar",
+    /*
+     * WHEN THE ORGANISATION BILLS — the invoice date, as a rule relative to the billing period.
+     *
+     * It used to exist only as a charge-template column (`billable_on_strategy`), so the answer to
+     * "when does this organisation bill?" was scattered across every template and could not say
+     * "seven days before the period begins" at all. It is now a scoped, effective-dated policy —
+     * org default, location override — and a template carries an exception only where a charge
+     * kind genuinely bills differently. It writes the same column (`billable_on`); there is still
+     * one invoice date and one engine that computes it (`resolveChargeDateChain`).
+     */
+    "invoice_timing",
 ] as const;
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
 
@@ -119,6 +131,13 @@ export const OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES = [
     "posting_review",
     "vacation_credit",
     "due_date",
+    /*
+     * The two billing-period rules the date chain consumes. `billing_calendar` is consumed by the
+     * billing-period binder; `invoice_timing` by `resolveChargeDateChain`. Both were resolvable and
+     * unauthorable, which is how a tenant's calendar came to be configured only by fixture scripts.
+     */
+    "billing_calendar",
+    "invoice_timing",
 ] as const satisfies readonly FinancialPolicyType[];
 
 /** Offered by the configuration surface, or held back until a runtime consumer exists. */
@@ -198,6 +217,22 @@ export const DUE_DATE_STRATEGIES = [
     { value: "days_after_period_start", label: "Days after the billing period starts" },
 ];
 
+/**
+ * HOW AN INVOICE DATE IS REACHED, relative to the billing period the obligation belongs to.
+ *
+ *   days_before_period_start   invoice = period start − N     (N = 0 is "on the first day")
+ *   on_service_date            invoice = the service date     (the historical "immediate")
+ *
+ * Either way the invoice date never precedes the day the charge is created: a charge added late
+ * is invoiced the day it exists. That clamp is applied by the date chain, not configured here.
+ */
+export const INVOICE_TIMING_STRATEGIES = [
+    { value: "days_before_period_start", label: "Days before the billing period begins" },
+    { value: "on_service_date", label: "On the service date" },
+];
+
+export type InvoiceTimingStrategy = "days_before_period_start" | "on_service_date";
+
 export type DueDateStrategy = "on_invoice" | "days_after_invoice" | "on_period_start" | "days_after_period_start";
 
 /** The registry: one definition per policy type, with its typed value fields. */
@@ -257,6 +292,16 @@ export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = 
         fields: [
             { key: "strategy", label: "Due", control: "select", options: DUE_DATE_STRATEGIES },
             { key: "offset_days", label: "Offset", control: "number", suffix: "days" },
+        ],
+    },
+    invoice_timing: {
+        key: "invoice_timing",
+        label: "Invoice timing",
+        description:
+            "When an obligation is invoiced, relative to the billing period it belongs to. A charge created after that date is invoiced the day it is created.",
+        fields: [
+            { key: "strategy", label: "Invoice", control: "select", options: INVOICE_TIMING_STRATEGIES },
+            { key: "offset_days", label: "Lead", control: "number", suffix: "days" },
         ],
     },
     billing_calendar: {
@@ -388,6 +433,8 @@ export function policyValueSummary(policyType: FinancialPolicyType, value: Recor
                 const opt = (f.options ?? []).find((o) => o.value === v);
                 return `${f.label}: ${opt?.label ?? String(v ?? "—")}`;
             }
+            // A date field reads as a date an operator reads, never year-first ISO (W7-F011).
+            if (f.control === "date") return `${f.label}: ${v ? humanDay(String(v)) : "—"}`;
             return `${f.label}: ${v ?? "—"}${f.suffix ? ` ${f.suffix}` : ""}`;
         })
         .join(" · ");

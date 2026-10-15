@@ -537,6 +537,13 @@ export default function FinancialsDetailCard({
                       */}
                     <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Due" value={period.dueNow} />
+                    {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
+                    {/*
+                      * W7 Scenario 8 final: "Scheduled" — draft, not-yet-posted obligation. The
+                      * Focus Panel already says Scheduled for the same money; the ledger row keeps
+                      * the lifecycle detail ("Draft · Posts Nov 1"). Same figure, shorter word.
+                      */}
+                    {period.upcoming ? <Stat label="Scheduled" value={period.upcoming} /> : null}
                     <Stat
                         label="Past due"
                         value={hydrating ? "—" : pastDue ? pastDue.amount : "None"}
@@ -1398,7 +1405,11 @@ function ledgerRowFromEntry(
     const resolveResp = responsibility.resolve && actions.onResolveResponsibility;
     const reallocateResp = responsibility.reallocate && actions.onReallocateResponsibility;
     /* The row's business word, which is what the ledger already shows the operator. */
-    const label = e.type || "Charge";
+    /*
+     * W7-F014: the charge's HUMAN name — the configured charge type ("Materials") — never the
+     * category key ("consumable_fee"), which the card title then uppercased to CONSUMABLE_FEE.
+     */
+    const label = (e.label && !/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(e.label) ? e.label : null) || chargeCategoryLabel(e.type) || "Charge";
     const openable = e.chargeId && actions.onOpenCharge;
     return {
         onOpen: openable ? () => actions.onOpenCharge!({ chargeId: e.chargeId!, label }) : undefined,
@@ -1432,7 +1443,17 @@ function ledgerRowFromEntry(
         description: reductionPreview(e) || e.label,
         glLabel: e.glCode,
         amount: e.amount,
-        status: e.status ?? "—",
+        /*
+         * W7-F018: A DRAFT DOES NOT LOOK LIKE POSTED MONEY. The canonical lifecycle classifier
+         * already says which rows are unposted; they read "Upcoming" (waiting for their period) or
+         * "Draft" (waiting for something else), and carry the muted upcoming tone.
+         */
+        status: e.status === "scheduled" ? "Upcoming" : e.status === "draft" ? "Draft" : e.status === "void" ? "Cancelled" : e.status ?? "—",
+        ...(e.status === "scheduled" || e.status === "draft"
+            ? { tone: "upcoming" as const }
+            : e.status === "void"
+              ? { tone: "muted" as const }
+              : {}),
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
         responsibilityAssignedCents: e.responsibilityAssignedCents,

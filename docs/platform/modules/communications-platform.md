@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-09
 supersedes: []
 ---
 
@@ -42,7 +42,9 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 ## Rules
 
 - No client direct DB writes for outbound
-- Stage work may auto-associate contact attempts (enrollment Contacting stage)
+- Stage work may auto-associate contact attempts (enrollment Contacting stage) — only when the
+  sending entry point declares the work consequence (Current Work); a generic send never completes
+  work (see [`stage-membership-and-outcomes.md`](../core/stage-membership-and-outcomes.md) § Command-result sufficiency)
 - Drawer/inbox warm deferred on work-unit entry for performance
 
 ---
@@ -109,9 +111,10 @@ Workspace Inbox owns only the operational queue and surrounding context controls
 | Surface | Template integration | Send / schedule behavior |
 |---------|---------------------|--------------------------|
 | **Template Library** (modal tab) | Authoring + versioning | N/A — registry only |
-| **Compose New** (`QuickMessageModal`) | Channel-filtered picker; applies `current_version` to editable subject/body | Outbound send uses composed text only (no `template_id` on message row today) |
+| **Record New Message composer** (`FamilyNewMessageComposer`: Current Work → Contact Family / Send Message / Tour Invitation, Manage → Send Message / Email / SMS / Tour Invitation) and every `FamilyCommunicationWorkspaceView` composer | **Template ▾** in the editor toolbar (`ComposerTemplateMenu`): channel-filtered active templates; applies `current_version` as an editable copy of subject/body (subject only on a new email) | Canonical `family-send` preview → confirm; composed text only (no `template_id` on message row today) |
+| **Compose New without a record** (`QuickMessageModal`, person search) | Channel-filtered picker; applies `current_version` to editable subject/body | Per-recipient `/communications/send` (`quick_message`) — see the runtime contract's legacy exception |
 | **Announcements** | `announcements.template_id` FK + picker; apply-on-select copies `current_version` into draft fields | Schedule snapshots `announcements.subject` / `announcements.body` at schedule time — not a live re-resolve from `template_id` |
-| **Inbox reply / drawer compose** | Not integrated | Free-text compose |
+| **Inbox reply** (`InboxThreadReplyBox`) | Not integrated | Free-text compose |
 | **Workflow `create_message` / `send_message`** | Inline `body` / `template` strings with payload path tokens | Separate from Template Library — no `communication_template_id` yet |
 | **Tour Invitation / confirmation / reschedule / cancel / reminder / no-show** | System templates (`system_key`, e.g. `tour_invitation:email`) seeded into Template Library; org-editable versions | Immediate Tour sends resolve **current** library version at send time; Send Tour Invitation seeds New Message from Tour Invitation template; **reminders snapshot at schedule time** |
 

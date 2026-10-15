@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizePhoneForPersonWrite } from "@/lib/identity";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { customerPersonRowIsHouseholdPrimaryContact } from "@/lib/admin/person/householdPrimaryContact";
 
@@ -79,7 +80,8 @@ async function ensurePersonId(
             first_name: input.firstName,
             last_name: input.lastName,
             email: input.email,
-            phone: input.phone,
+            // Same stored form as the find-or-create writer above (E2E-16).
+            phone: normalizePhoneForPersonWrite(input.phone),
         })
         .select("id")
         .single();

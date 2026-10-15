@@ -69,7 +69,21 @@ export function classifyChargeOrigin(evidence: ChargeOriginEvidence): ChargeOrig
 export function describeChargeOrigin(origin: ChargeOrigin, actorName: string | null): string {
     switch (origin.kind) {
         case "person":
-            return actorName ? `Created by ${actorName}` : "Created by a person whose name is not on file";
+            /*
+             * ── THE UNNAMED SENTENCE, AFTER W7-F002 ──
+             *
+             * It used to read "Created by a person whose name is not on file", which told a reader
+             * that something was absent and nothing about WHAT was absent or whose job it was to
+             * supply it — on a financial audit line, where the whole point is saying who did this.
+             * The Director's decision is explicit: a product must not accept that as normal
+             * financial attribution.
+             *
+             * So the sentence now names the unmet requirement rather than the symptom, and
+             * `financialActorIdentityGap` supplies the actionable half beside it. A recorded actor
+             * is still a recorded actor — `created_by` is durable and unchanged — which is why this
+             * says the ledger cannot NAME them rather than implying nobody is recorded.
+             */
+            return actorName ? `Created by ${actorName}` : "Created by an operator the ledger cannot name";
         case "billing_run":
             return "Raised by a billing run";
         case "correction":

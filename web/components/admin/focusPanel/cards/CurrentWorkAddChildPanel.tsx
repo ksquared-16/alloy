@@ -28,6 +28,8 @@ import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/curre
 type Props = {
     action: CurrentWorkActionVM;
     opportunityId: string;
+    /** The family's household (`truth.customer_id`). */
+    householdId?: string | null;
     defaultLocationId?: string | null;
     onClose: () => void;
     onComplete: () => void;
@@ -65,6 +67,7 @@ function buildInitialValues(
 export default function CurrentWorkAddChildPanel({
     action,
     opportunityId,
+    householdId = null,
     defaultLocationId = null,
     onClose,
     onComplete,
@@ -76,7 +79,15 @@ export default function CurrentWorkAddChildPanel({
     const [participationFields, setParticipationFields] = useState<EntityCreateFormField[]>([]);
     const [fieldsLoading, setFieldsLoading] = useState(true);
     const [values, setValues] = useState<Record<string, string>>({});
-    const [customerId, setCustomerId] = useState<string | null>(null);
+    /*
+     * The family's household, from the record the Focus Panel already holds — the same
+     * `truth.customer_id` the Household card and the panel's mutations read.
+     *
+     * This used to be fetched from `GET /api/admin/opportunities/{id}`. That route has never had a GET
+     * handler (it answers 405), so the household was never found and every Add Child from the process
+     * card ended in "This family has no household yet. Refresh and try again." — on every lead.
+     */
+    const customerId = (householdId ?? "").trim() || null;
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const submitLock = useRef(false);
@@ -92,22 +103,11 @@ export default function CurrentWorkAddChildPanel({
         setFieldsLoading(true);
         void (async () => {
             try {
-                const [memberFields, inquiryFields, oppRes] = await Promise.all([
+                const [memberFields, inquiryFields] = await Promise.all([
                     fetchEntityCreateFormFields("customer_member").catch(() => []),
                     fetchEntityCreateFormFields("inquiry_child").catch(() => []),
-                    fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}`, {
-                        credentials: "include",
-                    }).catch(() => null),
                 ]);
                 if (cancelled) return;
-                if (oppRes?.ok) {
-                    const json = (await oppRes.json().catch(() => ({}))) as {
-                        data?: { customer_id?: string | null; location_id?: string | null };
-                        customer_id?: string | null;
-                    };
-                    const cid = String(json.data?.customer_id ?? json.customer_id ?? "").trim();
-                    if (cid) setCustomerId(cid);
-                }
                 const identity =
                     memberFields.filter((f) =>
                         ["first_name", "last_name", "date_of_birth", "dob"].includes(f.field_key),
@@ -193,44 +193,31 @@ export default function CurrentWorkAddChildPanel({
         }
     };
 
+    /*
+     * E2E-03 — ONE SHELL. This panel is hosted inside `CurrentWorkActionPanel`, which already renders
+     * the command's header (eyebrow, title, Close) — the same chrome Move to Waitlist gets. It used to
+     * render a second complete action-panel shell of its own inside that one, so the operator saw the
+     * command named three times and the nested shell overflowed the host that clips it. It is now the
+     * host's body, like every other capability: the host scrolls it and pins its footer.
+     */
     return (
-        <aside
-            className="alloy-os-currentwork__action-panel"
-            data-work-action-panel="true"
+        <div
+            className="alloy-os-currentwork__action-panel-body space-y-3"
             data-work-action-panel-key={action.key}
-            data-work-action-surface="inline_form"
+            data-command-surface-section="add_child"
             data-testid="current-work-add-child"
             aria-label={action.label}
         >
-            <div className="alloy-os-currentwork__action-panel-header">
-                <div>
-                    <p className="alloy-os-currentwork__action-panel-eyebrow">Helpful action</p>
-                    <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
-                    <p className="alloy-os-currentwork__action-panel-desc">
-                        Add a child to this family. Primary contact stays on the household.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    className="alloy-os-currentwork__action-panel-close"
-                    onClick={onClose}
-                    disabled={busy}
-                    aria-label="Close action panel"
-                >
-                    Close
-                </button>
-            </div>
-
+            <p className="alloy-os-currentwork__action-panel-desc">
+                Add a child to this family. Primary contact stays on the household.
+            </p>
             {stage === "success" ?
-                <div className="alloy-os-currentwork__action-panel-body" data-command-surface-section="success">
+                <div className="space-y-1" data-command-surface-section="success">
                     <p className="text-sm font-medium text-alloy-midnight">Child added to this family.</p>
                     <p className="text-xs text-alloy-midnight/60">Updating Children and What's Next…</p>
                 </div>
             : stage === "preview" ?
-                <div
-                    className="alloy-os-currentwork__action-panel-body space-y-3"
-                    data-command-surface-section="preview"
-                >
+                <div className="space-y-3" data-command-surface-section="preview">
                     <p className="text-sm font-medium text-alloy-midnight">Review</p>
                     <ul className="space-y-1 text-sm text-alloy-midnight/80">
                         <li>
@@ -273,10 +260,7 @@ export default function CurrentWorkAddChildPanel({
                         </button>
                     </div>
                 </div>
-            :   <div
-                    className="alloy-os-currentwork__action-panel-body space-y-3"
-                    data-command-surface-section="input_fields"
-                >
+            :   <div className="space-y-3" data-command-surface-section="input_fields">
                     {fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/70">Loading child fields…</p>
                     :   null}
@@ -327,6 +311,6 @@ export default function CurrentWorkAddChildPanel({
                     <span className="sr-only">{allFields.length} fields</span>
                 </div>
             }
-        </aside>
+        </div>
     );
 }

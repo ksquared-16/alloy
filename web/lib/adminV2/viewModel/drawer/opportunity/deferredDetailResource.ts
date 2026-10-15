@@ -27,6 +27,8 @@ export type BuildDeferredDetailResourceParams = {
     deptMetadata: Record<string, unknown> | null;
     currentStageKey: string | null;
     currentStageLabel: string | null;
+    /** E2E-12 — a child subject's own track: its stage work runs child-scoped, as the commit path's does. */
+    attentionTrack?: { processInstanceId: string; customerMemberId: string; ocmId: string | null } | null;
     deferCommunicationsPreview: boolean;
 };
 
@@ -88,6 +90,13 @@ export async function buildDeferredDetailResource(
             stageKey: currentStageKey,
             stageLabel: currentStageLabel,
             departmentMetadata: deptMetadata,
+            ...(params.attentionTrack ?
+                {
+                    customerMemberId: params.attentionTrack.customerMemberId,
+                    opportunityCustomerMemberId: params.attentionTrack.ocmId ?? undefined,
+                    processInstanceId: params.attentionTrack.processInstanceId,
+                }
+            :   {}),
         }),
         communicationsPreviewP,
     ]);

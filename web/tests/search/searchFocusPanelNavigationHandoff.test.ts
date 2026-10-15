@@ -152,7 +152,11 @@ describe("a producer states intent; the kernel applies it", () => {
 
     it("the control never pushes a route for a Focus Panel destination", async () => {
         const src = await code("app/adminV2/components/GlobalSearchBox.tsx");
-        const focusPanelBranch = src.slice(src.indexOf('destination.target !== "focus_panel"'));
+        // E2E-18: the destination → selection mapping is shared (`operatorFocusSelectionFromDestination`)
+        // so Search and the Children card dispatch identical selections; the branch starts at it.
+        const focusPanelBranch = src.slice(src.indexOf("operatorFocusSelectionFromDestination(destination)"));
+        const helper = await code("lib/runtime/focus/operatorFocusSelection.ts");
+        expect(helper).toContain('destination.target !== "focus_panel"');
 
         // A route push survives only for `target === "route"` destinations (campus
         // settings), which are real routes with real pages.

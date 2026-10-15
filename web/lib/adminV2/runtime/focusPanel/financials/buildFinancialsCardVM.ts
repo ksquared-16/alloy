@@ -46,6 +46,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 /*
  * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
  * the one that governs a given service. The pair is what makes `posting_review` a configured fact
@@ -332,6 +333,34 @@ export type FinancialsPastDue = {
     agingDays: number;
 };
 
+/**
+ * W7-F018: drafts on the account — visible, not posted, and so not balance, Due, Past due or
+ * posted responsibility. The SAME lifecycle classifier the reconciliation uses decides membership
+ * (`scheduled` = waiting for its billing period; `draft` = waiting for something else), summed
+ * across every period, because a draft for next month is still on this account.
+ */
+export type FinancialsUpcoming = {
+    amountCents: number;
+    count: number;
+};
+
+export function upcomingFor(rows: readonly AccountChargeLedgerRow[]): FinancialsUpcoming | null {
+    const drafts = rows.filter(
+        (r) => (r.lifecycleStatus === "scheduled" || r.lifecycleStatus === "draft") && r.amountCents > 0,
+    );
+    if (drafts.length === 0) return null;
+    return { amountCents: drafts.reduce((sum, r) => sum + r.amountCents, 0), count: drafts.length };
+}
+
+/**
+ * W7-F013: posted money whose due date is still ahead — collectible (it may be paid early), not due.
+ * The mirror of past due: same rows, same residual, the other side of today.
+ */
+export type FinancialsNotYetDue = {
+    amountCents: number;
+    nextDueDate: string;
+};
+
 export type FinancialsPeriodGroup = {
     period: BillingPeriod;
     rows: FinancialsLedgerRow[];
@@ -366,6 +395,19 @@ export type FinancialsUnavailable = { fact: string; reason: string };
 export type FinancialsCardVM = {
     /** Null when the subject has no enrollment agreement at all — nothing financial to say. */
     account: { customerId: string | null; label: string | null } | null;
+    /**
+     * ── THE ORGANISATION'S BUSINESS DATE, RESOLVED SERVER-SIDE ────────────────────────────────
+     *
+     * The operating day this whole model was built against — the same value that chose `period`,
+     * reconciled the rows and decided what is past due.
+     *
+     * It reaches the surface because a command that needs to default an economic date must use the
+     * ORGANISATION's today, and React cannot compute that: the browser's zone is the OPERATOR's,
+     * and an operator may sit in a different zone from the site whose money they are recording.
+     * Carrying the resolved value is also what keeps the surface's default and the server's
+     * reconciliation talking about the same day.
+     */
+    businessDateYmd: string;
     period: BillingPeriod;
     subjects: FinancialsSubject[];
     /**
@@ -383,6 +425,10 @@ export type FinancialsCardVM = {
     /** The same reconciliation, narrowed per child — keyed by `customer_members.id`. */
     reconciliationBySubject: Record<string, FinancialsReconciliation>;
     pastDue: FinancialsPastDue | null;
+    /** W7-F013: posted, collectible, and not due until a later payment event. */
+    notYetDue: FinancialsNotYetDue | null;
+    /** W7-F018: drafts across the account — never balance, Due or posted responsibility. */
+    upcoming: FinancialsUpcoming | null;
     pastDueBySubject: Record<string, FinancialsPastDue | null>;
     ledgerPeriods: FinancialsPeriodGroup[];
     /**
@@ -565,7 +611,28 @@ function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
 
-function ymdToday(): string {
+/**
+ * THE ORGANISATION'S BUSINESS DATE, with the one honest fallback.
+ *
+ * `fetchOrgBusinessDate` already resolves a usable zone for a tenant that has configured none, so
+ * the catch here is for an unreachable read rather than an unconfigured org. A card that cannot
+ * reach the timezone authority still has to render, and the UTC day is the same answer this code
+ * gave before — so the fallback degrades to the old behaviour rather than to no behaviour.
+ */
+async function resolveOperatingDay(supabase: SupabaseClient, orgId: string): Promise<string> {
+    try {
+        return await fetchOrgBusinessDate(supabase, orgId);
+    } catch {
+        return ymdTodayUtcFallback();
+    }
+}
+
+/**
+ * LAST-RESORT UTC DAY. Retained only for the path that has no organisation to ask — see the
+ * resolution in `buildFinancialsCardVMInner`, which prefers the org's business date and falls back
+ * here only if the timezone authority itself fails.
+ */
+function ymdTodayUtcFallback(): string {
     return new Date().toISOString().slice(0, 10);
 }
 
@@ -583,9 +650,10 @@ function emptyReconciliation(): FinancialsReconciliation {
     };
 }
 
-function baseVm(period: BillingPeriod): FinancialsCardVM {
+function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardVM {
     return {
         account: null,
+        businessDateYmd,
         period,
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
@@ -606,6 +674,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         reconciliation: emptyReconciliation(),
         reconciliationBySubject: {},
         pastDue: null,
+        notYetDue: null,
+        upcoming: null,
         pastDueBySubject: {},
         ledgerPeriods: [],
         payments: [],
@@ -1163,9 +1233,20 @@ async function buildFinancialsCardVMInner(
     clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
     const mark = args.mark ?? (() => {});
-    const today = t(args.today) || ymdToday();
+    /*
+     * ── THE OPERATING DAY IS THE ORGANISATION'S, NOT UTC'S ────────────────────────────────────
+     *
+     * This was `new Date().toISOString().slice(0, 10)`, and `today` is not a label here: it chooses
+     * `period` through `billingPeriodForDate`, it reconciles the rows, and it decides what reads as
+     * past due and how many days overdue. For an organisation west of UTC the UTC date rolls over
+     * during the local working afternoon — so from about 5pm in Los Angeles the card would show the
+     * NEXT commercial period as current and age receivables a day early, every day.
+     *
+     * `args.today` still wins; certification pins it, and that is the whole reason it exists.
+     */
+    const today = t(args.today) || (await resolveOperatingDay(supabase, args.orgId));
     const period = billingPeriodForDate(today);
-    const vm = baseVm(period);
+    const vm = baseVm(period, today);
     vm.unavailable = platformUnavailabilities();
 
     const customerId = t(args.customerId) || null;
@@ -2096,6 +2177,8 @@ async function buildFinancialsCardVMInner(
 
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
     vm.pastDue = pastDueFor(rows, today, appliedByChargeId);
+    vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId);
+    vm.upcoming = upcomingFor(rows);
     vm.pastDueBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,
@@ -2381,6 +2464,39 @@ export function reconcileRows(
  * the first time an application was reversed the two would disagree. The applications are the
  * record; how much is outstanding is read from them.
  */
+/**
+ * W7-F013 — WHAT IS OWED BUT NOT YET DUE.
+ *
+ * A charge added after its period's payment date is due at the NEXT payment event; until then it
+ * is collectible and may be paid early, but it is not due and must not be presented as due. Same
+ * owed rows and the same residual as `pastDueFor`, on the other side of today.
+ */
+export function notYetDueFor(
+    rows: readonly AccountChargeLedgerRow[],
+    today: string,
+    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+): FinancialsNotYetDue | null {
+    const outstanding = (r: AccountChargeLedgerRow): number =>
+        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
+    const ahead = rows.filter(
+        (r) =>
+            OWED_STATUSES.has(r.status)
+            && r.status !== "paid"
+            && r.lifecycleStatus !== "reversed"
+            && r.correctionKind !== "reversal"
+            && r.dueDate != null
+            && r.dueDate > today
+            && r.amountCents > 0
+            && outstanding(r) > 0,
+    );
+    if (ahead.length === 0) return null;
+    const next = ahead.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
+    return {
+        amountCents: ahead.reduce((sum, r) => sum + outstanding(r), 0),
+        nextDueDate: next.dueDate as string,
+    };
+}
+
 export function pastDueFor(
     rows: readonly AccountChargeLedgerRow[],
     today: string,

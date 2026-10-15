@@ -103,8 +103,11 @@ describe("Insert ▾ Tour Invitation Link — shared provisioning", () => {
         expect(panel).toContain("CurrentWorkTourInvitationComposerHost");
         expect(panel).toContain("useTourInvitationComposeSeed");
         expect(panel).toMatch(/CurrentWorkNewMessageComposerHost[\s\S]*draftSeed=\{draftSeed \?\? null\}/);
-        // Message / send_message path mounts host without seed hook.
-        expect(panel).toContain('composeIntent="new_message"');
+        // Message / send_message path mounts the shared composer without seed hook.
+        expect(panel).toContain("FamilyNewMessageComposer");
+        expect(read("components/admin/communications/FamilyNewMessageComposer.tsx")).toContain(
+            'composeIntent="new_message"',
+        );
     });
 
     it("warm cache exports one shared provisionTourInvitationPrepare authority", () => {

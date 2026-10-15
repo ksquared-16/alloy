@@ -51,16 +51,34 @@
  * well as the first attempt — a retry that posted into a closed period would be the same breach
  * arriving later. Recorded now so the guard is not bolted onto one caller.
  */
+import {
+    EMPTY_FINANCIAL_POLICY_SCOPE,
+    policyScopeNarrowingNeeded,
+    resolveFinancialPolicyScope,
+    type FinancialPolicyScope,
+} from "@/lib/financials/policies/resolveFinancialPolicyScope";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import { PERIOD_NOT_STARTED_GATE, periodNotStartedFacts } from "@/lib/financials/posting/postingPeriodGate";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 
 /** How many unattended attempts a retryable failure gets before it becomes operator attention. */
 export const MAX_POST_ATTEMPTS = 5;
 
-export type PostGate = "posted" | "review_required" | "post_failed";
+/**
+ * WHY a draft is a draft. Four distinct answers, and the distinction is the product:
+ *
+ *   posted            not a gate — the key is cleared, because `status` already says it
+ *   review_required   a configured `posting_review` boundary asked for a human; never retried
+ *   post_failed       posting was attempted and could not complete; durable, bounded retry
+ *   period_not_started the billing period has not begun; the clock clears it, nobody acts
+ *
+ * The fourth arrived with W7-F001. It is deliberately NOT a variant of `post_failed`: nothing
+ * failed, no attempt budget should be spent, and an operator must never be asked to post it by hand.
+ */
+export type PostGate = "posted" | "review_required" | "post_failed" | "period_not_started";
 
 /** The durable record of what posting did, written onto the charge. */
 export type PostAttemptRecord = {
@@ -76,6 +94,8 @@ export type PostAttemptRecord = {
 export type AutoPostOutcome =
     | { kind: "posted"; chargeId: string }
     | { kind: "review_required"; chargeId: string; policyId: string }
+    /** Waiting for its billing period to begin. Not a failure, and not operator work. */
+    | { kind: "period_not_started"; chargeId: string; periodKey: string; postsOn: string }
     | { kind: "post_failed"; chargeId: string; attempt: PostAttemptRecord };
 
 /**
@@ -103,7 +123,15 @@ export function isRetryablePostFailure(message: string): boolean {
 
 /** A draft this repair created, whose failure was transient and is not yet exhausted. */
 export function shouldRetryPost(metadata: Record<string, unknown> | null | undefined): boolean {
-    const rec = (metadata ?? {})["post_attempt"] as PostAttemptRecord | undefined;
+    const md = metadata ?? {};
+    /*
+     * A draft waiting for its billing period is cleared by `financials.future_period_charge.activate`
+     * on the day that period begins, never by this budget. Stated explicitly rather than relying on
+     * such a draft happening to carry no attempt record: if some future path ever does attempt and
+     * fail one, the calendar must still be what releases it.
+     */
+    if (md["post_gate"] === PERIOD_NOT_STARTED_GATE) return false;
+    const rec = md["post_attempt"] as PostAttemptRecord | undefined;
     if (!rec) return false; // never attempted by this repair — includes every historical draft
     if (!rec.retryable) return false;
     return rec.attempts < MAX_POST_ATTEMPTS;
@@ -134,8 +162,24 @@ function reviewPolicyFor(
     policies: readonly FinancialPolicyRow[],
     serviceId: string | null,
     today: string,
+    scope: FinancialPolicyScope = EMPTY_FINANCIAL_POLICY_SCOPE,
 ): { required: boolean; policyId: string | null } {
-    const r = resolveFinancialPolicy(policies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+    /*
+     * Narrowed by the charge's own site and account, exactly as the write path narrows it
+     * (`chargeLifecycleService.reviewRequiredByPolicy`). With `serviceId` alone a location- or
+     * account-scoped review rule could never match here, so the write path and the auto-post path
+     * gave two answers to "does this generated charge need a person?".
+     */
+    const r = resolveFinancialPolicy(
+        policies,
+        "posting_review",
+        {
+            serviceId: serviceId ?? undefined,
+            locationId: scope.locationId ?? undefined,
+            customerId: scope.customerId ?? undefined,
+        },
+        today,
+    );
     /*
      * NO POLICY MEANS NO REVIEW. This mirrors `resolveChargePolicies` exactly rather than restating
      * the rule: `r.resolved ? value.required === true : false`. An absent policy has never meant
@@ -190,14 +234,25 @@ async function recordAttempt(
 async function loadPostingContext(
     supabase: SupabaseClient,
     args: { orgId: string; chargeId: string },
-): Promise<{ metadata: Record<string, unknown>; serviceId: string | null; status: string | null }> {
+): Promise<{
+    metadata: Record<string, unknown>;
+    serviceId: string | null;
+    status: string | null;
+    billableSourceType: string | null;
+    billableSourceId: string | null;
+}> {
     const { data } = await supabase
         .from("charges")
-        .select("metadata, status")
+        .select("metadata, status, billable_source_type, billable_source_id")
         .eq("org_id", args.orgId)
         .eq("id", args.chargeId)
         .maybeSingle();
-    const row = (data ?? null) as { metadata: Record<string, unknown> | null; status: string | null } | null;
+    const row = (data ?? null) as {
+        metadata: Record<string, unknown> | null;
+        status: string | null;
+        billable_source_type?: string | null;
+        billable_source_id?: string | null;
+    } | null;
 
     const { data: ob } = await supabase
         .from("resolved_obligations")
@@ -207,7 +262,13 @@ async function loadPostingContext(
         .maybeSingle();
     const serviceId = ((ob ?? null) as { service_id: string | null } | null)?.service_id ?? null;
 
-    return { metadata: { ...(row?.metadata ?? {}) }, serviceId, status: row?.status ?? null };
+    return {
+        metadata: { ...(row?.metadata ?? {}) },
+        serviceId,
+        status: row?.status ?? null,
+        billableSourceType: row?.billable_source_type ?? null,
+        billableSourceId: row?.billable_source_id ?? null,
+    };
 }
 
 /**
@@ -226,7 +287,21 @@ export async function autoPostGeneratedCharge(
         actorUserId?: string | null;
         policies: readonly FinancialPolicyRow[];
         metadata?: Record<string, unknown> | null;
+        /**
+         * The date POLICY is resolved against — which `posting_review` version was effective.
+         * Deliberately not the same parameter as the one below: a policy's effective window and
+         * "what day is it for this tenant" are different questions, and one argument answering both
+         * is how a UTC date ends up deciding a commercial calendar.
+         */
         today: string;
+        /**
+         * The organisation's business date, when the caller already resolved it.
+         *
+         * Forwarded to the posting authority so a single occurrence that posts many charges reads
+         * the tenant's zone once. Omitted by every ordinary caller, and then the authority resolves
+         * it — it must never depend on a caller passing the right calendar.
+         */
+        businessDateYmd?: string | null;
     },
 ): Promise<AutoPostOutcome> {
     const loaded = await loadPostingContext(supabase, { orgId: args.orgId, chargeId: args.chargeId });
@@ -238,7 +313,16 @@ export async function autoPostGeneratedCharge(
         return { kind: "posted", chargeId: args.chargeId };
     }
     const metadata = args.metadata ? { ...args.metadata } : loaded.metadata;
-    const review = reviewPolicyFor(args.policies, args.serviceId ?? loaded.serviceId, args.today);
+    /* The subject's scope, read only when some review rule is scoped to a site or an account. */
+    const scope =
+        policyScopeNarrowingNeeded(args.policies, "posting_review") && loaded.billableSourceType && loaded.billableSourceId
+            ? await resolveFinancialPolicyScope(supabase, {
+                  orgId: args.orgId,
+                  billableSourceType: loaded.billableSourceType,
+                  billableSourceId: loaded.billableSourceId,
+              })
+            : EMPTY_FINANCIAL_POLICY_SCOPE;
+    const review = reviewPolicyFor(args.policies, args.serviceId ?? loaded.serviceId, args.today, scope);
 
     if (review.required) {
         /*
@@ -262,6 +346,7 @@ export async function autoPostGeneratedCharge(
             orgId: args.orgId,
             chargeId: args.chargeId,
             actorUserId: args.actorUserId ?? null,
+            businessDateYmd: args.businessDateYmd ?? null,
         });
         /*
          * ── THE OBLIGATION CONVERGES, AND ONLY NOW ───────────────────────────────────────────
@@ -291,6 +376,10 @@ export async function autoPostGeneratedCharge(
             const cleaned = { ...metadata };
             delete cleaned["post_gate"];
             delete cleaned["post_attempt"];
+            /* The waiting label and its date go with the gate it explained. */
+            delete cleaned["post_not_before"];
+            delete cleaned["post_gate_period_key"];
+            delete cleaned["post_gate_observed_on"];
             await supabase
                 .from("charges")
                 .update({ metadata: cleaned, updated_at: new Date().toISOString() })
@@ -299,6 +388,25 @@ export async function autoPostGeneratedCharge(
         }
         return { kind: "posted", chargeId: args.chargeId };
     } catch (err) {
+        /*
+         * ── THE PERIOD HAS NOT BEGUN, WHICH IS NOT A FAILURE ──
+         *
+         * The authority already labelled the draft `period_not_started` and already knows the date,
+         * so there is nothing to record here and — importantly — no attempt to count. Routing this
+         * through `recordAttempt` would spend one of five attempts per generation run on a charge
+         * whose period is three weeks away, exhaust the budget, and present an ordinary future-dated
+         * charge to the operator as attention work. Recognition is structural, through the refusal's
+         * own marker, rather than by searching the message for words.
+         */
+        const waiting = periodNotStartedFacts(err);
+        if (waiting) {
+            return {
+                kind: "period_not_started",
+                chargeId: args.chargeId,
+                periodKey: waiting.periodKey,
+                postsOn: waiting.periodStartsOn,
+            };
+        }
         const message = err instanceof Error ? err.message : String(err);
         const attempt = await recordAttempt(supabase, {
             orgId: args.orgId, chargeId: args.chargeId, metadata, error: message,

@@ -141,7 +141,33 @@ function reviewControlSubSchema(
     fieldIds: string[],
     participantLabels?: ReadonlyMap<string, string | null>,
 ): FormSchemaV1 {
-    const sub = subSchemaForFieldsGrouped(schema, fieldIds, "");
+    const base = subSchemaForFieldsGrouped(schema, fieldIds, "");
+    /*
+     * A LINE OF A GROUP IS STILL A CONTROL.
+     *
+     * `subSchemaForFieldsGrouped` selects top-level fields, so a compiled control that is a line of an
+     * address (or of any non-people group) got an empty sub-schema and no input at all — the family
+     * could not correct a line the conversation had collected. The line is lifted into the sub-schema
+     * on its own, editing the same flat value the conversation wrote; the submit folds those lines
+     * into their group's row.
+     */
+    const present = new Set(base.fields.map((f) => f.id));
+    const lifted: FormField[] = [];
+    const want = new Set(fieldIds.filter((id) => !present.has(id)));
+    const seek = (fields: readonly FormField[]) => {
+        for (const f of fields) {
+            if (f.type === "group") seek((f as { fields: FormField[] }).fields);
+            else if (want.has(f.id)) lifted.push(f);
+        }
+    };
+    if (want.size) seek(schema.fields.filter((f) => f.type === "group"));
+    const sub: FormSchemaV1 = lifted.length
+        ? {
+              ...base,
+              fields: [...base.fields, ...lifted],
+              sections: [...base.sections, { id: "review-group-lines", field_ids: lifted.map((f) => f.id) }],
+          }
+        : base;
     const relabel = (fields: FormField[]): FormField[] =>
         fields.map((f) => {
             if (f.type === "group") {

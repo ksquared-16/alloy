@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
+import { normalizeSubmissionForSchema } from "@/lib/forms/submissionSemantics";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
@@ -162,6 +163,13 @@ export async function POST(
             values: filterPayloadValuesToSchemaFields(schema, (payloadToValidate.values ?? {}) as Record<string, unknown>),
         };
     }
+
+    /*
+     * The authored semantics both participant runtimes share: a group's answers are its rows, and a
+     * hidden question has no answer. Applied before derived values and validation so the generic
+     * form and the Enrollment conversation are judged by exactly the same rules.
+     */
+    payloadToValidate = normalizeSubmissionForSchema(schema, payloadToValidate as Parameters<typeof normalizeSubmissionForSchema>[1]);
 
     /*
      * Derived destinations are filled HERE — before validation, because this is the moment the

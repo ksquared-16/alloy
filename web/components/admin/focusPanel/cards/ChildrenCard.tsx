@@ -122,6 +122,10 @@ import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identit
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { prefetchOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import { prefetchInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
+import { findRecordAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
+import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { useChildWorkDestination } from "@/lib/adminV2/runtime/focusPanel/children/useChildWorkDestination";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -312,6 +316,27 @@ export default function ChildrenCard({
     const hasEditableChildFields = childFocusView.focusFields.some((field) => field.editable);
     const canMutateIdentity = Boolean(mutation?.canEdit && !composerPreview);
     const canEditChild = Boolean(canMutateIdentity && hasEditableChildFields);
+    /*
+     * E2E-07 — "+ Add Child" is ANOTHER PLACEMENT of the record's Add Child command, not a card form.
+     * It is the action Manage resolved for this record, invoked through the record action handler
+     * Manage uses — which hosts it in the Current Work workspace, the same panel the process card
+     * opens. No action resolved for this record (wrong stage, no access) → no button.
+     */
+    const addChildAction = useMemo(
+        () => (canMutateIdentity ? findRecordAction(context.recordHeaderActions, "add_child") : null),
+        [canMutateIdentity, context.recordHeaderActions],
+    );
+    const addChildButton =
+        addChildAction && coordination?.invokeHeaderAction ?
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => coordination.invokeHeaderAction?.(addChildAction)}
+                data-children-action="add-child"
+            >
+                + Add Child
+            </button>
+        :   null;
     const opportunityStartDate =
         context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
 
@@ -700,6 +725,42 @@ export default function ChildrenCard({
         !isEmpty && disclosure.selectedIdentityId
             ? evidence.children.find((c) => c.id === disclosure.selectedIdentityId) ?? null
             : null;
+    /*
+     * E2E-18 — THE CHILD'S OWN WORK, OPENED THE WAY SEARCH OPENS IT.
+     *
+     * Selecting a child here is card-local (details), and a family Work View cannot host a child
+     * subject — its membership guard admits the case only. A tracked child's work lives in the Work
+     * View that holds its track, so the focused child offers exactly the destination Search would
+     * open (the durable record's `relatedWork`, from Search's own resolver), dispatched through the
+     * one destination → selection mapping. An untracked child has no child-grain work yet (E2E-21):
+     * it says so and stays on the family's Current Work. Nothing here creates or chooses a track.
+     */
+    const focusedMemberId = focused?.customerMemberId?.trim() || null;
+    const childWork = useChildWorkDestination(
+        focused && focusedMemberId && focusedMemberId !== childAttentionMemberId ? focusedMemberId : null,
+    );
+    const familyOpportunityIdForReturn =
+        childAttentionMemberId && typeof context.truth?.["child.family_opportunity_id"] === "string"
+            ? String(context.truth["child.family_opportunity_id"]).trim() || null
+            : null;
+    const familyWorkButton =
+        familyOpportunityIdForReturn ? <FamilyWorkReturn opportunityId={familyOpportunityIdForReturn} /> : null;
+    const childFirstName = (focused?.firstName ?? focused?.name ?? "").trim().split(/\s+/)[0] || "This child";
+    const childWorkControl =
+        childWork.status === "ready" ?
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => dispatchOperatorFocusSelection(childWork.selection)}
+                data-children-action="open-child-work"
+            >
+                {`${childFirstName}'s work →`}
+            </button>
+        : childWork.status === "none" ?
+            <span className="alloy-os-household__row-detail" data-children-child-work="family-position">
+                {`${childFirstName}'s Enrollment work is the family's for now.`}
+            </span>
+        :   null;
     const editSeed = useMemo(() => {
         if (!editing || !focused) return null;
         const seed = seedChildFocusEditValues(context.truth, focused.id);
@@ -776,7 +837,7 @@ export default function ChildrenCard({
 
     let runtimeFooterAction: React.ReactNode;
     if (isEmpty) {
-        runtimeFooterAction = null;
+        runtimeFooterAction = addChildButton;
     } else if (editing && focused) {
         runtimeFooterAction = backToFocusButton("cancel-edit");
     } else if (relatedViewId && focused) {
@@ -819,6 +880,14 @@ export default function ChildrenCard({
                         View evidence →
                     </button>
                 :   null}
+                {childWorkControl}
+                {/*
+                  * E2E-24 — a tracked child's own surface opens this card at DETAILS depth on the
+                  * attention child (measured on deployed 89a004ba), so a return placed only in the
+                  * summary footer was never on screen. Same control, same canonical truth
+                  * (`child.family_opportunity_id` from the child-grain answer); null off a child view.
+                  */}
+                {familyWorkButton}
             </div>
         );
     } else if (disclosure.depth === "context") {
@@ -831,7 +900,7 @@ export default function ChildrenCard({
                 />
             );
     } else {
-        runtimeFooterAction = (
+        const viewChildren = (
             <button
                 type="button"
                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
@@ -841,6 +910,14 @@ export default function ChildrenCard({
                 View children →
             </button>
         );
+        runtimeFooterAction =
+            addChildButton || familyWorkButton ?
+                <div className="alloy-os-card-nav">
+                    {familyWorkButton}
+                    {addChildButton}
+                    {viewChildren}
+                </div>
+            :   viewChildren;
     }
 
 
@@ -1999,5 +2076,23 @@ function FocusedChild({
                 </>
             )}
         </div>
+    );
+}
+
+/**
+ * E2E-18 — back from a child's own work to the family's, through the record-focus owner. Its own
+ * component so the router-bound hook mounts only on a child view.
+ */
+function FamilyWorkReturn({ opportunityId }: { opportunityId: string }) {
+    const focusRecord = useOperatorRecordFocus();
+    return (
+        <button
+            type="button"
+            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+            onClick={() => void focusRecord({ entity_type: "opportunities", entity_id: opportunityId })}
+            data-children-action="family-work"
+        >
+            ← Family work
+        </button>
     );
 }

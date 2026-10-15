@@ -12,6 +12,7 @@ export {
     phoneDigitsNanp,
 } from "./normalizePhone";
 export { phoneLookupVariants } from "./phoneLookupVariants";
+export { normalizePhoneForPersonWrite, personPhoneMatchValues } from "./personPhoneWrite";
 export { normalizeName } from "./normalizeName";
 export { normalizeDob } from "./normalizeDob";
 

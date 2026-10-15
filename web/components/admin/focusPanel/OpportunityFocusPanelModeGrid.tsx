@@ -1,5 +1,14 @@
 "use client";
 
+import {
+    captureWorkspaceLauncher,
+    restoreWorkspaceLauncher,
+    type WorkspaceLauncher,
+} from "@/lib/adminV2/runtime/focusPanel/workspaceLauncherFocus";
+import {
+    ADMIN_V2_OPEN_CURRENT_WORK_ACTION,
+    type OpenCurrentWorkActionDetail,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
@@ -338,12 +347,39 @@ export default function OpportunityFocusPanelModeGrid({
         open: false,
         intent: null,
     });
+    /*
+     * E2E-11 — FOCUS RETURNS TO WHAT LAUNCHED THE COMMAND.
+     *
+     * Every launch (process card, Manage, Children / Household "+", Current Work buttons) and every
+     * close (X, Cancel, complete, Escape, backdrop) passes through this grid's workspace state, so the
+     * host owns the round trip. The launcher is recorded when the workspace opens — with a selector
+     * from its own data attribute, because the summary card re-renders its buttons — and focused
+     * again once the workspace has closed and the summary is back. A Manage item's menu is gone by
+     * then, so it returns to the Manage trigger. The card's own attempt focused a ref inside a card
+     * that had already unmounted, so focus fell to <body>.
+     */
+    const workspaceLauncherRef = useRef<WorkspaceLauncher | null>(null);
+    const workspaceOpenRef = useRef(false);
     const openCurrentWorkWorkspace = useCallback(
         (intent: FocusPanelCurrentWorkWorkspaceIntent | null = { kind: "drill_in" }) => {
+            if (!workspaceOpenRef.current && typeof document !== "undefined") {
+                workspaceLauncherRef.current = captureWorkspaceLauncher(
+                    document,
+                    intent?.kind === "action" && Boolean(intent.resolved),
+                );
+            }
             setCurrentWorkWorkspace({ open: true, intent: intent ?? { kind: "drill_in" } });
         },
         [],
     );
+    useEffect(() => {
+        const wasOpen = workspaceOpenRef.current;
+        workspaceOpenRef.current = currentWorkWorkspace.open;
+        if (!wasOpen || currentWorkWorkspace.open) return;
+        const launcher = workspaceLauncherRef.current;
+        workspaceLauncherRef.current = null;
+        if (typeof document !== "undefined") restoreWorkspaceLauncher(document, launcher);
+    }, [currentWorkWorkspace.open]);
     const closeCurrentWorkWorkspace = useCallback(() => {
         setCurrentWorkWorkspace({ open: false, intent: null });
     }, []);
@@ -356,6 +392,24 @@ export default function OpportunityFocusPanelModeGrid({
             setCurrentWorkWorkspace({ open: false, intent: null });
         }
     }, [mode]);
+    /*
+     * E2E-03 — a record action Manage carries in (Add Child) is hosted HERE, by the same workspace the
+     * process card opens, so both placements run one command. From Activity the panel returns to
+     * Work first; the mode effect above leaves an open workspace alone once the mode is Work.
+     */
+    const subjectId = model.subject.id;
+    useEffect(() => {
+        const onOpenAction = (event: Event) => {
+            const detail = (event as CustomEvent<OpenCurrentWorkActionDetail>).detail;
+            const key = detail?.action?.key?.trim();
+            if (!key || !detail.opportunity_id) return;
+            if (detail.opportunity_id !== drawerId && detail.opportunity_id !== subjectId) return;
+            if (mode !== "summary" && mode !== "work") onModeChange?.("summary");
+            openCurrentWorkWorkspace({ kind: "action", actionKey: key, resolved: detail.action });
+        };
+        window.addEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_CURRENT_WORK_ACTION, onOpenAction as EventListener);
+    }, [drawerId, subjectId, mode, onModeChange, openCurrentWorkWorkspace]);
     // Attention identity (queue row / subject), not resolved family opportunity id.
     // Child Waitlist truth enrichment often flips drawerId process-instance → family
     // opportunity without changing Attention — resetting on drawerId was closing

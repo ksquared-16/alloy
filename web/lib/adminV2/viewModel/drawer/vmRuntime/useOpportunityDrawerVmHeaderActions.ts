@@ -12,6 +12,10 @@ import {
     resolveOpportunityRegistryActionSuccessMessage,
 } from "@/lib/admin/actions/resolveOpportunityRegistryActionFeedbackMessage";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import {
+    dispatchOpenCurrentWorkAction,
+    isCurrentWorkHostedRecordAction,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/openCurrentWorkAction";
 
 function resolveScheduleTourFormKey(action: ResolvedActionForClient): string {
     const fromPayload =
@@ -72,6 +76,14 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                     && host?.openCreateWork
                 ) {
                     host.openCreateWork({ opportunity_id: id });
+                    return;
+                }
+
+                // E2E-03: a relationship capability the registry hosts in the Current Work workspace
+                // (Add Child) opens there from Manage too — the same command the process card runs,
+                // never the legacy relationship wizard. See openCurrentWorkAction.ts.
+                if (isCurrentWorkHostedRecordAction(action)) {
+                    dispatchOpenCurrentWorkAction({ opportunity_id: id, action });
                     return;
                 }
 

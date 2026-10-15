@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
+import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, Send, Clock, Check, UserPlus, ChevronDown, Plus, X } from "lucide-react";
 import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import RecipientPreferenceAffordance from "@/components/admin/communications/RecipientPreferenceAffordance";
+import ComposerTemplateMenu from "@/components/admin/communications/ComposerTemplateMenu";
 import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
@@ -265,7 +266,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
     const [showCcBcc, setShowCcBcc] = useState(false);
-    const [showManualEmailInput, setShowManualEmailInput] = useState(false);
     const [manualEmailDraft, setManualEmailDraft] = useState("");
     const [ccEmailDraft, setCcEmailDraft] = useState("");
     const [bccEmailDraft, setBccEmailDraft] = useState("");
@@ -319,6 +319,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         if (currentPlain === targetPlain) return;
         el.innerHTML = plainComposerTextToEditableHtml(bodyDraft);
     }, [bodyDraft, emailComposer]);
+
+    // + Add picker closes on Escape (it is a registered composer layer — see escapeLayerOwnership).
+    useEffect(() => {
+        if (!recipientPickerOpen) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setRecipientPickerOpen(false);
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [recipientPickerOpen]);
 
     useEffect(() => {
         if (!insertMenuOpen) return;
@@ -455,6 +465,18 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         [bodyDraft, emailComposer, onBodyChange],
     );
 
+    /**
+     * Template ▾ → the template's current version, COPIED into the draft. A reply has no Subject
+     * field (it inherits the conversation's), so only the body is taken there.
+     */
+    const applyTemplateSeed = useCallback(
+        (seed: { subject: string; body: string }) => {
+            if (subjectFieldVisible) onSubjectChange(seed.subject);
+            onBodyChange(seed.body);
+        },
+        [onBodyChange, onSubjectChange, subjectFieldVisible],
+    );
+
     const addComposerLocalEmail = useCallback((raw: string, target: "to" | "cc" | "bcc") => {
         const email = raw.trim();
         if (!email || !email.includes("@")) return;
@@ -515,6 +537,20 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             </button>
         );
     };
+
+    /* `shrink-0` is load-bearing. This strip is a flex child of a `flex-col` composer column, so
+       without it the browser squeezes it to make room for whatever else the column holds. Adding the
+       From line and the recipient-preferences row below collapsed it to EIGHT PIXELS: still
+       "visible" to a test, still reporting the right aria state, and completely unclickable — an
+       operator could not switch the composer from SMS to Email at all. */
+    const channelTabs = (
+        <div data-cc-composer-channels className="inline-flex w-fit shrink-0 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+            {renderModeTab("email", "Email")}
+            {renderModeTab("sms", "SMS")}
+            {!isActivityEmbed ? renderModeTab("note", "Notes") : null}
+            {!isActivityEmbed ? renderModeTab("tasks", "Tasks") : null}
+        </div>
+    );
 
     const renderLinkChip = (link: CommandCenterRecordLink, className: string) => (
         <button
@@ -736,21 +772,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     : "px-4 py-3"
             }`}
         >
-                {/* `shrink-0` is load-bearing. This strip is a flex child of a
-                    `flex-col` composer column, so without it the browser squeezes
-                    it to make room for whatever else the column holds. Adding the
-                    From line and the recipient-preferences row below collapsed it
-                    to EIGHT PIXELS: still "visible" to a test, still reporting the
-                    right aria state, and completely unclickable — an operator
-                    could not switch the composer from SMS to Email at all. */}
-                <div data-cc-composer-channels className={`inline-flex w-fit shrink-0 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
-                    {renderModeTab("email", "Email")}
-                    {renderModeTab("sms", "SMS")}
-                    {!isActivityEmbed ? renderModeTab("note", "Notes") : null}
-                    {!isActivityEmbed ? renderModeTab("tasks", "Tasks") : null}
-                </div>
+                {/* Activity embed renders the channel strip in the conversation header instead. */}
+                {!isActivityEmbed ? channelTabs : null}
                 {activeModeReason ? (
-                    <div data-cc-mode-unavailable className={`mt-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
+                    <div data-cc-mode-unavailable className={`${isActivityEmbed ? "" : "mt-2 "}${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
                         {activeModeReason}
                     </div>
                 ) : null}
@@ -767,7 +792,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 {workspaceMode === "email" && sendingIdentity ? (
                     <div
                         data-cc-compose-from="true"
-                        className="mt-2 flex shrink-0 flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
+                        className={`${isActivityEmbed ? "" : "mt-2 "}flex shrink-0 flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60`}
                     >
                         <span className="font-medium text-alloy-midnight/45">From</span>
                         {sendingIdentity.displayName ? (
@@ -838,22 +863,38 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 <>
                 {LIVE_WORKSPACE && liveRecipientGroups ? (
                     isActivityEmbed ? (
-                        <div className="relative mt-2 space-y-1.5" data-cc-recipient-compact>
+                        <div className="relative mt-1.5 space-y-1.5" data-cc-recipient-compact>
                             <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 shadow-sm">
-                                <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5" data-cc-recipient-to-row>
                                     <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">To</span>
+                                    {/*
+                                      * THE RECIPIENT IS THE PREFERENCE AFFORDANCE.
+                                      *
+                                      * A separate Preferences row repeated every selected name a second
+                                      * time just to hang a chevron on it. The name in To now opens that
+                                      * person's own preferences — same component, same per-person
+                                      * profile, same write path — and × removes them from the send.
+                                      */}
                                     {selectedRecipientRows.slice(0, 2).map((r) => (
-                                        <button
-                                            key={r.id}
-                                            type="button"
-                                            data-cc-recipient={r.id}
-                                            aria-pressed
-                                            onClick={() => onToggleRecipient(r.id)}
-                                            className="inline-flex items-center gap-1 rounded-full bg-alloy-juniper px-2 py-0.5 text-[10px] font-medium text-white"
-                                        >
-                                            <Check className="h-3 w-3" aria-hidden />
-                                            {r.displayName}
-                                        </button>
+                                        <span key={r.id} data-cc-recipient-pill={r.id} className="inline-flex items-center gap-0.5">
+                                            <RecipientPreferenceAffordance
+                                                personId={r.id}
+                                                displayName={r.displayName}
+                                                profile={preferenceProfilesByContact[r.id] ?? null}
+                                                canEdit={canEditPreferences}
+                                                saving={preferenceSaving}
+                                                onChange={onPreferenceChange}
+                                            />
+                                            <button
+                                                type="button"
+                                                data-cc-recipient-remove={r.id}
+                                                aria-label={`Remove ${r.displayName}`}
+                                                onClick={() => onToggleRecipient(r.id)}
+                                                className="rounded-full p-0.5 text-alloy-midnight/40 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight"
+                                            >
+                                                <X className="h-3 w-3" aria-hidden />
+                                            </button>
+                                        </span>
                                     ))}
                                     {selectedRecipientRows.length > 2 ? (
                                         <button
@@ -880,36 +921,26 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                         data-cc-recipient-compact-trigger
                                         aria-expanded={recipientPickerOpen}
                                         onClick={() => setRecipientPickerOpen((open) => !open)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/55 hover:border-alloy-juniper/45 hover:text-alloy-juniper"
+                                        className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-alloy-juniper hover:bg-alloy-juniper/10"
                                     >
-                                        <UserPlus className="h-3 w-3" />
+                                        <Plus className="h-3 w-3" aria-hidden />
                                         Add
-                                        <ChevronDown className={`h-3 w-3 transition ${recipientPickerOpen ? "rotate-180" : ""}`} />
                                     </button>
-                                </div>
-                                {workspaceMode === "email" ? (
-                                    <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-alloy-stone/12 pt-1.5">
-                                        <button
-                                            type="button"
-                                            data-cc-add-email
-                                            onClick={() => setShowManualEmailInput((v) => !v)}
-                                            className="text-[10px] font-medium text-alloy-juniper hover:underline"
-                                        >
-                                            Add another email
-                                        </button>
+                                    {workspaceMode === "email" ? (
                                         <button
                                             type="button"
                                             data-cc-toggle-cc-bcc
                                             aria-expanded={showCcBcc}
                                             onClick={() => setShowCcBcc((v) => !v)}
-                                            className="text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-juniper"
+                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/55 hover:bg-alloy-stone/10 hover:text-alloy-juniper"
                                         >
+                                            <Plus className="h-3 w-3" aria-hidden />
                                             CC/BCC
                                         </button>
-                                    </div>
-                                ) : null}
+                                    ) : null}
+                                </div>
                                 {workspaceMode === "email" && showCcBcc ? (
-                                    <div className="mt-1.5 space-y-1 border-t border-alloy-stone/12 pt-1.5">
+                                    <div className="mt-1.5 space-y-1 border-t border-alloy-stone/12 pt-1.5" data-cc-cc-bcc-fields>
                                         <div className="flex items-center gap-1.5">
                                             <span className="w-8 text-[10px] font-medium text-alloy-midnight/45">CC</span>
                                             <input
@@ -958,25 +989,28 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 ) : null}
                             </div>
                             {recipientPickerOpen ? (
-                                <div data-cc-recipient-popover className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-auto rounded-lg border border-alloy-stone/25 bg-white px-2 py-2 shadow-md">
+                                <div data-cc-recipient-popover className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-auto rounded-lg border border-alloy-stone/25 bg-white px-2 py-2 shadow-md">
                                     {renderRecipientTiers(true)}
+                                    {/* "Add another email" lives with the other ways of adding someone,
+                                        not on a row of its own under To. */}
+                                    {workspaceMode === "email" ? (
+                                        <input
+                                            aria-label="Manual recipient email"
+                                            data-cc-add-email
+                                            value={manualEmailDraft}
+                                            onChange={(e) => setManualEmailDraft(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    addComposerLocalEmail(manualEmailDraft, "to");
+                                                    setManualEmailDraft("");
+                                                }
+                                            }}
+                                            placeholder="Another email — Enter to add"
+                                            className="mt-1.5 w-full rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px]"
+                                        />
+                                    ) : null}
                                 </div>
-                            ) : null}
-                            {workspaceMode === "email" && showManualEmailInput && !showCcBcc ? (
-                                <input
-                                    aria-label="Manual recipient email"
-                                    value={manualEmailDraft}
-                                    onChange={(e) => setManualEmailDraft(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            e.preventDefault();
-                                            addComposerLocalEmail(manualEmailDraft, "to");
-                                            setManualEmailDraft("");
-                                        }
-                                    }}
-                                    placeholder="name@example.com — Enter to add"
-                                    className="w-full rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px]"
-                                />
                             ) : null}
                         </div>
                     ) : (
@@ -1007,7 +1041,8 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                   * answer it states. Two recipients with different preferences
                   * show two different summaries, side by side.
                   */}
-                {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
+                {/* Activity embed carries this on the To pills themselves (above). */}
+                {LIVE_WORKSPACE && composeMode && !isActivityEmbed && selectedRecipientRows.length > 0 ? (
                     <div data-cc-recipient-preferences-row className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
                         {selectedRecipientRows.map((r) => (
@@ -1097,10 +1132,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 :   null}
                             </div>
                         :   null}
+                        <ComposerTemplateMenu
+                            channel={workspaceMode === "sms" ? "sms" : "email"}
+                            buttonClassName={toolbarBtn}
+                            onApply={applyTemplateSeed}
+                        />
                         <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
                         <span className="ml-auto flex items-center gap-0.5">
                             <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
-                            <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
                         </span>
                     </div>
                     {insertError ?
@@ -1305,7 +1344,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     <div data-cc-thread-header className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/20 bg-white px-3 py-2">
                         <div className="min-w-0 flex-1">
                         {isNewMessageMode ? (
-                            <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
+                            /* The channel choice IS the header of a new message — a separate
+                               "New Message" title above a separate channel strip spent a whole row
+                               of the body's height saying the same thing twice. */
+                            channelTabs
                         ) : activeThread ? (
                             (() => {
                                 const headerTitle = threadDisplayTitle(activeThread, timelineMessages);

@@ -59,7 +59,34 @@ const OPERATOR_RESOLVABLE_CODES = new Set([
      * an internal error, because nothing internal went wrong.
      */
     "billing_period_closed",
+    /*
+     * THE CORRECTION NAMES A CHARGE THAT IS NOT THERE. Actionable — the operator picked a source
+     * and it no longer exists on this account, so choosing another is the fix — and the message
+     * names what could not be found rather than carrying a database string. A 500 here would tell
+     * an operator nothing went wrong that they could act on, when in fact everything did.
+     */
+    "correction_source_not_found",
 ]);
+
+/**
+ * INFRASTRUCTURE CODES WITH THEIR OWN TRUE SENTENCE.
+ *
+ * The default infrastructure message speaks about the billing period, which is right for the three
+ * reads the binder itself does. The correction resolver reaches two more authorities, and telling
+ * an operator "the billing period could not be read" when responsibility was the thing that failed
+ * is a confident statement about the wrong subject. Same 500, same rule that the message is ours —
+ * only accurate about which read failed.
+ */
+const INFRASTRUCTURE_MESSAGES: Record<string, { code: string; message: string }> = {
+    responsibility_unresolved: {
+        code: "responsibility_unavailable",
+        message: "Who is responsible for this account could not be read, so this correction cannot say who would owe it. Nothing was written. Try again.",
+    },
+    source_read_failed: {
+        code: "correction_source_unavailable",
+        message: "The charge this correction refers to could not be read. Nothing was written. Try again.",
+    },
+};
 
 export type BillingPeriodBindingHttpAnswer = {
     status: number;
@@ -99,6 +126,8 @@ export function billingPeriodBindingHttpAnswer(
      * Infrastructure. The message is replaced, not forwarded: `agreement_read_failed`,
      * `member_read_failed` and `period_read_failed` all carry a raw PostgREST string.
      */
+    const named = INFRASTRUCTURE_MESSAGES[error.code.trim()];
+    if (named) return { status: 500, code: named.code, message: named.message };
     return {
         status: 500,
         code: "billing_period_unavailable",

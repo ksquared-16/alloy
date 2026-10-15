@@ -43,6 +43,7 @@ import {
 import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
 
 export type CompiledControlKind =
     /** A shared fact the conversation settled. Shown as a fact, editable on request. */
@@ -207,10 +208,42 @@ export function compileParticipantArtifact(
     const controls: CompiledArtifactControl[] = [];
     const sourceNames = sourceFieldNamesByFieldId(sourceMapping);
 
+    const shown = (fieldId: string) =>
+        fieldShownForAnswers(schema as FormSchemaV1, fieldId, (id) => values[id]);
+
     const walk = (fields: readonly FormField[]) => {
         for (const field of fields) {
+            // A question hidden by its condition is not on the family's paperwork.
+            if (!shown(field.id)) continue;
             if (field.type === "group") {
-                walk((field as { fields: FormField[] }).fields);
+                /*
+                 * A PEOPLE GROUP STAYS A GROUP.
+                 *
+                 * "Emergency Contacts, at least 2" is a collection: each contact's Name and Phone
+                 * belong to THAT contact. Flattening it here turned its lines into standalone
+                 * controls with no member to belong to — they rendered empty, the minimum could not
+                 * be met, and the submit then refused the packet for a group nobody could fill. It is
+                 * one outstanding control, edited by the shared form engine as rows (Add another,
+                 * the minimum, each member's required lines), which is exactly what the generic
+                 * runtime does with it.
+                 */
+                const g = field as FormField & { fields: FormField[]; collection_binding?: unknown; repeat?: { min?: number } };
+                if (g.collection_binding) {
+                    controls.push({
+                        field_id: g.id,
+                        label: g.label ?? "",
+                        participant_label: g.label ?? "",
+                        kind: "unresolved_artifact_specific",
+                        input_type: "group",
+                        options: [],
+                        required: g.required === true || (g.repeat?.min ?? 0) > 0,
+                        value: null,
+                        content: null,
+                        shared_key: null,
+                    });
+                    continue;
+                }
+                walk(g.fields);
                 continue;
             }
             const value = values[field.id];

@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createChildcareDraftCharge, postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { applyPaymentToCharge, readChargeBalance, recordChildcarePayment } from "@/lib/financials/childcarePaymentService";
-import { applyManualReduction } from "@/lib/financials/reductions/manualReductionService";
+import { applyManualReduction, reverseManualReduction } from "@/lib/financials/reductions/manualReductionService";
 import { closeBillingPeriod } from "@/lib/financials/billingPeriods/closeBillingPeriod";
 import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
 import {
@@ -172,9 +172,24 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
         expect(preview.summary).toBe("Reduces what the family owes by $25.00");
         const text = preview.changes.join(" | ");
         expect(text).toContain("November late pickup");
-        expect(text).toContain("2026-11");
-        expect(text).toContain("which is closed and stays unchanged");
-        expect(text).toContain("2026-12");
+        /*
+         * THE BUSINESS NAME, NOT THE STORAGE KEY. §8: no internal cadence keys in a preview where a
+         * business label exists. `2026-11` is how the period is stored; "November 2026" is what an
+         * operator calls it, and `billingPeriodLabel` is the canonical conversion both sentences
+         * now go through. Asserting the key here would lock in the thing §8 forbids.
+         */
+        expect(text).toContain("November 2026");
+        expect(text).not.toContain("2026-11 ");
+        /*
+         * ── THE WORDING CHANGED DELIBERATELY IN THE ADJUSTMENT UX SLICE ───────────────────────
+         *
+         * This asserted "which is closed and stays unchanged", appended to "That charge belongs to
+         * 2026-11". §8 asks for the stronger pair: the finalized period is named AS finalized and
+         * said to be unchanged, and the destination says "Recorded in" rather than "Applies to" —
+         * because "applies to" reads like the correction reaching into that period.
+         */
+        expect(text).toContain("November 2026 is finalized, and nothing in it changes");
+        expect(text).toContain("Recorded in December 2026");
 
         /* The resolution is explicit about the two truths. */
         expect(preview.resolution.destination.periodKey).toBe("2026-12");
@@ -266,7 +281,8 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
                 effectiveDate: "2026-11-15",
                 sourceChargeId: novemberFeeId,
             }),
-        ).rejects.toThrow(/2026-11.*is closed/);
+            /* The refusal names the period the operator would recognise, like every other sentence. */
+        ).rejects.toThrow(/November 2026.*is closed/);
 
         await expect(
             applyManualReduction(db, {
@@ -428,9 +444,14 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
             amountCents: -3_000, effectiveDate: "2026-12-08", sourceChargeId: legacySource.id,
         });
 
-        /* Provenance reads the legacy KEY, and reports no status because there is no period row. */
+        /*
+         * Provenance reads the legacy KEY and LABELS it, and reports no status because there is no
+         * period row. §12: a legacy source is presented as history an operator recognises, not as
+         * a storage key they have to decode — and still without materialising a fake canonical
+         * period to give it one.
+         */
         expect(preview.resolution.source?.generation).toBe("legacy");
-        expect(preview.resolution.source?.periodLabel).toBe("2026-08");
+        expect(preview.resolution.source?.periodLabel).toBe("August 2026");
         expect(preview.resolution.source?.billingPeriodId).toBeNull();
         expect(preview.resolution.source?.periodStatus).toBeNull();
         expect(preview.resolution.sourceIsFinalized).toBe(false);
@@ -595,7 +616,7 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
 
         /* SOURCE: a monthly key, legacy, no period row. */
         expect(preview.resolution.source?.generation).toBe("legacy");
-        expect(preview.resolution.source?.periodLabel).toBe("2026-07");
+        expect(preview.resolution.source?.periodLabel).toBe("July 2026");
         expect(preview.resolution.source?.billingPeriodId).toBeNull();
         /* DESTINATION: a BIWEEKLY canonical period — a different cadence entirely. */
         expect(preview.resolution.destination.periodKey).toMatch(/^\d{4}-\d{2}-\d{2}~\d{4}-\d{2}-\d{2}$/);
@@ -683,6 +704,266 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
         /* The closed weekly source is unchanged. */
         expect(await periodEconomics(db, weekOne)).toBe(20_000);
     });
+
+    /* ══ ADJUSTMENT UX CONVERGENCE ════════════════════════════════════════════════════════════ */
+
+    /**
+     * §13. Preview must say who bears the NEW economics, from the canonical responsibility
+     * authority — not from the source charge's allocations, which answer a different question and
+     * may have been decided by an arrangement since superseded.
+     */
+    it("RESPONSIBILITY is stated from the canonical arrangement, not copied from the source", async () => {
+        const preview = await previewProspectiveCorrection(db, {
+            orgId: ORG,
+            enrollmentAgreementId: MONTHLY.agreement,
+            customerId: MONTHLY.customer,
+            customerMemberId: MONTHLY.member,
+            amountCents: -1_500,
+            effectiveDate: "2026-12-08",
+            sourceChargeId: novemberTuitionId,
+        });
+
+        /*
+         * This household has no arrangement, so the household bears it. That is a TRUE answer and
+         * the ordinary one — it must be said out loud rather than left as an empty line, because
+         * silence there reads as "responsibility could not be worked out".
+         */
+        expect(preview.resolution.responsibility.kind).toBe("household");
+        expect(preview.resolution.responsibility.parties).toEqual([]);
+        expect(preview.changes.join(" | ")).toContain("The household owes this, by the standing arrangement.");
+
+        /* And it still wrote nothing. */
+        expect(await periodEconomics(db, novemberId)).toBe(107_500);
+    });
+
+    /**
+     * §14. An increase is a collectible obligation; a reduction is not.
+     *
+     * THE DEFECT: the reduction path never called the due-date authority at all, so an increase was
+     * written with `due_date: null` even where the organisation had configured terms — while every
+     * generated charge carried one.
+     */
+    it("DUE DATE: an increase resolves one from its OWN dates; a reduction is given none", async () => {
+        /* With no due-date policy, "no configured terms" is the truth and must be said out loud. */
+        const unconfigured = await previewProspectiveCorrection(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+            amountCents: 2_500, effectiveDate: "2026-12-09", sourceChargeId: novemberFeeId,
+        });
+        expect(unconfigured.resolution.due.applicable).toBe(true);
+        expect(unconfigured.resolution.due.reason).toBe("no_policy");
+        expect(unconfigured.resolution.due.dueDate).toBeNull();
+        expect(unconfigured.changes.join(" | ")).toContain("No due date");
+
+        /* A REDUCTION IS NOT ASKED THE QUESTION. Nothing is collected, so there is no date to miss. */
+        const reduction = await previewProspectiveCorrection(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+            amountCents: -2_500, effectiveDate: "2026-12-09", sourceChargeId: novemberFeeId,
+        });
+        expect(reduction.resolution.due.applicable).toBe(false);
+        expect(reduction.resolution.due.reason).toBe("not_applicable");
+        expect(reduction.changes.join(" | ")).not.toContain("due");
+
+        /*
+         * ── NOW CONFIGURE TERMS, AND GIVE THE SOURCE A DIFFERENT DUE DATE ────────────────────
+         *
+         * THIS SEEDING EXISTS BECAUSE THE PLANT COULD NOT OTHERWISE FIRE.
+         *
+         * The first version of this test asserted "the source's due date was not inherited" as
+         * `if (source.due_date) expect(...)` — and the fixture's November fee has no due date,
+         * because nothing configured terms and the draft writer resolves none. So the assertion
+         * never ran: planting the inheritance defect left this test GREEN. A conditional assertion
+         * guarding the only thing it was written to catch is a false green, and the fix is the
+         * fixture, not a softer claim.
+         *
+         * So terms are configured (due 10 days after the invoice date) and a source charge is
+         * created carrying a due date that no policy would ever produce for the correction's own
+         * dates. An inherited date is then unmistakable.
+         */
+        /* Same shape as `ids()` above: 8 hex, then the fixed groups. A longer first group is not a uuid. */
+        const duePolicyId = `fd3d${RUN.slice(0, 4)}-0000-4000-8000-0000000f0002`;
+        const seeded = await db.from("financial_policies").upsert({
+            id: duePolicyId, org_id: ORG, scope_type: "customer", customer_id: MONTHLY.customer,
+            location_id: null, policy_type: "due_date", is_active: true,
+            effective_start: "2026-01-01", effective_end: null,
+            value: { strategy: "days_after_invoice", offset_days: 10 },
+        });
+        expect(seeded.error, seeded.error?.message ?? "").toBeNull();
+
+        try {
+            /*
+             * THE SOURCE SITS IN THE OPEN PERIOD, not in closed November — the close guard
+             * correctly refuses a new charge there, which is S3/S4 working and not an obstacle to
+             * route around. Source finality is not what this test is about: §14's prohibition is
+             * that the correction must not inherit the SOURCE's due date, whichever period the
+             * source lives in. `2026-12-31` is a date no policy here could produce for the
+             * correction's own dates, so an inherited one is unmistakable.
+             */
+            const sourceWithDue = await createChildcareDraftCharge(db, {
+                orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, chargeCategory: "late_pickup",
+                chargeType: "fee", amountCents: 5_000, currencyCode: "USD", serviceDate: "2026-12-02",
+                dueDate: "2026-12-31", description: "December fee with terms",
+                actorUserId: ACTOR, metadata: { source: "s5_proof" },
+            } as never);
+            const sourceWithDueId = (sourceWithDue as { id: string }).id;
+            expect((await readCharge(db, sourceWithDueId)).due_date).toBe("2026-12-31");
+
+            const increase = await previewProspectiveCorrection(db, {
+                orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+                amountCents: 2_500, effectiveDate: "2026-12-09", sourceChargeId: sourceWithDueId,
+            });
+            /* Ten days after the CORRECTION's own effective date. */
+            expect(increase.resolution.due.reason).toBe("resolved");
+            expect(increase.resolution.due.dueDate).toBe("2026-12-19");
+            expect(increase.changes.join(" | ")).toContain("Due 2026-12-19");
+
+            /*
+             * ── AND THE PREVIEW AGREES WITH WHAT WAS WRITTEN ──────────────────────────────────
+             *
+             * The only way these cannot drift is that both go through `resolveCorrectionDueDate`.
+             */
+            const written = await applyManualReduction(db, {
+                orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+                customerMemberId: MONTHLY.member, chargeCategory: "adjustment", amountCents: 2_500,
+                currencyCode: "USD", reason: "December correction, due-date proof",
+                effectiveDate: "2026-12-09", sourceChargeId: sourceWithDueId, actorUserId: ACTOR,
+                idempotencyKey: `s5-${RUN}-due`,
+            });
+            const row = await readCharge(db, written.chargeId);
+            expect(row.due_date).toBe(increase.resolution.due.dueDate);
+            /* NOT THE SOURCE'S. §14's prohibition, now actually reachable. */
+            expect(row.due_date).not.toBe("2026-12-31");
+
+            /* A reduction against the same source, with terms configured, still carries none. */
+            const credit = await applyManualReduction(db, {
+                orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+                customerMemberId: MONTHLY.member, chargeCategory: "credit", amountCents: -500,
+                currencyCode: "USD", reason: "No due date on a credit",
+                effectiveDate: "2026-12-09", sourceChargeId: sourceWithDueId, actorUserId: ACTOR,
+                idempotencyKey: `s5-${RUN}-due-credit`,
+            });
+            expect((await readCharge(db, credit.chargeId)).due_date).toBeNull();
+        } finally {
+            await db.from("financial_policies").delete().eq("org_id", ORG).eq("id", duePolicyId);
+        }
+    });
+
+    /**
+     * §17. Reversing a correction after its period closed must become prospective economics in an
+     * open period rather than rewriting history.
+     *
+     * THE DEFECT: `reverseManualReduction` dated the reversal `today` — correct — and then handed
+     * `applyManualReduction` the ORIGINAL's `period_key`. The canonical `billing_period_id` came
+     * out right because the S2 binder resolves it from the charge's own date, and the STATED period
+     * contradicted it, so every surface reading `period_key` showed the reversal inside closed
+     * history.
+     */
+    it("REVERSAL is prospective: it does not carry the original's period key", async () => {
+        const original = await applyManualReduction(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+            customerMemberId: MONTHLY.member, chargeCategory: "credit", amountCents: -3_300,
+            currencyCode: "USD", reason: "Correction to be reversed",
+            effectiveDate: "2026-12-10", sourceChargeId: novemberTuitionId, actorUserId: ACTOR,
+            idempotencyKey: `s5-${RUN}-reversal-original`,
+        });
+
+        /*
+         * The original is forced to STATE a historical period, which is the shape a correction
+         * raised before this repair would have had — and the shape the reversal used to copy.
+         */
+        const forced = await db
+            .from("financial_reduction_applications")
+            .update({ period_key: "2026-11" })
+            .eq("org_id", ORG)
+            .eq("id", original.applicationId);
+        expect(forced.error).toBeNull();
+
+        const reversal = await reverseManualReduction(db, {
+            orgId: ORG, applicationId: original.applicationId,
+            reason: "The correction was itself wrong", actorUserId: ACTOR,
+        });
+
+        const reversalApp = await readApplicationById(db, reversal.applicationId);
+
+        /*
+         * ── THE REVERSAL'S PERIOD IS TODAY'S, NOT THE ORIGINAL'S AND NOT DECEMBER'S ──────────
+         *
+         * This assertion first read `toBe(decemberId)` and failed, which was my error and a useful
+         * one: `reverseManualReduction` dates the reversal `today` — the real wall-clock day — and
+         * not the original's effective date. That is the correct behaviour and it is what §17 asks
+         * for: undoing a correction is a decision taken NOW, so its economics belong to the period
+         * open now. The fixture's December is a fabricated future period; binding a reversal to it
+         * would be back-dating by a different route.
+         *
+         * So what is bound here is the property rather than a particular period: not November,
+         * resolved from the reversal's own date, OPEN, and with the stated key agreeing with the
+         * period row it points at — that last agreement being precisely what the defect broke.
+         */
+        expect(reversalApp.period_key).not.toBe("2026-11");
+        expect(reversalApp.billing_period_id).not.toBe(novemberId);
+        expect(reversalApp.billing_period_id).toBeTruthy();
+        const reversalPeriod = await readPeriod(db, reversalApp.billing_period_id!);
+        expect(reversalApp.period_key).toBe(reversalPeriod.period_key);
+        expect(reversalPeriod.status).toBe("open");
+
+        /* And it is TODAY's period — the reversal is dated now, by the account's own calendar. */
+        const todayYmd = new Date().toISOString().slice(0, 10);
+        const todaysBinding = await resolveChargeBillingPeriodBinding(db, {
+            orgId: ORG, billableSourceType: "enrollment_agreement",
+            billableSourceId: MONTHLY.agreement, placementDate: todayYmd,
+        });
+        expect(reversalApp.billing_period_id).toBe(todaysBinding.billing_period_id);
+
+        /* NOVEMBER IS STILL UNTOUCHED, and the original row still stands. */
+        expect(await periodEconomics(db, novemberId)).toBe(107_500);
+        const originalApp = await readApplicationById(db, original.applicationId);
+        expect(originalApp.amount_cents).toBe(-3_300);
+        expect(originalApp.reversed_by_id).toBe(reversal.applicationId);
+        expect(reversalApp.reverses_id).toBe(original.applicationId);
+        /* One reversal only. */
+        await expect(
+            reverseManualReduction(db, {
+                orgId: ORG, applicationId: original.applicationId,
+                reason: "A second attempt", actorUserId: ACTOR,
+            }),
+        ).rejects.toThrow(/already been reversed/i);
+    });
+
+    /**
+     * §11. S5 must not make every adjustment prospective merely because S5 exists. A source and a
+     * correction that legitimately belong to the SAME open period stay in it, by the ordinary path.
+     */
+    it("OPEN PERIOD: a source and correction in the same open period stay there", async () => {
+        const decemberCharge = await createChildcareDraftCharge(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, chargeCategory: "late_pickup",
+            chargeType: "fee", amountCents: 4_000, currencyCode: "USD", serviceDate: "2026-12-11",
+            description: "December late pickup", actorUserId: ACTOR, metadata: { source: "s5_proof" },
+        } as never);
+        const decemberChargeId = (decemberCharge as { id: string }).id;
+        await postChildcareCharge(db, { orgId: ORG, chargeId: decemberChargeId, actorUserId: ACTOR });
+
+        const preview = await previewProspectiveCorrection(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+            amountCents: -1_000, effectiveDate: "2026-12-12", sourceChargeId: decemberChargeId,
+        });
+
+        /* The source is NOT finalized, so nothing says anything about finality. */
+        expect(preview.resolution.sourceIsFinalized).toBe(false);
+        expect(preview.resolution.source?.billingPeriodId).toBe(decemberId);
+        expect(preview.resolution.destination.billingPeriodId).toBe(decemberId);
+        expect(preview.changes.join(" | ")).not.toContain("finalized");
+
+        const applied = await applyManualReduction(db, {
+            orgId: ORG, enrollmentAgreementId: MONTHLY.agreement, customerId: MONTHLY.customer,
+            customerMemberId: MONTHLY.member, chargeCategory: "credit", amountCents: -1_000,
+            currencyCode: "USD", reason: "December fee was overstated",
+            effectiveDate: "2026-12-12", sourceChargeId: decemberChargeId, actorUserId: ACTOR,
+            idempotencyKey: `s5-${RUN}-openperiod`,
+        });
+        const app = await readApplicationById(db, applied.applicationId);
+        /* ONE period for both. No hop forward, because there was nothing to hop over. */
+        expect(app.billing_period_id).toBe(decemberId);
+        expect(app.period_key).toBe("2026-12");
+    });
 });
 
 /* ── readers ─────────────────────────────────────────────────────────────────────────────────── */
@@ -698,11 +979,38 @@ async function readPeriod(db: SupabaseClient, id: string) {
 async function readCharge(db: SupabaseClient, id: string) {
     const { data } = await db
         .from("charges")
-        .select("id, status, amount_cents, billing_period_id, billing_period_generation, posted_at")
+        /*
+         * `due_date` IS NAMED. An explicit select list that omits a column hands back `undefined`,
+         * and an assertion written against it can pass for the wrong reason — the §14 proof is
+         * exactly a comparison of this column against what the preview said, so a dropped column
+         * would turn the strongest claim in that test into a false green.
+         */
+        .select("id, status, amount_cents, due_date, billing_period_id, billing_period_generation, posted_at")
         .eq("id", id).maybeSingle();
     return data as {
-        id: string; status: string; amount_cents: number;
+        id: string; status: string; amount_cents: number; due_date: string | null;
         billing_period_id: string | null; billing_period_generation: string; posted_at: string | null;
+    };
+}
+
+/**
+ * One application BY ITS OWN ID.
+ *
+ * `readApplication` below keys on the idempotency key, which a caller supplies. A reversal's key is
+ * composed by the service (`fred:reverse:<id>`), so reconstructing it in a test would be asserting
+ * against our own guess at an implementation detail rather than reading the row the service
+ * returned.
+ */
+async function readApplicationById(db: SupabaseClient, id: string) {
+    const { data } = await db
+        .from("financial_reduction_applications")
+        .select("id, charge_id, source_charge_id, amount_cents, billing_period_id, period_key, reason, reverses_id, reversed_by_id")
+        .eq("org_id", ORG).eq("id", id).maybeSingle();
+    expect(data, `no application ${id}`).not.toBeNull();
+    return data as {
+        id: string; charge_id: string; source_charge_id: string | null; amount_cents: number;
+        billing_period_id: string | null; period_key: string | null; reason: string | null;
+        reverses_id: string | null; reversed_by_id: string | null;
     };
 }
 

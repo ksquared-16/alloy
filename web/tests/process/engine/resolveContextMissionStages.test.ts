@@ -42,7 +42,7 @@ describe("resolveContextMissionStages", () => {
         expect(r.contributingParticipantCount).toBe(2);
     });
 
-    it("C. mixed Lead + Waitlist → both tracks", () => {
+    it("C. mixed Lead + Waitlist → both tracks; the case's own position (Lead) leads (E2E-12 rule 6)", () => {
         const r = resolveContextMissionStages({
             contextStageKey: "lead",
             effectiveParticipantStageKeys: ["waitlist", "lead"],
@@ -50,6 +50,42 @@ describe("resolveContextMissionStages", () => {
         });
         expect(r.missionStageKeys).toEqual(["waitlist", "lead"]);
         expect(r.homogeneous).toBe(false);
+        // Was "waitlist" — first-seen. The waitlisted child's work has its own child-grain subject;
+        // the case subject must keep the work of the participant still at its position.
+        expect(r.primaryMissionStageKey).toBe("lead");
+    });
+
+    it("E2E-12. Alpha waitlisted + Bravo untracked (at the family position) → mixed, Lead leads", () => {
+        const r = resolveContextMissionStages({
+            contextStageKey: "lead",
+            effectiveParticipantStageKeys: ["waitlist"],
+            workViewLensStageKeys: [],
+            participantsAtContextPosition: 1,
+        });
+        expect(r.missionStageKeys).toEqual(["waitlist", "lead"]);
+        expect(r.homogeneous).toBe(false);
+        expect(r.primaryMissionStageKey).toBe("lead");
+        expect(r.contributingParticipantCount).toBe(2);
+    });
+
+    it("E2E-12. without the untracked child the same tracks read as all-Waitlist — the measured defect", () => {
+        const r = resolveContextMissionStages({
+            contextStageKey: "lead",
+            effectiveParticipantStageKeys: ["waitlist"],
+            workViewLensStageKeys: [],
+        });
+        expect(r.missionStageKeys).toEqual(["waitlist"]);
+        expect(r.primaryMissionStageKey).toBe("waitlist");
+    });
+
+    it("E2E-12. a stage-scoped lens keeps its own emphasis", () => {
+        const r = resolveContextMissionStages({
+            contextStageKey: "lead",
+            effectiveParticipantStageKeys: ["waitlist"],
+            workViewLensStageKeys: ["waitlist"],
+            participantsAtContextPosition: 1,
+        });
+        expect(r.source).toBe("work_view_lens");
         expect(r.primaryMissionStageKey).toBe("waitlist");
     });
 

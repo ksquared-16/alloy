@@ -9,7 +9,7 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
-import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
+import { collectionGroupField } from "@/lib/forms/relationshipCollectionGroup";
 import type { DraftCollectionGroup, DraftFormField, StoredFormDraftPreview } from "./types";
 import {
     PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
@@ -21,11 +21,17 @@ import { addressComponentOf, collapseAddressRun } from "./importedAddressGroups"
 /** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
 function mapDraftField(f: DraftFormField): FormField {
     const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
-    // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
-    // from the label/type so generated forms prefill + drive guided intake by default.
-    const field_source = unresolvedAtGenerate
-        ? undefined
-        : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+    /*
+     * The destination is exactly what the draft STORES — never a guess made here.
+     *
+     * This used to fall back to `suggestFieldBinding(label, type)`, so every question without a
+     * destination arrived in the Studio already carrying one. The mapping view then read that guess as
+     * the operator's own destination ("Mapped"), and the next unrelated save — a width, a requiredness —
+     * posted the whole field list and persisted it: an answer nobody mapped quietly started writing to
+     * `customer_member.dob`. A destination is applied at import only where the safe-import law allows
+     * (`safeImportMappings`), or by an operator; a suggestion stays a suggestion until someone accepts it.
+     */
+    const field_source = unresolvedAtGenerate ? undefined : f.field_source;
     const description = f.description ?? (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
     const base = {
         id: f.id,
@@ -88,27 +94,16 @@ function mapDraftField(f: DraftFormField): FormField {
  * time, so a client can never assert them. @see docs/platform/core/data/relationship-model.md
  */
 function collectionGroupToFormField(c: DraftCollectionGroup): FormField {
-    return {
+    // The same builder Forms Studio uses for a group the operator adds — one shape for both.
+    return collectionGroupField({
         id: c.id,
-        type: "group",
         label: c.label,
-        required: false,
-        // Cardinality comes from the definition; the document's repeated occurrences are evidence of
-        // how many instances to seed, not a cap.
-        repeat: c.cardinality === "many" ? { min: 0 } : { min: 0, max: 1 },
-        collection_binding: {
-            collection_provider_ref: c.collection_provider_ref,
-            iteration_entity_type: c.item_entity_type,
-            ...(c.iteration_alias ? { iteration_alias: c.iteration_alias } : {}),
-        },
-        fields: c.nested_fields.map((n) => ({
-            id: n.id,
-            type: n.type === "boolean" ? "boolean" : n.type === "date" ? "date" : n.type === "number" ? "number" : "text",
-            label: n.label,
-            required: n.required,
-            ...(n.field_source ? { field_source: n.field_source } : {}),
-        })) as FormField[],
-    };
+        cardinality: c.cardinality,
+        collection_provider_ref: c.collection_provider_ref,
+        item_entity_type: c.item_entity_type,
+        iteration_alias: c.iteration_alias,
+        nested_fields: c.nested_fields,
+    });
 }
 
 function sectionHasType(fields: FormField[], type: FormField["type"]): boolean {

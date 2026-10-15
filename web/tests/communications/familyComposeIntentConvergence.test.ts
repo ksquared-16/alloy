@@ -25,10 +25,13 @@ describe("family compose intent — New Message vs browse", () => {
 
     it("Current Work communication commands force New Message compose intent", () => {
         const panel = read("components/admin/focusPanel/cards/CurrentWorkActionPanel.tsx");
-        expect(panel).toContain('composeIntent="new_message"');
+        const composer = read("components/admin/communications/FamilyNewMessageComposer.tsx");
+        // Current Work and Manage → Send Message mount ONE composer; it forces New Message.
+        expect(panel).toContain("FamilyNewMessageComposer");
+        expect(composer).toContain('composeIntent="new_message"');
+        expect(composer).toContain("CommunicationsDrawerSection");
         expect(panel).toContain("CurrentWorkNewMessageComposerHost");
         expect(panel).toContain("useTourInvitationComposeSeed");
-        expect(panel).toContain("CommunicationsDrawerSection");
         // Tour no longer mounts a forked composer panel.
         expect(panel).not.toContain("CurrentWorkTourInvitationPanel");
     });

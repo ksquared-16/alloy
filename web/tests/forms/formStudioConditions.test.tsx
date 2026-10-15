@@ -72,9 +72,14 @@ describe("the shared schema authority can author a condition", () => {
         expect(conditionTriggerOf(next.fields.find((f) => f.id === "list")!)).toBeNull();
     });
 
-    it("does not offer a conditional question as somebody else's trigger", () => {
+    it("offers a conditional question as somebody else's trigger — the runtime evaluates chains", () => {
         const withCondition = setFieldVisibility(manual, "list", { triggerFieldId: "siblings", value: true });
-        expect(eligibleConditionTriggers(withCondition, "name").map((t) => t.id)).not.toContain("list");
+        expect(eligibleConditionTriggers(withCondition, "name").map((t) => t.id)).toContain("list");
+    });
+
+    it("never offers a question that depends on this one — that would be a cycle", () => {
+        const withCondition = setFieldVisibility(manual, "list", { triggerFieldId: "siblings", value: true });
+        expect(eligibleConditionTriggers(withCondition, "siblings").map((t) => t.id)).not.toContain("list");
     });
 
     it("leaves no dangling condition when the trigger question is removed", () => {

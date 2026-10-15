@@ -43,8 +43,6 @@ import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
 import ProcessingImportedFormStudio from "./ProcessingImportedFormStudio";
-import { buildDraftSavePayload, buildDraftSavePayloadFromSchema, type DraftFieldEdit } from "@/lib/pos/formDraft/buildDraftSavePayload";
-import { planCreateFieldFromSource } from "@/lib/pos/formDraft/createFieldFromSource";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
 import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
@@ -447,64 +445,6 @@ export default function PosTemplateSetupColumn({
      */
     const isTextSource = isTextSourcePreview(sourceFilenameEarly ?? null, null);
     const sourcePreviewUrl = isTextSource && docId ? `/api/admin/documents/${docId}/source-preview` : null;
-    /**
-     * Save the operator's field edits through the WHOLE-DRAFT contract.
-     *
-     * The save route does not patch — it REBUILDS the draft from the fields it is handed, so a payload
-     * that names only what changed deletes everything it does not name. `buildDraftSavePayload` carries
-     * every round-trippable property of every field (its section, its accepted condition, its choices,
-     * its page and region provenance) and applies the edits on top. The response is the rebuilt draft,
-     * so what the operator sees next came from the server and survives a reload.
-     */
-    const saveDraftFieldEdits = async (
-        edits: ReadonlyMap<string, DraftFieldEdit>,
-        omitFieldIds: ReadonlySet<string> = new Set(),
-    ): Promise<void> => {
-        if (!caseId || !draft) return;
-        const built = buildDraftSavePayload(draft, edits, omitFieldIds);
-        if (!built.ok) {
-            setErr(
-                built.reason === "unknown_field"
-                    ? "That question is no longer on this draft — reload and try again."
-                    : "There is nothing to save on this draft yet.",
-            );
-            return;
-        }
-        await postDraftPayload(built);
-    };
-
-    /** The one place a rebuilt draft is posted and adopted, so both save paths behave identically. */
-    const postDraftPayload = async (built: ReturnType<typeof buildDraftSavePayload>): Promise<void> => {
-        if (!caseId || !draft) return;
-        if (!built.ok) {
-            setErr(
-                built.reason === "unknown_field"
-                    ? "That question is no longer on this draft — reload and try again."
-                    : "There is nothing to save on this draft yet.",
-            );
-            return;
-        }
-        setErr(null);
-        try {
-            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
-                method: "POST",
-                credentials: "same-origin",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify(built.payload),
-            });
-            const body = (await res.json().catch(() => ({}))) as {
-                data?: { form_draft_preview?: unknown };
-                form_draft_preview?: unknown;
-                error?: string;
-            };
-            if (!res.ok) throw new Error(body.error || `Couldn't save that (${res.status})`);
-            const next = (body.data?.form_draft_preview ?? body.form_draft_preview) as typeof draft | undefined;
-            if (next) setDraft(next);
-        } catch (e) {
-            setErr(e instanceof Error ? e.message : "Couldn't save that change.");
-        }
-    };
-
     const showDocumentCanvas =
         !isTextSource &&
         leftView === "highlights" &&
@@ -1008,8 +948,14 @@ export default function PosTemplateSetupColumn({
             setErr("Enter a form name before generating.");
             return;
         }
-        const expanded = expandQuestionsForDraftSave(reviewQuestionsRef.current, { generateAnyway });
-        if (expanded.length === 0) {
+        /*
+         * A form already authored in Forms Studio is generated from the Studio's own schema. Re-posting
+         * the older review list first would rebuild the importer's view of the draft from a list that never
+         * saw those edits — so it is skipped, and create reads the Studio schema directly.
+         */
+        const studioAuthored = Boolean(draft?.studio_schema);
+        const expanded = studioAuthored ? [] : expandQuestionsForDraftSave(reviewQuestionsRef.current, { generateAnyway });
+        if (!studioAuthored && expanded.length === 0) {
             setErr("Add at least one active question before generating the form.");
             return;
         }
@@ -1019,7 +965,7 @@ export default function PosTemplateSetupColumn({
         setGenerateAnywayOpen(false);
         try {
             setCreatingPhase(1);
-            const saveRes = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+            const saveRes = studioAuthored ? null : await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "content-type": "application/json" },
@@ -1048,8 +994,10 @@ export default function PosTemplateSetupColumn({
                         .map(([title, info]) => ({ title, disposition: info.disposition })),
                 }),
             });
-            const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
-            if (!saveRes.ok) throw new Error(saveBody.error || `Couldn't save questions (${saveRes.status})`);
+            if (saveRes) {
+                const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
+                if (!saveRes.ok) throw new Error(saveBody.error || `Couldn't save questions (${saveRes.status})`);
+            }
 
             setCreatingPhase(2);
             const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, {
@@ -1346,63 +1294,23 @@ export default function PosTemplateSetupColumn({
                     draft={draft}
                     sourceDocumentName={sourceFilenameEarly}
                     sourcePreviewUrl={sourcePreviewUrl}
-                    onSaveFieldEdits={async (edits) => {
-                        await saveDraftFieldEdits(edits);
-                    }}
-                    onSaveSchema={async (schema) => {
-                        // The operator changed the form's shape; the schema says what it now contains.
-                        await postDraftPayload(buildDraftSavePayloadFromSchema(draft, schema));
-                    }}
-                    onRemoveFields={async (fieldIds) => {
-                        // An explicit removal the operator asked for, through the same whole-draft save.
-                        await saveDraftFieldEdits(new Map(), new Set(fieldIds));
-                    }}
-                    onCreateFieldAndMap={async (fieldId, name, entity, fieldType) => {
+                    onSaveStudioSchema={async (schema) => {
                         /*
-                         * Two steps, in this order: make the destination through the canonical
-                         * configuration API, then point the question at it. If the field cannot be
-                         * created the mapping is NOT saved, so the operator never ends up with a
-                         * question aimed at a field that does not exist.
+                         * The form exactly as Forms Studio has it — the same whole-schema save a hand-built
+                         * form makes. The importer's view of the draft is not rebuilt from it.
                          */
-                        const field = draft.fields?.find((f) => f.id === fieldId);
-                        const plan = planCreateFieldFromSource({
-                            label: name,
-                            entityType: entity,
-                            fieldType,
-                            ...(field?.options ? { options: field.options } : {}),
+                        const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ studio_schema: schema }),
                         });
-                        if (!plan.ok) {
-                            setErr(
-                                plan.reason === "unusable_name"
-                                    ? "Give the field a name with some letters or numbers in it."
-                                    : "Alloy cannot store that answer type yet.",
-                            );
-                            return;
-                        }
-                        setErr(null);
-                        try {
-                            const res = await fetch("/api/admin/field-definitions", {
-                                method: "POST",
-                                credentials: "same-origin",
-                                headers: { "content-type": "application/json" },
-                                body: JSON.stringify(plan.request),
-                            });
-                            /*
-                             * 409 means a field of that name already exists on that entity — which is
-                             * the destination the operator asked for. Mapping to it is the correct
-                             * outcome, not an error to show them.
-                             */
-                            if (!res.ok && res.status !== 409) {
-                                const body = (await res.json().catch(() => ({}))) as { error?: string };
-                                throw new Error(body.error || `Couldn't create that field (${res.status})`);
-                            }
-                        } catch (e) {
-                            setErr(e instanceof Error ? e.message : "Couldn't create that field.");
-                            return;
-                        }
-                        await saveDraftFieldEdits(
-                            new Map([[fieldId, { field_source: plan.choice.destination }]]),
-                        );
+                        const body = (await res.json().catch(() => ({}))) as {
+                            data?: { form_draft_preview?: StoredFormDraftPreview };
+                            error?: string;
+                        };
+                        if (!res.ok) throw new Error(body.error || `Couldn't save the form (${res.status})`);
+                        if (body.data?.form_draft_preview) setDraft(body.data.form_draft_preview);
                     }}
                 />
             ) : reviewMode === "concepts" && discovery && !created ? (

@@ -46,6 +46,8 @@ import {
     type ConfiguredCaptureScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import UserPersonLinkControl from "@/components/adminV2/settings/access/UserPersonLinkControl";
+import AccountNameControl from "@/components/adminV2/settings/access/AccountNameControl";
 import {
     identityHeadline,
     identitySubtitle,
@@ -1048,19 +1050,35 @@ export default function AccessUsersConfigurationPage({
                                                       */}
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Name</dt>
-                                                        <dd className="mt-0.5" data-testid="access-user-overview-name">
-                                                            {identityOf(selected).name ?? (
-                                                                <UnknownValue
-                                                                    label="No name on file"
-                                                                    reason="This account was created without a name. Nothing is inferred from the email address."
-                                                                    testId="access-user-overview-name-unknown"
-                                                                />
-                                                            )}
+                                                        <dd className="mt-0.5">
+                                                            {/*
+                                                              * W7-F002 (corrected): the login's OWN name, editable here.
+                                                              * It is what audit activity names when the login is not linked
+                                                              * to a Person. Never inferred from the email address.
+                                                              */}
+                                                            <AccountNameControl
+                                                                key={selected.user_id}
+                                                                userId={selected.user_id}
+                                                                name={identityOf(selected).name}
+                                                                canManage={canManageUsers}
+                                                                onSaved={reload}
+                                                            />
                                                         </dd>
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Email</dt>
                                                         <dd className="mt-0.5">{selected.email ?? "No email on file"}</dd>
+                                                    </div>
+                                                    {/*
+                                                      * W7-F002. Which human this login IS — chosen by an
+                                                      * operator, never matched from the email above.
+                                                      */}
+                                                    <div className="border-t border-alloy-stone/25 pt-3">
+                                                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Person</p>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">Linked person</dt>
+                                                        <dd className="mt-0.5">
+                                                            <UserPersonLinkControl userId={selected.user_id} canManage={canManageUsers} />
+                                                        </dd>
                                                     </div>
                                                     {/*
                                                       * W-51 / IA-7. The label follows the record: a membership

@@ -208,7 +208,11 @@ describe("authority and grain are preserved", () => {
             "utf8",
         );
         expect(src).toContain('.eq("org_id", orgId)');
-        expect(src).toContain('.eq("context_id", opportunityId)');
+        // E2E-17: ownership is "this track's journey leads back to THIS opportunity", resolved by the
+        // journey owner for both track shapes — no longer a `context_id = opportunity` filter, which
+        // refused every participation-anchored track the current writer creates.
+        expect(src).toContain("resolveEnrollmentJourneyContext(");
+        expect(src).toContain("if (journey.opportunityId !== opportunityId) return null;");
         expect(src).toContain('.eq("id", participationId)');
     });
 

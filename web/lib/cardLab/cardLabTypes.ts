@@ -386,6 +386,10 @@ export type FinancialsPeriod = {
      * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
      */
     dueNow: string;
+    /** W7-F018: drafts — not yet posted, not balance, not Due. */
+    upcoming?: string | null;
+    /** W7-F013: collectible but not due until a later payment event — "$40.00 on Nov 1, 2026". */
+    notYetDue?: string | null;
     /**
      * MONEY THE FAMILY HAS ALREADY GIVEN THAT IS NOT YET SPENT — and only the spendable part.
      *
@@ -658,10 +662,28 @@ export type AddChargeSpecimen = {
     amount: string;
     /** `charges.service_date` — when the thing happened. */
     serviceDate: string;
-    /** The billing period the charge lands in, derived from billable_on unless overridden. */
+    /**
+     * The resolved service date as `YYYY-MM-DD`, for the editable control's value. The display
+     * string above is for reading; a date input needs the canonical value.
+     */
+    serviceDateIso?: string | null;
+    /** W7-F017: the charge type's own invoice timing, when it overrides the organisation's. */
+    invoiceOverride?: string | null;
+    /** The billing period CONTAINING the service date, as the server's date chain resolved it. */
     period: string;
+    /** `charges.billable_on` — when the obligation is invoiced. Never earlier than the day it is created. */
+    invoiceDate: string;
     /** `charges.due_date`. */
     due: string;
+    /**
+     * WHY EACH DATE IS WHAT IT IS — the rule and the scope it came from, in the server's words
+     * ("7 days before the billing period begins (organization default)"). Empty until previewed.
+     */
+    dateRules: { invoice: string | null; due: string | null };
+    /** What confirming does to posting: posts now, waits for the period, or waits for review. */
+    posting: string | null;
+    /** Set when the charge's billing period has not begun: the day it posts itself. Null otherwise. */
+    awaitsPeriodUntil: string | null;
     /** Which date the operator changed, if any. */
     overridden: string | null;
     chargeTo: string;

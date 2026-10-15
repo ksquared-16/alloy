@@ -177,57 +177,64 @@ describe("the guard decides and nothing else", () => {
 describe("the guard is wired to the invariant-owning path", () => {
     // A STRUCTURAL assertion, in the style this suite already uses elsewhere. It proves the call
     // site's shape — guard before write, gated to closes, fail-closed read — not its runtime
-    // behaviour against a live database. Runtime proof belongs to the sub-slice that builds the
-    // family-close command, where a real preview exists to assert against.
+    // behaviour. Runtime proof of every close path is `familyCloseRefusalPaths.test.ts`.
+    //
+    // The rule itself lives in `familyCloseRefusal` (E2E-09), so the command paths that write case
+    // status directly ask the same rule; the executor is one caller of it.
     const executor = readFileSync(
         resolve(__dirname, "../../lib/lifecycle/stageOutcomeRuleTargetExecutor.ts"),
         "utf8",
     );
+    const rule = readFileSync(resolve(__dirname, "../../lib/lifecycle/familyCloseRefusal.ts"), "utf8");
     const familyCase = executor.slice(
         executor.indexOf('case "update_family_case_status"'),
         executor.indexOf('case "update_child_enrollment_status"'),
     );
 
     it("guards the executor, not merely the close_lead command", () => {
-        expect(familyCase).toContain("evaluateFamilyCloseGuard");
+        expect(familyCase).toContain("familyCloseRefusal(");
+        expect(rule).toContain("evaluateFamilyCloseGuard");
     });
 
     it("checks the guard BEFORE the status write", () => {
         // Order is the whole point: a guard after the write is not a guard.
-        expect(familyCase.indexOf("evaluateFamilyCloseGuard")).toBeLessThan(
+        expect(familyCase.indexOf("familyCloseRefusal(")).toBeLessThan(
             familyCase.indexOf("updateOpportunityStatusWithEvent"),
         );
     });
 
     it("only guards writes that close the case", () => {
         // `reached_qualified` writes status `open` and must not pay for this.
-        expect(familyCase).toContain("familyCaseStatusCloses");
-        expect(familyCase.indexOf("familyCaseStatusCloses")).toBeLessThan(
-            familyCase.indexOf("evaluateFamilyCloseGuard"),
+        expect(rule).toContain("familyCaseStatusCloses");
+        expect(rule.indexOf("if (!familyCaseStatusCloses(")).toBeLessThan(
+            rule.indexOf("readEnrollmentInstancesForLead(supabase"),
         );
     });
 
     it("reads children through the fail-closed seam, not the lenient one", () => {
-        expect(familyCase).toContain("readEnrollmentInstancesForLead");
-        expect(familyCase).not.toContain("listEnrollmentInstancesForLead");
+        expect(rule).toContain("readEnrollmentInstancesForLead");
+        expect(rule).not.toContain("listEnrollmentInstancesForLead");
     });
 
     it("returns structured reasons for a later preview to translate", () => {
-        expect(familyCase).toContain("blocked_reasons");
+        expect(rule).toContain("blocked_reasons");
+        expect(familyCase).toContain("return refusal");
     });
 
     it("performs no child mutation on the blocked path", () => {
         const blocked = familyCase.slice(
-            familyCase.indexOf("evaluateFamilyCloseGuard"),
+            familyCase.indexOf("familyCloseRefusal("),
             familyCase.indexOf("Read the prior value"),
         );
-        for (const writer of [
-            "setEnrollmentInstanceStateByScope",
-            "moveEnrollmentInstanceStageByScope",
-            ".update(",
-            ".insert(",
-        ]) {
-            expect(blocked, `guard path must not call ${writer}`).not.toContain(writer);
+        for (const source of [blocked, rule]) {
+            for (const writer of [
+                "setEnrollmentInstanceStateByScope",
+                "moveEnrollmentInstanceStageByScope",
+                ".update(",
+                ".insert(",
+            ]) {
+                expect(source, `guard path must not call ${writer}`).not.toContain(writer);
+            }
         }
     });
 });

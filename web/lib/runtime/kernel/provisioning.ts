@@ -149,6 +149,12 @@ type Inflight = {
     promise: Promise<PreparationTerminal | null>;
     /** Caused by pointer intent. Populates the cache; never reaches K3. */
     speculative?: boolean;
+    /**
+     * The attention version this work answers for. Starts as `ref.version`; an explicit movement that
+     * joins the work (the dedup branch) takes it over, so every emit — phase 1 and the settlement —
+     * reaches K3 stamped for the attention that is actually waiting.
+     */
+    answersFor: number;
     controller: AbortController;
     /** Set the moment a coarser/newer attention supersedes this work. Checked at the emit boundary. */
     disposed: DisposalReason | null;
@@ -276,15 +282,27 @@ export class ProvisioningRuntime {
         // Supersession is unaffected: `onAttentionMoved` has already disposed every preparation this
         // movement genuinely supersedes, so anything still in flight here is work the new attention
         // legitimately wants.
+        //
+        // E2E-22: restamping only the PROMISE was not enough. Focus is fed from `onTerminal` alone
+        // (#1252) and discards the promise, so the terminal K3 received still carried the starting
+        // movement's version and was refused as superseded by the very movement waiting for it —
+        // measured on deployed 50affaee as a warm child-grain selection stuck on "Thinking" forever.
+        // An explicit consumer therefore takes over what the in-flight work answers for, and the one
+        // `emit` delivers it. A speculative consumer changes nothing (warming is not navigating); an
+        // explicit one joining a warm makes it navigation, which is what the operator just did.
         const existing = this.inflight.get(key);
         if (existing && !existing.disposed) {
             this.instr.onDeduplicated?.(key, ref.version);
+            if (!speculative && ref.version > existing.answersFor) {
+                existing.answersFor = ref.version;
+                existing.speculative = false;
+            }
             return existing.promise.then((t) => (t ? { ...t, attentionVersion: ref.version } : null));
         }
 
         const controller = new AbortController();
         const startedAt = this.clock();
-        const f: Inflight = { key, ref, promise: Promise.resolve(null), controller, disposed: null, startedAt, speculative };
+        const f: Inflight = { key, ref, promise: Promise.resolve(null), controller, disposed: null, startedAt, speculative, answersFor: ref.version };
         f.promise = this.run(f);
         this.inflight.set(key, f);
         this.instr.onStarted?.(key, ref.version);
@@ -341,7 +359,7 @@ export class ProvisioningRuntime {
                 key: f.key,
                 outcome,
                 snapshot: Object.freeze(snapshot), // immutable at commit
-                attentionVersion: f.ref.version,
+                attentionVersion: f.answersFor,
                 durationMs: this.clock() - f.startedAt,
             };
             this.completed.set(f.key, {

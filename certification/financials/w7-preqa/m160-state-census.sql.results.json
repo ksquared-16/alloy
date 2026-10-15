@@ -1,0 +1,105 @@
+{
+  "trusted_host_action_id": "tha_8064dbf7481788",
+  "query_hash": "a77b80d9beb6305125940f92bd8bbc6b59a76423fa2ef6d7beaa1e4ad45c76e0",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T15:44:38.200Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8064dbf7481788",
+    "query_hash": "a77b80d9beb6305125940f92bd8bbc6b59a76423fa2ef6d7beaa1e4ad45c76e0",
+    "authorization_id": "grnt_e753cc07e3074afc",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T15:44:43.828Z",
+    "question_ids": [
+      "g",
+      "d",
+      "l"
+    ],
+    "questions": {
+      "g": {
+        "question_id": "g",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "authenticated_writes": null,
+            "anon_writes": null,
+            "authenticated_select": true,
+            "session_write_policies": 0
+          },
+          {
+            "table": "payments",
+            "authenticated_writes": null,
+            "anon_writes": null,
+            "authenticated_select": true,
+            "session_write_policies": 0
+          },
+          {
+            "table": "payment_allocations",
+            "authenticated_writes": null,
+            "anon_writes": null,
+            "authenticated_select": true,
+            "session_write_policies": 0
+          },
+          {
+            "table": "ledger_transactions",
+            "authenticated_writes": null,
+            "anon_writes": null,
+            "authenticated_select": true,
+            "session_write_policies": 0
+          },
+          {
+            "table": "resolved_obligations",
+            "authenticated_writes": null,
+            "anon_writes": null,
+            "authenticated_select": true,
+            "session_write_policies": 0
+          }
+        ]
+      },
+      "d": {
+        "question_id": "d",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "post_ledger_transaction",
+            "authenticated": false,
+            "anon": false,
+            "service_role": true
+          },
+          {
+            "function": "stamp_payment_posted_to_ledger_at",
+            "authenticated": false,
+            "anon": false,
+            "service_role": true
+          },
+          {
+            "function": "reconcile_consumption_correction",
+            "authenticated": false,
+            "anon": false,
+            "service_role": true
+          }
+        ]
+      },
+      "l": {
+        "question_id": "l",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20261122160000",
+            "in_ledger": true,
+            "head": "20261122160000",
+            "total": 521
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

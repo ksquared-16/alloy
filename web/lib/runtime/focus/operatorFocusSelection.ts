@@ -56,3 +56,47 @@ export function dispatchOperatorFocusSelection(detail: OperatorFocusSelectionDet
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, { detail }));
 }
+
+/** The fields of a Search destination a focus selection is built from (`SearchDestination` subset). */
+export type FocusDestinationLike = {
+    target?: string | null;
+    card_key?: string | null;
+    item_id?: string | null;
+    context_key?: string | null;
+    host_entity_type?: string | null;
+    host_entity_id?: string | null;
+    host_work_unit_key?: string | null;
+    host_work_view_id?: string | null;
+    operational_member_id?: string | null;
+};
+
+/**
+ * THE ONE MAPPING from a resolved destination to the focus intent that opens it.
+ *
+ * Search built this inline; the Children card (E2E-18) opens a tracked child through the SAME
+ * destination — the durable record's `relatedWork`, produced by Search's own resolver — so the mapping
+ * lives here and both dispatch byte-identical selections. Null when the destination cannot be opened
+ * in a Focus Panel (wrong target, or no host record).
+ */
+export function operatorFocusSelectionFromDestination(
+    destination: FocusDestinationLike,
+): OperatorFocusSelectionDetail | null {
+    const hostType = (destination.host_entity_type ?? "").trim();
+    const hostId = (destination.host_entity_id ?? "").trim();
+    if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return null;
+    return {
+        entity_type: hostType,
+        entity_id: hostId,
+        host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
+        // The participant's own Work View, when their stage has one — preferred over the case unit.
+        host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
+        // The Work View's own ROW identity (a participation on a child-grain lens), kept apart from
+        // the host the panel composes against.
+        operational_member_id: (destination.operational_member_id ?? "").trim() || null,
+        card_focus: {
+            card_key: destination.card_key,
+            item_id: destination.item_id ?? null,
+            context_key: destination.context_key ?? null,
+        },
+    };
+}

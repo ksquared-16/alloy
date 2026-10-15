@@ -7,7 +7,7 @@
  * answer differently:
  *
  *   SERVICE DATE     when the chargeable event happened          (`occurs_on`)
- *   BILLING PERIOD   which commercial cycle owns the obligation  (derived from `billable_on`)
+ *   BILLING PERIOD   which commercial cycle owns the obligation  (the interval containing the service date)
  *   INVOICE DATE     when the obligation is issued               (`billable_on`)
  *   DUE DATE         when payment is expected                    (`due_date`)
  *   PAYMENT DATE     when money actually arrived                 (`payments.received_at`)
@@ -42,6 +42,34 @@ export type DueDateInputs = {
     periodStart: string | null;
     /** Narrowing, so a service-scoped rule can beat the organisation's. */
     serviceId?: string | null;
+    /**
+     * ── THE ACCOUNT DIMENSION, WHICH THIS RESOLVER COULD NOT PREVIOUSLY EXPRESS ───────────────
+     *
+     * `PolicyResolutionContext` carries five narrowing dimensions and ranks `customer` as the MOST
+     * specific — its own comment says why: "an explicit account answer must beat an inherited
+     * default". This resolver passed only `serviceId`, so `matchesContext` could never match a
+     * `scope_type: "customer"` policy and an account-scoped due-date rule resolved to `no_policy`
+     * no matter how it was configured.
+     *
+     * Found by a test that seeded exactly such a policy and got `no_policy` back. Optional, so a
+     * caller that has no account in hand is unaffected and nothing that resolves today changes.
+     */
+    customerId?: string | null;
+    /**
+     * ── THE SITE DIMENSION, WHICH THIS RESOLVER COULD NOT EXPRESS AT ALL ──────────────────────
+     *
+     * `customerId` was added when an account-scoped rule was found unresolvable. The same census
+     * then showed a wider instance of the identical defect: `DueDateInputs` had no `locationId`
+     * either, so a `scope_type: "location"` due-date policy could never resolve for ANY caller —
+     * generated, manual or correction. Not one caller's omission; the resolver's.
+     *
+     * Null for a household-source charge, which attends no site. See `resolveFinancialPolicyScope`.
+     *
+     * `rate_plan` is deliberately still absent: no Financials writer holds a rate-plan id at the
+     * moment a due date is resolved, and a dimension nothing can supply is an argument that only
+     * looks like coverage.
+     */
+    locationId?: string | null;
 };
 
 export type DueDateResolution = {
@@ -51,6 +79,10 @@ export type DueDateResolution = {
     strategy: string | null;
     /** Why there is no date, when there is none. */
     reason: "resolved" | "no_policy" | "missing_input" | "unknown_strategy";
+    /** Which scope's rule answered — org default, a location override, an account — for the explanation. */
+    sourceScope?: string | null;
+    /** The rule's offset, so a surface can say "10 days after the invoice date" without re-reading it. */
+    offsetDays?: number | null;
 };
 
 function addDays(ymd: string, days: number): string {
@@ -82,7 +114,11 @@ export function resolveDueDate(
     const resolved = resolveFinancialPolicy(
         policies,
         "due_date",
-        { serviceId: inputs.serviceId ?? undefined },
+        {
+            serviceId: inputs.serviceId ?? undefined,
+            customerId: inputs.customerId ?? undefined,
+            locationId: inputs.locationId ?? undefined,
+        },
         asOf,
     );
     if (!resolved.resolved) return { dueDate: null, strategy: null, reason: "no_policy" };
@@ -90,31 +126,35 @@ export function resolveDueDate(
     const value = (resolved.policy.value ?? {}) as { strategy?: string; offset_days?: unknown };
     const strategy = typeof value.strategy === "string" ? value.strategy.trim() : "";
     const offset = wholeDays(value.offset_days);
+    const provenance = { sourceScope: resolved.sourceScope, offsetDays: offset };
+    return { ...decide(), ...provenance };
 
-    switch (strategy) {
-        case "on_invoice":
-            return inputs.invoiceDate
-                ? { dueDate: inputs.invoiceDate, strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "days_after_invoice":
-            return inputs.invoiceDate
-                ? { dueDate: addDays(inputs.invoiceDate, offset), strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "on_period_start":
-            return inputs.periodStart
-                ? { dueDate: inputs.periodStart, strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        case "days_after_period_start":
-            return inputs.periodStart
-                ? { dueDate: addDays(inputs.periodStart, offset), strategy, reason: "resolved" }
-                : { dueDate: null, strategy, reason: "missing_input" };
-        default:
-            /*
-             * A stored strategy this build does not know is REPORTED, never guessed at. It means the
-             * database permits a value the application has not caught up with — the same class of
-             * drift `vacation_credit` documents having had — and guessing would put a date on a
-             * family's obligation on the strength of a string nobody here understands.
-             */
-            return { dueDate: null, strategy: strategy || null, reason: "unknown_strategy" };
+    function decide(): DueDateResolution {
+        switch (strategy) {
+            case "on_invoice":
+                return inputs.invoiceDate
+                    ? { dueDate: inputs.invoiceDate, strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "days_after_invoice":
+                return inputs.invoiceDate
+                    ? { dueDate: addDays(inputs.invoiceDate, offset), strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "on_period_start":
+                return inputs.periodStart
+                    ? { dueDate: inputs.periodStart, strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            case "days_after_period_start":
+                return inputs.periodStart
+                    ? { dueDate: addDays(inputs.periodStart, offset), strategy, reason: "resolved" }
+                    : { dueDate: null, strategy, reason: "missing_input" };
+            default:
+                /*
+                 * A stored strategy this build does not know is REPORTED, never guessed at. It means the
+                 * database permits a value the application has not caught up with — the same class of
+                 * drift `vacation_credit` documents having had — and guessing would put a date on a
+                 * family's obligation on the strength of a string nobody here understands.
+                 */
+                return { dueDate: null, strategy: strategy || null, reason: "unknown_strategy" };
+        }
     }
 }

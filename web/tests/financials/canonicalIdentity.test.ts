@@ -122,7 +122,11 @@ describe("the reads belong to the surface that uses them", () => {
          * reads should not have been there.
          */
         const card = code(CARD);
-        expect(card).toMatch(/const detailInPlay = overlay === "detail" \|\| detailsAreTheSurface;/);
+        /*
+         * W7-F011 (#1430) added the Add Charge command, which states the standing responsibility
+         * and so needs the same read. The compact card is still neither — the rule holds.
+         */
+        expect(card).toMatch(/const detailInPlay = overlay === "detail" \|\| overlay === "add_charge" \|\| detailsAreTheSurface;/);
         expect(card, "and the read is gated on it")
             .toMatch(/if \(!customerId \|\| !detailInPlay\) return;/);
     });

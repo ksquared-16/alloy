@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveEnrollmentJourneyContext } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
+
 
 /**
  * RESOLVE THE ATTENTION PARTICIPATION TO ITS AUTHORITATIVE MEMBER — scoped to one opportunity.
@@ -39,47 +41,95 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * indexed lookup by primary key on the SETTLEMENT path — not the commit path — and it runs only when
  * a participation is actually named.
  */
+/**
+ * E2E-17 — BOTH TRACK SHAPES, THROUGH THE ONE JOURNEY OWNER.
+ *
+ * This required `context_id = opportunity`. That is the OLDER track shape. A child track begun by the
+ * certified Add Child → Move to Waitlist path (doctrine 2846e7ee9) anchors to the child's Enrollment
+ * Participation instead (`context_type = enrollment_participation`, `context_id` = the
+ * `opportunity_customer_members` row), so every such child resolved to null here and the settled
+ * frame carried no participant — measured on deployed 59538995: a child opened from the Waitlist view
+ * settled with `selectedParticipant: null` and every participant `scoped: false`.
+ *
+ * Which participation a track belongs to is already owned by `resolveEnrollmentJourneyContext`
+ * ("the canonical graph behind one Enrollment journey … every consumer that needs any part of this
+ * reads it from here"), which reads both shapes. This resolver now asks it, and refuses unless the
+ * journey's Opportunity is THIS one — so the authorization boundary is unchanged, merely implemented
+ * for the shape the current writer produces. One lookup here; the graph walk is the owner's.
+ *
+ * The answer names the track (`participationId`, the attention id), the child (`customerMemberId`),
+ * the Enrollment Participation (`enrollmentParticipationId`) and the track's open stage
+ * (`stageKey`, null once closed) — so the drawer keys a child subject's stage work off this same
+ * resolution instead of a second lookup.
+ */
 export async function resolveParticipationSubjectForOpportunity(args: {
     supabase: SupabaseClient;
     orgId: string;
     opportunityId: string;
     participationId: string | null;
-}): Promise<{ participationId: string; customerMemberId: string } | null> {
+}): Promise<{
+    participationId: string;
+    customerMemberId: string;
+    enrollmentParticipationId?: string | null;
+    stageKey?: string | null;
+} | null> {
     const participationId = args.participationId?.trim() ?? "";
     const opportunityId = args.opportunityId?.trim() ?? "";
     const orgId = args.orgId?.trim() ?? "";
-    if (!participationId || !opportunityId || !orgId) return null;
+    // A family subject (attention = the Opportunity) names no child: nothing to resolve, and no
+    // child is chosen for it — this never answers "the first child".
+    if (!participationId || !opportunityId || !orgId || participationId === opportunityId) return null;
 
     const { data, error } = await args.supabase
         .from("process_instances")
-        .select("id, subject_type, subject_id, context_id")
+        .select("id, subject_type, subject_id, context_type, context_id, stage_key, close_reason_key")
         .eq("id", participationId)
         .eq("org_id", orgId)
-        .eq("context_id", opportunityId)
         .maybeSingle();
 
     // A failed read is not a refusal, but it is not a scope either: answer null and let the caller's
     // existing fallback stand. Nothing here may invent a child.
     if (error || !data) return null;
+    const row = data as {
+        id: string;
+        subject_type: string | null;
+        subject_id: string | null;
+        context_type: string | null;
+        context_id: string | null;
+        stage_key: string | null;
+        close_reason_key: string | null;
+    };
 
     /*
      * Only a CHILD participation names the member this panel is about. `"child"` is the value the
-     * canonical enrollment resolver filters on (`enrollmentContextResolver` queries
-     * `process_instances` with `.eq("subject_type", "child")`), read from that owner rather than
-     * assumed — the first draft of this guard tested `"customer_member"`, which would have rejected
-     * every real row and reproduced the very silent-absence defect it exists to close.
-     *
-     * An unset value is not treated as a refusal: the org + opportunity + id triple above has already
-     * authorized the row, and refusing on a blank column would fail closed against data this resolver
-     * did not write.
+     * canonical enrollment resolver filters on, read from that owner rather than assumed. An unset
+     * value is not treated as a refusal: org + id + the ownership check below authorize the row.
      */
-    const subjectType = String((data as { subject_type?: unknown }).subject_type ?? "").trim();
+    const subjectType = String(row.subject_type ?? "").trim();
     if (subjectType && subjectType !== "child") return null;
+    const subjectMemberId = String(row.subject_id ?? "").trim();
+    if (!subjectMemberId) return null;
 
-    const customerMemberId = String((data as { subject_id?: unknown }).subject_id ?? "").trim();
-    if (!customerMemberId) return null;
+    // Ownership. The older shape names this Opportunity directly; anything else is resolved by the
+    // journey owner and must lead back to this Opportunity, or the answer is null.
+    let enrollmentParticipationId: string | null = null;
+    if (String(row.context_id ?? "").trim() !== opportunityId) {
+        const journey = await resolveEnrollmentJourneyContext(args.supabase, {
+            orgId,
+            processInstance: { id: row.id, subject_id: row.subject_id, context_type: row.context_type, context_id: row.context_id },
+        });
+        if (journey.opportunityId !== opportunityId) return null;
+        // The track and its participation must name the same child.
+        if (journey.customerMemberId && journey.customerMemberId !== subjectMemberId) return null;
+        enrollmentParticipationId = journey.participationId;
+    }
 
-    return { participationId, customerMemberId };
+    return {
+        participationId,
+        customerMemberId: subjectMemberId,
+        enrollmentParticipationId,
+        stageKey: row.close_reason_key ? null : String(row.stage_key ?? "").trim() || null,
+    };
 }
 
 /**

@@ -25,6 +25,7 @@
 
 import type { FormFieldSource } from "@/lib/forms/schema";
 import type { DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
+import { matchCanonicalDestination } from "./canonicalImportMatch";
 import {
     classifyReviewQuestionMapping,
     defaultSubjectForIntent,
@@ -66,6 +67,22 @@ export type FieldMapping = {
 
 /** A settled status means the existing resolver was confident, not that a label matched. */
 const SETTLED = new Set(["high", "medium"]);
+
+/** The record a destination lands on, in the operator's words. Never the raw entity token. */
+function subjectNoun(entityType: string): string {
+    switch (entityType) {
+        case "child":
+        case "customer_member":
+            return "the child";
+        case "person":
+        case "guardian":
+            return "a parent or guardian";
+        case "customer":
+            return "the household";
+        default:
+            return "this record";
+    }
+}
 
 export function resolveFieldMapping(
     field: Pick<DraftFormField, "id" | "label" | "type" | "required" | "confidence" | "evidence" | "page" | "pdf_field_name" | "bbox" | "field_source" | "derived">,
@@ -123,7 +140,25 @@ export function resolveFieldMapping(
             type: seeded.type,
             ...(seeded.destinationFieldId ? { destinationFieldId: seeded.destinationFieldId } : {}),
         }) ?? null;
-    const label = proposed ? storageSummaryLabel(proposed, seeded.destinationFieldId) : null;
+    /*
+     * WHERE THE CATALOG FINALLY BECOMES REACHABLE.
+     *
+     * `inferQuestionIntent` is a closed vocabulary of nine patterns, and anything it does not recognise
+     * becomes `processing_only` — at which point `deriveFieldSources` returns undefined on its first
+     * line, before any catalog is consulted. So an obvious canonical fact could be unreachable purely
+     * because nobody had written a regex for it: "How would you describe your child's gender?" resolved
+     * to form-only while `child:gender` sat in the catalog the picker offers.
+     *
+     * The intent vocabulary stays as the high-confidence shortcut and runs first. Only when it has said
+     * "generic" does the question get asked of the canonical field authority, and only an unambiguous
+     * answer is accepted. @see canonicalImportMatch for the law.
+     */
+    const catalogMatch =
+        !proposed && intent === "generic" ? matchCanonicalDestination(seeded.displayLabel, sectionTitle) : null;
+    const resolved = proposed ?? catalogMatch?.fieldSource ?? null;
+    const label = resolved
+        ? catalogMatch?.label ?? storageSummaryLabel(resolved, seeded.destinationFieldId)
+        : null;
 
     /*
      * An operator's own decision outranks everything. A destination already written on the draft was
@@ -142,6 +177,21 @@ export function resolveFieldMapping(
             explanation: `Alloy already knows this — ${storageSummaryLabel(ownDestination, seeded.destinationFieldId)}.`,
             apply: ownDestination,
             proposed: ownDestination,
+        };
+    }
+
+    /*
+     * A catalog match is a destination the authority named, so it is applied — the question was only
+     * "form field only" because the intent vocabulary had nothing to say about it, which is an absence
+     * of recognition rather than a decision that the answer belongs on the form.
+     */
+    if (catalogMatch) {
+        return {
+            state: "mapped",
+            destinationLabel: catalogMatch.label,
+            explanation: `Alloy already knows this — ${catalogMatch.label} for ${subjectNoun(catalogMatch.fieldSource.entity_type)}.`,
+            apply: catalogMatch.fieldSource,
+            proposed: catalogMatch.fieldSource,
         };
     }
 

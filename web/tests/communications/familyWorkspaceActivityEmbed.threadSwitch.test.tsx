@@ -269,7 +269,8 @@ describe("familyWorkspace activity_embed thread switching", () => {
         await flush();
 
         expect(el.textContent).toContain("Beta thread message");
-        expect(el.textContent).not.toMatch(/^\s*New Message\s*$/m);
+        // Reading a thread: the header is the thread, not the new-message channel strip.
+        expect(el.querySelector('[data-cc-thread-header] [data-cc-composer-channels]')).toBeNull();
         expect(el.querySelector('[data-cc-thread-header-summary]')).toBeTruthy();
         expect(el.querySelector('[data-cc-reply-collapsed]')).toBeTruthy();
         expect(el.querySelector('[data-cc-new-message]')?.getAttribute("aria-pressed")).not.toBe("true");
@@ -281,7 +282,9 @@ describe("familyWorkspace activity_embed thread switching", () => {
         });
         await flush();
 
-        expect(el.textContent).toContain("New Message");
+        // New Message mode: Email | SMS take the header row (no separate "New Message" title row).
+        expect(el.querySelector('[data-cc-thread-header] [data-cc-composer-channels]')).toBeTruthy();
+        expect(el.querySelector('[data-cc-thread-header]')?.textContent).not.toContain("New Message");
         expect(el.querySelector('[data-cc-new-message]')?.getAttribute("aria-pressed")).toBe("true");
     });
 

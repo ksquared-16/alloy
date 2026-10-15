@@ -32,7 +32,26 @@ export async function dbStoreFormDraftPreview(
     // Left unsanitized, ONE odd character fails the entire import with an opaque
     // "unsupported Unicode escape sequence" — which is exactly how the Sunscreen Permission Form
     // died. Cleaned here because every draft-producing path converges on this write.
-    const safeDraft = sanitizeForJsonb(args.draft);
+    /*
+     * IMPORTED METADATA NEVER OVERWRITES A STUDIO DECISION.
+     *
+     * Re-detecting a document, or applying discovery, produces a fresh draft from the importer — and
+     * this write replaced `form_draft_preview` whole, so an operator's saved Forms Studio schema
+     * (`studio_schema`: their answer types, mappings, conditions, groups, layout) vanished the moment
+     * the document was read again. The importer owns the draft's evidence; Forms Studio owns the form.
+     * A draft arriving without a Studio schema therefore keeps the one already saved. Only an explicit
+     * Studio save replaces it.
+     */
+    const priorDraft = (baseMeta as { form_draft_preview?: StoredFormDraftPreview }).form_draft_preview;
+    const incoming: StoredFormDraftPreview =
+        !args.draft.studio_schema && priorDraft?.studio_schema
+            ? {
+                  ...args.draft,
+                  studio_schema: priorDraft.studio_schema,
+                  ...(priorDraft.studio_schema_saved_at ? { studio_schema_saved_at: priorDraft.studio_schema_saved_at } : {}),
+              }
+            : args.draft;
+    const safeDraft = sanitizeForJsonb(incoming);
     const metadata = { ...baseMeta, form_draft_preview: safeDraft };
 
     const { error } = await supabase
@@ -132,6 +151,12 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         ...(Array.isArray(d.collections)
             ? { collections: d.collections as StoredFormDraftPreview["collections"] }
             : {}),
+        // Forms Studio's own schema for this form (see `StoredFormDraftPreview.studio_schema`). Passed
+        // through as stored; it is validated on write and again by every reader that renders it.
+        ...(d.studio_schema && typeof d.studio_schema === "object" && !Array.isArray(d.studio_schema)
+            ? { studio_schema: d.studio_schema as StoredFormDraftPreview["studio_schema"] }
+            : {}),
+        ...(typeof d.studio_schema_saved_at === "string" ? { studio_schema_saved_at: d.studio_schema_saved_at } : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

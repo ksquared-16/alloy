@@ -11,6 +11,7 @@ import type {
     FamilyComposeDraftSeed,
     FamilyComposeIntent,
 } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
+import type { FamilySendWorkConsequence } from "@/lib/communications/v2/familyWorkspace/familySendWorkConsequence";
 import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 
 export default function FamilyCommunicationWorkspace(props: {
@@ -25,6 +26,8 @@ export default function FamilyCommunicationWorkspace(props: {
     entryContext?: "current_work" | null;
     composeIntent?: FamilyComposeIntent | null;
     draftSeed?: FamilyComposeDraftSeed | null;
+    workConsequence?: FamilySendWorkConsequence | null;
+    onSendAcknowledged?: (() => void) | null;
 }) {
     const adminAuth = useAdminAuthOptional();
     const runtime = useFamilyCommunicationRuntime(props);
@@ -85,6 +88,9 @@ export default function FamilyCommunicationWorkspace(props: {
                 messages={runtime.messages}
                 timelineMessages={isActivityEmbed ? runtime.timelineMessages : undefined}
                 liveRecipientGroups={runtime.vm.recipientGroups}
+                // Per-person profiles from the workspace VM — read-only here (no write path is
+                // wired on this surface), but what each recipient pill states is their own truth.
+                preferenceProfilesByContact={runtime.vm.consentSummary.preferenceProfilesByContact}
                 selectedRecipientIds={runtime.selectedRecipientIds}
                 liveChannel={runtime.liveChannel}
                 subjectDraft={runtime.subjectDraft}

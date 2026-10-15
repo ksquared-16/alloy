@@ -25,7 +25,12 @@ export type ChargeTemplateAmountStrategy = (typeof CHARGE_TEMPLATE_AMOUNT_STRATE
 export const CHARGE_TEMPLATE_OCCURS_ON = ["now", "event_date", "service_period_start"] as const;
 export type ChargeTemplateOccursOn = (typeof CHARGE_TEMPLATE_OCCURS_ON)[number];
 
-export const CHARGE_TEMPLATE_BILLABLE_ON = ["immediate", "offset_days", "next_billing_cycle"] as const;
+/*
+ * `billing_policy` is the default: the template does not decide when it is invoiced, the
+ * organisation's `invoice_timing` policy does (org default, location override). The other three are
+ * EXCEPTIONS a template keeps only when its charge kind genuinely bills differently.
+ */
+export const CHARGE_TEMPLATE_BILLABLE_ON = ["billing_policy", "immediate", "offset_days", "next_billing_cycle"] as const;
 export type ChargeTemplateBillableOn = (typeof CHARGE_TEMPLATE_BILLABLE_ON)[number];
 
 /** Responsibility default vocabulary (placeholder until Responsibility ships). */
@@ -51,9 +56,10 @@ export const OCCURS_ON_LABEL: Record<ChargeTemplateOccursOn, string> = {
     service_period_start: "At service period start",
 };
 export const BILLABLE_ON_LABEL: Record<ChargeTemplateBillableOn, string> = {
-    immediate: "Immediately",
-    offset_days: "After N days",
-    next_billing_cycle: "Next billing cycle",
+    billing_policy: "Follows the organisation's invoice timing",
+    immediate: "On the service date",
+    offset_days: "N days after the service date",
+    next_billing_cycle: "When the next billing period begins",
 };
 export const RESPONSIBILITY_LABEL: Record<ChargeTemplateResponsibility, string> = {
     household: "Household",

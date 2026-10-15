@@ -1,0 +1,109 @@
+{
+  "trusted_host_action_id": "tha_8d5b7fb1070eb8",
+  "query_hash": "3069877457f089e58a075453bc58cf4c4b5e2cb09db5aec37decbe87c540ca66",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T13:55:07.567Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8d5b7fb1070eb8",
+    "query_hash": "3069877457f089e58a075453bc58cf4c4b5e2cb09db5aec37decbe87c540ca66",
+    "authorization_id": "grnt_4c11d292f2d84729",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T13:55:13.359Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "due_date": 1,
+            "billing_period_id": 1,
+            "legacy_billing_period_key": 1,
+            "billing_period_generation": 1
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "financial_reduction_applications",
+            "reason": 1,
+            "explanation": 1,
+            "source_charge_id": 1,
+            "reverses_id": 1,
+            "reversed_by_id": 1,
+            "period_key": 1
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "table_present": 1,
+            "status": 1,
+            "closed_at": 1,
+            "close_actor": 1,
+            "close_shape_chk": 1,
+            "close_actor_shape_chk": 1
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "charges_shape_chk": 1,
+            "reduction_shape_chk": 1,
+            "charge_immutability_trigger": 1,
+            "period_immutability_trigger": 1,
+            "correction_lineage_trigger": 1
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "table_present": 1,
+            "policy_type": 1,
+            "scope_type": 1,
+            "customer_id": 1
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "financial_corrections": 0,
+            "adjustment_notes": 0,
+            "correction_notes": 0
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

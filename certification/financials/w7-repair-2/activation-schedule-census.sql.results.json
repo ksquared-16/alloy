@@ -1,0 +1,82 @@
+{
+  "trusted_host_action_id": "tha_5b266acb61104e",
+  "query_hash": "1a0493c9f5ebd364a1d481e736aae1fde73037889f0a53ca073140f236350157",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T22:41:48.056Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5b266acb61104e",
+    "query_hash": "1a0493c9f5ebd364a1d481e736aae1fde73037889f0a53ca073140f236350157",
+    "authorization_id": "grnt_17e230cc65f94f8f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T22:41:53.837Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "handler_key": "financials.future_period_charge.activate",
+            "recurrence_kind": "daily",
+            "is_active": true,
+            "org_scoped": true,
+            "next_due_at_utc": "2026-10-06T11:30",
+            "label": "future_period_charge_activation",
+            "purpose": "post draft charges whose billing period has begun, on the organisation business date",
+            "authority": "postChildcareCharge via autoPostGeneratedCharge",
+            "gate": "period_not_started"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "activation_schedules": 1,
+            "orgs_holding_canonical_periods": 1,
+            "misconfigured": 0,
+            "off_time": 0,
+            "duplicated_orgs": 0,
+            "activation_precedes_close_wake": true
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_has_20261120120000": true,
+            "ledger_head": "20261120120000",
+            "ledger_total": 516
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "drafts_waiting_for_a_period": 0,
+            "draft_charges": 35,
+            "posted_in_future_period": 4
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

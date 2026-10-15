@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Info } from "lucide-react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
@@ -47,17 +48,21 @@ const SHARE_METHODS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
  *
  *   amount_strategy   fixed → amount locked · manual → operator sets it · rate_derived → resolved
  *   occurs_on         now | event_date | service_period_start   → the SERVICE date
- *   billable_on       immediate | offset_days | next_billing_cycle → the BILLING PERIOD
+ *   billable_on       follows the organisation's invoice timing (or a template exception) → the INVOICE date
  *   responsibility    household | employer | third_party | agency → who is billed
  *
  * Nothing about a charge type is hardcoded, and no fee definition is duplicated into the card.
  *
- * ── FOUR DATES, FOUR COLUMNS, NO INVENTION ──
+ * ── THE DATE CHAIN, RESOLVED BY THE SERVER, PLACED HERE ──
  *
  *   service date    `charges.service_date`  when the thing happened
- *   billing period  derived from `billable_on`; the period the charge lands in
- *   due date        `charges.due_date`
- *   posting date    `charges.posted_at`, set by the mutation, never by the operator
+ *   billing period  the interval CONTAINING the service date (never moved by invoice timing)
+ *   invoice date    `charges.billable_on`   from invoice timing; never before the charge exists
+ *   due date        `charges.due_date`      from payment terms; never before the invoice
+ *   posting         now, or draft until the billing period begins, or held for review
+ *
+ * Every value and every "why" line is the server's (`resolveChargeDateChain` via the preview, the
+ * same resolver the write runs). The card does no date arithmetic.
  *
  * A future-dated charge is therefore ordinary: a September service date on a charge created in
  * August, billable next cycle. Whether the operator may override any of them is
@@ -79,7 +84,10 @@ export default function AddChargeCommand({
     templates,
     controls,
     modeSlot,
+    editing = false,
 }: {
+    /** W7-F016: editing a draft — the same command, re-titled; saving replaces the draft. */
+    editing?: boolean;
     specimen: AddChargeSpecimen;
     templates: ChargeTemplateOption[];
     /**
@@ -247,7 +255,7 @@ export default function AddChargeCommand({
     return (
         <div className="alloy-os-addcharge-host">
             <UniversalCard
-                title="Add"
+                title={editing ? "Edit draft" : "Add"}
                 insight=""
                 iconName="Receipt"
                 tier="work"
@@ -302,27 +310,15 @@ export default function AddChargeCommand({
               * did, and the preview states the effect they produce.
               */}
 
-            {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
-                Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
-            <SectionHead ruled={false}>Charge</SectionHead>
             {/*
-             * ── ONE TARGET, TWO CONCEPTS UNDERNEATH ──────────────────────────────────────────
+             * ── W7-F011: WHAT THE CHARGE IS FOR, AND WHO OWES IT — ONE SECTION, TWO CONCEPTS ──
              *
-             * "Applies to" and "Also bill" were two controls for one question — who receives this
-             * charge — and an operator had to understand the GRAIN model to use them: pick an
-             * anchor here, then widen there. The model is right and the presentation was not.
-             *
-             * So one control, and the same model beneath it: Household stays an explicit option,
-             * children are a multi-select, and the two are mutually exclusive. Selecting Household
-             * clears every child; selecting a child clears Household. What is never allowed is an
-             * empty selection meaning Household — that is the ambiguity the grain model forbids,
-             * and it is why the household option is a radio with a value rather than the absence
-             * of ticks.
-             *
-             * Category grain still governs what is offered: the household option only appears when
-             * `categoryPermitsHouseholdGrain`, the children only when `categoryPermitsChildGrain`.
-             * A control that offers a choice the write path refuses is worse than one that does not.
+             * "Applies to" is the financial SUBJECT; "Responsibility" is who owes it. They stay two
+             * values from two models — a subject is never a payer — and are placed together because
+             * operators reason about them together. This is presentation grouping only.
              */}
+            <section className="alloy-os-addcharge__group" data-addcharge-applies-section="true">
+            <SectionHead ruled={false}>Charge applies to</SectionHead>
             {controls && controls.unifiedTarget ? (
                 <Field label="Applies to" required={t.requiresSubject}>
                     {/*
@@ -411,140 +407,10 @@ export default function AddChargeCommand({
                     )}
                 </Field>
             )}
-            {/*
-              * THE LEGACY "ALSO BILL" CHECKBOX ROW IS GONE.
-              *
-              * It was unreachable: `unifiedTarget` is checked first and the host always supplies
-              * it, so the branch rendered nowhere. What it left behind was a row of browser
-              * checkboxes in a file whose every other control is canonical — a native control
-              * that cannot render is still a native control a reader has to reason about, and
-              * the census that forbids them cannot tell the difference.
-              *
-              * The grain it expressed is unchanged and lives in the unified target above: each
-              * ticked child receives their own independent obligation at the full amount.
-              */}
-            <Field label="Amount" required={!amountLocked}>
-                {controls && !amountLocked ? (
-                    <input
-                        className="alloy-os-addcharge__input"
-                        data-addcharge-amount
-                        inputMode="decimal"
-                        value={controls.amount}
-                        placeholder="0.00"
-                        onChange={(e) => controls.onAmount(e.target.value)}
-                    />
-                ) : (
-                    <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
-                )}
-
-            </Field>
-            <Field label="Note" required={t.requiresNote}>
-                {controls ? (
-                    <input
-                        className="alloy-os-addcharge__input"
-                        data-addcharge-note
-                        value={controls.note}
-                        placeholder={t.requiresNote ? "Required" : "Optional"}
-                        onChange={(e) => controls.onNote(e.target.value)}
-                    />
-                ) : (
-                    <Value>{specimen.note}</Value>
-                )}
-            </Field>
-
-            <SectionHead ruled={false}>Dates</SectionHead>
-            <Field label="Service date" required={t.occursOn === "event_date"}>
-                {controls && t.occursOn === "event_date" ? (
-                    /*
-                      * The canonical date control. This was a raw `<input type="date">` — the one
-                      * browser-styled widget on a card of Alloy dropdowns, on the surface that
-                      * commits money. The stored value is still `YYYY-MM-DD` and still the same
-                      * `event_date` the resolver is given, so nothing about dating semantics moved.
-                      */
-                    <span data-addcharge-event-date>
-                        <AlloyDateInput
-                            value={controls.eventDate}
-                            onChange={controls.onEventDate}
-                            aria-label="Service date"
-                            testId="addcharge-event-date"
-                        />
-                    </span>
-                ) : (
-                    <Value>{specimen.serviceDate}</Value>
-                )}
-
-            </Field>
-            <Field label="Billing period">
-                <Value>{specimen.period}</Value>
-            </Field>
-            <Field label="Due">
-                <Value>{specimen.due}</Value>
-            </Field>
-            {/*
-                ── WHAT CONFIRMING ACTUALLY DOES, ON THIS TENANT ────────────────────────────────
-                This read "Creates a draft — not yet owed" unconditionally. That was true of every
-                tenant when it was written, and it stopped being true once manual entry began
-                honouring the configured review boundary: on an organization that has configured
-                none, the charge posts on confirm and the balance moves. A command may not describe
-                a mechanism it will not use.
-                `reviewRequired` is the server's answer — the posting_review policy for this
-                template's service, OR'd with the template's own flag — so this states the act.
-            */}
-            {/*
-              * ONLY THE ANSWER THAT CHANGES THE OPERATOR'S DECISION.
-              *
-              * "Posts on confirm — owed immediately" described the ordinary case in
-              * implementation language; a review requirement is the case worth saying out loud,
-              * because it changes what happens when they press Confirm. The posting semantics
-              * themselves are unchanged — `reviewRequired` still governs.
-              */}
-            {t.reviewRequired ? (
-                <Field label="Posting">
-                    <Value locked>Creates a draft — not yet owed</Value>
-                </Field>
-            ) : null}
-
-            {/*
-                ── ONE ANSWER TO "WHO OWES THIS", NOT TWO ──────────────────────────────────────
-
-                This block said it first — "Charge to · Responsibility: Household" — and the
-                section below said it again with the actual parties and amounts. Two headings,
-                two renderings, one fact, and an operator reading them had to work out whether
-                they disagreed.
-
-                The section below survives because it is the one that can be ACTED on: it names
-                the parties, carries the standing source quietly, and offers Change. What was
-                here was the same truth with less of it.
-
-                `operator_selectable` targeting is not lost — a template that puts the payer in
-                the operator's hands reaches the same Change control, which is where choosing
-                one belongs.
-            */}
-
-            {/*
-                ── WHO OWES THIS ONE ────────────────────────────────────────────────────────────
-                Offered only when the host supplies it, which it does only when the operator holds
-                the grant to decide it. The default is the standing arrangement — an operator who
-                changes nothing creates no charge-scoped anything, and the account's answer governs
-                exactly as it did before this control existed.
-            */}
-            {/*
-                ── CHARGE TO — WHO OWES THIS CHARGE ─────────────────────────────────────────────
-                One decision, stated as an answer with a way to change it. What it used to be was
-                two decisions: who owes, and which arrangement scope should record that. The second
-                was never the operator's — an override here has only ever meant "this charge" —
-                and asking it made them understand the data model before they could bill a family.
-            */}
             {controls?.chargeResponsibility ? (
-                <div data-addcharge-charge-responsibility="section">
-                    <SectionHead ruled={false}>Charge to</SectionHead>
-                    <Field label="">
-                        {/*
-                            WHO OWES, THEN WHERE IT COMES FROM — in that order and at that weight.
-                            The parties and their amounts are the answer; that the answer is the
-                            account's standing one is context, said quietly beneath it rather than
-                            wrapped around it as "The account's arrangement: …".
-                        */}
+                <div className="alloy-os-addcharge__responsibility" data-addcharge-charge-responsibility="section">
+                    {/* WHO OWES, then a quiet way to change it for this charge only. */}
+                    <Field label="Responsibility">
                         <span className="alloy-os-addcharge__chargeto" data-addcharge-charge-to="summary">
                             <Value>{controls.chargeResponsibility.standingSummary}</Value>
                             {!controls.chargeResponsibility.changing ? (
@@ -560,7 +426,6 @@ export default function AddChargeCommand({
                             ) : null}
                         </span>
                     </Field>
-
                     {controls.chargeResponsibility.changing ? (
                         <div data-addcharge-charge-shares="editor">
                             {controls.chargeResponsibility.shares.map((share, index) => (
@@ -644,6 +509,131 @@ export default function AddChargeCommand({
                     ) : null}
                 </div>
             ) : null}
+            </section>
+
+            {/* Amount and note side by side — the two values an operator types. */}
+            <div className="alloy-os-addcharge__pair" data-addcharge-amount-note="true">
+                <Field label="Amount" required={!amountLocked}>
+                    {controls && !amountLocked ? (
+                        <input
+                            className="alloy-os-addcharge__input"
+                            data-addcharge-amount
+                            inputMode="decimal"
+                            value={controls.amount}
+                            placeholder="0.00"
+                            onChange={(e) => controls.onAmount(e.target.value)}
+                        />
+                    ) : (
+                        <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
+                    )}
+
+                </Field>
+                <Field label="Note" required={t.requiresNote}>
+                    {controls ? (
+                        <input
+                            className="alloy-os-addcharge__input"
+                            data-addcharge-note
+                            value={controls.note}
+                            placeholder={t.requiresNote ? "Required" : "Optional"}
+                            onChange={(e) => controls.onNote(e.target.value)}
+                        />
+                    ) : (
+                        <Value>{specimen.note}</Value>
+                    )}
+                </Field>
+            </div>
+
+            {/*
+             * ── W7-F011: THE FOUR DATES, ONE ROW ────────────────────────────────────────────
+             *
+             * Service date is the ONE operator-controlled date. Billing period, invoice date and
+             * due date are the server's answers from the date chain (`resolveChargeDateChain` via
+             * the preview the write also runs) and are read-only: a different invoice or payment
+             * behaviour is a policy change, not a per-charge edit. Changing the service date
+             * re-previews, so the other three move with it. The card does no date arithmetic.
+             */}
+            <SectionHead ruled={false}>Dates</SectionHead>
+            <div className="alloy-os-addcharge__dates" data-addcharge-dates="row">
+                <DateCell label="Service date" required>
+                    {controls ? (
+                        <span data-addcharge-event-date>
+                            <AlloyDateInput
+                                value={controls.eventDate || specimen.serviceDateIso || ""}
+                                onChange={controls.onEventDate}
+                                aria-label="Service date"
+                                testId="addcharge-event-date"
+                            />
+                        </span>
+                    ) : (
+                        <Value>{specimen.serviceDate}</Value>
+                    )}
+                </DateCell>
+                <DateCell label="Billing period" readOnly>
+                    <span data-addcharge-period>
+                        <Value locked>{specimen.period}</Value>
+                    </span>
+                </DateCell>
+                <DateCell label="Invoice date" readOnly>
+                    {/*
+                      * W7-F015: the rule that produced this date is a tooltip, not a paragraph —
+                      * an ordinary date does not need explaining in the form. It stays in the
+                      * accessibility tree for screen-reader users.
+                      */}
+                    <span className="alloy-os-addcharge__date-with-hint">
+                        <span data-addcharge-invoice-date title={specimen.dateRules.invoice ?? undefined}>
+                            <Value locked>{specimen.invoiceDate}</Value>
+                        </span>
+                        {/*
+                          * W7 Scenario 8 final: a charge-type override is provenance, not a line of
+                          * prose under the date — an info mark whose tooltip and accessible name
+                          * say "Charge-type override · 7 days after service".
+                          */}
+                        {specimen.invoiceOverride ? (
+                            <span
+                                data-addcharge-invoice-override
+                                className="alloy-os-addcharge__date-hint"
+                                role="img"
+                                aria-label={`Charge-type override · ${specimen.invoiceOverride}`}
+                                title={`Charge-type override · ${specimen.invoiceOverride}`}
+                            >
+                                <Info aria-hidden="true" />
+                            </span>
+                        ) : null}
+                    </span>
+                    {specimen.dateRules.invoice ? (
+                        <span data-addcharge-invoice-rule className="alloy-os-addcharge__sr-only">
+                            {specimen.dateRules.invoice}
+                        </span>
+                    ) : null}
+                </DateCell>
+                <DateCell label="Due date" readOnly>
+                    <span data-addcharge-due-date title={specimen.dateRules.due ?? undefined}>
+                        <Value locked>{specimen.due}</Value>
+                    </span>
+                    {specimen.dateRules.due ? (
+                        <span data-addcharge-due-rule className="alloy-os-addcharge__sr-only">
+                            {specimen.dateRules.due}
+                        </span>
+                    ) : null}
+                </DateCell>
+            </div>
+            {/*
+              * W7-F015: ONE compact state line, not a narrated consequence. The three states are the
+              * server's answer (review flag, the date chain's posting gate) — named, not explained.
+              */}
+            <p
+                className="alloy-os-addcharge__posting"
+                data-addcharge-posting-rule
+                data-addcharge-posting={t.reviewRequired ? "draft" : specimen.awaitsPeriodUntil ? "awaits_period" : "posts"}
+                title={specimen.posting ?? undefined}
+            >
+                <span className="alloy-os-addcharge__sublabel">Posting</span>{" "}
+                {t.reviewRequired
+                    ? "Saved for review before posting"
+                    : specimen.awaitsPeriodUntil
+                      ? `Saved as a draft · Posts automatically ${specimen.awaitsPeriodUntil}`
+                      : "Posts when saved"}
+            </p>
 
             {/*
                 ── DISCOUNT — ONE DECISION, ONE CONTROL ─────────────────────────────────────────
@@ -835,34 +825,21 @@ export default function AddChargeCommand({
                     <span className="alloy-os-billing__line-label">Current balance</span>
                     <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
                 </p>
-                <p className="alloy-os-billingdetail__group" data-addcharge-preview-consequence="true">
-                    On confirm
-                </p>
-                {t.reviewRequired ? (
-                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="draft">
-                        Creates a draft charge for review. The balance does not change until it is posted.
+                {/*
+                  * W7-F015: the posting state is stated once, beside the dates. What remains here is
+                  * the one figure that changes when it posts now — and only then.
+                  */}
+                {!t.reviewRequired && !specimen.awaitsPeriodUntil && specimen.previewPostedBalance ? (
+                    <p
+                        className="alloy-os-billing__line alloy-os-billing__line--emphasis"
+                        data-addcharge-preview-consequence="true"
+                    >
+                        <span className="alloy-os-billing__line-label">Balance after posting</span>
+                        <span className="alloy-os-billing__line-value" data-addcharge-posted-balance="true">
+                            {specimen.previewPostedBalance}
+                        </span>
                     </p>
-                ) : (
-                    <>
-                        <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="posts">
-                            Creates this charge and posts it.
-                            {specimen.previewDiscountAmount
-                                ? " The discount is recorded separately when discounts run, and lowers the balance then."
-                                : ""}
-                        </p>
-                        {specimen.previewPostedBalance ? (
-                            <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                                <span className="alloy-os-billing__line-label">Balance after posting</span>
-                                <span
-                                    className="alloy-os-billing__line-value"
-                                    data-addcharge-posted-balance="true"
-                                >
-                                    {specimen.previewPostedBalance}
-                                </span>
-                            </p>
-                        ) : null}
-                    </>
-                )}
+                ) : null}
             </div>
 
             {controls?.error ? (
@@ -912,7 +889,7 @@ export default function AddChargeCommand({
                     data-addcharge-submit
                     onClick={controls?.onSubmit}
                 >
-                    {controls?.running ? "Adding…" : "Add charge"}
+                    {controls?.running ? (editing ? "Saving…" : "Adding…") : editing ? "Save changes" : "Add charge"}
                 </Action>
                 <Action onClick={controls?.onCancel}>Cancel</Action>
             </ActionRow>
@@ -939,6 +916,33 @@ function Field({
             </span>
             <span className="alloy-os-addcharge__field-value">{children}</span>
         </p>
+    );
+}
+
+/**
+ * One cell of the four-date row: label above value, so four fit across a desktop modal and the
+ * row collapses to two, then one, column on narrow screens. `readOnly` says so to assistive tech.
+ */
+function DateCell({
+    label,
+    required,
+    readOnly,
+    children,
+}: {
+    label: string;
+    required?: boolean;
+    readOnly?: boolean;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="alloy-os-addcharge__datecell" data-readonly={readOnly ? "true" : undefined}>
+            <span className="alloy-os-addcharge__field-label">
+                {label}
+                {readOnly ? <span className="alloy-os-addcharge__sr-only"> (derived, read-only)</span> : null}
+                {required ? <span className="alloy-os-addcharge__req">required</span> : null}
+            </span>
+            <span className="alloy-os-addcharge__field-value">{children}</span>
+        </div>
     );
 }
 

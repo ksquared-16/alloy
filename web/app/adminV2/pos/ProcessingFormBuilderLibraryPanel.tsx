@@ -17,6 +17,7 @@ import type {
     ProcessingLibraryGroupOffer,
 } from "@/lib/forms/processingFormFieldLibrary";
 import type { BuilderFieldType } from "@/lib/forms/formBuilderSchema";
+import type { PeopleGroupOption } from "@/lib/forms/relationshipCollectionGroup";
 
 export type QuestionTypeItem = { type: BuilderFieldType; label: string; meta: string; category: string };
 
@@ -36,6 +37,8 @@ export default function ProcessingFormBuilderLibraryPanel({
     onPickCanonicalField,
     onPickLibraryField,
     fieldLibrary,
+    peopleGroups,
+    onPickPeopleGroup,
     onClose,
 }: {
     open: boolean;
@@ -51,6 +54,9 @@ export default function ProcessingFormBuilderLibraryPanel({
      * failed) the panel falls back to the curated static list so it is never empty.
      */
     fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
+    /** Repeatable people groups, from the canonical relationship definitions. */
+    peopleGroups?: readonly PeopleGroupOption[];
+    onPickPeopleGroup?: (definitionKey: string) => void;
     onClose: () => void;
 }) {
     const [tab, setTab] = useState<LibraryTab>("alloy-fields");
@@ -104,6 +110,13 @@ export default function ProcessingFormBuilderLibraryPanel({
             .map((group) => ({ group, label: PROCESSING_BUILDER_GROUP_LABELS[group], items: byGroup.get(group) ?? [] }))
             .filter((g) => g.items.length > 0);
     }, [search]);
+
+    const visiblePeople = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return (peopleGroups ?? []).filter(
+            (g) => !q || g.label.toLowerCase().includes(q) || g.asks.some((a) => a.toLowerCase().includes(q)),
+        );
+    }, [peopleGroups, search]);
 
     if (!open || typeof document === "undefined") return null;
 
@@ -242,10 +255,34 @@ export default function ProcessingFormBuilderLibraryPanel({
                                 </section>
                             ))
                         )
-                    ) : questionCategories.length === 0 ? (
+                    ) : questionCategories.length === 0 && !visiblePeople.length ? (
                         <p className="py-6 text-center text-[12px] text-alloy-midnight/45">No question types match your search.</p>
                     ) : (
-                        questionCategories.map((cat) => (
+                        <>
+                        {visiblePeople.length && onPickPeopleGroup ? (
+                            <section className="mb-4" data-library-category="people">
+                                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">People — repeatable</h3>
+                                <ul className="space-y-1">
+                                    {visiblePeople.map((g) => (
+                                        <li key={g.definitionKey}>
+                                            <button
+                                                type="button"
+                                                data-library-item={`people-${g.definitionKey}`}
+                                                onClick={() => onPickPeopleGroup(g.definitionKey)}
+                                                className="flex w-full flex-col rounded-lg border border-alloy-stone/15 px-3 py-2 text-left hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04]"
+                                            >
+                                                <span className="text-[12px] font-semibold text-alloy-midnight">{g.label}</span>
+                                                <span className="text-[10px] text-alloy-midnight/45">
+                                                    {g.repeats ? "+ Add another · " : ""}
+                                                    {g.asks.join(", ")}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        ) : null}
+                        {questionCategories.map((cat) => (
                             <section key={cat.key} className="mb-4">
                                 <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{cat.label}</h3>
                                 <ul className="space-y-1">
@@ -264,7 +301,8 @@ export default function ProcessingFormBuilderLibraryPanel({
                                     ))}
                                 </ul>
                             </section>
-                        ))
+                        ))}
+                        </>
                     )}
                 </div>
             </div>

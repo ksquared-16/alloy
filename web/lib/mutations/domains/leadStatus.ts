@@ -12,6 +12,7 @@ import type { DomainHandler } from "@/lib/mutations/domainRegistry";
 import type { MutationDomain } from "@/lib/mutations/types";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { familyCloseRefusal } from "@/lib/lifecycle/familyCloseRefusal";
 
 /** Canonical command key for lead status mutations. Import this instead of using the string literal. */
 export const UPDATE_LEAD_STATUS_COMMAND_KEY = "update_lead_status";
@@ -55,6 +56,23 @@ export const leadStatusHandler: DomainHandler = {
             .filter(Boolean);
 
         return { currentState, availableTargets };
+    },
+
+    /**
+     * A family case cannot close out from under its children (E2E-09) — the same rule the outcome
+     * target executor and the governed family close obey. Asked as readiness so the command panel
+     * names the refusal in its preview, and the runtime refuses the commit before the RPC writes.
+     */
+    async evaluateReadiness(ctx, intent) {
+        const refusal = await familyCloseRefusal(ctx.supabase, {
+            orgId: ctx.orgId,
+            opportunityId: intent.subjectId,
+            targetStatusKey: intent.targetState,
+            // `close_lead` is a close whichever status the operator picks.
+            closesCase: intent.commandKey === CLOSE_LEAD_COMMAND_KEY,
+        });
+        if (!refusal) return [];
+        return [{ code: "family_close_blocked", message: refusal.error, severity: "warn" }];
     },
 
     async commit(ctx, intent, resolved, warnings) {

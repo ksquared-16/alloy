@@ -1,0 +1,177 @@
+{
+  "trusted_host_action_id": "tha_78fa86a91a036c",
+  "query_hash": "004ffadb391d8de8e689941f37afeb235afbb437618730b3a8f58e7623fcd766",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T21:10:25.333Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_78fa86a91a036c",
+    "query_hash": "004ffadb391d8de8e689941f37afeb235afbb437618730b3a8f58e7623fcd766",
+    "authorization_id": "grnt_82ccfec38e8d4227",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T21:10:31.535Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "period_key": "2026-12",
+            "period_starts_on": "2026-12-01",
+            "period_status": "open",
+            "charge_status": "posted",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "amount_cents": 4000,
+            "charge_category": "one_time",
+            "origin": "charge_template",
+            "billing_period_generation": "canonical",
+            "has_template": true
+          },
+          {
+            "period_key": "2026-12",
+            "period_starts_on": "2026-12-01",
+            "period_status": "open",
+            "charge_status": "posted",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "amount_cents": 4000,
+            "charge_category": "one_time",
+            "origin": "charge_template",
+            "billing_period_generation": "canonical",
+            "has_template": true
+          },
+          {
+            "period_key": "2026-11-30~2026-12-06",
+            "period_starts_on": "2026-11-30",
+            "period_status": "open",
+            "charge_status": "posted",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "amount_cents": 4000,
+            "charge_category": "one_time",
+            "origin": "charge_template",
+            "billing_period_generation": "canonical",
+            "has_template": true
+          },
+          {
+            "period_key": "2026-11-23~2026-12-06",
+            "period_starts_on": "2026-11-23",
+            "period_status": "open",
+            "charge_status": "posted",
+            "posted_on": "2026-10-02",
+            "created_on": "2026-10-02",
+            "amount_cents": 4000,
+            "charge_category": "one_time",
+            "origin": "charge_template",
+            "billing_period_generation": "canonical",
+            "has_template": true
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "draft_charges": 35,
+            "draft_bound_to_a_period": 0,
+            "draft_in_future_period": 0,
+            "post_gate_review_required": 0,
+            "post_gate_post_failed": 0,
+            "post_gate_period_not_started": 0,
+            "never_attempted": 35
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "distinct_financial_actors": 4,
+            "with_active_person_link": 0,
+            "resolves_to_named_person": 0,
+            "acted_on_charges": 4,
+            "acted_on_reductions": 1
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "users_with_money_capable_role": 13,
+            "money_capable_roles_present": [
+              "admin",
+              "ops"
+            ],
+            "orgs_with_money_capable_users": 2,
+            "named_persons_available_to_link": 31,
+            "person_links_any_status": 0
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "handler_key": "financials.periodic_billing.evaluate",
+            "recurrence_kind": "one_time",
+            "is_active": true,
+            "org_scoped": false,
+            "next_due_at_utc": null,
+            "label": "clock_activation_certification"
+          },
+          {
+            "handler_key": "financials.periodic_billing.evaluate",
+            "recurrence_kind": "daily",
+            "is_active": true,
+            "org_scoped": true,
+            "next_due_at_utc": "2026-10-06T03:14",
+            "label": "financials_periodic_billing"
+          },
+          {
+            "handler_key": "financials.billing_period_close.evaluate",
+            "recurrence_kind": "daily",
+            "is_active": true,
+            "org_scoped": true,
+            "next_due_at_utc": "2026-10-06T12:00",
+            "label": "billing_period_commercial_close"
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "org_settings_rows": 2,
+            "declared_timezones": [
+              "America/Los_Angeles",
+              "undeclared"
+            ],
+            "orgs_holding_canonical_periods": 1
+          }
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

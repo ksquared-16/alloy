@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_c3a69ac22d29cc",
+  "query_hash": "16c95292a2a171171b7025ff7fee5e99f48d566d746f6c9b086b77ff495639bc",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-14T19:20:12.599Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c3a69ac22d29cc",
+    "query_hash": "16c95292a2a171171b7025ff7fee5e99f48d566d746f6c9b086b77ff495639bc",
+    "authorization_id": "grnt_2a85107477804fd3",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-14T19:20:18.584Z",
+    "question_ids": [
+      "e2e09_close_rpc_execute"
+    ],
+    "questions": {
+      "e2e09_close_rpc_execute": {
+        "question_id": "e2e09_close_rpc_execute",
+        "row_count": null,
+        "rows": [
+          {
+            "functions": [
+              {
+                "sig": "execute_lead_status_mutation(uuid,uuid,text,text,text,jsonb)",
+                "security_definer": true,
+                "authenticated": false,
+                "anon": false
+              }
+            ],
+            "boundary_20261104120000_in_ledger": 1
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

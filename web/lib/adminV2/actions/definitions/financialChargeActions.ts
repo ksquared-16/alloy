@@ -32,6 +32,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { cancelDraftCharge, CancelDraftChargeError } from "@/lib/financials/chargeLifecycle/cancelDraftCharge";
 
 import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import {
@@ -44,6 +45,9 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
+import { periodNotStartedFacts } from "@/lib/financials/posting/postingPeriodGate";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import { chargeDateChainPreviewLines } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
@@ -74,6 +78,8 @@ const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
 export const CHARGE_POST_ACTION_KEY = "charge.post";
 export const CHARGE_REVERSE_ACTION_KEY = "charge.reverse";
+/** W7-F016: withdraw a never-posted draft — retained as `void`, attributed, never deleted. */
+export const CHARGE_CANCEL_DRAFT_ACTION_KEY = "charge.cancel_draft";
 
 /**
  * ── WHO MAY MOVE THIS MONEY ──
@@ -216,8 +222,15 @@ function childIdsFrom(
     return one ? [one] : [];
 }
 
-function todayYmd(): string {
-    return new Date().toISOString().slice(0, 10);
+/**
+ * TODAY, AS THE ORGANISATION'S CALENDAR READS IT.
+ *
+ * This was the UTC date, so after 5pm in Los Angeles a charge entered "today" was dated tomorrow —
+ * and today is now what the invoice-date clamp and the posting gate measure against. One business
+ * date, the same `fetchOrgBusinessDate` the posting authority uses.
+ */
+async function todayYmd(supabase: SupabaseClient, orgId: string): Promise<string> {
+    return fetchOrgBusinessDate(supabase, orgId);
 }
 
 /**
@@ -349,7 +362,7 @@ async function executeMultiChildAdd(args: {
     correlationId: string;
 }): Promise<ActionResult> {
     const { supabase, ctx, invocation, payload, subjects, correlationId } = args;
-    const today = t(payload.today) || todayYmd();
+    const today = t(payload.today) || (await todayYmd(supabase, ctx.orgId));
 
     type PerChild = {
         customer_member_id: string;
@@ -358,6 +371,8 @@ async function executeMultiChildAdd(args: {
         resolution_key: string | null;
         review_required: boolean;
         posted: boolean;
+        /** When the charge is a draft because its billing period has not begun, the day it posts. */
+        posts_on?: string;
         error?: string;
     };
 
@@ -367,7 +382,8 @@ async function executeMultiChildAdd(args: {
             const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
                 templateId: t(payload.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload.event_date) || null,
+                eventDate: t(payload.event_date) || t(payload.service_date) || null,
+                operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 /*
                  * THE AMOUNT IS PER CHILD. It is passed to each write unchanged and is never divided
@@ -395,6 +411,7 @@ async function executeMultiChildAdd(args: {
 
             let posted = false;
             let postFailed: string | null = null;
+            let postsOn: string | null = null;
             if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
                 try {
                     const result = await postChildcareCharge(supabase, {
@@ -404,9 +421,16 @@ async function executeMultiChildAdd(args: {
                     });
                     posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
                 } catch (err) {
+                    /*
+                     * A FUTURE BILLING PERIOD IS NOT AN ERROR (W7-F001). The charge is written, it is
+                     * a draft, the authority has recorded WHY, and the clock posts it when the period
+                     * begins. Reporting that as `error` would put a fault on an ordinary act.
+                     */
+                    const waiting = periodNotStartedFacts(err);
+                    if (waiting) postsOn = waiting.periodStartsOn;
                     // A failed post does NOT unmake the charge. It is written, it is a draft, and
                     // the operator can post it from the row.
-                    postFailed = err instanceof Error ? err.message : String(err);
+                    else postFailed = err instanceof Error ? err.message : String(err);
                 }
             }
 
@@ -417,6 +441,7 @@ async function executeMultiChildAdd(args: {
                 resolution_key: written.resolutionKey,
                 review_required: written.reviewRequired,
                 posted,
+                ...(postsOn ? { posts_on: postsOn } : {}),
                 ...(postFailed ? { error: postFailed } : {}),
             });
         } catch (err) {
@@ -575,11 +600,12 @@ const addCharge: RegisteredAction = {
             const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload?.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload?.event_date) || null,
+                eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
+                operatorServiceDate: t(payload?.service_date) || null,
                 servicePeriodStart: t(payload?.service_period_start) || null,
                 unitAmountCents:
                     payload?.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload?.today) || todayYmd(),
+                today: t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
             });
             if (!intent.eligible) {
                 return { summary: intent.reason ?? "This charge cannot be created right now.", changes: [] };
@@ -622,21 +648,21 @@ const addCharge: RegisteredAction = {
                 multi && totalCents != null ? `Total to create · ${money(totalCents)}` : null,
                 multi ? "Each child receives their own charge" : null,
                 intent.occursOn ? `Occurs ${intent.occursOn}` : null,
-                intent.billableOn ? `Billable ${intent.billableOn}` : null,
                 /*
-                 * ── THE DUE DATE THE PREVIEW ALREADY RESOLVED ───────────────────────────────
+                 * ── THE DATE CHAIN, FROM THE SAME RESOLVER THE WRITE USES ────────────────────
                  *
-                 * `previewTemplateCharge` runs `dueDateForIntent` and sets `intent.dueDate` from
-                 * the organisation's own `due_date` policy — the SAME resolver the write uses. It
-                 * was computed here and then dropped on the floor, so the command had nothing to
-                 * show and said "Configured policy" whether or not any terms were configured.
-                 *
-                 * Reported, not recomputed: there is one due-date engine and this is not a second
-                 * one. A null `dueDate` means the organisation has stated no terms, and that stays
-                 * an ABSENT line rather than a fabricated date — the card says what absent means.
+                 * Service date → billing period → invoice date → due date → posting, each line the
+                 * answer `resolveChargeDateChain` produced inside `previewTemplateCharge`, with the
+                 * rule and the scope it came from. Nothing here — and nothing in the card — derives
+                 * a date; the card places these lines. A household with no billing calendar says so.
                  */
-                intent.dueDate ? `Due ${intent.dueDate}` : null,
-                intent.lifecycleStatus === "scheduled" ? "Scheduled — a future billing context" : null,
+                ...(intent.dateChain
+                    ? chargeDateChainPreviewLines(intent.dateChain, intent.reviewRequired)
+                    : [
+                          intent.billableOn ? `Invoice date ${intent.billableOn}` : null,
+                          intent.dueDate ? `Due ${intent.dueDate}` : null,
+                      ]),
+                intent.periodIssue ? `Billing period · ${intent.periodIssue.message}` : null,
             ].filter((v): v is string => Boolean(v));
             return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
         } catch (err) {
@@ -726,10 +752,11 @@ const addCharge: RegisteredAction = {
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
                 ...billableSourceForSubject(subject),
-                eventDate: t(payload.event_date) || null,
+                eventDate: t(payload.event_date) || t(payload.service_date) || null,
+                operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload.today) || todayYmd(),
+                today: t(payload.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
                 actorUserId: ctx.userId ?? null,
             });
             if (written.status === "not_writable") {
@@ -766,6 +793,7 @@ const addCharge: RegisteredAction = {
              */
             let posted = false;
             let postFailed: string | null = null;
+            let postsOn: string | null = null;
             if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
                 try {
                     const result = await postChildcareCharge(supabase as SupabaseClient, {
@@ -775,7 +803,18 @@ const addCharge: RegisteredAction = {
                     });
                     posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
                 } catch (err) {
-                    postFailed = err instanceof Error ? err.message : String(err);
+                    /*
+                     * ── A FUTURE BILLING PERIOD IS NOT A FAILED POST (W7-F001) ──
+                     *
+                     * The confirmed lifecycle: a charge in the CURRENT period posts in the same
+                     * gesture that created it; a charge in a FUTURE period stays a draft, is not
+                     * owed, and posts itself when that period begins. Both are successful outcomes
+                     * of Add Charge, and the operator needs to be told WHICH — not handed the
+                     * posting authority's refusal as an error string.
+                     */
+                    const waiting = periodNotStartedFacts(err);
+                    if (waiting) postsOn = waiting.periodStartsOn;
+                    else postFailed = err instanceof Error ? err.message : String(err);
                 }
             }
 
@@ -794,6 +833,7 @@ const addCharge: RegisteredAction = {
                         resolution_key: written.resolutionKey,
                         review_required: written.reviewRequired,
                         posted,
+                        ...(postsOn ? { posts_on: postsOn } : {}),
                         ...(postFailed ? { post_failed: postFailed } : {}),
                     },
                 },
@@ -1024,7 +1064,99 @@ const reverseCharge: RegisteredAction = {
     },
 };
 
-export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge];
+/**
+ * W7-F016 — CANCEL A DRAFT.
+ *
+ * A draft that never posted may be withdrawn. It is retained as `void` with who, when and why
+ * (`cancelDraftCharge`), so the account still shows that it existed; a posted charge is refused and
+ * pointed at the correction path. `replaced_by_charge_id` is how Edit records that a new draft took
+ * this one's place.
+ */
+const cancelDraft: RegisteredAction = {
+    actionKey: CHARGE_CANCEL_DRAFT_ACTION_KEY,
+    defaultLabel: "Cancel draft",
+    description: "Withdraw a draft charge that has not posted. The draft is kept, marked cancelled.",
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.charge_id)) {
+            return { ok: false, blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }] };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ supabase, ctx, payload }) {
+        const chargeId = t(payload?.charge_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
+        return {
+            eligible: Boolean(chargeId) && allowed,
+            blockers: [
+                ...(chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }]),
+                ...(allowed ? [] : [{ code: "charge_permission_required", message: `Cancelling a draft requires ${CHARGE_WRITE_PERMISSION}.` }]),
+            ],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: `Cancel draft ${t(payload?.charge_label) || t(payload?.charge_id)}`,
+            changes: ["The draft is withdrawn and kept on the account as cancelled. Nothing was owed, so no balance changes."],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
+            return denied(correlationId, "Cancelling a draft", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
+        try {
+            const replacedBy = t(payload.replaced_by_charge_id) || null;
+            const out = await cancelDraftCharge(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                chargeId: t(payload.charge_id),
+                actorUserId: ctx.userId ?? null,
+                reason: replacedBy ? "replaced_by_edit" : "operator_cancelled",
+                note: t(payload.note) || null,
+                replacedByChargeId: replacedBy,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: CHARGE_CANCEL_DRAFT_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: out.chargeId,
+                    detail: {
+                        status: out.status,
+                        already_cancelled: out.alreadyCancelled,
+                        withdrawn_reductions: out.withdrawnReductions,
+                    },
+                },
+            };
+        } catch (err) {
+            if (err instanceof CancelDraftChargeError) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: err.code === "charge_not_found" ? 404 : err.code === "charge_not_draft" ? 409 : 500,
+                    error: err.message,
+                };
+            }
+            return { ok: false, correlationId, status: 500, error: err instanceof Error ? err.message : "The draft could not be cancelled." };
+        }
+    },
+};
+
+export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge, cancelDraft];
 
 /**
  * Exposed for the multi-child operation's locks.

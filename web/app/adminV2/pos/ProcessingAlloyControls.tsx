@@ -29,6 +29,7 @@ export function AlloyTextInput({
     disabled,
     testId,
     id,
+    type = "text",
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -36,11 +37,13 @@ export function AlloyTextInput({
     disabled?: boolean;
     testId?: string;
     id?: string;
+    /** The native input kind; a number or a date gets the browser's own entry and validation. */
+    type?: "text" | "number" | "date";
 }) {
     return (
         <input
             id={id}
-            type="text"
+            type={type}
             value={value}
             disabled={disabled}
             placeholder={placeholder}
