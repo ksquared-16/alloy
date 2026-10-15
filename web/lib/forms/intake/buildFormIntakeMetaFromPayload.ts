@@ -118,10 +118,48 @@ function buildChildHintFromPaths(
     };
 }
 
-function mergeFieldPaths(linkMetadata: Record<string, unknown> | null | undefined): FormIntakeValueFieldPaths {
+/**
+ * The canonical binding a published question declares (`field_source.crm_mapping_key`) → the intake
+ * value path it fills.
+ *
+ * Intake used to find values by FIELD ID alone, against default ids. A Studio-authored date of birth
+ * is `child_date_of_birth` bound to `child.date_of_birth`, not the default id `child_dob`, so its
+ * value was read by nobody: the child committed with no DOB although the family entered one. The
+ * question's own binding says what it holds; ids are only a fallback.
+ */
+const BINDING_TO_INTAKE_PATH: Readonly<Record<string, keyof FormIntakeValueFieldPaths>> = {
+    "guardian.email": "guardian_email",
+    "guardian.phone": "guardian_phone",
+    "guardian.first_name": "guardian_first_name",
+    "guardian.last_name": "guardian_last_name",
+    "guardian.full_name": "guardian_full_name",
+    "child.first_name": "child_first_name",
+    "child.last_name": "child_last_name",
+    "child.date_of_birth": "child_dob",
+    "child.dob": "child_dob",
+    "child.location_id": "child_location_id",
+    "child.start_date": "child_start_date",
+};
+
+function pathsFromSchemaBindings(schema: FormSchemaV1 | null | undefined): FormIntakeValueFieldPaths {
+    const out: Record<string, string> = {};
+    const fields = Array.isArray(schema?.fields) ? schema!.fields : [];
+    for (const field of fields) {
+        const key = field.field_source?.crm_mapping_key?.trim().toLowerCase();
+        const path = key ? BINDING_TO_INTAKE_PATH[key] : undefined;
+        if (path && typeof field.id === "string" && field.id && !(path in out)) out[path] = field.id;
+    }
+    return out as FormIntakeValueFieldPaths;
+}
+
+/** Precedence: the link's explicit `intake_field_paths` → the schema's canonical bindings → default ids. */
+function mergeFieldPaths(
+    linkMetadata: Record<string, unknown> | null | undefined,
+    schema?: FormSchemaV1 | null,
+): FormIntakeValueFieldPaths {
     const raw = linkMetadata?.intake_field_paths;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_FORM_INTAKE_VALUE_PATHS };
-    return { ...DEFAULT_FORM_INTAKE_VALUE_PATHS, ...(raw as FormIntakeValueFieldPaths) };
+    const explicit = !raw || typeof raw !== "object" || Array.isArray(raw) ? {} : (raw as FormIntakeValueFieldPaths);
+    return { ...DEFAULT_FORM_INTAKE_VALUE_PATHS, ...pathsFromSchemaBindings(schema), ...explicit };
 }
 
 export type BuildFormIntakeMetaResult =
@@ -142,7 +180,14 @@ export function buildFormIntakeMetaFromPayload(input: {
     /** Published schema — supplies the nested field bindings the envelope values are keyed by. */
     schema?: FormSchemaV1 | null;
 }): BuildFormIntakeMetaResult {
-    const paths = mergeFieldPaths(input.linkMetadata ?? undefined);
+    const paths = mergeFieldPaths(input.linkMetadata ?? undefined, input.schema);
+    // The campus a location-specific link was shared for ("Share by location"). A child the form did
+    // not place elsewhere belongs there — the same default the direct intake path applies to the lead.
+    const linkLocationRaw =
+        typeof input.linkMetadata?.default_location_id === "string" ? input.linkMetadata.default_location_id.trim() : "";
+    const linkLocationId = /^[0-9a-f-]{36}$/i.test(linkLocationRaw) ? linkLocationRaw : null;
+    const withLinkLocation = (child: FormIntakeChildHint): FormIntakeChildHint =>
+        child.location_id || !linkLocationId ? child : { ...child, location_id: linkLocationId };
 
     const verticalRaw =
         typeof input.linkMetadata?.default_vertical_id === "string"
@@ -226,6 +271,7 @@ export function buildFormIntakeMetaFromPayload(input: {
             ? paths.children
                   .map((cp) => buildChildHintFromPaths(input.values, cp))
                   .filter((c): c is FormIntakeChildHint => c != null)
+                  .map(withLinkLocation)
             : [];
 
     const singleChild =
@@ -258,7 +304,7 @@ export function buildFormIntakeMetaFromPayload(input: {
         ...(multiChildren.length > 0
             ? { children: multiChildren }
             : singleChild
-              ? { child: singleChild }
+              ? { child: withLinkLocation(singleChild) }
               : {}),
         idempotency_key: input.submissionId?.trim() || null,
     };
