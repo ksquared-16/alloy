@@ -42,6 +42,7 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
+import ProcessingSaveToFormsFolder from "./ProcessingSaveToFormsFolder";
 import ProcessingImportedFormStudio from "./ProcessingImportedFormStudio";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
@@ -211,6 +212,8 @@ export default function PosTemplateSetupColumn({
     const [applicationCounts, setApplicationCounts] = useState<Record<string, number> | null>(null);
     const [dispositionOverrides, setDispositionOverrides] = useState<Record<string, SectionDisposition>>({});
     const [formName, setFormName] = useState("");
+    // The Forms folder this form is filed in at Save to Forms ("" = not filed).
+    const [folderId, setFolderId] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
     const [generateAnywayOpen, setGenerateAnywayOpen] = useState(false);
 
@@ -945,7 +948,7 @@ export default function PosTemplateSetupColumn({
     const handleCreate = async (generateAnyway = false) => {
         const trimmedFormName = formName.trim();
         if (!trimmedFormName) {
-            setErr("Enter a form name before generating.");
+            setErr("Enter a form name before saving to Forms.");
             return;
         }
         /*
@@ -956,7 +959,7 @@ export default function PosTemplateSetupColumn({
         const studioAuthored = Boolean(draft?.studio_schema);
         const expanded = studioAuthored ? [] : expandQuestionsForDraftSave(reviewQuestionsRef.current, { generateAnyway });
         if (!studioAuthored && expanded.length === 0) {
-            setErr("Add at least one active question before generating the form.");
+            setErr("Add at least one active question before saving to Forms.");
             return;
         }
         setCreating(true);
@@ -1004,7 +1007,7 @@ export default function PosTemplateSetupColumn({
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ form_name: trimmedFormName }),
+                body: JSON.stringify({ form_name: trimmedFormName, ...(folderId ? { folder_id: folderId } : {}) }),
             });
             const body = (await res.json().catch(() => ({}))) as {
                 data?: { form_id?: string; form_name?: string };
@@ -1132,8 +1135,11 @@ export default function PosTemplateSetupColumn({
                 <>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     <header className="mb-4">
-                        <h2 className="text-[15px] font-semibold text-alloy-midnight">Ready to create your native form</h2>
-                        <p className="mt-1 text-[12px] text-alloy-midnight/55">Review what Alloy will include before generating.</p>
+                        <h2 className="text-[15px] font-semibold text-alloy-midnight">Save to Forms</h2>
+                        <p className="mt-1 text-[12px] text-alloy-midnight/55" data-testid="processing-save-to-forms-explainer">
+                            Saves this as a normal Form in Forms Studio, as a draft in the folder you choose. It is not
+                            published — publish it from Forms Studio when it is ready.
+                        </p>
                     </header>
 
                     <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-white p-4">
@@ -1147,6 +1153,7 @@ export default function PosTemplateSetupColumn({
                                     testId="processing-generate-form-name"
                                 />
                             </div>
+                            <ProcessingSaveToFormsFolder value={folderId} onChange={setFolderId} disabled={creating} />
                             <DetailRow label="Source document" value={sourceFilename} />
                             <DetailRow label="Document display name" value={docTitle} />
                             <DetailRow label="Detected document type" value={detectionModeLabel(draft)} />
@@ -1225,7 +1232,7 @@ export default function PosTemplateSetupColumn({
                                     className={`${WS_ACTION_SECONDARY} text-alloy-midnight/55`}
                                     data-testid="processing-generate-anyway"
                                 >
-                                    Generate anyway
+                                    Save anyway
                                 </button>
                                 <button
                                     type="button"
@@ -1245,7 +1252,7 @@ export default function PosTemplateSetupColumn({
                                 className={WS_ACTION_PRIMARY}
                                 data-testid="processing-generate-native-form"
                             >
-                                Generate native form
+                                {creating ? "Saving…" : "Save to Forms"}
                             </button>
                         )}
                     </div>
@@ -1254,9 +1261,9 @@ export default function PosTemplateSetupColumn({
                     open={generateAnywayOpen}
                     onClose={() => setGenerateAnywayOpen(false)}
                     onConfirm={() => void handleCreate(true)}
-                    title="Generate with unresolved questions?"
-                    body={`${summaryCounts.unresolved} unresolved question${summaryCounts.unresolved === 1 ? "" : "s"} will be generated as form-only fields. They will not write to business records until you configure a destination in the form builder.`}
-                    confirmLabel="Generate anyway"
+                    title="Save with unresolved questions?"
+                    body={`${summaryCounts.unresolved} unresolved question${summaryCounts.unresolved === 1 ? "" : "s"} will be saved as form-only fields. They will not write to business records until you configure a destination in the form builder.`}
+                    confirmLabel="Save anyway"
                     confirming={creating}
                     testId="processing-generate-anyway-confirm"
                 />
@@ -1631,7 +1638,7 @@ export default function PosTemplateSetupColumn({
                     ) : null}
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
-                            ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
+                            ? "Saved to Forms as a draft. Open it in Forms Studio to keep editing or to publish."
                             : "When you're done reviewing, continue to generate your native form."}
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
@@ -1676,7 +1683,7 @@ export default function PosTemplateSetupColumn({
                                 onClick={() => created.form_id && onOpenForm?.(created.form_id, formName.trim() || undefined)}
                                 className={WS_ACTION_PRIMARY}
                             >
-                                Edit form in Studio
+                                Open in Forms Studio
                             </button>
                         ) : (
                             <button
@@ -1688,7 +1695,7 @@ export default function PosTemplateSetupColumn({
                                 }}
                                 className={WS_ACTION_PRIMARY}
                             >
-                                Continue to generate
+                                Continue to Save to Forms
                             </button>
                         )}
                     </div>

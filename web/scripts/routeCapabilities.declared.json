@@ -4168,6 +4168,18 @@
         "reason": "POS + Processing authority cleanup. Test-data reset. The capability is necessary and not sufficient: the route and the planner both refuse in production through assertProcessingDevCleanupAllowed, independently of any grant."
       }
     },
+    "app/api/admin/processing/folders/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Folder labels for the organisation's Forms and Work folders. Every admin surface that lists folders (Work queues, Forms library) reads them, so any admin-context principal may; admin context (org membership) is still required by getAdminContextCached. Contains no record data."
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Creating, renaming, reordering or hiding a Forms folder is form configuration — the same authority as authoring a form."
+      }
+    },
     "app/api/admin/processing/queue/route.ts": {
       "GET": {
         "status": "pending"

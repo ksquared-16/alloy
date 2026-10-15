@@ -40,12 +40,89 @@ function readRaw(orgId?: string | null): StoredPayload | null {
     }
 }
 
-function writeRaw(folders: ProcessingFolderDefinition[], orgId?: string | null): void {
+/*
+ * THE ORGANISATION'S FOLDERS LIVE ON THE SERVER.
+ *
+ * This store used to be the only home of folder definitions — one browser's localStorage under a global
+ * key — so a folder an operator created existed for nobody else and on no other device. The persistence
+ * seam the model always named (`/api/admin/processing/folders`) now holds them, org-scoped. localStorage
+ * stays only as a fast first paint; the server answer replaces it as soon as it arrives, and every write
+ * goes to the server.
+ */
+const SERVER_ROUTE = "/api/admin/processing/folders";
+let lastServerWrite: Promise<void> = Promise.resolve();
+let hydration: Promise<void> | null = null;
+
+function writeLocal(folders: ProcessingFolderDefinition[], orgId?: string | null): void {
     if (typeof window === "undefined") return;
     const payload: StoredPayload = { version: PROCESSING_FOLDER_STORAGE_VERSION, folders };
     window.localStorage.setItem(storageKey(orgId), JSON.stringify(payload));
     memoryCache = mergeFolderDefaults(folders);
     notify();
+}
+
+async function persistToServer(folders: ProcessingFolderDefinition[]): Promise<void> {
+    if (typeof fetch === "undefined") return;
+    const res = await fetch(SERVER_ROUTE, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folders }),
+    });
+    if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || `Could not save folders (${res.status})`);
+    }
+}
+
+function writeRaw(folders: ProcessingFolderDefinition[], orgId?: string | null): void {
+    writeLocal(folders, orgId);
+    // Serialized, so the server always ends on the latest list.
+    lastServerWrite = lastServerWrite
+        .catch(() => undefined)
+        .then(() => persistToServer(folders))
+        .catch((e) => console.warn("[processingFolderStore] server save failed", e));
+}
+
+/** Read the organisation's folders once per page load; the server list wins over the local cache. */
+export function hydrateProcessingFoldersFromServer(orgId?: string | null): Promise<void> {
+    if (typeof window === "undefined" || typeof fetch === "undefined") return Promise.resolve();
+    if (!hydration) {
+        hydration = (async () => {
+            try {
+                const res = await fetch(SERVER_ROUTE, { credentials: "same-origin" });
+                if (!res.ok) return;
+                const body = (await res.json().catch(() => ({}))) as { data?: { folders?: ProcessingFolderDefinition[] | null } };
+                const folders = body.data?.folders;
+                if (Array.isArray(folders)) writeLocal(folders, orgId);
+            } catch {
+                // Offline or signed out: the local cache stands until the next load.
+            }
+        })();
+    }
+    return hydration;
+}
+
+/**
+ * Create a folder and wait until the organisation has it — for flows that immediately file something
+ * into it (Save to Forms), where a folder only this browser knows would leave the form unfindable.
+ */
+export async function createProcessingFolderOnServer(
+    input: { label: string; description?: string; scopes?: ProcessingFolderDefinition["scopes"] },
+    orgId?: string | null,
+): Promise<ProcessingFolderDefinition> {
+    await hydrateProcessingFoldersFromServer(orgId);
+    const folder = addProcessingFolder(input, orgId);
+    await lastServerWrite;
+    await persistToServer(getProcessingFoldersSnapshot(orgId));
+    return folder;
+}
+
+/** Test seam: forget the per-load hydration and cached list. */
+export function __resetProcessingFolderStoreForTests(): void {
+    memoryCache = null;
+    hydration = null;
+    lastServerWrite = Promise.resolve();
 }
 
 export function getProcessingFoldersSnapshot(orgId?: string | null): ProcessingFolderDefinition[] {

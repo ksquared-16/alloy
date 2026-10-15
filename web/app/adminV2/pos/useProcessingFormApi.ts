@@ -169,7 +169,11 @@ export function useProcessingFormApi() {
                     ...existingMeta,
                     field_count: schema.fields.length,
                     section_count: schema.sections.length,
-                    origin: existingMeta.origin ?? "blank",
+                    // A form created from a document stays "From document" through every draft save;
+                    // stamping "blank" here relabelled it "Manual" the first time it was edited.
+                    origin:
+                        existingMeta.origin
+                        ?? (existingMeta.source === "document_form_draft" || existingMeta.source_case_id ? "document" : "blank"),
                 }
             );
             const payload: Record<string, unknown> = { metadata };
