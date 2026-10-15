@@ -77,7 +77,7 @@ export type ProcessCardCommand = {
 
 export type ProcessCardCommandDrift = {
     actionRef: string;
-    slot: "primary_action" | "helpful_action";
+    slot: "stage_command";
     code: "configured_command_not_registered";
     message: string;
 };
@@ -141,7 +141,7 @@ function commandFrom(
     };
 }
 
-/** Every `action_ref` the published work template configures, in configured order. */
+/** Every `action_ref` the published stage configures as a stage command, in configured order. */
 function configuredRefs(context: OperationalContext): Array<{ ref: string; slot: ProcessCardCommandDrift["slot"] }> {
     const published = context.publishedStageInputs;
     if (!published) return [];
@@ -155,11 +155,9 @@ function configuredRefs(context: OperationalContext): Array<{ ref: string; slot:
     if (!config) return [];
 
     const rows: Array<{ ref: string; slot: ProcessCardCommandDrift["slot"] }> = [];
-    const primary = config.primary_action?.action_ref?.trim();
-    if (primary) rows.push({ ref: primary, slot: "primary_action" });
     for (const row of resolvedHelpfulActionRefs(config) ?? []) {
         const ref = row.action_ref?.trim();
-        if (ref) rows.push({ ref, slot: "helpful_action" });
+        if (ref) rows.push({ ref, slot: "stage_command" });
     }
     return rows;
 }
@@ -251,8 +249,7 @@ export function projectProcessCardCommands(context: OperationalContext): Process
             slot,
             code: "configured_command_not_registered",
             message:
-                `Configured ${slot === "primary_action" ? "primary" : "helpful"} command "${ref}" `
-                + "did not resolve to a registered action for this stage.",
+                `Configured stage command "${ref}" did not resolve to a runnable action for this stage.`,
         });
     }
 

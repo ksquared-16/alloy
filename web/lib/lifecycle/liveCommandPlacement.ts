@@ -27,6 +27,8 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { resolveStageCommands } from "@/lib/lifecycle/stageCommands";
+import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 /** Where the command refs on a resolved stage came from. */
 export type CommandPlacementSource = "live_published" | "pinned_fallback";
@@ -35,6 +37,8 @@ export type ResolvedCommandPlacement = {
     source: CommandPlacementSource;
     /** Command refs now in force for the stage, by work-template key. Diagnostics only. */
     refsByTemplateKey: Record<string, string[]>;
+    /** The stage's commands now in force (what the Process Card renders). Diagnostics only. */
+    stageCommandRefs?: string[];
 };
 
 type Rec = Record<string, unknown>;
@@ -104,7 +108,17 @@ export function overlayLiveCommandPlacementOntoPinnedRevision(params: {
         return { payload: pinned, placement: { source: "pinned_fallback", refsByTemplateKey: {} } };
     }
 
-    const liveTemplates = asArray(asRecord(asRecord(liveStage)?.stage_operating_plan_v1)?.work_templates);
+    const livePlanRecord = asRecord(asRecord(liveStage)?.stage_operating_plan_v1);
+    const liveTemplates = asArray(livePlanRecord?.work_templates);
+    /*
+     * The stage's command list is placement too. When the live plan authors one, it is written onto
+     * the pinned plan explicitly, so the pinned revision's own work-item commands cannot leak back in.
+     */
+    const livePlan = parseStageOperatingPlanV1(livePlanRecord);
+    // Only an AUTHORED live list is overlaid. A legacy live plan derives its list from its work
+    // items (overlaid below) and stage catalog, exactly as the pinned plan will on read.
+    const liveStageCommands =
+        livePlan?.stage_commands !== undefined ? resolveStageCommands(livePlan).commands : null;
     const refsByTemplateKey: Record<string, string[]> = {};
     let touchedStage = false;
 
@@ -123,6 +137,7 @@ export function overlayLiveCommandPlacementOntoPinnedRevision(params: {
             if (templates.length === 0) return stageNode;
 
             touchedStage = true;
+            const stageCommands = liveStageCommands?.map((row) => ({ ...row }));
             const nextTemplates = templates.map((templateNode) => {
                 const templateRecord = asRecord(templateNode);
                 if (!templateRecord) return templateNode;
@@ -143,7 +158,14 @@ export function overlayLiveCommandPlacementOntoPinnedRevision(params: {
                 return { ...templateRecord, helpful_actions: nextHelpful };
             });
 
-            return { ...stageRecord, stage_operating_plan_v1: { ...plan, work_templates: nextTemplates } };
+            return {
+                ...stageRecord,
+                stage_operating_plan_v1: {
+                    ...plan,
+                    ...(stageCommands ? { stage_commands: stageCommands } : {}),
+                    work_templates: nextTemplates,
+                },
+            };
         });
 
         return { ...processRecord, stages: nextStages };
@@ -157,6 +179,10 @@ export function overlayLiveCommandPlacementOntoPinnedRevision(params: {
 
     return {
         payload: { ...pinned, processes: nextProcesses },
-        placement: { source: "live_published", refsByTemplateKey },
+        placement: {
+            source: "live_published",
+            refsByTemplateKey,
+            ...(liveStageCommands ? { stageCommandRefs: liveStageCommands.map((row) => row.action_ref) } : {}),
+        },
     };
 }

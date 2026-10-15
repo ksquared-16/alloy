@@ -48,9 +48,9 @@ describe("explicit stage commands never fall through to legacy defaults", () => 
 
 describe("the published resolver marks stage commands explicit either way", () => {
     it("documents why absence cannot reach the legacy list from a published plan", async () => {
-        // `resolveCurrentWorkTemplateFromPublishedPlan` sets `helpful_actions_explicit` on BOTH
-        // branches — configured refs, and the empty set when a template omits them — so a published
-        // plan can never present as "absent". That is what rules the fallback out as a cause here.
+        // `resolveCurrentWorkTemplateFromPublishedPlan` sets `helpful_actions_explicit`
+        // unconditionally from the stage's commands (authored, or derived from its work items), so a
+        // published plan can never present as "absent". That is what rules the fallback out here.
         const src = await import("node:fs").then((fs) =>
             fs.readFileSync(
                 "lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkTemplateFromPublishedPlan.ts",
@@ -58,7 +58,8 @@ describe("the published resolver marks stage commands explicit either way", () =
             ),
         );
         const assignments = src.match(/helpful_actions_explicit = true/g) ?? [];
-        expect(assignments.length).toBeGreaterThanOrEqual(2);
+        expect(assignments.length).toBeGreaterThanOrEqual(1);
+        expect(src).toContain("resolveStageCommands(operatingPlan");
         expect(src).not.toMatch(/helpful_actions_explicit = false/);
     });
 });

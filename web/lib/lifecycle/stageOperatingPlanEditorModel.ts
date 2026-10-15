@@ -7,6 +7,7 @@ import type {
     StageCompletionOutcomeV1,
     StageOperatingPlanV1,
     StageOutgoingTransitionV1,
+    StageWorkTemplateActionRefV1,
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -25,6 +26,11 @@ export type StageOperatingPlanEditorDraft = {
     journey_segment: "family" | "child";
     /** Undefined preserves a legacy plan until the operator authors first-class transitions. */
     outgoing_transitions?: StageOutgoingTransitionV1[];
+    /**
+     * Undefined preserves a legacy plan (its commands are derived from its work items on read)
+     * until the operator authors the stage's command list.
+     */
+    stage_commands?: StageWorkTemplateActionRefV1[];
     work_templates: StageWorkTemplateV1[];
     outcomes: StageCompletionOutcomeV1[];
     /** Rules preserved from saved plan — edited via advanced path later. */
@@ -55,6 +61,7 @@ export function stageOperatingPlanDraftFromSaved(
         ...(plan.outgoing_transitions !== undefined
             ? { outgoing_transitions: structuredClone(plan.outgoing_transitions) }
             : {}),
+        ...(plan.stage_commands !== undefined ? { stage_commands: structuredClone(plan.stage_commands) } : {}),
         work_templates: structuredClone(plan.work_templates),
         outcomes: structuredClone(plan.outcomes),
         outcome_rules: structuredClone(plan.outcome_rules),
@@ -91,6 +98,9 @@ export function stageOperatingPlanDraftToPersisted(
                     (transition) => structuredClone(transition),
                 ),
             }
+            : {}),
+        ...(normalized.stage_commands !== undefined
+            ? { stage_commands: normalized.stage_commands.map((row) => structuredClone(row)) }
             : {}),
         work_templates: normalized.work_templates.map((t) => structuredClone(t)),
         outcomes: normalized.outcomes.map((o) => structuredClone(o)),
