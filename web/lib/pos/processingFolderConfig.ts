@@ -37,7 +37,15 @@ function haystack(form: { name?: string | null; key?: string; metadata?: Record<
 
 export function formOrigin(form: { metadata?: Record<string, unknown> }): "generated" | "manual" {
     const meta = form.metadata ?? {};
-    if (meta.generated_from_processing === true || meta.processing_case_id || meta.origin === "document") {
+    // `source_case_id` / `source: "document_form_draft"` are what Save to Forms has always written; a form
+    // created from a document read as "Manual" because only these other keys were checked.
+    if (
+        meta.generated_from_processing === true
+        || meta.processing_case_id
+        || meta.origin === "document"
+        || meta.source === "document_form_draft"
+        || (typeof meta.source_case_id === "string" && meta.source_case_id.trim() !== "")
+    ) {
         return "generated";
     }
     return "manual";

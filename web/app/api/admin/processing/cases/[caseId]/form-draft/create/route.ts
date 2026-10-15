@@ -29,10 +29,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (caseId instanceof NextResponse) return caseId;
 
     let formNameOverride: string | null = null;
+    let folderId: string | null = null;
     try {
-        const body = (await request.json()) as { form_name?: unknown };
+        const body = (await request.json()) as { form_name?: unknown; folder_id?: unknown };
         if (typeof body.form_name === "string" && body.form_name.trim()) {
             formNameOverride = body.form_name.trim();
+        }
+        // The Forms folder chosen at Save to Forms. Same id shape the folder model mints.
+        if (typeof body.folder_id === "string" && /^[a-z0-9_]{1,64}$/.test(body.folder_id.trim())) {
+            folderId = body.folder_id.trim();
         }
     } catch {
         // Empty body is allowed — create uses stored preview name.
@@ -75,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const result = await createFormFromCaseDraft(makeCreateFormDepsFromSupabase(supabase), {
             orgId: ctx.orgId,
             caseId,
+            folderId,
         });
 
         if (!result.ok) {
