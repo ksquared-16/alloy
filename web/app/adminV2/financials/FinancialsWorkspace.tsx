@@ -36,6 +36,7 @@ export default function FinancialsWorkspace({
     activity,
     scopeLabel,
     siteSelected,
+    siteLocationId = "",
     onOpenSection,
 }: {
     section: FinancialsSection;
@@ -47,6 +48,8 @@ export default function FinancialsWorkspace({
     activity: FinancialsReadState<FinancialActivityFeed>;
     scopeLabel: string;
     siteSelected: boolean;
+    /** The header's site, for sections that read with it themselves (Charges' index). */
+    siteLocationId?: string;
     onOpenSection: (section: FinancialsWorkSection) => void;
 }) {
     switch (section) {
@@ -62,7 +65,14 @@ export default function FinancialsWorkspace({
         case "accounts":
             return <FinancialsAccounts position={position} subjects={subjects} scopeLabel={scopeLabel} />;
         case "charges":
-            return <FinancialsCharges queue={queue} position={position} scopeLabel={scopeLabel} siteSelected={siteSelected} />;
+            return (
+                <FinancialsCharges
+                    siteLocationId={siteLocationId}
+                    scopeLabel={scopeLabel}
+                    siteSelected={siteSelected}
+                    onChargesChanged={queue.refresh}
+                />
+            );
         case "payments":
             return <FinancialsPayments flow={flow} scopeLabel={scopeLabel} />;
         case "subsidy":

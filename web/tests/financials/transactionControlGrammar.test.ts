@@ -130,7 +130,9 @@ describe("the whole Financials control set is canonical, not just the command su
         "app/adminV2/financials/FinancialsResponsibilityPanel.tsx",
         "app/adminV2/financials/FinancialsExpectedFundingPanel.tsx",
         "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx",
-        "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
+        "app/adminV2/financials/sections/FinancialsTuitionBilling.tsx",
+        "app/adminV2/financials/sections/FinancialsBulkAddCharge.tsx",
+        "app/adminV2/financials/sections/FinancialsCharges.tsx",
     ];
 
     it.each(SURFACES)("%s carries no native select", (rel) => {

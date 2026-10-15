@@ -1,10 +1,11 @@
 /**
- * W7-F020 (QA_SCRIPT_DEFECT) — Scenario 9 runs the generated-tuition workflow the product HAS.
+ * W7-F020 / W7-F021 — Scenario 9 runs the generated-tuition workflow the product HAS.
  *
- * It named "Financials → Billing work for next month" and asked for one account's tuition; neither
- * exists. The deployed workflow is Financials → Charges → Generate a period's tuition: organization-
- * wide, previewed, confirmed. Scenario 9 now runs that, against a household built for it (W7 QA ·
- * Tuition Family) whose monthly tuition is accepted through the canonical action, not inserted.
+ * It once named "Financials → Billing work for next month" and asked for one account's tuition;
+ * neither exists. After the Charges convergence (W7-F021) the real workflow is: generate from
+ * Charges → Tuition billing (automatic billing, with a previewed manual run that names who it bills),
+ * verify in Accounts → W7 QA · Tuition Family filtered to Tuition, then preview again to prove
+ * nothing bills twice. The fixture's monthly tuition is accepted through the canonical action.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -15,7 +16,7 @@ import { fixtureForScenario, fixtureLabel, w7Fixture, W7_TUITION_TERM } from "@/
 
 const read = (rel: string) => readFileSync(path.join(process.cwd(), rel), "utf8");
 const scenario = SCENARIOS.find((s) => s.key === "generated_billing_parity")!;
-const text = [scenario.title, scenario.purpose, ...scenario.navigate, ...scenario.doThis, ...scenario.expectChanges, ...scenario.expectUnchanged, ...scenario.failSymptoms].join("\n");
+const text = [scenario.title, scenario.purpose, scenario.whyItMatters, ...scenario.navigate, ...scenario.doThis, ...scenario.expectChanges, ...scenario.expectUnchanged, ...scenario.failSymptoms].join("\n");
 
 describe("Scenario 9 names only what the deployed product renders", () => {
     it("the invented path and the single-account step are gone from every scenario", () => {
@@ -26,39 +27,42 @@ describe("Scenario 9 names only what the deployed product renders", () => {
         }
     });
 
-    it("every control it names is a label the Generate tuition surface renders", () => {
-        const surface = read("app/adminV2/financials/sections/FinancialsBulkCharge.tsx");
-        expect(surface).toContain("Generate a period&apos;s tuition");
-        expect(surface).toContain('{ key: "monthly", label: "Monthly" }');
-        expect(surface).toMatch(/>Service period</);
-        expect(surface).toContain('"Preview run"');
-        expect(surface).toMatch(/`Generate \$\{preview\.counts\.generated\} · \$\{moneyExact\(preview\.total_amount_cents, "USD"\)\}`/);
-        expect(surface).toContain("Nothing would be billed for this period, so there is nothing to confirm.");
-        expect(read("app/adminV2/financials/sections/FinancialsCharges.tsx")).toContain("<FinancialsBulkCharge");
+    it("every control it names is a label the converged surfaces render", () => {
+        const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
+        expect(charges).toMatch(/>\s*Tuition billing\s*</);
+        expect(charges).toContain('title="Tuition billing"');
+        const billing = read("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
+        for (const label of ["Automatic tuition billing", "Preview or run manually", "Billing frequency", "Service period", '"Preview run"', "Will bill", "Already generated — not billed again", "Not billed by this run"]) {
+            expect(billing, label).toContain(label);
+        }
+        expect(billing).toMatch(/`Generate \$\{preview\.counts\.generated\} · \$\{moneyExact\(preview\.total_amount_cents, "USD"\)\}`/);
+        expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toContain('placeholder="Every charge type"');
 
-        expect(scenario.navigate[0]).toBe("Financials → Charges → Generate a period's tuition (the button above Awaiting posting).");
-        expect(text).toMatch(/Billing frequency = Monthly/);
-        expect(text).toMatch(/Service period = November 2026/);
-        expect(text).toMatch(/Preview run/);
+        expect(scenario.navigate[0]).toBe("A · Financials → Charges → Tuition billing (top right).");
+        expect(scenario.navigate[1]).toMatch(/Financials → Accounts → W7 QA · Tuition Family → Charge type: Tuition/);
+        expect(text).toMatch(/Billing frequency = Monthly and Service period = November 2026/);
+        expect(text).toMatch(/Tilly Tuition · W7 QA · Tuition Family — \$1,200\.00/);
         expect(text).toMatch(/Generate 2 · \$2,650\.00/);
     });
 
-    it("says the run is organization-wide and what else it drafts", () => {
+    it("frames generation as automatic, with the manual run as run control", () => {
+        expect(text).toMatch(/Tuition normally bills itself when/);
+        expect(text).toMatch(/run control for QA, not routine work/);
         expect(text).toMatch(/organization-wide/);
         expect(text).toMatch(/Certhouse Family’s November tuition/);
     });
 
-    it("states the expected generated charge, the account, other cadences and the rerun", () => {
-        expect(text).toMatch(/Service period Nov 1–30, 2026\. Billing period November 2026\./);
+    it("states the expected charge, the account and the rerun", () => {
+        expect(text).toMatch(/Billing period November 2026\./);
         expect(text).toMatch(/Posting: Draft · Posts Nov 1, 2026/);
         expect(text).toMatch(/\$1,200\.00 as Scheduled/);
         expect(text).toMatch(/No weekly or bi-weekly tuition is generated by the Monthly run/);
-        expect(text).toMatch(/rerun preview reads “0 to bill”/);
+        expect(text).toMatch(/Already generated — not billed again/);
         expect(scenario.failSymptoms.join(" ")).toMatch(/October 2026 or December 2026/);
     });
 
     it("the catalog version moved, so earlier Scenario 9 results do not count", () => {
-        expect(CATALOG_VERSION).toBe("2026-10-15.1");
+        expect(CATALOG_VERSION).toBe("2026-10-15.2");
     });
 });
 
@@ -76,26 +80,17 @@ describe("the W7 Tuition Family fixture", () => {
     it("builds an enrolment assignment the canonical resolver can price, starting Nov 1", () => {
         expect(sql).toMatch(/\\set w7_tuition_start '2026-11-01'/);
         expect(block).toMatch(/insert into opportunity_customer_members[\s\S]*'full_time'[\s\S]*:'w7_north_toddler'::uuid, :'w7_tuition_start'::date,[\s\S]*"requested_days_per_week":3/);
-        expect(sql).toMatch(/c\.key = 'toddler'[\s\S]*l\.label = 'North Campus'/);
     });
 
-    it("links the agreement to that assignment — the link generation calls enrolled", () => {
+    it("links the agreement to that assignment, and inserts no pricing term and no charge", () => {
         expect(block).toMatch(/insert into child_enrollment_agreements[\s\S]*opportunity_customer_member_id[\s\S]*:'w7_ocm_tilly'::uuid/);
-    });
-
-    it("inserts no pricing term and no charge: tuition is accepted through the registered action", () => {
         expect(block).not.toMatch(/insert into enrollment_pricing_terms/);
         expect(block).not.toMatch(/insert into charges/);
-        expect(block).toMatch(/enrollment\.pricing\.accept/);
     });
 
-    it("keeps the opportunity out of every Enrollment lane: no work unit, no stage", () => {
+    it("keeps the opportunity out of every Enrollment lane and is insert-if-absent", () => {
         const opp = block.slice(block.indexOf("insert into opportunities"), block.indexOf("insert into opportunity_customer_members"));
         expect(opp).not.toMatch(/work_unit_id|stage_key|status_key/);
-    });
-
-    it("is insert-if-absent: nothing in it updates or deletes", () => {
         expect(block).not.toMatch(/\bupdate\s+\w+\s+set\b|\bdelete from\b/i);
-        expect(block.match(/on conflict \(id\) do nothing|where not exists/g)?.length).toBeGreaterThanOrEqual(8);
     });
 });

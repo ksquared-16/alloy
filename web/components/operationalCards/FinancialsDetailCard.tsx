@@ -49,6 +49,19 @@ const UNASSIGNED_LABEL = "Unassigned";
 /** The account itself, as a scope value — a charge with no child subject belongs to the household. */
 const HOUSEHOLD_SUBJECT = "__household__";
 
+/*
+ * W7-F021 — the three states an operator reads a ledger row in. A draft waiting on its period or a
+ * review is Scheduled; posted, partly paid and paid are Posted; a void draft is Cancelled.
+ */
+const LEDGER_STATUS_GROUPS = ["Scheduled", "Posted", "Cancelled"] as const;
+function ledgerStatusGroup(status: string | null | undefined): string | null {
+    const s = (status ?? "").toLowerCase();
+    if (!s) return null;
+    if (s === "void" || s === "cancelled" || s === "canceled") return "Cancelled";
+    if (s === "draft" || s === "scheduled" || s === "pending") return "Scheduled";
+    return "Posted";
+}
+
 export default function FinancialsDetailCard({
     evidence,
     periods,
@@ -367,6 +380,16 @@ export default function FinancialsDetailCard({
     const [payer, setPayer] = useState<string | null>(null);
     /* WHO OWES IT — distinct from whose child the row is, and from who paid. */
     const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
+    /*
+     * ── WHAT KIND OF CHARGE, AND WHERE IT IS (W7-F021) ──────────────────────────────────────
+     *
+     * After tuition generates, the natural check is THIS account's Tuition charge — not a hunt
+     * through an organization-wide queue. Charge type filters by the row's canonical category (the
+     * label is the catalog's); Status groups the row's lifecycle into the three an operator reads:
+     * Scheduled (a draft waiting on its period or a review), Posted, Cancelled.
+     */
+    const [chargeType, setChargeType] = useState<string | null>(null);
+    const [statusGroup, setStatusGroup] = useState<string | null>(null);
 
     const allEntries = useMemo(() => periods.flatMap((p) => p.entries), [periods]);
 
@@ -377,10 +400,12 @@ export default function FinancialsDetailCard({
      * convergence repaired once already.
      */
     const inResponsibleScope = useCallback(
-        (e: { responsibleParty?: string | null }) =>
-            !responsibleParty
-            || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty,
-        [responsibleParty],
+        (e: { responsibleParty?: string | null; type?: string; status?: string | null }) =>
+            (!responsibleParty
+                || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty)
+            && (!chargeType || e.type === chargeType)
+            && (!statusGroup || ledgerStatusGroup(e.status) === statusGroup),
+        [responsibleParty, chargeType, statusGroup],
     );
 
     const counts = useMemo(() => {
@@ -441,6 +466,16 @@ export default function FinancialsDetailCard({
      * which one it opened from, and on dismissal it focuses that marker once Details is back in
      * the document. See `restoreAdminFocus` in FinancialsCard.
      */
+
+    const chargeTypeChoices = useMemo(() => {
+        const byType = new Map<string, string>();
+        for (const e of allEntries) if (e.type) byType.set(e.type, chargeCategoryLabel(e.type) || e.type);
+        return [...byType.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [allEntries]);
+    const statusChoices = useMemo(
+        () => LEDGER_STATUS_GROUPS.filter((g) => allEntries.some((e) => ledgerStatusGroup(e.status) === g)),
+        [allEntries],
+    );
 
     const responsiblePartyChoices = useMemo(
         () =>
@@ -799,6 +834,24 @@ export default function FinancialsDetailCard({
                                 onChange={(v) => setPeriodLabel(v || null)}
                                 placeholder="All periods"
                                 options={periodChoices}
+                            />
+                        ) : null}
+                        {lens !== "payments" && chargeTypeChoices.length > 1 ? (
+                            <LensFilter
+                                testId="charge-type"
+                                value={chargeType ?? ""}
+                                onChange={(v) => setChargeType(v || null)}
+                                placeholder="Every charge type"
+                                options={chargeTypeChoices}
+                            />
+                        ) : null}
+                        {lens !== "payments" && statusChoices.length > 1 ? (
+                            <LensFilter
+                                testId="status"
+                                value={statusGroup ?? ""}
+                                onChange={(v) => setStatusGroup(v || null)}
+                                placeholder="Any status"
+                                options={statusChoices}
                             />
                         ) : null}
                         {/*

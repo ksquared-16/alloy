@@ -112,6 +112,17 @@ type Props = {
      * This is not a second mode. It is the same surface, entered at open rather than on request.
      */
     detailsAreTheSurface?: boolean;
+    /**
+     * ── OPEN ON ONE CHARGE (W7-F021) ──────────────────────────────────────────────────────────
+     *
+     * The Charges workspace finds a charge across the organization and opens it in THIS card's
+     * Charge Details — the certified modal, with its Edit / Cancel draft and Correct commands —
+     * rather than a second detail design of its own. The card starts with that surface already on
+     * its stack, so nothing compact renders first.
+     */
+    openCharge?: { chargeId: string; label: string } | null;
+    /** Called once the operator has closed every surface the card was opened with. */
+    onSurfacesClosed?: () => void;
 };
 
 /**
@@ -365,6 +376,8 @@ export default function FinancialsCard({
     showDetailsAction = true,
     summaryVariant = "period",
     detailsAreTheSurface = false,
+    openCharge = null,
+    onSurfacesClosed,
 }: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
@@ -466,8 +479,20 @@ export default function FinancialsCard({
          * stack either way, so every depth card, every dismissal and the whole escape-ownership
          * doctrine behave identically in both hosts.
          */
-        detailsAreTheSurface ? [{ kind: "detail" }] : [],
+        detailsAreTheSurface
+            ? [{ kind: "detail" }]
+            : openCharge
+              ? [{ kind: "charge_detail", chargeId: openCharge.chargeId, label: openCharge.label }]
+              : [],
     );
+    /*
+     * A card opened ON a charge has no resting surface of its own in that host: when the operator
+     * closes back past what it was opened with, the host is told, and unmounts it.
+     */
+    const openedOnCharge = useRef(Boolean(openCharge) && !detailsAreTheSurface);
+    useEffect(() => {
+        if (openedOnCharge.current && stack.length === 0) onSurfacesClosed?.();
+    }, [stack.length, onSurfacesClosed]);
     const surface = stack.length ? stack[stack.length - 1] : null;
     const overlay = surface?.kind ?? null;
     const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);

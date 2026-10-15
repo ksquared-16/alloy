@@ -1,127 +1,216 @@
 "use client";
 
 /**
- * CHARGES — the draft charges waiting to be posted, and the operator's path to acting on them.
+ * CHARGES — CROSS-ACCOUNT CHARGE OPERATIONS (W7-F021).
  *
- * Selecting a row opens the EXISTING Thread 2 account detail. This file renders no financial
- * figure of its own beyond the amount already written on the charge, and computes none at all.
+ * ── THE JOB THIS PAGE OWNS, AND THE ONE IT DOES NOT ──
+ *
+ * Accounts is the household workspace: find a family, read its balance and ledger, add a charge to
+ * it, take a payment, open one of its charges. Charges does what one account cannot:
+ *
+ *   FIND         charges across the organization — search a household, child or charge type; filter
+ *                by charge type and billing period; read them by what they need (Needs attention ·
+ *                Scheduled · Posted · Cancelled).
+ *   APPLY        one charge to many accounts (New bulk charge), one canonical charge per account.
+ *   EXCEPTIONS   drafts a person must act on, with the Post they are waiting for.
+ *   RUN CONTROL  tuition billing — automatic, with the scheduler's own status, and a previewed
+ *                manual run for when an operator needs it.
+ *
+ * ── ONE CHARGE DETAIL ──
+ *
+ * Selecting a charge opens the account's own Charge Details — the certified modal, with Edit / Cancel
+ * draft and Correct — through `FinancialsAccountDetail`. There is no second detail design here and no
+ * side pane: the record is the record wherever it was found.
  *
  * ── WHERE EVERY NUMBER COMES FROM ──
  *
- *   queue rows + counts   the workspace projection (selection only, no arithmetic)
- *   row amount            `charges.amount_cents`, as stored
- *   everything else       Thread 2's card, after selection, from its own owners
- *
- * ── SCOPE IS LABELLED, NOT ASSUMED ──
- *
- * The queue is site-scoped when a site is selected. The account detail is NOT: Thread 2 answers
- * for a household across every site, and silently presenting an account-wide balance under a site
- * heading would be the workspace lying about somebody else's number. The detail zone says
- * "Account-wide" for exactly that reason.
+ * Rows are `/api/admin/financials/charge-index` — the work-queue resolver asked for every status, so
+ * household, child, site visibility and the awaiting-posting reason are decided by one read. A row's
+ * amount is the stored `amount_cents`. This page computes no money.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
-import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
-import FinancialsChargeDetail from "@/app/adminV2/financials/FinancialsChargeDetail";
-import FinancialsBulkCharge from "@/app/adminV2/financials/sections/FinancialsBulkCharge";
+import FinancialsBulkAddCharge from "@/app/adminV2/financials/sections/FinancialsBulkAddCharge";
+import FinancialsTuitionBilling from "@/app/adminV2/financials/sections/FinancialsTuitionBilling";
 import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
-import type { FinancialWorkQueueState } from "@/app/adminV2/financials/useFinancialWorkQueue";
-import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
-import type { FinancialPositionCohort, FinancialPositionRow } from "@/lib/financials/workspace/resolveFinancialPosition";
-import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
+import {
+    CHARGE_INDEX_VIEW_LABELS,
+    CHARGE_INDEX_VIEWS,
+    type ChargeIndexOption,
+    type ChargeIndexView,
+} from "@/lib/financials/workspace/chargeIndex";
+import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 
-/*
- * WORK AND RECORD ARE DIFFERENT QUESTIONS, and they get different lists.
- *
- * "What needs posting?" is operational work: a queue of drafts an operator is expected to act on.
- * "What has been billed?" is the record: posted obligations, including ones from months already
- * closed. Folding the second into the first would turn a work queue into a pretend ledger, and an
- * operator would lose the ability to ask either question cleanly.
- *
- * So there are two views over two canonical reads — the work queue and the position cohort — and
- * exactly one detail surface beneath them. Selection supplies a charge id and nothing else;
- * `FinancialsChargeDetail` re-resolves every figure by that id, so where a charge was discovered
- * can never change what it is worth.
- */
-type ChargesView = "awaiting" | "posted";
-
-/** What a selection hands to the detail below it: identity, never money. */
-type SelectedCharge = {
-    chargeId: string;
-    customerId: string | null;
-    customerMemberId: string | null;
-    childName: string | null;
-    label: string;
-    /** Present only for drafts, where the Post control states the amount it is about to owe. */
-    draft: FinancialWorkRow | null;
+type IndexPayload = {
+    rows: FinancialWorkRow[];
+    counts: Record<ChargeIndexView, number>;
+    typeOptions: ChargeIndexOption[];
+    periodOptions: ChargeIndexOption[];
+    truncated?: boolean;
 };
 
-function fromWorkRow(row: FinancialWorkRow): SelectedCharge {
-    return {
-        chargeId: row.chargeId,
-        customerId: row.customerId,
-        customerMemberId: row.customerMemberId,
-        childName: row.childName,
-        label: row.categoryLabel,
-        draft: row,
-    };
+type OpenCharge = { chargeId: string; label: string; customerId: string; customerMemberId: string | null; childName: string | null };
+
+/** The date part of a stored timestamp, for a label — never printed raw. */
+function dayOf(stamp: string | null | undefined): string | null {
+    return stamp ? stamp.substring(0, 10) : null;
 }
 
-function fromPositionRow(row: FinancialPositionRow): SelectedCharge {
-    return {
-        chargeId: row.position.chargeId,
-        customerId: row.customerId,
-        customerMemberId: row.customerMemberId,
-        childName: null,
-        label: row.householdName ?? "Charge",
-        draft: null,
-    };
+/** What a row's state reads as, in the operator's words. */
+function stateLine(row: FinancialWorkRow): string {
+    const status = row.status ?? "draft";
+    if (status === "void") return `Cancelled${row.voidedAt ? ` ${shortDate(dayOf(row.voidedAt))}` : ""}`;
+    if (status !== "draft") {
+        const paid = status === "paid" ? " · paid" : status === "partially_paid" ? " · partly paid" : "";
+        return `Posted${row.postedAt ? ` ${shortDate(dayOf(row.postedAt))}` : ""}${paid}`;
+    }
+    if (row.awaiting.key === "period_not_started" && row.awaiting.postsOn) return `Draft · Posts ${shortDate(row.awaiting.postsOn)}`;
+    return row.awaiting.label;
+}
+
+/**
+ * A COMMAND LAYER on this page — the same shell, backdrop and dismissal the account commands use
+ * (`alloy-accounts-command-host`), so Tuition billing and New bulk charge open like Add Charge does.
+ */
+function CommandDialog({
+    overlay,
+    title,
+    iconName,
+    onClose,
+    children,
+}: {
+    overlay: string;
+    title: string;
+    iconName: string;
+    onClose: () => void;
+    children: ReactNode;
+}) {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            if (document.querySelector('[role="listbox"]')) return; // an open menu closes itself first
+            e.preventDefault();
+            onClose();
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [onClose]);
+    return (
+        <div className="alloy-accounts-command-host" data-financials-command-scope="true">
+            <div className="alloy-accounts-command-backdrop" data-financials-command-backdrop="true" aria-hidden="true" onClick={onClose} />
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay={overlay} role="dialog" aria-modal="true" aria-label={title}>
+                <UniversalCard
+                    title={title}
+                    insight=""
+                    iconName={iconName}
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key={overlay}
+                    footerAction={null}
+                >
+                    {children}
+                    <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions">
+                        <button
+                            type="button"
+                            className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
+                            onClick={onClose}
+                            data-financials-command-close={overlay}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </UniversalCard>
+            </div>
+        </div>
+    );
 }
 
 export default function FinancialsCharges({
-    queue,
-    position,
+    siteLocationId,
     scopeLabel,
     siteSelected,
+    onChargesChanged,
 }: {
-    queue: FinancialWorkQueueState;
-    /** The posted cohort — the same read Accounts and Subsidy use, never a second projection. */
-    position: FinancialsReadState<FinancialPositionCohort>;
+    /** The site chosen in the header, or "" for every site the operator can see. */
+    siteLocationId: string;
     scopeLabel: string;
-    /** True when a site is chosen — the bulk run does not obey it, and says so. */
+    /** True when a site is chosen — the tuition run does not obey it, and says so. */
     siteSelected: boolean;
+    /** Other reads that count charges (the header KPIs) re-read after anything here changes money. */
+    onChargesChanged?: () => Promise<void> | void;
 }) {
-    const [view, setView] = useState<ChargesView>("awaiting");
-    const [selected, setSelected] = useState<SelectedCharge | null>(null);
-    const [posting, setPosting] = useState(false);
-    const [reversing, setReversing] = useState(false);
+    const [view, setView] = useState<ChargeIndexView>("scheduled");
+    const [query, setQuery] = useState("");
+    const [debounced, setDebounced] = useState("");
+    const [typeKey, setTypeKey] = useState("");
+    const [periodKey, setPeriodKey] = useState("");
+    const [data, setData] = useState<IndexPayload | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [nonce, setNonce] = useState(0);
+    const [open, setOpen] = useState<OpenCharge | null>(null);
+    const [dialog, setDialog] = useState<"tuition" | "bulk" | null>(null);
+    const [posting, setPosting] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
-    const [cardNonce, setCardNonce] = useState(0);
-    const [detailNonce, setDetailNonce] = useState(0);
 
-    const rows = useMemo(() => queue.data?.rows ?? [], [queue.data]);
-    /* Newest obligations first: the record is read backwards from now. */
-    const postedRows = useMemo(() => {
-        const all = position.data?.rows ?? [];
-        return [...all].sort((a, b) => (b.serviceDate ?? "").localeCompare(a.serviceDate ?? ""));
-    }, [position.data]);
+    useEffect(() => {
+        const id = setTimeout(() => setDebounced(query.trim()), 250);
+        return () => clearTimeout(id);
+    }, [query]);
+
+    useEffect(() => {
+        let live = true;
+        setLoading(true);
+        const params = new URLSearchParams({ view });
+        if (debounced) params.set("q", debounced);
+        if (typeKey) params.set("type", typeKey);
+        if (periodKey) params.set("period", periodKey);
+        if (siteLocationId) params.set("site_location_id", siteLocationId);
+        void (async () => {
+            try {
+                const res = await fetch(`/api/admin/financials/charge-index?${params.toString()}`, { credentials: "include", cache: "no-store" });
+                const json = (await res.json()) as { ok?: boolean; error?: string } & IndexPayload;
+                if (!live) return;
+                if (!res.ok || json.ok === false) {
+                    setError(json.error ?? "Charges could not be loaded.");
+                    setData(null);
+                } else {
+                    setError(null);
+                    setData(json);
+                }
+            } catch (e) {
+                if (live) setError(e instanceof Error ? e.message : "Charges could not be loaded.");
+            } finally {
+                if (live) setLoading(false);
+            }
+        })();
+        return () => {
+            live = false;
+        };
+    }, [view, debounced, typeKey, periodKey, siteLocationId, nonce]);
+
+    const refresh = useCallback(async () => {
+        setNonce((n) => n + 1);
+        await onChargesChanged?.();
+    }, [onChargesChanged]);
 
     /*
-     * POSTING GOES THROUGH THE REGISTERED ACTION, from the operator's own session.
-     *
-     * `charge.post` already owns eligibility, authorization, idempotency and audit. A page-local
-     * write here would be a second posting path with none of those, and it would drift from the one
-     * Thread 1 certifies. After it commits, committed truth is re-read — the queue and the card both
-     * — rather than the row being removed optimistically.
+     * POSTING GOES THROUGH THE REGISTERED ACTION, from the operator's own session. `charge.post` owns
+     * eligibility, authorization, idempotency and audit; a refusal is shown as it came back.
      */
     const postCharge = useCallback(
         async (row: FinancialWorkRow) => {
-            setPosting(true);
+            setPosting(row.chargeId);
             setActionError(null);
             try {
                 const res = await fetch("/api/admin/actions/execute", {
@@ -134,311 +223,260 @@ export default function FinancialsCharges({
                         entity_id: row.customerMemberId ?? row.customerId ?? "",
                         mode: "execute",
                         confirmation: { confirmed: true },
-                        payload: { charge_id: row.chargeId, charge_label: row.categoryLabel },
+                        payload: { charge_id: row.chargeId, charge_label: row.typeLabel ?? row.categoryLabel },
                     }),
                 });
                 const json = (await res.json()) as { ok?: boolean; error?: unknown };
                 if (!res.ok || json.ok === false) {
-                    const message =
+                    setActionError(
                         typeof json.error === "string"
                             ? json.error
-                            : ((json.error as { message?: string } | undefined)?.message ?? "Posting was refused.");
-                    setActionError(message);
+                            : ((json.error as { message?: string } | undefined)?.message ?? "Posting was refused."),
+                    );
                     return;
                 }
-                /*
-                 * BOTH LISTS RE-READ. A posted charge leaves the work queue and joins the record,
-                 * and an operator who just posted it must be able to find it there rather than
-                 * losing it for having acted.
-                 */
-                await Promise.all([queue.refresh(), position.refresh()]);
-                setDetailNonce((n) => n + 1);
-                setCardNonce((n) => n + 1);
+                await refresh();
             } catch (e) {
                 setActionError(e instanceof Error ? e.message : "Posting failed.");
             } finally {
-                setPosting(false);
+                setPosting(null);
             }
         },
-        [position, queue],
+        [refresh],
     );
 
-    /*
-     * REVERSING GOES THROUGH THE REGISTERED ACTION TOO, for the same reasons posting does.
-     *
-     * `charge.reverse` owns eligibility, `fin.adjust`, idempotency and audit. Nothing here decides
-     * whether a charge may be reversed — the command does, and a refusal is shown as it came back
-     * rather than pre-empted by hiding the control. A hidden button is not authorization; the
-     * server answering 403 is.
-     */
-    const reverseCharge = useCallback(
-        async (charge: SelectedCharge) => {
-            setReversing(true);
-            setActionError(null);
-            try {
-                const res = await fetch("/api/admin/actions/execute", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        action_key: "charge.reverse",
-                        entity_type: "child",
-                        entity_id: charge.customerMemberId ?? charge.customerId ?? "",
-                        mode: "execute",
-                        confirmation: { confirmed: true },
-                        payload: { charge_id: charge.chargeId, charge_label: charge.label },
-                    }),
-                });
-                const json = (await res.json()) as { ok?: boolean; error?: unknown };
-                if (!res.ok || json.ok === false) {
-                    const message =
-                        typeof json.error === "string"
-                            ? json.error
-                            : ((json.error as { message?: string } | undefined)?.message ?? "Reversing was refused.");
-                    setActionError(message);
-                    return;
-                }
-                await Promise.all([queue.refresh(), position.refresh()]);
-                // Both projections re-read; neither is edited in place.
-                setDetailNonce((n) => n + 1);
-                setCardNonce((n) => n + 1);
-            } catch (e) {
-                setActionError(e instanceof Error ? e.message : "Reversing failed.");
-            } finally {
-                setReversing(false);
-            }
-        },
-        [position, queue],
-    );
+    const rows = data?.rows ?? [];
+    const counts = data?.counts ?? { attention: 0, scheduled: 0, posted: 0, cancelled: 0 };
+    const filtered = Boolean(debounced || typeKey || periodKey);
+    const openRow = (row: FinancialWorkRow) => {
+        if (!row.customerId) return;
+        setOpen({
+            chargeId: row.chargeId,
+            label: row.typeLabel ?? row.categoryLabel,
+            customerId: row.customerId,
+            customerMemberId: row.customerMemberId,
+            childName: row.childName,
+        });
+    };
+
+    const typeOptions = useMemo(() => data?.typeOptions ?? [], [data]);
+    const periodOptions = useMemo(() => data?.periodOptions ?? [], [data]);
 
     return (
-        <div className="flex min-h-0 flex-1 gap-3" data-testid="financials-charges-section">
-            <WorkspaceSurface className="flex min-h-0 w-[22rem] shrink-0 flex-col overflow-hidden">
-                {/*
-                 * BULK CHARGING SITS ABOVE THE QUEUE IT FILLS. One server-owned run, previewed and
-                 * confirmed — never a client loop over Add Charge.
-                 */}
-                <FinancialsBulkCharge onCommitted={queue.refresh} siteSelected={siteSelected} />
-                {/* WORK, OR RECORD. Two questions, stated as two views over two canonical reads. */}
-                <div className="flex shrink-0 gap-1 border-b border-alloy-stone/10 px-3 py-2" role="tablist">
-                    {([
-                        { key: "awaiting" as const, label: "Awaiting posting", count: rows.length },
-                        { key: "posted" as const, label: "Posted", count: postedRows.length },
-                    ]).map((tab) => (
+        <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="financials-charges-section">
+            <WorkspaceSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {/* ── WHAT THIS PAGE IS FOR ── */}
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-alloy-stone/10 px-4 py-3" data-financials-charges-purpose="true">
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-alloy-midnight">Charges across every account</p>
+                        <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                            Find charges, clear what needs attention, and apply one charge to many accounts. To work one household, use Accounts.
+                        </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
                         <button
-                            key={tab.key}
+                            type="button"
+                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                            onClick={() => setDialog("tuition")}
+                            data-financials-open-tuition-billing="true"
+                        >
+                            Tuition billing
+                        </button>
+                        <button
+                            type="button"
+                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                            onClick={() => setDialog("bulk")}
+                            data-financials-open-bulk-charge="true"
+                        >
+                            New bulk charge
+                        </button>
+                    </div>
+                </div>
+
+                {/* ── SEARCH + FILTERS ── */}
+                <div className="flex flex-wrap items-center gap-2 border-b border-alloy-stone/10 px-4 py-2" data-financials-charges-filters="true">
+                    <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search household, child or charge type"
+                        aria-label="Search household, child or charge type"
+                        data-financials-charges-search="true"
+                        className="w-72 rounded-md border border-alloy-stone/30 bg-white px-2.5 py-1 text-xs text-alloy-midnight"
+                    />
+                    <span className="w-48">
+                        <AlloySelect
+                            aria-label="Charge type"
+                            testId="charges-type-filter"
+                            value={typeKey}
+                            placeholder="Every charge type"
+                            options={typeOptions}
+                            onChange={(next) => setTypeKey(next)}
+                        />
+                    </span>
+                    <span className="w-44">
+                        <AlloySelect
+                            aria-label="Billing period"
+                            testId="charges-period-filter"
+                            value={periodKey}
+                            placeholder="Every period"
+                            options={periodOptions}
+                            onChange={(next) => setPeriodKey(next)}
+                        />
+                    </span>
+                    {filtered ? (
+                        <button
+                            type="button"
+                            className="text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                            onClick={() => {
+                                setQuery("");
+                                setTypeKey("");
+                                setPeriodKey("");
+                            }}
+                        >
+                            Clear filters
+                        </button>
+                    ) : null}
+                    <span className="ml-auto text-[11px] text-alloy-midnight/45">{scopeLabel}</span>
+                </div>
+
+                {/* ── THE VIEWS: what each charge needs ── */}
+                <div className="flex shrink-0 gap-1 border-b border-alloy-stone/10 px-4 py-2" role="tablist">
+                    {CHARGE_INDEX_VIEWS.map((key) => (
+                        <button
+                            key={key}
                             type="button"
                             role="tab"
-                            aria-selected={view === tab.key}
-                            data-financials-charges-view={tab.key}
-                            data-active={view === tab.key ? "true" : undefined}
+                            aria-selected={view === key}
+                            data-financials-charges-view={key}
+                            data-active={view === key ? "true" : undefined}
                             onClick={() => {
-                                setView(tab.key);
-                                setSelected(null);
+                                setView(key);
                                 setActionError(null);
                             }}
                             className={`rounded-full px-2.5 py-1 text-xs transition ${
-                                view === tab.key
-                                    ? "bg-alloy-bend-pine/10 font-medium text-alloy-midnight"
-                                    : "text-alloy-midnight/60 hover:bg-alloy-stone/5"
+                                view === key ? "bg-alloy-bend-pine/10 font-medium text-alloy-midnight" : "text-alloy-midnight/60 hover:bg-alloy-stone/5"
                             }`}
                         >
-                            {tab.label}
-                            <span className="ml-1 tabular-nums text-alloy-midnight/45">{tab.count}</span>
+                            {CHARGE_INDEX_VIEW_LABELS[key]}
+                            <span className="ml-1 tabular-nums text-alloy-midnight/45">{counts[key]}</span>
                         </button>
                     ))}
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto" data-financials-work-queue="true">
-                    {view === "posted" ? (
-                        position.loading && postedRows.length === 0 ? (
-                            <p className="px-3 py-4 text-xs text-alloy-midnight/50">Loading posted charges…</p>
-                        ) : position.error ? (
-                            <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-posted-error="true">
-                                {position.error}
-                            </p>
-                        ) : postedRows.length === 0 ? (
-                            <WorkspaceEmptyState
-                                title="Nothing billed yet"
-                                body={`No posted charges for ${scopeLabel.toLowerCase()}.`}
-                            />
-                        ) : (
-                            postedRows.map((row) => (
-                                <button
-                                    key={row.position.chargeId}
-                                    type="button"
-                                    onClick={() => setSelected(fromPositionRow(row))}
-                                    data-financials-posted-row={row.position.chargeId}
-                                    aria-current={selected?.chargeId === row.position.chargeId ? "true" : undefined}
-                                    className={`block w-full border-b border-alloy-stone/10 px-3 py-2 text-left transition hover:bg-alloy-stone/5 ${
-                                        selected?.chargeId === row.position.chargeId ? "bg-alloy-bend-pine/5" : ""
-                                    }`}
-                                >
-                                    <span className="flex items-baseline justify-between gap-2">
-                                        <span className="truncate text-sm text-alloy-midnight">
-                                            {row.householdName ?? "Household"}
-                                        </span>
-                                        <span className="shrink-0 text-sm tabular-nums text-alloy-midnight">
-                                            {moneyExact(
-                                                row.position.explanation.netCents,
-                                                row.position.currencyCode,
-                                            )}
-                                        </span>
-                                    </span>
-                                    <span className="mt-0.5 block truncate text-xs text-alloy-midnight/60">
-                                        {/* The charge's own date, not the operating month. */}
-                                        {row.serviceDate ? shortDate(row.serviceDate) : "No service date"}
-                                        {row.customerMemberId ? " · child" : " · account-wide"}
-                                        {row.position.outstandingCents > 0
-                                            ? ` · ${moneyExact(row.position.outstandingCents, row.position.currencyCode)} outstanding`
-                                            : " · settled"}
-                                    </span>
-                                </button>
-                            ))
-                        )
-                    ) : queue.loading && rows.length === 0 ? (
-                        <p className="px-3 py-4 text-xs text-alloy-midnight/50">Loading financial work…</p>
-                    ) : queue.error ? (
-                        <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-queue-error="true">
-                            {queue.error}
+
+                {actionError ? (
+                    <p className="px-4 py-2 text-xs text-alloy-ember" data-financials-action-error="true">
+                        {actionError}
+                    </p>
+                ) : null}
+
+                {/* ── THE LIST ── */}
+                <div className="min-h-0 flex-1 overflow-y-auto" data-financials-charge-index="true" aria-busy={loading ? "true" : undefined}>
+                    <div className="sticky top-0 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] gap-3 border-b border-alloy-stone/10 bg-white px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                        <span>Household</span>
+                        <span>Child</span>
+                        <span>Charge type</span>
+                        <span className="text-right">Amount</span>
+                        <span>Billing period</span>
+                        <span>State</span>
+                    </div>
+                    {error ? (
+                        <p className="px-4 py-4 text-xs text-alloy-ember" data-financials-charges-error="true">
+                            {error}
                         </p>
+                    ) : !data && loading ? (
+                        <p className="px-4 py-4 text-xs text-alloy-midnight/50">Loading charges…</p>
                     ) : rows.length === 0 ? (
                         <WorkspaceEmptyState
-                            title="Nothing waiting to post"
-                            body={`No draft charges for ${scopeLabel.toLowerCase()}. Charges in the current billing period post as they are created.`}
+                            title={filtered ? "No charge matches" : `No ${CHARGE_INDEX_VIEW_LABELS[view].toLowerCase()} charges`}
+                            body={filtered ? "Change the search or the filters." : `Nothing ${CHARGE_INDEX_VIEW_LABELS[view].toLowerCase()} for ${scopeLabel.toLowerCase()}.`}
                         />
                     ) : (
                         rows.map((row) => (
-                            <button
+                            <div
                                 key={row.chargeId}
-                                type="button"
-                                onClick={() => setSelected(fromWorkRow(row))}
-                                data-financials-queue-row={row.chargeId}
-                                data-financials-queue-row-site={row.siteLocationId ?? "org"}
-                                aria-current={selected?.chargeId === row.chargeId ? "true" : undefined}
-                                className={`block w-full border-b border-alloy-stone/10 px-3 py-2 text-left transition hover:bg-alloy-stone/5 ${
-                                    selected?.chargeId === row.chargeId ? "bg-alloy-bend-pine/5" : ""
-                                }`}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => openRow(row)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        openRow(row);
+                                    }
+                                }}
+                                data-financials-charge-index-row={row.chargeId}
+                                data-financials-charge-index-type={row.typeKey}
+                                className="grid cursor-pointer grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] items-center gap-3 border-b border-alloy-stone/10 px-4 py-2 text-xs transition hover:bg-alloy-stone/5 focus:bg-alloy-bend-pine/5 focus:outline-none"
                             >
-                                <span className="flex items-baseline justify-between gap-2">
-                                    <span className="truncate text-sm text-alloy-midnight">
-                                        {row.householdName ?? "Household"}
+                                <span className="truncate text-sm text-alloy-midnight">{row.householdName ?? "Household"}</span>
+                                <span className="truncate text-alloy-midnight/75">{row.childName ?? "Account-wide"}</span>
+                                <span className="truncate text-alloy-midnight/75">{row.typeLabel ?? row.categoryLabel}</span>
+                                <span className="text-right tabular-nums text-alloy-midnight">{moneyExact(row.amountCents, row.currencyCode)}</span>
+                                <span className="truncate text-alloy-midnight/75">
+                                    {row.billingPeriodKey ? billingPeriodLabel(row.billingPeriodKey) : "Unplaced"}
+                                </span>
+                                <span className="flex min-w-0 items-center justify-between gap-2">
+                                    <span
+                                        className={`truncate ${row.awaiting.key === "post_failed" && (row.status ?? "draft") === "draft" ? "text-alloy-ember" : "text-alloy-midnight/70"}`}
+                                        data-financials-awaiting-reason={(row.status ?? "draft") === "draft" ? row.awaiting.key : undefined}
+                                        title={(row.status ?? "draft") === "draft" ? row.awaiting.explanation : undefined}
+                                    >
+                                        {stateLine(row)}
                                     </span>
-                                    <span className="shrink-0 text-sm tabular-nums text-alloy-midnight">
-                                        {moneyExact(row.amountCents, row.currencyCode)}
-                                    </span>
+                                    {view === "attention" ? (
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary shrink-0"
+                                            disabled={posting !== null}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                void postCharge(row);
+                                            }}
+                                            data-financials-post-charge={row.chargeId}
+                                        >
+                                            {posting === row.chargeId ? "Posting…" : "Post"}
+                                        </button>
+                                    ) : null}
                                 </span>
-                                <span className="mt-0.5 block truncate text-xs text-alloy-midnight/60">
-                                    {row.categoryLabel}
-                                    {row.childName ? ` · ${row.childName}` : ""}
-                                    {row.periodKey ? ` · ${billingPeriodLabel(String(row.periodKey))}` : ""}
-                                    {" · "}
-                                    {/* Location is stated per row, including when it belongs to no site. */}
-                                    {row.locationScope === "site" ? (row.siteName ?? "Site") : "Account-wide"}
-                                </span>
-                                {/*
-                                 * WHY THIS ONE IS WAITING, on the row itself (W7-F001).
-                                 *
-                                 * The list is the only place an operator triages, so the reason has
-                                 * to be here rather than one click away. The tone carries the same
-                                 * information as the words: a charge the clock will post is quiet,
-                                 * and anything needing a person is not.
-                                 */}
-                                <span
-                                    className={`mt-0.5 block truncate text-[11px] ${
-                                        row.awaiting.key === "post_failed"
-                                            ? "text-alloy-ember"
-                                            : row.awaiting.operatorActionable
-                                              ? "text-alloy-midnight/70"
-                                              : "text-alloy-midnight/45"
-                                    }`}
-                                    data-financials-awaiting-reason={row.awaiting.key}
-                                    title={row.awaiting.explanation}
-                                >
-                                    {row.awaiting.label}
-                                </span>
-                            </button>
+                            </div>
                         ))
                     )}
+                    {data?.truncated ? (
+                        <p className="px-4 py-2 text-[11px] text-alloy-midnight/45">Showing the most recent 2,000 charges. Search or filter to narrow.</p>
+                    ) : null}
                 </div>
             </WorkspaceSurface>
 
-            <WorkspaceSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {!selected ? (
-                    <WorkspaceEmptyState
-                        title="Select financial work"
-                        body="Choose a draft charge to see the household's canonical financial detail."
+            {/*
+              * ── THE CANONICAL CHARGE DETAILS ──
+              * The account's own card, opened on this charge. Closing it returns here and re-reads.
+              */}
+            {open ? (
+                <div className="alloy-accounts-command-host" data-financials-charges-detail-host={open.chargeId}>
+                    <FinancialsAccountDetail
+                        key={open.chargeId}
+                        customerId={open.customerId}
+                        customerMemberId={open.customerMemberId}
+                        participationId={null}
+                        displayName={open.childName}
+                        openCharge={{ chargeId: open.chargeId, label: open.label }}
+                        onSurfacesClosed={() => {
+                            setOpen(null);
+                            void refresh();
+                        }}
                     />
-                ) : (
-                    <div className="flex min-h-0 flex-1 flex-col" data-financials-detail={selected.chargeId}>
-                        <div className="flex items-center justify-between gap-3 border-b border-alloy-stone/10 px-3 py-2">
-                            <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-alloy-midnight">
-                                    {selected.label}
-                                </p>
-                                {/* SCOPE, SAID OUT LOUD. The queue is site-scoped; this is not. */}
-                                <p className="text-xs text-alloy-midnight/60" data-financials-detail-scope="account_wide">
-                                    Account-wide financial detail
-                                </p>
-                            </div>
-                            {/*
-                             * THE ACTION THE CHARGE'S OWN STATE ALLOWS. A draft is posted; a posted
-                             * charge is reversed. Neither control decides whether it may run — the
-                             * registered command does, and its refusal is shown rather than
-                             * pre-empted by hiding the button.
-                             */}
-                            {selected.draft ? (
-                                <button
-                                    type="button"
-                                    className={WS_ACTION_PRIMARY}
-                                    disabled={posting}
-                                    onClick={() => void postCharge(selected.draft!)}
-                                    data-financials-post-charge={selected.chargeId}
-                                >
-                                    {posting
-                                        ? "Posting…"
-                                        : `Post ${moneyExact(selected.draft.amountCents, selected.draft.currencyCode)}`}
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    className={WS_ACTION_PRIMARY}
-                                    disabled={reversing}
-                                    onClick={() => void reverseCharge(selected)}
-                                    data-financials-reverse-charge={selected.chargeId}
-                                >
-                                    {reversing ? "Reversing…" : "Reverse charge"}
-                                </button>
-                            )}
-                        </div>
-                        {actionError ? (
-                            <p className="px-3 py-2 text-xs text-alloy-ember" data-financials-action-error="true">
-                                {actionError}
-                            </p>
-                        ) : null}
-                        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                            {/*
-                             * THE OBLIGATION FIRST, THEN THE ACCOUNT IT BELONGS TO.
-                             *
-                             * The pane has always shown how the household is doing. It never said
-                             * what the selected charge actually was, so an operator could read an
-                             * amount and a family name and still not know what the money was for,
-                             * who owed it, or what had been applied. This resolves the charge by id
-                             * through its own canonical read — the queue row supplies identity and
-                             * nothing else, because a row is a preview and not authority.
-                             */}
-                            <FinancialsChargeDetail key={selected.chargeId} chargeId={selected.chargeId} refreshKey={detailNonce} />
-                            {/* THREAD 2, UNFORKED. Its own read model, its own numbers. */}
-                            <FinancialsAccountDetail
-                                key={`${selected.customerId ?? selected.customerMemberId}-${cardNonce}`}
-                                customerId={selected.customerId ?? null}
-                                customerMemberId={selected.customerMemberId ?? null}
-                                participationId={null}
-                                displayName={selected.childName}
-                            />
-                        </div>
-                    </div>
-                )}
-            </WorkspaceSurface>
+                </div>
+            ) : null}
+
+            {dialog === "tuition" ? (
+                <CommandDialog overlay="tuition_billing" title="Tuition billing" iconName="Repeat" onClose={() => setDialog(null)}>
+                    <FinancialsTuitionBilling onCommitted={refresh} siteSelected={siteSelected} />
+                </CommandDialog>
+            ) : null}
+            {dialog === "bulk" ? (
+                <CommandDialog overlay="bulk_charge" title="New bulk charge" iconName="Receipt" onClose={() => setDialog(null)}>
+                    <FinancialsBulkAddCharge siteLocationId={siteLocationId} onCommitted={refresh} />
+                </CommandDialog>
+            ) : null}
         </div>
     );
 }

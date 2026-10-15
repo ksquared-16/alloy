@@ -85,7 +85,8 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
      */
     const position = useFinancialsPosition(
         siteId,
-        section === "accounts" || section === "subsidy" || section === "charges",
+        /* Charges reads its own cross-account index now (W7-F021); the cohort is Accounts' and Subsidy's. */
+        section === "accounts" || section === "subsidy",
     );
     /*
      * ACCOUNTS READS WHO EXISTS, not only what has been billed. The rail is the left side of a join
@@ -145,6 +146,7 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
                 activity={activity}
                 scopeLabel={scopeLabel}
                 siteSelected={Boolean(siteId)}
+                siteLocationId={siteId}
                 onOpenSection={openWorkSection}
             />
         </FinancialsWorkspaceShell>

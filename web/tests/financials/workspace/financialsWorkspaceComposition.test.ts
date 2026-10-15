@@ -42,7 +42,8 @@ const SECTION_FILES = [
     "app/adminV2/financials/sections/FinancialsSubsidy.tsx",
     "app/adminV2/financials/sections/FinancialsActivity.tsx",
     "app/adminV2/financials/sections/FinancialsStudio.tsx",
-    "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
+    "app/adminV2/financials/sections/FinancialsTuitionBilling.tsx",
+    "app/adminV2/financials/sections/FinancialsBulkAddCharge.tsx",
 ];
 
 /* Both canonical gate helpers; the migration between them is partial and deliberately so. */
@@ -123,8 +124,8 @@ describe("Financials workspace — every mutation goes through a registered acti
         expect(charges).toContain("/api/admin/actions/execute");
     });
 
-    it("bulk charging is ONE canonical run, previewed and confirmed — not a client loop", () => {
-        const bulk = read("app/adminV2/financials/sections/FinancialsBulkCharge.tsx");
+    it("tuition billing is ONE canonical run, previewed and confirmed — not a client loop", () => {
+        const bulk = read("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
         expect(bulk).toContain("billing.generate_tuition");
         expect(bulk).toContain('mode: "preview"');
         expect(bulk).toContain('callAction("execute"');

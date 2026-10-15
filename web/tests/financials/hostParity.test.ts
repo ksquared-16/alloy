@@ -42,7 +42,7 @@ describe("the two hosts differ by a prop, not by an implementation", () => {
         expect(summary).toMatch(/detailsAreTheSurface=\{summaryVariant === "account"\}/);
         const card = code(CARD);
         expect(card, "which seeds the same stack the Focus Panel pushes onto")
-            .toMatch(/detailsAreTheSurface \? \[\{ kind: "detail" \}\] : \[\]/);
+            .toMatch(/detailsAreTheSurface\s*\?\s*\[\{ kind: "detail" \}\]\s*:\s*openCharge\s*\?\s*\[\{ kind: "charge_detail"[^\]]*\]\s*:\s*\[\]/);
     });
 
     it("the workspace cannot be popped off its own subject", () => {
