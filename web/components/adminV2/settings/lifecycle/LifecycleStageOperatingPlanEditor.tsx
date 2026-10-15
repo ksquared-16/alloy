@@ -21,6 +21,7 @@ import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
 import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
+import LifecycleStageCommandsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageCommandsEditor";
 import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor";
 import LifecycleStageOutgoingTransitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
@@ -135,6 +136,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 ...(draft.outgoing_transitions !== undefined
                     ? { outgoing_transitions: draft.outgoing_transitions }
                     : {}),
+                ...(draft.stage_commands !== undefined ? { stage_commands: draft.stage_commands } : {}),
                 work_templates: draft.work_templates,
                 outcomes: draft.outcomes,
                 outcome_rules: draft.outcome_rules,
@@ -289,6 +291,21 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                     </select>
                 </label>
             </div>
+
+            {/* Stage commands lead: the stage's own command row, independent of which work item
+                is open. Work items below describe the work; they no longer carry commands. */}
+            <LifecycleStageCommandsEditor
+                draft={draft}
+                stageKey={stageKey}
+                stageLabel={stageLabel}
+                stageOperatingPlan={stageOperatingPlanForResolver}
+                actionCatalog={actionCatalog ?? null}
+                configuredActions={configuredActions ?? []}
+                processStages={processStages ?? []}
+                processTracks={processTracks ?? null}
+                process={process ?? null}
+                onChange={(stage_commands) => setDraft((prev) => ({ ...prev, stage_commands }))}
+            />
 
             {/* Operator Work first — objective 9's reading order is
                 Overview → Operator Work → Stage Exit → Attention. What staff DO is the centre of
