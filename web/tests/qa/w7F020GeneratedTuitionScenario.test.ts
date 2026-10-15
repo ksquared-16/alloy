@@ -39,7 +39,8 @@ describe("Scenario 9 names only what the deployed product renders", () => {
         expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toContain('placeholder="Every charge type"');
 
         expect(scenario.navigate[0]).toBe("A · Financials → Charges → Tuition billing (top right).");
-        expect(scenario.navigate[1]).toMatch(/Financials → Accounts → W7 QA · Tuition Family → Charge type: Tuition/);
+        expect(scenario.navigate[1]).toMatch(/Financials → Accounts → W7 QA · Tuition Family → the Tuition charge for Tilly Tuition/);
+        expect(text).toMatch(/Charge type = Tuition narrows the ledger/);
         expect(text).toMatch(/Billing frequency = Monthly and Service period = November 2026/);
         expect(text).toMatch(/Tilly Tuition · W7 QA · Tuition Family — \$1,200\.00/);
         expect(text).toMatch(/Generate 2 · \$2,650\.00/);

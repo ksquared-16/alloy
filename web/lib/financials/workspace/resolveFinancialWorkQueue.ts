@@ -87,7 +87,11 @@ export type FinancialWorkRow = {
     chargeTemplateId?: string | null;
     /** The configured charge type's label, else the category's. */
     typeLabel?: string;
-    /** Filter key: the template when there is one, else `category:<key>`. */
+    /**
+     * Filter key: the charge type AS THE OPERATOR NAMES IT. A versioned template (Materials, Field
+     * trip) is several rows with one label, and the filter offered each version as its own "Materials";
+     * keyed by label, one choice finds every version.
+     */
     typeKey?: string;
     /** The bound billing period key when bound, else the service month (legacy placement). */
     billingPeriodKey?: string | null;
@@ -314,7 +318,10 @@ export async function resolveFinancialWorkQueue(
                       typeLabel:
                           (charge.charge_template_id && templateLabels.get(charge.charge_template_id))
                           || chargeCategoryLabel(categoryKey),
-                      typeKey: charge.charge_template_id ? `template:${charge.charge_template_id}` : `category:${categoryKey}`,
+                      typeKey: `type:${(
+                          (charge.charge_template_id && templateLabels.get(charge.charge_template_id))
+                          || chargeCategoryLabel(categoryKey)
+                      ).toLowerCase()}`,
                       billingPeriodKey:
                           (charge.billing_period_id && periodKeys.get(charge.billing_period_id))
                           || (charge.service_date ? charge.service_date.slice(0, 7) : null),

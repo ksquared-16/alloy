@@ -29,7 +29,7 @@
  * amount is the stored `amount_cents`. This page computes no money.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -40,6 +40,7 @@ import FinancialsBulkAddCharge from "@/app/adminV2/financials/sections/Financial
 import FinancialsTuitionBilling from "@/app/adminV2/financials/sections/FinancialsTuitionBilling";
 import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
+import { hasOpenTransientPopup } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import {
     CHARGE_INDEX_VIEW_LABELS,
     CHARGE_INDEX_VIEWS,
@@ -162,6 +163,43 @@ export default function FinancialsCharges({
     const [dialog, setDialog] = useState<"tuition" | "bulk" | null>(null);
     const [posting, setPosting] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+
+    /*
+     * ── ESCAPE CLOSES THE LAYER, NEVER THE FINANCIALS APP (W7-F021, measured on deployed) ──────
+     *
+     * Financials opens inside a drawer that closes on any Escape reaching `window`. In Accounts a
+     * charge's Details sits over the account's own floor, so the account host still sees an open
+     * layer when the key reaches it and stops it there. Here there is no floor: the card dismisses
+     * Charge Details from its window listener, React re-renders before the host's document listener
+     * runs, the host sees nothing open, and the key went on to close the whole app.
+     *
+     * The same is true of a dropdown on this page: Escape that closes an open menu is that menu's
+     * key, and it closed the app too (measured: the charge-type filter).
+     *
+     * So this page remembers whether one of ITS layers was open when the key went down (window,
+     * capture — nothing is stopped there, so menus and the card still receive it) and, if so, stops
+     * that same key at the document on its way back up — before the drawer's window listener.
+     */
+    const layerOpenRef = useRef(false);
+    useEffect(() => {
+        layerOpenRef.current = Boolean(open || dialog);
+    });
+    useEffect(() => {
+        let armed = false;
+        const onCapture = (e: KeyboardEvent) => {
+            if (e.key === "Escape") armed = layerOpenRef.current || hasOpenTransientPopup(document);
+        };
+        const onBubble = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && armed) e.stopPropagation();
+            armed = false;
+        };
+        window.addEventListener("keydown", onCapture, true);
+        document.addEventListener("keydown", onBubble);
+        return () => {
+            window.removeEventListener("keydown", onCapture, true);
+            document.removeEventListener("keydown", onBubble);
+        };
+    }, []);
 
     useEffect(() => {
         const id = setTimeout(() => setDebounced(query.trim()), 250);

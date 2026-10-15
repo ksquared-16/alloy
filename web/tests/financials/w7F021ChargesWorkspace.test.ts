@@ -232,3 +232,26 @@ describe("Accounts locates a household's tuition without hunting", () => {
         expect(card).toMatch(/chargeTypeChoices\.length > 1 \?/);
     });
 });
+
+describe("deployed fixes (W7-F021 follow-up, measured on 39a20265)", () => {
+    it("Escape that closes a Charges layer or an open menu never reaches the Financials drawer", () => {
+        const page = code("app/adminV2/financials/sections/FinancialsCharges.tsx");
+        expect(page).toMatch(/armed = layerOpenRef\.current \|\| hasOpenTransientPopup\(document\)/);
+        expect(page).toMatch(/window\.addEventListener\("keydown", onCapture, true\)/);
+        expect(page).toMatch(/if \(e\.key === "Escape" && armed\) e\.stopPropagation\(\);/);
+        expect(page).toMatch(/document\.addEventListener\("keydown", onBubble\)/);
+    });
+
+    it("a versioned charge type is ONE filter choice, keyed by the label operators read", () => {
+        const resolver = code("lib/financials/workspace/resolveFinancialWorkQueue.ts");
+        expect(resolver).toMatch(/typeKey: `type:\$\{\(/);
+        expect(resolver).not.toContain("`template:${charge.charge_template_id}`");
+    });
+
+    it("the bulk preview's date chain is in the operator's words and names whose dates they are", () => {
+        const ui = code("app/adminV2/financials/sections/FinancialsBulkAddCharge.tsx");
+        expect(ui).toMatch(/formatDisplayDate\(iso\)/);
+        expect(ui).toContain("Dates for {firstTarget?.householdName}");
+    });
+});
+

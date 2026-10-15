@@ -1,0 +1,80 @@
+{
+ "purpose": "Charges across every account ⏎ Find charges, clear what needs attention, and apply one charge to many accounts. To work one household, use Accounts. ⏎ Tuition billing ⏎ New bulk charge",
+ "views": [
+  "Needs attention35",
+  "Scheduled3",
+  "Posted112",
+  "Cancelled2"
+ ],
+ "oldPane": 0,
+ "oldGenerateButton": 0,
+ "searchMonthly": [
+  "W7 QA · Monthly Family | Milo Monthly | Materials | $18.00 | November 2026 | Draft · Posts Nov 1, 2026"
+ ],
+ "typeOptions": [
+  "Every charge type",
+  "Adjustment",
+  "Certification household fee",
+  "Credit",
+  "Discount",
+  "Field trip",
+  "Field trip",
+  "Late pickup",
+  "Materials",
+  "Materials",
+  "Monthly tuition",
+  "Registration fee"
+ ],
+ "detail": {
+  "fixed": [
+   "charge_detail"
+  ],
+  "backdrops": 1,
+  "role": "dialog",
+  "header": "Materials",
+  "buttons": [
+   "Edit draft",
+   "Cancel draft",
+   "Close"
+  ]
+ },
+ "afterClose": {
+  "cd": 0,
+  "listRows": 1
+ },
+ "tuitionAutomatic": "AUTOMATIC TUITION BILLING ⏎ On — tuition bills automatically when each period begins. ⏎ Next automatic check ⏎ Oct 16, 2026 at 8:14 PM ⏎ Last automatic run ⏎ Oct 15, 2026 at 8:15 PM · 6 billed ⏎ Tuition is generated automatically. Use the run below to preview a period, or to run billing manually when needed.",
+ "periodDefault": "2026-11",
+ "tuitionPreview": "2 to bill · 0 already generated · 6 not billed · 0 already posted · 0 refused · 0 errored ⏎ WILL BILL ⏎ Tilly Tuition · W7 QA · Tuition Family ⏎ $1,200.00 ⏎ Certb Certhouse · Certhouse Family ⏎ $1,450.00 ⏎ NOT BILLED BY THIS RUN ⏎ Pbchild Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfour Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbtwo Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfive Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbthree Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Certa Certhouse · Certhouse Family · Not billed — billed on a different frequency — not part of a monthly run",
+ "tuitionButton": "Generate 2 · $2,650.00",
+ "bulkTemplates": [
+  "Choose a charge type…",
+  "Enrollment fee (waived)",
+  "Field trip",
+  "Late pickup",
+  "Materials",
+  "Registration fee"
+ ],
+ "bulkAmount": "$40.00 · configured",
+ "bulkGrain": "Each child ⏎ Household",
+ "bulkTally": "2 accounts · 2 charges · $80.00 · 1 refused",
+ "bulkChain": "Billing period Oct 14–20, 2026 · 2026-10-14 → 2026-10-20 ⏎ Invoice date 2026-10-15 ⏎ Invoice timing · 3 days before the billing period begins (location override) would be 2026-10-11; this charge is added later, so it is invoiced the day it is created ⏎ Due 2026-10-21 ⏎ Posting · Posts on confirm — the billing period has begun",
+ "bulkRowStates": [
+  "refused: Refused — No child selected in this household.",
+  "previewed: Ready",
+  "previewed: Ready"
+ ],
+ "bulkConfirmButton": "Create 2 charges · $80.00",
+ "accountsFilters": [
+  "financials-filter-subject",
+  "financials-filter-period",
+  "financials-filter-charge-type",
+  "financials-filter-status",
+  "financials-filter-responsible-party"
+ ],
+ "accountsFilterText": "Everyone ⏎ ▾ ⏎ All periods ⏎ ▾ ⏎ Every charge type ⏎ ▾ ⏎ Any status ⏎ ▾ ⏎ Anyone responsible ⏎ ▾",
+ "actionModes": [
+  "billing.generate_tuition:preview",
+  "charge.add:preview",
+  "charge.add:preview"
+ ]
+}
