@@ -154,6 +154,10 @@ and `activation` and drop the stage entirely. Nothing in production reads it. It
 an Opportunity, not where a child's process instance begins, so it was left alone rather than folded
 into an entry-point model it does not belong to.
 
+That queue routing now has one owner for every Create Lead door: `resolveCreateLeadPlacement`. It is
+used by BOS → Create Lead, and by an approved public form in Processing. See
+[`FORM-LEAD-CAPTURE-ACCEPTANCE.md`](FORM-LEAD-CAPTURE-ACCEPTANCE.md).
+
 ## Evidence
 
 `tests/lifecycle/startEnrollmentParticipantLaunch.test.ts` — `create_lead → lead` and
