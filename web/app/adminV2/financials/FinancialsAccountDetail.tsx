@@ -34,6 +34,8 @@ export default function FinancialsAccountDetail({
     displayName,
     showDetailsAction = true,
     summaryVariant = "period",
+    openCharge = null,
+    onSurfacesClosed,
 }: {
     customerId: string | null;
     customerMemberId: string | null;
@@ -44,6 +46,9 @@ export default function FinancialsAccountDetail({
     showDetailsAction?: boolean;
     /** "account" in Financials → Accounts: balance, due, past due, Payment, Add. */
     summaryVariant?: "period" | "account";
+    /** W7-F021: open the canonical Charge Details for this charge (Charges workspace host). */
+    openCharge?: { chargeId: string; label: string } | null;
+    onSurfacesClosed?: () => void;
 }) {
     const model = useMemo<FocusPanelCardModel>(
         () => ({
@@ -170,6 +175,8 @@ export default function FinancialsAccountDetail({
                  */
                 detailsAreTheSurface={summaryVariant === "account"}
                 coordination={coordination}
+                openCharge={openCharge}
+                onSurfacesClosed={onSurfacesClosed}
             />
         </div>
     );

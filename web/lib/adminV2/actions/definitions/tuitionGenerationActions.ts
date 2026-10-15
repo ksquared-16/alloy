@@ -41,6 +41,47 @@ function t(v: unknown): string {
 const PRICE_FIELDS = ["amount_cents", "amount", "currency", "currency_code", "cadence_key", "rate_cents"];
 
 /**
+ * ── A PREVIEW NAMES WHO IT WILL BILL (W7-F021) ────────────────────────────────────────────────
+ *
+ * The preview carried assignment ids. An operator confirming an organization-wide money run has to
+ * be able to see WHICH families it reaches — "2 to bill" is a tally, not a decision. This names each
+ * assignment by its child and household, read-only, from the same rows enrolment owns. A name that
+ * cannot be read is null and the surface says so; nothing is billed or skipped by this lookup.
+ */
+async function nameAssignments(
+    supabase: SupabaseClient,
+    orgId: string,
+    assignmentIds: readonly string[],
+): Promise<Record<string, { child: string | null; household: string | null }>> {
+    const ids = [...new Set(assignmentIds.filter(Boolean))];
+    if (ids.length === 0) return {};
+    const { data: ocms } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id")
+        .eq("org_id", orgId)
+        .in("id", ids);
+    const memberIds = [...new Set(((ocms ?? []) as Array<{ customer_member_id: string | null }>).map((o) => o.customer_member_id).filter((v): v is string => !!v))];
+    const { data: members } = memberIds.length
+        ? await supabase.from("customer_members").select("id, display_name, customer_id").eq("org_id", orgId).in("id", memberIds)
+        : { data: [] };
+    const customerIds = [...new Set(((members ?? []) as Array<{ customer_id: string | null }>).map((m) => m.customer_id).filter((v): v is string => !!v))];
+    const { data: customers } = customerIds.length
+        ? await supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds)
+        : { data: [] };
+    const memberById = new Map(((members ?? []) as Array<{ id: string; display_name: string | null; customer_id: string | null }>).map((m) => [m.id, m]));
+    const householdById = new Map(((customers ?? []) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]));
+    const out: Record<string, { child: string | null; household: string | null }> = {};
+    for (const o of (ocms ?? []) as Array<{ id: string; customer_member_id: string | null }>) {
+        const member = o.customer_member_id ? memberById.get(o.customer_member_id) : undefined;
+        out[o.id] = {
+            child: member?.display_name ?? null,
+            household: member?.customer_id ? householdById.get(member.customer_id) ?? null : null,
+        };
+    }
+    return out;
+}
+
+/**
  * THE RUN'S CADENCE — read ONCE, by both preview and execute.
  *
  * `buildPreview` used to pass no cadence at all, so `previewTuitionGeneration` defaulted to monthly
@@ -164,6 +205,14 @@ const generateTuition: RegisteredAction = {
                 not_due_outcomes: result.outcomes.filter((o) => o.kind === "not_due"),
                 error_outcomes: result.outcomes.filter((o) => o.kind === "error"),
                 already_posted_outcomes: result.outcomes.filter((o) => o.kind === "already_posted"),
+                /* W7-F021: what it WILL bill, and what already exists — each named, not just counted. */
+                to_bill_outcomes: result.outcomes.filter((o) => o.kind === "generated"),
+                unchanged_outcomes: result.outcomes.filter((o) => o.kind === "unchanged"),
+                assignment_names: await nameAssignments(
+                    supabase as SupabaseClient,
+                    ctx.orgId,
+                    result.outcomes.map((o) => o.assignmentId),
+                ),
             },
         };
     },

@@ -2311,12 +2311,26 @@
         "reason": "Payments W5. Reading what a family has authorized is an ordinary Financials read; enrolling, pausing, resuming and revoking are registered actions behind fin.write. The route returns the arrangement and the LIVE amount due, resolved the same way the scheduled handler resolves it, so the surface cannot show a stale figure. fin.read cannot mutate anything here."
       }
     },
+    "app/api/admin/financials/bulk-charge-targets/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/card/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
         "helper": "requireFinancialsCapability",
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" \u2014 but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
+      }
+    },
+    "app/api/admin/financials/charge-index/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/charge/[id]/route.ts": {

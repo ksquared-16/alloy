@@ -117,7 +117,15 @@
  * count. Single-account generation is carried separately as
  * TUITION_GENERATION_SINGLE_ACCOUNT_SURFACE_NOT_EXPOSED — non-blocking product debt.
  */
-export const CATALOG_VERSION = "2026-10-15.1";
+/*
+ * 2026-10-15.2 — W7-F021: the Charges workspace converged on cross-account work. Tuition billing is
+ * presented as AUTOMATIC with manual run control, its preview names who it bills, and Accounts filters
+ * a household's ledger by charge type and status. Scenario 9 now generates from Charges → Tuition
+ * billing and VERIFIES in Accounts → W7 QA · Tuition Family → Tuition, then reruns the preview. The
+ * economic invariant is unchanged; the workflow is different, so earlier Scenario 9 results do not
+ * count.
+ */
+export const CATALOG_VERSION = "2026-10-15.2";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -464,13 +472,14 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         title: "Generated tuition uses the same billing rules as Add Charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
-            "Generate November 2026's monthly tuition with Financials → Charges → Generate a period's tuition, and confirm "
-            + "W7 QA · Tuition Family's generated charge carries the billing period, invoice date, due date and posting day "
-            + "the same rules give a charge you add by hand.",
+            "Run November 2026's tuition from Charges → Tuition billing, then open W7 QA · Tuition Family's generated "
+            + "Tuition charge in Accounts and confirm it carries the billing period, invoice date, due date and posting "
+            + "day the same rules give a charge you add by hand. Then preview again and confirm nothing is billed twice.",
         whyItMatters:
             "One writer must not treat invoice timing as the billing period while another uses the service date. Generated "
             + "billing and manual entry resolve the same chain: the service period decides the billing period, the billing "
-            + "period and invoice policy decide the invoice date, and the billing period and payment terms decide the due date.",
+            + "period and invoice policy decide the invoice date, and the billing period and payment terms decide the due date. "
+            + "Tuition normally bills itself when a period begins; running it by hand here is run control for QA, not routine work.",
         /*
          * No `scenario_passed` link: Scenario 8 runs on W7 QA · Monthly Family and leaves nothing this
          * household reads. The comparison with Add Charge is to the rules on Policies, not to a draft.
@@ -479,30 +488,30 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             { kind: "account_state", check: "has_billable_enrollment", describe: "Tilly Tuition, with accepted monthly tuition of $1,200.00 from Nov 1, 2026" },
         ],
         navigate: [
-            "Financials → Charges → Generate a period's tuition (the button above Awaiting posting).",
-            "After generating: Charges → Awaiting posting → the Tuition charge for Tilly Tuition (W7 QA · Tuition Family).",
+            "A · Financials → Charges → Tuition billing (top right).",
+            "B · Financials → Accounts → W7 QA · Tuition Family → Charge type: Tuition → the Tuition charge for Tilly Tuition.",
+            "C · Financials → Charges → Tuition billing again.",
         ],
         doThis: [
-            "Set Billing frequency = Monthly.",
-            "Set Service period = November 2026 (2026-11).",
-            "Press Preview run. The run is organization-wide, so read the tally, not one family: W7 QA · Tuition Family "
-                + "contributes 1 to bill at $1,200.00. Certhouse Family's monthly certification assignment is the only other "
-                + "monthly term today ($1,450.00), so expect “2 to bill · 6 not due · 0 already posted · 0 refused · 0 errored” "
-                + "and the button “Generate 2 · $2,650.00”. The six Not due rows are weekly terms a Monthly run does not bill.",
-            "Press Generate 2 · $2,650.00 (the button shows the preview’s own count and total). Because the run is "
-                + "organization-wide this also drafts Certhouse Family’s November tuition — the same draft automatic billing "
-                + "creates for it on Nov 1.",
-            "Open Charges → Awaiting posting → the Tuition charge for Tilly Tuition, and read its dates.",
-            "Rerun: press Preview run again for Monthly · 2026-11.",
+            "A1. Read Automatic tuition billing: it is On, with its next automatic check and last automatic run. Tuition normally bills itself when each period begins.",
+            "A2. Under Preview or run manually, set Billing frequency = Monthly and Service period = November 2026, then press Preview run.",
+            "A3. Under Will bill, confirm “Tilly Tuition · W7 QA · Tuition Family — $1,200.00” is listed. The run is organization-wide, so "
+                + "Certhouse Family’s monthly certification assignment is also listed ($1,450.00); expect “Generate 2 · $2,650.00”. "
+                + "Weekly terms appear under Not billed by this run.",
+            "A4. Press Generate 2 · $2,650.00 (it also drafts Certhouse Family’s November tuition — the same draft automatic billing "
+                + "creates for it on Nov 1). Read the result line, then Close.",
+            "B1. Financials → Accounts → open W7 QA · Tuition Family. In the ledger, choose Charge type = Tuition.",
+            "B2. Open Tilly Tuition’s Tuition charge (Charge details) and read its dates and state.",
+            "C1. Financials → Charges → Tuition billing → Monthly · November 2026 → Preview run again.",
         ],
         expectChanges: [
-            "The run result reads “November 2026 · monthly · 2 newly generated, 0 already existed …”.",
-            "Tilly Tuition’s charge: Tuition · $1,200.00 · draft. Service period Nov 1–30, 2026. Billing period November 2026. "
+            "A: the result line reads “November 2026 · monthly · 2 newly generated, 0 already existed …”.",
+            "B: Tuition · $1,200.00 · Draft charge. Applies to Tilly Tuition. Service date Nov 1, 2026. Billing period November 2026. "
                 + "Invoice date and due date as Policies states them for a November charge (currently invoice Oct 25, 2026 — 7 days "
                 + "before the period — and due Nov 1, 2026 — the 1st day of the period). Posting: Draft · Posts Nov 1, 2026.",
-            "W7 QA · Tuition Family’s account shows $1,200.00 as Scheduled.",
-            "The rerun preview reads “0 to bill” and “Nothing would be billed for this period, so there is nothing to confirm.” "
-                + "There is no Generate button, and no second November tuition charge exists.",
+            "B: the account strip shows $1,200.00 as Scheduled.",
+            "C: Tilly Tuition is listed under “Already generated — not billed again”, the tally reads “0 to bill”, and there is no "
+                + "Generate button: nothing is billed twice.",
         ],
         expectUnchanged: [
             "Current balance, Due and Past due for W7 QA · Tuition Family stay $0.00 / $0.00 / None until November begins.",
@@ -513,9 +522,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         failSymptoms: [
             "The generated charge's billing period is October 2026 or December 2026 for a November service period.",
             "Its invoice or due date contradicts the November rule shown on Policies.",
-            "The preview does not count W7 QA · Tuition Family (1 to bill short of the expected tally) although its term is accepted.",
+            "The preview does not list Tilly Tuition under Will bill although the term is accepted.",
             "A weekly or bi-weekly assignment is billed by the Monthly run.",
-            "The rerun creates a second November tuition charge, or offers to.",
+            "The second preview offers to bill Tilly Tuition again, or a second November tuition charge exists.",
+            "The Tuition charge counts toward Current balance, Due or Past due before November begins.",
         ],
     }),
     S({

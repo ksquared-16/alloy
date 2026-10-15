@@ -651,7 +651,7 @@ describe("F12 · a billing period is named, not identified", () => {
             "lib/financials/workspace/accountLenses.ts",
             "lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts",
             "app/adminV2/financials/sections/FinancialsCharges.tsx",
-            "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
+            "app/adminV2/financials/sections/FinancialsTuitionBilling.tsx",
             WORKSPACE_DETAIL,
         ]) {
             expect(read(path), `${path} must label periods, not print their keys`)
@@ -668,7 +668,7 @@ describe("F12 · a billing period is named, not identified", () => {
 
         const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
         expect(charges, "no bare period key interpolated into a row").not.toMatch(/\$\{row\.periodKey\}/);
-        const bulk = read("app/adminV2/financials/sections/FinancialsBulkCharge.tsx");
+        const bulk = read("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
         expect(bulk, "the run result reads as a month").toContain("billingPeriodLabel(result.periodKey)");
         expect(bulk, "and the month input still holds the key").toContain('type="month"');
     });

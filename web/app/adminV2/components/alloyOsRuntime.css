@@ -11169,3 +11169,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     color: rgba(16, 24, 32, 0.6);
     font-size: 0.75rem;
 }
+
+/*
+ * W7-F021 — New bulk charge holds a target list beside its fields, so its command layer is wider
+ * than a single-account command. Same shell, same backdrop; only the width differs.
+ */
+.alloy-accounts-command-host [data-financials-overlay="bulk_charge"]:not([data-financials-surface-role="floor"]) {
+    width: min(46rem, calc(100vw - 3rem));
+}

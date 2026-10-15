@@ -74,6 +74,28 @@ export type FinancialWorkRow = {
      * same draft differently.
      */
     awaiting: AwaitingPostingReason;
+
+    /*
+     * ── IDENTITY FOR THE CROSS-ACCOUNT CHARGE INDEX (W7-F021) ─────────────────────────────────
+     *
+     * The same rows, read for more than drafts. Every field is a stored fact or a configured label —
+     * the status as written, the charge type the tenant named, the commercial period the charge is
+     * BOUND to (its service date's, never its invoice date's) — so the index needs no second
+     * projection and computes no money. Optional: the work queue's draft read does not fetch them.
+     */
+    status?: string;
+    chargeTemplateId?: string | null;
+    /** The configured charge type's label, else the category's. */
+    typeLabel?: string;
+    /** Filter key: the template when there is one, else `category:<key>`. */
+    typeKey?: string;
+    /** The bound billing period key when bound, else the service month (legacy placement). */
+    billingPeriodKey?: string | null;
+    billableOn?: string | null;
+    dueDate?: string | null;
+    postedAt?: string | null;
+    voidedAt?: string | null;
+    createdAt?: string | null;
 };
 
 export type FinancialWorkQueue = {
@@ -110,26 +132,45 @@ export async function resolveFinancialWorkQueue(
         /** The site the operator selected, or null for org scope. */
         activeSiteLocationId?: string | null;
         limit?: number;
+        /**
+         * Which stored statuses to read. Omitted, this is the WORK QUEUE — drafts only, oldest service
+         * date first, exactly as before. The charge index (W7-F021) asks for every status, newest first.
+         */
+        statuses?: readonly string[];
     },
 ): Promise<FinancialWorkQueue> {
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
-    const limit = Math.min(Math.max(args.limit ?? 200, 1), 500);
+    const isIndex = Boolean(args.statuses?.length);
+    const limit = Math.min(Math.max(args.limit ?? 200, 1), isIndex ? 2000 : 500);
 
     /*
      * DRAFT CHILDCARE CHARGES. `status = 'draft'` is the eligibility, because `charge.post` is what
      * a draft is waiting for — the action owns the rule and this does not restate it.
      */
-    const { data: chargeRows, error } = await supabase
-        .from("charges")
-        .select(
-            "id, billable_source_type, billable_source_id, charge_category, charge_type, description, "
-            + "amount_cents, currency_code, service_date, billable_on, status, metadata",
-        )
-        .eq("org_id", args.orgId)
-        .eq("status", "draft")
-        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-        .order("service_date", { ascending: true, nullsFirst: false })
-        .limit(limit);
+    const { data: chargeRows, error } = isIndex
+        ? await supabase
+              .from("charges")
+              .select(
+                  "id, billable_source_type, billable_source_id, charge_category, charge_type, description, "
+                  + "amount_cents, currency_code, service_date, billable_on, status, metadata, "
+                  + "charge_template_id, billing_period_id, due_date, posted_at, voided_at, created_at",
+              )
+              .eq("org_id", args.orgId)
+              .in("status", [...args.statuses!])
+              .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+              .order("created_at", { ascending: false, nullsFirst: false })
+              .limit(limit)
+        : await supabase
+              .from("charges")
+              .select(
+                  "id, billable_source_type, billable_source_id, charge_category, charge_type, description, "
+                  + "amount_cents, currency_code, service_date, billable_on, status, metadata",
+              )
+              .eq("org_id", args.orgId)
+              .eq("status", "draft")
+              .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+              .order("service_date", { ascending: true, nullsFirst: false })
+              .limit(limit);
     if (error) throw new Error(`financial work queue read failed: ${error.message}`);
     const charges = ((chargeRows ?? []) as unknown) as Array<{
         id: string;
@@ -143,6 +184,13 @@ export async function resolveFinancialWorkQueue(
         service_date: string | null;
         billable_on: string | null;
         metadata: Record<string, unknown> | null;
+        status?: string;
+        charge_template_id?: string | null;
+        billing_period_id?: string | null;
+        due_date?: string | null;
+        posted_at?: string | null;
+        voided_at?: string | null;
+        created_at?: string | null;
     }>;
 
     // ── PROVENANCE: each charge's OWN agreement, never the household's ──────────────────────
@@ -195,6 +243,22 @@ export async function resolveFinancialWorkQueue(
         (((siteRows ?? []) as unknown) as Array<{ id: string; label: string | null }>).map((s) => [s.id, s.label]),
     );
 
+    // ── INDEX ONLY: the configured charge type and the bound period, by id — labels, never money ──
+    const templateIds = isIndex ? [...new Set(charges.map((c) => c.charge_template_id).filter((v): v is string => !!v))] : [];
+    const { data: templateRows } = templateIds.length
+        ? await supabase.from("financial_charge_templates").select("id, label").eq("org_id", args.orgId).in("id", templateIds)
+        : { data: [] };
+    const templateLabels = new Map(
+        (((templateRows ?? []) as unknown) as Array<{ id: string; label: string | null }>).map((t) => [t.id, (t.label ?? "").trim()]),
+    );
+    const periodIds = isIndex ? [...new Set(charges.map((c) => c.billing_period_id).filter((v): v is string => !!v))] : [];
+    const { data: periodRows } = periodIds.length
+        ? await supabase.from("financial_billing_periods").select("id, period_key").eq("org_id", args.orgId).in("id", periodIds)
+        : { data: [] };
+    const periodKeys = new Map(
+        (((periodRows ?? []) as unknown) as Array<{ id: string; period_key: string | null }>).map((p) => [p.id, (p.period_key ?? "").trim()]),
+    );
+
     const rows: FinancialWorkRow[] = [];
     for (const charge of charges) {
         const agreement = charge.billable_source_type === "enrollment_agreement"
@@ -243,6 +307,24 @@ export async function resolveFinancialWorkQueue(
             siteName: location.siteLocationId ? siteNames.get(location.siteLocationId) ?? null : null,
             locationProvenance: location.provenance,
             awaiting: awaitingPostingReason(charge.metadata),
+            ...(isIndex
+                ? {
+                      status: charge.status ?? "draft",
+                      chargeTemplateId: charge.charge_template_id ?? null,
+                      typeLabel:
+                          (charge.charge_template_id && templateLabels.get(charge.charge_template_id))
+                          || chargeCategoryLabel(categoryKey),
+                      typeKey: charge.charge_template_id ? `template:${charge.charge_template_id}` : `category:${categoryKey}`,
+                      billingPeriodKey:
+                          (charge.billing_period_id && periodKeys.get(charge.billing_period_id))
+                          || (charge.service_date ? charge.service_date.slice(0, 7) : null),
+                      billableOn: charge.billable_on,
+                      dueDate: charge.due_date ?? null,
+                      postedAt: charge.posted_at ?? null,
+                      voidedAt: charge.voided_at ?? null,
+                      createdAt: charge.created_at ?? null,
+                  }
+                : {}),
         });
     }
 

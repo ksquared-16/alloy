@@ -140,8 +140,13 @@ describe("W7-F014 — title, header and one stable shell", () => {
         expect(src).not.toContain("Loading charge…");
         expect(src).toMatch(/aria-busy="true"/);
         expect(src).toMatch(/\}, \[chargeId, refreshKey\]\);/);
+        /*
+         * W7-F021: Charges no longer draws a second detail — it opens the account's own card ON the
+         * charge, so the certified Charge Details (and its refresh-without-remount) is the one used.
+         */
         const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
-        expect(charges).toContain("<FinancialsChargeDetail key={selected.chargeId} chargeId={selected.chargeId} refreshKey={detailNonce} />");
+        expect(charges).not.toContain("<FinancialsChargeDetail");
+        expect(charges).toMatch(/<FinancialsAccountDetail[\s\S]*?openCharge=\{\{ chargeId: open\.chargeId, label: open\.label \}\}/);
     });
 });
 
