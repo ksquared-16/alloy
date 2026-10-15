@@ -19,14 +19,18 @@ import { buildApprovalResultView } from "@/lib/pos/approvalResultPresentation";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosIdentityReviewOverlay from "./PosIdentityReviewOverlay";
+import ProcessingLeadAcknowledgement from "./ProcessingLeadAcknowledgement";
 import type { PosCaseState } from "./usePosCase";
 
 /**
  * The completed conclusion of the conversation (§ completed-state). One calm card — a title, the
  * concrete ✓ outcomes, and "Complete." — so the operator never wonders what happened. Fades in on
- * mount rather than snapping. No duplicated success screens; this IS the final Result.
+ * mount rather than snapping. No duplicated success screens; this IS the final Result. It stays
+ * until the operator moves on (Next Item / Return to Queue) — Processing never advances on its own.
+ * A lead commit gets the actionable acknowledgement instead (ProcessingLeadAcknowledgement).
  */
-function ConclusionCard({ title, lines }: { title: string; lines: string[] }) {
+function ConclusionCard({ title, lines, queue }: { title: string; lines: string[]; queue?: QueueNavigation }) {
+    const [queueEmpty, setQueueEmpty] = useState(false);
     const [shown, setShown] = useState(false);
     useEffect(() => {
         const id = requestAnimationFrame(() => setShown(true));
@@ -53,11 +57,48 @@ function ConclusionCard({ title, lines }: { title: string; lines: string[] }) {
                 </ul>
             ) : null}
             <div className="mt-2.5 text-[11.5px] font-medium text-alloy-bend-pine/70">Complete.</div>
+            {queue ? (
+                <div className="mt-3 flex items-center justify-between border-t border-alloy-bend-pine/15 pt-2.5">
+                    <button
+                        type="button"
+                        className="text-[12px] font-medium text-alloy-midnight/70 hover:underline"
+                        onClick={queue.onReturnToQueue}
+                        data-testid="processing-ack-return-to-queue"
+                    >
+                        Return to Queue
+                    </button>
+                    <button
+                        type="button"
+                        className="text-[12px] font-semibold text-alloy-bend-pine hover:underline disabled:opacity-50"
+                        disabled={queueEmpty}
+                        onClick={() => {
+                            if (!queue.onNextItem()) setQueueEmpty(true);
+                        }}
+                        data-testid="processing-ack-next-item"
+                    >
+                        Next Item →
+                    </button>
+                </div>
+            ) : null}
+            {queueEmpty ? (
+                <p className="mt-1.5 text-right text-[11px] text-alloy-midnight/50" data-testid="processing-ack-queue-empty">
+                    No more items waiting in the queue.
+                </p>
+            ) : null}
         </div>
     );
 }
 
-export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }) {
+/** Moving on from a concluded case — always the operator's choice. */
+export interface QueueNavigation {
+    /** Selects the next open item; false when there is none. */
+    onNextItem: () => boolean;
+    onReturnToQueue: () => void;
+    /** Processing is a modal over the workspace — leave it when a record is opened. */
+    onLeaveProcessing?: () => void;
+}
+
+export default function PosCaseDecisionColumn({ state, queue }: { state: PosCaseState; queue?: QueueNavigation }) {
     const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, needsIdentityReview, reviewEligible, refreshAfterReview, isClosed } = state;
     const [reviewOpen, setReviewOpen] = useState(false);
     if (!detail) return null;
@@ -101,6 +142,8 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
             ? buildApprovalResultView({
                   cards: matchedCards,
                   records: leadRecords,
+                  createdRecords:
+                      approveResult && "createdRecords" in approveResult ? approveResult.createdRecords ?? null : null,
                   linkedParentName: recommendedCandidate?.fullName ?? null,
                   linkedHouseholdName: recommendedCandidate?.householdName ?? null,
                   submittedZip,
@@ -129,8 +172,17 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
                             Saved or linked records appear here after you approve.
                         </p>
                     </>
+                ) : approveResult?.kind === "lead" && queue ? (
+                    <ProcessingLeadAcknowledgement
+                        key={detail.id}
+                        result={approveResult}
+                        lines={conclusionLines}
+                        onLeaveProcessing={queue.onLeaveProcessing}
+                        onNextItem={queue.onNextItem}
+                        onReturnToQueue={queue.onReturnToQueue}
+                    />
                 ) : (
-                    <ConclusionCard key={detail.id} title={conclusionTitle} lines={conclusionLines} />
+                    <ConclusionCard key={detail.id} title={conclusionTitle} lines={conclusionLines} queue={queue} />
                 )}
             </div>
 

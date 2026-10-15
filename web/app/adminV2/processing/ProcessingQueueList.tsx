@@ -29,6 +29,7 @@ import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { PROCESSING_EMPTY, PROCESSING_QUEUE_METADATA, PROCESSING_QUEUE_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
+import { processingStatusFolderCounts } from "@/lib/pos/processingQueueBadgeCounts";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -80,7 +81,8 @@ const SECONDARY_LANES: { key: ProcessingCaseStatus; label: string }[] = [
  * Scope C2 — Incoming folder/category rail.
  *
  * Folders are DERIVED from the on-ramp kind already on each loaded row — no new schema,
- * no fabricated categories, counts reflect loaded rows only. This is the UI foundation
+ * no fabricated categories. Category counts reflect loaded rows; Incoming / Completed read the
+ * org-wide status counts (processingStatusFolderCounts). This is the UI foundation
  * for grouped processing: the folder is a filter layer that wraps the status lanes.
  *
  * The richer category tree the product wants (Enrollment · Subsidy · Licensing, and
@@ -317,6 +319,10 @@ export default function ProcessingQueueList({
     const visibleRows = collapseDuplicateDocumentRows(rows, requestedCaseId);
     const incomingRows = visibleRows.filter((r) => deriveWorkLane(r) !== "completed");
     const completedRows = visibleRows.filter((r) => deriveWorkLane(r) === "completed");
+    const statusFolderCounts = processingStatusFolderCounts(counts, {
+        incoming: incomingRows.length,
+        completed: completedRows.length,
+    });
 
     const renderWorkLane = (lane: { key: WorkLaneKey; label: string }) => {
         const laneRows = incomingRows.filter((r) => deriveWorkLane(r) === lane.key);
@@ -561,7 +567,7 @@ export default function ProcessingQueueList({
                     </div>
                     {(() => {
                         const incoming = workFolders.find((f) => f.id === "incoming");
-                        return renderFolderHeader("incoming", incoming?.label ?? "Incoming", incomingRows.length, incoming?.accent);
+                        return renderFolderHeader("incoming", incoming?.label ?? "Incoming", statusFolderCounts.incoming, incoming?.accent);
                     })()}
                     {openFolders.incoming ? (
                         <div className="border-b border-alloy-stone/10 py-0.5">
@@ -593,7 +599,7 @@ export default function ProcessingQueueList({
                     })}
                     {(() => {
                         const completed = workFolders.find((f) => f.id === "completed");
-                        return renderFolderHeader("completed", completed?.label ?? "Completed", completedRows.length, completed?.accent);
+                        return renderFolderHeader("completed", completed?.label ?? "Completed", statusFolderCounts.completed, completed?.accent);
                     })()}
                     {openFolders.completed ? (
                         <div className="py-0.5">

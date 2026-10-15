@@ -178,6 +178,7 @@ export default function ProcessingModal({
                                 selectedCaseId={selectedCaseId}
                                 onSelectCase={setSelectedCaseId}
                                 onOpenForm={openFormInStudio}
+                                onLeaveProcessing={handleClose}
                             />
                         )
                     ) : (

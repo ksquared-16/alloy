@@ -5,7 +5,7 @@
  * Folder rail + queue lanes + source-document-first review.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
@@ -13,7 +13,7 @@ import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
 import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
 import PosCaseWorkColumn from "./PosCaseWorkColumn";
-import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
+import PosCaseDecisionColumn, { type QueueNavigation } from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
 import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
 import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
@@ -24,34 +24,34 @@ export default function PosProcessingWorkspace({
     selectedCaseId,
     onSelectCase,
     onOpenForm,
+    onLeaveProcessing,
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string | null) => void;
     onOpenForm?: (formId: string, formName?: string) => void;
+    /** Leave Processing (close the modal) — when the operator opens a committed record. */
+    onLeaveProcessing?: () => void;
 }) {
     const state = usePosCase(selectedCaseId);
-    const advancedForRef = useRef<string | null>(null);
     const [dropActive, setDropActive] = useState(false);
 
-    // Auto-advance (§ completed-state): once a case reaches its completed conclusion, let the operator
-    // read the outcome, then return to the queue and select the next available case — preserving flow
-    // without an extra click. Only fires once per completed case; cancels if they navigate away first.
-    useEffect(() => {
-        if (!selectedCaseId || !state.isClosed) {
-            advancedForRef.current = null;
-            return;
-        }
-        if (advancedForRef.current === selectedCaseId) return;
-        advancedForRef.current = selectedCaseId;
-        const timer = setTimeout(() => {
+    // NO AUTO-ADVANCE. A concluded case stays in front of the operator — the lead they just created
+    // is one click away — until THEY choose Next Item or Return to Queue. (It used to jump to the next
+    // open row 3.2 s after approval, which took the operator away from the record before they could
+    // open it.) Next Item reads the queue at the moment of the click.
+    const queue: QueueNavigation = {
+        onNextItem: () => {
             const rows = getProcessingQueueWarmSnapshot().data?.rows ?? [];
             const next = rows.find(
                 (r) => r.id !== selectedCaseId && r.status !== "completed" && r.status !== "archived",
             );
-            onSelectCase(next?.id ?? null);
-        }, 3200);
-        return () => clearTimeout(timer);
-    }, [state.isClosed, selectedCaseId, onSelectCase]);
+            if (!next) return false;
+            onSelectCase(next.id);
+            return true;
+        },
+        onReturnToQueue: () => onSelectCase(null),
+        onLeaveProcessing,
+    };
     const [uploading, setUploading] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
@@ -192,7 +192,7 @@ export default function PosProcessingWorkspace({
                             <PosCaseWorkColumn state={state} />
                         </div>
                         <div className={`flex w-[19rem] shrink-0 flex-col overflow-hidden ${WS_INSPECTOR}`}>
-                            <PosCaseDecisionColumn state={state} />
+                            <PosCaseDecisionColumn state={state} queue={queue} />
                         </div>
                     </>
                 )}
