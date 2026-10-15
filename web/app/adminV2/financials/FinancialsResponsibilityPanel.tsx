@@ -268,7 +268,13 @@ export default function FinancialsResponsibilityPanel({
     hostedOpen,
     onHostedClose,
     onCommitted,
+    compact = false,
 }: {
+    /**
+     * W7 Scenario 8 final presentation: inside Charge Details' "Responsibility & funding" section the
+     * trigger is a compact action at the section's foot, not a link with an arrow above the shares.
+     */
+    compact?: boolean;
     customerId: string | null;
     customerMemberId: string | null;
     /** The obligation being looked at — carried so an arrangement in force can still be edited. */
@@ -635,14 +641,18 @@ export default function FinancialsResponsibilityPanel({
         /* The gear is the trigger when hosted; a second one here would be two ways in. */
         if (hosted) return null;
         return (
-            <div className="mb-3">
+            <div className={compact ? "mt-1" : "mb-3"}>
                 <button
                     type="button"
-                    className="text-xs font-medium text-alloy-bend-pine hover:underline"
+                    className={
+                        compact
+                            ? "text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                            : "text-xs font-medium text-alloy-bend-pine hover:underline"
+                    }
                     onClick={() => void start()}
                     data-financials-manage-responsibility="open"
                 >
-                    Manage responsibility →
+                    {compact ? "Manage responsibility" : "Manage responsibility →"}
                 </button>
                 {parties.filter((p) => p.personId).length === 0 ? (
                     arrangement ? (

@@ -34,6 +34,18 @@ export function financialsSurfaceRole(args: {
     detailsAreTheSurface: boolean;
     /** How many surfaces are on the stack, the floor included. */
     stackDepth: number;
+    /**
+     * WHICH LAYER IS ASKING — its own position on the stack, 1 being the bottom. Omitted, the
+     * question is about the TOP layer (position = depth).
+     *
+     * W7 Scenario 8 final presentation, measured on deployed staging: once the floor began rendering
+     * BENEATH a command (so the account stays in view), the floor kept asking with the whole stack's
+     * depth. Charge details pushed onto the account made the floor answer "command", the stylesheet
+     * lifted it into a second fixed, centred card, and the operator saw two modals. The floor is the
+     * floor at every depth; only what is pushed above it is a command.
+     */
+    layerPosition?: number;
 }): FinancialsSurfaceRole {
-    return args.detailsAreTheSurface && args.stackDepth <= 1 ? "floor" : "command";
+    const position = args.layerPosition ?? args.stackDepth;
+    return args.detailsAreTheSurface && position <= 1 ? "floor" : "command";
 }

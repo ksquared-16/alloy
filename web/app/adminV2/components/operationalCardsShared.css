@@ -2151,6 +2151,87 @@
 }
 
 /*
+ * ── CHARGE DETAILS: LIFECYCLE COMMANDS THAT LOOK LIKE COMMANDS (W7 Scenario 8 final) ──────────
+ *
+ * Edit draft and Cancel draft rendered as unstyled text — the two lifecycle decisions on the
+ * record were the easiest things on it to miss. They take Add Charge's own footer grammar (the
+ * family's filled bend-pine primary, outlined secondaries, the same height and radius):
+ *
+ *   primary       Edit draft — the constructive action, filled.
+ *   destructive   Cancel draft — clearly destructive, outlined, never the dominant control.
+ *   secondary     Keep draft / Correct this charge — outlined bend-pine.
+ *   neutral       Close — midnight outline, pushed to the end of the row.
+ */
+.alloy-os-chargedetail__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alloy-os-chargedetail__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--alloy-os-currentwork-action-height, 1.9rem);
+  min-height: var(--alloy-os-currentwork-action-height, 1.9rem);
+  border-radius: 7px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background-color 120ms ease, border-color 120ms ease, filter 120ms ease;
+}
+.alloy-os-chargedetail__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.alloy-os-chargedetail__action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+}
+.alloy-os-chargedetail__action--primary {
+  border: 0;
+  color: var(--alloy-os-surface, #fff);
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-chargedetail__action--primary:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.alloy-os-chargedetail__action--secondary {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 38%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-chargedetail__action--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, var(--alloy-os-surface, #fff));
+}
+.alloy-os-chargedetail__action--destructive {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-danger, #b3261e) 40%, transparent);
+  color: var(--alloy-os-danger, #b3261e);
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-chargedetail__action--destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 6%, var(--alloy-os-surface, #fff));
+}
+/* The confirmation IS the destructive decision, so it is the one place destructive is filled. */
+.alloy-os-chargedetail__action--destructive-confirm {
+  border: 0;
+  color: var(--alloy-os-surface, #fff);
+  background: var(--alloy-os-danger, #b3261e);
+}
+.alloy-os-chargedetail__action--destructive-confirm:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+.alloy-os-chargedetail__action--neutral {
+  margin-left: auto;
+  padding: 0 14px;
+  font-size: 0.74rem;
+  border-radius: 7px;
+}
+
+/*
  * THREE GROUPS ON ONE LINE — identity, discount, payment. Each action sits with the state it
  * acts on, and the groups are what wrap: at 1280 and up the row is one line with the payment
  * group at its end; narrower, the groups break between themselves rather than mid-thought, and
@@ -3587,6 +3668,27 @@
  * WHY A DATE IS WHAT IT IS — the invoice-timing and payment-terms rule under each resolved date.
  * Its own line, so the date stays the first thing read and the rule the second.
  */
+/* W7 Scenario 8 final: a date's provenance is an info mark beside it, not prose beneath it. */
+.alloy-os-addcharge__date-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-addcharge__date-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  cursor: help;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 40%, transparent);
+}
+.alloy-os-addcharge__date-hint:hover {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, transparent);
+}
+.alloy-os-addcharge__date-hint svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
 .alloy-os-addcharge__date-rule {
     display: block;
     margin-top: 2px;

@@ -24,6 +24,7 @@
  * the charge rather than an admission about the record.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Info } from "lucide-react";
 
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
@@ -201,12 +202,44 @@ function Pair(props: { children: React.ReactNode }) {
     return <span className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">{props.children}</span>;
 }
 
-/** One of the four date identities: label above value, mirroring Add Charge's read-only cells. */
-function DateCell(props: { label: string; value: string; testId: string }) {
+/**
+ * One of the four date identities: label above value, mirroring Add Charge's read-only cells.
+ *
+ * W7 Scenario 8 final presentation: the row holds the four dates and nothing else. Where a date's
+ * provenance is worth knowing (a charge type overriding the organisation's invoice timing) it is an
+ * info mark beside the value — a tooltip and an accessible name, never a line of configuration
+ * mechanics under the date.
+ */
+function DateCell(props: { label: string; value: string; testId: string; hint?: string | null; hintAttr?: string }) {
     return (
         <span className="flex min-w-0 flex-col" data-financials-charge-line={props.testId} data-financials-charge-datecell="true">
             <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.label}</span>
-            <span className="text-xs tabular-nums text-alloy-midnight/80" title={props.value}>{props.value}</span>
+            <span className="flex items-center gap-1 text-xs tabular-nums text-alloy-midnight/80">
+                <span className="truncate" title={props.value}>{props.value}</span>
+                {props.hint ? (
+                    <span
+                        role="img"
+                        aria-label={props.hint}
+                        title={props.hint}
+                        className="inline-flex shrink-0 cursor-help text-alloy-midnight/40 hover:text-alloy-midnight/70"
+                        {...(props.hintAttr ? { [props.hintAttr]: "true" } : {})}
+                    >
+                        <Info aria-hidden="true" className="h-3 w-3" />
+                    </span>
+                ) : null}
+            </span>
+        </span>
+    );
+}
+
+/** A label above its value — the header pair (Applies to · Responsibility), Add Charge's grammar. */
+function Fact(props: { label: string; value: string; testId: string; strong?: boolean }) {
+    return (
+        <span className="flex min-w-0 flex-col" data-financials-charge-line={props.testId}>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.label}</span>
+            <span className={`truncate text-sm ${props.strong ? "font-semibold text-alloy-midnight" : "text-alloy-midnight/85"}`} title={props.value}>
+                {props.value}
+            </span>
         </span>
     );
 }
@@ -232,8 +265,14 @@ export default function FinancialsChargeDetail({
     chargeId,
     refreshKey = 0,
     onLoaded,
+    bare = false,
 }: {
     chargeId: string;
+    /**
+     * W7 Scenario 8 final presentation: hosted inside a command card (Charge details), the card IS
+     * the surface, so this record draws no second box inside it. The Charges section keeps its frame.
+     */
+    bare?: boolean;
     /** Bumped by the host after an action; re-reads WITHOUT unmounting, so nothing swaps. */
     refreshKey?: number;
     onLoaded?: (facts: ChargeDetailFacts) => void;
@@ -305,7 +344,7 @@ export default function FinancialsChargeDetail({
     if (loading && !detail) {
         return (
             <section
-                className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
+                className={bare ? "mb-1" : "mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"}
                 data-financials-charge-detail-loading="true"
                 aria-busy="true"
                 aria-label="Loading charge"
@@ -380,27 +419,31 @@ export default function FinancialsChargeDetail({
                       ? { text: "Cancelled — never posted", tone: "plain", explain: null }
                       : { text: detail.status.charAt(0).toUpperCase() + detail.status.slice(1), tone: "plain", explain: null };
 
-    /* Who owes it, compactly: this charge's allocation, else the account's standing shares. */
+    /*
+     * WHO OWES IT, in one line: "Mara Monthly · 100%". The arrangement's shares say it as the
+     * operator set it up; a charge billed before any arrangement still names its allocated parties.
+     */
+    const shareTerm = (sh: { percentBasisPoints: number | null; amountCents: number | null }) =>
+        sh.percentBasisPoints != null
+            ? `${sh.percentBasisPoints / 100}%`
+            : sh.amountCents != null
+              ? money(sh.amountCents, currency)
+              : "remainder";
+    const shares = detail.accountArrangement?.shares ?? [];
     const responsibilitySummary =
-        detail.responsibility.parties.length > 0
-            ? detail.responsibility.parties.map((p) => `${p.name} ${money(p.assignedCents, currency)}`).join(" · ")
-            : detail.accountArrangement && detail.accountArrangement.shares.length > 0
-              ? detail.accountArrangement.shares
-                    .map((sh) =>
-                        `${sh.name} ${
-                            sh.percentBasisPoints != null
-                                ? `${sh.percentBasisPoints / 100}%`
-                                : sh.amountCents != null
-                                  ? money(sh.amountCents, currency)
-                                  : "remainder"
-                        }`,
-                    )
-                    .join(" · ")
+        shares.length > 0
+            ? shares.map((sh) => `${sh.name} · ${shareTerm(sh)}`).join(", ")
+            : detail.responsibility.parties.length > 0
+              ? detail.responsibility.parties.map((p) => `${p.name} · ${money(p.assignedCents, currency)}`).join(", ")
               : "No responsibility on record";
+    /* This charge's own allocation, by party name — shown beside the share it was allocated under. */
+    const allocatedByName = new Map(detail.responsibility.parties.map((p) => [p.name, p.assignedCents] as const));
+    const unmatchedParties =
+        shares.length > 0 ? detail.responsibility.parties.filter((p) => !shares.some((sh) => sh.name === p.name)) : detail.responsibility.parties;
 
     return (
         <section
-            className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
+            className={bare ? "mb-1" : "mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"}
             data-financials-charge-detail={detail.chargeId}
         >
             {/* HEADER — what it is, and whose. */}
@@ -419,14 +462,14 @@ export default function FinancialsChargeDetail({
             </p>
 
             {/*
-              * ── APPLIES TO + RESPONSIBILITY — the same grouping Add Charge uses (W7-F014) ──
-              * Two facts from two models, side by side because they are read together.
+              * ── APPLIES TO · RESPONSIBILITY — ONE COMPACT PAIR (W7 Scenario 8 final) ──────────
+              * Who or what the charge is for, and who owes it: two facts from two models, side by
+              * side, each label said once. No group heading restates the first label.
               */}
-            <Group>Charge applies to</Group>
-            <span className="grid grid-cols-1 gap-x-6 sm:grid-cols-2" data-financials-charge-applies="true">
-                <Row label="Applies to" value={attribution.text} testId="applies-to" />
+            <span className="mt-2 grid grid-cols-2 gap-x-6" data-financials-charge-applies="true">
+                <Fact label="Applies to" value={attribution.text} testId="applies-to" strong />
                 <span data-financials-charge-attribution={attribution.state} className="hidden" />
-                <Row label="Responsibility" value={responsibilitySummary} testId="responsibility-summary" />
+                <Fact label="Responsibility" value={responsibilitySummary} testId="responsibility-summary" strong />
             </span>
             {detail.adjustment ? (
                 <>
@@ -520,11 +563,19 @@ export default function FinancialsChargeDetail({
             {e ? (
                 <>
                     <Group>Amount</Group>
-                    <Row label="Gross charge" value={money(e.grossCents, currency)} testId="gross" />
+                    {/*
+                      * Gross, reductions and net only when a reduction makes them differ. With none,
+                      * "Gross $18.00 / Net obligation $18.00" says one figure twice (W7 Scenario 8 final).
+                      */}
                     {e.reductionsCents !== 0 ? (
-                        <Row label="Reductions" value={money(-Math.abs(e.reductionsCents), currency)} testId="reductions" />
-                    ) : null}
-                    <Row label="Net obligation" value={money(e.netCents, currency)} strong testId="net" />
+                        <>
+                            <Row label="Gross charge" value={money(e.grossCents, currency)} testId="gross" />
+                            <Row label="Reductions" value={money(-Math.abs(e.reductionsCents), currency)} testId="reductions" />
+                            <Row label="Net obligation" value={money(e.netCents, currency)} strong testId="net" />
+                        </>
+                    ) : (
+                        <Row label="Charge" value={money(e.netCents, currency)} strong testId="net" />
+                    )}
                 </>
             ) : (
                 /* A draft owes nothing yet, and saying $0 outstanding would read as settled. */
@@ -544,18 +595,21 @@ export default function FinancialsChargeDetail({
             <span className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4" data-financials-charge-dates="row">
                 <DateCell label="Service date" value={day(detail.serviceDate) ?? "—"} testId="service-date" />
                 <DateCell label="Billing period" value={detail.billingPeriodLabel ?? "Unplaced"} testId="billing-period" />
-                <span className="flex min-w-0 flex-col">
-                    <DateCell label="Invoice date" value={formatDisplayDate(detail.invoiceDate) || "—"} testId="invoice-date" />
-                    {/*
-                      * W7-F017: a charge type that overrides the organisation's invoice timing says
-                      * so where the date it changed is read — visibly, because it is the exception.
-                      */}
-                    {detail.invoiceRule?.source === "template" ? (
-                        <span className="text-[10px] text-alloy-ember/90" data-financials-charge-invoice-override="true">
-                            Charge-type override · {invoiceRuleShort(detail.invoiceRule.strategy, detail.invoiceRule.offsetDays)}
-                        </span>
-                    ) : null}
-                </span>
+                {/*
+                  * W7-F017 provenance, kept but no longer prose: a charge type that overrides the
+                  * organisation's invoice timing carries an info mark whose tooltip says so.
+                  */}
+                <DateCell
+                    label="Invoice date"
+                    value={formatDisplayDate(detail.invoiceDate) || "—"}
+                    testId="invoice-date"
+                    hint={
+                        detail.invoiceRule?.source === "template"
+                            ? `Charge-type override · ${invoiceRuleShort(detail.invoiceRule.strategy, detail.invoiceRule.offsetDays)}`
+                            : null
+                    }
+                    hintAttr="data-financials-charge-invoice-override"
+                />
                 <DateCell
                     label="Due date"
                     value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
@@ -620,105 +674,91 @@ export default function FinancialsChargeDetail({
             ) : null}
 
             {/*
-             * THE INTENT SITS WITH THE STATE IT CHANGES, at the grain the capability actually has.
+             * ── RESPONSIBILITY & FUNDING — ONE COMPACT SECTION (W7 Scenario 8 final) ─────────────
+             *
+             * Two distinct concepts, kept distinct in the model and read together:
+             *
+             *   RESPONSIBILITY    who owes the obligation — the arrangement's share ("100%
+             *                     responsible") with this charge's own allocation beside it.
+             *   EXPECTED FUNDING  outside money expected to cover part of a share. It attaches to
+             *                     a SHARE (`billing.configure_expected_funding`), so it is stated
+             *                     under the share it funds, and never as money received.
+             *
+             * These were three stacked blocks (arrangement, funding, allocation) restating the same
+             * party. The arrangement and the allocation still differ when a charge was billed before
+             * the arrangement existed, so an allocated party with no share is listed on its own.
              *
              * `billing.configure_responsibility` records an ARRANGEMENT for a household or child
-             * from a date — it is not a decision about this one charge. The parties shown here are
-             * the account's arrangement as it applies to this obligation, which is why the control
-             * is offered beside them and why it says "account" rather than implying the charge.
+             * from a date — not a decision about this one charge — which is why the control is
+             * offered for the account here rather than implying the charge.
              */}
-            {detail.customerId || detail.customerMemberId ? (
-                <FinancialsResponsibilityPanel
-                    customerId={detail.customerId}
-                    customerMemberId={detail.customerMemberId}
-                    chargeId={detail.chargeId}
-                    chargeStatus={detail.status}
-                    subjectLabel={detail.childName}
-                    arrangement={detail.accountArrangement}
-                    parties={detail.responsibility.parties}
-                    onCommitted={reload}
-                />
-            ) : null}
-
-            {/*
-             * ── THE ARRANGEMENT'S OWN SHARES, AND WHAT IS EXPECTED TO FUND THEM ─────────────────
-             *
-             * `billing.configure_expected_funding` attaches to a SHARE. So the shares have to be
-             * visible and named: an operator cannot say "this agency covers $650 of this" while
-             * looking at a list that does not say whose responsibility "this" is.
-             *
-             * Shown beside the charge's own allocation rather than instead of it. The arrangement
-             * says who bears the account from a date; the allocation says who bears THIS obligation
-             * once it was resolved. A posted charge billed before the arrangement has the second
-             * and not the first, and conflating them would claim a division that never happened.
-             */}
-            {detail.accountArrangement && detail.accountArrangement.shares.length > 0 ? (
+            {detail.customerId || detail.customerMemberId || shares.length > 0 || detail.responsibility.parties.length > 0
+                || detail.responsibility.unassignedCents !== 0 || detail.expectedFunding.length > 0 ? (
                 <>
-                    <Group>Responsibility arrangement</Group>
-                    {detail.accountArrangement.shares.map((share) => (
-                        <div key={share.id} data-financials-arrangement-share={share.id}>
+                    <Group>Responsibility &amp; funding</Group>
+                    <div data-financials-charge-responsibility-funding="true">
+                        {shares.map((share) => {
+                            const allocated = allocatedByName.get(share.name);
+                            return (
+                                <div key={share.id} data-financials-arrangement-share={share.id}>
+                                    <Row
+                                        label={share.name}
+                                        value={`${shareTerm(share)} responsible${allocated != null ? ` · ${money(allocated, currency)}` : ""}`}
+                                        testId="arrangement-share"
+                                    />
+                                    <FinancialsExpectedFundingPanel
+                                        shareId={share.id}
+                                        arrangementId={detail.accountArrangement!.id}
+                                        customerMemberId={detail.customerMemberId}
+                                        partyName={share.name}
+                                        responsibleCents={share.amountCents}
+                                        currency={currency}
+                                        funding={share.expectedFunding}
+                                        onCommitted={reload}
+                                        compact
+                                    />
+                                </div>
+                            );
+                        })}
+                        {unmatchedParties.map((party) => (
                             <Row
-                                label={share.name}
-                                value={
-                                    share.amountCents != null
-                                        ? money(share.amountCents, currency)
-                                        : share.percentBasisPoints != null
-                                          ? `${share.percentBasisPoints / 100}%`
-                                          : "Remainder"
-                                }
-                                testId="arrangement-share"
+                                key={party.personId ?? party.name}
+                                label={party.name}
+                                value={money(party.assignedCents, currency)}
+                                testId="responsibility-party"
                             />
-                            <FinancialsExpectedFundingPanel
-                                shareId={share.id}
-                                arrangementId={detail.accountArrangement!.id}
+                        ))}
+                        {detail.responsibility.unassignedCents !== 0 ? (
+                            <Row
+                                label="Unassigned"
+                                value={money(detail.responsibility.unassignedCents, currency)}
+                                testId="responsibility-unassigned"
+                            />
+                        ) : null}
+                        {detail.expectedFunding.map((f) => (
+                            /* An expectation is not a payment, and never reduces what is owed. */
+                            <Row
+                                key={f.label}
+                                label={`Expected from ${f.label} · not yet received`}
+                                value={f.expectedCents != null ? money(f.expectedCents, currency) : "Amount not yet known"}
+                                muted
+                                testId="expected-funding"
+                            />
+                        ))}
+                        {detail.customerId || detail.customerMemberId ? (
+                            <FinancialsResponsibilityPanel
+                                customerId={detail.customerId}
                                 customerMemberId={detail.customerMemberId}
-                                partyName={share.name}
-                                responsibleCents={share.amountCents}
-                                currency={currency}
-                                funding={share.expectedFunding}
+                                chargeId={detail.chargeId}
+                                chargeStatus={detail.status}
+                                subjectLabel={detail.childName}
+                                arrangement={detail.accountArrangement}
+                                parties={detail.responsibility.parties}
                                 onCommitted={reload}
+                                compact
                             />
-                        </div>
-                    ))}
-                </>
-            ) : null}
-
-            {detail.responsibility.parties.length > 0 || detail.responsibility.unassignedCents !== 0 ? (
-                <>
-                    <Group>Responsibility</Group>
-                    {detail.responsibility.parties.map((party) => (
-                        <Row
-                            key={party.personId ?? party.name}
-                            label={party.name}
-                            value={money(party.assignedCents, currency)}
-                            testId="responsibility-party"
-                        />
-                    ))}
-                    {detail.responsibility.unassignedCents !== 0 ? (
-                        <Row
-                            label="Unassigned"
-                            value={money(detail.responsibility.unassignedCents, currency)}
-                            testId="responsibility-unassigned"
-                        />
-                    ) : null}
-                </>
-            ) : null}
-
-            {detail.expectedFunding.length > 0 ? (
-                <>
-                    <Group>Expected funding</Group>
-                    {detail.expectedFunding.map((f) => (
-                        <Row
-                            key={f.label}
-                            label={f.label}
-                            value={f.expectedCents != null ? money(f.expectedCents, currency) : "Amount not yet known"}
-                            testId="expected-funding"
-                        />
-                    ))}
-                    {/* An expectation is not a payment, and never reduces what is owed. */}
-                    <p className="text-[11px] text-alloy-midnight/50" data-financials-charge-funding-note="true">
-                        Not yet received
-                    </p>
+                        ) : null}
+                    </div>
                 </>
             ) : null}
 

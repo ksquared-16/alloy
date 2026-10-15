@@ -150,8 +150,8 @@ describe("W7-F017 — a charge-type timing override is named where it acts", () 
         expect(invoiceRuleSource({ strategy: "days_after_service_date", offsetDays: 7, source: { kind: "template" } } as never)).toBe("charge-type override");
     });
 
-    it("Add Charge and Charge Details both show it visibly", () => {
-        expect(read("components/operationalCards/AddChargeCommand.tsx")).toContain("Charge-type override · {specimen.invoiceOverride}");
+    it("Add Charge and Charge Details both keep it — as an info mark, not prose (Scenario 8 final)", () => {
+        expect(read("components/operationalCards/AddChargeCommand.tsx")).toContain("`Charge-type override · ${specimen.invoiceOverride}`");
         expect(read("app/adminV2/financials/FinancialsChargeDetail.tsx")).toContain('detail.invoiceRule?.source === "template"');
         expect(read("lib/financials/workspace/resolveChargeDetail.ts")).toMatch(/invoice_rule_source/);
     });
@@ -174,8 +174,8 @@ describe("W7-F018 — drafts are upcoming, never balance, Due or Past due", () =
         expect(upcomingFor([row({ status: "posted", lifecycleStatus: "posted" }), row({ status: "void", lifecycleStatus: "void" })])).toBeNull();
     });
 
-    it("the summary states Upcoming beside the balance, and the ledger sets draft rows apart", () => {
-        expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toContain('<Stat label="Upcoming · not yet posted" value={period.upcoming} />');
+    it("the summary states Scheduled beside the balance, and the ledger sets draft rows apart", () => {
+        expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toContain('<Stat label="Scheduled" value={period.upcoming} />');
         expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/tone: "upcoming" as const/);
         expect(read("app/adminV2/components/operationalCardsShared.css")).toContain(".alloy-os-billingdetail__row--upcoming");
     });

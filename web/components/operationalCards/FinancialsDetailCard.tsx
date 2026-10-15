@@ -538,7 +538,12 @@ export default function FinancialsDetailCard({
                     <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Due" value={period.dueNow} />
                     {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
-                    {period.upcoming ? <Stat label="Upcoming · not yet posted" value={period.upcoming} /> : null}
+                    {/*
+                      * W7 Scenario 8 final: "Scheduled" — draft, not-yet-posted obligation. The
+                      * Focus Panel already says Scheduled for the same money; the ledger row keeps
+                      * the lifecycle detail ("Draft · Posts Nov 1"). Same figure, shorter word.
+                      */}
+                    {period.upcoming ? <Stat label="Scheduled" value={period.upcoming} /> : null}
                     <Stat
                         label="Past due"
                         value={hydrating ? "—" : pastDue ? pastDue.amount : "None"}

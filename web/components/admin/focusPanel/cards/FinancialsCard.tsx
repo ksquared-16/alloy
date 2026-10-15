@@ -4869,6 +4869,9 @@ export default function FinancialsCard({
                     data-financials-card="true"
                     data-financials-overlay="charge_detail"
                     data-financials-charge-detail-for={surface.chargeId}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Charge details"
                 >
                     <UniversalCard
                         title="Charge details"
@@ -4886,8 +4889,15 @@ export default function FinancialsCard({
                             chargeId={surface.chargeId}
                             refreshKey={chargeDetailRefresh}
                             onLoaded={setChargeDetailFacts}
+                            bare
                         />
-                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                        {/*
+                          * W7 Scenario 8 final presentation: lifecycle commands LOOK like commands —
+                          * Add Charge's own button grammar. Edit draft is the constructive primary,
+                          * Cancel draft is destructive but outlined (never the dominant control),
+                          * Close is neutral and sits at the end.
+                          */}
+                        <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions" data-financials-card-actions="true">
                             {/*
                               * ── CORRECT THIS, FROM THE RECORD OF THIS ──────────────────────
                               *
@@ -4918,13 +4928,20 @@ export default function FinancialsCard({
                                     <>
                                         <button
                                             type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--destructive-confirm"
                                             data-financials-charge-detail-cancel-draft-confirm="true"
                                             disabled={running}
                                             onClick={() => void cancelDraft(chargeDetailFacts)}
                                         >
                                             {running ? "Cancelling…" : "Confirm cancel draft"}
                                         </button>
-                                        <button type="button" onClick={() => setCancelDraftConfirm(false)} disabled={running}>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                                            data-financials-charge-detail-keep-draft="true"
+                                            onClick={() => setCancelDraftConfirm(false)}
+                                            disabled={running}
+                                        >
                                             Keep draft
                                         </button>
                                     </>
@@ -4932,6 +4949,7 @@ export default function FinancialsCard({
                                     <>
                                         <button
                                             type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
                                             data-financials-charge-detail-edit-draft="true"
                                             disabled={running}
                                             onClick={() => openEditDraft(chargeDetailFacts)}
@@ -4940,6 +4958,7 @@ export default function FinancialsCard({
                                         </button>
                                         <button
                                             type="button"
+                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--destructive"
                                             data-financials-charge-detail-cancel-draft="true"
                                             disabled={running}
                                             onClick={() => setCancelDraftConfirm(true)}
@@ -4957,6 +4976,7 @@ export default function FinancialsCard({
                             {chargeDetailFacts?.status !== "draft" && adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
                                 <button
                                     type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
                                     data-financials-charge-detail-correct="true"
                                     onClick={() => openAdjustForCharge({ chargeId: surface.chargeId })}
                                 >
@@ -4965,7 +4985,7 @@ export default function FinancialsCard({
                             ) : null}
                             <button
                                 type="button"
-                                className="alloy-os-depthcard__close"
+                                className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
                                 data-financials-charge-detail-close="true"
                                 onClick={pop}
                             >
@@ -5956,7 +5976,14 @@ export default function FinancialsCard({
                 data-financials-surface-role={financialsSurfaceRole({
                     detailsAreTheSurface,
                     stackDepth: stack.length,
+                    layerPosition: 1,
                 })}
+                /*
+                 * Beneath a command the floor stays in view, under the one backdrop — and out of
+                 * the focus order and the pointer, so the command is the only surface that acts.
+                 */
+                inert={detailsAreTheSurface && commandSurface ? true : undefined}
+                data-financials-floor-beneath-command={detailsAreTheSurface && commandSurface ? "true" : undefined}
             >
                 <FinancialsDetailCard
                     evidence={hydratingFinancialsEvidence()}
@@ -6006,7 +6033,14 @@ export default function FinancialsCard({
                 data-financials-surface-role={financialsSurfaceRole({
                     detailsAreTheSurface,
                     stackDepth: stack.length,
+                    layerPosition: 1,
                 })}
+                /*
+                 * Beneath a command the floor stays in view, under the one backdrop — and out of
+                 * the focus order and the pointer, so the command is the only surface that acts.
+                 */
+                inert={detailsAreTheSurface && commandSurface ? true : undefined}
+                data-financials-floor-beneath-command={detailsAreTheSurface && commandSurface ? "true" : undefined}
             >
                 {/*
                   * The Move / Apply panel. One panel serves both intents because they differ only in
