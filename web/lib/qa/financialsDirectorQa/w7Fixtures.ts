@@ -12,7 +12,7 @@
  * reads Certhouse's genuine W5 consent history, which is READ-ONLY evidence, not a subject to spend.
  */
 
-export type W7FixtureKey = "w7_monthly" | "w7_weekly" | "w7_west" | "w7_multi_site" | "w7_split";
+export type W7FixtureKey = "w7_monthly" | "w7_weekly" | "w7_west" | "w7_multi_site" | "w7_split" | "w7_tuition";
 
 /** Where a scenario is run: a W7 household, organization-level configuration, or read-only evidence. */
 export type ScenarioFixtureKey = W7FixtureKey | "organization" | "certhouse" | "certopp";
@@ -107,7 +107,36 @@ export const W7_FIXTURES: readonly W7Fixture[] = Object.freeze([
         eligibleNotResponsible: [{ id: id("b", 8), name: "Gale Split" }],
         purpose: "Responsibility: a standing 50/50 arrangement, plus an eligible adult for “+ Add responsible member”.",
     },
+    /*
+     * W7 Scenario 9: the one household with an enrolment ASSIGNMENT and accepted monthly tuition —
+     * Toddler · full-time · 3 days at North Campus, resolved by the canonical pricing resolver to the
+     * organization's authored $1,200.00 monthly rate and accepted through `enrollment.pricing.accept`,
+     * effective Nov 1, 2026. No charges, payments or other money until the Director generates
+     * November's tuition through Financials → Charges.
+     */
+    {
+        key: "w7_tuition",
+        customerId: id("c", 6),
+        householdLabel: "W7 QA · Tuition Family",
+        children: [{ id: id("d", 7), name: "Tilly Tuition", campus: "North Campus" }],
+        campuses: ["North Campus"],
+        billingResolution: "Monthly — North Campus calendar; no account override",
+        responsibility: "100% Tess Tuition",
+        responsibleAdults: [{ id: id("b", 9), name: "Tess Tuition" }],
+        eligibleNotResponsible: [],
+        purpose: "Recurring tuition: one accepted monthly term ($1,200.00 from Nov 1, 2026) for Generate tuition to bill.",
+    },
 ] satisfies W7Fixture[]);
+
+/** The W7 Tuition Family's accepted monthly term, as Scenario 9 expects the preview to bill it. */
+export const W7_TUITION_TERM = Object.freeze({
+    child: "Tilly Tuition",
+    program: "Toddler · full-time · 3 days a week · North Campus",
+    cadence: "monthly",
+    amountCents: 120000,
+    effectiveStart: "2026-11-01",
+    source: "Organization tuition rate: Toddler · full-time · 3 days · monthly · private pay",
+});
 
 export function w7Fixture(key: W7FixtureKey): W7Fixture {
     return W7_FIXTURES.find((f) => f.key === key)!;
@@ -146,7 +175,7 @@ export const SCENARIO_FIXTURE: Readonly<Record<string, ScenarioFixtureKey>> = Ob
     due_date_derivation: "w7_monthly",
     late_current_period_charge: "w7_monthly",
     add_charge_preview_commit_parity: "w7_monthly",
-    generated_billing_parity: "w7_monthly",
+
     add_charge_honours_review_boundary: "w7_monthly",
     draft_moves_nothing: "w7_monthly",
     post_charge: "w7_monthly",
@@ -199,6 +228,9 @@ export const SCENARIO_FIXTURE: Readonly<Record<string, ScenarioFixtureKey>> = Ob
     bank_setup_visual_review: "w7_monthly",
     // Chained after bank_setup_payer_authorization, so it reads the method THAT scenario created.
     bank_method_operator_projection: "w7_monthly",
+
+    // Recurring tuition: the one household with an accepted monthly term (W7 Scenario 9).
+    generated_billing_parity: "w7_tuition",
 
     // A weekly location override: a charge dated into a period that has not begun.
     future_period_charge: "w7_weekly",

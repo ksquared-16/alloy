@@ -414,6 +414,15 @@ insert into financial_subsidy_authorizations
 --   W7 QA · West Family        West Campus             weekly, a different anchor      100% Wren
 --   W7 QA · Multi-Site Family  North + South Campus    explicit ACCOUNT calendar       50/50
 --   W7 QA · Split Family       North Campus            monthly                         50/50 + Gale
+--   W7 QA · Tuition Family     North Campus            monthly, recurring tuition      100% Tess
+--
+-- The Tuition Family (W7 Scenario 9) is the one household with an ENROLMENT ASSIGNMENT: an
+-- opportunity, a child on it, and the agreement linked to that assignment — the shape the accept-
+-- tuition action and `billing.generate_tuition` read. It carries no pricing term: tuition is accepted
+-- afterwards through the registered `enrollment.pricing.accept` action, so the term is resolved by
+-- the canonical resolver rather than written here. Its assignment starts Nov 1, 2026, so the accepted
+-- term starts then too, and automatic billing has no started period to bill before the Director runs
+-- Generate tuition for November.
 --
 -- ── CONVERGE, NEVER RESET ──
 --
@@ -461,6 +470,15 @@ insert into financial_subsidy_authorizations
 \set w7_arr_multi   'fd000000-0000-4000-8000-0000007e0004'
 \set w7_arr_split   'fd000000-0000-4000-8000-0000007e0005'
 \set w7_cal_multi   'fd000000-0000-4000-8000-0000007f0001'
+\set w7_hh_tuition  'fd000000-0000-4000-8000-0000007c0006'
+\set w7_kid_tilly   'fd000000-0000-4000-8000-0000007d0007'
+\set w7_tess        'fd000000-0000-4000-8000-0000007b0009'
+\set w7_agr_tilly   'fd000000-0000-4000-8000-0000007a0007'
+\set w7_arr_tuition 'fd000000-0000-4000-8000-0000007e0006'
+\set w7_opp_tuition 'fd000000-0000-4000-8000-000000790001'
+\set w7_ocm_tilly   'fd000000-0000-4000-8000-000000790002'
+-- The Tuition Family's enrolment starts on the first day of the period Scenario 9 generates.
+\set w7_tuition_start '2026-11-01'
 -- One fixed, known start for every W7 enrolment, arrangement and calendar.
 \set w7_start '2026-09-01'
 
@@ -477,6 +495,21 @@ select
   (select count(distinct l.label) = 3 from locations l
     where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active
       and l.label in ('North Campus', 'South Campus', 'West Campus')) as w7_sites_ok
+\gset
+
+-- The Tuition Family's program, by KEY at North Campus — the tenant's own authored Toddler program,
+-- whose full-time 3-day monthly private-pay rate is the one Scenario 9 expects ($1,200.00). Absent,
+-- the tuition household is skipped and says so; it never substitutes another program.
+select
+  (select c.id from location_program_categories c
+     join locations l on l.id = c.location_id
+    where c.org_id = :'org'::uuid and c.key = 'toddler' and c.is_active
+      and l.location_type = 'site' and l.is_active and l.label = 'North Campus'
+    order by c.id limit 1) as w7_north_toddler,
+  exists (select 1 from location_program_categories c
+     join locations l on l.id = c.location_id
+    where c.org_id = :'org'::uuid and c.key = 'toddler' and c.is_active
+      and l.location_type = 'site' and l.is_active and l.label = 'North Campus') as w7_tuition_ok
 \gset
 
 \if :w7_sites_ok
@@ -581,6 +614,70 @@ insert into financial_policies
 on conflict (id) do nothing;
 
 \echo 'w7_fixture: converged (5 households, 6 children, 8 adults, 6 agreements, 5 arrangements, 1 account calendar)'
+
+-- ── W7 QA · TUITION FAMILY — RECURRING TUITION (W7 Scenario 9) ─────────────────────────────────
+--
+-- One child, Tilly Tuition, at North Campus, on an enrolment assignment the canonical pricing
+-- resolver can price: Toddler program, full-time attendance, three days a week. The resolver's only
+-- applicable option for those facts is the organization's Toddler · full-time · 3 days · monthly ·
+-- private-pay rate, so accepting tuition records one monthly term at that authored amount.
+--
+-- The opportunity carries NO work unit and no stage: it exists so the assignment exists, and it does
+-- not appear in any Enrollment lane, Work View or waitlist the Director walks for other scenarios.
+-- The agreement names the assignment it belongs to — the link `assignment_not_enrolled` asks for.
+\if :w7_tuition_ok
+insert into customers (id, org_id, name, customer_type, status_key) values
+  (:'w7_hh_tuition'::uuid, :'org'::uuid, 'W7 QA · Tuition Family', 'residential', 'active')
+on conflict (id) do nothing;
+
+insert into customer_members (id, org_id, customer_id, display_name, first_name, last_name, is_active) values
+  (:'w7_kid_tilly'::uuid, :'org'::uuid, :'w7_hh_tuition'::uuid, 'Tilly Tuition', 'Tilly', 'Tuition', true)
+on conflict (id) do nothing;
+
+insert into persons (id, org_id, first_name, last_name, full_name, status_key) values
+  (:'w7_tess'::uuid, :'org'::uuid, 'Tess', 'Tuition', 'Tess Tuition', 'active')
+on conflict (id) do nothing;
+
+insert into customer_persons (org_id, customer_id, person_id, role_type, is_primary, status)
+select :'org'::uuid, :'w7_hh_tuition'::uuid, :'w7_tess'::uuid, 'parent', true, 'active'
+ where not exists (
+   select 1 from customer_persons cp
+    where cp.org_id = :'org'::uuid and cp.customer_id = :'w7_hh_tuition'::uuid and cp.person_id = :'w7_tess'::uuid);
+
+insert into opportunities (id, org_id, customer_id, location_id, name, title, primary_person_id, metadata) values
+  (:'w7_opp_tuition'::uuid, :'org'::uuid, :'w7_hh_tuition'::uuid, :'w7_north'::uuid,
+   'W7 QA · Tuition Family — enrolment', 'W7 QA · Tuition Family — enrolment', :'w7_tess'::uuid,
+   '{"fixture":"w7_qa","purpose":"recurring tuition assignment for W7 Scenario 9"}'::jsonb)
+on conflict (id) do nothing;
+
+insert into opportunity_customer_members
+  (id, org_id, opportunity_id, customer_member_id, schedule_type, location_id, program_category_id, start_date, metadata) values
+  (:'w7_ocm_tilly'::uuid, :'org'::uuid, :'w7_opp_tuition'::uuid, :'w7_kid_tilly'::uuid, 'full_time',
+   :'w7_north'::uuid, :'w7_north_toddler'::uuid, :'w7_tuition_start'::date,
+   '{"fixture":"w7_qa","requested_days_per_week":3}'::jsonb)
+on conflict (id) do nothing;
+
+insert into child_enrollment_agreements
+  (id, org_id, customer_member_id, customer_id, site_location_id, opportunity_id, opportunity_customer_member_id,
+   status, start_date, source_key) values
+  (:'w7_agr_tilly'::uuid, :'org'::uuid, :'w7_kid_tilly'::uuid, :'w7_hh_tuition'::uuid, :'w7_north'::uuid,
+   :'w7_opp_tuition'::uuid, :'w7_ocm_tilly'::uuid, 'pending_start', :'w7_tuition_start'::date, 'w7_qa_fixture')
+on conflict (id) do nothing;
+
+insert into financial_responsibility_arrangements
+  (id, org_id, customer_id, customer_member_id, effective_start, state, source_key, source_reference) values
+  (:'w7_arr_tuition'::uuid, :'org'::uuid, :'w7_hh_tuition'::uuid, null, :'w7_start'::date, 'active', 'w7_qa_fixture', 'W7 QA: 100% Tess')
+on conflict (id) do nothing;
+
+insert into financial_responsibility_shares
+  (id, org_id, arrangement_id, responsible_party_type, responsible_party_id, method, percent_basis_points, priority) values
+  ('fd000000-0000-4000-8000-0000007e1008'::uuid, :'org'::uuid, :'w7_arr_tuition'::uuid, 'person', :'w7_tess'::uuid, 'percentage', 10000, 100)
+on conflict (id) do nothing;
+
+\echo 'w7_tuition_fixture: converged (1 household, 1 child, 1 adult, 1 assignment, 1 agreement, 1 arrangement; tuition is accepted through enrollment.pricing.accept)'
+\else
+\echo 'w7_tuition_fixture: skipped: this tenant has no active Toddler program at North Campus'
+\endif
 \else
 \echo 'w7_fixture: skipped: this tenant does not have all of North, South and West Campus as active sites'
 \endif
