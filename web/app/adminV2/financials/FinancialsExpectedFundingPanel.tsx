@@ -138,7 +138,13 @@ export default function FinancialsExpectedFundingPanel({
     currency,
     funding,
     onCommitted,
+    compact = false,
 }: {
+    /**
+     * W7 Scenario 8 final presentation: one secondary line under the share — "Expected funding ·
+     * None" with "Manage funding" beside it — instead of an indented explanatory block.
+     */
+    compact?: boolean;
     shareId: string;
     arrangementId: string | null;
     customerMemberId: string | null;
@@ -245,6 +251,51 @@ export default function FinancialsExpectedFundingPanel({
         },
         [agencies, agencyId, amount, arrangementId, customerMemberId, label, needsAgency, onCommitted, shareId, sourceType],
     );
+
+    if (!open && compact) {
+        return (
+            <div className="pb-0.5" data-financials-share-funding={shareId} data-financials-share-funding-compact="true">
+                <span className="flex items-baseline justify-between gap-3 text-[11px] text-alloy-midnight/55">
+                    <span className="min-w-0 truncate">
+                        Expected funding ·{" "}
+                        {funding.length === 0 ? (
+                            <span data-financials-funding-none="true">None</span>
+                        ) : (
+                            funding.map((f, i) => (
+                                /* WHAT IS EXPECTED, AND FROM WHOM — never rendered as money received. */
+                                <span key={f.id} data-financials-funding-row={f.id}>
+                                    {i > 0 ? ", " : ""}
+                                    {f.label}
+                                    {f.expectedAmountCents != null ? ` ${money(f.expectedAmountCents, currency)}` : ""}
+                                    {f.percentBasisPoints != null ? ` ${f.percentBasisPoints / 100}%` : ""}
+                                </span>
+                            ))
+                        )}
+                    </span>
+                    <button
+                        type="button"
+                        className="shrink-0 text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                        onClick={start}
+                        data-financials-manage-funding={shareId}
+                    >
+                        Manage funding
+                    </button>
+                </span>
+                {responsibleCents != null && expectedCents > 0 ? (
+                    <p className="text-[11px] text-alloy-midnight/45" data-financials-funding-residual="true">
+                        {expectedCents > responsibleCents
+                            ? "Expected funding exceeds this share."
+                            : `${money(responsibleCents - expectedCents, currency)} still their responsibility.`}
+                    </p>
+                ) : null}
+                {done ? (
+                    <p className="mt-0.5 text-[11px] text-alloy-bend-pine" data-financials-funding-done="true">
+                        {done}
+                    </p>
+                ) : null}
+            </div>
+        );
+    }
 
     if (!open) {
         return (

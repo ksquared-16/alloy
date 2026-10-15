@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Info } from "lucide-react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
@@ -578,14 +579,27 @@ export default function AddChargeCommand({
                       * an ordinary date does not need explaining in the form. It stays in the
                       * accessibility tree for screen-reader users.
                       */}
-                    <span data-addcharge-invoice-date title={specimen.dateRules.invoice ?? undefined}>
-                        <Value locked>{specimen.invoiceDate}</Value>
-                    </span>
-                    {specimen.invoiceOverride ? (
-                        <span data-addcharge-invoice-override className="alloy-os-addcharge__date-rule">
-                            Charge-type override · {specimen.invoiceOverride}
+                    <span className="alloy-os-addcharge__date-with-hint">
+                        <span data-addcharge-invoice-date title={specimen.dateRules.invoice ?? undefined}>
+                            <Value locked>{specimen.invoiceDate}</Value>
                         </span>
-                    ) : null}
+                        {/*
+                          * W7 Scenario 8 final: a charge-type override is provenance, not a line of
+                          * prose under the date — an info mark whose tooltip and accessible name
+                          * say "Charge-type override · 7 days after service".
+                          */}
+                        {specimen.invoiceOverride ? (
+                            <span
+                                data-addcharge-invoice-override
+                                className="alloy-os-addcharge__date-hint"
+                                role="img"
+                                aria-label={`Charge-type override · ${specimen.invoiceOverride}`}
+                                title={`Charge-type override · ${specimen.invoiceOverride}`}
+                            >
+                                <Info aria-hidden="true" />
+                            </span>
+                        ) : null}
+                    </span>
                     {specimen.dateRules.invoice ? (
                         <span data-addcharge-invoice-rule className="alloy-os-addcharge__sr-only">
                             {specimen.dateRules.invoice}

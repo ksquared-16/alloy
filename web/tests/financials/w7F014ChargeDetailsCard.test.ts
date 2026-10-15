@@ -16,10 +16,11 @@ const code = (rel: string) => read(rel).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").rep
 describe("the card's composition", () => {
     const src = code("app/adminV2/financials/FinancialsChargeDetail.tsx");
 
-    it("groups Applies to and Responsibility the way Add Charge does", () => {
-        const applies = src.slice(src.indexOf("<Group>Charge applies to</Group>"));
-        expect(applies.slice(0, 600)).toMatch(/label="Applies to"/);
-        expect(applies.slice(0, 600)).toMatch(/label="Responsibility"/);
+    it("groups Applies to and Responsibility the way Add Charge does — one pair, each label once", () => {
+        const applies = src.slice(src.indexOf('data-financials-charge-applies="true"'));
+        expect(applies.slice(0, 600)).toMatch(/<Fact label="Applies to"/);
+        expect(applies.slice(0, 600)).toMatch(/<Fact label="Responsibility"/);
+        expect(src).not.toContain("<Group>Charge applies to</Group>");
     });
 
     it("puts the four dates in one row, in Add Charge's order, and nothing else in that row", () => {
