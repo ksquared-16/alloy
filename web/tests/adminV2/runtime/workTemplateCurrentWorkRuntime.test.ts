@@ -143,7 +143,9 @@ describe("Work Template Current Work runtime", () => {
          * A default nobody chose and a control somebody configured are different things, and they
          * now live in different fields.
          */
-        expect(vm.supportingActions.map((a) => a.key)).toEqual(["schedule_tour"]);
+        // Stage commands: the work item's legacy primary command (quick_message) is carried into the
+        // stage's flat list, so emptying its helpful list leaves that one, plus the stage's own.
+        expect(vm.supportingActions.map((a) => a.key)).toEqual(["quick_message", "schedule_tour"]);
     });
 
     it("never surfaces generic Change Enrollment Status on Current Work", () => {
@@ -197,7 +199,9 @@ describe("Work Template Current Work runtime", () => {
             recordHeaderActions: null,
             processStages: publishedStageInputs.processStages,
         })!;
-        expect(resolved.templateConfig.primary_action?.action_ref).toBe("record_payment");
+        // Flat stage commands: the legacy primary command leads the list as a peer, not as a primary.
+        expect(resolved.templateConfig.primary_action).toBeUndefined();
+        expect(resolved.templateConfig.helpful_actions?.[0]?.action_ref).toBe("record_payment");
         expect(resolved.templateConfig.helpful_actions_explicit).toBe(true);
     });
 

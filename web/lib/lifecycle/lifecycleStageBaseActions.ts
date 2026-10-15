@@ -81,6 +81,12 @@ export const LIFECYCLE_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOptio
     { id: "workspace_root", label: "Workspace", surface: "workspace", slot: "primary" },
 ] as const;
 
+/**
+ * Focus Panel Manage lists every command enabled for the process — it is not a placement an
+ * administrator opts into. Enabled commands always carry it; the other placements are additional.
+ */
+export const LIFECYCLE_MANAGE_PLACEMENT_ID = "overflow";
+
 /** Activation wizard uses the same canonical placement set as the process action editor. */
 export const LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] =
     LIFECYCLE_ACTION_PLACEMENTS;

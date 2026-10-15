@@ -27,6 +27,7 @@ import {
     lifecycleActivationBaseActions,
     lifecycleActivationPlacementIdForSurfaceSlot,
     lifecyclePlacementById,
+    LIFECYCLE_MANAGE_PLACEMENT_ID,
     normalizeLifecyclePlacementId,
     type LifecycleBaseActionDefinition,
     type LifecycleBaseActionKey,
@@ -312,6 +313,24 @@ export function upsertEnabledProcessActionsIntoCommandSet(
     };
 }
 
+/**
+ * The placements an ENABLED process command is saved with.
+ *
+ * Legacy ids normalize onto the canonical set (department_rail → Workspace, drawer → Focus Panel
+ * Manage) and deprecated ones (queue_row) drop. Focus Panel Manage is always included: Manage lists
+ * every enabled process command, so it is not a placement an administrator can opt out of.
+ */
+export function enabledLifecycleActionPlacementIds(rawPlacementIds: readonly string[]): string[] {
+    return [
+        ...new Set([
+            LIFECYCLE_MANAGE_PLACEMENT_ID,
+            ...rawPlacementIds
+                .map((id) => normalizeLifecyclePlacementId(id))
+                .filter((id): id is string => Boolean(id)),
+        ]),
+    ];
+}
+
 export type LifecycleActionsMatrixSaveResult = {
     saved: number;
     /** Category-F only — never includes `lifecycle_builder_v1`. */
@@ -390,19 +409,7 @@ export async function saveLifecycleActionsMatrix(
         const rawPlacementIds = Array.isArray(row.placement_ids)
             ? row.placement_ids.map((p) => String(p ?? "").trim()).filter(Boolean)
             : [];
-        if (!rawPlacementIds.length) {
-            throw new Error(`Select at least one placement for ${base.label}`);
-        }
-
-        // Normalize legacy ids onto the canonical set (department_rail → Workspace,
-        // drawer → Focus Panel Manage) and drop deprecated ones (queue_row), de-duping.
-        const placementIds = [
-            ...new Set(
-                rawPlacementIds
-                    .map((id) => normalizeLifecyclePlacementId(id))
-                    .filter((id): id is string => Boolean(id))
-            ),
-        ];
+        const placementIds = enabledLifecycleActionPlacementIds(rawPlacementIds);
 
         const placements = placementIds
             .map((id) => lifecyclePlacementById(id))

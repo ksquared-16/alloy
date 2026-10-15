@@ -242,15 +242,16 @@ describe("Current Work operational surface", () => {
         expect(vm.purpose).toBe("Collect payment for July 2026.");
         expect(vm.checklist.map((item) => item.label)).toEqual(["Collect Payment"]);
         expect(vm.surface.supportingActions.map((a) => a.key)).toEqual([
+            // The stage's commands as one flat list: this legacy plan's primary command
+            // (record_payment) is carried into the list ahead of its helpful commands, and is a
+            // peer — not a separately promoted button. Generic, not an Enrollment accommodation.
+            "record_payment",
             "send_reminder",
             "payment_plan",
             "send_email",
             "adjust_invoice",
-            // The BILLING stage's own configured action, which the work template's explicit list
-            // used to suppress. Stage and work scopes compose — and this fixture is the proof the
-            // rule is generic rather than an Enrollment accommodation.
-            "record_payment",
         ]);
+        expect(vm.surface.primaryAction).toBeNull();
         // Billing fixtures without process edges expose no Other Transitions from WT alternate_paths.
         expect(vm.surface.alternatePaths).toEqual([]);
         expect(vm.surface.supportingActions.map((a) => a.key)).not.toContain("schedule_tour");
@@ -274,12 +275,14 @@ describe("Current Work operational surface", () => {
 
         expect(resolved.templateConfig.title).toBe("Collect Payment");
         expect(resolved.templateConfig.helpful_actions?.map((a) => a.action_ref)).toEqual([
+            "record_payment",
             "send_reminder",
             "payment_plan",
             "send_email",
             "adjust_invoice",
         ]);
         expect(resolved.templateConfig.helpful_actions_explicit).toBe(true);
+        expect(resolved.templateConfig.primary_action).toBeUndefined();
         // Runtime Other Transitions come from process edges; WT alternate_paths are not the source.
         expect(resolved.templateConfig.alternate_paths ?? []).toEqual([]);
     });

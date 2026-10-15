@@ -442,6 +442,18 @@ export type StageOperatingPlanV1 = {
     journey_segment: StageJourneySegment;
     /** Absent on legacy plans. When present, this is the authoritative edge set. */
     outgoing_transitions?: StageOutgoingTransitionV1[];
+    /**
+     * The stage's commands — "the main things you'd do at this stage", in operator order. The
+     * Process Card (and What's Next) render exactly this list, whichever work item is open.
+     *
+     * Stage-owned, not work-owned: a stage has one command set, and the work item that happens to
+     * be open does not change it. Every ref must be a capability the process selected in
+     * `command_set_v1` (the Commands tab). Empty array = explicitly none.
+     *
+     * Absent on plans authored before stage commands existed; `resolveStageCommands` then derives
+     * the list from the work templates' legacy `primary_action` / `helpful_actions`.
+     */
+    stage_commands?: StageWorkTemplateActionRefV1[];
     work_templates: StageWorkTemplateV1[];
     outcomes: StageCompletionOutcomeV1[];
     outcome_rules: StageOutcomeRuleV1[];
@@ -1008,12 +1020,21 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
         }
     }
 
+    const stage_commands: StageWorkTemplateActionRefV1[] = [];
+    if (Array.isArray(o.stage_commands)) {
+        for (const item of o.stage_commands) {
+            const parsed = parseActionRef(item);
+            if (parsed) stage_commands.push(parsed);
+        }
+    }
+
     const plan: StageOperatingPlanV1 = {
         version: 1,
         lifecycle_key,
         stage_key,
         journey_segment: journeyRaw as StageJourneySegment,
         ...(Array.isArray(o.outgoing_transitions) ? { outgoing_transitions } : {}),
+        ...(Array.isArray(o.stage_commands) ? { stage_commands } : {}),
         work_templates,
         outcomes,
         outcome_rules,

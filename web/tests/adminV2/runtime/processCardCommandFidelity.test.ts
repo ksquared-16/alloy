@@ -199,8 +199,9 @@ function contextFor(options: {
     primaryRef?: string;
     recordHeaderActions?: ResolvedActionsBySlot | null;
     extraMetadata?: Record<string, unknown>;
+    plan?: StageOperatingPlanV1;
 }): OperationalContext {
-    const plan = configuredContactFamilyPlan(options.helpful, options.primaryRef);
+    const plan = options.plan ?? configuredContactFamilyPlan(options.helpful, options.primaryRef);
     const publishedStageInputs = resolvePublishedStageInputsForCurrentWork({
         departmentMetadata: publishedMetadata(plan, options.extraMetadata),
         builderStageKey: "lead",
@@ -304,19 +305,20 @@ describe("Process card command fidelity", () => {
         expect(evidence.actions.map((a) => a.key)).toEqual(rendered);
     });
 
-    it("gives exactly one command the configured lead prominence", () => {
+    it("renders stage commands as peers — no command is promoted by being first", () => {
         const projection = projectProcessCardCommands(
             contextFor({ helpful: ["schedule_tour", "send_tour_invitation"] }),
         );
-        expect(projection.commands.filter((c) => c.prominence === "primary")).toHaveLength(1);
-        expect(projection.commands[0]?.prominence).toBe("primary");
+        const stageCommands = projection.commands.filter((c) => c.key !== "record_outcome");
+        expect(stageCommands.length).toBeGreaterThan(0);
+        expect(stageCommands.every((c) => c.prominence === "secondary")).toBe(true);
     });
 
     it("keeps configured identity when configuration renames the command", () => {
         // `quick_message` is configured with override_label "Contact Family". A card that matched
         // on the label would key on a name configuration is free to change tomorrow.
         const projection = projectProcessCardCommands(contextFor({ helpful: [] }));
-        const lead = projection.commands.find((c) => c.prominence === "primary")!;
+        const lead = projection.commands.find((c) => c.label === "Contact Family")!;
         expect(lead.label).toBe("Contact Family");
         expect(lead.key).not.toBe("Contact Family");
         expect(lead.key).not.toBe("contact_family");
@@ -396,6 +398,48 @@ describe("Process card command fidelity", () => {
         const code = card.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
         expect(code).not.toContain("recordHeaderActions");
         expect(code).toContain("projectProcessCardCommands");
+    });
+
+    it("shows commands authored on a work item other than the open one", () => {
+        // The reported bug: commands set on any work item but the active one never reached the card.
+        const base = configuredContactFamilyPlan(["schedule_tour"]);
+        const plan: StageOperatingPlanV1 = {
+            ...base,
+            work_templates: [
+                ...base.work_templates,
+                {
+                    template_key: "send_information",
+                    label: "Send information",
+                    required: false,
+                    due_policy: { kind: "offset_days", days: 2 },
+                    owner_strategy: "record_owner",
+                    helpful_actions: [{ action_ref: "send_tour_invitation" }],
+                },
+            ],
+        };
+        const projection = projectProcessCardCommands(contextFor({ helpful: [], plan }));
+        expect(projection.configuredRefs).toEqual(["quick_message", "schedule_tour", "send_tour_invitation"]);
+        expect(projection.commands.map((c) => c.actionRef ?? c.key)).toContain("send_tour_invitation");
+    });
+
+    it("an authored stage command list is the card's list, in its order — work-item commands no longer reach it", () => {
+        const base = configuredContactFamilyPlan(["schedule_tour"]);
+        const plan: StageOperatingPlanV1 = {
+            ...base,
+            stage_commands: [{ action_ref: "send_tour_invitation" }, { action_ref: "schedule_tour" }],
+        };
+        const projection = projectProcessCardCommands(contextFor({ helpful: [], plan }));
+        expect(projection.configuredRefs).toEqual(["send_tour_invitation", "schedule_tour"]);
+        const keys = projection.commands.map((c) => c.actionRef ?? c.key);
+        expect(keys).not.toContain("quick_message");
+        expect(keys.indexOf("send_tour_invitation")).toBeLessThan(keys.indexOf("schedule_tour"));
+    });
+
+    it("an explicitly empty stage command list renders no commands", () => {
+        const plan: StageOperatingPlanV1 = { ...configuredContactFamilyPlan(["schedule_tour"]), stage_commands: [] };
+        const projection = projectProcessCardCommands(contextFor({ helpful: [], plan }));
+        expect(projection.configuredRefs).toEqual([]);
+        expect(projection.commands.filter((c) => c.key !== "record_outcome")).toEqual([]);
     });
 
     it("selects commands with no process or domain branching", () => {

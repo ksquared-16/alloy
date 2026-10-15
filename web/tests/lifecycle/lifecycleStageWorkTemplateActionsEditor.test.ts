@@ -19,14 +19,21 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(editor).not.toMatch(/<select[\s>]/);
     });
 
-    it("surfaces explicit configuration source indicators", () => {
+    it("authors commands once per stage, not per work item", () => {
         const editor = read("components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx");
-        expect(editor).toContain("workTemplateConfigSourceLabel");
-        expect(editor).toContain("data-work-template-config-source");
+        // The per-work-item Primary / Helpful command pickers are retired.
+        expect(editor).not.toContain("Helpful Commands");
+        expect(editor).not.toContain("Primary Command");
+        expect(editor).not.toContain("addWorkTemplateHelpfulAction");
+        expect(editor).toContain("work-template-commands-note");
 
-        const source = read("lib/lifecycle/workTemplateConfigSource.ts");
-        expect(source).toContain("Configured on this Work Item");
-        expect(source).toContain("Using stage recommendations");
+        const stage = read("components/adminV2/settings/lifecycle/LifecycleStageCommandsEditor.tsx");
+        expect(stage).toContain("Stage commands");
+        expect(stage).toContain("resolveStageCommands");
+        expect(stage).toContain("will not appear on the Process Card");
+
+        const plan = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
+        expect(plan).toContain("<LifecycleStageCommandsEditor");
     });
 
     it("authors Available Outcomes and Outcome Definitions on the Work Template", () => {
@@ -35,9 +42,9 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(editor).toContain("data-stage-actions-results");
         expect(editor).toContain("Available Outcomes");
         expect(editor).not.toContain("Available Results");
-        expect(editor).toContain("Direct Action");
-        expect(editor).toContain("Outcome Led");
-        expect(editor).toContain("Execution Mode");
+        // Direct Command / Outcome Led was the per-work-item primary command choice — retired with
+        // stage commands, which are one flat list per stage.
+        expect(editor).not.toContain("Direct Command");
         expect(editor).toContain("LifecycleStageOutcomeDefinitionsEditor");
         expect(editor).not.toContain("Completion Outcomes");
         expect(editor).not.toContain("work-template-alternate-paths");

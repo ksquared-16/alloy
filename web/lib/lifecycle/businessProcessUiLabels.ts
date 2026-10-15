@@ -155,7 +155,7 @@ export const BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY =
     "Commands available to staff while records are in this stage.";
 export const BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE = "Process Commands";
 export const BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY =
-    "Configure which commands are available in this process and where they appear.";
+    "Enable the commands this process offers. Every enabled command is in Focus Panel Manage; each stage picks the ones its Process Card shows.";
 export const BUSINESS_PROCESS_SECTION_READY = "Ready Check";
 export const BUSINESS_PROCESS_SECTION_READY_SUMMARY =
     "Confirm this stage is ready for staff on the workspace.";

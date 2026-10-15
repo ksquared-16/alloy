@@ -7,13 +7,15 @@ import { parseProcessCommandSetV1 } from "@/lib/lifecycle/processCommandSetV1";
 import { listEnabledCommandKeys } from "@/lib/lifecycle/processCommandSetV1";
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
+import { resolveStageCommands } from "@/lib/lifecycle/stageCommands";
 
 export type ProcessCommandSetPublishIssue = {
     code:
         | "invalid_command_set"
         | "unknown_capability"
         | "stage_orphan"
-        | "work_template_orphan";
+        | "work_template_orphan"
+        | "stage_command_orphan";
     processKey: string;
     stageKey?: string;
     capabilityKey?: string;
@@ -92,25 +94,31 @@ export function validateProcessCommandSetsForPublish(
                 });
             }
 
-            for (const wt of stage.stage_operating_plan_v1?.work_templates ?? []) {
-                const refs = [
-                    wt.primary_action?.action_ref,
-                    ...(wt.helpful_actions ?? []).map((r) => r.action_ref),
-                ];
-                for (const ref of refs) {
-                    const key = ref?.trim();
-                    if (!key) continue;
-                    const canon = resolveCanon(key);
-                    const intent = normalizeActionRefToIntentKey(key);
-                    if (selected.has(canon) || selected.has(intent) || selected.has(key)) continue;
-                    issues.push({
-                        code: "work_template_orphan",
-                        processKey: process.key,
-                        stageKey: stage.key,
-                        capabilityKey: key,
-                        message: `Work Template on '${stage.key}' references '${key}' which is not process-selected.`,
-                    });
-                }
+            // The stage's commands — authored on the stage, or (legacy plans) its work items' commands.
+            const stageCommands = resolveStageCommands(stage.stage_operating_plan_v1 ?? null);
+            for (const row of stageCommands.commands) {
+                const key = row.action_ref.trim();
+                if (!key) continue;
+                const canon = resolveCanon(key);
+                const intent = normalizeActionRefToIntentKey(key);
+                if (selected.has(canon) || selected.has(intent) || selected.has(key)) continue;
+                issues.push(
+                    stageCommands.source === "stage"
+                        ? {
+                              code: "stage_command_orphan",
+                              processKey: process.key,
+                              stageKey: stage.key,
+                              capabilityKey: key,
+                              message: `Stage command '${key}' on '${stage.key}' is not enabled in the process Commands.`,
+                          }
+                        : {
+                              code: "work_template_orphan",
+                              processKey: process.key,
+                              stageKey: stage.key,
+                              capabilityKey: key,
+                              message: `Work Template on '${stage.key}' references '${key}' which is not process-selected.`,
+                          },
+                );
             }
         }
     }

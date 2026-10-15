@@ -13,6 +13,7 @@
  * Explicit empty arrays disable fallback for that bucket.
  */
 
+import { resolveStageCommands } from "@/lib/lifecycle/stageCommands";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
@@ -215,16 +216,11 @@ function buildActionRegistry(args: {
         register(key, actionLabel(key, candidate.override_label));
     }
 
-    const template = args.activeTemplate;
-    if (template?.primary_action?.action_ref) {
-        register(
-            template.primary_action.action_ref,
-            actionLabel(template.primary_action.action_ref, template.primary_action.override_label),
-        );
-    }
-    for (const row of template?.helpful_actions ?? []) {
+    // The stage's commands — every one the card can render must resolve, not only the active work's.
+    for (const row of resolveStageCommands(args.stageOperatingPlan ?? null).commands) {
         register(row.action_ref, actionLabel(row.action_ref, row.override_label));
     }
+    const template = args.activeTemplate;
     for (const row of template?.alternate_paths ?? []) {
         if (isWorkTemplateTransitionRef(row)) {
             register(
@@ -288,6 +284,23 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
     }
 
     return { supporting, alternate_paths, communication_actions };
+}
+
+/**
+ * The stage action catalog's supporting commands, split by what they are now:
+ *   - `startWork` — bound to one of the stage's work items (`stage_work.start`); authored on the
+ *     stage's startable-work editor and always composed beside the stage's commands.
+ *   - `legacyCommands` — unbound; folded into a LEGACY plan's derived stage commands only.
+ */
+export function stageCatalogSupportingCommands(actionCatalog: StageActionCatalogV1 | null): {
+    startWork: StageWorkTemplateActionRefV1[];
+    legacyCommands: StageWorkTemplateActionRefV1[];
+} {
+    const supporting = actionsFromCatalog(actionCatalog).supporting;
+    return {
+        startWork: supporting.filter((row) => row.work_template_key?.trim()),
+        legacyCommands: supporting.filter((row) => !row.work_template_key?.trim()),
+    };
 }
 
 function mapAlternatePathRefs(
@@ -357,31 +370,24 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         checklist,
     };
 
-    if (activeTemplate?.execution_mode === "direct_action" || activeTemplate?.execution_mode === "outcome_led") {
-        templateConfig.execution_mode = activeTemplate.execution_mode;
-    }
-
-    if (activeTemplate?.primary_action?.action_ref?.trim()) {
-        templateConfig.primary_action = {
-            action_ref: activeTemplate.primary_action.action_ref.trim(),
-            ...(activeTemplate.primary_action.override_label?.trim()
-                ? { override_label: activeTemplate.primary_action.override_label.trim() }
-                : {}),
-        };
-    }
-
-    if (activeTemplate?.helpful_actions !== undefined) {
-        templateConfig.helpful_actions = activeTemplate.helpful_actions.map((row) => ({
-            action_ref: row.action_ref,
-            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
-        }));
-        templateConfig.helpful_actions_explicit = true;
-    } else {
-        // Config fidelity: do not invent helpful commands from stage catalog when the Work
-        // Template omitted helpful_actions. Empty means empty.
-        templateConfig.helpful_actions = [];
-        templateConfig.helpful_actions_explicit = true;
-    }
+    /*
+     * STAGE COMMANDS — one flat, ordered list per stage, whichever work item is open.
+     *
+     * The card used to read `primary_action` + `helpful_actions` from the ONE active work template,
+     * so a command authored on any other work item of the stage never reached the operator, and the
+     * "primary" one was styled differently from the rest. Commands are stage-owned now: every one of
+     * them is a peer, and none is promoted over Record Outcome by being first. A work template's
+     * legacy `primary_action` / `execution_mode` no longer shape this surface — `resolveStageCommands`
+     * folds them into the stage list for plans saved before the list existed.
+     */
+    const catalogSupporting = stageCatalogSupportingCommands(processAwareCatalog);
+    templateConfig.helpful_actions = resolveStageCommands(operatingPlan, {
+        legacyCatalogCommands: catalogSupporting.legacyCommands,
+    }).commands.map((row) => ({
+        action_ref: row.action_ref,
+        ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+    }));
+    templateConfig.helpful_actions_explicit = true;
 
     // Legacy Work Template alternate_paths: parse safely for stored plans but do not
     // emit as Current Work Other Transitions — those derive from process edges only.
@@ -401,12 +407,12 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
     }
 
     /*
-     * The STAGE's own configured actions. Computed here all along and never carried, so a stage
-     * action could be authored, validated, persisted and published and still never reach an
-     * operator. They compose with the work template's actions rather than replacing or being
-     * replaced — see `resolvedHelpfulActionRefs`.
+     * The stage's START-WORK controls (catalog actions bound to one of its work items). Authored on
+     * the stage's startable-work editor, they compose beside the stage commands rather than being
+     * part of that list — see `resolvedHelpfulActionRefs`. Unbound catalog actions are not composed
+     * here: they are folded into a legacy plan's derived stage commands above.
      */
-    if (catalogActions.supporting.length) {
+    if (catalogSupporting.startWork.length) {
         /*
          * An action bound to a work template is LABELLED by that work.
          *
@@ -421,7 +427,7 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         const workLabelByKey = new Map(
             (operatingPlan?.work_templates ?? []).map((t) => [t.template_key, (t.label ?? "").trim()]),
         );
-        templateConfig.stage_actions = catalogActions.supporting.map((row) => {
+        templateConfig.stage_actions = catalogSupporting.startWork.map((row) => {
             const boundKey = row.work_template_key?.trim();
             const boundLabel = boundKey ? workLabelByKey.get(boundKey) : undefined;
             const label = row.override_label?.trim() || boundLabel || undefined;

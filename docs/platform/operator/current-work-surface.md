@@ -62,10 +62,10 @@ Requirement timing affects checklist truth as follows:
 - `stage_exit` rules may appear as progression gaps, with copy such as “Needed before the configured next step,” but they do not make the record invalid.
 - Transition blocking happens in the stage/status preflight path only when explicit `stage_exit` metadata applies to the selected transition.
 | **Checklist handoff** | `inferWorkItemOwner()` + scope from field-rule entity | blocked operator copy — never silent no-op |
-| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title; optional `primary_action` when configured | `"No current work configured"` |
+| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title. Work-template `primary_action` no longer shapes this surface (see Stage commands) | `"No current work configured"` |
 | **Record outcome CTA** | `"Record outcome"` when `showOutcomeCompletion` | disabled + `outcomeCompletionBlockReason` |
 | **Outcomes list** | Active work template `outcome_refs` filter canonical stage outcomes; legacy uses `item.outcomes` from runtime | honest gap copy — **never invent lists** |
-| **Helpful actions** | Active work template `helpful_actions` (explicit order) | stage `action_catalog_v1` fallback → `record_header` registry |
+| **Stage commands** | Stage `stage_operating_plan_v1.stage_commands` (explicit order), whichever work item is open; plus the stage's bound start-work controls | legacy plan: derived on read from every work item's `primary_action` + `helpful_actions`, then unbound `action_catalog_v1` supporting actions |
 | **Alternate paths** | Active work template `alternate_paths` (transition or action refs) | catalog `context_dependent` fallback → registry |
 | **Communication actions** | Published catalog + registry communication category | registry classification |
 | **Blockers** | `signals.attention` primary reason | empty |
@@ -77,12 +77,17 @@ Requirement timing affects checklist truth as follows:
 
 **Action tiers on surface VM:** primary · supporting · communication · alternate paths · administrative (Manage) · BOS recommendations.
 
+### Stage commands vs Manage — two models
+
+- **Process Card / What's Next** — `stage_operating_plan_v1.stage_commands`: the main things operators do at this stage, one flat ordered list per stage (Stages → Operator work → Stage commands). Every command is a peer; Record Outcome stays separate. Published with the process; records pinned to an older revision take an authored live list (`liveCommandPlacement`). Each ref must be enabled in the process Commands tab (`command_set_v1`); publish refuses `stage_command_orphan`. `resolveStageCommands` derives the list for legacy plans that predate it (every work item's `primary_action` + `helpful_actions`, primary work item first, then unbound stage-catalog actions), so nothing configured disappears; saving the stage writes the list explicitly.
+- **Manage** — every command enabled on the Commands tab. Saving the tab always places an enabled command in Focus Panel Manage (`record_header/overflow`); other placements are additional. Live on save (`action_placements`).
+
+Work-template `primary_action` / `helpful_actions` / `execution_mode` are no longer authored in `/processes` and no longer shape the card. Stored `primary_action` still drives Work View operability and the queue row's primary action (`workViewDestinationOperability`).
+
 ### Work Template action resolution hierarchy
 
-`/processes` owns operational behavior. Each work template in `stage_operating_plan_v1` may configure:
+Each work template in `stage_operating_plan_v1` may configure:
 
-- `primary_action` — optional execution affordance (distinct from work-card expand and Record Outcome)
-- `helpful_actions` — ordered supporting actions on the summary card (config-owned; Tour companions such as Send Tour Invitation appear only when authored here — never invented by the presentation layer)
 - `alternate_paths` — transition refs (`move_to_stage:{stage_key}`) or action refs
 - `outcome_refs` — ordered references to canonical stage outcomes (definitions remain stage-owned)
 
@@ -97,9 +102,9 @@ Explicit empty arrays disable fallback for that bucket (`undefined` = legacy fal
 
 Generic umbrella status actions (`update_enrollment_status`, `update_lead_status`, etc.) are never surfaced. Runtime-internal mutation commands are not operator-selectable.
 
-Configured helpful refs must resolve to a runtime-wired capability (`ACTION_BUTTON_LIBRARY` / canonical registry) to appear as executable controls. Unwired refs are treated as configuration errors and are not shown to operators.
+Configured stage command refs must resolve to a runtime-wired capability (`ACTION_BUTTON_LIBRARY` / canonical registry) to appear as executable controls. Unwired refs are treated as configuration errors and are not shown to operators.
 
-**Summary card:** checklist + progress + primary + helpful actions visible without opening Details. Expanded view is inline — no navigation detour.
+**Summary card:** checklist + progress + stage commands visible without opening Details. Expanded view is inline — no navigation detour.
 
 The UI **never writes `stage_key` directly**. Outcome execution uses `useWorkIntentOutcomeCompletion` → `completeStageWorkWithOutcome` only.
 
@@ -187,7 +192,7 @@ Queue remains preview/selection only — authoritative detail from entity GET / 
 ## Action relationship (doctrine)
 
 - **Current Work owns operational progression** — primary completion + checklist handoffs
-- **Manage is administrative** — duplicate, merge, archive, export (registry `header_menu` filtered for record)
+- **Manage lists every enabled process command** (Commands tab) plus record administration — duplicate, merge, archive, export (registry `header_menu` filtered for record)
 - **Right rail Actions** — secondary assistive inventory; outline tiles; must not compete with Current Work primary
 - **BOS assists Current Work** — routes through configured actions/comms; does not bypass outcome completion
 

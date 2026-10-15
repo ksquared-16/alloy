@@ -2,36 +2,15 @@
 
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 
-import AlloyConfigPicker, { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
+import { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
 import LifecycleStageOutcomeDefinitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
-import {
-    addWorkTemplateHelpfulAction,
-    markWorkTemplateHelpfulActionsEmpty,
-    removeWorkTemplateHelpfulAction,
-    reorderWorkTemplateHelpfulActions,
-    setWorkTemplateNoDirectAction,
-    setWorkTemplatePrimaryActionRef,
-    setWorkTemplateSelectDirectAction,
-    workTemplateExecutionMode,
-    workTemplateHelpfulActionRefs,
-    workTemplatePrimaryActionRef,
-} from "@/lib/lifecycle/stageWorkTemplateActionRefs";
-import {
-    resolveWorkTemplateActionOptions,
-    type WorkTemplateActionOption,
-} from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
+import type { WorkTemplateActionOption } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
 import { workTemplateActionAppliesToLabel } from "@/lib/lifecycle/workTemplateActionAppliesToLabel";
-import {
-    helpfulActionsConfigSource,
-    primaryActionConfigSource,
-    workTemplateConfigSourceLabel,
-    workTemplateExecutionModeSourceLabel,
-} from "@/lib/lifecycle/workTemplateConfigSource";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -60,11 +39,11 @@ type Props = {
     onStageDraftChange?: (draft: StageOperatingPlanEditorDraft) => void;
 };
 
-function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemplateActionOption | null {
+export function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemplateActionOption | null {
     return options.find((row) => row.ref === ref) ?? null;
 }
 
-function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPickerOption[] {
+export function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPickerOption[] {
     return options.map((row) => {
         const appliesTo = workTemplateActionAppliesToLabel(row.ref);
         return {
@@ -87,18 +66,7 @@ function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPicker
     });
 }
 
-function ConfigSourceBadge({ source, fallbackHint }: { source: ReturnType<typeof helpfulActionsConfigSource>; fallbackHint?: string }) {
-    return (
-        <p className="text-[0.6875rem] text-alloy-midnight/50" data-work-template-config-source={source}>
-            {workTemplateConfigSourceLabel(source)}
-            {source === "fallback" && fallbackHint ?
-                <span className="block text-alloy-midnight/40">{fallbackHint}</span>
-            :   null}
-        </p>
-    );
-}
-
-function OrderedActionRows({
+export function OrderedActionRows({
     title,
     refs,
     resolveLabel,
@@ -188,49 +156,13 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     work,
     stageKey,
     stageLabel,
-    stageOutcomes,
-    actionCatalog,
-    configuredActions,
     processStages,
-    stageOperatingPlan,
-    processTracks,
-    stageDefinition,
-    processDefinition,
-    process,
-    onChange,
     stageDraft,
     transitionOptions = [],
     onStageDraftChange,
     configuredStatuses,
     entityType,
 }: Props) {
-    const options = resolveWorkTemplateActionOptions({
-        actionRegistry: configuredActions,
-        stageActionCatalog: actionCatalog,
-        stageOperatingPlan: stageOperatingPlan ?? null,
-        processTracks: processTracks ?? null,
-        processStages,
-        stageKey,
-        stageLabel,
-        stageOutcomes,
-        workTemplateKey: work.template_key,
-        stageDefinition,
-        processDefinition,
-        process: process ?? null,
-    });
-
-    const executionMode = workTemplateExecutionMode(work);
-    const primaryRef = workTemplatePrimaryActionRef(work) ?? "";
-    const helpfulRefs = workTemplateHelpfulActionRefs(work);
-    const radioName = `work-template-primary-mode-${work.template_key}`;
-
-    const primaryOptions = toPickerOptions(options.primaryActionOptions.filter((row) => row.supported));
-    const helpfulAddOptions = toPickerOptions(
-        options.helpfulActionOptions.filter(
-            (row) => row.supported && !helpfulRefs.includes(row.ref) && row.ref !== primaryRef,
-        ),
-    );
-
     return (
         <div
             className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3"
@@ -240,136 +172,14 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             <div className="mb-1">
                 <h3 className="stage-section-label">Actions &amp; Results</h3>
                 <p className="stage-field__hint mt-0.5">
-                    What can happen here, which action is emphasized, who it applies to, and what result it produces.
+                    What results this work can produce.
                 </p>
             </div>
-            <section data-testid={`work-template-primary-action-${work.template_key}`}>
-                <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h4 className="stage-section-label">How operators start this work</h4>
-                    <ConfigSourceBadge source={primaryActionConfigSource(work)} />
-                    <span
-                        className="stage-field__hint"
-                        data-testid={`work-template-execution-mode-${work.template_key}`}
-                    >
-                        {workTemplateExecutionModeSourceLabel(work)}
-                    </span>
-                </div>
-
-                <fieldset className="space-y-2" data-testid={`work-template-primary-mode-${work.template_key}`}>
-                    <legend className="sr-only">Execution Mode</legend>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-alloy-forge/12 bg-white px-2.5 py-2">
-                        <input
-                            type="radio"
-                            name={radioName}
-                            className="mt-0.5"
-                            checked={executionMode === "direct_action"}
-                            onChange={() => onChange(setWorkTemplateSelectDirectAction(work, primaryRef || null))}
-                            data-testid={`work-template-primary-select-${work.template_key}`}
-                        />
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Command</span>
-                            <span className="stage-field__hint mb-1.5 block">
-                                Operators launch this command first, then may record an outcome.
-                            </span>
-                            {executionMode === "direct_action" ?
-                                <AlloyConfigPicker
-                                    label="Primary Command"
-                                    value={primaryRef}
-                                    options={primaryOptions}
-                                    onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
-                                    testId={`work-template-primary-picker-${work.template_key}`}
-                                />
-                            :   null}
-                        </span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-alloy-forge/12 bg-white px-2.5 py-2">
-                        <input
-                            type="radio"
-                            name={radioName}
-                            className="mt-0.5"
-                            checked={executionMode === "outcome_led"}
-                            onChange={() => onChange(setWorkTemplateNoDirectAction(work))}
-                            data-testid={`work-template-primary-none-${work.template_key}`}
-                        />
-                        <span>
-                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Outcome Led</span>
-                            <span className="stage-field__hint block">
-                                No Primary Command. Record Outcome is the main operator command.
-                            </span>
-                        </span>
-                    </label>
-                </fieldset>
-            </section>
-
-            <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
-                {/* Helpful Commands support this work. Stage transitions live under Ways out. */}
-                <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h4 className="stage-section-label">Helpful Commands</h4>
-                    <ConfigSourceBadge
-                        source={helpfulActionsConfigSource(work)}
-                        fallbackHint="Configure this section to take explicit control."
-                    />
-                </div>
-                <div className="mb-2 flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        className="text-[0.6875rem] text-alloy-midnight/50 hover:text-alloy-bend-pine"
-                        onClick={() => onChange(markWorkTemplateHelpfulActionsEmpty(work))}
-                    >
-                        Clear all
-                    </button>
-                    <div className="w-44">
-                        <AlloyConfigPicker
-                            label="Add helpful command"
-                            value=""
-                            options={helpfulAddOptions}
-                            onChange={(ref) => {
-                                if (!ref) return;
-                                onChange(addWorkTemplateHelpfulAction(work, ref));
-                            }}
-                            compact
-                            clearable={false}
-                            searchable={helpfulAddOptions.length > 6}
-                            testId={`work-template-helpful-add-${work.template_key}`}
-                            placeholder="+ Add"
-                        />
-                    </div>
-                </div>
-                <OrderedActionRows
-                    title="Helpful Commands"
-                    refs={helpfulRefs}
-                    resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref.replace(/_/g, " ")}
-                    resolveDescription={(ref) => {
-                        const appliesTo = workTemplateActionAppliesToLabel(ref);
-                        const description =
-                            optionByRef(options.helpfulActionOptions, ref)?.description ?? null;
-                        if (appliesTo && description && !description.includes(appliesTo)) {
-                            return `${appliesTo} · ${description}`;
-                        }
-                        return appliesTo ?? description;
-                    }}
-                    resolveInvalid={(ref) => {
-                        const row = optionByRef(options.helpfulActionOptions, ref);
-                        if (!row) return "Unknown command";
-                        if (!row.supported) return row.disabledReason ?? "Unsupported";
-                        return null;
-                    }}
-                    onRemove={(ref) => onChange(removeWorkTemplateHelpfulAction(work, ref))}
-                    onMoveUp={(index) => {
-                        const next = [...helpfulRefs];
-                        if (index <= 0) return;
-                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                        onChange(reorderWorkTemplateHelpfulActions(work, next));
-                    }}
-                    onMoveDown={(index) => {
-                        const next = [...helpfulRefs];
-                        if (index >= next.length - 1) return;
-                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                        onChange(reorderWorkTemplateHelpfulActions(work, next));
-                    }}
-                    testIdPrefix={`work-template-helpful-${work.template_key}`}
-                />
-            </section>
+            {/* Commands are configured once per stage, under "Stage commands" — not per work
+                item. A work item's legacy Primary/Helpful commands are carried into that list. */}
+            <p className="stage-field__hint" data-testid={`work-template-commands-note-${work.template_key}`}>
+                Commands for this stage are set under Stage commands above — not per work item.
+            </p>
 
             {/* Two sentences of schema language ("Outgoing transitions… never by destination text
                 alone") became one operator-language pointer. The mechanism they described is now

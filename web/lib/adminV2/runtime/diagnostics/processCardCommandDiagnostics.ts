@@ -19,7 +19,7 @@ export type ProcessCardCommandDriftEvent = {
     processKey: string | null;
     stageKey: string | null;
     actionRef: string;
-    slot: "primary_action" | "helpful_action";
+    slot: "stage_command";
     code: "configured_command_not_registered";
     message: string;
 };
