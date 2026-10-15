@@ -165,7 +165,9 @@ describe("stage + work action composition", () => {
         // Computed all along and never assigned — which is why a published stage action could not
         // reach an operator no matter what the composition rule said.
         const src = read("lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkTemplateFromPublishedPlan.ts");
-        expect(src).toContain("templateConfig.stage_actions = catalogActions.supporting");
+        // Stage commands: the catalog's work-bound start controls are carried onto the overlay;
+        // unbound catalog actions fold into a legacy plan's derived stage command list instead.
+        expect(src).toContain("templateConfig.stage_actions = catalogSupporting.startWork");
         expect(src).toContain("row.work_template_key");
     });
 

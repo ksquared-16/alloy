@@ -143,7 +143,8 @@ describe("Other Transitions ownership", () => {
         expect(editor).not.toContain("work-template-alternate-paths");
         expect(editor).not.toContain(">Alternate Paths<");
         expect(editor).toContain("work-template-transitions-note");
-        expect(editor).toContain("Helpful Commands");
+        // Commands moved to the stage (Stage commands); the work item points there instead.
+        expect(editor).toContain("work-template-commands-note");
     });
 });
 

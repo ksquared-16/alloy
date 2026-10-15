@@ -39,13 +39,22 @@ function action(
 }
 
 describe("What's Next config fidelity + Tour grouping + Send Invitation compose", () => {
-    it("does not invent helpful_actions from stage catalog when Work Template omits them", () => {
+    it("an authored stage command list is never extended from the stage catalog", async () => {
+        // Config fidelity under stage commands: once a stage authors its list (even empty), the
+        // catalog cannot add to it. Only a LEGACY plan's derived list carries catalog actions —
+        // the ones it already rendered — so the migration drops nothing.
+        const { resolveStageCommands } = await import("@/lib/lifecycle/stageCommands");
+        const catalog = [{ action_ref: "send_tour_invitation" }];
+        expect(
+            resolveStageCommands({ stage_commands: [], work_templates: [] }, { legacyCatalogCommands: catalog }).commands,
+        ).toEqual([]);
+        expect(
+            resolveStageCommands({ work_templates: [] }, { legacyCatalogCommands: catalog }).commands,
+        ).toEqual(catalog);
         const src = read(
             "lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkTemplateFromPublishedPlan.ts",
         );
-        expect(src).toContain("helpful_actions = []");
         expect(src).toContain("helpful_actions_explicit = true");
-        expect(src).not.toMatch(/else if \(catalogActions\.supporting\.length\)/);
     });
 
     it("does not fall back to record-header registry for helpful actions", () => {

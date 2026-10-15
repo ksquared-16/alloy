@@ -711,7 +711,9 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
             } as never,
             recordHeaderActions: null,
         });
-        expect(resolved?.templateConfig.execution_mode).toBe("outcome_led");
+        // Stage commands: the overlay carries no per-work execution mode; absence of a lead command
+        // IS outcome-led, which the surface below still derives.
+        expect(resolved?.templateConfig.execution_mode).toBeUndefined();
         expect(resolved?.templateConfig.primary_action).toBeUndefined();
 
         const surface = buildCurrentWorkSurfaceVM({
@@ -758,7 +760,7 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
         expect(surface.execution).toBeTruthy();
     });
 
-    it("32. Direct-action Current Work prefers configured Primary Action", () => {
+    it("32. A legacy Direct-action work item's Primary Command becomes a peer stage command", () => {
         const plan = leadContactFamilyProofPlan();
         const resolved = resolveCurrentWorkTemplateFromPublishedPlan({
             operatingPlan: plan,
@@ -790,8 +792,9 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
                 secondary: [],
             },
         });
-        expect(resolved?.templateConfig.execution_mode).toBe("direct_action");
-        expect(resolved?.templateConfig.primary_action?.action_ref).toBe("quick_message");
+        // The legacy primary command is carried into the stage's flat list — not promoted.
+        expect(resolved?.templateConfig.primary_action).toBeUndefined();
+        expect(resolved?.templateConfig.helpful_actions?.[0]?.action_ref).toBe("quick_message");
 
         const surface = buildCurrentWorkSurfaceVM({
             context: baseContext({
@@ -800,9 +803,9 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
             templateConfig: resolved!.templateConfig,
             actionRegistry: resolved!.actionRegistry,
         });
-        expect(surface.execution?.executionMode).toBe("direct_action");
-        expect(surface.primaryAction?.actionRef).toBe("quick_message");
-        expect(surface.execution?.prominentCta).toBe("primary_action");
+        expect(surface.primaryAction).toBeFalsy();
+        expect(surface.execution?.prominentCta).not.toBe("primary_action");
+        expect(surface.supportingActions.map((a) => a.actionRef ?? a.key)).toContain("quick_message");
     });
 
     it("33–34. Outcome transition / close use canonical configured paths", () => {
