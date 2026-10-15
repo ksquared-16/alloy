@@ -16,7 +16,7 @@ export const campuses: Campus[] = [
     address: "123 Learning Lane",
     phone: "(555) 010-1000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/wj-2bcAUuJ_4fG4pLcvRdTnk2_sYEjmxo-LcI-2UogM",
+      "https://staging.workwithalloy.com/forms/embed/mXZyldl_1mmztYfIffmEoZ4uzStB2EpqpP88HSsMaeA",
     embedTitle: "New Lead Generation Form — West Campus",
   },
   {
@@ -26,7 +26,7 @@ export const campuses: Campus[] = [
     address: "456 Discovery Drive",
     phone: "(555) 010-2000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/emVv8hMkZFFz_9Xz8pITA78579md-WQ2VQZXcrgYypQ",
+      "https://staging.workwithalloy.com/forms/embed/N4AEQO5uIv8laGbfcng-cPg12HfgY_xCOOLKPiSpR_Y",
     embedTitle: "New Lead Generation Form — North Campus",
   },
   {
@@ -36,7 +36,7 @@ export const campuses: Campus[] = [
     address: "789 Meadow Road",
     phone: "(555) 010-3000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/rH4qQvSIcGWLfuzZonUAaPpfUCRpLLLuN_io0hmhfiY",
+      "https://staging.workwithalloy.com/forms/embed/T4dfGkQfPVi2YwgTfRMNF3Yazq8Io2OFI53IeXiYvQ4",
     embedTitle: "New Lead Generation Form — South Campus",
   },
 ];
