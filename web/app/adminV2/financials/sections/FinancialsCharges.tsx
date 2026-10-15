@@ -94,14 +94,31 @@ function CommandDialog({
     children: ReactNode;
 }) {
     useEffect(() => {
+        /*
+         * An open menu closes itself first, and that Escape is the MENU's. The menu has already shut
+         * by the time this bubble listener runs (measured on deployed: one Escape on the charge-type
+         * dropdown closed the dropdown AND the dialog), so whether a menu was open is recorded when
+         * the key goes down, in capture, and honoured here.
+         */
+        let menuWasOpen = false;
+        const onCapture = (e: KeyboardEvent) => {
+            if (e.key === "Escape") menuWasOpen = hasOpenTransientPopup(document);
+        };
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
-            if (document.querySelector('[role="listbox"]')) return; // an open menu closes itself first
+            if (menuWasOpen) {
+                menuWasOpen = false;
+                return;
+            }
             e.preventDefault();
             onClose();
         };
+        window.addEventListener("keydown", onCapture, true);
         document.addEventListener("keydown", onKey);
-        return () => document.removeEventListener("keydown", onKey);
+        return () => {
+            window.removeEventListener("keydown", onCapture, true);
+            document.removeEventListener("keydown", onKey);
+        };
     }, [onClose]);
     return (
         <div className="alloy-accounts-command-host" data-financials-command-scope="true">
