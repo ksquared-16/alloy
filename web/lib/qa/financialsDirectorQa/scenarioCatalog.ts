@@ -489,7 +489,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         ],
         navigate: [
             "A · Financials → Charges → Tuition billing (top right).",
-            "B · Financials → Accounts → W7 QA · Tuition Family → Charge type: Tuition → the Tuition charge for Tilly Tuition.",
+            "B · Financials → Accounts → W7 QA · Tuition Family → the Tuition charge for Tilly Tuition in its ledger.",
             "C · Financials → Charges → Tuition billing again.",
         ],
         doThis: [
@@ -500,7 +500,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
                 + "Weekly terms appear under Not billed by this run.",
             "A4. Press Generate 2 · $2,650.00 (it also drafts Certhouse Family’s November tuition — the same draft automatic billing "
                 + "creates for it on Nov 1). Read the result line, then Close.",
-            "B1. Financials → Accounts → open W7 QA · Tuition Family. In the ledger, choose Charge type = Tuition.",
+            "B1. Financials → Accounts → open W7 QA · Tuition Family. Its ledger lists the Tuition charge (on an account that also "
+                + "holds other charge types, Charge type = Tuition narrows the ledger to it).",
             "B2. Open Tilly Tuition’s Tuition charge (Charge details) and read its dates and state.",
             "C1. Financials → Charges → Tuition billing → Monthly · November 2026 → Preview run again.",
         ],

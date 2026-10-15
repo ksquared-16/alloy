@@ -273,10 +273,23 @@ export default function FinancialsBulkAddCharge({
     }, [input, sendable, states, onCommitted]);
 
     /* The canonical date chain, as the resolver stated it for the first previewed account. */
-    const firstPreviewed = targets.map((t) => states[t.customerId]).find((s) => s?.state === "previewed");
+    /*
+     * The canonical date chain, as the resolver stated it for the first previewed account — named,
+     * because two accounts on different billing calendars resolve different periods. The resolver's
+     * lines carry ISO dates; they are read in the operator's words, and the bare `start → end` echo
+     * of a period already named is dropped.
+     */
+    const firstTarget = targets.find((t) => states[t.customerId]?.state === "previewed") ?? null;
+    const firstPreviewed = firstTarget ? states[firstTarget.customerId] : undefined;
     const chain =
         firstPreviewed?.state === "previewed"
-            ? firstPreviewed.changes.filter((c) => /^(Service|Billing period|Invoice|Due|Posting|Posts|Draft)/i.test(c))
+            ? firstPreviewed.changes
+                  .filter((c) => /^(Service|Billing period|Invoice date|Due|Posting|Posts|Draft)/i.test(c))
+                  .map((c) =>
+                      c
+                          .replace(/\s·\s\d{4}-\d{2}-\d{2}\s→\s\d{4}-\d{2}-\d{2}/g, "")
+                          .replace(/\d{4}-\d{2}-\d{2}/g, (iso) => formatDisplayDate(iso) ?? iso),
+                  )
             : [];
 
     const obligationsToCreate = sendable.reduce((n, t) => n + obligationsFor(t, grain), 0);
@@ -453,6 +466,7 @@ export default function FinancialsBulkAddCharge({
                     </p>
                     {chain.length ? (
                         <ul className="mt-1 text-[11px] text-alloy-midnight/60" data-financials-bulk-charge-date-chain="true">
+                            <li className="font-medium text-alloy-midnight/70">Dates for {firstTarget?.householdName}</li>
                             {chain.map((c) => (
                                 <li key={c}>{c}</li>
                             ))}
