@@ -51,7 +51,6 @@ export default function ProcessingFormBuilder({
         publishForm,
         loadForms,
         listPublicLinks,
-        loadPublishedVersionId,
         mintProcessingPublicLink,
         unpublishProcessingPublicLinks,
     } = useProcessingFormApi();
@@ -190,18 +189,16 @@ export default function ProcessingFormBuilder({
     }, [copiedKey]);
     const onCreateLocationLink = useCallback(
         async ({ locationId, locationName }: { locationId: string; locationName: string }) => {
-            const pv = await loadPublishedVersionId(formId);
             await mintProcessingPublicLink(formId, {
                 formName: displayFormName,
                 formKey: formMeta?.key ?? formId,
                 existingMeta: formMetaSnapshot,
-                publishedVersionId: pv,
                 locationId,
                 locationName,
             });
             await reloadLinks();
         },
-        [loadPublishedVersionId, mintProcessingPublicLink, formId, displayFormName, formMeta?.key, formMetaSnapshot, reloadLinks]
+        [mintProcessingPublicLink, formId, displayFormName, formMeta?.key, formMetaSnapshot, reloadLinks]
     );
 
     const activeLink = useMemo(
@@ -610,7 +607,6 @@ export default function ProcessingFormBuilder({
                                             canMutate={editable || hasPublishedVersion}
                                             onBackToForms={onBack}
                                             listPublicLinks={listPublicLinks}
-                                            loadPublishedVersionId={loadPublishedVersionId}
                                             mintProcessingPublicLink={mintProcessingPublicLink}
                                             unpublishProcessingPublicLinks={unpublishProcessingPublicLinks}
                                             onPublishRepublish={editable ? () => publish() : undefined}

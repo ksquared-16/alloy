@@ -8,6 +8,10 @@
  *    secrets — the retrievable posture is intentional.
  *  - Bug B (duplicate minting): every click minted a new row. Distribution-mode create now reuses the
  *    existing active link for a scope (org-wide vs a specific location) and collapses duplicates.
+ *  - Bug C (frozen on first publish): links were minted pinned to the version published at that moment,
+ *    so a republish never reached a website that had already embedded the link. A distribution link is
+ *    a standing URL, so it follows the latest published version; a reused link that is still pinned is
+ *    un-pinned (`unpinReuse`).
  *
  * Pure helpers only — no DB access here so the reuse/dedup decision is unit-testable.
  */
@@ -63,7 +67,7 @@ export function planDistributionLink(args: {
     links: FormPublicLinkSafeRow[];
     locationId: string | null;
     regenerate: boolean;
-}): { reuse: FormPublicLinkSafeRow | null; deactivateIds: string[]; mintNew: boolean } {
+}): { reuse: FormPublicLinkSafeRow | null; deactivateIds: string[]; mintNew: boolean; unpinReuse: boolean } {
     const scopeMatches = args.links.filter(
         (l) => l.is_active && isProcessingIntakeLink(l.metadata) && matchesDistributionScope(l.metadata, args.locationId)
     );
@@ -78,10 +82,11 @@ export function planDistributionLink(args: {
                 reuse: keep,
                 deactivateIds: scopeMatches.filter((l) => l.id !== keep.id).map((l) => l.id),
                 mintNew: false,
+                unpinReuse: keep.pinned_form_definition_version_id !== null,
             };
         }
     }
 
     // Regenerate, or no retrievable link exists for this scope: clean slate + mint fresh.
-    return { reuse: null, deactivateIds: scopeMatches.map((l) => l.id), mintNew: true };
+    return { reuse: null, deactivateIds: scopeMatches.map((l) => l.id), mintNew: true, unpinReuse: false };
 }

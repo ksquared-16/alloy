@@ -95,6 +95,21 @@ describe("planDistributionLink — idempotent create / dedup / regenerate", () =
         expect(plan.deactivateIds).toEqual([]);
     });
 
+    it("flags a reused link that is still pinned so the server un-pins it", () => {
+        const pinned = [
+            link({ id: "pinned", pinned_form_definition_version_id: "v1", metadata: { form_context_mode: "processing_intake", [SHARE_EMBED_PATH_META_KEY]: "/forms/embed/p" } }),
+        ];
+        const p1 = planDistributionLink({ links: pinned, locationId: null, regenerate: false });
+        expect(p1.reuse?.id).toBe("pinned");
+        expect(p1.unpinReuse).toBe(true);
+
+        const unpinned = [
+            link({ id: "free", metadata: { form_context_mode: "processing_intake", [SHARE_EMBED_PATH_META_KEY]: "/forms/embed/f" } }),
+        ];
+        expect(planDistributionLink({ links: unpinned, locationId: null, regenerate: false }).unpinReuse).toBe(false);
+        expect(planDistributionLink({ links: pinned, locationId: null, regenerate: true }).unpinReuse).toBe(false);
+    });
+
     it("ignores inactive and non-processing links", () => {
         const links = [
             link({ id: "inactive", is_active: false, metadata: { form_context_mode: "processing_intake", [SHARE_EMBED_PATH_META_KEY]: "/forms/embed/x" } }),

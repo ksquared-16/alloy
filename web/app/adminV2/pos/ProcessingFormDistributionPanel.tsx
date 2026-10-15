@@ -23,7 +23,6 @@ type MintArgs = {
     formName: string;
     formKey: string;
     existingMeta?: Record<string, unknown>;
-    publishedVersionId?: string | null;
     locationId?: string;
     locationName?: string;
     /** Rotate to a fresh token, deactivating any prior link for this scope. */
@@ -39,7 +38,6 @@ type Props = {
     existingMeta?: Record<string, unknown>;
     canMutate?: boolean;
     listPublicLinks: (formId: string) => Promise<ProcessingFormPublicLinkRow[]>;
-    loadPublishedVersionId: (formId: string) => Promise<string | null>;
     mintProcessingPublicLink: (formId: string, args: MintArgs) => Promise<ProcessingMintedPublicLink>;
     unpublishProcessingPublicLinks: (formId: string, links: ProcessingFormPublicLinkRow[]) => Promise<void>;
     onPublishRepublish?: () => Promise<void>;
@@ -78,7 +76,6 @@ export default function ProcessingFormDistributionPanel({
     existingMeta = {},
     canMutate = true,
     listPublicLinks,
-    loadPublishedVersionId,
     mintProcessingPublicLink,
     unpublishProcessingPublicLinks,
     onPublishRepublish,
@@ -180,14 +177,12 @@ export default function ProcessingFormDistributionPanel({
     };
 
     const mintLinks = async (targets: Array<{ locationId?: string; locationName?: string }>) => {
-        const publishedVersionId = await loadPublishedVersionId(formId);
         const created: ProcessingMintedPublicLink[] = [];
         for (const target of targets) {
             const link = await mintProcessingPublicLink(formId, {
                 formName,
                 formKey,
                 existingMeta,
-                publishedVersionId,
                 ...(target.locationId ? { locationId: target.locationId, locationName: target.locationName } : {}),
             });
             const embedUrl = resolveProcessingPublicShareUrl({
@@ -247,13 +242,11 @@ export default function ProcessingFormDistributionPanel({
         setBusy(true);
         setErr(null);
         try {
-            const publishedVersionId = await loadPublishedVersionId(formId);
             const locationId = linkScopeLocationId(link.metadata) ?? undefined;
             const created = await mintProcessingPublicLink(formId, {
                 formName,
                 formKey,
                 existingMeta,
-                publishedVersionId,
                 regenerate: true,
                 ...(locationId
                     ? { locationId, locationName: siteCatalog[locationId] ?? "Location" }

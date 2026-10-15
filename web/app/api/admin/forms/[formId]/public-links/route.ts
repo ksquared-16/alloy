@@ -258,8 +258,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Distribution-mode (the Processing "Create distribution link(s)" panel): make create idempotent,
     // retrievable, and self-healing. Reuse the existing active link for this scope, collapse duplicates,
     // and — with `regenerate` — rotate to a fresh token. Other callers of this route are unaffected.
+    // A distribution link is a standing URL embedded on a website, so it always serves the latest
+    // published version: it is never pinned, and a reused link that is still pinned is un-pinned.
     const distributionMode = body.distribution === true;
     if (distributionMode) {
+        pinnedId = null;
         const { data: existingLinks } = await dbListPublicLinksForForm(supabase, ctx.orgId, formId);
         const plan = planDistributionLink({
             links: (existingLinks ?? []) as FormPublicLinkSafeRow[],
@@ -272,10 +275,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (plan.reuse) {
             const sharePath = readShareEmbedPath(plan.reuse.metadata);
             if (sharePath) {
+                let reused = plan.reuse;
+                if (plan.unpinReuse) {
+                    const { data: unpinned, error: unpinErr } = await dbUpdateFormPublicLinkForForm(
+                        supabase,
+                        ctx.orgId,
+                        formId,
+                        reused.id,
+                        { pinned_form_definition_version_id: null }
+                    );
+                    if (unpinErr || !unpinned) {
+                        return NextResponse.json({ error: unpinErr?.message ?? "Unpin failed" }, { status: 500 });
+                    }
+                    reused = unpinned as FormPublicLinkSafeRow;
+                }
                 const base = deriveEmbedBaseUrl();
                 return jsonData(
                     {
-                        ...(plan.reuse as unknown as Record<string, unknown>),
+                        ...(reused as unknown as Record<string, unknown>),
                         plaintext_token: plaintextTokenFromEmbedPath(sharePath),
                         embed_path: sharePath,
                         embed_url: base ? `${base}${sharePath}` : null,
