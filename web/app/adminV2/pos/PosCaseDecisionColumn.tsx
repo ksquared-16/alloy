@@ -119,7 +119,7 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
     const submitted = evidence.flatMap((e) => e.proposedValues).map((v) => ({ label: v.label, value: v.value ?? null }));
     const matchedCards =
         rec?.supported && rec.recommendation
-            ? buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted })
+            ? buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted, leadPlan: rec.leadPlan ?? null })
             : [];
     const planLines = matchedCards.length ? buildCommitPlanLines(matchedCards) : [];
 

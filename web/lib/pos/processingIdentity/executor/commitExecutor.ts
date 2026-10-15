@@ -207,7 +207,7 @@ function opResult(
     idempotentReplay: boolean,
     error: string | null,
 ): OperationResult {
-    return { opId: op.opId, commandKey: op.commandKey, status, recordId, idempotentReplay, error };
+    return { opId: op.opId, commandKey: op.commandKey, opKind: op.opKind, status, recordId, idempotentReplay, error };
 }
 
 function finalize(

@@ -57,17 +57,13 @@ export function buildLeadAcknowledgementView(result: LeadCommitResultLike): Lead
     const matched = result.matchedExisting === true;
     const leadCreated = result.createdRecords ? result.createdRecords.lead : result.created !== false && !!leadId;
 
-    const title = !leadId
-        ? "Completed"
-        : matched
-          ? leadCreated
-              ? "Lead added to an existing family"
-              : "Linked to an existing family"
-          : "Lead created";
+    const title = !leadId ? "Completed" : matched ? "Added to an existing family" : "Lead created";
     const body = !leadId
         ? "This submission has been processed."
         : matched
-          ? "This submission matched a family already in Alloy. No new family was created — the existing record was updated and linked."
+          ? leadCreated
+              ? "This submission matched a family already in Alloy. No new family was created — the existing record was linked and a new Enrollment lead was opened for them."
+              : "This submission matched a family already in Alloy. No new family and no new lead were created — it was added to the family's existing Enrollment lead."
           : "A new family is now an Enrollment lead, in the same place a lead created in Alloy appears.";
 
     const actions: LeadAcknowledgementAction[] = [];

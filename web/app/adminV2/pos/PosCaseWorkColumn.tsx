@@ -76,6 +76,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                   recommendation: rec.recommendation,
                   intent: rec.intent ?? null,
                   submitted: submitted.map((v) => ({ label: v.label, value: v.value ?? null })),
+                  leadPlan: rec.leadPlan ?? null,
               })
             : [];
 

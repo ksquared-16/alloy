@@ -344,6 +344,17 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                         dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []),
                         reason: "new lead",
                     });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    // The family's existing open case — reused, not created. Stated as an operation (as a
+                    // linked household is) so the commit reports the lead it attached to.
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.createLead,
+                        targetId: sub.selectedRecordId,
+                        payload: { lead_id: sub.selectedRecordId },
+                        reason: "reuse the family's open lead",
+                    });
                 } else if (sub.decision === "update") {
                     operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateLead, targetId: sub.selectedRecordId ?? null, payload: { lead_id: sub.selectedRecordId, name: sub.values?.name }, after: { name: sub.values?.name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update lead" });
                 }

@@ -5,6 +5,9 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { isClosedStatusKeyForEntity } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+
 export type IntakeOpportunityMatchDecision =
     | { kind: "no_match" }
     | { kind: "matched"; opportunityId: string }
@@ -42,6 +45,11 @@ export function decideIntakeOpportunityMatch(candidateIds: string[]): IntakeOppo
 export type FindIntakeOpportunityParams = {
     orgId: string;
     personId: string;
+    /**
+     * The household identity review already resolved. When known, the family case is looked up on
+     * the HOUSEHOLD — the family-grain case container — rather than re-deriving it from the parent.
+     */
+    customerId?: string | null;
     locationId?: string | null;
     childFirst?: string | null;
     childLast?: string | null;
@@ -95,8 +103,20 @@ async function filterOpportunityIdsByChild(
 }
 
 /**
- * Find an existing open opportunity for intake dedup.
- * Matches guardian person + optional location + optional child name on linked customer members.
+ * THE FAMILY'S OPEN ENROLLMENT CASE, if it already has one — the one lookup every intake door
+ * (BOS → Create Lead, an approved public form in Processing) resolves the lead subject through.
+ *
+ * A family-grain case holds every child of the household; adding a sibling attaches the child to
+ * it, it does not open a second case. Scope: the resolved household (else the matched parent) at
+ * the intake's location when one is known.
+ *
+ * OPEN means "not a closed status" by the configured status catalogue (`isClosedStatusKeyForEntity`,
+ * the canonical closed check; durable family truth is open | closed). This used to be the literal
+ * `status_key = 'open'`, while both doors commit leads with the entry status (`new`) — so an open
+ * lead was never found, and a matched family with a second child got a second lead.
+ *
+ * A CLOSED prior case is never reused or reopened: a new intake after the family's case closed
+ * starts a new case.
  */
 export async function findExistingIntakeOpportunity(
     supabase: SupabaseClient,
@@ -104,10 +124,10 @@ export async function findExistingIntakeOpportunity(
 ): Promise<IntakeOpportunityMatchDecision> {
     let query = supabase
         .from("opportunities")
-        .select("id")
-        .eq("org_id", params.orgId)
-        .eq("primary_person_id", params.personId)
-        .eq("status_key", "open");
+        .select("id, status_key")
+        .eq("org_id", params.orgId);
+    const customerId = params.customerId?.trim();
+    query = customerId ? query.eq("customer_id", customerId) : query.eq("primary_person_id", params.personId);
 
     if (params.locationId) {
         query = query.eq("location_id", params.locationId);
@@ -116,7 +136,26 @@ export async function findExistingIntakeOpportunity(
     const { data, error } = await query;
     if (error) throw new Error(`opportunities dedup lookup failed: ${error.message}`);
 
-    let ids = (data ?? []).map((r) => (r as { id: string }).id);
+    const rows = (data ?? []) as Array<{ id: string; status_key?: string | null }>;
+    let configuredStatuses: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>> = [];
+    if (rows.length > 0) {
+        try {
+            configuredStatuses = await fetchEffectiveStatusDefinitions(supabase, params.orgId, "opportunities", { activeOnly: true });
+        } catch {
+            // Without the catalogue the canonical check still knows the doctrine key (`closed`).
+            configuredStatuses = [];
+        }
+    }
+    const catalogue = configuredStatuses.map((row) => ({
+        status_key: row.status_key,
+        status_label: row.status_label ?? row.status_key,
+        entity_type: "opportunities",
+        is_active: row.is_active,
+        metadata: row.metadata,
+    }));
+    let ids = rows
+        .filter((row) => !isClosedStatusKeyForEntity({ statusKey: row.status_key ?? "", entityType: "opportunities", configuredStatuses: catalogue }))
+        .map((row) => row.id);
     ids = await filterOpportunityIdsByChild(
         supabase,
         params.orgId,

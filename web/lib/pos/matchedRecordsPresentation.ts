@@ -70,6 +70,8 @@ export function buildMatchedRecords(input: {
     recommendation: IntakeRecommendation;
     intent: OperationalIntentKey | null | undefined;
     submitted: SubmittedValue[];
+    /** The lead subject's resolution, when known — preferred over the parent-derived decision. */
+    leadPlan?: "reuse" | "create" | null;
 }): MatchedRecordCard[] {
     const cards: MatchedRecordCard[] = [];
     const rec = input.recommendation;
@@ -111,11 +113,15 @@ export function buildMatchedRecords(input: {
     const noun = decisionNounForIntent(input.intent);
     const nounTitle = noun.replace(/^\w/, (c) => c.toUpperCase());
     const willBe =
-        rec.decision === "link"
-            ? `Will be linked after approval`
-            : rec.decision === "route"
-              ? `Held for review`
-              : `Will be created after approval`;
+        rec.decision === "route"
+            ? `Held for review`
+            : input.leadPlan === "reuse"
+              ? `Existing lead — the child will be added to it`
+              : input.leadPlan === "create"
+                ? `Will be created after approval`
+                : rec.decision === "link"
+                  ? `Will be linked after approval`
+                  : `Will be created after approval`;
     cards.push({
         role: "business_object",
         title: nounTitle,

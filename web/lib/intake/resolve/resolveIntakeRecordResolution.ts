@@ -238,6 +238,7 @@ export async function resolveIntakeRecordResolution(
         const leadLookup = await findExistingLeadForIntake(supabase, {
             orgId,
             personId: primaryParentPersonId,
+            customerId: householdCustomerId ?? null,
             locationId: input.location_id ?? household.location?.resolved_value ?? null,
             // Household-level open lead warning — child OCM linkage is optional on existing leads.
             childFirst: null,

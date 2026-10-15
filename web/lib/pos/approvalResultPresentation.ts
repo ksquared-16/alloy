@@ -90,6 +90,8 @@ export function buildApprovalResultView(input: {
     if (child && createdChild) created.push({ primary: child.name ?? "New child", secondary: "Child" });
     else if (child && made && r?.child) linked.push({ primary: child.name ?? "Existing child", secondary: "Child" });
     if (biz && createdLead) created.push({ primary: biz.title });
+    // The family's open case was reused: the child joined it — no new lead exists.
+    else if (biz && made && r?.lead) linked.push({ primary: `Existing ${biz.title}` });
     if (r?.participation) created.push({ primary: "Enrollment participation" });
 
     // ZIP is written onto the lead's person (created or linked) — show it only when such a person exists.

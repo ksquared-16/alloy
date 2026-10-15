@@ -200,6 +200,7 @@ export async function findExistingLeadForIntake(
     input: {
         orgId: string;
         personId: string;
+        customerId?: string | null;
         locationId?: string | null;
         childFirst?: string | null;
         childLast?: string | null;
@@ -208,6 +209,7 @@ export async function findExistingLeadForIntake(
     const decision = await findExistingIntakeOpportunity(supabase, {
         orgId: input.orgId,
         personId: input.personId,
+        customerId: input.customerId ?? null,
         locationId: input.locationId ?? null,
         childFirst: input.childFirst ?? null,
         childLast: input.childLast ?? null,

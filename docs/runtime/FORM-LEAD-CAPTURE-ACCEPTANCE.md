@@ -32,6 +32,31 @@ Intake reads each submitted value through the published question's **canonical b
 (`field_source.crm_mapping_key`, e.g. `child.date_of_birth`), then the default field ids. The link's
 explicit `intake_field_paths` override both.
 
+## One open family case per household
+
+A family-grain Enrollment case holds every child of the household. A second child attaches to it; it
+does not open a second case. Both doors resolve the lead subject through the one lookup,
+`findExistingIntakeOpportunity`, called by `householdGraph` and `resolveIntakeRecordResolution`:
+
+- **Scope:** the household identity review resolved (`customer_id`). Without one, the matched parent
+  (`primary_person_id`). Narrowed to the intake's location when one is known.
+- **Open:** not a closed status by the configured catalogue (`isClosedStatusKeyForEntity`). It used to be the
+  literal `status_key = 'open'`, while both doors commit leads as `new`, so no open lead was ever found,
+  and a matched family's second child got a second lead (BOS and Processing alike).
+- **Closed:** a closed prior case is never reused or reopened. A new intake starts a new case.
+- **Child identity:** plays no part in the family-case lookup.
+- **Confidence:** found on the resolved household, the open case is *confirmed* and the child is attached.
+  Found from the parent alone, it is *strong* and goes to the operator to confirm. Two open cases are
+  surfaced as ambiguous, never guessed.
+- **Plan:** a reused lead is an explicit `no_op` operation carrying the existing id, the same pattern as a
+  linked household. Execution results carry `opKind`.
+- **Result contract** (`summarizeLeadCommitRecords`): *created* means a committed `create`. A reused
+  household or lead reports its existing id with `created: false`. The review's lead line comes from the
+  lead subject's own resolution (`leadPlan`), not the parent match.
+
+Not settled here: a household's open case with **no** location, against an intake that names one. The
+location narrowing treats them as different cases.
+
 ## After Approve: an acknowledgement, not an auto-advance
 
 `ProcessingLeadAcknowledgement` stays until the operator chooses. Processing never moves to the next item
