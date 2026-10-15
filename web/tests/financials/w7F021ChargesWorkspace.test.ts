@@ -253,5 +253,10 @@ describe("deployed fixes (W7-F021 follow-up, measured on 39a20265)", () => {
         expect(ui).toMatch(/formatDisplayDate\(iso\)/);
         expect(ui).toContain("Dates for {firstTarget?.householdName}");
     });
-});
 
+    it("Escape on a menu inside a Charges dialog closes the menu, not the dialog", () => {
+        const page = code("app/adminV2/financials/sections/FinancialsCharges.tsx");
+        expect(page).toMatch(/if \(e\.key === "Escape"\) menuWasOpen = hasOpenTransientPopup\(document\);/);
+        expect(page).toMatch(/if \(menuWasOpen\) \{\s*menuWasOpen = false;\s*return;\s*\}/);
+    });
+});
