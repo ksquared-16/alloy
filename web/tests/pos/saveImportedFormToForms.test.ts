@@ -222,3 +222,22 @@ describe("/api/admin/processing/folders — the organisation's folders", () => {
         expect((await patch([{ id: "BAD", label: "" }])).status).toBe(400);
     });
 });
+
+describe("Save to Forms is reachable from the imported form's Studio", () => {
+    /*
+     * STRUCTURAL GUARD, NOT A RUNTIME PROOF. Deployed acceptance found the defect this pins: the footer
+     * holding "Continue to Save to Forms" lived only inside the legacy review branch, so a case opened in
+     * the imported form's Studio had no way forward at all. Runtime reachability is proven by deployed
+     * acceptance (web/.qa1441); this keeps the branch from silently losing the footer again.
+     */
+    it("the imported-form Studio branch renders the same footer as the review branch", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { resolve } = await import("node:path");
+        const src = readFileSync(resolve(process.cwd(), "app/adminV2/pos/PosTemplateSetupColumn.tsx"), "utf8");
+        const branch = src.slice(src.indexOf('reviewMode === "form" && draft && !created ? ('), src.indexOf('reviewMode === "concepts" && discovery && !created ? ('));
+        expect(branch).toContain("<ProcessingImportedFormStudio");
+        expect(branch).toContain("{reviewFooter}");
+        const footer = src.slice(src.indexOf("const reviewFooter = ("), src.indexOf("const reviewFooter = (") + 6000);
+        expect(footer).toContain("Continue to Save to Forms");
+    });
+});
