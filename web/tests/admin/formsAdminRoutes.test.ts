@@ -1275,6 +1275,78 @@ describe("Admin forms routes", () => {
         expect(res.status).toBe(403);
     });
 
+    it("distribution create never pins — a website embed must follow the latest published version", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    distribution: true,
+                    metadata: { form_context_mode: "processing_intake" },
+                    pinned_form_definition_version_id: vid,
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { id: string; pinned_form_definition_version_id: string | null } };
+        expect(j.data.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[j.data.id]?.pinned_form_definition_version_id).toBeNull();
+    });
+
+    it("distribution create reusing a pinned link un-pins it and keeps the same URL", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "h",
+            token_prefix: "tok",
+            pinned_form_definition_version_id: vid,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: { form_context_mode: "processing_intake", share_embed_path: "/forms/embed/campusTok" },
+            created_at: "2026-10-15T19:50:00.000Z",
+            updated_at: null,
+            last_used_at: null,
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ distribution: true, metadata: { form_context_mode: "processing_intake" } }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            data: { id: string; reused: boolean; plaintext_token: string; pinned_form_definition_version_id: string | null };
+        };
+        expect(j.data.reused).toBe(true);
+        expect(j.data.id).toBe(lid);
+        expect(j.data.plaintext_token).toBe("campusTok");
+        expect(j.data.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[lid]?.pinned_form_definition_version_id).toBeNull();
+        expect(storeRef.publicLinks[lid]?.is_active).toBe(true);
+    });
+
     it("POST confirm-linkage clears intake_needs_review and stamps reviewer", async () => {
         const fid = crypto.randomUUID();
         const vid = crypto.randomUUID();

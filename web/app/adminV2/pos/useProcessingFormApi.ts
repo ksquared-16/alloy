@@ -310,7 +310,6 @@ export function useProcessingFormApi() {
                 formName: string;
                 formKey: string;
                 existingMeta?: Record<string, unknown>;
-                publishedVersionId?: string | null;
                 locationId?: string;
                 locationName?: string;
                 /** Rotate to a fresh token, deactivating any prior link for this scope. */
@@ -326,9 +325,9 @@ export function useProcessingFormApi() {
                 body: JSON.stringify({
                     metadata,
                     // Idempotent, retrievable distribution create — reuse existing links per scope.
+                    // Never pinned: the server keeps distribution links on the latest published version.
                     distribution: true,
                     ...(args.regenerate ? { regenerate: true } : {}),
-                    ...(args.publishedVersionId ? { pinned_form_definition_version_id: args.publishedVersionId } : {}),
                     ...(args.locationId
                         ? {
                               default_location_id: args.locationId,
