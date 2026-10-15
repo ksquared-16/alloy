@@ -121,6 +121,7 @@ export async function generateHouseholdGraphCandidates(
         const leadLookup = await findExistingLeadForIntake(supabase, {
             orgId,
             personId: primaryParentPersonId,
+            customerId: resolvedCustomerId ?? null,
             locationId: input.locationId ?? household.location?.resolved_value ?? null,
             childFirst: null,
             childLast: null,
@@ -154,7 +155,10 @@ export async function generateHouseholdGraphCandidates(
                 entityType: "lead",
                 recordId: leadLookup.opportunityId,
                 matchedEntityType: "opportunity",
-                confidenceBand: "strong",
+                // Looked up on the RESOLVED household, the family's one open case is determined — not a
+                // fuzzy match to review — so a sibling attaches to it. Found from the parent alone, it
+                // stays a strong match for the operator to confirm.
+                confidenceBand: resolvedCustomerId ? "confirmed" : "strong",
                 signals: [
                     {
                         key: "open_lead",

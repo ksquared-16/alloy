@@ -34,7 +34,7 @@ describe("post-approval acknowledgement", () => {
             matchedExisting: true,
         });
         expect(v.matched).toBe(true);
-        expect(v.title).toBe("Lead added to an existing family");
+        expect(v.title).toBe("Added to an existing family");
         expect(v.body).toMatch(/No new family was created/);
         expect(`${v.title} ${v.body}`).not.toMatch(/new family is now/i);
     });

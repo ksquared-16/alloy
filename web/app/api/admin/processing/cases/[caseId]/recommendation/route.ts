@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { recommendationFromFormSubmission } from "@/lib/pos/processingCase/recommendation/recommendationFromSubmission";
+import { listProcessingResolutionsByCase } from "@/lib/pos/processingIdentity/processingResolutionsDb";
+import { pickLatestResolutionPerSubject } from "@/lib/pos/processingIdentity/operator/recommendationBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +62,19 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         const result = await recommendationFromFormSubmission(supabase, ctx.orgId, source.source_id, {
             enrichCandidates: true,
         });
-        return jsonData(result);
+        // What approval will do with the ENROLLMENT LEAD is the lead subject's own resolution — reuse the
+        // family's open case, or open one — not an inference from the parent match. A matched parent with
+        // no open case gets a new lead; one with an open case keeps it.
+        let leadPlan: "reuse" | "create" | null = null;
+        try {
+            const rows = pickLatestResolutionPerSubject(await listProcessingResolutionsByCase(supabase, ctx.orgId, caseId));
+            const lead = rows.find((r) => r.subject_role === "lead");
+            if (lead?.decision_action === "link_existing" && lead.selected_candidate_id) leadPlan = "reuse";
+            else if (lead?.decision_action === "create_new") leadPlan = "create";
+        } catch {
+            leadPlan = null;
+        }
+        return jsonData({ ...result, leadPlan });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to build recommendation" },

@@ -21,6 +21,11 @@ export type OperationStatus =
 export type OperationResult = {
     opId: string;
     commandKey: string;
+    /**
+     * The planned kind. A `no_op` reuses an existing record (a linked household / lead) and is
+     * reported `committed` with that record's id — "created" is only a committed `create`.
+     */
+    opKind?: string;
     status: OperationStatus;
     recordId: string | null;
     idempotentReplay: boolean;

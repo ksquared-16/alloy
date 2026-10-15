@@ -33,6 +33,8 @@ export interface RecommendationView {
     /** Identifying detail per existing-match candidate (§3), keyed by candidate id. */
     candidateDetails?: CandidateDetail[];
     source?: { kind: string; hasEmailBinding: boolean; mappedPersonValues: number };
+    /** The lead subject's own resolution: reuse the family's open case, or open one. */
+    leadPlan?: "reuse" | "create" | null;
 }
 
 /** Map the read-model decision to a stable action key (engine vocabulary, not shown to the operator). */

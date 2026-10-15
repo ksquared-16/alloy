@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { emitEvent } from "@/lib/emitEvent";
+import { summarizeLeadCommitRecords } from "@/lib/pos/leadCommitRecords";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbCompleteProcessingCaseWithResult } from "@/lib/pos/processingCase/processingCaseDb";
@@ -82,7 +83,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     attempt.operations.find((o) => commandKeys.includes(o.commandKey) && o.status === "committed")
                         ?.recordId ?? null;
                 const leadId = committedRecord("create_lead") ?? committedRecord("update_lead");
-                const personId = committedRecord("create_person");
 
                 // The canonical lead as committed — the same row BOS → Create Lead hands off from. Its
                 // owner (work unit), stage and status decide the Work View the record lands in; its person
@@ -103,6 +103,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     status_key?: string | null;
                     stage_key?: string | null;
                 } | null;
+
+                // Created vs reused, per record, from the PLANNED kind of each committed operation.
+                const { records, createdRecords, matchedExisting } = summarizeLeadCommitRecords(attempt.operations, leadRow);
+                const personId = createdRecords.person ? records.person : null;
 
                 // Phase 1 — populate the committed Person's canonical address (incl. ZIP) through the
                 // canonical field system. ZIP is identity, not intake: this reuses the same writer as the
@@ -143,21 +147,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     }
                 }
 
-                const createdHousehold = committedRecord("create_household");
-                const createdChild = committedRecord("create_child");
-                const records = {
-                    household: createdHousehold ?? leadRow?.customer_id ?? null,
-                    child: createdChild ?? committedRecord("update_child"),
-                    person: personId ?? leadRow?.primary_person_id ?? null,
-                    lead: leadId,
-                    participation: committedRecord("create_process_participation"),
-                };
-                const createdRecords = {
-                    household: createdHousehold != null,
-                    child: createdChild != null,
-                    person: personId != null,
-                    lead: committedRecord("create_lead") != null,
-                };
                 const operationalResult = {
                     kind: "lead",
                     recordType: "opportunity",
@@ -167,10 +156,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     created: createdRecords.lead,
                     records,
                     createdRecords,
-                    matchedExisting:
-                        (records.household != null && !createdRecords.household) ||
-                        (records.person != null && !createdRecords.person) ||
-                        (records.child != null && !createdRecords.child),
+                    matchedExisting,
                     handoff: { workUnitId, workViewId, workViewRouteKey, statusKey, stageKey },
                     attemptId: attempt.attemptId,
                 };
