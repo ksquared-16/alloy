@@ -1085,6 +1085,92 @@ export default function PosTemplateSetupColumn({
         return { lines, matches: lines.length };
     })();
 
+    /*
+     * THE WAY FORWARD FROM THE FORM — rendered under every review surface.
+     *
+     * It used to live only inside the legacy review branch, so a case opened in Forms Studio (the
+     * imported form's own editor) had no footer at all: no "Continue to Save to Forms", no Re-detect, no
+     * Add source. An operator who had finished configuring the form had nowhere to go.
+     */
+    const reviewFooter = (
+    <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+        {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
+        <div className="flex items-center justify-between gap-3">
+            {(detail?.sources.length ?? 0) > 1 ? (
+                <p className="min-w-0 text-[10px] text-alloy-midnight/55" data-testid="processing-case-sources">
+                    {detail!.sources.length} sources on this case:{" "}
+                    {detail!.sources
+                        .map((s) => `${s.display.originalFilename ?? s.display.label}${s.role === "primary" ? " (primary)" : ""}`)
+                        .join(" · ")}
+                </p>
+            ) : null}
+            <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
+                {created
+                    ? "Saved to Forms as a draft. Open it in Forms Studio to keep editing or to publish."
+                    : "When you're done reviewing, continue to generate your native form."}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+                {!created ? (
+                    <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
+                        {busy ? "Re-detecting…" : "Re-detect questions"}
+                    </button>
+                ) : null}
+                {!created ? (
+                    <>
+                        <input
+                            ref={addSourceInputRef}
+                            type="file"
+                            accept={processingImportAcceptList()}
+                            className="hidden"
+                            data-testid="processing-add-source-input"
+                            onChange={(e) => void handleAddSource(e.target.files?.[0] ?? null)}
+                        />
+                        <button
+                            type="button"
+                            disabled={addingSource || packetBusy || busy || creating}
+                            onClick={() => addSourceInputRef.current?.click()}
+                            className={WS_ACTION_SECONDARY}
+                            data-testid="processing-add-source"
+                            title="Attach another document to this case, then analyse them together"
+                        >
+                            {addingSource ? "Adding…" : "Add source"}
+                        </button>
+                    </>
+                ) : null}
+                {/*
+                  * "Analyse as one packet" used to sit here. Removing it from the intent chooser
+                  * was not enough — it remained as a second action asking an operator to
+                  * understand a second analysis mode in order to do the one thing they came to
+                  * do, which is turn their paperwork into a form. `handleAnalyzePacket` and the
+                  * `{"mode":"packet"}` route are untouched for callers that genuinely want packet
+                  * composition; it is simply not offered in the form-authoring workflow.
+                  */}
+                {created ? (
+                    <button
+                        type="button"
+                        onClick={() => created.form_id && onOpenForm?.(created.form_id, formName.trim() || undefined)}
+                        className={WS_ACTION_PRIMARY}
+                    >
+                        Open in Forms Studio
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        disabled={activeFieldCount === 0}
+                        onClick={() => {
+                            setFormName((cur) => cur.trim() || proposeGeneratedFormName(docTitle));
+                            setPhase("generate");
+                        }}
+                        className={WS_ACTION_PRIMARY}
+                    >
+                        Continue to Save to Forms
+                    </button>
+                )}
+            </div>
+        </div>
+    </div>
+    );
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
             <div className="mb-2 shrink-0 bg-white px-1.5">
@@ -1297,6 +1383,8 @@ export default function PosTemplateSetupColumn({
                     />
                 </div>
             ) : reviewMode === "form" && draft && !created ? (
+                <div className="flex min-h-0 flex-1 flex-col" data-testid="processing-imported-form-with-footer">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ProcessingImportedFormStudio
                     draft={draft}
                     sourceDocumentName={sourceFilenameEarly}
@@ -1320,6 +1408,9 @@ export default function PosTemplateSetupColumn({
                         if (body.data?.form_draft_preview) setDraft(body.data.form_draft_preview);
                     }}
                 />
+                </div>
+                {reviewFooter}
+                </div>
             ) : reviewMode === "concepts" && discovery && !created ? (
                 <ProcessingConceptReview
                     discovery={discovery}
@@ -1624,83 +1715,7 @@ export default function PosTemplateSetupColumn({
                 </WorkspaceZonePanel>
             </div>
 
-            {/* Footer — below review workspace; document scroll stays above */}
-            <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
-                {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
-                <div className="flex items-center justify-between gap-3">
-                    {(detail?.sources.length ?? 0) > 1 ? (
-                        <p className="min-w-0 text-[10px] text-alloy-midnight/55" data-testid="processing-case-sources">
-                            {detail!.sources.length} sources on this case:{" "}
-                            {detail!.sources
-                                .map((s) => `${s.display.originalFilename ?? s.display.label}${s.role === "primary" ? " (primary)" : ""}`)
-                                .join(" · ")}
-                        </p>
-                    ) : null}
-                    <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
-                        {created
-                            ? "Saved to Forms as a draft. Open it in Forms Studio to keep editing or to publish."
-                            : "When you're done reviewing, continue to generate your native form."}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                        {!created ? (
-                            <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
-                                {busy ? "Re-detecting…" : "Re-detect questions"}
-                            </button>
-                        ) : null}
-                        {!created ? (
-                            <>
-                                <input
-                                    ref={addSourceInputRef}
-                                    type="file"
-                                    accept={processingImportAcceptList()}
-                                    className="hidden"
-                                    data-testid="processing-add-source-input"
-                                    onChange={(e) => void handleAddSource(e.target.files?.[0] ?? null)}
-                                />
-                                <button
-                                    type="button"
-                                    disabled={addingSource || packetBusy || busy || creating}
-                                    onClick={() => addSourceInputRef.current?.click()}
-                                    className={WS_ACTION_SECONDARY}
-                                    data-testid="processing-add-source"
-                                    title="Attach another document to this case, then analyse them together"
-                                >
-                                    {addingSource ? "Adding…" : "Add source"}
-                                </button>
-                            </>
-                        ) : null}
-                        {/*
-                          * "Analyse as one packet" used to sit here. Removing it from the intent chooser
-                          * was not enough — it remained as a second action asking an operator to
-                          * understand a second analysis mode in order to do the one thing they came to
-                          * do, which is turn their paperwork into a form. `handleAnalyzePacket` and the
-                          * `{"mode":"packet"}` route are untouched for callers that genuinely want packet
-                          * composition; it is simply not offered in the form-authoring workflow.
-                          */}
-                        {created ? (
-                            <button
-                                type="button"
-                                onClick={() => created.form_id && onOpenForm?.(created.form_id, formName.trim() || undefined)}
-                                className={WS_ACTION_PRIMARY}
-                            >
-                                Open in Forms Studio
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled={activeFieldCount === 0}
-                                onClick={() => {
-                                    setFormName((cur) => cur.trim() || proposeGeneratedFormName(docTitle));
-                                    setPhase("generate");
-                                }}
-                                className={WS_ACTION_PRIMARY}
-                            >
-                                Continue to Save to Forms
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
+            {reviewFooter}
             </div>
             )}
         </div>
