@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { IDENTITY_COMMAND_KEYS } from "@/lib/pos/processingIdentity/commands";
 import { resolveRefsInValue } from "@/lib/pos/processingIdentity/executor/refResolution";
@@ -24,6 +24,13 @@ import {
     type OperatorReviewDeps,
 } from "@/lib/pos/processingIdentity/operator";
 import type { ProcessingResolutionRow } from "@/lib/pos/processingIdentity/processingResolutionsDb";
+
+// The ONE Create Lead placement owner. Stubbed here so the plan builder's use of it is observable;
+// its own resolution is covered by tests/lifecycle/resolveCreateLeadPlacement.test.ts.
+const placement = vi.hoisted(() => ({ resolve: vi.fn() }));
+vi.mock("@/lib/lifecycle/resolveCreateLeadPlacement", () => ({
+    resolveCreateLeadPlacement: placement.resolve,
+}));
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const CASE = "22222222-2222-4222-8222-222222222222";
@@ -331,6 +338,105 @@ describe("Create Lead work-unit binding (Work View visibility)", () => {
         await executeApprovedPlanForCase(d, { caseId: CASE, planId: plan.planId, executionIdempotencyKey: "exec-wu" });
         expect(captured).toHaveLength(1);
         expect(captured[0]?.work_unit_id).toBe("wu-888");
+    });
+
+    // ── An approved PUBLIC FORM places its lead exactly as BOS → Create Lead does ──────────────
+    describe("public form intake (no create_lead_intake) — the shared Create Lead placement", () => {
+        const formCase = (extra: Row = {}) =>
+            ({
+                id: CASE,
+                org_id: ORG,
+                metadata: {
+                    source_adapter: "public_form_v1",
+                    intake_authority: "processing",
+                    intake_meta: { child: { location_id: "loc-form-1" } },
+                    ...extra,
+                },
+            }) as Row;
+
+        beforeEach(() => placement.resolve.mockReset());
+
+        it("resolves the owning work unit through resolveCreateLeadPlacement and the location from the form", async () => {
+            placement.resolve.mockResolvedValue({ ok: true, workUnitId: "wu-enroll", statusKey: "new" });
+            const db = new FakeSupabase();
+            seedNewFamily(db);
+            db.seed("processing_cases", [formCase()]);
+            const { plan } = await buildPlan(deps(db, new Counter()), { caseId: CASE });
+            const leadOp = plan.operations.find((o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead);
+            expect(leadOp?.payload.work_unit_id).toBe("wu-enroll");
+            expect(leadOp?.payload.location_id).toBe("loc-form-1");
+            // The same call BOS makes from a surface that names no department.
+            expect(placement.resolve).toHaveBeenCalledTimes(1);
+            expect(placement.resolve.mock.calls[0]?.[1]).toBe(ORG);
+        });
+
+        it("fails closed — never an orphaned lead — when no Create Lead entry is configured", async () => {
+            placement.resolve.mockResolvedValue({
+                ok: false,
+                reason: "unconfigured",
+                message: "Create Lead is not configured for this process/location.",
+            });
+            const db = new FakeSupabase();
+            seedNewFamily(db);
+            db.seed("processing_cases", [formCase()]);
+            await expect(buildPlan(deps(db, new Counter()), { caseId: CASE })).rejects.toMatchObject({
+                code: "lead_placement_unresolved",
+                message: "Create Lead is not configured for this process/location.",
+            });
+        });
+
+        it("surfaces an ambiguous entry rather than guessing", async () => {
+            placement.resolve.mockResolvedValue({
+                ok: false,
+                reason: "ambiguous",
+                message: "More than one process can create leads. Choose a process, then create the lead.",
+            });
+            const db = new FakeSupabase();
+            seedNewFamily(db);
+            db.seed("processing_cases", [formCase()]);
+            await expect(buildPlan(deps(db, new Counter()), { caseId: CASE })).rejects.toMatchObject({
+                code: "lead_placement_unresolved",
+            });
+        });
+
+        it("a BOS-resolved intake still wins — the resolver is not asked twice", async () => {
+            const db = new FakeSupabase();
+            seedNewFamily(db);
+            db.seed("processing_cases", [formCase({ create_lead_intake: { work_unit_id: "wu-bos", location_id: "loc-bos" } })]);
+            const { plan } = await buildPlan(deps(db, new Counter()), { caseId: CASE });
+            const leadOp = plan.operations.find((o) => o.commandKey === IDENTITY_COMMAND_KEYS.createLead);
+            expect(leadOp?.payload.work_unit_id).toBe("wu-bos");
+            expect(leadOp?.payload.location_id).toBe("loc-bos");
+            expect(placement.resolve).not.toHaveBeenCalled();
+        });
+
+        it("delivers the resolved work unit to the opportunity-creation port end to end (commitApprovedLeadForCase)", async () => {
+            placement.resolve.mockResolvedValue({ ok: true, workUnitId: "wu-enroll", statusKey: "new" });
+            const db = new FakeSupabase();
+            const counter = new Counter();
+            seedNewFamily(db);
+            db.seed("processing_cases", [formCase()]);
+            const captured: Record<string, unknown>[] = [];
+            const capturing: CommandExecutor = {
+                async execute(commandKey, payload) {
+                    if (commandKey === IDENTITY_COMMAND_KEYS.createLead) captured.push(payload as Record<string, unknown>);
+                    const table = commandKey === IDENTITY_COMMAND_KEYS.createProcessParticipation ? "process_instances" : "opportunities";
+                    return { ok: true, refs: [{ targetType: "lead", recordId: counter.bump(table), created: true }], result: {}, idempotentReplay: false };
+                },
+            };
+            const d: OperatorReviewDeps = {
+                supabase: db as unknown as SupabaseClient,
+                orgId: ORG,
+                actorId: "user-1",
+                actorAuthorized: true,
+                executorPorts: { atomicGroup: atomicRunner(counter), command: capturing, compensation: compensationPort([]) },
+                now: clock,
+            };
+            await commitApprovedLeadForCase(d, { caseId: CASE });
+            expect(captured).toHaveLength(1);
+            expect(captured[0]?.work_unit_id).toBe("wu-enroll");
+            expect(captured[0]?.location_id).toBe("loc-form-1");
+        });
     });
 });
 

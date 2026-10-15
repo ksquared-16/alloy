@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbCompleteProcessingCaseWithResult } from "@/lib/pos/processingCase/processingCaseDb";
@@ -10,6 +11,8 @@ import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processin
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
 
 export const dynamic = "force-dynamic";
 
@@ -65,8 +68,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         if (row.case_type === "form_submission") {
             const resolved = await resolveOperatorRoute(caseId);
             if (resolved instanceof NextResponse) return resolved;
-    const denied = requireProcessingCapability(resolved.ctx, PROCESSING_OPERATE);
-    if (denied) return denied;
+            const denied = requireProcessingCapability(resolved.ctx, PROCESSING_OPERATE);
+            if (denied) return denied;
             try {
                 const { attempt } = await commitApprovedLeadForCase(resolved.deps, { caseId: resolved.caseId });
                 if (attempt.outcome !== "committed") {
@@ -75,11 +78,31 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                     return jsonData({ caseId, status: row.status, attempt, blocked: true });
                 }
 
-                const committedRecord = (commandKey: string): string | null =>
-                    attempt.operations.find((o) => o.commandKey === commandKey && o.status === "committed")?.recordId ??
-                    null;
-                const leadId = committedRecord("create_lead");
+                const committedRecord = (...commandKeys: string[]): string | null =>
+                    attempt.operations.find((o) => commandKeys.includes(o.commandKey) && o.status === "committed")
+                        ?.recordId ?? null;
+                const leadId = committedRecord("create_lead") ?? committedRecord("update_lead");
                 const personId = committedRecord("create_person");
+
+                // The canonical lead as committed — the same row BOS → Create Lead hands off from. Its
+                // owner (work unit), stage and status decide the Work View the record lands in; its person
+                // and household are the records the operator can open, whether they were created here or
+                // an existing family was linked.
+                const { data: leadRowData } = leadId
+                    ? await supabase
+                          .from("opportunities")
+                          .select("id, customer_id, primary_person_id, work_unit_id, status_key, stage_key")
+                          .eq("org_id", ctx.orgId)
+                          .eq("id", leadId)
+                          .maybeSingle()
+                    : { data: null };
+                const leadRow = leadRowData as {
+                    customer_id?: string | null;
+                    primary_person_id?: string | null;
+                    work_unit_id?: string | null;
+                    status_key?: string | null;
+                    stage_key?: string | null;
+                } | null;
 
                 // Phase 1 — populate the committed Person's canonical address (incl. ZIP) through the
                 // canonical field system. ZIP is identity, not intake: this reuses the same writer as the
@@ -90,16 +113,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 // person the lead was linked to, read back from the committed opportunity's
                 // primary_person_id. Without this fallback, linking an existing parent silently dropped
                 // the submitted ZIP.
-                let addressPersonId: string | null = personId;
-                if (!addressPersonId && leadId) {
-                    const { data: leadRow } = await supabase
-                        .from("opportunities")
-                        .select("primary_person_id")
-                        .eq("org_id", ctx.orgId)
-                        .eq("id", leadId)
-                        .maybeSingle();
-                    addressPersonId = (leadRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null;
-                }
+                const addressPersonId: string | null = personId ?? leadRow?.primary_person_id ?? null;
                 if (addressPersonId) {
                     try {
                         await persistIntakePersonAddressFieldValues(supabase, {
@@ -111,22 +125,82 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                         /* canonical-field population is best-effort — the lead is already committed */
                     }
                 }
+                // WHERE THE OPERATOR GOES NEXT — the Work View BOS → Create Lead hands off to, resolved the
+                // same way from the same lead. Best-effort: the commit has already succeeded.
+                const workUnitId = leadRow?.work_unit_id?.trim() || null;
+                const statusKey = leadRow?.status_key?.trim() || null;
+                const stageKey = leadRow?.stage_key?.trim() || "lead";
+                let workViewId: string | null = null;
+                let workViewRouteKey: string | null = null;
+                if (workUnitId) {
+                    try {
+                        const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, ctx.orgId, workUnitId);
+                        const handoff = resolveCreateLeadWorkViewForHandoff({ departmentMetadata, statusKey, stageKey });
+                        workViewId = handoff?.workViewId ?? null;
+                        workViewRouteKey = handoff?.workViewRouteKey ?? null;
+                    } catch {
+                        /* routing enrichment is best-effort */
+                    }
+                }
+
+                const createdHousehold = committedRecord("create_household");
+                const createdChild = committedRecord("create_child");
+                const records = {
+                    household: createdHousehold ?? leadRow?.customer_id ?? null,
+                    child: createdChild ?? committedRecord("update_child"),
+                    person: personId ?? leadRow?.primary_person_id ?? null,
+                    lead: leadId,
+                    participation: committedRecord("create_process_participation"),
+                };
+                const createdRecords = {
+                    household: createdHousehold != null,
+                    child: createdChild != null,
+                    person: personId != null,
+                    lead: committedRecord("create_lead") != null,
+                };
                 const operationalResult = {
                     kind: "lead",
                     recordType: "opportunity",
                     recordId: leadId,
-                    created: true,
-                    records: {
-                        household: committedRecord("create_household"),
-                        child: committedRecord("create_child"),
-                        person: committedRecord("create_person"),
-                        lead: leadId,
-                        participation: committedRecord("create_process_participation"),
-                    },
+                    // `created` is the LEAD. Whether the family was new or an existing one was linked is
+                    // stated per record — a matched family must never read as created.
+                    created: createdRecords.lead,
+                    records,
+                    createdRecords,
+                    matchedExisting:
+                        (records.household != null && !createdRecords.household) ||
+                        (records.person != null && !createdRecords.person) ||
+                        (records.child != null && !createdRecords.child),
+                    handoff: { workUnitId, workViewId, workViewRouteKey, statusKey, stageKey },
                     attemptId: attempt.attemptId,
                 };
 
                 await dbCompleteProcessingCaseWithResult(supabase, { orgId: ctx.orgId, caseId, result: operationalResult });
+
+                // The same `action_executed` activity BOS → Create Lead records on the lead, carrying where
+                // this one came from: the public form submission and the Processing case that accepted it.
+                if (leadId && createdRecords.lead) {
+                    try {
+                        const meta = row.metadata ?? {};
+                        await emitEvent({
+                            org_id: ctx.orgId,
+                            event_type: "action_executed",
+                            entity_type: "opportunities",
+                            entity_id: leadId,
+                            payload: {
+                                action_key: "create_lead",
+                                actor_user_id: ctx.userId ?? null,
+                                source: "public_form",
+                                processing_case_id: caseId,
+                                form_submission_id: typeof meta.form_submission_id === "string" ? meta.form_submission_id : null,
+                                form_definition_id: typeof meta.form_definition_id === "string" ? meta.form_definition_id : null,
+                                matched_existing: operationalResult.matchedExisting,
+                            },
+                        });
+                    } catch {
+                        /* activity is best-effort — the lead is already committed */
+                    }
+                }
                 return jsonData({ caseId, status: "completed", operationalResult, attempt });
             } catch (e) {
                 // identity_review_required (plausible match needs an operator decision), stale

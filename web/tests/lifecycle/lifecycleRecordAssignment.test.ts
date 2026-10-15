@@ -40,9 +40,9 @@ describe("lifecycle record assignment wiring", () => {
         const src = read("lib/lifecycle/lifecycleRuntimeBinding.ts");
         expect(src).toContain("resolveBuilderOwnedLifecycleCreateLeadBinding");
         expect(resolveLifecycleCreateLeadBinding).toBeDefined();
-        expect(read("lib/admin/actions/entryLifecycleActions.ts")).toContain(
-            "resolveLifecycleCreateLeadBinding"
-        );
+        // Through the one placement owner BOS and the Processing plan builder share.
+        expect(read("lib/lifecycle/resolveCreateLeadPlacement.ts")).toContain("resolveLifecycleCreateLeadBinding");
+        expect(read("lib/admin/actions/entryLifecycleActions.ts")).toContain("resolveCreateLeadPlacement(");
         expect(read("lib/lifecycle/lifecycleCreateLeadEntryBinding.ts")).toContain(
             "resolveCreateLeadEntryStageKey"
         );

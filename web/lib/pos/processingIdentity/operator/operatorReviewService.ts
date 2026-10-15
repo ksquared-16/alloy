@@ -10,6 +10,9 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
+import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
+import { formIntakeLocationId } from "../formIntakeShadowHelpers";
 import {
     appendCorrectedProcessingFact,
     listProcessingFactsByCase,
@@ -371,9 +374,14 @@ export async function buildPlan(
         sourceResolutionVersions =
             sourceResolutionVersions ?? Array.from(new Set(rows.map((r) => r.generation_id)));
     }
-    // Thread intake-resolved work_unit_id + location_id (stored on create_lead_intake) onto the
-    // lead subject so createLead persists them. Without work_unit_id, Work Unit membership excludes
-    // the row; without location_id, queue/focus location chips stay empty despite required intake.
+    // Thread the lead's placement — owning work_unit_id + location_id — onto the lead subject so
+    // createLead persists them. Without work_unit_id, Work Unit membership excludes the row (and every
+    // location-scoped operator never sees it); without location_id, queue/focus location chips stay empty.
+    //
+    // ONE placement owner for every entry source. BOS → Create Lead resolved it before opening the case
+    // (create_lead_intake). A case with no such intake — an approved public form — resolves it HERE
+    // through the same resolveCreateLeadPlacement, with the location the family chose on the form. A new
+    // lead that cannot be placed fails closed exactly as BOS does; it is never committed as an orphan.
     {
         const leadSubject = resolutionSet.subjects.find((s) => s.role === "lead");
         const needsWorkUnit =
@@ -387,19 +395,39 @@ export async function buildPlan(
                 .eq("org_id", deps.orgId)
                 .eq("id", input.caseId)
                 .maybeSingle();
-            const intake = (caseRow as {
+            const metadata = (caseRow as {
                 metadata?: {
                     create_lead_intake?: { work_unit_id?: unknown; location_id?: unknown };
+                    intake_meta?: unknown;
+                    source_adapter?: unknown;
                 };
-            } | null)?.metadata?.create_lead_intake;
-            const workUnitId =
+            } | null)?.metadata;
+            const intake = metadata?.create_lead_intake;
+            let workUnitId =
                 typeof intake?.work_unit_id === "string" && intake.work_unit_id.trim()
                     ? intake.work_unit_id.trim()
                     : null;
-            const locationId =
+            let locationId =
                 typeof intake?.location_id === "string" && intake.location_id.trim()
                     ? intake.location_id.trim()
                     : null;
+            // Public form intake (formIntakeAdapter) is the entry that never ran the Create Lead placement.
+            // Other sources keep their existing behaviour; they are not Create Lead entries.
+            const publicFormIntake = metadata?.source_adapter === "public_form_v1";
+            if (!intake && publicFormIntake && leadSubject.decision === "create") {
+                if (needsWorkUnit) {
+                    const placement = await resolveCreateLeadPlacement(deps.supabase, deps.orgId, {});
+                    if (!placement.ok) {
+                        throw new OperatorServiceError("lead_placement_unresolved", placement.message);
+                    }
+                    workUnitId = placement.workUnitId;
+                }
+                const intakeMeta = metadata?.intake_meta;
+                if (needsLocation && intakeMeta && typeof intakeMeta === "object") {
+                    const fromForm = formIntakeLocationId(intakeMeta as FormIntakeMeta);
+                    locationId = typeof fromForm === "string" && fromForm.trim() ? fromForm.trim() : null;
+                }
+            }
             if ((needsWorkUnit && workUnitId) || (needsLocation && locationId)) {
                 resolutionSet = {
                     subjects: resolutionSet.subjects.map((s) => {
