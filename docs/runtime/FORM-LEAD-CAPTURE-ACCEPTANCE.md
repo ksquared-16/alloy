@@ -10,7 +10,7 @@ lead created through BOS → Create Lead. This page states the contract and wher
 | Case opened by | `ingestCreateLeadThroughProcessing` | `ingestPublicFormThroughProcessing` (`source_adapter: public_form_v1`) |
 | Identity review | in BOS (operator confirms) | in Processing (Review matches) — never at raw submission |
 | **Placement** (owning work unit, entry status) | `resolveCreateLeadPlacement` before the case opens → `create_lead_intake` | `resolveCreateLeadPlacement` in the plan builder when the case has no `create_lead_intake` |
-| Location | the operator's choice | the family's choice on the form (`formIntakeLocationId(intake_meta)`) |
+| Location | the operator's choice | the family's choice on the form, else the campus of the location-specific link it came through (`default_location_id`) — `formIntakeLocationId(intake_meta)` |
 | Commit | `commitApprovedLeadForCase` (build → approve → execute) | `commitApprovedLeadForCase` |
 | Unplaceable | 422 "Create Lead is not configured…" / "More than one process…" | the same messages, `lead_placement_unresolved` → 422 |
 | Activity | `action_executed` / `create_lead` on the lead | `action_executed` / `create_lead`, plus `source: public_form`, `processing_case_id`, `form_submission_id` |
@@ -27,6 +27,10 @@ case "Smith Family", `work_unit_id` NULL, compared with a BOS control lead carry
 
 Both doors persist the create-lead command's status (`new`) at stage `lead`. Neither creates a process
 instance at intake; the child journey begins at the family decision (see `BUSINESS-PROCESS-ENTRY-STAGE.md`).
+
+Intake reads each submitted value through the published question's **canonical binding**
+(`field_source.crm_mapping_key`, e.g. `child.date_of_birth`), then the default field ids. The link's
+explicit `intake_field_paths` override both.
 
 ## After Approve: an acknowledgement, not an auto-advance
 
