@@ -85,6 +85,8 @@ export function operatorErrorResponse(e: unknown): NextResponse {
             e.code === "actor_not_authorized" ? 403
             : e.code.endsWith("_not_found") ? 404
             : e.code === "no_executable_operations" || e.code === "not_ready_for_approval" ? 409
+            // A new lead with no configured owning process: the same 422 BOS → Create Lead returns.
+            : e.code === "lead_placement_unresolved" ? 422
             : 400;
         return NextResponse.json({ error: e.message, code: e.code }, { status });
     }

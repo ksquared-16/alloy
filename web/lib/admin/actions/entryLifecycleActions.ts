@@ -1,18 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-    assertAllowedStatusKey,
-    fetchEffectiveStatusDefinitions,
-    resolveConfiguredDefaultCreateStatusKey,
-} from "@/lib/admin/statusDefinitionsResolve";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
-import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import {
     primaryIncludedParent,
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
-import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
-import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
+import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
 import {
@@ -142,78 +137,20 @@ export async function executeCreateLeadAction(
         trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId)) || null;
 
     const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
-    let workUnitId =
-        trim(input.context?.work_unit_id) ||
-        trim(input.merged.work_unit_id) ||
-        null;
-
-    // The default create status is OWNED by the opportunity status configuration (a status_definitions
-    // row flagged `metadata.default_on_create`) — Create Lead reads it rather than hardcoding a
-    // pipeline key. Falls back to the canonical durable default (`open`); never mints legacy
-    // `new_inquiry`. Defensive: a status-config read failure must not block a valid create.
-    let configuredDefaultStatus: string | null = null;
-    try {
-        const oppStatusDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", {
-            activeOnly: true,
-        });
-        configuredDefaultStatus = resolveConfiguredDefaultCreateStatusKey(oppStatusDefs);
-    } catch {
-        configuredDefaultStatus = null;
+    // WHERE THE LEAD BELONGS is one shared resolution (resolveCreateLeadPlacement): the same owner every
+    // entry source — including an approved public form in Processing — commits through. It fails closed:
+    // never an orphaned lead (work_unit_id NULL, invisible in every work-unit-scoped queue) or an empty
+    // status, and an ambiguous entry is surfaced rather than guessed.
+    const placement = await resolveCreateLeadPlacement(supabase, ctx.orgId, {
+        departmentId,
+        workUnitId: trim(input.context?.work_unit_id) || trim(input.merged.work_unit_id) || null,
+        accessScope: ctx.accessScope ?? null,
+    });
+    if (!placement.ok) {
+        return { ok: false, error: placement.message, status: 422 };
     }
-    let statusKeyForLead = (configuredDefaultStatus || DEFAULT_LEAD_CASE_STATUS_KEY).trim();
-
-    if (departmentId) {
-        const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
-        if (!workUnitId && binding.work_unit_id) {
-            workUnitId = binding.work_unit_id;
-        }
-        // Operator-configured entry-stage status wins when present (department-level ownership).
-        if (binding.status_key?.trim()) {
-            statusKeyForLead = binding.status_key.trim();
-        }
-    }
-
-    // Workspace-level surfaces cannot name a department, and historically sent whichever one
-    // sorted first — so a missing binding here does NOT mean "the operator's process is
-    // unconfigured". Resolve the entry department from configuration before failing closed;
-    // ambiguity is surfaced rather than guessed.
-    if (!workUnitId) {
-        const entry = await resolveCreateLeadEntryDepartmentForOrg(
-            supabase,
-            ctx.orgId,
-            ctx.accessScope ?? null
-        );
-        if (entry.state === "ambiguous") {
-            return {
-                ok: false,
-                error: "More than one process can create leads. Choose a process, then create the lead.",
-                status: 422,
-            };
-        }
-        if (entry.state === "resolved") {
-            workUnitId = entry.workUnitId;
-            const binding = await resolveLifecycleCreateLeadBinding(
-                supabase,
-                ctx.orgId,
-                entry.departmentId
-            );
-            if (binding.status_key?.trim()) {
-                statusKeyForLead = binding.status_key.trim();
-            }
-        }
-    }
-
-    // Fail closed: Create Lead must resolve BOTH a create status and an owning work unit from
-    // configuration. Never persist an orphaned lead (work_unit_id = NULL) or an empty status — a
-    // department/location with no configured process/work unit is a configuration error, not a
-    // silent orphan (an orphaned lead is invisible in every work-unit-scoped queue).
-    if (!statusKeyForLead || !workUnitId) {
-        return {
-            ok: false,
-            error: "Create Lead is not configured for this process/location.",
-            status: 422,
-        };
-    }
+    const workUnitId = placement.workUnitId;
+    const statusKeyForLead = placement.statusKey;
     const workUnitKey = await resolveWorkUnitKey(supabase, ctx.orgId, workUnitId);
     const locationId = trim(input.merged.location_id) || null;
 

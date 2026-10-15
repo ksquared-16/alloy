@@ -20,6 +20,7 @@
 
 import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import { formatCardFocusAspect, type CardFocusInput } from "@/lib/runtime/kernel/attentionCardFocus";
 
 const WORK_UNIT_ROUTE = /\/work-unit\/([^/?#]+)/;
 
@@ -32,6 +33,11 @@ export function openCreatedLead(args: {
     /** Where the operator stands now (`usePathname()` / `location.pathname`). */
     pathname: string | null | undefined;
     push: (href: string) => void;
+    /**
+     * The card of the lead's Focus Panel to land on (Contact Family → communications, Update
+     * Information → household). Carried as the kernel's ASPECT; absent, the panel opens as before.
+     */
+    cardFocus?: CardFocusInput | null;
 }): OpenCreatedLeadResult {
     const href = (args.href ?? "").trim();
     const opportunityId = (args.opportunityId ?? "").trim();
@@ -50,10 +56,18 @@ export function openCreatedLead(args: {
             // The lens the server placed the new record in; the listener prefers it over the unit.
             host_work_view_id: workViewId || null,
             host_work_unit_key: workViewId ? null : slug,
+            ...(args.cardFocus ? { card_focus: args.cardFocus } : {}),
         });
         return "focus_selection";
     }
 
+    // A cold entry: the aspect rides the address, which a cold load is allowed to establish.
+    const aspect = formatCardFocusAspect(args.cardFocus ?? null);
+    if (aspect) {
+        url.searchParams.set("aspect", aspect);
+        args.push(`${url.pathname}${url.search}${url.hash}`);
+        return "push";
+    }
     args.push(href);
     return "push";
 }

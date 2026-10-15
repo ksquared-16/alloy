@@ -153,8 +153,10 @@ describe("lifecycleCreateLeadEntryBinding", () => {
         const src = read("lib/lifecycle/lifecycleCreateLeadEntryBinding.ts");
         expect(src).toContain("status_key: entryStatusKey");
         expect(src).not.toContain("status_key: NEW_LEAD_STATUS_KEY");
-        // Create Lead still applies the binding's resolved status when present.
-        expect(read("lib/admin/actions/entryLifecycleActions.ts")).toContain("binding.status_key");
+        // Create Lead still applies the binding's resolved status when present — in the one placement
+        // owner every Create Lead entry (BOS, an approved public form) now resolves through.
+        expect(read("lib/lifecycle/resolveCreateLeadPlacement.ts")).toContain("binding.status_key");
+        expect(read("lib/admin/actions/entryLifecycleActions.ts")).toContain("resolveCreateLeadPlacement(");
     });
 
     it("validation uses empty lifecycle copy when no records in scope", () => {

@@ -21,7 +21,8 @@ import {
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
-import type { CommittedRecordIds } from "@/lib/pos/approvalResultPresentation";
+import type { CommittedRecordIds, CreatedRecordFlags } from "@/lib/pos/approvalResultPresentation";
+import type { LeadCommitHandoff } from "@/lib/pos/leadAcknowledgementPresentation";
 import type { RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
 
 /**
@@ -35,6 +36,11 @@ export interface LeadCommitResult {
     recordId?: string | null;
     created?: boolean;
     records?: CommittedRecordIds;
+    /** Created vs linked, per record — a matched family must never read as created. */
+    createdRecords?: CreatedRecordFlags;
+    matchedExisting?: boolean;
+    /** Where the lead landed — the same Work View handoff BOS → Create Lead returns. */
+    handoff?: LeadCommitHandoff;
     attemptId?: string;
 }
 

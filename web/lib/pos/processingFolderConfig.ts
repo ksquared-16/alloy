@@ -86,7 +86,9 @@ export function caseMatchesCategoryFolder(
     // An explicit category (configured on the source form) is authoritative — keywords are only
     // the fallback "when metadata.admin_category is unset", per the folder model. Without this a
     // form whose name happens not to contain the folder keyword (e.g. "Firefly Lead Capture" vs
-    // "enrollment") silently falls back to Incoming no matter how it is configured.
+    // "enrollment") silently matches no category folder no matter how it is configured. (It is in
+    // Incoming either way: Incoming holds every open case; category folders are overlapping lenses
+    // over it, not a partition — see processingQueueBadgeCounts.)
     const explicit = typeof row.adminCategory === "string" ? row.adminCategory.trim().toLowerCase() : "";
     if (explicit) return explicit === folderId;
     const stack = `${row.sourceDisplay?.label ?? ""} ${row.caseType ?? ""}`.toLowerCase();
