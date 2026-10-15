@@ -1,0 +1,160 @@
+{
+  "trusted_host_action_id": "tha_8282fa3093e6a0",
+  "query_hash": "d510c697c47581a946db72ab9156475f53408e1fc3057480eb7ab61fa39154a5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-15T20:09:30.850Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8282fa3093e6a0",
+    "query_hash": "d510c697c47581a946db72ab9156475f53408e1fc3057480eb7ab61fa39154a5",
+    "authorization_id": "grnt_1c69ba4d953b45be",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-15T20:09:36.850Z",
+    "question_ids": [
+      "term"
+    ],
+    "questions": {
+      "term": {
+        "question_id": "term",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "2a23f980-26d3-499a-b5bb-394e5c657499",
+            "cadence": "monthly",
+            "amount_cents": 145000,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-01",
+            "effective_end": null,
+            "child": "Certb Certhouse",
+            "household": "Certhouse Family",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "ef10654a-e4cf-494d-b38e-82900af1163e",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "ef1e0159-63b8-4879-8fb4-9e61aba0a283",
+            "cadence": "weekly",
+            "amount_cents": 19500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-22",
+            "effective_end": null,
+            "child": "Pbchild Automation",
+            "household": "Automation Family",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "bd5b59ae-bd04-4284-8d2a-5395960e11ab",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "329ca704-4a36-4dbc-93db-04a94af5c758",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "4d7ece5a-29ba-40e8-ad72-e9655ef5aabe",
+            "cadence": "weekly",
+            "amount_cents": 19500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-22",
+            "effective_end": null,
+            "child": "Pbfour Automation",
+            "household": "Automation Family",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "3c58a611-bb3d-472b-9788-e8521158fa87",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "40971cd2-3a41-42cf-b744-3b5c7c49652b",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "8ed0158e-285c-49ba-bb8c-ae65ebcbe985",
+            "cadence": "weekly",
+            "amount_cents": 19500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-15",
+            "effective_end": null,
+            "child": "Pbtwo Automation",
+            "household": "Automation Family",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "c80b2cdb-245b-47e0-bd39-6b61d9430a92",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "afde2aa1-b4cb-423e-bbb3-0813ddbd8740",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "065a75d8-28e2-4ea7-b8ab-da31b364d033",
+            "cadence": "weekly",
+            "amount_cents": 19500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-15",
+            "effective_end": null,
+            "child": "Pbfive Automation",
+            "household": "Automation Family",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "25b9b4d3-d0d9-4ff7-904a-692436db5b3f",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "e978987c-56d1-4972-af34-54ccc32f37e2",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "46f44bf4-862c-4fae-b25e-fc9cea4dae21",
+            "cadence": "weekly",
+            "amount_cents": 19500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-08",
+            "effective_end": null,
+            "child": "Pbthree Automation",
+            "household": "Automation Family",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "c8d9efa0-3292-47c3-978a-baec5c39122c",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+            "cadence": "weekly",
+            "amount_cents": 18500,
+            "state": "accepted",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-01",
+            "effective_end": "2026-09-01",
+            "child": "Certa Certhouse",
+            "household": "Certhouse Family",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+            "tuition_charges_by_month": null
+          },
+          {
+            "label": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "matched_as": "opportunity_customer_member_id",
+            "term_id": "5e4c3bfe-38c4-4164-a651-27f2b0106148",
+            "cadence": "weekly",
+            "amount_cents": 18500,
+            "state": "overridden",
+            "term_kind": "tuition",
+            "effective_start": "2026-09-01",
+            "effective_end": null,
+            "child": "Certa Certhouse",
+            "household": "Certhouse Family",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+            "tuition_charges_by_month": null
+          }
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}
