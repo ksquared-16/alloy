@@ -1,0 +1,35 @@
+{
+ "periodicBilling": {
+  "automatic_billing_active": true,
+  "schedule_exists": true,
+  "next_evaluation_at": "2026-10-16T03:14:06.759+00:00",
+  "automatic_catch_up_period_limit": 2
+ },
+ "tabs": [
+  "Overview",
+  "Accounts",
+  "Charges",
+  "Payments",
+  "Subsidy",
+  "Activity"
+ ],
+ "billingWorkForNextMonth": 0,
+ "generateButton": {
+  "count": 1,
+  "text": "Generate a period's tuition"
+ },
+ "panelText": "GENERATE TUITION ⏎ Close ⏎ Billing frequency ⏎ Monthly ⏎ ▾ ⏎ Service period ⏎ Monthly terms, organization-wide for this period. ⏎ Preview run",
+ "defaultPeriod": "2026-10",
+ "accountScopeControl": 0,
+ "previewResult": "2 to bill · 6 not due · 0 already posted · 0 refused · 0 errored ⏎ Not due · cadence_not_billed_by_this_run ⏎ Not due · cadence_not_billed_by_this_run ⏎ Not due · cadence_not_billed_by_this_run ⏎ Not due · cadence_not_billed_by_this_run ⏎ Not due · cadence_not_billed_by_this_run ⏎ Not due · cadence_not_billed_by_this_run",
+ "executeButton": "Generate 2 · $2,650.00",
+ "error": null,
+ "actionModes": [
+  "billing.generate_tuition:preview"
+ ],
+ "previewPayloadKeys": [
+  "execution_result",
+  "affected_id"
+ ],
+ "previewDetail": "{\"ok\":true,\"data\":{\"execution_result\":{\"mode\":\"preview\",\"eligibility\":{\"eligible\":true,\"blockers\":[],\"availableTransitions\":[],\"requiredInputs\":[]},\"preview\":{\"summary\":\"2 to bill, 6 not due, 0 refused for monthly 2026-11\",\"changes\":[\"fd000000-0000-4000-8000-000000790002 · 1200.00 USD\",\"ef10654a-e4cf-494d-b38e-82900af1163e · cadence_not_billed_by_this_run\",\"329ca704-4a36-4dbc-93db-04a94af5c758 · cadence_not_billed_by_this_run\",\"40971cd2-3a41-42cf-b744-3b5c7c49652b · cadence_not_billed_by_this_run\",\"afde2aa1-b4cb-423e-bbb3-0813ddbd8740 · cadence_not_billed_by_this_run\",\"e978987c-56d1-4972-af34-54ccc32f37e2 · cadence_not_billed_by_this_run\",\"cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD\",\"79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run\"],\"after\":{\"period_key\":\"2026-11\",\"cadence_key\":\"monthly\",\"service_period\":{\"start\":\"2026-11-01\",\"end\":\"2026-11-30\"},\"counts\":{\"generated\":2,\"unchanged\":0,\"alreadyPosted\":0,\"notDue\":6,\"refused\":0,\"errors\":0},\"total_amount_cents\":265000,\"refused_outcomes\":[],\"not_due_outcomes\":[{\"kind\":\"not_due\",\"assignmentId\":\"ef10654a-e4cf-494d-b38e-82900af1163e\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"},{\"kind\":\"not_due\",\"assignmentId\":\"329ca704-4a36-4dbc-93db-04a94af5c758\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"},{\"kind\":\"not_due\",\"assignmentId\":\"40971cd2-3a41-42cf-b744-3b5c7c49652b\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"},{\"kind\":\"not_due\",\"assignmentId\":\"afde2aa1-b4cb-423e-bbb3-0813ddbd8740\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"},{\"kind\":\"not_due\",\"assignmentId\":\"e978987c-56d1-4972-af34-54ccc32f37e2\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"},{\"kind\":\"not_due\",\"assignmentId\":\"79f8011d-a236-4054-bee7-af10f1dbc632\",\"periodKey\":\"2026-11\",\"periodLabel\":\"November 2026\",\"reason\":\"cadence_not_billed_by_this_run\"}],\"error_outcomes\":[],\"already_posted_outcomes\":[]}}},\"affected_id\":null},\"correlation_id\":\"75d2c9e2-8fc8-4b86-9f17-65437465e894\"}"
+}

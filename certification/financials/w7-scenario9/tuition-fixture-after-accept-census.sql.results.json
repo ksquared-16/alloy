@@ -1,0 +1,91 @@
+{
+  "trusted_host_action_id": "tha_fb9df664b01b50",
+  "query_hash": "b1567a982d04c655a181b9c18026ed6cedd4726b4c62b10d06a0c327db50bdc6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-15T20:52:50.623Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_fb9df664b01b50",
+    "query_hash": "b1567a982d04c655a181b9c18026ed6cedd4726b4c62b10d06a0c327db50bdc6",
+    "authorization_id": "grnt_fdbacdd05c824603",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-15T20:52:56.363Z",
+    "question_ids": [
+      "term",
+      "household",
+      "certhouse",
+      "w7_terms"
+    ],
+    "questions": {
+      "term": {
+        "question_id": "term",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "w7_tuition_term",
+            "term_id": "b09b5f15-2e64-4560-8b4a-6ba1b99553e0",
+            "state": "accepted",
+            "cadence": "monthly",
+            "amount_cents": 120000,
+            "currency": "USD",
+            "effective_start": "2026-11-01",
+            "effective_end": null,
+            "superseded": false,
+            "agreement_linked": true,
+            "source_entity": "commercial_tuition_rates",
+            "source_id": "8ecdd655-40d9-4879-b5d6-b1c9a7983dea",
+            "location_is_north": null,
+            "accepted_by_set": true,
+            "live_terms_for_assignment": 1
+          }
+        ]
+      },
+      "household": {
+        "question_id": "household",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "w7_tuition_household",
+            "name": "W7 QA · Tuition Family",
+            "agreement": "pending_start from 2026-11-01",
+            "charges": 0,
+            "payments": 0,
+            "responsibility_shares": 1
+          }
+        ]
+      },
+      "certhouse": {
+        "question_id": "certhouse",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "certhouse_monthly_untouched",
+            "term_state": "accepted",
+            "term_amount_cents": 145000,
+            "term_superseded": false,
+            "november_tuition_charges": 0
+          }
+        ]
+      },
+      "w7_terms": {
+        "question_id": "w7_terms",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "w7_households_with_tuition_terms",
+            "households": [
+              "W7 QA · Tuition Family"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}
