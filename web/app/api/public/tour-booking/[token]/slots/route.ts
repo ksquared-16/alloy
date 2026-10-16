@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
+import { isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import { assertTourPublicSlotsQueryWindow } from "@/lib/tours/public/tourPublicSlotsWindow";
 import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
@@ -48,13 +49,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const win = assertTourPublicSlotsQueryWindow(new Date(fromRaw), new Date(toRaw));
     if (!win.ok) return tourPublicErr(win.message, 400);
 
-    const slots = await computeAvailableTourSlots(supabase, {
+    const computed = await computeAvailableTourSlots(supabase, {
         orgId: auth.link.org_id,
         locationId: auth.link.location_id,
         userId: null,
         from: win.from,
         to: win.to,
     });
+    // A family may only pick a tour from tomorrow on, in the site's calendar (tourEarliestDate) — the
+    // booking service refuses anything earlier, so the page must not offer it. The month view asks from
+    // the first of the month, which used to surface today's and even past days' times.
+    const slots = computed.filter((slot) => !slot.timezone || isTourStartAllowed(new Date(slot.startAt), slot.timezone));
 
     await recordTourEvent(supabase, {
         event: "tour_slots_viewed",
