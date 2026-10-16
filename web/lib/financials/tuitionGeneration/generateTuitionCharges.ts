@@ -41,6 +41,7 @@ import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicy
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { readAcceptedPricingTerms } from "@/lib/enrollment/pricing/enrollmentPricingTermsService";
 import { draftConsumption } from "@/lib/operationalConsumption/consumptionService";
+import { applyTuitionResponsibility, type TuitionResponsibility } from "@/lib/financials/tuitionGeneration/tuitionResponsibility";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
 import { autoPostGeneratedCharge } from "@/lib/financials/posting/autoPostGeneratedCharge";
 import {
@@ -68,7 +69,7 @@ export const TUITION_CHARGE_TEMPLATE_KEY = "tuition";
  * four indistinguishable lines and unable to tell which week refused.
  */
 export type TuitionGenerationOutcome =
-    | { kind: "generated"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string | null; amountCents: number; currencyCode: string; obligationId: string | null }
+    | { kind: "generated"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string | null; amountCents: number; currencyCode: string; obligationId: string | null; responsibility?: TuitionResponsibility }
     | { kind: "not_due"; assignmentId: string; periodKey: string; periodLabel: string; reason: string }
     | { kind: "refused"; assignmentId: string; periodKey: string; periodLabel: string; reason: string; detail: string }
     /*
@@ -79,7 +80,7 @@ export type TuitionGenerationOutcome =
      * away. The data was right — the ledger held five rows, not ten — but an operator reading the
      * result would believe they had billed the family twice.
      */
-    | { kind: "unchanged"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string; amountCents: number; currencyCode: string; obligationId: string | null }
+    | { kind: "unchanged"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string; amountCents: number; currencyCode: string; obligationId: string | null; responsibility?: TuitionResponsibility }
     | { kind: "already_posted"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string; amountCents: number }
     | { kind: "error"; assignmentId: string; periodKey: string; periodLabel: string; message: string };
 
@@ -511,6 +512,30 @@ export async function generateTuitionCharges(
              * holds the draft; a failure leaves it a draft with durable diagnostics and is retried
              * by the next unattended run.
              */
+            /*
+             * ── WHO OWES IT, BOUND AT CREATION (W7-F023) ─────────────────────────────────────
+             *
+             * Before the draft can post, it is divided under the arrangement in force through the
+             * canonical resolver — the same act Add Charge sequences after `charge.add`. Without
+             * this every generated draft read "Not allocated" under an arrangement that named its
+             * payer. Idempotent (an identical division is unchanged) and never a reallocation of
+             * posted money. A resolver failure does not un-create the charge: it is reported on the
+             * row, and the ledger's Resolve command remains the operator's path.
+             */
+            let responsibility: TuitionResponsibility;
+            try {
+                responsibility = await applyTuitionResponsibility(supabase, {
+                    orgId: args.orgId,
+                    chargeId,
+                    agreementId: term.enrollmentAgreementId,
+                    serviceDate: decision.serviceDate,
+                    netCents: decision.amountCents,
+                    actorUserId: args.actorUserId ?? null,
+                });
+            } catch (err) {
+                responsibility = { status: "refused", reason: "resolve_failed", detail: err instanceof Error ? err.message : String(err) };
+            }
+
             await autoPostGeneratedCharge(supabase, {
                 orgId: args.orgId,
                 chargeId,
@@ -534,6 +559,7 @@ export async function generateTuitionCharges(
                 amountCents: decision.amountCents,
                 currencyCode: decision.currencyCode,
                 obligationId: drafted.persisted.resolvedObligationIds[0] ?? null,
+                responsibility,
             });
         } catch (err) {
             outcomes.push({

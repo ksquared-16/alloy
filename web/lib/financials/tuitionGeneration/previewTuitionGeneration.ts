@@ -33,6 +33,7 @@ import {
     type ProrationMethod,
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
 import { previewConsumption } from "@/lib/operationalConsumption/consumptionService";
+import { planTuitionResponsibility } from "@/lib/financials/tuitionGeneration/tuitionResponsibility";
 import {
     assignmentBillingPeriods,
     buildTuitionFact,
@@ -158,6 +159,17 @@ export async function previewTuitionGeneration(
                         outcomes.push({ kind: "refused", assignmentId, periodKey: periodKeyOf, periodLabel, reason: readiness.reason, detail: readiness.detail });
                         continue;
                     }
+                    /*
+                     * W7-F023: who the run will bind — the same arrangement read and the same split
+                     * the resolver performs, without writing. "No responsible party" and an
+                     * arrangement that cannot divide the charge are said here, before Generate.
+                     */
+                    const responsibility = await planTuitionResponsibility(supabase, {
+                        orgId: args.orgId,
+                        agreementId: d.term.enrollmentAgreementId,
+                        serviceDate: d.serviceDate,
+                        netCents: d.amountCents,
+                    });
                     outcomes.push({
                         kind: "generated",
                         assignmentId,
@@ -168,6 +180,7 @@ export async function previewTuitionGeneration(
                         amountCents: d.amountCents,
                         currencyCode: d.currencyCode,
                         obligationId: null,
+                        responsibility,
                     });
                 }
             }
