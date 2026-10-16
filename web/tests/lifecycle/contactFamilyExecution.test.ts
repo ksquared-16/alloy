@@ -172,6 +172,59 @@ beforeEach(() => {
     parseWork.mockImplementation(() => currentWorkView as never);
 });
 
+/** First outreach + its follow-up: both share the contact_family work definition. */
+const planFirstOutreachWithFollowUp = {
+    journey_segment: "family",
+    stage_key: "lead",
+    work_templates: [
+        {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                sufficient_command_results: [
+                    { capability: "communications_send", result: "sent", satisfies_outcome_key: "outreach_sent" },
+                ],
+            },
+        },
+        {
+            template_key: "follow_up_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                sufficient_command_results: [
+                    { capability: "communications_send", result: "sent", satisfies_outcome_key: "left_message" },
+                ],
+            },
+        },
+    ],
+    outcomes: [
+        { outcome_key: "outreach_sent", label: "Outreach sent", successful: true },
+        { outcome_key: "left_message", label: "Left Message" },
+    ],
+};
+
+describe("a task is judged by its OWN template", () => {
+    it("a follow-up task's accepted send uses the follow-up policy, never the first-outreach completion", async () => {
+        currentPlan = planFirstOutreachWithFollowUp;
+        listWork.mockResolvedValue({
+            ok: true,
+            rows: [{ id: "task-fu", status: "open", metadata: { operating_plan_template_key: "follow_up_family" } }],
+        } as never);
+        const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
+        expect(res.outcome_key).toBe("left_message");
+        expect(complete.mock.calls[0]![0].outcomeKey).toBe("left_message");
+    });
+
+    it("the first-outreach task completes with outreach_sent", async () => {
+        currentPlan = planFirstOutreachWithFollowUp;
+        listWork.mockResolvedValue({
+            ok: true,
+            rows: [{ id: "task-fo", status: "open", metadata: { operating_plan_template_key: "contact_family" } }],
+        } as never);
+        const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
+        expect(res.outcome_key).toBe("outreach_sent");
+    });
+});
+
 describe("integrated contact — effective sufficiency + integrated provenance", () => {
     it("completes the open work with the CONFIGURED outcome (not sent_text) and integrated provenance", async () => {
         const res = await associateOutboundCommunicationToContactAttempt({
