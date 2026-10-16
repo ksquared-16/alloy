@@ -306,6 +306,23 @@ export function FormEmbedClient({
     // The tenant's own brand, resolved server-side from the authored form metadata. Held here and
     // applied by the frame so the conversation and the artifact review cannot theme differently.
     const [brand, setBrand] = useState<ParticipantBrand | null>(null);
+    /*
+     * EMBEDDED IN AN ORGANIZATION'S PAGE → no chrome of our own. The host page ("Contact Us — North
+     * Campus") already establishes the organization, site and purpose; our brand bar and the form's own
+     * title above the questions repeated it. Detected from the frame itself (existing website snippets
+     * carry no flag) or asked for with `?chrome=0`. A standalone shared link keeps its chrome.
+     */
+    const [chrome, setChrome] = useState<"full" | "none">("full");
+    useEffect(() => {
+        let framed = false;
+        try {
+            framed = window.self !== window.top;
+        } catch {
+            framed = true; // cross-origin parent: we are inside someone else's page
+        }
+        const asked = new URLSearchParams(window.location.search).get("chrome") === "0";
+        if (framed || asked) setChrome("none");
+    }, []);
     const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(null);
     /**
      * The runtime phase, kept in sync as the conversation advances.
@@ -798,7 +815,7 @@ export function FormEmbedClient({
 
     if (phase === "loading") {
         return (
-            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} chrome={chrome} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice>{advancingToNextPacketStep ? "Loading next step…" : "Loading…"}</IntakeNotice>
             </IntakeFrame>
         );
@@ -806,7 +823,7 @@ export function FormEmbedClient({
 
     if (phase === "error") {
         return (
-            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} chrome={chrome} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice tone="error">
                     <span>{message ?? "Unable to load this form."}</span>
                 </IntakeNotice>
@@ -817,6 +834,7 @@ export function FormEmbedClient({
     if (packetAlreadyDone) {
         return (
             <IntakeFrame
+                chrome={chrome}
                 brand={brand}
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
@@ -859,6 +877,7 @@ export function FormEmbedClient({
     if (packetFinalThankYou) {
         return (
             <IntakeFrame
+                chrome={chrome}
                 brand={brand}
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
@@ -885,7 +904,7 @@ export function FormEmbedClient({
 
     if (!schema) {
         return (
-            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} chrome={chrome} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice>Loading…</IntakeNotice>
             </IntakeFrame>
         );
@@ -893,7 +912,7 @@ export function FormEmbedClient({
 
     if (submitted) {
         return (
-            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} chrome={chrome} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 {enrollmentObjective ? (
                     <IntakeCompletion
                         title="You're all set."
@@ -1271,6 +1290,10 @@ export function FormEmbedClient({
 
     return (
         <IntakeFrame
+            chrome={chrome}
+            // The tenant's brand on the form itself, as on every other phase of this frame — it was the
+            // one frame not given it, so a branded tenant's form fell back to the platform mark.
+            brand={brand}
             packetName={packetProgress?.packet_name}
             previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             contentClassName={clsx(
@@ -1872,7 +1895,9 @@ export function FormEmbedClient({
                 </div>
             ) : (
                 <IntakeCard>
-                    {/* Single-form (non-packet) experience — same renderer, premium shell. */}
+                    {/* Single-form (non-packet) experience — same renderer, premium shell. Embedded in
+                        an organization's page, the form's own title is the host page's job. */}
+                    <div className={chrome === "none" ? "[&_header]:hidden" : undefined}>
                     <FormEngineRenderer
                         schema={schema}
                         payload={payload}
@@ -1888,6 +1913,7 @@ export function FormEmbedClient({
                         variant="embed"
                         validationErrors={validationErrors ?? undefined}
                     />
+                    </div>
                     <IntakeFooter
                         errorLines={errorLines}
                         message={message}
