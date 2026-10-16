@@ -5,6 +5,8 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
+import { buildRecordRenderContext } from "@/lib/communications/render/buildRecordRenderContext";
+import { renderOutboundMessage, type RenderContext } from "@/lib/communications/render/renderOutboundMessage";
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
 import { resolveFamilyCommunicationWorkspace } from "@/lib/communications/v2/familyWorkspace";
 import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from "@/lib/communications/v2/familyWorkspace";
@@ -118,6 +120,11 @@ export async function POST(req: Request) {
     if (!messageRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
     const confirm = body.confirm === true;
     const clientToken = typeof body.client_token === "string" ? body.client_token : null;
+    // Template lineage, when the draft was seeded from the Template Library (recorded on the message).
+    const templateIdRaw = typeof body.template_id === "string" ? body.template_id.trim() : "";
+    const templateId = UUID_RE.test(templateIdRaw) ? templateIdRaw : null;
+    const templateVersion =
+        typeof body.template_version === "number" || typeof body.template_version === "string" ? String(body.template_version) : null;
     const replyToThreadIdRaw = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id.trim() : "";
     const replyToThreadId = UUID_RE.test(replyToThreadIdRaw) ? replyToThreadIdRaw : null;
     const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
@@ -186,9 +193,32 @@ export async function POST(req: Request) {
         const recipientById = new Map<string, RecipientVM>();
         for (const g of vm.recipientGroups) for (const r of g.recipients) recipientById.set(r.id, r);
 
+        // A TEMPLATE's tokens resolve per recipient from that recipient's canonical records — the same
+        // context the canonical enqueue renders with, so the preflight answer is the send answer.
+        const hasTokens = (text: string, subj: string | null) => text.includes("{{") || (subj ?? "").includes("{{");
+        const renderValuesByPerson = new Map<string, RenderContext["values"]>();
+        const renderValuesFor = async (personId: string) => {
+            let values = renderValuesByPerson.get(personId);
+            if (!values) {
+                values = await buildRecordRenderContext(supabase, ctx.orgId, { personId, customerId, opportunityId });
+                renderValuesByPerson.set(personId, values);
+            }
+            return values;
+        };
+
         const result = await orchestrateFamilySend(
             {
                 getRecipient: (id) => recipientById.get(id),
+                checkRender: async ({ personId, channel: ch, subject: subj, body: text }) => {
+                    if (!hasTokens(text, subj)) return null;
+                    const rendered = renderOutboundMessage({
+                        subject: ch === "email" ? (subj ?? null) : null,
+                        body: text,
+                        bodyIsHtml: ch === "email" && bodyIsHtml,
+                        context: { values: await renderValuesFor(personId), channel: ch },
+                    });
+                    return rendered.ok ? null : rendered.block.message;
+                },
                 checkConsent: async (personId) => {
                     if (!enforceConsent) return null;
                     const decision = await enforceConsentForSend({ supabase, orgId: ctx.orgId, personId, channel, lifecycleStage: vm.family.lifecycleStage });
@@ -220,6 +250,8 @@ export async function POST(req: Request) {
                         primaryEntityId: personId,
                         bodyRaw: text,
                         bodyIsHtml: ch === "email" && bodyIsHtml,
+                        ...(hasTokens(text, subj) ? { renderContext: await renderValuesFor(personId) } : {}),
+                        ...(templateId ? { templateId, templateVersion } : {}),
                         subjectRaw: ch === "email" ? (subj ?? null) : null,
                         userAuthored: true,
                         // Per-recipient identity: a three-recipient bulk request

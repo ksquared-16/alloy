@@ -58,7 +58,13 @@ export default function FamilySendConfirmationDialog({
 }: Props) {
     const mode = sendResult?.mode ?? null;
     const isPreflight = mode === "preflight";
-    const isSuccess = mode === "sent";
+    // SENT means at least one recipient's message was actually queued. A confirm that queued nothing —
+    // every recipient refused (a template value missing, consent, eligibility) — used to show the green
+    // "Message sent" view while nothing left; it is a failure, with each recipient's reason.
+    const sentCount = sendResult?.summary.sent ?? 0;
+    const isSuccess = mode === "sent" && sentCount > 0;
+    const isNotSent = mode === "sent" && sentCount === 0;
+    const notSentRows = (sendResult?.results ?? []).filter((r) => r.status !== "sent");
 
     // `document` does not exist during the server render, so the portal target is
     // claimed after mount.
@@ -115,7 +121,7 @@ export default function FamilySendConfirmationDialog({
             className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/40 px-3 py-6"
             style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-cc-send-confirm-dialog="true"
-            data-cc-send-confirm-phase={isPreflight ? "preflight" : isSuccess ? "success" : "error"}
+            data-cc-send-confirm-phase={isPreflight ? "preflight" : isSuccess ? "success" : isNotSent ? "not_sent" : "error"}
         >
             <button
                 type="button"
@@ -214,6 +220,25 @@ export default function FamilySendConfirmationDialog({
                                         {sending ? "Sending…" : "Confirm send"}
                                     </button>
                                 ) : null}
+                            </div>
+                        </div>
+                    ) : isNotSent ? (
+                        <div className="space-y-3" data-cc-send-not-sent="true">
+                            <p id="cc-send-confirm-title" className="text-[15px] font-semibold text-alloy-midnight">
+                                Not sent
+                            </p>
+                            <ul className="space-y-0.5 text-[13px] text-alloy-ember">
+                                {notSentRows.map((r) => (
+                                    <li key={r.person_id}>
+                                        {r.display_name}
+                                        {r.reason ? ` — ${r.reason}` : " — could not be sent"}
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="flex justify-end">
+                                <button type="button" onClick={onBackToEdit} className={MESSAGING_MODAL_SECONDARY_BUTTON_CLASS}>
+                                    Back to edit
+                                </button>
                             </div>
                         </div>
                     ) : isSuccess ? (

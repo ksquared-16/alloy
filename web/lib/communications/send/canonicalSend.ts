@@ -115,6 +115,11 @@ export type CanonicalSendRequest = {
     userAuthored: boolean;
     templateId?: string | null;
     templateVersion?: string | null;
+    /**
+     * Owner-scoped token values for the canonical renderer (`buildRecordRenderContext`). Absent, the body
+     * is free text: any `{{token}}` it carries is refused at enqueue rather than sent unfilled.
+     */
+    renderContext?: import("@/lib/communications/render/renderOutboundMessage").RenderContext["values"];
 
     communicationProviderBindingId?: string | null;
     /** Stable key. The same key with a different payload is rejected. */
@@ -266,6 +271,10 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
             bodyRaw: req.bodyRaw,
             bodyIsHtml: req.bodyIsHtml === true && facts.channel === "email",
             emailSubjectRaw: req.subjectRaw ?? null,
+            ...(req.renderContext ? { renderContext: req.renderContext } : {}),
+            ...(req.templateId && Number.isFinite(Number(req.templateVersion))
+                ? { template: { id: req.templateId, version: Number(req.templateVersion) } }
+                : {}),
             communicationProviderBindingId: req.communicationProviderBindingId ?? null,
             audience: req.audience,
             category: req.category,
