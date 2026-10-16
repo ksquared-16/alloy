@@ -75,6 +75,10 @@ export const ALLOWLISTED_METADATA_KEYS = [
     "template_id",
     "template_version",
     "author_user_id",
+    // The work this send declares it performs (e.g. contact_family_work). Recorded on the message so the
+    // contact attempt can be associated when the PROVIDER accepts it, not when Alloy queues it.
+    "work_consequence",
+    "workflow_id",
     "assist_proposal_id",
     "recipient_role",
     "external_recipient_reason",

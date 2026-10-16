@@ -69,7 +69,8 @@ describe("Contact Family → Communications loop", () => {
 
     it("family-send associates Contact Family work after confirmed send only", () => {
         const route = read("app/api/admin/communications/family-send/route.ts");
-        expect(route).toContain("associateOutboundCommunicationToContactAttempt");
+        // Associated at PROVIDER ACCEPTANCE through the one reconciler (contactAttemptOnProviderAcceptance).
+        expect(route).toContain("reconcileContactAttemptOnProviderAcceptance");
         expect(route).toContain("opportunity_id");
         expect(route).toContain("confirm &&");
         expect(route).toContain("result.summary.sent > 0");

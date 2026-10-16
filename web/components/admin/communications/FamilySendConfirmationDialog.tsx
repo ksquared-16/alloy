@@ -87,8 +87,11 @@ export default function FamilySendConfirmationDialog({
     if (!open || !portalReady) return null;
 
     const channelLine = buildFamilySendConfirmChannelLine({ channel, recipientLabel });
-    const bodyPreview = composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)";
-    const subjectPreview = subjectDraft.trim();
+    // The server's canonical render for the recipient (tokens filled) when the draft carries tokens;
+    // otherwise the draft is the message.
+    const rendered = (sendResult as { rendered_preview?: { subject: string | null; body: string } | null } | null)?.rendered_preview ?? null;
+    const bodyPreview = rendered?.body?.trim() || composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)";
+    const subjectPreview = (rendered?.subject ?? subjectDraft).trim();
     const readyCount = sendResult?.summary.ready ?? 0;
     const blocked = (sendResult?.results ?? []).filter((r) => r.status === "blocked");
     const ackTitle = buildFamilySendAckTitle({ tourInvitation });

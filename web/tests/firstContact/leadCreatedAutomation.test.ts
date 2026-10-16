@@ -12,14 +12,14 @@ const m = vi.hoisted(() => ({
     executeWorkflowRun: vi.fn(async () => ({ ok: true })),
     canonicalSend: vi.fn(),
     buildRecordRenderContext: vi.fn(async () => ({ recipient: { "contact.first_name": "Ravi" } })),
-    associate: vi.fn(async () => ({ associated: true, task_id: "t1", outcome_key: "left_message" })),
+    associate: vi.fn(async () => ({ state: "associated", task_id: "t1", outcome_key: "left_message" })),
 }));
 vi.mock("@/lib/emitEvent", () => ({ emitEvent: m.emitEvent }));
 vi.mock("@/lib/workflowRun", async (orig) => ({ ...(await orig<typeof import("@/lib/workflowRun")>()), executeWorkflowRun: m.executeWorkflowRun }));
 vi.mock("@/lib/communications/send/canonicalSend", () => ({ canonicalSend: m.canonicalSend }));
 vi.mock("@/lib/communications/render/buildRecordRenderContext", () => ({ buildRecordRenderContext: m.buildRecordRenderContext }));
 vi.mock("@/lib/communications/triggerBackendMessagesQueue", () => ({ triggerBackendMessagesQueue: async () => undefined }));
-vi.mock("@/lib/lifecycle/associateOutboundCommunicationToContactAttempt", () => ({ associateOutboundCommunicationToContactAttempt: m.associate }));
+vi.mock("@/lib/communications/contactAttemptOnProviderAcceptance", () => ({ reconcileContactAttemptOnProviderAcceptance: m.associate }));
 
 import { emitLeadCreatedEvent } from "@/lib/opportunities/emitLeadCreatedEvent";
 import { executeSendCommunicationTemplateWorkflowAction } from "@/lib/workflows/actions/executeSendCommunicationTemplateWorkflowAction";
@@ -124,8 +124,9 @@ describe("send_communication_template", () => {
             idempotencyKey: "workflow:wf-1:lead:l1:template:t1:sms",
         });
         expect(req.renderContext).toEqual({ recipient: { "contact.first_name": "Ravi" } });
-        // A successful send is a contact attempt on the lead's open work — the operator's association.
-        expect(m.associate).toHaveBeenCalledWith(expect.objectContaining({ opportunityId: "l1", channel: "sms", communicationMessageId: "msg-1" }));
+        // The send DECLARES contact work on the message; the attempt is recorded when the provider accepts it.
+        expect(req.metadata).toMatchObject({ opportunity_id: "l1", author_user_id: "u1", work_consequence: "contact_family_work" });
+        expect(m.associate).toHaveBeenCalledWith(expect.objectContaining({ messageId: "msg-1" }));
     });
 
     it("a replay is a duplicate, not a second message", async () => {
