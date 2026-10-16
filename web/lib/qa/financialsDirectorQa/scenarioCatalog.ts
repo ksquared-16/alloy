@@ -497,7 +497,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "A2. Under Preview or run manually, set Billing frequency = Monthly and Service period = November 2026, then press Preview run.",
             "A3. Under Will bill, confirm “Tilly Tuition · W7 QA · Tuition Family — $1,200.00” is listed. The run is organization-wide, so "
                 + "Certhouse Family’s monthly certification assignment is also listed ($1,450.00); expect “Generate 2 · $2,650.00”. "
-                + "Weekly terms appear under Not billed by this run.",
+                + "Weekly terms are counted in the collapsed Skipped summary (open it to see each child and reason).",
             "A4. Press Generate 2 · $2,650.00 (it also drafts Certhouse Family’s November tuition — the same draft automatic billing "
                 + "creates for it on Nov 1). Read the result line, then Close.",
             "B1. Financials → Accounts → open W7 QA · Tuition Family. Its ledger lists the Tuition charge (on an account that also "

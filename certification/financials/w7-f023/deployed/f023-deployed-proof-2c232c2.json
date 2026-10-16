@@ -1,0 +1,34 @@
+{
+ "stripBefore": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+ "rowBefore": [
+  "Oct 25, 2026 | Tuition | Tilly Tuition | 4000 · Tuition Revenue | $1,200.00 | Upcoming | Not allocated | Monthly tuition"
+ ],
+ "rowActions": [
+  "post:charge.post",
+  "resolveResponsibility:billing.resolve_responsibility"
+ ],
+ "resolveSurface": "RESOLVE RESPONSIBILITY ⏎ OBLIGATION ⏎ Monthly tuition ⏎ AMOUNT ⏎ $1,200.00 ⏎ FOR ⏎ Tilly Tuition ⏎ DATED ⏎ Oct 25, 2026 ⏎ OWES IT NOW ⏎ Not allocated ⏎ This divides the obligation between the parties named by the arrangement in force for its service date. Where no arrangement was in force then, it stays honestly unassigned — configuring one now does not reach backwards. ⏎ Preview ⏎ Resolve responsibility ⏎ Cancel",
+ "resolveButtons": [
+  "Preview",
+  "Resolve responsibility",
+  "Cancel"
+ ],
+ "inputs": [],
+ "buttonsState": [
+  "Preview|enabled|responsibility-preview-button",
+  "Resolve responsibility|disabled|responsibility-confirm",
+  "Cancel|enabled|responsibility-cancel"
+ ],
+ "previewShown": "RESOLVE RESPONSIBILITY ⏎ OBLIGATION ⏎ Monthly tuition ⏎ AMOUNT ⏎ $1,200.00 ⏎ FOR ⏎ Tilly Tuition ⏎ DATED ⏎ Oct 25, 2026 ⏎ OWES IT NOW ⏎ Not allocated ⏎ This divides the obligation between the parties named by the arrangement in force for its service date. Where no arrangement was in force then, it stays honestly unassigned — configuring one now does not reach backwards. ⏎ $1200.00 to divide. ⏎ Gross $1200.00 ⏎ Reductions $0.00 ⏎ Preview ⏎ Resolve responsibility ⏎ Cancel",
+ "afterResolve": "",
+ "stripAfter": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+ "rowAfter": [],
+ "preview": "0 to bill · 2 already generated · 6 not billed · 0 already posted · 0 refused · 0 errored ⏎ ALREADY GENERATED — NOT BILLED AGAIN ⏎ Tilly Tuition · W7 QA · Tuition Family ⏎ Certb Certhouse · Certhouse Family ⏎ NOT BILLED BY THIS RUN ⏎ Pbchild Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfour Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbtwo Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfive Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbthree Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Certa Certhouse · Certhouse Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Nothing would be billed for this period, so there is nothing to confirm.",
+ "previewDecember": "2 to bill · 0 already generated · 6 not billed · 0 already posted · 0 refused · 0 errored ⏎ WILL BILL ⏎ Tilly Tuition · W7 QA · Tuition Family ⏎ $1,200.00 ⏎ Responsibility · Tess Tuition · 100% ⏎ Certb Certhouse · Certhouse Family ⏎ $1,450.00 ⏎ Responsibility · Certt Certhouse · 100% ⏎ NOT BILLED BY THIS RUN ⏎ Pbchild Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfour Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbtwo Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbfive Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Pbthree Automation · Automation Family · Not billed — billed on a different frequency — not part of a monthly run ⏎ Certa Certhouse · Certhouse Family · Not billed — billed on a different frequency — not part of a monthly run",
+ "actionModes": [
+  "billing.resolve_responsibility:preview",
+  "billing.resolve_responsibility:execute",
+  "billing.generate_tuition:preview",
+  "billing.generate_tuition:preview"
+ ]
+}

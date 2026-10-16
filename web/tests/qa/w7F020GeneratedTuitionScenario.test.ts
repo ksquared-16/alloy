@@ -32,7 +32,7 @@ describe("Scenario 9 names only what the deployed product renders", () => {
         expect(charges).toMatch(/>\s*Tuition billing\s*</);
         expect(charges).toContain('title="Tuition billing"');
         const billing = read("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
-        for (const label of ["Automatic tuition billing", "Preview or run manually", "Billing frequency", "Service period", '"Preview run"', "Will bill", "Already generated — not billed again", "Not billed by this run"]) {
+        for (const label of ["Automatic tuition billing", "Preview or run manually", "Billing frequency", "Service period", '"Preview run"', "Will bill", "Already generated — not billed again", 'title: "Skipped"']) {
             expect(billing, label).toContain(label);
         }
         expect(billing).toMatch(/`Generate \$\{preview\.counts\.generated\} · \$\{moneyExact\(preview\.total_amount_cents, "USD"\)\}`/);

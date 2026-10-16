@@ -159,7 +159,7 @@ describe("the run binds through the canonical resolver, at creation, before post
         expect(code("lib/financials/tuitionGeneration/previewTuitionGeneration.ts")).toMatch(/const responsibility = await planTuitionResponsibility\(supabase, \{/);
         const ui = code("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
         expect(ui).toContain("No responsible party — the charge will read Not allocated");
-        expect(ui).toContain("Responsibility · {responsibilityLine(o)!.text}");
+        expect(ui).toContain("Responsibility · {resp.text}");
     });
 
     it("posting never writes or rewrites an allocation — the debtor is the one bound at creation", () => {
