@@ -105,14 +105,25 @@ export async function associateOutboundCommunicationToContactAttempt(
         });
         if (!plan) continue;
 
-        // Prefer the task's own template; otherwise any template at this stage whose
-        // policy maps this capability result.
+        // A task is judged by ITS OWN template when the plan still has it (the template key the task was
+        // instantiated from). Falling through to "any template at this stage that maps the result" let a
+        // follow-up task resolve through the first-outreach template's mapping — every accepted send would
+        // close the follow-up and create another. Tasks that predate template keys keep the old fallback:
+        // templates sharing the task's work definition first, then any template at the stage.
+        const md = ((task as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>;
+        const ownTemplateKey =
+            (typeof md.operating_plan_template_key === "string" && md.operating_plan_template_key.trim()) ||
+            (typeof md.work_intent_key === "string" && md.work_intent_key.trim()) ||
+            "";
+        const ownTemplate = ownTemplateKey ? plan.work_templates.find((t) => t.template_key === ownTemplateKey) : undefined;
         const workDefKey = work.work_definition_key?.trim() ?? "";
-        const candidateTemplates = plan.work_templates.slice().sort((a, b) => {
-            const aMatch = a.work_definition_key?.trim() === workDefKey ? 0 : 1;
-            const bMatch = b.work_definition_key?.trim() === workDefKey ? 0 : 1;
-            return aMatch - bMatch;
-        });
+        const candidateTemplates = ownTemplate
+            ? [ownTemplate]
+            : plan.work_templates.slice().sort((a, b) => {
+                  const aMatch = a.work_definition_key?.trim() === workDefKey ? 0 : 1;
+                  const bMatch = b.work_definition_key?.trim() === workDefKey ? 0 : 1;
+                  return aMatch - bMatch;
+              });
 
         for (const template of candidateTemplates) {
             const outcomeKey = resolveEffectiveSufficientCommandResultOutcome(
