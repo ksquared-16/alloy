@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll, beforeAll } from "vitest";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 
@@ -44,6 +44,16 @@ vi.mock("@/lib/tours/comms/tourCommsOrchestrator", () => ({
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+
+// The service refuses a tour before the site's tomorrow (tourEarliestDate); these fixtures book fixed
+// dates, so the clock is pinned before them. Only Date is faked — timers and promises run normally.
+beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-01T12:00:00Z"));
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
 
 describe("createTourBooking", () => {
     beforeEach(() => {

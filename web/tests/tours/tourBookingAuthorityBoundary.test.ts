@@ -11,7 +11,7 @@
  * degrade, and genuine booking failures must still roll back.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterAll, beforeAll } from "vitest";
 
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 
@@ -56,6 +56,16 @@ vi.mock("@/lib/tours/availability/internalCompute", () => ({
 }));
 
 import { createTourBooking, TourBookingTransactionError } from "@/lib/tours/bookings/tourBookingService";
+
+// The service refuses a tour before the site's tomorrow (tourEarliestDate); these fixtures book fixed
+// dates, so the clock is pinned before them. Only Date is faked — timers and promises run normally.
+beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-01T12:00:00Z"));
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
 
 const ORG = "org-1";
 const OPP = "opp-1";

@@ -1,3 +1,4 @@
+import { TOUR_TOO_SOON_MESSAGE, isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { isSlotOffered } from "@/lib/tours/availability/internalCompute";
@@ -237,6 +238,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
             if (!(input.endAt > input.startAt)) {
                 return { ok: false, message: "tour_bookings: end_at must be after start_at" };
             }
+            if (!isTourStartAllowed(input.startAt, tz)) return { ok: false, message: TOUR_TOO_SOON_MESSAGE };
             try {
                 await assertNoOtherActiveBooking(supabase, orgId, opportunityId, null);
                 if (status !== "requested") {
@@ -619,6 +621,9 @@ export async function rescheduleTourBooking(
                 input.timezone != null && String(input.timezone).trim() !== "" ?
                     String(input.timezone).trim()
                 :   existing.timezone;
+            if (nextTz && !isTourStartAllowed(input.startAt, nextTz)) {
+                return { ok: false, message: TOUR_TOO_SOON_MESSAGE };
+            }
 
             await assertSlotAvailableForWrite(supabase, {
                 orgId,
