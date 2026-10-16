@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildRecordRenderContext } from "@/lib/communications/render/buildRecordRenderContext";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
-import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+import { reconcileContactAttemptOnProviderAcceptance } from "@/lib/communications/contactAttemptOnProviderAcceptance";
 
 /**
  * Workflow action `send_communication_template` — an automation sends a TEMPLATE LIBRARY message.
@@ -113,6 +113,8 @@ export async function executeSendCommunicationTemplateWorkflowAction(input: {
             workflow_id: input.workflowId,
             opportunity_id: l.id,
             customer_id: l.customer_id,
+            // The automation's first contact is contact work; it is recorded on PROVIDER ACCEPTANCE.
+            ...(str(ev.actor_user_id) ? { author_user_id: str(ev.actor_user_id), work_consequence: "contact_family_work" } : {}),
         },
     });
 
@@ -127,23 +129,13 @@ export async function executeSendCommunicationTemplateWorkflowAction(input: {
     if (send.outcome === "duplicate") return skip("already_sent_for_this_lead", outputs);
     if (send.outcome !== "sent_to_queue") return skip(`send_${send.outcome}:${send.reason ?? ""}`, { ...outputs, message: send.message });
 
-    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
-
-    // The same contact-attempt association an operator's send makes — a successful send is contact.
-    const actor = str(ev.actor_user_id);
-    if (actor) {
+    // Hand it to the provider now, then record the contact attempt only if the provider accepted it.
+    await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+    if (send.messageId) {
         try {
-            const assoc = await associateOutboundCommunicationToContactAttempt({
-                supabase,
-                orgId,
-                userId: actor,
-                opportunityId: l.id,
-                channel,
-                communicationMessageId: send.messageId ?? null,
-            });
-            outputs.contact_attempt = assoc;
+            outputs.contact_attempt = await reconcileContactAttemptOnProviderAcceptance({ supabase, messageId: send.messageId });
         } catch (e) {
-            outputs.contact_attempt = { associated: false, error: e instanceof Error ? e.message : String(e) };
+            outputs.contact_attempt = { state: "error", error: e instanceof Error ? e.message : String(e) };
         }
     }
     return { status: "completed", log: `send_communication_template: ${channel} queued for lead ${l.id}`, outputs };

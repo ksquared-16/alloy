@@ -10,7 +10,8 @@ import {
 } from "@/lib/communications/communicationPermissions";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { resolveSendRecipientMode } from "@/lib/communications/send/resolveSendRecipientMode";
-import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+import { reconcileContactAttemptOnProviderAcceptance } from "@/lib/communications/contactAttemptOnProviderAcceptance";
+import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import {
     requireCommunicationsAuthority,
     COMMUNICATIONS_SEND,
@@ -307,7 +308,15 @@ export async function POST(request: NextRequest) {
         // Stable per (recipient, content). A double-click or retry returns the
         // existing message rather than sending twice.
         idempotencyKey: `comms_send:${recipientPersonIdRaw}:${contentToken(textRaw, subjectRawEmail ?? null)}`,
-        metadata: { source: "communications_send", author_user_id: ctx.userId ?? null },
+        metadata: {
+            source: "communications_send",
+            author_user_id: ctx.userId ?? null,
+            // A message composed against a lead declares contact work; the attempt is recorded when the
+            // provider accepts it (contactAttemptOnProviderAcceptance), not at enqueue.
+            ...(primaryEntityType === "opportunities" && (channel === "email" || channel === "sms")
+                ? { opportunity_id: entityId, work_consequence: "contact_family_work" }
+                : {}),
+        },
     });
 
     if (send.outcome !== "sent_to_queue" && send.outcome !== "duplicate") {
@@ -350,28 +359,28 @@ export async function POST(request: NextRequest) {
         (channel === "email" || channel === "sms") &&
         ctx.userId
     ) {
-        // TRANSACTION BOUNDARY: the message row is COMMITTED and the delivery queue already triggered
-        // above. Contact-attempt association is DOWNSTREAM bookkeeping — it must never convert a
-        // delivered message into a failed response (the operator would re-send and double-message the
-        // family). Failures are reported honestly on the payload, never thrown and never swallowed.
-        try {
-            const assoc = await associateOutboundCommunicationToContactAttempt({
-                supabase,
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-                opportunityId: entityId,
-                channel,
-                communicationMessageId: exec.communication_message_id,
-            });
+        // TRANSACTION BOUNDARY: the message row is COMMITTED. Contact-attempt association is DOWNSTREAM
+        // bookkeeping — it must never convert a sent message into a failed response. It happens at PROVIDER
+        // ACCEPTANCE: wake the sender, then reconcile; a message not yet answered is associated later by the
+        // webhook / scheduled sweep (never twice). A provider rejection records nothing.
+        if (exec.communication_message_id) {
+            await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+            const r = await reconcileContactAttemptOnProviderAcceptance({ supabase, messageId: exec.communication_message_id });
             contact_attempt_association =
-                assoc.associated ?
-                    { associated: true, task_id: assoc.task_id, outcome_key: assoc.outcome_key }
-                :   { associated: false, reason: assoc.reason, error: assoc.error };
-        } catch (e) {
-            contact_attempt_association = {
-                associated: false,
-                error: e instanceof Error ? e.message : String(e),
-            };
+                r.state === "associated"
+                    ? { associated: true, task_id: r.task_id, outcome_key: r.outcome_key }
+                    : {
+                          associated: false,
+                          reason:
+                              r.state === "pending_provider_acceptance"
+                                  ? "pending_provider_acceptance"
+                                  : r.state === "not_accepted"
+                                    ? `provider_${r.status}`
+                                    : r.state === "not_applicable"
+                                      ? r.reason
+                                      : r.state,
+                          ...(r.state === "error" ? { error: r.error } : {}),
+                      };
         }
     }
 

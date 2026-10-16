@@ -430,8 +430,9 @@ describe("Item 1 — explicit contract", () => {
 
     it("family-send associates Contact Family work only when the consequence is declared", () => {
         const route = readFileSync(join(process.cwd(), "app/api/admin/communications/family-send/route.ts"), "utf8");
-        const gate = route.slice(0, route.indexOf("await associateOutboundCommunicationToContactAttempt("));
-        const condition = gate.slice(gate.lastIndexOf("if ("));
+        const gate = route.slice(0, route.indexOf("await reconcileContactAttemptOnProviderAcceptance("));
+        // The gate is the condition that opens the association block (the loop inside checks each message).
+        const condition = gate.slice(gate.lastIndexOf("if (confirm &&"));
         expect(condition).toContain('workConsequence === "contact_family_work"');
         expect(condition).toContain("confirm &&");
         expect(condition).toContain("result.summary.sent > 0");

@@ -10,7 +10,7 @@ import { renderOutboundMessage, type RenderContext } from "@/lib/communications/
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
 import { resolveFamilyCommunicationWorkspace } from "@/lib/communications/v2/familyWorkspace";
 import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from "@/lib/communications/v2/familyWorkspace";
-import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+import { reconcileContactAttemptOnProviderAcceptance } from "@/lib/communications/contactAttemptOnProviderAcceptance";
 import {
     FAMILY_SEND_WORK_CONSEQUENCE_FIELD,
     parseFamilySendWorkConsequence,
@@ -197,6 +197,7 @@ export async function POST(req: Request) {
         // context the canonical enqueue renders with, so the preflight answer is the send answer.
         const hasTokens = (text: string, subj: string | null) => text.includes("{{") || (subj ?? "").includes("{{");
         const renderValuesByPerson = new Map<string, RenderContext["values"]>();
+        const renderedPreviewByPerson = new Map<string, { subject: string | null; body: string }>();
         const renderValuesFor = async (personId: string) => {
             let values = renderValuesByPerson.get(personId);
             if (!values) {
@@ -217,7 +218,10 @@ export async function POST(req: Request) {
                         bodyIsHtml: ch === "email" && bodyIsHtml,
                         context: { values: await renderValuesFor(personId), channel: ch },
                     });
-                    return rendered.ok ? null : rendered.block.message;
+                    if (!rendered.ok) return rendered.block.message;
+                    // What THIS recipient will actually read — shown at preflight instead of the draft's tokens.
+                    renderedPreviewByPerson.set(personId, { subject: rendered.output.subject, body: rendered.output.text });
+                    return null;
                 },
                 checkConsent: async (personId) => {
                     if (!enforceConsent) return null;
@@ -265,6 +269,9 @@ export async function POST(req: Request) {
                             customer_id: customerId,
                             author_user_id: ctx.userId ?? null,
                             ...(opportunityId ? { opportunity_id: opportunityId } : {}),
+                            ...(workConsequence === "contact_family_work" && opportunityId
+                                ? { work_consequence: "contact_family_work" }
+                                : {}),
                         },
                     });
                     return send.outcome === "sent_to_queue" || send.outcome === "duplicate"
@@ -275,6 +282,25 @@ export async function POST(req: Request) {
             { recipientPersonIds, channel, subject, body: message, confirm }
         );
 
+        // Hand the queued messages to the provider now: email inline (Resend), SMS by waking the sender
+        // and waiting for it — the provider's answer is what decides whether this send was contact.
+        if (confirm && result.mode === "sent" && result.summary.sent > 0 && channel === "email") {
+            let needsQueue = false;
+            for (const row of result.results) {
+                const mid = row.communication_message_id;
+                if (!mid || row.status !== "sent") continue;
+                const delivered = await deliverQueuedEmailHtml({ supabase, messageId: mid });
+                if (!delivered.ok) needsQueue = true;
+            }
+            if (needsQueue) await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+        } else if (confirm && result.mode === "sent" && result.summary.sent > 0) {
+            await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => undefined);
+        }
+
+        // CONTACT IS PROVIDER ACCEPTANCE. Only when the caller declared Contact Family work: each accepted
+        // message becomes the lead's contact attempt (configured sufficiency decides what that does to the
+        // work); a rejected one records nothing and the work stays open. A message the provider has not
+        // answered yet is associated later by the webhook / scheduled sweep — never twice.
         let contact_attempt_association:
             | {
                   associated: boolean;
@@ -284,61 +310,38 @@ export async function POST(req: Request) {
                   error?: string;
               }
             | undefined;
-
-        // After a confirmed send with at least one accepted recipient, satisfy open Contact Family
-        // work on the opportunity via the existing communications→work seam (no new framework) —
-        // ONLY when the caller declared it is performing that work. A generic message composed
-        // against the same opportunity (Manage → Send Message, Activity) is a send, not a
-        // completion, even while a Contact Family item happens to be open.
-        if (
-            confirm &&
-            workConsequence === "contact_family_work" &&
-            opportunityId &&
-            ctx.userId &&
-            result.mode === "sent" &&
-            result.summary.sent > 0
-        ) {
-            const firstMessageId =
-                result.results.find((r) => r.status === "sent" && r.communication_message_id)?.communication_message_id
-                ?? null;
-            try {
-                const assoc = await associateOutboundCommunicationToContactAttempt({
-                    supabase,
-                    orgId: ctx.orgId,
-                    userId: ctx.userId,
-                    opportunityId,
-                    channel,
-                    communicationMessageId: firstMessageId,
-                });
-                contact_attempt_association =
-                    assoc.associated
-                        ? { associated: true, task_id: assoc.task_id, outcome_key: assoc.outcome_key }
-                        : { associated: false, reason: assoc.reason, error: assoc.error };
-            } catch (e) {
+        if (confirm && workConsequence === "contact_family_work" && opportunityId && result.mode === "sent" && result.summary.sent > 0) {
+            for (const row of result.results) {
+                const mid = row.communication_message_id;
+                if (!mid || row.status !== "sent") continue;
+                const r = await reconcileContactAttemptOnProviderAcceptance({ supabase, messageId: mid });
+                if (r.state === "associated") {
+                    contact_attempt_association = { associated: true, task_id: r.task_id, outcome_key: r.outcome_key };
+                    break;
+                }
                 contact_attempt_association = {
                     associated: false,
-                    error: e instanceof Error ? e.message : String(e),
+                    reason:
+                        r.state === "pending_provider_acceptance"
+                            ? "pending_provider_acceptance"
+                            : r.state === "not_accepted"
+                              ? `provider_${r.status}`
+                              : r.state === "not_applicable"
+                                ? r.reason
+                                : r.state,
+                    ...(r.state === "error" ? { error: r.error } : {}),
                 };
             }
         }
 
-        // Prefer snapshot HTML delivery when Resend is available in this process.
-        // Falls back to backend queue wake (rendered_snapshot path) otherwise.
-        if (confirm && result.mode === "sent" && result.summary.sent > 0 && channel === "email") {
-            for (const row of result.results) {
-                const mid = row.communication_message_id;
-                if (!mid || row.status !== "sent") continue;
-                const delivered = await deliverQueuedEmailHtml({ supabase, messageId: mid });
-                if (!delivered.ok) {
-                    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
-                }
-            }
-        } else if (confirm && result.mode === "sent" && result.summary.sent > 0) {
-            void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
-        }
+        // The canonical render for the first recipient who is ready — the preflight preview. Absent when
+        // the draft has no tokens (the draft already IS the message).
+        const firstReady = result.results.find((r) => r.status === "ready" || r.status === "sent");
+        const rendered_preview = firstReady ? renderedPreviewByPerson.get(firstReady.person_id) ?? null : null;
 
         return NextResponse.json({
             ...result,
+            rendered_preview,
             contact_attempt_association,
             meta: {
                 customer_id: customerId,

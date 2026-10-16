@@ -82,6 +82,27 @@ of its own.
 - **Authoring.** On the Workflows page, "When a new lead is created, send a message" picks a template and,
   by default, adds the condition `new_family = true`. Conditions can now read the event's own root facts.
 
+## First contact is provider acceptance
+
+`lib/communications/contactAttemptOnProviderAcceptance.ts`. A send that declares contact work records
+`work_consequence`, `opportunity_id` and `author_user_id` on the message. Three senders do this: family send,
+communications send and the automation.
+
+The contact attempt is recorded only when the provider **accepts** the message, meaning
+`communication_messages.status` is `sent` or `delivered` and a `provider_message_id` is present.
+
+- Queued inside Alloy is not contact.
+- A synchronous provider rejection (e.g. Twilio 400, invalid number) records nothing, so the work stays open.
+- Later carrier delivery is telemetry.
+
+The reconciler runs at three points:
+
+- inline, after the send hands messages to the provider;
+- from the provider webhooks (`applyOutboundProviderDeliveryPatch`);
+- from the 5-minute scheduled wake.
+
+It runs once per message: the message is stamped, and a stamped message is never associated again.
+
 ## First-contact work: completion is configuration
 
 A successful send (accepted for delivery) is associated with the lead's open Contact Family work through
@@ -92,6 +113,29 @@ The platform default maps `communications_send/sent → left_message`. A tenant 
 "reach the family" (for example `min_attempts: 3`, `left_message → reopen_work`) records the send as an
 attempt and moves the work's due date. It does not close the work. Closing on a send requires the tenant to
 map `communications_send/sent` to a successful outcome.
+
+## A confirmed tour moves the family (E2E-25)
+
+Every path that confirms a booking runs the same Business Process step (`runConfirmedTourStageWork` in
+`tourBookingService`): `schedule_tour/confirmed`, then the stage's mapped outcome (`tour_scheduled`), then its
+rule (`lead_to_tour`). This covers operator create, public-link create and confirm-from-pending.
+
+The step used to require a staff user, so a family's public booking never reached the Business Process. With
+no staff user, the platform's system actor records it.
+
+Tour is **family-grain**: Lead, Tour and Decision are family; Waitlist, Enrolling and Enrolled are child. Before
+Decision a child has no stage of its own and rides the family's. So the child label reads the family stage
+before any intake status (`childEnrollmentProcessStageLabel`). No child state is written.
+
+## Workflow conditions are stored and enforced
+
+`workflow_conditions` is `field / operator / value (text) / org_id`.
+
+- **Authoring:** the API writes those columns. It replaces safely: insert first, then delete. Failures are
+  reported, not swallowed.
+- **Runtime:** it reads `*` and fails a run **closed** when conditions cannot be read. It used to name absent
+  columns, discard the error, and run every conditioned workflow as unconditioned.
+- **Automation creator:** it creates the workflow disabled and enables it last.
 
 ## Tours from tomorrow
 

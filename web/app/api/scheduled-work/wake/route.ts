@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ensureScheduledWorkConsumersRegistered } from "@/lib/scheduledWork/scheduledWorkConsumers";
 import { runScheduledWorkWake } from "@/lib/scheduledWork/scheduledWorkRuntime";
+import { sweepPendingContactAttempts } from "@/lib/communications/contactAttemptOnProviderAcceptance";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +51,17 @@ function isAuthorizedClock(request: NextRequest): boolean {
 async function wake(): Promise<NextResponse> {
     ensureScheduledWorkConsumersRegistered();
     try {
-        const result = await runScheduledWorkWake(createAdminClient(), {});
-        return NextResponse.json({ ok: true, ...result });
+        const supabase = createAdminClient();
+        const result = await runScheduledWorkWake(supabase, {});
+        // Backstop for contact attempts: accepted messages that declared contact work but were never
+        // associated (no webhook configured, provider answered after the send returned).
+        let contactAttemptsAssociated = 0;
+        try {
+            contactAttemptsAssociated = await sweepPendingContactAttempts(supabase);
+        } catch {
+            contactAttemptsAssociated = 0;
+        }
+        return NextResponse.json({ ok: true, ...result, contact_attempts_associated: contactAttemptsAssociated });
     } catch (err) {
         const message = err instanceof Error ? err.message : "wake failed";
         return NextResponse.json({ ok: false, error: "WAKE_FAILED", message }, { status: 500 });

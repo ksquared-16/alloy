@@ -215,6 +215,19 @@ describe("other downstream consequences also degrade rather than roll back", () 
         expect(bookingRows).toHaveLength(1);
     });
 
+    it("E2E-25: a family booking from the PUBLIC link (no staff user) still runs the Business Process step", async () => {
+        mockStageWork.mockClear();
+        const booking = await createTourBooking(makeSupabase(), { ...input(), source: "public_link", requestedByUserId: null });
+        expect(booking).toBeTruthy();
+        // Same canonical step as an operator booking — schedule_tour/confirmed → the stage's outcome → its
+        // transition — attributed to the platform's system actor instead of being skipped.
+        expect(mockStageWork).toHaveBeenCalledTimes(1);
+        expect(mockStageWork.mock.calls[0]?.[0]).toMatchObject({
+            result: "confirmed",
+            userId: "00000000-0000-0000-0000-000000000000",
+        });
+    });
+
     it("a stage/work sufficiency failure leaves the booking committed", async () => {
         mockStageWork.mockRejectedValue(new Error("no work unit"));
 

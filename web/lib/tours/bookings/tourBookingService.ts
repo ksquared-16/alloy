@@ -1,3 +1,4 @@
+import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { TOUR_TOO_SOON_MESSAGE, isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
@@ -341,19 +342,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                 name: "stage_work_sufficiency",
                 stage: "business_process",
                 boundary: "outside",
-                run: async () => {
-                    if (!row || row.status_key !== "confirmed") return null;
-                    const actor = (input.requestedByUserId ?? "").trim();
-                    if (!actor) return null;
-                    return associateTourBookingToStageWork({
-                        supabase,
-                        orgId,
-                        userId: actor,
-                        opportunityId: row.opportunity_id,
-                        result: "confirmed",
-                        bookingId: row.id,
-                    });
-                },
+                run: async () => runConfirmedTourStageWork({ supabase, orgId, row, actorUserId: input.requestedByUserId }),
             },
             {
                 name: "lifecycle_event",
@@ -402,6 +391,35 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
  * `create` and left in place here: a mirror failure returned an error to the operator next to
  * a booking whose status had already changed.
  */
+
+/**
+ * A CONFIRMED TOUR IS THE BUSINESS PROCESS FACT — whoever booked it.
+ *
+ * `schedule_tour` publishes `confirmed`; the stage's completion policy maps that to its outcome (e.g. Lead's
+ * Contact Family → `tour_scheduled`) and the outcome's rule moves the family (`lead_to_tour`). This step used
+ * to require a staff user and returned early without one — so a family booking from the public invitation
+ * link (no staff user) never reached the Business Process, and the case stayed at Lead with a scheduled
+ * tour. The booking is the authority; with no staff user the platform's system actor records it, exactly
+ * as domain-signal automation already does. Every path that confirms a booking runs this same step.
+ */
+async function runConfirmedTourStageWork(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    row: TourBookingRow | null;
+    actorUserId: string | null | undefined;
+}) {
+    if (!params.row || params.row.status_key !== "confirmed") return null;
+    const actor = (params.actorUserId ?? "").trim() || DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID;
+    return associateTourBookingToStageWork({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        userId: actor,
+        opportunityId: params.row.opportunity_id,
+        result: "confirmed",
+        bookingId: params.row.id,
+    });
+}
+
 async function runTourBookingLifecycleTransition(params: {
     supabase: SupabaseClient;
     capability: string;
@@ -421,6 +439,8 @@ async function runTourBookingLifecycleTransition(params: {
           }
     >;
     integration?: (row: TourBookingRow) => Parameters<typeof applyTourBookingOpportunityIntegration>[1] | null;
+    /** True when this transition can CONFIRM a booking — then the Business Process step runs too. */
+    confirmsBooking?: boolean;
     lifecycleEvent: (
         row: TourBookingRow,
         existing: TourBookingRow
@@ -507,6 +527,14 @@ async function runTourBookingLifecycleTransition(params: {
                 },
             },
             {
+                // Soft, like createTourBooking's: the booking is committed; the Business Process follows it.
+                name: "stage_work_sufficiency",
+                stage: "business_process",
+                boundary: "outside",
+                run: async () =>
+                    params.confirmsBooking ? runConfirmedTourStageWork({ supabase, orgId, row, actorUserId: params.actorUserId }) : null,
+            },
+            {
                 name: "lifecycle_event",
                 stage: "activity",
                 run: async () => {
@@ -547,6 +575,7 @@ export async function confirmTourBooking(
         bookingId,
         correlationId: opts?.correlationId ?? null,
         actorUserId: opts?.actorUserId ?? null,
+        confirmsBooking: true,
         prepare: async () => {
             const existing = await fetchBooking(supabase, orgId, bookingId);
             if (!existing) return { ok: false, message: "tour_bookings: not found" };

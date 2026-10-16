@@ -1616,12 +1616,22 @@ export async function executeWorkflowRun(
         org_id: payload.org_id ?? null,
     });
 
-    const { data: conditions } = await supabase
+    // `*`: the evaluator reads whichever shape the table carries (`field`/`value`, or the richer columns).
+    // Naming columns the table lacks made this read fail, the error was discarded, and "no conditions" let
+    // EVERY conditioned workflow run — fail OPEN. A condition that cannot be read now fails the run.
+    const { data: conditions, error: conditionsError } = await supabase
         .from("workflow_conditions")
-        .select("target_entity, field_path, field, operator, value, value_jsonb, enabled")
+        .select("*")
         .eq("workflow_id", workflowId);
+    if (conditionsError) {
+        await supabase
+            .from("workflow_runs")
+            .update({ status: "failed", completed_at: new Date().toISOString(), error: `conditions_unreadable: ${conditionsError.message}` })
+            .eq("id", runId);
+        return { ok: false, status: "failed", workflow_run_id: runId, error: `conditions_unreadable: ${conditionsError.message}` } as WorkflowRunResult;
+    }
 
-    const conditionRows = conditions ?? [];
+    const conditionRows = (conditions ?? []) as ConditionRow[];
     const conditionEval = conditionRows.map((c: ConditionRow) => {
         try {
             const actual = getConditionActual(payload, defaultEntityType, c);

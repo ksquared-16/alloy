@@ -71,32 +71,41 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         const supabase = createAdminClient();
         const rowOk = await assertRowOrg(supabase, "workflows", id, ctx.orgId);
         if (!rowOk.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        await supabase.from("workflow_conditions").delete().eq("workflow_id", id);
-        if (conditions.length > 0) {
-            const rows = conditions.map((c: ConditionInput) => {
-                const fieldPath = normalizeFieldPath(
-                    (c.target_entity ?? "").toString().trim() || null,
-                    (c.field_path ?? c.field ?? "").toString().trim()
-                );
-                const op = (c.operator ?? "eq").toString().trim();
-                const val = c.value;
-                const valueJsonb = val === undefined || val === null ? null : typeof val === "object" ? val : Array.isArray(val) ? val : val;
-                const row: Record<string, unknown> = {
-                    workflow_id: id,
-                    org_id: ctx.orgId,
-                    target_entity: (c.target_entity ?? "").toString().trim() || null,
-                    field_path: fieldPath || null,
-                    operator: op || "eq",
-                    value_jsonb: valueJsonb,
-                    enabled: c.enabled !== false,
-                };
-                return row;
-            });
+        /*
+         * STORE WHAT THE TABLE HAS. `workflow_conditions` is `field / operator / value (text) / org_id`
+         * (baseline schema; no migration ever added `field_path`, `value_jsonb`, `target_entity` or
+         * `enabled`). Writing those columns failed every insert — AFTER the old conditions had already
+         * been deleted, so a workflow silently lost its conditions. The evaluator reads `field_path ?? field`
+         * and `value_jsonb ?? value`, and compares as strings, so `field` + text `value` is the whole contract.
+         *
+         * Replace safely: insert the new set first, then remove the previous rows. A failed insert leaves
+         * the workflow's existing conditions exactly as they were, and the failure is reported.
+         */
+        const { data: previous, error: readErr } = await supabase.from("workflow_conditions").select("id").eq("workflow_id", id);
+        if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 });
+        const previousIds = ((previous ?? []) as Array<{ id: string }>).map((r) => r.id);
+
+        const rows = conditions.map((c: ConditionInput) => {
+            const field = (c.field_path ?? c.field ?? "").toString().trim();
+            const val = c.value;
+            const value =
+                val === undefined || val === null ? null : typeof val === "object" ? JSON.stringify(val) : String(val);
+            return { workflow_id: id, org_id: ctx.orgId, field, operator: (c.operator ?? "eq").toString().trim() || "eq", value };
+        });
+        if (rows.some((r: { field: string }) => !r.field)) {
+            return NextResponse.json({ error: "Every condition needs a field." }, { status: 400 });
+        }
+        let inserted: unknown[] = [];
+        if (rows.length > 0) {
             const { data, error } = await supabase.from("workflow_conditions").insert(rows).select();
             if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-            return NextResponse.json(data ?? []);
+            inserted = data ?? [];
         }
-        return NextResponse.json([]);
+        if (previousIds.length > 0) {
+            const { error: delErr } = await supabase.from("workflow_conditions").delete().in("id", previousIds);
+            if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+        }
+        return NextResponse.json(inserted);
     } catch (err: unknown) {
         return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
