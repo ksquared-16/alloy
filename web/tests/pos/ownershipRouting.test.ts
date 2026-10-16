@@ -213,3 +213,29 @@ describe("the no-fallthrough invariant", () => {
         }
     });
 });
+
+describe("a date is the day it was signed only when the paper says so", () => {
+    it("routes the start of care to enrolment, not to today", () => {
+        expect(route("Requested Start Date").owner).not.toBe("DERIVED_SYSTEM");
+        expect(route("Start Date").owner).not.toBe("DERIVED_SYSTEM");
+    });
+    it("does not read the office's own dates as the submission date", () => {
+        expect(route("Date Contacted for Enrollment").derivedKind).toBeUndefined();
+        expect(route("Date of Enrollment Meeting").derivedKind).toBeUndefined();
+    });
+    it("still reads a bare date blank and a signature date as the execution", () => {
+        expect(route("Date").derivedKind).toBe("execution_date");
+        expect(route("Date signed").derivedKind).toBe("execution_date");
+    });
+});
+
+describe("a printed dollar blank is money the school sets", () => {
+    it.each(["Total $", "Client(s) agree to pay $", "Tuition Child 1 $"])("%s", (label) => {
+        const r = route(label);
+        expect(r.owner).toBe("FINANCIAL_PAYMENT");
+        expect(r.bulkAcceptSafe).toBe(false);
+    });
+    it("reads how a payment was made as payment-method detail", () => {
+        expect(route("Paid by: Cash Check").financialKind).toBe("method_setup");
+    });
+});

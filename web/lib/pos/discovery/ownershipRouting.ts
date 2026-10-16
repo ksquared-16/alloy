@@ -103,11 +103,16 @@ const PROTECTED_FINANCIAL_CREDENTIAL =
 
 /** Payment-method SETUP input — transient at the provider, never durable Alloy truth. */
 const PAYMENT_METHOD_SETUP =
-    /\b(financial\s*institution|bank\s*name|account\s*type|checking\s*or\s*savings|account\s*holder|name\s*on\s*(the\s*)?account|voided\s*check)\b/i;
+    /\b(financial\s*institution|bank\s*name|account\s*type|checking\s*or\s*savings|account\s*holder|name\s*on\s*(the\s*)?account|voided\s*check|paid\s*by)\b/i;
 
-/** Billing configuration — an amount the ORG charges, not a fact about a family. */
+/**
+ * Billing configuration — an amount the ORG charges, not a fact about a family.
+ *
+ * A printed dollar blank ("Total $____", "agree to pay $____ per month") is the same thing in another
+ * spelling: the paper leaves the amount for someone to write in, and that amount belongs to Financials.
+ */
 const BILLING_CONFIGURATION =
-    /\b(fee|tuition|rate|deposit|price|charge|amount\s*due|monthly\s*(cost|payment))\b/i;
+    /\b(fee|tuition|rate|deposit|price|charge|amount\s*due|monthly\s*(cost|payment)|agree\s*to\s*pay)\b|\$/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Derived. A value Alloy can compute is not a value Alloy should store.
@@ -115,6 +120,14 @@ const BILLING_CONFIGURATION =
 
 /** Age is DOB plus a date. Storing it guarantees it is wrong by the next birthday. */
 const AGE_AT_A_DATE = /\bage\b(?![a-z])/i;
+
+/**
+ * A date that names its own occasion is not the day the form was filled in. The matcher's catch-all
+ * reads any "…date…" label as the submission date (at low confidence); paper also carries the office's
+ * own record of what happened — when the family was contacted, when they met, when they paid.
+ */
+const DATED_OCCASION =
+    /\b(contacted|contact\s*date|meeting|interview|tour|visit|paid|payment|received|reviewed|approved|entered|appointment)\b/i;
 
 /** Household membership already answers this. */
 const SIBLING_EXISTENCE = /\b(sibling|siblings|brothers?\s*(or|and|\/)\s*sisters?)\b/i;
@@ -281,8 +294,16 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
     // 6. Execution dates. The platform matcher ALREADY identifies these; discovery used to discard
     //    the answer because it carried no `field_source`, and proposing a field was what happened
     //    next. A signature or submission date belongs to the execution, never to a person.
+    //    The matcher's catch-all reads ANY label containing "date" as a submission date, at LOW
+    //    confidence ("Generic date — verify"). That guess swallowed "Requested Start Date" and "Date
+    //    of Enrollment Meeting" as "today": a start of care and an office occasion are not the
+    //    execution, so a low-confidence guess yields to either.
     const suggestion = suggestFieldBinding(label, concept.suggestedDataType ?? "text");
-    if (suggestion?.special === "signature_date" || suggestion?.special === "submission_date") {
+    const isExecutionDate =
+        suggestion?.special === "signature_date"
+        || (suggestion?.special === "submission_date"
+            && (suggestion.confidence !== "low" || (!ENROLLMENT_START.test(label) && !DATED_OCCASION.test(label))));
+    if (suggestion?.special && isExecutionDate) {
         return {
             owner: "DERIVED_SYSTEM",
             derivedKind: "execution_date",

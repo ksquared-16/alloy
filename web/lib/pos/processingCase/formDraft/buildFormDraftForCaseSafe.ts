@@ -27,6 +27,7 @@ import type { PdfAcroFormResult } from "../structure/pdfAcroForm";
 import { extractPdfAcroFormFields } from "../structure/pdfAcroForm";
 import { decodeCaptureText, downloadDocumentBytesSafe, looksLikeHtmlBytes, looksLikePdfBytes } from "../structure/documentBytes";
 import { extractDocumentTextSafe } from "../structure/extractDocumentTextSafe";
+import { DISCOVERY_APPLICATION_METADATA_KEY, initializeStrongUnderstanding } from "@/lib/pos/discovery/initializeStrongUnderstanding";
 import { detectDocumentStructure } from "../structure/detectDocumentStructure";
 import { extractPdfPositional } from "../structure/pdfPositionalExtract";
 import { detectLayoutStructure } from "../structure/detectLayoutStructure";
@@ -344,7 +345,47 @@ export async function buildFormDraftForCaseSafe(
         const ocr = ocrProvenanceFromDocument(doc);
         if (ocr) draft.ocr = ocr;
 
-        return await dbStoreFormDraftPreview(supabase, { orgId: args.orgId, caseId: args.caseId, draft });
+        // The first pass: what discovery is sure of is applied now, so the form opens already
+        // understood. Enrichment — a failure here must not cost the operator the draft.
+        let initialized: ReturnType<typeof initializeStrongUnderstanding> | null = null;
+        try {
+            initialized = initializeStrongUnderstanding(draft);
+        } catch (e) {
+            console.warn("[buildFormDraftForCaseSafe] strong understanding", e instanceof Error ? e.message : e);
+        }
+        const stored = await dbStoreFormDraftPreview(supabase, {
+            orgId: args.orgId,
+            caseId: args.caseId,
+            draft: initialized?.draft ?? draft,
+        });
+        // A fresh detection is a fresh draft: its ledger replaces any earlier one, so the operator's
+        // Apply knows what was already applied to THIS draft and re-applies nothing.
+        if (initialized?.application) {
+            const { data: fresh } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", args.orgId)
+                .eq("id", args.caseId)
+                .maybeSingle();
+            const meta = ((fresh as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+            await supabase
+                .from("processing_cases")
+                .update({
+                    metadata: {
+                        ...meta,
+                        [DISCOVERY_APPLICATION_METADATA_KEY]: {
+                            ledger: initialized.application.ledger,
+                            counts: initialized.application.counts,
+                            applied_at: new Date().toISOString(),
+                            applied_by: "system:strong_match",
+                            left_for_operator: initialized.skipped,
+                        },
+                    },
+                })
+                .eq("org_id", args.orgId)
+                .eq("id", args.caseId);
+        }
+        return stored;
     } catch (e) {
         // A crash while reading the document is NOT "no document source". Report it as what it is.
         const message = e instanceof Error ? e.message : String(e);

@@ -1145,6 +1145,21 @@ export default function PosTemplateSetupColumn({
                   * `{"mode":"packet"}` route are untouched for callers that genuinely want packet
                   * composition; it is simply not offered in the form-authoring workflow.
                   */}
+                {/*
+                  * The concept review — what Alloy understood, including what it left for a person —
+                  * was promised "reachable from the form's footer" and was not. The strong matches are
+                  * applied at detection; this is where the rest are decided.
+                  */}
+                {!created && reviewMode === "form" && discovery?.proposals?.length ? (
+                    <button
+                        type="button"
+                        onClick={() => setReviewMode("concepts")}
+                        className={WS_ACTION_SECONDARY}
+                        data-testid="processing-review-understanding"
+                    >
+                        Review what Alloy understood
+                    </button>
+                ) : null}
                 {created ? (
                     <button
                         type="button"

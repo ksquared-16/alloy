@@ -182,7 +182,8 @@ export function inferQuestionIntent(label: string, sectionTitle = ""): QuestionI
     if (/\ballerg|medical|immuniz|physician|health\b/i.test(text)) return "health";
     if (/\b(date\s*of\s*birth|birth\s*date|birthdate|d\.?o\.?b\.?)\b/i.test(text)) return "date_of_birth";
     if (/\bemail\b/i.test(text)) return "contact_info";
-    if (/\b(phone|telephone|mobile|cell)\b/i.test(text)) return "contact_info";
+    // "Cell Carrier" names the phone company, not a number: a carrier line is not contact info.
+    if (/\b(phone|telephone|mobile|cell)\b/i.test(text) && !/\bcarrier\b/i.test(text)) return "contact_info";
     if (/\bdate\b/i.test(text)) return "date";
     return "generic";
 }
@@ -297,8 +298,12 @@ export function deriveFieldSources(input: {
         return registrySource("guardian", "guardian_first_name", "guardian_first_name");
     }
 
+    // An emergency contact is a different person from the guardian, reached through the
+    // `emergency_contacts` relationship collection. Binding the line to the guardian's first name
+    // wrote the contact's name over the parent's. There is no scalar destination for it: discovery's
+    // collection proposal, or the operator, decides.
     if (input.intent === "emergency_contact" || input.subject === "other_adult") {
-        return registrySource("guardian", "guardian_first_name", "guardian_first_name");
+        return undefined;
     }
 
     if (input.intent === "health" || input.subject === "enrollment") {

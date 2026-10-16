@@ -18,6 +18,7 @@ import {
 import { absenceTextFor, suggestedConditionsFor } from "@/lib/pos/formDraft/importedFormAnnotations";
 import { tableReviewNoticesFor } from "@/lib/pos/formDraft/tabularSourceSections";
 import { plumbingFieldsOnDraft } from "@/lib/pos/formDraft/documentPlumbingFields";
+import { financialQuestionsOnDraft } from "@/lib/pos/formDraft/financialSourceQuestions";
 import ProcessingFormCanvas, { MAPPING_STATE_CHIP, type CanvasMappingState } from "./ProcessingFormCanvas";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 import { useFormStudioAuthoring } from "./useFormStudioAuthoring";
@@ -160,6 +161,21 @@ export default function ProcessingImportedFormStudio({
         // Only what is still on the form: once removed, it is gone from the Studio schema for good.
         return plumbingFieldsOnDraft(draft.fields ?? []).filter((f) => present.has(f.id));
     }, [draft.fields, schema]);
+    /*
+     * Money the school sets, still asked of the family. Discovery routed these to Financials; the
+     * operator is told, and removes them — or keeps them — through the same Studio save.
+     */
+    const financialQuestions = useMemo(() => {
+        const present = new Set<string>();
+        const walk = (fields: readonly FormField[]) => {
+            for (const f of fields) {
+                present.add(f.id);
+                if (f.type === "group") walk((f as { fields: FormField[] }).fields);
+            }
+        };
+        if (schema) walk(schema.fields);
+        return financialQuestionsOnDraft(draft).filter((f) => present.has(f.id));
+    }, [draft, schema]);
 
     const selectedField: FormField | null = useMemo(
         // A group's line (an address's City, a contact's Phone) is selectable too.
@@ -320,6 +336,25 @@ export default function ProcessingImportedFormStudio({
                             className="font-medium text-alloy-bend-pine underline underline-offset-2"
                         >
                             Remove {plumbing.length === 1 ? "it" : "them"} from the form
+                        </button>
+                    </p>
+                ) : null}
+                {financialQuestions.length ? (
+                    <p
+                        className="mt-1.5 rounded-md bg-alloy-gold/[0.12] px-2.5 py-1.5 text-[11.5px] text-alloy-midnight/75"
+                        data-qa-financial-notice="true"
+                    >
+                        {financialQuestions.map((f) => f.label).join(", ")}{" "}
+                        {financialQuestions.length === 1 ? "is an amount" : "are amounts"} the school sets, not{" "}
+                        {financialQuestions.length === 1 ? "a question" : "questions"} for a family. Financials owns
+                        fees and tuition; the Enrollment Packet&apos;s financial requirement charges them.{" "}
+                        <button
+                            type="button"
+                            onClick={() => mutate((s) => financialQuestions.reduce((acc, f) => removeField(acc, f.id), s))}
+                            data-qa-financial-remove="true"
+                            className="font-medium text-alloy-bend-pine underline underline-offset-2"
+                        >
+                            Remove {financialQuestions.length === 1 ? "it" : "them"} from the form
                         </button>
                     </p>
                 ) : null}
