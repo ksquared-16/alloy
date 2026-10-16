@@ -181,6 +181,14 @@ export function taskMatchesStageWorkTemplate(
     row: TaskDbRow,
     stageKey: string,
     template: Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">,
+    /**
+     * The stage's own template keys. When given, a task that names ANOTHER template on this stage is
+     * that template's work and never binds here through the shared work definition: a follow-up
+     * spawned from `follow_up_family` is not "First outreach" just because both are `contact_family`
+     * work. Omitted, the definition fallback is unconditional — the orphan reconciler asks "is this
+     * kind of work open at all", and must not respawn first outreach while its follow-up is open.
+     */
+    stageTemplateKeys?: ReadonlySet<string>,
 ): boolean {
     const templateKey = template.template_key;
     const md = row.metadata ?? {};
@@ -205,6 +213,7 @@ export function taskMatchesStageWorkTemplate(
         if (stage && stage !== stageKey) return false;
         return true;
     }
+    if (mdTemplateKey != null && stageTemplateKeys?.has(mdTemplateKey)) return false;
 
     const templateDefinitionKey = templateWorkDefinitionKey(template);
     const rowDefinitionKey =
@@ -505,13 +514,12 @@ export function projectStageWorkRuntimeSync(
               })
             : null;
 
+    const stageTemplateKeys = new Set(plan.work_templates.map((t) => t.template_key));
+    const matches = (row: TaskDbRow, template: StageWorkTemplateV1) =>
+        taskMatchesStageWorkTemplate(row, stageKey, template, stageTemplateKeys);
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
-        const openRow =
-            openList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null;
-        const completedRow =
-            !openRow
-                ? completedList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null
-                : null;
+        const openRow = openList.find((row) => matches(row, template)) ?? null;
+        const completedRow = !openRow ? completedList.find((row) => matches(row, template)) ?? null : null;
         return buildWorkItemProjection({
             template,
             role: index === 0 ? "primary" : "secondary",
