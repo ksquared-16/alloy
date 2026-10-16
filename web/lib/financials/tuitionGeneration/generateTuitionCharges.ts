@@ -47,6 +47,7 @@ import {
     resolveTuitionRecurrence,
     tuitionOccurrenceKey,
     type ProrationMethod,
+    type TuitionRecurrenceDecision,
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
 import {
     billingPeriodFromKey,
@@ -210,6 +211,118 @@ async function findPostedTuitionCharge(
  * `(org_id, idempotency_key)`, the draft charge on its own resolution key — so a second run over the
  * same period reports the same charges rather than creating more.
  */
+/**
+ * ── ONE OCCURRENCE, ONE FACT — shared by the run and its preview (W7-F022) ──────────────────────
+ *
+ * The run hands Operational Consumption this fact; the preview hands the SAME fact to the same
+ * read-only consumption preview, so the two cannot be asked different questions about one period.
+ */
+export function buildTuitionFact(args: {
+    assignmentId: string;
+    decision: Extract<TuitionRecurrenceDecision, { kind: "due" }>;
+    /** The term's enrolment agreement — callers have already refused a term without one. */
+    agreementId: string;
+    period: BillingPeriod;
+    periodKey: string;
+}): OperationalFactDto {
+    const { assignmentId, decision, period } = args;
+    const periodKeyOf = args.periodKey;
+    const term = decision.term;
+    return {
+        eventKey: TUITION_EVENT_KEY,
+        sourceFamily: "schedule",
+        sourceEntityType: "child_enrollment_agreements",
+        sourceEntityId: args.agreementId,
+        subjectType: "customer_member",
+        subjectId: term.customerMemberId,
+        locationId: term.locationId,
+        occursOn: decision.serviceDate,
+        effectiveOn: decision.serviceDate,
+        eventDate: decision.serviceDate,
+        servicePeriodStart: decision.period.start,
+        periodStart: decision.period.start,
+        periodEnd: decision.period.end,
+        scheduleChangeKind: "recurring",
+        // The proration inputs the existing policy consumption already reads. Reported, not
+        // applied here: the configured method owns the arithmetic.
+        proratedDays: decision.coverage.partial ? decision.coverage.coveredDays : null,
+        periodDays: decision.coverage.partial ? decision.coverage.periodDays : null,
+        // THE PRICE. Its presence is what makes the catalog lookup unreachable on this path.
+        acceptedPricing: {
+            termId: term.termId,
+            amountCents: decision.amountCents,
+            currencyCode: decision.currencyCode,
+            cadenceKey: term.cadenceKey,
+            state: term.state,
+            sourceEntity: term.source.entity,
+            sourceId: term.source.id,
+            configVersion: term.configVersion,
+            resolutionKey: term.resolutionKey,
+        },
+        // One occurrence per assignment per service period — the database converges on it.
+        idempotencyKey: tuitionOccurrenceKey(assignmentId, periodKeyOf),
+        context: {
+            generated_by: "tuition_generation",
+            accepted_pricing_term_id: term.termId,
+            accepted_state: term.state,
+            service_period: periodKeyOf,
+            billing_period_start: period.start,
+            billing_period_end: period.end,
+        },
+    };
+}
+
+/**
+ * ── WILL THIS OCCURRENCE DRAFT A CHARGE? (W7-F022) ───────────────────────────────────────────────
+ *
+ * The question the preview never asked and the run answered with a placeholder. Operational
+ * Consumption resolves the occurrence into an obligation through the charge template in effect; when
+ * that obligation cannot be drafted (no template, a retired or not-yet-effective template, no amount)
+ * it says why in `explanation.no_charge_reason`. The run reports THAT reason, and the preview refuses
+ * the row with the same reason before anyone confirms — one rule, read from one resolution.
+ */
+export type DraftReadiness = { ok: true } | { ok: false; reason: string; detail: string };
+
+const NO_CHARGE_DETAIL: Record<string, string> = {
+    template_retired:
+        "The tuition charge type in effect has been retired, so no tuition charge can be drafted. Configure a current Tuition charge type.",
+    template_inactive: "The tuition charge type is not active, so no tuition charge can be drafted.",
+    template_not_yet_effective: "The tuition charge type does not take effect yet, so no tuition charge can be drafted.",
+};
+
+export function draftReadinessOf(resolution: {
+    obligations: ReadonlyArray<{
+        draftable: boolean;
+        chargeTemplateId: string | null;
+        amountCents: number | null;
+        status: string;
+        explanation?: Record<string, unknown>;
+    }>;
+}): DraftReadiness {
+    const obligation = resolution.obligations[0];
+    if (!obligation) {
+        return { ok: false, reason: "no_obligation", detail: "Operational Consumption resolved no tuition obligation for this period." };
+    }
+    const noCharge = typeof obligation.explanation?.no_charge_reason === "string" ? String(obligation.explanation.no_charge_reason) : null;
+    if (obligation.status === "no_charge" || !obligation.draftable || !obligation.chargeTemplateId) {
+        const reason = noCharge ?? (obligation.chargeTemplateId ? "not_draftable" : "configuration_required");
+        return {
+            ok: false,
+            reason,
+            detail:
+                NO_CHARGE_DETAIL[reason]
+                ?? (reason === "configuration_required"
+                    ? `No tuition charge type is configured. Recurring tuition resolves the organisation's charge template keyed '${TUITION_CHARGE_TEMPLATE_KEY}'.`
+                    : `No tuition charge can be drafted for this period (${reason.replace(/_/g, " ")}).`),
+        };
+    }
+    if (obligation.amountCents == null || obligation.amountCents <= 0) {
+        return { ok: false, reason: "amount_not_resolvable", detail: "The tuition amount for this period could not be resolved." };
+    }
+    return { ok: true };
+}
+
+
 export async function generateTuitionCharges(
     supabase: SupabaseClient,
     args: TuitionGenerationArgs,
@@ -321,48 +434,7 @@ export async function generateTuitionCharges(
             continue;
         }
 
-        const fact: OperationalFactDto = {
-            eventKey: TUITION_EVENT_KEY,
-            sourceFamily: "schedule",
-            sourceEntityType: "child_enrollment_agreements",
-            sourceEntityId: term.enrollmentAgreementId,
-            subjectType: "customer_member",
-            subjectId: term.customerMemberId,
-            locationId: term.locationId,
-            occursOn: decision.serviceDate,
-            effectiveOn: decision.serviceDate,
-            eventDate: decision.serviceDate,
-            servicePeriodStart: decision.period.start,
-            periodStart: decision.period.start,
-            periodEnd: decision.period.end,
-            scheduleChangeKind: "recurring",
-            // The proration inputs the existing policy consumption already reads. Reported, not
-            // applied here: the configured method owns the arithmetic.
-            proratedDays: decision.coverage.partial ? decision.coverage.coveredDays : null,
-            periodDays: decision.coverage.partial ? decision.coverage.periodDays : null,
-            // THE PRICE. Its presence is what makes the catalog lookup unreachable on this path.
-            acceptedPricing: {
-                termId: term.termId,
-                amountCents: decision.amountCents,
-                currencyCode: decision.currencyCode,
-                cadenceKey: term.cadenceKey,
-                state: term.state,
-                sourceEntity: term.source.entity,
-                sourceId: term.source.id,
-                configVersion: term.configVersion,
-                resolutionKey: term.resolutionKey,
-            },
-            // One occurrence per assignment per service period — the database converges on it.
-            idempotencyKey: tuitionOccurrenceKey(assignmentId, periodKeyOf),
-            context: {
-                generated_by: "tuition_generation",
-                accepted_pricing_term_id: term.termId,
-                accepted_state: term.state,
-                service_period: periodKeyOf,
-                billing_period_start: period.start,
-                billing_period_end: period.end,
-            },
-        };
+        const fact = buildTuitionFact({ assignmentId, decision, agreementId: term.enrollmentAgreementId, period, periodKey: periodKeyOf });
 
         /*
          * ── A SETTLED MONTH IS NOT RE-GENERATED, AND ITS HISTORY IS NOT REWRITTEN ──
@@ -408,20 +480,21 @@ export async function generateTuitionCharges(
             const chargeId = drafted.persisted.draftChargeId;
             if (!chargeId) {
                 /*
-                 * The settled-month case was answered above, so a missing draft link here means the
-                 * organisation has not authored the tuition charge template the global event
-                 * registry resolves. Named, rather than reported as a silent zero.
+                 * W7-F022: the REAL reason, read from the resolution the write just made — not a
+                 * placeholder. This said `configuration_required` for a template that was configured
+                 * and merely resolved to its retired version, so the operator was told to author
+                 * something that already existed.
                  */
+                const readiness = draftReadinessOf(drafted.resolution);
                 outcomes.push({
                     kind: "refused",
                     assignmentId,
                     periodKey: periodKeyOf,
                     periodLabel: periodLabelOf,
-                    reason: "configuration_required",
-                    detail:
-                        `No draft tuition charge was produced for ${periodLabelOf}. Recurring tuition resolves `
-                        + `the organisation's charge template keyed '${TUITION_CHARGE_TEMPLATE_KEY}'; author `
-                        + "that template in Commercial configuration and run the period again.",
+                    reason: readiness.ok ? "not_written" : readiness.reason,
+                    detail: readiness.ok
+                        ? `No draft tuition charge was written for ${periodLabelOf}, although the period resolved as billable.`
+                        : readiness.detail,
                 });
                 continue;
             }

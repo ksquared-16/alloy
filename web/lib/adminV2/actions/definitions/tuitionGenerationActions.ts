@@ -170,6 +170,8 @@ const generateTuition: RegisteredAction = {
             periodKey,
             opportunityCustomerMemberIds: scope,
             cadenceKey,
+            /* The same evaluation date the run is given, so preview and run choose the same template version. */
+            today: t(payload?.today) || null,
         });
         return {
             summary:
@@ -259,6 +261,20 @@ const generateTuition: RegisteredAction = {
                         ...result.counts,
                         refused_outcomes: result.outcomes.filter((o) => o.kind === "refused"),
                         error_outcomes: result.outcomes.filter((o) => o.kind === "error"),
+                        /*
+                         * W7-F022: EVERY ROW, NAMED. A money-moving batch that answers "2 refused"
+                         * and nothing else leaves the operator unable to say who was not billed or
+                         * why. The run reports each outcome with the child and household it is for.
+                         */
+                        generated_outcomes: result.outcomes.filter((o) => o.kind === "generated"),
+                        unchanged_outcomes: result.outcomes.filter((o) => o.kind === "unchanged"),
+                        already_posted_outcomes: result.outcomes.filter((o) => o.kind === "already_posted"),
+                        not_due_outcomes: result.outcomes.filter((o) => o.kind === "not_due"),
+                        assignment_names: await nameAssignments(
+                            supabase as SupabaseClient,
+                            ctx.orgId,
+                            result.outcomes.map((o) => o.assignmentId),
+                        ),
                     },
                 },
             };

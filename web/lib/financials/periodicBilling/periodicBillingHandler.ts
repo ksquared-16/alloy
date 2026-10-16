@@ -53,6 +53,9 @@ function observability(evaluation: PeriodicBillingEvaluation) {
         automatic_catch_up_limit: AUTOMATIC_CATCH_UP_PERIOD_LIMIT,
         counts: evaluation.counts,
         periods_billed: evaluation.outcomes.flatMap((o) => o.periodsProcessed),
+        /* W7-F022: what the run actually WROTE, separately from what it processed. */
+        charges_generated: evaluation.outcomes.reduce((n, o) => n + (o.generatedCount ?? 0), 0),
+        charges_refused: evaluation.outcomes.reduce((n, o) => n + (o.refusedCount ?? 0), 0),
         requires_operator: overBound.map((o) => ({
             opportunity_customer_member_id: o.opportunityCustomerMemberId,
             outstanding_periods: o.outstandingPeriods,

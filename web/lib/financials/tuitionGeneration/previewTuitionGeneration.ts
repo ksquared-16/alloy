@@ -32,8 +32,11 @@ import {
     resolveTuitionRecurrence,
     type ProrationMethod,
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
+import { previewConsumption } from "@/lib/operationalConsumption/consumptionService";
 import {
     assignmentBillingPeriods,
+    buildTuitionFact,
+    draftReadinessOf,
     tallyTuitionOutcomes,
     type TuitionGenerationOutcome,
     type TuitionGenerationResult,
@@ -55,8 +58,11 @@ export async function previewTuitionGeneration(
         periodKey: string;
         opportunityCustomerMemberIds?: readonly string[] | null;
         cadenceKey?: string;
+        /** The evaluation date the run would use — the template version in effect is chosen by it. */
+        today?: string | null;
     },
 ): Promise<TuitionGenerationResult> {
+    const today = (args.today ?? "").trim() || new Date().toISOString().slice(0, 10);
     const periodKey = args.periodKey.trim();
     if (!/^\d{4}-\d{2}$/.test(periodKey)) throw new Error("period_key must be YYYY-MM");
     const cadenceKey = (args.cadenceKey ?? "monthly").trim();
@@ -131,6 +137,27 @@ export async function previewTuitionGeneration(
                         amountCents: converged.amountCents, currencyCode: d.currencyCode, obligationId: null,
                     });
                 } else {
+                    /*
+                     * ── PREVIEW MAY NOT ADVERTISE A WRITE THE RUN WILL REFUSE (W7-F022) ──────────
+                     *
+                     * "Will bill" used to mean only "the accepted term is due". The run then hands the
+                     * occurrence to Operational Consumption, which resolves the charge template in
+                     * effect — and on staging refused every row (`template_retired`) after the
+                     * preview had offered "Generate 2 · $2,650.00". The SAME fact goes through the
+                     * SAME read-only consumption preview here, and the row is refused with the same
+                     * reason the run would give.
+                     */
+                    const consumption = await previewConsumption(
+                        supabase,
+                        args.orgId,
+                        buildTuitionFact({ assignmentId, decision: d, agreementId: d.term.enrollmentAgreementId, period, periodKey: periodKeyOf }),
+                        today,
+                    );
+                    const readiness = draftReadinessOf(consumption.resolution);
+                    if (!readiness.ok) {
+                        outcomes.push({ kind: "refused", assignmentId, periodKey: periodKeyOf, periodLabel, reason: readiness.reason, detail: readiness.detail });
+                        continue;
+                    }
                     outcomes.push({
                         kind: "generated",
                         assignmentId,

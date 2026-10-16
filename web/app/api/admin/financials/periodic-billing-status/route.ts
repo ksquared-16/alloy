@@ -62,6 +62,8 @@ export async function GET() {
         assignments_considered?: number;
         counts?: Record<string, number>;
         periods_billed?: unknown[];
+        charges_generated?: number;
+        charges_refused?: number;
         requires_operator?: unknown[];
     } | null;
     const counts = diagnostic?.counts ?? null;
@@ -83,6 +85,9 @@ export async function GET() {
                   periods_billed: Array.isArray(diagnostic?.periods_billed) ? diagnostic!.periods_billed!.length : null,
                   needs_operator: Array.isArray(diagnostic?.requires_operator) ? diagnostic!.requires_operator!.length : null,
                   configuration_refused: counts ? (counts.configuration_refused ?? 0) : null,
+                  /* W7-F022: what the run wrote. Null for a run recorded before it was measured. */
+                  charges_generated: typeof diagnostic?.charges_generated === "number" ? diagnostic.charges_generated : null,
+                  charges_refused: typeof diagnostic?.charges_refused === "number" ? diagnostic.charges_refused : null,
               }
             : null,
     });
