@@ -7,10 +7,11 @@ import { parseStoredFormDraftPreview, dbStoreFormDraftPreview } from "@/lib/pos/
 import { dbLoadDiscoveryDecisions } from "@/lib/pos/discovery/discoveryDecisionsDb";
 import { fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
+import { DISCOVERY_APPLICATION_METADATA_KEY } from "@/lib/pos/discovery/initializeStrongUnderstanding";
 
 export const dynamic = "force-dynamic";
 
-const APPLICATION_METADATA_KEY = "configuration_discovery_application";
+const APPLICATION_METADATA_KEY = DISCOVERY_APPLICATION_METADATA_KEY;
 
 /**
  * Apply approved Configuration Discovery proposals (POS-FP16 / M5C).
