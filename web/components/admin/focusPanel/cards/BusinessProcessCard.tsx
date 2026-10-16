@@ -476,7 +476,13 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                 subjectLabel: context.subject?.label ?? null,
                 // `occurredAt` is already the formatted, viewer-timezone string the previous card
                 // rendered; the locked component calls that field `when`.
-                activity: activity.map((a) => ({ id: a.id ?? null, label: a.label, when: a.occurredAt ?? "" })),
+                activity: activity.map((a) => ({
+                    id: a.id ?? null,
+                    label: a.label,
+                    when: a.occurredAt ?? "",
+                    kind: a.kind ?? null,
+                    detail: a.detail ?? null,
+                })),
                 actions,
             }),
         [evidence, context.subject?.label, activity, actions],

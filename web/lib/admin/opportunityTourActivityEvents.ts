@@ -78,6 +78,34 @@ export function collapseTourActivityDuplicates<T extends CollapseRow>(rows: T[])
     // Near-duplicate invitation fan-out (email+SMS / double-activate within a few seconds).
     const invitationSeen = new Map<string, number>();
 
+    // PER SEND, not per window. Message lifecycle rows carry their `communication_message_id`; a queued
+    // or delivered row collapses into the SAME message's sent row, and a message hides behind a tour
+    // invitation only when it is that invitation's own delivery (within a minute of it). These rules
+    // used to look at the whole window, so one tour invitation hid every SMS on the lead.
+    const messageIdOf = (r: CollapseRow): string => {
+        const p = r.payload && typeof r.payload === "object" ? (r.payload as Record<string, unknown>) : {};
+        const raw = p.communication_message_id;
+        return raw != null ? String(raw).trim() : "";
+    };
+    const sentMessageIds = new Set(
+        rows.filter((r) => String(r.event_type ?? "").toLowerCase() === "message_sent").map(messageIdOf).filter(Boolean),
+    );
+    const settledMessageIds = new Set(
+        rows
+            .filter((r) => {
+                const t = String(r.event_type ?? "").toLowerCase();
+                return t === "message_sent" || t === "message_delivered";
+            })
+            .map(messageIdOf)
+            .filter(Boolean),
+    );
+    const invitationTimes = rows
+        .filter((r) => String(r.event_type ?? "").toLowerCase() === "tour_invitation_activated")
+        .map((r) => Date.parse(String(r.occurred_at ?? "")))
+        .filter((ms) => Number.isFinite(ms));
+    const nearInvitation = (ms: number) =>
+        Number.isFinite(ms) && invitationTimes.some((at) => Math.abs(at - ms) <= 60_000);
+
     return rows.filter((row) => {
         const t = String(row.event_type ?? "").toLowerCase();
         const key = actionKey(row);
@@ -99,9 +127,19 @@ export function collapseTourActivityDuplicates<T extends CollapseRow>(rows: T[])
             else invitationSeen.set(dedupeKey, Number.NaN);
         }
 
+        const isMessageRow = t === "message_queued" || t === "message_sent" || t === "message_delivered";
+        const messageId = isMessageRow ? messageIdOf(row) : "";
+        if (isMessageRow && messageId) {
+            // The invitation's own delivery reads as "Tour invitation sent", not as a second row.
+            if (nearInvitation(occurredMs)) return false;
+            if (t === "message_queued" && settledMessageIds.has(messageId)) return false;
+            if (t === "message_delivered" && sentMessageIds.has(messageId)) return false;
+            return true;
+        }
+
         if (hasInvitationSent) {
             // Same send: drop technical message lifecycle + work-template action rows.
-            if (t === "message_queued" || t === "message_sent" || t === "message_delivered") {
+            if (isMessageRow) {
                 return false;
             }
             if (

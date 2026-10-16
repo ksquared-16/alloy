@@ -66,7 +66,7 @@ export async function loadOpportunityActivityEvents(params: {
             .order("occurred_at", { ascending: false })
             .limit(relatedCategoryLimit);
 
-    const [directRes, relatedChildRes, relatedTourRes, relatedFormRes] = await Promise.all([
+    const [directRes, relatedChildRes, relatedTourRes, relatedFormRes, messageRows] = await Promise.all([
         supabase
             .from("workflow_events")
             .select(selectCols)
@@ -78,6 +78,7 @@ export async function loadOpportunityActivityEvents(params: {
         relatedQuery(OPPORTUNITY_RELATED_CHILD_ACTIVITY_EVENT_TYPES),
         relatedQuery(OPPORTUNITY_RELATED_TOUR_ACTIVITY_EVENT_TYPES),
         relatedQuery(OPPORTUNITY_RELATED_FORM_ACTIVITY_EVENT_TYPES),
+        loadOpportunityMessageActivityEvents({ supabase, orgId, opportunityId, limit: relatedCategoryLimit }),
     ]);
 
     if (directRes.error) throw new Error(directRes.error.message);
@@ -91,6 +92,7 @@ export async function loadOpportunityActivityEvents(params: {
         ...(relatedChildRes.data ?? []),
         ...(relatedTourRes.data ?? []),
         ...(relatedFormRes.data ?? []),
+        ...messageRows,
     ]) {
         const id = typeof row.id === "string" ? row.id : "";
         if (!id || byId.has(id)) continue;
@@ -112,6 +114,87 @@ export async function loadOpportunityActivityEvents(params: {
         rows: merged,
     });
     return collapseTourActivityDuplicates(enriched).slice(0, limit);
+}
+
+/**
+ * THE LEAD'S OWN MESSAGES, as activity.
+ *
+ * A family send threads on the RECIPIENT (a person), so its `message_queued` / `message_sent` /
+ * `message_delivered` events are emitted on that person and never matched this opportunity — the SMS
+ * an operator just sent from the lead was missing from its Recent Activity. The send stamps the lead on
+ * the message itself (`communication_messages.metadata.opportunity_id`), and every lifecycle event names
+ * its message (`payload.communication_message_id`): that pair is the canonical link. The recipient's
+ * name is attached so the timeline reads "SMS to Jane", not a bare channel.
+ */
+async function loadOpportunityMessageActivityEvents(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    opportunityId: string;
+    limit: number;
+}): Promise<WorkflowActivityEventRow[]> {
+    const { supabase, orgId, opportunityId, limit } = params;
+    try {
+        const { data: messages, error: msgErr } = await supabase
+            .from("communication_messages")
+            .select("id, thread_id")
+            .eq("org_id", orgId)
+            .eq("direction", "outbound")
+            .filter("metadata->>opportunity_id", "eq", opportunityId)
+            .order("created_at", { ascending: false })
+            .limit(limit);
+        if (msgErr || !messages?.length) return [];
+        const rows = messages as Array<{ id: string; thread_id: string | null }>;
+
+        const threadIds = [...new Set(rows.map((m) => m.thread_id).filter((t): t is string => Boolean(t)))];
+        const { data: threads } = threadIds.length
+            ? await supabase
+                  .from("communication_threads")
+                  .select("id, primary_entity_type, primary_entity_id")
+                  .eq("org_id", orgId)
+                  .in("id", threadIds)
+            : { data: [] };
+        const personByThread = new Map<string, string>();
+        for (const t of (threads ?? []) as Array<{ id: string; primary_entity_type: string | null; primary_entity_id: string | null }>) {
+            if (t.primary_entity_type === "persons" && t.primary_entity_id) personByThread.set(t.id, t.primary_entity_id);
+        }
+        const personIds = [...new Set(personByThread.values())];
+        const { data: persons } = personIds.length
+            ? await supabase.from("persons").select("id, first_name, last_name").eq("org_id", orgId).in("id", personIds)
+            : { data: [] };
+        const nameByPerson = new Map<string, string>();
+        for (const p of (persons ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>) {
+            const name = [p.first_name, p.last_name].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
+            if (name) nameByPerson.set(p.id, name);
+        }
+        const recipientByMessage = new Map<string, string>();
+        for (const m of rows) {
+            const person = m.thread_id ? personByThread.get(m.thread_id) : undefined;
+            const name = person ? nameByPerson.get(person) : undefined;
+            if (name) recipientByMessage.set(m.id, name);
+        }
+
+        const { data: events, error: evErr } = await supabase
+            .from("workflow_events")
+            .select("id, occurred_at, event_type, entity_type, entity_id, action_type, payload")
+            .eq("org_id", orgId)
+            .in("event_type", ["message_queued", "message_sent", "message_delivered", "message_failed"])
+            .filter("payload->>communication_message_id", "in", `(${rows.map((m) => m.id).join(",")})`)
+            .order("occurred_at", { ascending: false })
+            .limit(limit * 3);
+        if (evErr) return [];
+        return ((events ?? []) as WorkflowActivityEventRow[]).map((ev) => {
+            const payload = rowPayload(ev.payload) ?? {};
+            const mid = String(payload.communication_message_id ?? "");
+            const recipient = recipientByMessage.get(mid);
+            return {
+                ...ev,
+                payload: recipient && !payload.recipient_display_name ? { ...payload, recipient_display_name: recipient } : payload,
+            };
+        });
+    } catch {
+        // Message activity is additive — its absence must never empty the lead's timeline.
+        return [];
+    }
 }
 
 /**

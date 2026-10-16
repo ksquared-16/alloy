@@ -25,6 +25,7 @@ import type {
     ProcessActivityRow,
     ProcessChildState,
     ProcessEvidence,
+    ProcessLastAction,
     ProcessStage,
 } from "@/lib/cardLab/cardLabTypes";
 
@@ -32,7 +33,28 @@ export type ProcessCardActivityItem = {
     id?: string | null;
     label: string;
     when: string;
+    kind?: string | null;
+    detail?: string | null;
 };
+
+/**
+ * LAST ACTION — the newest row of the canonical activity timeline that records something an operator
+ * (or the system on their behalf) DID: a message sent, an outcome recorded, a tour booked, a stage
+ * moved. Record bookkeeping (created / updated), notes and preparatory steps are not actions.
+ * The rows are already newest-first and de-duplicated by the timeline owner; this only chooses one.
+ */
+const LAST_ACTION_KINDS = new Set(["communication", "task", "activity"]);
+const NOT_AN_ACTION = /^(tour invitation prepared|tour time selected|action completed)$/i;
+
+export function selectLastAction(activity: readonly ProcessCardActivityItem[]): ProcessLastAction | null {
+    for (const row of activity) {
+        if (!row.label?.trim()) continue;
+        if (row.kind && !LAST_ACTION_KINDS.has(row.kind)) continue;
+        if (NOT_AN_ACTION.test(row.label.trim())) continue;
+        return { label: row.label.trim(), detail: row.detail?.trim() || null, when: row.when };
+    }
+    return null;
+}
 
 /**
  * One command as the published Business Process configured it, already resolved through the
@@ -118,7 +140,10 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         id: a.id ?? null,
         label: a.label,
         when: a.when,
+        kind: a.kind ?? null,
+        detail: a.detail ?? null,
     }));
+    const lastAction = selectLastAction(input.activity);
 
     /*
      * IDENTITY IS CARRIED, NOT REBUILT. The command's `key` is what execution and the shared
@@ -195,6 +220,7 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         outcomeAction,
         stillNeeded: evidence.currentWork?.stillNeeded ?? [],
         activity,
+        lastAction,
         participantsLabel: evidence.participantsLabel,
     };
 }

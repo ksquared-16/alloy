@@ -824,7 +824,14 @@ export type ProcessActivityRow = {
     id?: string | null;
     label: string;
     when: string;
+    /** What kind of thing happened (communication, task, …) — lets the card pick its Last action. */
+    kind?: string | null;
+    /** The canonical row's detail line, e.g. "SMS to Jane Smith". */
+    detail?: string | null;
 };
+
+/** The most recent MEANINGFUL activity row — a projection of `activity`, never a store of its own. */
+export type ProcessLastAction = { label: string; detail: string | null; when: string };
 
 export type ProcessEvidence = {
     caseLabel: string;
@@ -867,6 +874,11 @@ export type ProcessEvidence = {
      * height, never on the truth — the menu scrolls rather than silently truncating the record.
      */
     activity: ProcessActivityRow[];
+    /**
+     * "Last action": what most recently happened on this case, from the same canonical timeline as
+     * `activity` (its newest meaningful row). Absent when nothing meaningful has happened yet.
+     */
+    lastAction?: ProcessLastAction | null;
     /**
      * Present only when the process has participant grain at all. Assignment and Billing omit it,
      * and the card renders no children region — there is no Enrollment-specific section here.

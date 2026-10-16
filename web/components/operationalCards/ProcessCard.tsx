@@ -184,6 +184,17 @@ export default function ProcessCard({
                           * commands start something, this one closes what those lines just described.
                           * The runtime decided which command this is — the card is not filtering.
                           */}
+                        {/* LAST ACTION — what most recently happened on this case, from the same timeline
+                            as Recent activity (never a store of its own). Directly above resolving the
+                            work, because it is usually the reason the work can now be resolved. */}
+                        {evidence.lastAction ? (
+                            <p className="alloy-os-process__needed" data-process-last-action="true">
+                                <span className="alloy-os-process__needed-label">Last action</span>
+                                {[evidence.lastAction.label, evidence.lastAction.detail, evidence.lastAction.when]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                            </p>
+                        ) : null}
                         {evidence.outcomeAction ? (
                             <button
                                 type="button"

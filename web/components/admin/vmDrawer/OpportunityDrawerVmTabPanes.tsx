@@ -1,5 +1,6 @@
 "use client";
 
+import { OPPORTUNITY_QUEUE_UPDATED_EVENT, type OpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 // Both are tab-gated (rendered only for their active drawer tab), so they never need to be in the
@@ -182,6 +183,18 @@ export default function OpportunityDrawerVmTabPanes({
     useEffect(() => {
         if (drawerTab === "activity") void loadActivity();
     }, [drawerTab, loadActivity]);
+
+    // Live: a mutation on THIS lead (a message sent, a child added, an outcome recorded) re-reads the
+    // timeline from canonical activity — the same refresh the Focus Panel listens to.
+    useEffect(() => {
+        if (drawerTab !== "activity") return;
+        const onUpdated = (event: Event) => {
+            const id = (event as CustomEvent<OpportunityQueueUpdatedDetail>).detail?.id;
+            if (!id || id === drawerId) void loadActivity();
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onUpdated);
+    }, [drawerTab, drawerId, loadActivity]);
 
     const saveNotes = useCallback(async () => {
         setNotesSaving(true);
