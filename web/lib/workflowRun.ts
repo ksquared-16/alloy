@@ -22,6 +22,7 @@ import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservat
 import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { executeInstantiateWorkWorkflowAction } from "@/lib/admin/operationalWork/workflowInstantiateWork/executeInstantiateWorkWorkflowAction";
+import { executeSendCommunicationTemplateWorkflowAction } from "@/lib/workflows/actions/executeSendCommunicationTemplateWorkflowAction";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -299,7 +300,10 @@ function getConditionActual(payload: Record<string, unknown>, defaultEntityType:
     if (c.field && typeof c.field === "string" && c.field.trim()) {
         return getByPath(payload, c.field.trim());
     }
-    return undefined;
+    // The EVENT's own facts (e.g. `new_family` on `lead_created`) live at the payload root, not on an
+    // entity. The conditions API writes `field_path` only, so without this fallback a root fact could
+    // never be matched and the condition failed every run.
+    return getByPath(payload, path);
 }
 
 function normalizeConditionValue(v: unknown): string | number | boolean | null | unknown[] {
@@ -2490,6 +2494,25 @@ export async function executeWorkflowRun(
                         if (taskId) {
                             (payload as Record<string, unknown>)._last_instantiated_work_id = taskId;
                         }
+                    }
+                    break;
+                }
+                case "send_communication_template": {
+                    // A Template Library message, by reference, through the canonical sender.
+                    const sent = await executeSendCommunicationTemplateWorkflowAction({
+                        supabase,
+                        orgId: orgId ?? "",
+                        workflowId,
+                        actionPayload: pl,
+                        workflowPayload: payload as Record<string, unknown>,
+                    });
+                    logs.push(sent.log);
+                    actionOutputs = sent.outputs;
+                    if (sent.status === "skipped") {
+                        actionSkipped = true;
+                        skipReason = sent.skipReason;
+                    } else {
+                        actionCompleted = true;
                     }
                     break;
                 }

@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
+import { emitLeadCreatedEvent } from "@/lib/opportunities/emitLeadCreatedEvent";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
 import {
@@ -252,6 +253,27 @@ export async function executeCreateLeadAction(
                     error: "Lead could not be created after identity check. Try again.",
                     status: 500,
                 };
+            }
+            // `lead_created` — the same business event an approved public form emits; automations
+            // trigger on it. Only for a genuinely created lead (a reused open lead emits nothing).
+            try {
+                const { data: leadRow } = await supabase
+                    .from("opportunities")
+                    .select("id, customer_id, primary_person_id, location_id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", opportunityId)
+                    .maybeSingle();
+                await emitLeadCreatedEvent({
+                    supabase,
+                    orgId: ctx.orgId,
+                    operations: attempt.operations,
+                    lead: (leadRow as { id: string } | null) ?? { id: opportunityId },
+                    source: "bos_create_lead",
+                    actorUserId: ctx.userId ?? null,
+                    provenance: { processing_case_id: ingested.processingCaseId },
+                });
+            } catch (e) {
+                console.warn("[create_lead] lead_created emit failed", e instanceof Error ? e.message : e);
             }
             return {
                 ok: true,

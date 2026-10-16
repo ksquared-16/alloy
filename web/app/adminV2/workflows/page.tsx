@@ -1,5 +1,6 @@
 "use client";
 
+import NewLeadMessageAutomationCreator from "./NewLeadMessageAutomationCreator";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -196,6 +197,8 @@ export default function AdminV2WorkflowsPage() {
     const [kpisError, setKpisError] = useState<string | null>(null);
 
     const [workflows, setWorkflows] = useState<WorkflowSummaryRow[] | null>(null);
+    // Bumped when an automation is created here, so the list re-reads past the session cache.
+    const [workflowsReload, setWorkflowsReload] = useState(0);
     const [workflowsLoading, setWorkflowsLoading] = useState(true);
     const [workflowsError, setWorkflowsError] = useState<string | null>(null);
 
@@ -244,7 +247,7 @@ export default function AdminV2WorkflowsPage() {
             setWorkflowsLoading(true);
         }
         setWorkflowsError(null);
-        fetchWorkflowsNavSummary(init)
+        fetchWorkflowsNavSummary(init, workflowsReload > 0 ? { force: true } : undefined)
             .then((r) => r.json().then((j) => ({ r, j })))
             .then(({ r, j }) => {
                 if (cancelled) return;
@@ -273,7 +276,7 @@ export default function AdminV2WorkflowsPage() {
         return () => {
             cancelled = true;
         };
-    }, [init, highlightWorkflowId]);
+    }, [init, highlightWorkflowId, workflowsReload]);
 
     useEffect(() => {
         if (!highlightWorkflowId || !workflows?.length) return;
@@ -512,6 +515,9 @@ export default function AdminV2WorkflowsPage() {
                         <div className="flex items-center justify-between gap-2">
                             <h2 className="text-sm font-semibold text-alloy-midnight">Workflows</h2>
                             <span className="text-xs font-semibold text-alloy-midnight/55">Editor coming next</span>
+                        </div>
+                        <div className="mt-2">
+                            <NewLeadMessageAutomationCreator onCreated={() => setWorkflowsReload((n) => n + 1)} />
                         </div>
                         {workflowsLoading ? <p className="mt-2 text-sm text-alloy-midnight/60">Loading…</p> : null}
                         {workflowsError ? <p className="mt-2 text-sm text-alloy-ember">{workflowsError}</p> : null}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { emitEvent } from "@/lib/emitEvent";
 import { summarizeLeadCommitRecords } from "@/lib/pos/leadCommitRecords";
+import { emitLeadCreatedEvent } from "@/lib/opportunities/emitLeadCreatedEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbCompleteProcessingCaseWithResult } from "@/lib/pos/processingCase/processingCaseDb";
@@ -91,7 +92,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 const { data: leadRowData } = leadId
                     ? await supabase
                           .from("opportunities")
-                          .select("id, customer_id, primary_person_id, work_unit_id, status_key, stage_key")
+                          .select("id, customer_id, primary_person_id, location_id, work_unit_id, status_key, stage_key")
                           .eq("org_id", ctx.orgId)
                           .eq("id", leadId)
                           .maybeSingle()
@@ -99,6 +100,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 const leadRow = leadRowData as {
                     customer_id?: string | null;
                     primary_person_id?: string | null;
+                    location_id?: string | null;
                     work_unit_id?: string | null;
                     status_key?: string | null;
                     stage_key?: string | null;
@@ -185,6 +187,29 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                         });
                     } catch {
                         /* activity is best-effort — the lead is already committed */
+                    }
+                }
+
+                // `lead_created` — what an org's automations trigger on (welcome message, …). Emitted only
+                // for a genuinely created lead, once per lead; never fails the approval.
+                if (leadId) {
+                    try {
+                        const meta = row.metadata ?? {};
+                        await emitLeadCreatedEvent({
+                            supabase,
+                            orgId: ctx.orgId,
+                            operations: attempt.operations,
+                            lead: { id: leadId, ...(leadRow ?? {}) },
+                            source: "public_form",
+                            actorUserId: ctx.userId ?? null,
+                            provenance: {
+                                processing_case_id: caseId,
+                                form_submission_id: typeof meta.form_submission_id === "string" ? meta.form_submission_id : null,
+                                form_definition_id: typeof meta.form_definition_id === "string" ? meta.form_definition_id : null,
+                            },
+                        });
+                    } catch (e) {
+                        console.warn("[processing approve] lead_created emit failed", e instanceof Error ? e.message : e);
                     }
                 }
                 return jsonData({ caseId, status: "completed", operationalResult, attempt });
