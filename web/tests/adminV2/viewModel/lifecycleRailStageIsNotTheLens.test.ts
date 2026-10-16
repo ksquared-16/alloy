@@ -67,6 +67,35 @@ describe("the lifecycle rail's current stage", () => {
         expect(rail({ statusKey: "new_lead" })?.current_stage_key).toBe("lead");
     });
 
+    /**
+     * A family-grain stage move (Lead → Tour, by a Business Process rule) writes `opportunities
+     * .stage_key` and leaves the status as it was. Measured on staging: a family with a confirmed
+     * tour, `stage_key = tour`, `status_key = new` — the queue badge said Tour, the Focus Panel's
+     * stepper and work said Lead.
+     */
+    it("is the record's persisted stage when it has one, over what its status maps to", () => {
+        const r = buildOpportunityWorkspaceLifecycleRail({
+            departmentMetadata: departmentMetadata(),
+            statusKey: "new_lead",
+            stageKey: "tour",
+            statusDefs: [statusDef("new_lead", "lead")],
+        });
+        expect(r?.current_stage_key).toBe("tour");
+    });
+
+    it("falls back to the status when the persisted stage is absent or not a configured stage", () => {
+        const withStage = (stageKey: string | null) =>
+            buildOpportunityWorkspaceLifecycleRail({
+                departmentMetadata: departmentMetadata(),
+                statusKey: "touring",
+                stageKey,
+                statusDefs: [statusDef("touring", "tour")],
+            })?.current_stage_key;
+        expect(withStage(null)).toBe("tour");
+        expect(withStage("  ")).toBe("tour");
+        expect(withStage("not_a_stage")).toBe("tour");
+    });
+
     it("is NULL when the record's status names no stage — the honest answer", () => {
         // The rail still renders. It simply stops claiming to know where this record sits.
         const r = rail({ statusKey: "some_unconfigured_status" });

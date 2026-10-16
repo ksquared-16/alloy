@@ -149,8 +149,10 @@ export async function resolveSharedCanonicalDeps(
      * last only by source order.
      *
      * Its ROUND TRIP reads exactly three fields off the context row: `id`, `stage_key` and
-     * `lifecycle_stage_key`. All three are columns of OPPORTUNITY_CANONICAL_ADMIN_SELECT, so they
-     * are canonical the moment `oppRow` lands -- it never needed the composed record. What DOES
+     * `lifecycle_stage_key`. `id` and `stage_key` are columns of OPPORTUNITY_CANONICAL_ADMIN_SELECT
+     * (`stage_key` only since the select was found not to carry it — every family read as stageless
+     * here); `lifecycle_stage_key` is not an opportunities column. So they are canonical the moment
+     * `oppRow` lands -- it never needed the composed record. What DOES
      * need the record is the apply step, which decorates the returned row; that stays where it was.
      *
      * Modelled per sample on deployed 38248a2d (n=23): moving the load here recovers a P50 of 222ms
@@ -399,6 +401,7 @@ export async function resolveSharedCanonicalDeps(
     const lifecycle_rail = buildOpportunityWorkspaceLifecycleRail({
         departmentMetadata: deptMetadata,
         statusKey,
+        stageKey: trimOrNull((oppRow as Record<string, unknown>).stage_key),
         statusDefs,
         /*
          * The record the stage annotations are ABOUT.
@@ -440,9 +443,9 @@ export async function resolveSharedCanonicalDeps(
         await missionLoadP,
         "drawer-mission",
     );
-    // The FAMILY's own stage. The composed record is layout-filtered and carries no `stage_key`, and
-    // on these leads the row's `stage_key` is empty too — the family's stage lives in its status,
-    // which the lifecycle rail resolves (`current_stage_key`). That is the same stage this Mission
+    // The FAMILY's own stage: the persisted `stage_key` (a family-grain move writes it and leaves the
+    // status alone). The select did not carry it until a Tour family was measured reading as Lead
+    // here; a record with no stage still falls back to the rail's status mapping. That is the same stage this Mission
     // already fell back to when nothing else resolved, so with no tracked participant nothing
     // changes. Measured on deployed 7cd17a7c (E2E-12): rail "lead", Mission still "waitlist",
     // because the untracked-child gate needs the family stage and saw none.
