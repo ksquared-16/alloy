@@ -10,7 +10,19 @@
  *
  * These drive the real preview against real-shaped rows and assert the vocabulary it returns.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/*
+ * W7-F022: the preview now also asks Operational Consumption whether the occurrence would draft — the
+ * same read-only resolution the run starts with. This suite is about CONVERGENCE (draft, posted, none),
+ * so consumption answers "draftable" here, except where a case says otherwise.
+ */
+const consumption = vi.hoisted(() => ({
+    obligation: { draftable: true, chargeTemplateId: "tpl-tuition", amountCents: 145_000, status: "pending_review", explanation: {} } as Record<string, unknown>,
+}));
+vi.mock("@/lib/operationalConsumption/consumptionService", () => ({
+    previewConsumption: vi.fn(async () => ({ resolution: { obligations: [consumption.obligation] } })),
+}));
 
 import { previewTuitionGeneration } from "@/lib/financials/tuitionGeneration/previewTuitionGeneration";
 
@@ -55,6 +67,20 @@ const preview = (charges: Record<string, unknown>[], cadence = "monthly") =>
         { orgId: ORG, periodKey: "2026-09", cadenceKey: cadence });
 
 describe("preview tells the economic truth about what a run would do", () => {
+    it("W7-F022: a period whose charge the run would refuse is REFUSED in the preview, with the run's reason", async () => {
+        const saved = consumption.obligation;
+        consumption.obligation = { draftable: true, chargeTemplateId: null, amountCents: null, status: "no_charge", explanation: { no_charge_reason: "template_retired" } };
+        try {
+            const r = await preview([]);
+            expect(r.counts.generated, "never advertised as Will bill").toBe(0);
+            expect(r.counts.refused).toBe(1);
+            const o = r.outcomes.find((x) => x.kind === "refused");
+            expect(o && "reason" in o ? o.reason : null).toBe("template_retired");
+        } finally {
+            consumption.obligation = saved;
+        }
+    });
+
     it("an unbilled period is offered as work", async () => {
         const r = await preview([]);
         expect(r.counts.generated).toBe(1);

@@ -75,7 +75,19 @@ type PreviewPayload = {
     assignment_names?: Record<string, { child: string | null; household: string | null }>;
 };
 
-type RunResult = { counts: GenerationCounts; periodKey: string; cadenceKey: string };
+type RunResult = {
+    counts: GenerationCounts;
+    periodKey: string;
+    cadenceKey: string;
+    /* W7-F022: every row the run decided, named — never counts alone. */
+    generated: Outcome[];
+    unchanged: Outcome[];
+    alreadyPosted: Outcome[];
+    notDue: Outcome[];
+    refused: Outcome[];
+    errors: Outcome[];
+    names: Record<string, { child: string | null; household: string | null }>;
+};
 
 type BillingStatus = {
     automatic_billing_active: boolean;
@@ -88,6 +100,8 @@ type BillingStatus = {
         periods_billed: number | null;
         needs_operator: number | null;
         configuration_refused: number | null;
+        charges_generated?: number | null;
+        charges_refused?: number | null;
     } | null;
 };
 
@@ -169,6 +183,8 @@ export default function FinancialsTuitionBilling({
     const [preview, setPreview] = useState<PreviewPayload | null>(null);
     const [result, setResult] = useState<RunResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    /* The rows the preview the operator confirmed said it WOULD bill — compared with what the run did. */
+    const [confirmedToBill, setConfirmedToBill] = useState<string[]>([]);
 
     useEffect(() => {
         let live = true;
@@ -211,9 +227,18 @@ export default function FinancialsTuitionBilling({
     const runExecute = useCallback(async () => {
         setBusy("execute");
         setError(null);
+        setConfirmedToBill((preview?.to_bill_outcomes ?? []).map((o) => o.assignmentId ?? "").filter(Boolean));
         try {
             const detail = await callAction("execute", periodKey, cadenceKey);
+            const list = (key: string) => (Array.isArray(detail[key]) ? (detail[key] as Outcome[]) : []);
             setResult({
+                generated: list("generated_outcomes"),
+                unchanged: list("unchanged_outcomes"),
+                alreadyPosted: list("already_posted_outcomes"),
+                notDue: list("not_due_outcomes"),
+                refused: list("refused_outcomes"),
+                errors: list("error_outcomes"),
+                names: (detail.assignment_names as RunResult["names"] | undefined) ?? {},
                 counts: {
                     generated: Number(detail.generated ?? 0),
                     unchanged: Number(detail.unchanged ?? 0),
@@ -233,7 +258,20 @@ export default function FinancialsTuitionBilling({
         } finally {
             setBusy(null);
         }
-    }, [periodKey, cadenceKey, onCommitted]);
+    }, [periodKey, cadenceKey, onCommitted, preview]);
+
+    /*
+     * ── WHAT CHANGED SINCE THE PREVIEW (W7-F022) ─────────────────────────────────────────────────
+     *
+     * The run recomputes from canonical state and is authoritative; the preview is not trusted and
+     * nothing is forced through. But a row the preview promised and the run did not generate is said
+     * out loud, so "Generate 2" followed by "2 refused" can never pass without explanation.
+     */
+    const changedSincePreview = useMemo(() => {
+        if (!result) return [];
+        const generated = new Set([...result.generated, ...result.unchanged, ...result.alreadyPosted].map((o) => o.assignmentId));
+        return confirmedToBill.filter((id) => !generated.has(id));
+    }, [result, confirmedToBill]);
 
     const nameOf = useCallback(
         (o: Outcome) => {
@@ -242,6 +280,15 @@ export default function FinancialsTuitionBilling({
             return [n.child, n.household].filter(Boolean).join(" · ");
         },
         [preview],
+    );
+
+    const resultName = useCallback(
+        (o: Outcome) => {
+            const n = o.assignmentId ? result?.names?.[o.assignmentId] : undefined;
+            if (!n || (!n.child && !n.household)) return "An enrolment whose names could not be read";
+            return [n.child, n.household].filter(Boolean).join(" · ");
+        },
+        [result],
     );
 
     const notBilled = useMemo(() => {
@@ -282,10 +329,19 @@ export default function FinancialsTuitionBilling({
                             <div>
                                 <dt className="text-alloy-midnight/50">Last automatic run</dt>
                                 <dd className="text-alloy-midnight/85" data-financials-tuition-last-run="true">
+                                    {/*
+                                      * W7-F022: what the run WROTE. "N billed" used to be the number
+                                      * of assignments it processed — including runs that drafted
+                                      * nothing because generation refused every period.
+                                      */}
                                     {last
-                                        ? `${moment(last.finished_at) ?? "—"} · ${last.assignments_billed ?? "—"} billed${
-                                              last.needs_operator ? ` · ${last.needs_operator} need attention` : ""
-                                          }${last.configuration_refused ? ` · ${last.configuration_refused} refused` : ""}`
+                                        ? `${moment(last.finished_at) ?? "—"} · ${
+                                              last.charges_generated != null
+                                                  ? `${last.charges_generated} charge${last.charges_generated === 1 ? "" : "s"} generated${
+                                                        last.charges_refused ? ` · ${last.charges_refused} refused` : ""
+                                                    }`
+                                                  : `${last.assignments_billed ?? "—"} processed (charges not recorded)`
+                                          }${last.needs_operator ? ` · ${last.needs_operator} need attention` : ""}`
                                         : "No automatic run recorded yet"}
                                 </dd>
                             </div>
@@ -421,12 +477,59 @@ export default function FinancialsTuitionBilling({
                 ) : null}
 
                 {result ? (
-                    <p className="mt-2 text-xs text-alloy-midnight" data-financials-bulk-run-result="true">
-                        {/* `unchanged` is named, because a rerun that creates nothing must not read as billing. */}
-                        {billingPeriodLabel(result.periodKey)} · {result.cadenceKey} · {result.counts.generated} newly generated,{" "}
-                        {result.counts.unchanged} already existed, {result.counts.alreadyPosted} already posted,{" "}
-                        {result.counts.refused} refused, {result.counts.errors} errored.
-                    </p>
+                    <div className="mt-2 rounded-md border border-alloy-stone/15 px-2.5 py-2" data-financials-tuition-run-result="true">
+                        <p className="text-xs text-alloy-midnight" data-financials-bulk-run-result="true">
+                            {/* `unchanged` is named, because a rerun that creates nothing must not read as billing. */}
+                            {billingPeriodLabel(result.periodKey)} · {result.cadenceKey} · {result.counts.generated} newly generated,{" "}
+                            {result.counts.unchanged} already existed, {result.counts.alreadyPosted} already posted,{" "}
+                            {result.counts.refused} refused, {result.counts.errors} errored.
+                        </p>
+                        {changedSincePreview.length ? (
+                            <p className="mt-1 text-[11px] text-alloy-ember" data-financials-tuition-changed-since-preview={changedSincePreview.length}>
+                                {changedSincePreview.length} row{changedSincePreview.length === 1 ? "" : "s"} the preview listed under Will bill
+                                {changedSincePreview.length === 1 ? " was" : " were"} not generated. The run is checked against current
+                                state when it executes — the reason for each is below.
+                            </p>
+                        ) : null}
+                        {/*
+                          * W7-F022: EVERY ROW, NAMED, WITH ITS REASON. The run once answered "2 refused"
+                          * and nothing else; an operator could not say who was not billed, or why.
+                          */}
+                        {([
+                            { key: "generated", title: "Generated", rows: result.generated, amount: true, reason: false },
+                            { key: "unchanged", title: "Already generated", rows: result.unchanged, amount: true, reason: false },
+                            { key: "already_posted", title: "Already posted", rows: result.alreadyPosted, amount: true, reason: false },
+                            { key: "not_billed", title: "Not billed", rows: result.notDue, amount: false, reason: true },
+                            { key: "refused", title: "Refused", rows: result.refused, amount: false, reason: true },
+                            { key: "errored", title: "Errored", rows: result.errors, amount: false, reason: true },
+                        ] as const).map((section) =>
+                            section.rows.length ? (
+                                <div key={section.key} data-financials-tuition-result-section={section.key}>
+                                    <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{section.title}</p>
+                                    <ul className="flex flex-col gap-0.5">
+                                        {section.rows.map((o, i) => (
+                                            <li
+                                                key={`${o.assignmentId}-${i}`}
+                                                className={`flex justify-between gap-3 text-xs ${section.key === "refused" || section.key === "errored" ? "text-alloy-ember" : "text-alloy-midnight/80"}`}
+                                                data-financials-tuition-result-row={o.assignmentId}
+                                                title={o.reason ?? undefined}
+                                            >
+                                                <span className="min-w-0 truncate">
+                                                    {resultName(o)}
+                                                    {section.reason
+                                                        ? ` — ${section.key === "not_billed" ? notBilledReason(o, CADENCES.find((c) => c.key === result.cadenceKey)?.label ?? result.cadenceKey) : (o.detail ?? o.message ?? o.reason ?? "no reason recorded")}`
+                                                        : ""}
+                                                </span>
+                                                {section.amount && o.amountCents != null ? (
+                                                    <span className="shrink-0 tabular-nums">{moneyExact(o.amountCents, o.currencyCode ?? "USD")}</span>
+                                                ) : null}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null,
+                        )}
+                    </div>
                 ) : null}
             </section>
         </div>

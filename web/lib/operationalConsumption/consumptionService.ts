@@ -173,15 +173,47 @@ async function loadEventType(
     return eligible.sort((a, b) => (a.org_id === orgId ? -1 : 1) - (b.org_id === orgId ? -1 : 1))[0];
 }
 
-/** Find the org's active Charge Template for a template key (Commercial Model). */
+/**
+ * Find the org's Charge Template for a template key (Commercial Model) — THE VERSION IN EFFECT.
+ *
+ * ── W7-F022 ───────────────────────────────────────────────────────────────────────────────
+ *
+ * A template is versioned by closing the old row (`effective_end`) and opening a new one under the
+ * SAME key. This took the first active row with the key, in table order — and on staging the closed
+ * version (Monthly tuition, to 2026-10-07) came back before its successor (from 2026-10-08). Every
+ * recurring-tuition occurrence then resolved a retired template, `resolveChargeFromTemplate` refused
+ * it as `template_retired`, and no tuition was drafted: the Director's manual run, and every automatic
+ * run since the version change.
+ *
+ * The version chosen is the one whose window contains `asOf` — the same anchor the template's own
+ * eligibility check uses (`today`), so selection and eligibility can never disagree. With none in
+ * effect, the most recently started version is returned so that eligibility states the honest reason
+ * (not yet effective, retired) instead of the caller reporting a missing template.
+ */
+export function chooseTemplateVersion(
+    templates: readonly ChargeTemplateRow[],
+    templateKey: string,
+    asOf: string,
+): ChargeTemplateRow | null {
+    const versions = templates.filter((t) => t.template_key === templateKey && t.is_active !== false);
+    if (versions.length === 0) return null;
+    const inEffect = versions.filter(
+        (t) => (!t.effective_start || t.effective_start <= asOf) && (!t.effective_end || t.effective_end >= asOf),
+    );
+    const byStartDesc = (a: ChargeTemplateRow, b: ChargeTemplateRow) =>
+        String(b.effective_start ?? "").localeCompare(String(a.effective_start ?? ""));
+    return [...inEffect].sort(byStartDesc)[0] ?? [...versions].sort(byStartDesc)[0] ?? null;
+}
+
 async function loadTemplateByKey(
     supabase: SupabaseClient,
     orgId: string,
     templateKey: string | null,
+    asOf: string,
 ): Promise<ChargeTemplateRow | null> {
     if (!templateKey) return null;
     const templates = await listChargeTemplates(supabase, orgId);
-    return templates.find((t) => t.template_key === templateKey && t.is_active !== false) ?? null;
+    return chooseTemplateVersion(templates, templateKey, asOf);
 }
 
 /** Map a fact to the agreement that scopes/bills it. Attendance facts carry an explicit agreementId. */
@@ -301,7 +333,7 @@ async function previewConsumptionCore(
     const eventType = await loadEventType(supabase, orgId, fact.eventKey.trim());
     if (!eventType) fail("not_found", `No consumption event type registered for '${fact.eventKey}'`);
 
-    const template = await loadTemplateByKey(supabase, orgId, eventType.charge_template_key);
+    const template = await loadTemplateByKey(supabase, orgId, eventType.charge_template_key, today);
     let chargePreview: ChargePreviewResult | null = null;
     if (template) {
         chargePreview = await previewTemplateCharge(supabase, orgId, simulateArgsFromFact(fact, template, today));
@@ -867,7 +899,7 @@ async function resolveDirective(
     if (directive.draftable) {
         if (!ctx.eventTypeCache.has(directive.eventKey)) ctx.eventTypeCache.set(directive.eventKey, await loadEventType(supabase, orgId, directive.eventKey));
         const dEventType = ctx.eventTypeCache.get(directive.eventKey) ?? null;
-        const template = await loadTemplateByKey(supabase, orgId, dEventType?.charge_template_key ?? null);
+        const template = await loadTemplateByKey(supabase, orgId, dEventType?.charge_template_key ?? null, ctx.today);
         if (!template) {
             return { obligation: noChargeObligation(directive, `no charge template configured for ${directive.eventKey}`, ctx, currency), chargePreview: null, template: null, commercialRefs };
         }

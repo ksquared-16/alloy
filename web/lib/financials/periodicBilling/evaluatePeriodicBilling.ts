@@ -66,6 +66,12 @@ export type PeriodicBillingAssignmentOutcome = {
     periodsProcessed: string[];
     generatedCount: number;
     unchangedCount: number;
+    /**
+     * W7-F022: periods generation REFUSED or errored. "Processed" never meant "billed": every run
+     * since the tuition template was versioned processed its assignments and drafted nothing, and the
+     * scheduler's record could not say so.
+     */
+    refusedCount?: number;
     detail: string | null;
     operatorAction: string | null;
 };
@@ -220,6 +226,7 @@ export async function evaluatePeriodicBilling(
         }
         const generatedCount = results.reduce((n, r) => n + r.counts.generated, 0);
         const unchangedCount = results.reduce((n, r) => n + r.counts.unchanged + r.counts.alreadyPosted, 0);
+        const refusedCount = results.reduce((n, r) => n + r.counts.refused + r.counts.errors, 0);
         const kind: PeriodicBillingOutcomeKind =
             outstandingPeriods === 1 ? "normal_period_processed" : "short_catch_up_processed";
         outcomes.push({
@@ -229,6 +236,7 @@ export async function evaluatePeriodicBilling(
             periodsProcessed: assignment.outstanding.map((p) => p.periodKey),
             generatedCount,
             unchangedCount,
+            refusedCount,
             detail: null,
             operatorAction: null,
         });
