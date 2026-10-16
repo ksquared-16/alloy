@@ -31,7 +31,11 @@ import {
     defaultWaitlistQueueLayoutV3,
     type QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
-import { defaultEnrollmentQueueRowLayoutWithVariantsV1 } from "@/lib/layout/queueRecordLayoutDefaults";
+import {
+    defaultEnrollmentQueueRowLayoutWithVariantsV1,
+    defaultRuntimeQueueRowLayoutV3,
+    queueRowLayoutHasNoFields,
+} from "@/lib/layout/queueRecordLayoutDefaults";
 import type { LayoutDoc, LayoutSurface, EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { WAITLIST_CANDIDATE_ENTITY_TYPE } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
@@ -179,6 +183,28 @@ function queueRecordToVariantCandidate(
     };
 }
 
+/**
+ * The layout the RUNTIME renders, as distinct from the envelope the BUILDER edits.
+ *
+ * A published layout always has fields (publish refuses an empty one). When nothing is published,
+ * the builder's starting envelope is deliberately empty — and an empty layout handed to the row maps
+ * to "every secondary slot hidden", which rendered the household name and nothing else. So an
+ * surface with no authored field renders `defaultRuntimeQueueRowLayoutV3()` instead.
+ * A non-empty default envelope (the Waitlist surface's) is used as is.
+ */
+export function runtimeQueueRowConfig(
+    published: QueueRecordLayoutConfigV3 | null,
+    fallback: QueueRecordLayoutConfigV3,
+): QueueRecordLayoutConfigV3 {
+    // Publish refuses an empty layout, so a published one with no field predates that guard — it
+    // was never an authored "show nothing", and gets the same default.
+    const candidate = published ?? fallback;
+    if (!queueRowLayoutHasNoFields(candidate)) return candidate;
+    // Only the Default columns are substituted: authored variants (e.g. a Waitlist variant on an
+    // otherwise unconfigured surface) keep applying, and inherit these columns where they are empty.
+    return { ...candidate, columns: defaultRuntimeQueueRowLayoutV3().columns };
+}
+
 export async function resolveQueueRowLayoutServer(args: {
     supabase: SupabaseClient;
     orgId: string;
@@ -245,7 +271,7 @@ export async function resolveQueueRowLayoutServer(args: {
             | undefined;
         return {
             envelope,
-            config: envelope.layout,
+            config: runtimeQueueRowConfig(published ? envelope.layout : null, envelope.layout),
             placementOverrideEnabled: queueCtx?.placement_override_enabled ?? false,
             source: published ? "published" : resolution.source,
         };
@@ -254,7 +280,7 @@ export async function resolveQueueRowLayoutServer(args: {
     const fallback = spec.defaultEnvelope();
     return {
         envelope: fallback,
-        config: fallback.layout,
+        config: runtimeQueueRowConfig(null, fallback.layout),
         placementOverrideEnabled: false,
         source: "builtin_default",
     };

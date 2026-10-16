@@ -70,9 +70,11 @@ export function usePublishedQueueRowSlotsOverlay(args: {
         clearProvisioningPrefetchCache();
         try {
             const loaded = await loadQueueRowSurfaceConfig(surfaceId, processKey);
-            const defaultSlots = mapQueueRowSurfaceToCompactConfig(loaded.envelope.layout).slots;
+            // The RUNTIME layout, not the builder envelope: an unpublished surface's envelope is
+            // empty and would re-hide every slot the server answer just rendered.
+            const defaultSlots = mapQueueRowSurfaceToCompactConfig(loaded.runtimeLayout).slots;
             setOverride({
-                layout: loaded.envelope.layout,
+                layout: loaded.runtimeLayout,
                 defaultSlots,
                 source: loaded.source,
                 surfaceId,
