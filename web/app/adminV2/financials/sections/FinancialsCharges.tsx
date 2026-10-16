@@ -426,9 +426,8 @@ export default function FinancialsCharges({
 
                 {/* ── THE LIST ── */}
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-charge-index="true" aria-busy={loading ? "true" : undefined}>
-                    <div className="sticky top-0 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] gap-3 border-b border-alloy-stone/10 bg-white px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                        <span>Household</span>
-                        <span>Child</span>
+                    <div className="sticky top-0 grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] gap-3 border-b border-alloy-stone/10 bg-white px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                        <span>Charge for</span>
                         <span>Charge type</span>
                         <span className="text-right">Amount</span>
                         <span>Billing period</span>
@@ -460,10 +459,21 @@ export default function FinancialsCharges({
                                 }}
                                 data-financials-charge-index-row={row.chargeId}
                                 data-financials-charge-index-type={row.typeKey}
-                                className="grid cursor-pointer grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] items-center gap-3 border-b border-alloy-stone/10 px-4 py-2 text-xs transition hover:bg-alloy-stone/5 focus:bg-alloy-bend-pine/5 focus:outline-none"
+                                className="grid cursor-pointer grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] items-center gap-3 border-b border-alloy-stone/10 px-4 py-2 text-xs transition hover:bg-alloy-stone/5 focus:bg-alloy-bend-pine/5 focus:outline-none"
                             >
-                                <span className="truncate text-sm text-alloy-midnight">{row.householdName ?? "Household"}</span>
-                                <span className="truncate text-alloy-midnight/75">{row.childName ?? "Account-wide"}</span>
+                                {/*
+                                  * W7-F025: THE CHARGE'S OWN GRAIN LEADS. A child's charge names the child,
+                                  * with the household as its account; a household charge names the household.
+                                  * "Account-wide" is never shown in a child's place.
+                                  */}
+                                <span className="min-w-0" data-financials-charge-index-grain={row.childName ? "child" : "household"}>
+                                    <span className="block truncate text-sm font-medium text-alloy-midnight">
+                                        {row.childName ?? row.householdName ?? "Household"}
+                                    </span>
+                                    <span className="block truncate text-[11px] text-alloy-midnight/55">
+                                        {row.childName ? (row.householdName ?? "Household") : "Household charge"}
+                                    </span>
+                                </span>
                                 <span className="truncate text-alloy-midnight/75">{row.typeLabel ?? row.categoryLabel}</span>
                                 <span className="text-right tabular-nums text-alloy-midnight">{moneyExact(row.amountCents, row.currencyCode)}</span>
                                 <span className="truncate text-alloy-midnight/75">

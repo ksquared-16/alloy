@@ -101,12 +101,12 @@ describe("a money-moving batch names every row it decided", () => {
         expect(action.match(/assignment_names: await nameAssignments\(/g)?.length).toBe(2);
     });
 
-    it("the result panel shows Generated, Already generated, Not billed, Refused and Errored, named, with reasons", () => {
+    it("the result panel shows Generated, Already generated, Skipped, Refused and Errored, named, with reasons", () => {
         const ui = code("app/adminV2/financials/sections/FinancialsTuitionBilling.tsx");
-        for (const title of ['title: "Generated"', 'title: "Already generated"', 'title: "Not billed"', 'title: "Refused"', 'title: "Errored"']) {
+        for (const title of ['title: "Generated"', 'title: "Already generated"', 'title: "Skipped"', 'title: "Refused"', 'title: "Errored"']) {
             expect(ui, title).toContain(title);
         }
-        expect(ui).toMatch(/o\.detail \?\? o\.message \?\? o\.reason \?\? "no reason recorded"/);
+        expect(ui).toMatch(/o\.detail \?\? o\.message \?\? o\.reason \?\? "No reason recorded"/);
         expect(ui).toContain("data-financials-tuition-changed-since-preview");
     });
 });

@@ -137,19 +137,148 @@ function moment(iso: string | null | undefined): string | null {
     return `${day} at ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
-/** Why a row is not billed, in words. The code stays in the tooltip for support. */
-function notBilledReason(o: Outcome, cadenceLabel: string): string {
+/**
+ * WHY A ROW WAS SKIPPED, IN A FEW WORDS (W7-F024). The code stays in the row's tooltip for support;
+ * the operator reads "Different billing frequency", not a sentence per row.
+ */
+function skippedReason(o: Outcome): string {
     switch (o.reason) {
         case "cadence_not_billed_by_this_run":
-            return `billed on a different frequency — not part of a ${cadenceLabel.toLowerCase()} run`;
+            return "Different billing frequency";
         case "assignment_not_enrolled":
-            return "priced, but not enrolled yet";
+            return "Not enrolled yet";
         case "before_effective_start":
         case "term_not_effective":
-            return "tuition not in effect for this period";
-        default:
-            return (o.reason ?? o.detail ?? o.message ?? "not billed").replace(/_/g, " ");
+            return "Tuition not in effect";
+        default: {
+            const raw = (o.reason ?? o.detail ?? o.message ?? "Skipped").replace(/_/g, " ");
+            return raw.charAt(0).toUpperCase() + raw.slice(1);
+        }
     }
+}
+
+type Names = Record<string, { child: string | null; household: string | null }>;
+
+type OutcomeGroup = {
+    key: string;
+    title: string;
+    rows: Outcome[];
+    /** primary: always open · skipped: collapsed · alert: opens itself when it has rows. */
+    tone: "primary" | "skipped" | "alert";
+    amount: boolean;
+    responsibility: boolean;
+    reason: "skipped" | "detail" | null;
+    /** Kept so existing instrumentation still finds each list. */
+    listAttr?: Record<string, string>;
+};
+
+/**
+ * ── THE CHILD IS THE BILLING SUBJECT; THE HOUSEHOLD IS ITS ACCOUNT (W7-F025) ──────────────────
+ *
+ * Tuition is billed for a child's enrolment, so each row leads with the child and carries the
+ * household beneath it as context. Siblings sort together under their household's name and stay
+ * one row — one obligation — each; nothing is collapsed into a family line.
+ */
+function OutcomeRow({ o, names, group }: { o: Outcome; names: Names; group: OutcomeGroup }) {
+    const n = o.assignmentId ? names[o.assignmentId] : undefined;
+    const child = n?.child ?? (n?.household ? null : "An enrolment whose names could not be read");
+    const resp = group.responsibility ? responsibilityLine(o) : null;
+    const detail =
+        group.reason === "skipped" ? skippedReason(o) : group.reason === "detail" ? (o.detail ?? o.message ?? o.reason ?? "No reason recorded") : null;
+    return (
+        <li
+            className="flex items-start justify-between gap-3 py-0.5"
+            data-financials-tuition-result-row={o.assignmentId}
+            data-financials-tuition-to-bill-row={group.key === "to_bill" ? o.assignmentId : undefined}
+            title={o.reason ?? undefined}
+        >
+            <span className="min-w-0">
+                <span className={`block truncate ${group.tone === "skipped" ? "text-xs text-alloy-midnight/75" : "text-sm font-medium text-alloy-midnight"}`} data-financials-tuition-child="true">
+                    {child ?? n?.household}
+                </span>
+                {child && n?.household ? (
+                    <span className="block truncate text-[11px] text-alloy-midnight/55" data-financials-tuition-household="true">
+                        {n.household}
+                    </span>
+                ) : null}
+                {resp ? (
+                    <span
+                        className={`block truncate text-[11px] ${resp.warn ? "text-alloy-ember" : "text-alloy-midnight/55"}`}
+                        data-financials-tuition-responsibility={o.responsibility?.status}
+                    >
+                        Responsibility · {resp.text}
+                    </span>
+                ) : null}
+                {detail ? (
+                    <span className={`block truncate text-[11px] ${group.tone === "alert" ? "text-alloy-ember" : "text-alloy-midnight/55"}`}>{detail}</span>
+                ) : null}
+            </span>
+            {group.amount && o.amountCents != null ? (
+                <span className="shrink-0 text-sm tabular-nums text-alloy-midnight">{moneyExact(o.amountCents, o.currencyCode ?? "USD")}</span>
+            ) : null}
+        </li>
+    );
+}
+
+/** Siblings together, under their household; children in name order. */
+function bySubject(names: Names) {
+    return (a: Outcome, b: Outcome) => {
+        const na = names[a.assignmentId ?? ""] ?? { child: null, household: null };
+        const nb = names[b.assignmentId ?? ""] ?? { child: null, household: null };
+        return (na.household ?? "").localeCompare(nb.household ?? "") || (na.child ?? "").localeCompare(nb.child ?? "");
+    };
+}
+
+/**
+ * ── WHAT THE OPERATOR CAME FOR, FIRST (W7-F024) ────────────────────────────────────────────────
+ *
+ * Billed and already-billed rows are always open. Skipped rows — other frequencies, not yet
+ * enrolled — are a collapsed count the operator may open. Refused and Errored open themselves,
+ * because they are the rows someone must act on.
+ */
+function OutcomeGroups({ groups, names }: { groups: OutcomeGroup[]; names: Names }) {
+    return (
+        <>
+            {groups.map((group) => {
+                if (group.rows.length === 0) return null;
+                const rows = [...group.rows].sort(bySubject(names));
+                const list = (
+                    <ul className="flex flex-col" {...(group.listAttr ?? {})}>
+                        {rows.map((o, i) => (
+                            <OutcomeRow key={`${o.assignmentId}-${i}`} o={o} names={names} group={group} />
+                        ))}
+                    </ul>
+                );
+                if (group.tone === "primary") {
+                    return (
+                        <div key={group.key} className="mt-2" data-financials-tuition-result-section={group.key}>
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{group.title}</p>
+                            {list}
+                        </div>
+                    );
+                }
+                const reasons = [...new Set(rows.map((o) => (group.reason === "skipped" ? skippedReason(o) : null)).filter(Boolean))];
+                return (
+                    <details
+                        key={group.key}
+                        className="mt-2"
+                        open={group.tone === "alert"}
+                        data-financials-tuition-result-section={group.key}
+                        data-financials-tuition-collapsible={group.tone}
+                    >
+                        <summary
+                            className={`cursor-pointer select-none text-[11px] font-medium ${group.tone === "alert" ? "text-alloy-ember" : "text-alloy-midnight/60"}`}
+                            data-financials-tuition-group-summary={group.key}
+                        >
+                            {group.title} · {rows.length}
+                            {reasons.length === 1 ? <span className="font-normal text-alloy-midnight/45"> — {reasons[0]}</span> : null}
+                        </summary>
+                        {list}
+                    </details>
+                );
+            })}
+        </>
+    );
 }
 
 /**
@@ -289,34 +418,6 @@ export default function FinancialsTuitionBilling({
         return confirmedToBill.filter((id) => !generated.has(id));
     }, [result, confirmedToBill]);
 
-    const nameOf = useCallback(
-        (o: Outcome) => {
-            const n = o.assignmentId ? preview?.assignment_names?.[o.assignmentId] : undefined;
-            if (!n || (!n.child && !n.household)) return "An enrolment whose names could not be read";
-            return [n.child, n.household].filter(Boolean).join(" · ");
-        },
-        [preview],
-    );
-
-    const resultName = useCallback(
-        (o: Outcome) => {
-            const n = o.assignmentId ? result?.names?.[o.assignmentId] : undefined;
-            if (!n || (!n.child && !n.household)) return "An enrolment whose names could not be read";
-            return [n.child, n.household].filter(Boolean).join(" · ");
-        },
-        [result],
-    );
-
-    const notBilled = useMemo(() => {
-        if (!preview) return [];
-        return [
-            ...preview.refused_outcomes.map((o) => ({ o, kind: "Refused", text: o.detail ?? o.reason ?? "refused" })),
-            ...preview.error_outcomes.map((o) => ({ o, kind: "Error", text: o.message ?? "error" })),
-            ...preview.already_posted_outcomes.map((o) => ({ o, kind: "Already posted", text: "this period is settled" })),
-            ...preview.not_due_outcomes.map((o) => ({ o, kind: "Not billed", text: notBilledReason(o, cadenceLabel) })),
-        ];
-    }, [preview, cadenceLabel]);
-
     const last = status?.last_run ?? null;
 
     return (
@@ -444,56 +545,20 @@ export default function FinancialsTuitionBilling({
                             <span className="font-semibold tabular-nums" data-financials-bulk-preview-count="true">
                                 {preview.counts.generated}
                             </span>{" "}
-                            to bill · {preview.counts.unchanged} already generated · {preview.counts.notDue} not billed ·{" "}
+                            to bill · {preview.counts.unchanged} already generated · {preview.counts.notDue} skipped ·{" "}
                             {preview.counts.alreadyPosted} already posted · {preview.counts.refused} refused · {preview.counts.errors} errored
                         </p>
-                        {(preview.to_bill_outcomes ?? []).length > 0 ? (
-                            <>
-                                <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Will bill</p>
-                                <ul className="flex flex-col gap-0.5" data-financials-tuition-to-bill="true">
-                                    {(preview.to_bill_outcomes ?? []).map((o, i) => (
-                                        <li key={`${o.assignmentId}-${i}`} className="text-xs text-alloy-midnight/85" data-financials-tuition-to-bill-row={o.assignmentId}>
-                                            <span className="flex justify-between gap-3">
-                                                <span className="truncate">{nameOf(o)}</span>
-                                                <span className="shrink-0 tabular-nums">{moneyExact(o.amountCents ?? 0, o.currencyCode ?? "USD")}</span>
-                                            </span>
-                                            {responsibilityLine(o) ? (
-                                                <span
-                                                    className={`block truncate text-[11px] ${responsibilityLine(o)!.warn ? "text-alloy-ember" : "text-alloy-midnight/55"}`}
-                                                    data-financials-tuition-responsibility={o.responsibility?.status}
-                                                >
-                                                    Responsibility · {responsibilityLine(o)!.text}
-                                                </span>
-                                            ) : null}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        ) : null}
-                        {(preview.unchanged_outcomes ?? []).length > 0 ? (
-                            <>
-                                <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Already generated — not billed again</p>
-                                <ul className="flex flex-col gap-0.5" data-financials-tuition-unchanged="true">
-                                    {(preview.unchanged_outcomes ?? []).map((o, i) => (
-                                        <li key={`${o.assignmentId}-${i}`} className="truncate text-xs text-alloy-midnight/60" data-financials-tuition-unchanged-row={o.assignmentId}>
-                                            {nameOf(o)}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        ) : null}
-                        {notBilled.length > 0 ? (
-                            <>
-                                <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Not billed by this run</p>
-                                <ul className="flex flex-col gap-0.5" data-financials-bulk-exceptions="true">
-                                    {notBilled.slice(0, 20).map(({ o, kind, text }, index) => (
-                                        <li key={index} className="truncate text-[11px] text-alloy-midnight/55" title={o.reason ?? undefined}>
-                                            {nameOf(o)} · {kind} — {text}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        ) : null}
+                        <OutcomeGroups
+                            names={preview.assignment_names ?? {}}
+                            groups={[
+                                { key: "to_bill", title: "Will bill", rows: preview.to_bill_outcomes ?? [], tone: "primary", amount: true, responsibility: true, reason: null, listAttr: { "data-financials-tuition-to-bill": "true" } },
+                                { key: "unchanged", title: "Already generated — not billed again", rows: preview.unchanged_outcomes ?? [], tone: "primary", amount: true, responsibility: false, reason: null, listAttr: { "data-financials-tuition-unchanged": "true" } },
+                                { key: "already_posted", title: "Already posted", rows: preview.already_posted_outcomes, tone: "primary", amount: true, responsibility: false, reason: null },
+                                { key: "skipped", title: "Skipped", rows: preview.not_due_outcomes, tone: "skipped", amount: false, responsibility: false, reason: "skipped", listAttr: { "data-financials-bulk-exceptions": "true" } },
+                                { key: "refused", title: "Refused", rows: preview.refused_outcomes, tone: "alert", amount: false, responsibility: false, reason: "detail" },
+                                { key: "errored", title: "Errored", rows: preview.error_outcomes, tone: "alert", amount: false, responsibility: false, reason: "detail" },
+                            ]}
+                        />
                         {preview.counts.generated === 0 ? (
                             <p className="mt-1.5 text-[11px] text-alloy-midnight/55">
                                 Nothing would be billed for this period, so there is nothing to confirm.
@@ -521,43 +586,17 @@ export default function FinancialsTuitionBilling({
                           * W7-F022: EVERY ROW, NAMED, WITH ITS REASON. The run once answered "2 refused"
                           * and nothing else; an operator could not say who was not billed, or why.
                           */}
-                        {([
-                            { key: "generated", title: "Generated", rows: result.generated, amount: true, reason: false },
-                            { key: "unchanged", title: "Already generated", rows: result.unchanged, amount: true, reason: false },
-                            { key: "already_posted", title: "Already posted", rows: result.alreadyPosted, amount: true, reason: false },
-                            { key: "not_billed", title: "Not billed", rows: result.notDue, amount: false, reason: true },
-                            { key: "refused", title: "Refused", rows: result.refused, amount: false, reason: true },
-                            { key: "errored", title: "Errored", rows: result.errors, amount: false, reason: true },
-                        ] as const).map((section) =>
-                            section.rows.length ? (
-                                <div key={section.key} data-financials-tuition-result-section={section.key}>
-                                    <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{section.title}</p>
-                                    <ul className="flex flex-col gap-0.5">
-                                        {section.rows.map((o, i) => (
-                                            <li
-                                                key={`${o.assignmentId}-${i}`}
-                                                className={`flex justify-between gap-3 text-xs ${section.key === "refused" || section.key === "errored" ? "text-alloy-ember" : "text-alloy-midnight/80"}`}
-                                                data-financials-tuition-result-row={o.assignmentId}
-                                                title={o.reason ?? undefined}
-                                            >
-                                                <span className="min-w-0 truncate">
-                                                    {resultName(o)}
-                                                    {(section.key === "generated" || section.key === "unchanged") && responsibilityLine(o)
-                                                        ? ` — Responsibility · ${responsibilityLine(o)!.text}`
-                                                        : ""}
-                                                    {section.reason
-                                                        ? ` — ${section.key === "not_billed" ? notBilledReason(o, CADENCES.find((c) => c.key === result.cadenceKey)?.label ?? result.cadenceKey) : (o.detail ?? o.message ?? o.reason ?? "no reason recorded")}`
-                                                        : ""}
-                                                </span>
-                                                {section.amount && o.amountCents != null ? (
-                                                    <span className="shrink-0 tabular-nums">{moneyExact(o.amountCents, o.currencyCode ?? "USD")}</span>
-                                                ) : null}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ) : null,
-                        )}
+                        <OutcomeGroups
+                            names={result.names}
+                            groups={[
+                                { key: "generated", title: "Generated", rows: result.generated, tone: "primary", amount: true, responsibility: true, reason: null },
+                                { key: "unchanged", title: "Already generated", rows: result.unchanged, tone: "primary", amount: true, responsibility: true, reason: null },
+                                { key: "already_posted", title: "Already posted", rows: result.alreadyPosted, tone: "primary", amount: true, responsibility: false, reason: null },
+                                { key: "skipped", title: "Skipped", rows: result.notDue, tone: "skipped", amount: false, responsibility: false, reason: "skipped" },
+                                { key: "refused", title: "Refused", rows: result.refused, tone: "alert", amount: false, responsibility: false, reason: "detail" },
+                                { key: "errored", title: "Errored", rows: result.errors, tone: "alert", amount: false, responsibility: false, reason: "detail" },
+                            ]}
+                        />
                     </div>
                 ) : null}
             </section>
