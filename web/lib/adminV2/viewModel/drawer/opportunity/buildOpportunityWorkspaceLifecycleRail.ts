@@ -44,6 +44,13 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
     statusKey: string | null;
     statusDefs: StatusDefinitionRow[];
     /**
+     * The record's own persisted stage (`opportunities.stage_key`). A family-grain stage move
+     * (Lead → Tour by a Business Process rule) writes the stage and leaves the status as it was, so a
+     * status-only reading kept a Tour family on Lead. When it names a configured stage it wins; the
+     * status mapping remains the answer for records that carry none.
+     */
+    stageKey?: string | null;
+    /**
      * The record the annotations are ABOUT. Optional: a caller with no record still gets the rail,
      * just without supporting detail — the stages are configuration, the annotations are truth.
      */
@@ -72,10 +79,12 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
     if (stages.length < 2) return null;
 
     const stageKeys = stages.map((s) => s.key);
-    let currentStageKey: string | null = null;
+    const persistedStageKey = trimOrNull(params.stageKey);
+    let currentStageKey: string | null =
+        persistedStageKey && stageKeys.includes(persistedStageKey) ? persistedStageKey : null;
 
     const sk = trimOrNull(params.statusKey);
-    if (sk) {
+    if (!currentStageKey && sk) {
         const def = params.statusDefs.find((d) => d.status_key === sk);
         const { stage } = effectiveStageKeyAssignment(sk, def?.metadata ?? null, stageKeys);
         if (stage) currentStageKey = stage;
