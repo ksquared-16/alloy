@@ -56,7 +56,9 @@ export default function NewLeadMessageAutomationCreator({ onCreated }: { onCreat
                     description: `When a new Enrollment lead is created, send the "${chosen.name}" ${chosen.channel === "sms" ? "SMS" : "email"} template to the family.`,
                     event_type: "lead_created",
                     entity_type: "opportunities",
-                    enabled: true,
+                    // Created OFF and enabled only once every step has saved — a failed condition must never
+                    // leave a live, unconditioned automation messaging every new lead.
+                    enabled: false,
                     metadata: { authored_by: "new_lead_message_automation" },
                 }),
             });
@@ -81,10 +83,17 @@ export default function NewLeadMessageAutomationCreator({ onCreated }: { onCreat
             if (!actRes.ok) throw new Error("The automation was created but its message step could not be saved.");
             if (newFamiliesOnly) {
                 const condRes = await put("conditions", {
-                    conditions: [{ field_path: "new_family", operator: "eq", value: true }],
+                    conditions: [{ field: "new_family", operator: "eq", value: true }],
                 });
                 if (!condRes.ok) throw new Error("The automation was created but its new-family condition could not be saved.");
             }
+            const enableRes = await fetch(`/api/admin/workflows/${encodeURIComponent(wf.id!)}`, {
+                method: "PATCH",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled: true }),
+            });
+            if (!enableRes.ok) throw new Error("The automation was saved but could not be turned on.");
             setOpen(false);
             setTemplateId("");
             onCreated();

@@ -158,7 +158,7 @@ export async function fetchWorkflowAssistExplainV1(
     if (wfIdsForConditions.length) {
         const { data: condRows, error: condErr } = await supabase
             .from("workflow_conditions")
-            .select("id, workflow_id, target_entity, field_path, field, operator, value, value_jsonb, enabled")
+            .select("*") // the table carries field/operator/value; naming absent columns failed this read
             .in("workflow_id", wfIdsForConditions);
         if (condErr) throw new Error(condErr.message);
         for (const row of condRows ?? []) {
