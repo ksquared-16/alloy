@@ -31,7 +31,15 @@ const DISPOSITION_TO_STAGE_KEY: Readonly<Record<string, string>> = {
     not_enrolling: "closed_withdrawn",
     declined: "closed_withdrawn",
     closed: "closed_withdrawn",
-    // Undispositioned / brand-new lead → the family Lead stage.
+};
+
+/**
+ * Intake statuses (the child's `outcome_status_key` from Create Lead) that say NOTHING about a child
+ * stage — before Decision the child has no stage of its own and rides the FAMILY's (Lead and Tour are
+ * family-grain; child statuses begin at Decision). They map to Lead only when no family stage is known;
+ * consulted before the family stage, they kept a child at "New Lead" after its family reached Tour.
+ */
+const PRE_CHILD_TRACK_STATUS_TO_STAGE_KEY: Readonly<Record<string, string>> = {
     new_inquiry: "lead",
     new_lead: "lead",
     new: "lead",
@@ -74,7 +82,10 @@ export function resolveChildProcessStageKey(args: {
     }
 
     const family = args.familyStageKey?.trim();
-    return family && STAGE_LABEL_BY_KEY.has(family) ? family : null;
+    if (family && STAGE_LABEL_BY_KEY.has(family)) return family;
+
+    const preTrack = disposition ? PRE_CHILD_TRACK_STATUS_TO_STAGE_KEY[disposition] : undefined;
+    return preTrack && STAGE_LABEL_BY_KEY.has(preTrack) ? preTrack : null;
 }
 
 /**
@@ -96,5 +107,8 @@ export function resolveChildProcessStageLabel(args: {
         if (fromDisposition) return fromDisposition;
     }
 
-    return labelForStageKey(args.familyStageKey);
+    const fromFamily = labelForStageKey(args.familyStageKey);
+    if (fromFamily) return fromFamily;
+
+    return disposition ? labelForStageKey(PRE_CHILD_TRACK_STATUS_TO_STAGE_KEY[disposition]) : null;
 }
