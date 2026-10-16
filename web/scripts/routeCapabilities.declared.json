@@ -4035,6 +4035,12 @@
         "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
+    "app/api/admin/processing/attention/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Processing nav badge: a single count of actionable intake cases no operator has acted on yet. Shown in the shell to every admin-context principal beside the Processing entry; admin context (org membership) is still required by getAdminContextCached. Contains no record data."
+      }
+    },
     "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
       "POST": {
         "status": "declared",

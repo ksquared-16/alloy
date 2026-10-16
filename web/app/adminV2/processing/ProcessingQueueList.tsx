@@ -222,6 +222,7 @@ export default function ProcessingQueueList({
     }, [warmRowIds]);
     const counts = data?.counts ?? {};
     const recommendations = data?.recommendations ?? {};
+    const unworked = data?.unworked ?? {};
     const { workFolders } = useProcessingFolders();
     const categoryFolders = workFolders.filter((f) => f.id !== "incoming" && f.id !== "completed");
     // Every folder starts collapsed — the operator chooses which section to open, so the rail
@@ -345,6 +346,8 @@ export default function ProcessingQueueList({
         const title = row.caseTitle ?? row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
         const sourceContext = row.caseTitle ? row.sourceDisplay?.label ?? null : null;
         const rec = recommendations[row.id] ?? null;
+        // NEW: arrived and no operator has acted on it yet (processingCaseAttention). Not age, not "opened".
+        const isNew = unworked[row.id] === true;
         const lane = deriveWorkLane(row);
         const laneLabel =
             lane === "needs_review"
@@ -378,10 +381,21 @@ export default function ProcessingQueueList({
                 >
                     <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                            <span className={`min-w-0 flex-1 truncate ${PROCESSING_QUEUE_ROW_TITLE}`}>{title}</span>
+                            <span className={`flex min-w-0 flex-1 items-center gap-1.5 truncate ${PROCESSING_QUEUE_ROW_TITLE} ${isNew ? "font-semibold" : ""}`}>
+                                {isNew ? (
+                                    <span
+                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-bend-pine"
+                                        aria-label="New — not yet reviewed"
+                                        data-processing-row-new="true"
+                                    />
+                                ) : null}
+                                <span className="truncate">{title}</span>
+                            </span>
                             <span className={`shrink-0 tabular-nums ${PROCESSING_QUEUE_METADATA}`}>{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
                         </span>
                         <span className={`mt-0.5 flex items-center gap-1 truncate ${PROCESSING_QUEUE_METADATA} ${laneTone}`}>
+                            {isNew ? <span className="font-semibold text-alloy-bend-pine">New</span> : null}
+                            {isNew ? <span aria-hidden className="text-alloy-midnight/15">·</span> : null}
                             <span>{laneLabel}</span>
                             {/* A badge every single row shares is not a signal — it is noise that
                                 costs a line of scanning and tells the operator nothing about which

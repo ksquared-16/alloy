@@ -114,7 +114,7 @@ export default function PosProcessingWorkspace({
             <div className="flex min-h-0 flex-1 overflow-hidden">
                 <WorkspaceZonePanel
                     title="Queue"
-                    className={`w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
+                    className={`w-[24%] min-w-[12rem] max-w-[16.5rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 >
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <ProcessingQueueList
