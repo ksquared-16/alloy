@@ -1587,14 +1587,6 @@ export async function composeWorkUnitProvisioningAnswer(
                   queue: enrichmentQueueMeta,
               }) as unknown as Promise<readonly Record<string, unknown>[]>);
     void enrichedPromise.catch(() => {});
-    /*
-     * The enriched cohort, observed rather than awaited. `cohort_rows_wait_ms` was P50 660ms of the
-     * 1,596ms the frame spent holding an already-decided geometry, and every field enrichment adds —
-     * `_customer_name`, the sibling summary, `personal_seen` — is a SETTLEMENT-owned signal, not a
-     * geometry input. When it has landed the frame publishes it; when it has not, the row publishes
-     * the partial context it can honestly derive from its own columns.
-     */
-    const enrichedSettled = settledNow(enrichedPromise);
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. Gated on the PAGE
     //    (enrichment is 1:1, page in = page out), so it does not wait on enrichment. ──
@@ -2280,28 +2272,37 @@ export async function composeWorkUnitProvisioningAnswer(
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     /*
-     * ── THE COMMIT FRAME NO LONGER WAITS FOR THE COHORT. ────────────────────────────────────────
+     * ── THE COMMIT FRAME AND THE COHORT. ─────────────────────────────────────────────────────────
      *
-     * This was `await joinWait("cohort_rows", cohortRowsOnce())`: P50 660ms of waiting
-     * (`cohort_rows_wait_ms`, deployed d3cad7ec) for signals that do not select geometry. Measured
-     * on that same build, the geometry was already decided at 138ms and `composition_ready` did not
-     * arrive until 1,734ms — 1,596ms spent holding a frame nothing could still change.
-     *
-     * What enrichment adds is `_customer_name`, the sibling summary and `personal_seen`: every one
-     * a SETTLEMENT-owned signal. So the frame publishes what has landed and states the rest as
-     * UNKNOWN, rather than publishing nothing until all of it has.
-     *
-     * The rows stay HONEST either way. When enrichment has not landed the page is attached through
-     * `attachPartialQueueRowContextToRows` — the SAME derivation enrichment itself applies, over the
-     * same `enrichmentQueueMeta`, reading only columns the raw row already carries. It is pure
-     * (`enrich_row_context_ms` P50 0ms) and adds no read. What is absent is absent, not zero: a row
-     * with no resolved customer name renders its title, exactly as the honest fallback already does.
-     *
-     * `enriched` degrades to the raw page for the same reason — both carry `customer_id` and the
-     * identity columns the subject snapshot reads; only the overlay is missing.
+     * #1213 stopped awaiting `cohort_rows` (P50 660ms on deployed d3cad7ec) on the premise that
+     * enrichment adds only settlement signals — `_customer_name`, the sibling summary,
+     * `personal_seen`. It also adds the row's primary contact, phone and children, and nothing
+     * settles rows afterwards, so the frame now waits for it again (see ROW CONTENT below). The
+     * partial attach (`attachPartialQueueRowContextToRows`) remains the degrade when enrichment
+     * FAILS: pure, read-free, and honest — what is absent is absent, not zero.
      */
     const presentation = await joinWait("commit_presentation", presentationOnce());
-    const enrichedAtCommit = enrichedSettled.value;
+    /*
+     * ── ROW CONTENT IS COMMIT-CRITICAL. ─────────────────────────────────────────────────────────
+     *
+     * Enrichment is not only settlement signals: it is the ONLY source of the row's primary contact
+     * name, phone and email (`_primary_*`, one `persons` read by `primary_person_id`) and of its
+     * children (`customer_members`). The population select carries neither. Observing it rather
+     * than awaiting it meant a warm load — presentation cached at ~3ms, enrichment ~300–660ms —
+     * almost always committed rows showing the household name and nothing else, and no owner ever
+     * settled them afterwards: Settlement fills counts, totals, KPIs and the right rail, never rows.
+     *
+     * So the commit waits for the enriched cohort. It already runs concurrently with presentation,
+     * so the cost is only what enrichment takes beyond it. A FAILED enrichment still degrades to the
+     * partial context below — the honest, read-free attach — rather than failing the answer.
+     */
+    const enrichedAtCommit = await joinWait(
+        "cohort_rows",
+        enrichedPromise.then(
+            (rows) => rows,
+            () => null,
+        ),
+    );
     spans.cohort_enriched_at_commit = enrichedAtCommit ? 1 : 0;
     const enriched: readonly Record<string, unknown>[] =
         enrichedAtCommit ?? (page as unknown as readonly Record<string, unknown>[]);

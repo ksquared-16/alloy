@@ -3,7 +3,10 @@
 import type { QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 
 export type QueueRowSurfaceLoadResult = {
+    /** What the BUILDER edits — empty when nothing is published. */
     envelope: QueueRowSurfaceEnvelope;
+    /** What the RUNTIME renders — never empty (unconfigured surfaces get the runtime default). */
+    runtimeLayout: QueueRowSurfaceEnvelope["layout"];
     placementOverrideEnabled: boolean;
     source: string;
 };
@@ -22,8 +25,10 @@ export async function loadQueueRowSurfaceConfig(
     if (!envelope?.layout) {
         throw new Error("Invalid queue row surface response");
     }
+    const runtimeLayout = (body.config as QueueRowSurfaceEnvelope["layout"] | null | undefined) ?? envelope.layout;
     return {
         envelope,
+        runtimeLayout,
         placementOverrideEnabled: body.placementOverrideEnabled === true,
         source: typeof body.source === "string" ? body.source : "unknown",
     };
