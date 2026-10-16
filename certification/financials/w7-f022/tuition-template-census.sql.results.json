@@ -1,0 +1,81 @@
+{
+  "trusted_host_action_id": "tha_2dea0d08cbc931",
+  "query_hash": "feacd38f9ff095c2b586ee1ca210ba964ffc2dd3f8a2e7ef0002accec2dfdc02",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-16T20:29:11.075Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_2dea0d08cbc931",
+    "query_hash": "feacd38f9ff095c2b586ee1ca210ba964ffc2dd3f8a2e7ef0002accec2dfdc02",
+    "authorization_id": "grnt_3aaeff2476074375",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-16T20:29:16.218Z",
+    "question_ids": [
+      "template",
+      "event_type"
+    ],
+    "questions": {
+      "template": {
+        "question_id": "template",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "tuition",
+            "id": "9a4d0578-822b-4aee-af2d-e9bef48bf8d0",
+            "name": "Monthly tuition",
+            "category": "tuition",
+            "is_active": true,
+            "effective_start": "2026-01-01",
+            "effective_end": "2026-10-07",
+            "amount_strategy": "fixed",
+            "amount_cents": 40000,
+            "billable_on_strategy": "immediate",
+            "created_at": "2026-09-18T16:41:28.647281+00:00",
+            "updated_at": "2026-10-09T03:55:57.310143+00:00",
+            "source_key": "config",
+            "supersedes": null,
+            "version_of": null
+          },
+          {
+            "label": "tuition",
+            "id": "52400d60-54bf-440d-9ddd-6af1750c1903",
+            "name": "Monthly tuition",
+            "category": "tuition",
+            "is_active": true,
+            "effective_start": "2026-10-08",
+            "effective_end": null,
+            "amount_strategy": "fixed",
+            "amount_cents": 40000,
+            "billable_on_strategy": "billing_policy",
+            "created_at": "2026-10-09T03:55:57.275814+00:00",
+            "updated_at": "2026-10-09T03:55:57.275814+00:00",
+            "source_key": "config",
+            "supersedes": null,
+            "version_of": null
+          }
+        ]
+      },
+      "event_type": {
+        "question_id": "event_type",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "schedule.recurring_tuition",
+            "charge_template_key": "tuition",
+            "is_active": true,
+            "effective_start": "2000-01-01",
+            "effective_end": null,
+            "org_scoped": false
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

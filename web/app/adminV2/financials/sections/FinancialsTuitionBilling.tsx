@@ -61,7 +61,23 @@ type Outcome = {
     kind?: string;
     amountCents?: number;
     currencyCode?: string;
+    /* W7-F023: who the run binds (or bound) — the canonical responsibility answer for this row. */
+    responsibility?:
+        | { status: "resolved"; parties: Array<{ name: string | null; share: string }> }
+        | { status: "none" | "refused" | "review"; detail: string };
 };
+
+/** "Tess Tuition · 100%", or why nobody is bound — said on the row, never left to Charge Details. */
+function responsibilityLine(o: Outcome): { text: string; warn: boolean } | null {
+    const r = o.responsibility;
+    if (!r) return null;
+    if (r.status === "resolved") {
+        return { text: r.parties.map((p) => `${p.name ?? "Unnamed party"} · ${p.share}`).join(", "), warn: false };
+    }
+    if (r.status === "none") return { text: "No responsible party — the charge will read Not allocated", warn: true };
+    if (r.status === "review") return { text: `Responsibility needs review — ${r.detail}`, warn: true };
+    return { text: `Responsibility cannot be divided — ${r.detail}`, warn: true };
+}
 
 type PreviewPayload = {
     counts: GenerationCounts;
@@ -436,9 +452,19 @@ export default function FinancialsTuitionBilling({
                                 <p className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Will bill</p>
                                 <ul className="flex flex-col gap-0.5" data-financials-tuition-to-bill="true">
                                     {(preview.to_bill_outcomes ?? []).map((o, i) => (
-                                        <li key={`${o.assignmentId}-${i}`} className="flex justify-between gap-3 text-xs text-alloy-midnight/85" data-financials-tuition-to-bill-row={o.assignmentId}>
-                                            <span className="truncate">{nameOf(o)}</span>
-                                            <span className="shrink-0 tabular-nums">{moneyExact(o.amountCents ?? 0, o.currencyCode ?? "USD")}</span>
+                                        <li key={`${o.assignmentId}-${i}`} className="text-xs text-alloy-midnight/85" data-financials-tuition-to-bill-row={o.assignmentId}>
+                                            <span className="flex justify-between gap-3">
+                                                <span className="truncate">{nameOf(o)}</span>
+                                                <span className="shrink-0 tabular-nums">{moneyExact(o.amountCents ?? 0, o.currencyCode ?? "USD")}</span>
+                                            </span>
+                                            {responsibilityLine(o) ? (
+                                                <span
+                                                    className={`block truncate text-[11px] ${responsibilityLine(o)!.warn ? "text-alloy-ember" : "text-alloy-midnight/55"}`}
+                                                    data-financials-tuition-responsibility={o.responsibility?.status}
+                                                >
+                                                    Responsibility · {responsibilityLine(o)!.text}
+                                                </span>
+                                            ) : null}
                                         </li>
                                     ))}
                                 </ul>
@@ -516,6 +542,9 @@ export default function FinancialsTuitionBilling({
                                             >
                                                 <span className="min-w-0 truncate">
                                                     {resultName(o)}
+                                                    {(section.key === "generated" || section.key === "unchanged") && responsibilityLine(o)
+                                                        ? ` — Responsibility · ${responsibilityLine(o)!.text}`
+                                                        : ""}
                                                     {section.reason
                                                         ? ` — ${section.key === "not_billed" ? notBilledReason(o, CADENCES.find((c) => c.key === result.cadenceKey)?.label ?? result.cadenceKey) : (o.detail ?? o.message ?? o.reason ?? "no reason recorded")}`
                                                         : ""}

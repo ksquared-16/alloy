@@ -1,0 +1,132 @@
+{
+  "trusted_host_action_id": "tha_70e7da5459f614",
+  "query_hash": "acff1c7982031fee28c338a30a7b238c8ce97613ae0c40b02abad2f0912d5e88",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-16T20:26:41.073Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_70e7da5459f614",
+    "query_hash": "acff1c7982031fee28c338a30a7b238c8ce97613ae0c40b02abad2f0912d5e88",
+    "authorization_id": "grnt_5343974eb66544d0",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-16T20:26:46.493Z",
+    "question_ids": [
+      "term",
+      "event",
+      "obligation"
+    ],
+    "questions": {
+      "term": {
+        "question_id": "term",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "certb",
+            "term_id": "2a23f980-26d3-499a-b5bb-394e5c657499",
+            "state": "accepted",
+            "amount_cents": 145000,
+            "cadence": "monthly",
+            "effective_start": "2026-09-01",
+            "superseded": false,
+            "updated_at": "2026-09-19T02:25:25.674803+00:00",
+            "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574"
+          },
+          {
+            "label": "tilly",
+            "term_id": "b09b5f15-2e64-4560-8b4a-6ba1b99553e0",
+            "state": "accepted",
+            "amount_cents": 120000,
+            "cadence": "monthly",
+            "effective_start": "2026-11-01",
+            "superseded": false,
+            "updated_at": null,
+            "agreement": "fd000000-0000-4000-8000-0000007a0007"
+          }
+        ]
+      },
+      "event": {
+        "question_id": "event",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "certb",
+            "event_id": "bcc6c6df-ca31-48b2-9838-e8307aaaaf13",
+            "status": "resolved",
+            "event_key": "schedule.recurring_tuition",
+            "occurs_on": "2026-11-01",
+            "idempotency_key": "cev:tuition:cf044308-3ee4-47ab-a8fb-205eb172aa48:2026-11",
+            "created_at": "2026-10-15T21:11:16.440057+00:00",
+            "updated_at": "2026-10-16T20:22:58.916774+00:00",
+            "context_generated_by": "tuition_generation",
+            "context_service_period": "2026-11"
+          },
+          {
+            "label": "tilly",
+            "event_id": "879cd216-7b76-4e35-b24d-f371bdcaaa58",
+            "status": "resolved",
+            "event_key": "schedule.recurring_tuition",
+            "occurs_on": "2026-11-01",
+            "idempotency_key": "cev:tuition:fd000000-0000-4000-8000-000000790002:2026-11",
+            "created_at": "2026-10-15T21:11:15.714315+00:00",
+            "updated_at": "2026-10-16T20:22:58.331311+00:00",
+            "context_generated_by": "tuition_generation",
+            "context_service_period": "2026-11"
+          }
+        ]
+      },
+      "obligation": {
+        "question_id": "obligation",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "certb",
+            "obligation_id": "04ad762e-5086-480c-8a07-4bc42b24d86e",
+            "status": "no_charge",
+            "kind": "recurring_tuition",
+            "amount_cents": null,
+            "occurs_on": "2026-11-01",
+            "billable_on": "2026-11-01",
+            "period": "2026-11-01..2026-11-30",
+            "template_set": false,
+            "draft_charge_id": null,
+            "review_status": "pending",
+            "suppression_reason": null,
+            "explanation": {
+              "directive_reason": "Recurring schedule → recurring tuition for the service period.",
+              "no_charge_reason": "template_retired"
+            },
+            "created_at": "2026-10-15T21:11:16.506959+00:00",
+            "updated_at": "2026-10-16T20:22:58.980821+00:00"
+          },
+          {
+            "label": "tilly",
+            "obligation_id": "444a7f7f-dc60-4386-abcf-99fe9d491921",
+            "status": "no_charge",
+            "kind": "recurring_tuition",
+            "amount_cents": null,
+            "occurs_on": "2026-11-01",
+            "billable_on": "2026-11-01",
+            "period": "2026-11-01..2026-11-30",
+            "template_set": false,
+            "draft_charge_id": null,
+            "review_status": "pending",
+            "suppression_reason": null,
+            "explanation": {
+              "directive_reason": "Recurring schedule → recurring tuition for the service period.",
+              "no_charge_reason": "template_retired"
+            },
+            "created_at": "2026-10-15T21:11:15.820611+00:00",
+            "updated_at": "2026-10-16T20:22:58.401584+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

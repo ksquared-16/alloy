@@ -20,6 +20,10 @@ import { describe, expect, it, vi } from "vitest";
 const consumption = vi.hoisted(() => ({
     obligation: { draftable: true, chargeTemplateId: "tpl-tuition", amountCents: 145_000, status: "pending_review", explanation: {} } as Record<string, unknown>,
 }));
+/* W7-F023: who the run binds is its own module's question (w7F023TuitionResponsibility.test.ts). */
+vi.mock("@/lib/financials/tuitionGeneration/tuitionResponsibility", () => ({
+    planTuitionResponsibility: vi.fn(async () => ({ status: "resolved", arrangementId: "arr-1", parties: [] })),
+}));
 vi.mock("@/lib/operationalConsumption/consumptionService", () => ({
     previewConsumption: vi.fn(async () => ({ resolution: { obligations: [consumption.obligation] } })),
 }));
