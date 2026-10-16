@@ -549,6 +549,13 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                         body: bodyDraft,
                         reply_to_thread_id: selectedThreadId,
                         confirm,
+                        // One identity per confirmed send. Without it the server keyed idempotency on the
+                        // CONTENT alone, so the same template sent to the same person on a later day was
+                        // treated as a duplicate of the first — reported sent, nothing queued. Double
+                        // submission is already prevented by `confirmInFlightRef`.
+                        ...(confirm && typeof crypto !== "undefined" && "randomUUID" in crypto
+                            ? { client_token: crypto.randomUUID() }
+                            : {}),
                         ...(opportunityId ? { opportunity_id: opportunityId } : {}),
                         ...(workConsequence ? { [FAMILY_SEND_WORK_CONSEQUENCE_FIELD]: workConsequence } : {}),
                     }),
@@ -563,6 +570,9 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                 };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
                 setSendResult(data);
+                // Nothing was queued: keep the draft (and the template it came from) so the operator can
+                // fix what each recipient's refusal names. The dialog shows "Not sent".
+                if (confirm && data.summary.sent === 0) return;
                 if (confirm) {
                     const scope = resolveFamilyRuntimeInvalidateScope(input);
                     if (scope) invalidateDrawerFamilyWorkspaceCache(scope);

@@ -1,5 +1,6 @@
 "use client";
 
+import { isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
@@ -135,21 +136,27 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
         void loadSlots();
     }, [loadSlots]);
 
-    const grouped = useMemo(() => groupTourSlotsByLocalDate(slots), [slots]);
+    // Only slots on the site's tomorrow or later are bookable (tourEarliestDate — the service refuses
+    // the rest); each slot carries its site's timezone, so "today" is the site's today.
+    const bookableSlots = useMemo(
+        () => slots.filter((slot) => !slot.timezone || isTourStartAllowed(new Date(slot.startAt), slot.timezone)),
+        [slots],
+    );
+    const grouped = useMemo(() => groupTourSlotsByLocalDate(bookableSlots), [bookableSlots]);
 
     useEffect(() => {
         if (slotsLoading) return;
-        if (slots.length === 0) {
+        if (bookableSlots.length === 0) {
             setSelectedDayKey(null);
             return;
         }
-        const { orderedDayKeys, byDay } = groupTourSlotsByLocalDate(slots);
+        const { orderedDayKeys, byDay } = groupTourSlotsByLocalDate(bookableSlots);
         const first = orderedDayKeys[0] ?? null;
         setSelectedDayKey((prev) => {
             if (prev && byDay.has(prev)) return prev;
             return first;
         });
-    }, [slotsLoading, slots]);
+    }, [slotsLoading, bookableSlots]);
 
     const slotsForSelectedDay = useMemo(() => {
         if (!selectedDayKey) return [];

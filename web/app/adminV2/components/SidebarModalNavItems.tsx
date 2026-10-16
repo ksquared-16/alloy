@@ -7,6 +7,7 @@ import { Inbox, ListChecks, BarChart3, Layers, Contact, Banknote } from "lucide-
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
+import { useProcessingAttentionNavCount } from "@/lib/adminV2/useProcessingAttentionNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import { offersFinancialsSurface } from "@/lib/access/financialsSurfaceVisibility";
@@ -210,13 +211,25 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
 /** POS intake workspace — operator application alongside Tasks, Inbox, and Analytics. */
 export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
+    // New work: actionable intake no operator has acted on yet (processingCaseAttention).
+    const unworked = useProcessingAttentionNavCount();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Processing — intake, documents, and forms"
+            title={
+                unworked > 0
+                    ? `Processing — ${unworked} new item${unworked === 1 ? "" : "s"} to review`
+                    : "Processing — intake, documents, and forms"
+            }
             label="Processing"
             icon={<Layers size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
+            badge={
+                unworked > 0 ?
+                    <span className="adminv2-sidebar-nav-badge adminv2-sidebar-nav-badge--inbox" data-adminv2-processing-attention-badge="true">
+                        {formatSidebarBadgeCount(unworked, collapsed)}
+                    </span>
+                :   null
+            }
             active={activeModal === "processing"}
             dataAttr="processing"
             onMouseEnter={() => {

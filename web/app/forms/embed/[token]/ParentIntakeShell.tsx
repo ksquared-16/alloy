@@ -53,6 +53,7 @@ export function IntakeFrame({
     packetName,
     previewBanner,
     contentClassName,
+    chrome = "full",
 }: {
     /**
      * The tenant's authored brand.
@@ -66,6 +67,11 @@ export function IntakeFrame({
     packetName?: string | null;
     previewBanner?: ReactNode;
     contentClassName?: string;
+    /**
+     * `none` when the form is shown INSIDE another page (an organization's site embeds it): that page
+     * already says who and where, so the frame's brand bar is redundant chrome. A standalone link keeps it.
+     */
+    chrome?: "full" | "none";
 }) {
     return (
         <div
@@ -74,6 +80,7 @@ export function IntakeFrame({
             data-participant-brand={brand ? "tenant" : "platform"}
         >
             {previewBanner}
+            {chrome === "none" ? null : (
             <header className="sticky top-0 z-10 border-b border-alloy-midnight/[0.07] bg-white/85 backdrop-blur-sm">
                 <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3 sm:px-6">
                     {brand?.logoUrl ? (
@@ -92,6 +99,7 @@ export function IntakeFrame({
                     </div>
                 </div>
             </header>
+            )}
             <main className={clsx("mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6 sm:pt-8", contentClassName)}>
                 {children}
             </main>

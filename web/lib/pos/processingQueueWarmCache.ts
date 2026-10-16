@@ -36,6 +36,8 @@ export interface ProcessingQueueWarmData {
     rows: ProcessingCaseQueueRow[];
     counts: Record<string, number>;
     recommendations: Record<string, QueueRecommendationSummary>;
+    /** NEW / UNWORKED rows (processingCaseAttention) — actionable, no operator decision yet. */
+    unworked: Record<string, true>;
 }
 
 export type ProcessingQueueWarmState = WarmCacheEntryState<ProcessingQueueWarmData>;
@@ -46,6 +48,7 @@ interface QueueResponse {
         next_cursor?: unknown;
         counts: Record<string, number>;
         recommendations?: Record<string, QueueRecommendationSummary>;
+        unworked?: Record<string, true>;
     };
 }
 
@@ -58,6 +61,7 @@ async function readQueue(queryString: string): Promise<ProcessingQueueWarmData> 
         rows: Array.isArray(body.data?.rows) ? body.data.rows : [],
         counts: body.data?.counts ?? {},
         recommendations: body.data?.recommendations ?? {},
+        unworked: body.data?.unworked ?? {},
     };
 }
 
@@ -74,11 +78,13 @@ async function readActionableCohort(): Promise<ProcessingQueueWarmData> {
     const bands = await Promise.all(processingActionableQueryStrings().map(readQueue));
     const byId = new Map<string, ProcessingCaseQueueRow>();
     const recommendations: Record<string, QueueRecommendationSummary> = {};
+    const unworked: Record<string, true> = {};
     for (const band of bands) {
         for (const row of band.rows) if (!byId.has(row.id)) byId.set(row.id, row);
         Object.assign(recommendations, band.recommendations);
+        Object.assign(unworked, band.unworked);
     }
-    return { rows: [...byId.values()], counts: bands[0]?.counts ?? {}, recommendations };
+    return { rows: [...byId.values()], counts: bands[0]?.counts ?? {}, recommendations, unworked };
 }
 
 const warmCache = createWarmCache<ProcessingQueueScope, ProcessingQueueWarmData>({
