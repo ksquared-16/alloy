@@ -201,6 +201,19 @@ export const PURPOSE_REGISTRY: readonly PurposeDefinition[] = [
         allowsUserAuthored: false,
         allowsExternalOperational: false,
     },
+    // --- workflow automation (send_communication_template) ------------------
+    // An org-configured automation sends a Template Library message to a record's person — e.g. the
+    // welcome SMS when an Enrollment lead is created. Platform-composed (the template), never free text.
+    {
+        key: "automated_family_message",
+        source: "workflows.automation",
+        audiences: EXTERNAL,
+        categories: OPS_TX,
+        channels: EXTERNAL_CHANNELS,
+        recipientKinds: ["person"],
+        allowsUserAuthored: false,
+        allowsExternalOperational: false,
+    },
     {
         key: "tour_coordination",
         source: "tours.comms_orchestrator",
