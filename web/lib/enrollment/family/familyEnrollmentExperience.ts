@@ -187,7 +187,8 @@ export function composeFamilyEnrollmentExperience(
         progress.push({
             key: "payment",
             label: "Payment",
-            detail: settled ? "Complete" : `${(f.collectibleNowCents / 100).toFixed(2)} due`,
+            // A fee that is not due yet is not "$0.00 due" — it is not due.
+            detail: settled ? "Complete" : f.state === "NOT_DUE" ? "Not due yet" : `${(f.collectibleNowCents / 100).toFixed(2)} due`,
             complete: settled,
         });
     }
