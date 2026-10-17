@@ -94,8 +94,12 @@ export async function realizeEnrollmentFeesForProcessInstance(
      * Read directly, by status. The progress resolver's session is the CURRENT one, and "current"
      * means in_progress: at the moment of completion the session has just become history, so it was
      * never there to read and the fee never came due (found in the H3-3 census; the H3-2 unit test
-     * had mocked the session the runtime does not see). The latest COMPLETED session for this journey
-     * is the milestone.
+     * had mocked the session the runtime does not see).
+     *
+     * The FIRST completed session is the milestone, not the latest. The day is part of the charge's
+     * idempotency key, so it must never move for a journey: a packet relaunched and completed again
+     * would otherwise yield a later day, a different key and a second fee. A new enrolment episode is
+     * a new process instance with sessions of its own, so it still gets a fee of its own.
      */
     const { data: sessionRows } = await supabase
         .from("form_packet_sessions")
@@ -103,7 +107,7 @@ export async function realizeEnrollmentFeesForProcessInstance(
         .eq("org_id", input.orgId)
         .eq("process_instance_id", input.processInstanceId)
         .eq("status", "completed")
-        .order("completed_at", { ascending: false })
+        .order("completed_at", { ascending: true })
         .limit(1);
     const session = ((sessionRows ?? []) as { status?: string | null; completed_at?: string | null }[])[0] ?? null;
     if (!session?.completed_at) return { status: "no_due_milestone" };
@@ -169,7 +173,7 @@ export async function sweepUnrealizedEnrollmentFees(
         .not("process_instance_id", "is", null)
         .gte("completed_at", since)
         .order("completed_at", { ascending: false })
-        .limit(opts.limit ?? 25);
+        .limit(opts.limit ?? 50);
     const rows = (data ?? []) as { org_id: string; process_instance_id: string }[];
     let realized = 0;
     let created = 0;
