@@ -35,6 +35,7 @@ import {
     type ParticipantDecisionInputIssue,
 } from "@/lib/lifecycle/applyParticipantDecisionInputs";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
+import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
 import {
     childParticipationIdentityFromWire,
     namesAChild,
@@ -252,7 +253,7 @@ export async function executeParticipantDecisionForChild(
         customerMemberId,
         opportunityId,
     });
-    const processInstanceId = journey.id;
+    let processInstanceId = journey.id;
     const affected: ParticipantDecisionAffected = {
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
@@ -272,6 +273,25 @@ export async function executeParticipantDecisionForChild(
             message: ambiguity.ok ? "More than one enrollment track matched." : ambiguity.failure.message,
             write_error: ambiguity.ok ? undefined : ambiguity.failure,
         };
+    }
+    if (!processInstanceId) {
+        /*
+         * THE DECISION IS THE CHILD'S FIRST PATH. A child gets an Enrollment journey when they first
+         * stand in a child-grain position, and at Decision no child has stood in one yet — so this
+         * refusal fired for every child added through Add Child or Create Lead, and no path could be
+         * chosen at all (deployed QA). The journey is begun by its one canonical creator, which
+         * resolves an existing one first and refuses an ambiguous child rather than guessing.
+         */
+        const track = await ensureChildEnrollmentTrack(input.supabase, {
+            orgId: input.orgId,
+            opportunityId,
+            customerMemberId,
+            opportunityCustomerMemberId: identity.legacyOcmId ?? null,
+        });
+        if (track.ok) {
+            processInstanceId = track.instanceId;
+            affected.process_instance_id = track.instanceId;
+        }
     }
     if (!processInstanceId) {
         // Caught here rather than at the write so the operator gets the real reason instead of a

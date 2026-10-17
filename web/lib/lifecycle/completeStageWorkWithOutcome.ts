@@ -46,7 +46,7 @@ import {
 } from "@/lib/lifecycle/childParticipationIdentity";
 import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import { deriveParticipantDecisionProgress } from "@/lib/lifecycle/projectParticipantDecisionRows";
-import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import { readFamilyDecisionParticipants } from "@/lib/lifecycle/listFamilyDecisionParticipants";
 import {
     TOUR_STILL_SCHEDULED_CODE,
     closeScheduledTour,
@@ -541,7 +541,9 @@ async function preflightParticipantResolutionGate(
     const familyCaseId = input.subject.opportunity_id;
     if (!familyCaseId) return { ok: true };
 
-    const read = await readEnrollmentInstancesForLead(input.supabase, {
+    // Every child on the lead, with or without a journey yet — the same participants the Decision
+    // surface shows, so the gate and the surface can never count different families.
+    const read = await readFamilyDecisionParticipants(input.supabase, {
         orgId: input.orgId,
         opportunityId: familyCaseId,
     });
@@ -555,7 +557,7 @@ async function preflightParticipantResolutionGate(
     }
 
     const progress = deriveParticipantDecisionProgress({
-        participants: read.rows.map((row) => ({ state: row.state?.trim() ?? null })),
+        participants: read.participants.map((p) => ({ state: p.state })),
         decisions,
     });
     if (progress.all_resolved) return { ok: true };
