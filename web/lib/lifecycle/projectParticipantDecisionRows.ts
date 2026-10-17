@@ -101,17 +101,25 @@ export function resolvedStatesForTemplate(
 function decisionForState(
     decisions: readonly StageWorkParticipantDecisionV1[],
     state: string | null,
+    /**
+     * The child's own stage. Two paths can share a disposition (Waitlist and Offer spot both leave the
+     * child `waitlisted`), so the stage the path moved them to is what tells them apart.
+     */
+    stageKey: string | null = null,
 ): StageWorkParticipantDecisionV1 | null {
     if (!state) return null;
-    return (
-        decisions.find((d) =>
-            d.targets.some(
-                (t) =>
-                    t.kind === "update_child_enrollment_status"
-                    && t.disposition_key?.trim() === state,
-            ),
-        ) ?? null
+    const byState = decisions.filter((d) =>
+        d.targets.some(
+            (t) => t.kind === "update_child_enrollment_status" && t.disposition_key?.trim() === state,
+        ),
     );
+    if (stageKey) {
+        const byStage = byState.find((d) =>
+            d.targets.some((t) => t.kind === "move_to_stage" && t.stage_key?.trim() === stageKey),
+        );
+        if (byStage) return byStage;
+    }
+    return byState[0] ?? null;
 }
 
 /**
@@ -224,7 +232,7 @@ export async function projectParticipantDecisionRows(params: {
             const customerMemberId = row.customer_member_id;
             const label = participantLabelFrom(memberNames, customerMemberId);
             const state = row.state;
-            const chosen = decisionForState(configured, state);
+            const chosen = decisionForState(configured, state, row.stage_key);
 
             const decisions: ParticipantDecisionOptionVM[] = visible.map((decision) => {
                 const stateTarget = decision.targets.find(

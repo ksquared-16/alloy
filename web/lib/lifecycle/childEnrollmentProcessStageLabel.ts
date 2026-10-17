@@ -101,6 +101,16 @@ export function resolveChildProcessStageLabel(args: {
     const fromStage = labelForStageKey(args.stageKey);
     if (fromStage) return fromStage;
 
+    /*
+     * A STAGE THE TEMPLATE NEVER NAMED IS STILL THE CHILD'S STAGE. The label table is the Enrollment
+     * template's stage list, so a stage a tenant configured (e.g. Offered) had no entry and the label
+     * fell through to the DISPOSITION — and an offered child, whose disposition is `waitlisted`, was
+     * shown as "Waitlist". The child's own stage is the truth; it is named from its key rather than
+     * replaced by a different fact.
+     */
+    const ownStage = args.stageKey?.trim();
+    if (ownStage) return ownStage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
     const disposition = args.dispositionKey?.trim().toLowerCase();
     if (disposition) {
         const fromDisposition = labelForStageKey(DISPOSITION_TO_STAGE_KEY[disposition]);

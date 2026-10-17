@@ -56,6 +56,9 @@ import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/en
 /** Stamped in provenance so a track born at a grain crossing is distinguishable from one Started. */
 export const CHILD_TRACK_BOOTSTRAP_SOURCE = "child_stage_entry" as const;
 
+/** A sibling's track begun, riding the family, because another child branched first. */
+export const CHILD_TRACK_SIBLING_SOURCE = "sibling_branched" as const;
+
 export type EnsureChildEnrollmentTrackResult =
     | {
           ok: true;
@@ -151,7 +154,61 @@ export async function ensureChildEnrollmentTrack(
     if (!created.id) {
         return { ok: false, error: "Could not begin this child's enrollment track." };
     }
+    if (opportunityId && created.reused !== true) {
+        await beginRidingTracksForSiblings(supabase, { orgId, opportunityId, exceptCustomerMemberId: customerMemberId });
+    }
     // `reused` means the bootstrap found the row rather than inserting it — a concurrent writer got
     // there first, which is success, not a collision.
     return { ok: true, instanceId: created.id, created: created.reused !== true };
+}
+
+/**
+ * WHEN THE FIRST CHILD BRANCHES, EVERY CHILD GETS A TRACK — AND STAYS WHERE IT IS.
+ *
+ * A family's position in a family-grain Work View (Decision) is read from its children's journeys:
+ * with no journeys the family's own stage decides; with any journey, only the journeys do. Children
+ * get a journey when they first stand in a child-grain stage, so the moment one child branched the
+ * others — still undecided, with no journey — stopped counting, and the family left Decision while
+ * a sibling still needed a path (deployed QA, two-child family).
+ *
+ * So the first branch begins a track for each sibling that has none, with no stage and no state: a
+ * riding track inherits the family's stage, which is exactly where the sibling already is. Nothing
+ * about any sibling's position or disposition changes; their position simply becomes countable.
+ *
+ * Best-effort: a sibling track that cannot be begun leaves that sibling exactly as before (riding
+ * the family with no journey), and must not refuse the operator's decision about another child.
+ */
+async function beginRidingTracksForSiblings(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string; exceptCustomerMemberId: string },
+): Promise<void> {
+    try {
+        const { data } = await supabase
+            .from("opportunity_customer_members")
+            .select("id, customer_member_id")
+            .eq("org_id", args.orgId)
+            .eq("opportunity_id", args.opportunityId);
+        for (const row of (data ?? []) as { id: string; customer_member_id: string | null }[]) {
+            const childId = row.customer_member_id?.trim();
+            if (!childId || childId === args.exceptCustomerMemberId) continue;
+            const existing = await resolveEnrollmentInstanceIdForScope(supabase, {
+                orgId: args.orgId,
+                opportunityId: args.opportunityId,
+                customerMemberId: childId,
+            });
+            if (existing.id || existing.ambiguous) continue;
+            await createEnrollmentProcessInstance(supabase, {
+                orgId: args.orgId,
+                subjectId: childId,
+                contextId: row.id,
+                contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+                acquisitionOpportunityId: args.opportunityId,
+                stageKey: null,
+                state: null,
+                source: CHILD_TRACK_SIBLING_SOURCE,
+            });
+        }
+    } catch (e) {
+        console.warn("[ensureChildEnrollmentTrack] sibling riding tracks not begun", e instanceof Error ? e.message : e);
+    }
 }

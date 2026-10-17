@@ -8,6 +8,11 @@
  * expected work and applicability. Carry-forward preserves operational_tasks.id.
  */
 
+import {
+    childOfStageWork,
+    stageWorkBelongsTo,
+    type StageWorkChildSubject,
+} from "@/lib/lifecycle/stageWorkChildSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cancelWorkInstance } from "@/lib/admin/operationalWork/operationalWorkService";
 import {
@@ -119,6 +124,8 @@ async function stampCarryForward(params: {
         entityId: params.opportunityId,
         workDefinitionKey: params.semanticWorkKey,
         templateKey: params.destinationTemplate.template_key,
+        // A child's work keeps its owner when it is carried to the child's next stage.
+        subjectChildId: childOfStageWork(md),
     });
 
     const nowIso = new Date().toISOString();
@@ -199,6 +206,12 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     departmentMetadata: Record<string, unknown>;
     /** Work already completed by the initiating outcome — reported as completed, never canceled. */
     initiatingWorkId?: string | null;
+    /**
+     * WHOSE position moved. A child's move reconciles that child's work only — never a sibling's, and
+     * never the family's — and the destination's entry work is created for that child. Absent for a
+     * family move, which reconciles family work only.
+     */
+    childSubject?: StageWorkChildSubject | null;
     now?: Date;
 }): Promise<ReconcileBusinessProcessWorkAcrossStageMoveResult> {
     const orgId = params.orgId.trim();
@@ -261,8 +274,17 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     }
 
     const claimedDestinationSemantics = new Set<string>();
-    const openBp = (openRows ?? []).filter((row) =>
-        isBusinessProcessStageWorkTaskRow(row as { metadata?: Record<string, unknown>; source?: string }),
+    /*
+     * SCOPED TO THE SUBJECT THAT MOVED. Every open Business Process item on the Opportunity used to be
+     * reconciled against the mover's destination, so one child's move cancelled the family's Decision
+     * work and a sibling's Offered work (deployed QA: Ava Offered → Enrolling closed the work Ben
+     * needed to record his family's answer). Only the mover's own work is the mover's to settle.
+     */
+    const moverChildId = params.childSubject?.customerMemberId?.trim() || null;
+    const openBp = (openRows ?? []).filter(
+        (row) =>
+            isBusinessProcessStageWorkTaskRow(row as { metadata?: Record<string, unknown>; source?: string })
+            && stageWorkBelongsTo((row as { metadata?: unknown }).metadata, moverChildId),
     );
 
     for (const row of openBp) {
@@ -391,6 +413,7 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
             departmentId: params.departmentId,
             template,
             departmentMetadata: params.departmentMetadata,
+            childSubject: params.childSubject ?? null,
             now: params.now,
         });
 

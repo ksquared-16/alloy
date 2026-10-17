@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
+import { stageWorkBelongsTo, stageWorkChildKeySegment } from "@/lib/lifecycle/stageWorkChildSubject";
 
 export type BusinessProcessWorkRuntimeFingerprintInput = {
     orgId: string;
@@ -26,6 +27,8 @@ export type BusinessProcessWorkRuntimeFingerprintInput = {
     templateKey?: string;
     /** Preferred semantic work key (platform work definition). */
     workDefinitionKey?: string;
+    /** The child this work belongs to, at a child stage. Absent for family work. */
+    subjectChildId?: string | null;
 };
 
 export type ParsedBusinessProcessWorkRuntimeFingerprint = {
@@ -72,7 +75,7 @@ export function buildBusinessProcessWorkRuntimeFingerprint(
     if (!orgId || !entityId || !semanticWorkKey) {
         throw new Error("BP runtime fingerprint requires orgId, entityId, and semantic work key");
     }
-    return `bpw:${orgId}:${entityType}:${entityId}:${semanticWorkKey}`;
+    return `bpw:${orgId}:${entityType}:${entityId}:${semanticWorkKey}${stageWorkChildKeySegment(input.subjectChildId ?? null)}`;
 }
 
 /**
@@ -132,6 +135,8 @@ export async function findOpenBusinessProcessWorkBySemanticIdentity(params: {
     entityId: string;
     workDefinitionKey?: string | null;
     templateKey?: string | null;
+    /** The child the work belongs to. A sibling's work, or family work, never matches a child request. */
+    subjectChildId?: string | null;
 }): Promise<OperationalTaskRow | null> {
     const orgId = params.orgId.trim();
     const entityType = params.entityType.trim() || "opportunities";
@@ -148,6 +153,7 @@ export async function findOpenBusinessProcessWorkBySemanticIdentity(params: {
         entityId,
         workDefinitionKey: params.workDefinitionKey ?? undefined,
         templateKey: params.templateKey ?? undefined,
+        subjectChildId: params.subjectChildId ?? null,
     });
 
     const byExact = await findOpenBusinessProcessWorkTask({
@@ -180,6 +186,7 @@ export async function findOpenBusinessProcessWorkBySemanticIdentity(params: {
             row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
                 ? (row.metadata as Record<string, unknown>)
                 : {};
+        if (!stageWorkBelongsTo(md, params.subjectChildId ?? null)) continue;
         const rowSemantic =
             resolveBusinessProcessSemanticWorkKey({
                 workDefinitionKey: trimOrNull(md.work_definition_key),
@@ -206,7 +213,8 @@ export function parseBusinessProcessWorkRuntimeFingerprint(
 
     if (fingerprint.startsWith("bpw:")) {
         const parts = fingerprint.split(":");
-        if (parts.length !== 5) return null;
+        // A child's work carries a trailing `:child:<id>` segment.
+        if (parts.length !== 5 && !(parts.length === 7 && parts[5] === "child")) return null;
         const semanticWorkKey = parts[4]!;
         return {
             orgId: parts[1]!,

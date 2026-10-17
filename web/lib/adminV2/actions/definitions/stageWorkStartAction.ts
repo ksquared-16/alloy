@@ -349,6 +349,8 @@ export const stageWorkStartAction: RegisteredAction = {
             departmentId: resolution.departmentId,
             template: resolution.template,
             departmentMetadata: resolution.departmentMetadata,
+            // Started for one child at a child stage: that child's own work.
+            childSubject: { customerMemberId: resolution.customerMemberId },
         });
 
         if (result.status === "rejected") {

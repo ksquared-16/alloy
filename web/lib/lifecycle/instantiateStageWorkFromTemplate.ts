@@ -20,6 +20,7 @@ import {
     resolveFollowUpWorkDueAt,
     type StageFollowUpWorkDuePolicyV1,
 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import { stageWorkChildMetadata, type StageWorkChildSubject } from "@/lib/lifecycle/stageWorkChildSubject";
 import {
     RECORD_TOUR_OUTCOME_WORK_DEFINITION_KEY,
     readActiveTourBooking,
@@ -62,6 +63,11 @@ export async function instantiateStageWorkFromTemplate(params: {
     scheduledEventStartAt?: string | null;
     stageEnteredAt?: string | null;
     fieldValueAt?: string | null;
+    /**
+     * The child this work belongs to, when it is created for a child at a child stage. Each sibling
+     * then gets their own item; omitted for family work, whose identity is unchanged.
+     */
+    childSubject?: StageWorkChildSubject | null;
     now?: Date;
 }): Promise<InstantiateStageWorkFromTemplateResult> {
     const templateKey = params.template.template_key.trim();
@@ -84,12 +90,14 @@ export async function instantiateStageWorkFromTemplate(params: {
     }
 
     const workDefinitionKey = resolvedDefinition.work_definition_key;
+    const subjectChildId = params.childSubject?.customerMemberId?.trim() || null;
     const bpRuntimeFingerprint = buildBusinessProcessWorkRuntimeFingerprint({
         orgId,
         entityType: "opportunities",
         entityId: opportunityId,
         workDefinitionKey,
         templateKey,
+        subjectChildId,
     });
 
     const existingBpTask = await findOpenBusinessProcessWorkBySemanticIdentity({
@@ -99,6 +107,7 @@ export async function instantiateStageWorkFromTemplate(params: {
         entityId: opportunityId,
         workDefinitionKey,
         templateKey,
+        subjectChildId,
     });
     if (existingBpTask?.id) {
         return { status: "deduped", work_id: existingBpTask.id, reason: "bp_runtime_fingerprint" };
@@ -109,11 +118,13 @@ export async function instantiateStageWorkFromTemplate(params: {
         opportunityId,
         stageKey,
         workIntentKey: templateKey,
+        subjectChildId,
     });
     const subjectFingerprint = buildLifecycleIntentSubjectFingerprint({
         orgId,
         opportunityId,
         stageKey,
+        subjectChildId,
     });
 
     let dueAtOverride: string | undefined;
@@ -158,7 +169,7 @@ export async function instantiateStageWorkFromTemplate(params: {
             departmentId: params.departmentId,
             attemptCount: 0,
             bpRuntimeFingerprint,
-            extra: { work_definition_key: workDefinitionKey },
+            extra: { work_definition_key: workDefinitionKey, ...stageWorkChildMetadata(params.childSubject) },
         }),
         resolveParams: {
             departmentMetadata: params.departmentMetadata ?? null,
