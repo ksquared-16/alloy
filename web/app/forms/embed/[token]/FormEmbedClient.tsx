@@ -21,6 +21,7 @@ import {
 } from "@/lib/enrollment/participantRuntime/participantUploadRequests";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
+import { withListedFieldsShown } from "@/lib/forms/submissionSemantics";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { outstandingRequiredCollections } from "@/lib/forms/validateSubmission";
@@ -178,11 +179,16 @@ function reviewControlSubSchema(
             const words = participantLabels.get(f.id) ?? null;
             return { ...f, label: words ?? UNNAMED_SOURCE_CONTROL_LABEL } as FormField;
         });
-    return {
-        ...sub,
-        fields: relabel(sub.fields as FormField[]),
-        sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })),
-    };
+    /* Visibility was decided over the whole form by the compiled artifact that listed these controls;
+       it cannot be re-decided inside a schema that lacks the questions it depends on. */
+    return withListedFieldsShown(
+        {
+            ...sub,
+            fields: relabel(sub.fields as FormField[]),
+            sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })),
+        },
+        fieldIds,
+    );
 }
 
 /**
