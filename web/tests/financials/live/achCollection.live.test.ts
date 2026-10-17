@@ -125,7 +125,10 @@ async function postCharge(client: SupabaseClient, amountCents: number): Promise<
         .insert({
             org_id: ORG, billable_source_type: "enrollment_agreement", billable_source_id: AGREEMENT,
             charge_type: "service", charge_category: "tuition", status: "draft",
-            amount_cents: amountCents, currency_code: "USD", service_date: TODAY, occurs_on: TODAY,
+            amount_cents: amountCents, currency_code: "USD",
+            // A childcare charge names its billing period (charges_billing_period_childcare_chk); the legacy shape needs no period row.
+            billing_period_generation: "legacy", legacy_billing_period_key: new Date().toISOString().slice(0, 7),
+            service_date: TODAY, occurs_on: TODAY,
             billable_on: TODAY, description: "8C ACH certification", created_by: ACTOR, updated_by: ACTOR,
         })
         .select("id").single();
