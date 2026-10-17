@@ -664,9 +664,18 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         visibleOpportunityIdsRef.current = visibleOpportunityIds;
     }, [visibleOpportunityIds]);
 
+    /*
+     * THE SUBJECT MAY HAVE LEFT THE LENS. A lifecycle move can carry the record the operator is on
+     * out of the active Work View (Tour → Decision leaves Tours). Re-preparing at SUBJECT scope then
+     * asks the server for a subject it honestly refuses (`subject_unavailable`), and the surface lost
+     * its counts and KPIs until a reload. Remembered here so the commit below can fall back to the
+     * lens — the record's own Work View is one pill away.
+     */
+    const truthMovedSubjectRef = useRef<string | null>(null);
     const recommitForTruthMovement = useCallback(() => {
         const current = kernel.attention.get();
         if (!current) return;
+        truthMovedSubjectRef.current = current.subject ? JSON.stringify(current.subject) : null;
         /*
          * TRUTH MOVED — NOTHING PREWARMED BEFORE IT MAY ANSWER FOR IT. The re-prepare below reads the
          * URL-keyed provisioning prefetch first; a row hover or neighbour prewarm from before the
@@ -696,6 +705,20 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             source: "command",
         });
     }, [kernel]);
+
+    useEffect(() => {
+        const snapshot = focus.current?.snapshot as { terminal?: string; code?: string } | undefined;
+        if (!truthMovedSubjectRef.current || !snapshot) return;
+        if (snapshot.terminal === "error" && snapshot.code === "subject_unavailable") {
+            truthMovedSubjectRef.current = null;
+            const current = kernel.attention.get();
+            if (current?.lens) {
+                kernel.attention.move({ scope: ATTENTION_SCOPE.LENS, lens: current.lens, source: "command" });
+            }
+            return;
+        }
+        if (snapshot.terminal) truthMovedSubjectRef.current = null;
+    }, [focus.current, kernel]);
 
     // Each projection is decided INDEPENDENTLY by the existing policy: a signal that moves a count
     // must not be allowed to imply a row refetch, and vice versa. The wiring lives in
