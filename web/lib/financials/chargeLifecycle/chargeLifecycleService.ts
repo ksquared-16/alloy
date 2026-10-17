@@ -81,6 +81,18 @@ export type SimulateArgs = {
      * behaving exactly as before.
      */
     billableSource?: { type: "enrollment_agreement" | "customer"; id: string } | null;
+    /**
+     * THE CHILD a household charge is for, when it is for one.
+     *
+     * A per-child fee can fall due before the child has an agreement (a registration fee owed when
+     * the paperwork is done). The household is then the billable source — Financials' own answer for
+     * pre-enrolment charges — but two siblings falling due on the same day must stay two charges. The
+     * subject narrows the idempotency key to the child and is recorded on the charge, so the
+     * obligation can be found, explained and corrected per child. The payer is still the household.
+     *
+     * Ignored for an agreement source: an agreement already belongs to one child.
+     */
+    subjectCustomerMemberId?: string | null;
     occursDate?: string | null;
     eventDate?: string | null;
     servicePeriodStart?: string | null;
@@ -265,6 +277,18 @@ function createdOnOf(existing: ChargeLifecycleRow | null, today: string): string
     return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today;
 }
 
+/** The child a household charge is for — only ever a household (customer) source's narrowing. */
+function subjectOf(args: Pick<SimulateArgs, "billableSource" | "subjectCustomerMemberId">): string | null {
+    const child = typeof args.subjectCustomerMemberId === "string" ? args.subjectCustomerMemberId.trim() : "";
+    return child && args.billableSource?.type === "customer" ? child : null;
+}
+
+/** The idempotency scope: the billable source, narrowed to the child when a household charge is for one. */
+function scopeKeyFor(source: { type: string; id: string }, subjectCustomerMemberId: string | null | undefined): string {
+    const child = typeof subjectCustomerMemberId === "string" ? subjectCustomerMemberId.trim() : "";
+    return source.type === "customer" && child ? `${source.id}:child:${child}` : source.id;
+}
+
 /** Resolve a Charge intent + idempotency status for a template/context. No write. */
 export async function previewTemplateCharge(
     supabase: SupabaseClient,
@@ -325,7 +349,7 @@ async function resolveTemplateCharge(
          * families' registration fees resolved to the same key on the same day. Scoping to the
          * source id makes the key mean what it says — this template, this date, this payer.
          */
-        scopeKey: source?.id ?? "org",
+        scopeKey: source?.id ? scopeKeyFor(source, args.subjectCustomerMemberId) : "org",
     });
 
     let existing: ChargeLifecycleRow | null = null;
@@ -497,6 +521,7 @@ export async function writeTemplateDraftCharge(
         review_required: intent.reviewRequired,
         lifecycle_status: intent.lifecycleStatus,
         source: "charge_template",
+        ...(subjectOf(args) ? { subject_customer_member_id: subjectOf(args) } : {}),
         /* How every date on this charge was reached, so it can be explained without re-resolving. */
         ...(chain ? { charge_dates: chargeDateProvenance(chain) } : {}),
     });
