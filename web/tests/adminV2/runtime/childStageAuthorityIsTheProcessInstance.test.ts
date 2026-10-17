@@ -377,3 +377,39 @@ describe("the child overlay carries the child's operational projection, never th
         expect(overlaid.context.operationalProjection).toBeNull();
     });
 });
+
+/**
+ * ANOTHER FAMILY'S ACTIVITY IS NEVER THIS CHILD'S "LAST ACTION".
+ *
+ * Deployed: Family C's Ava showed "Ava ZZQA1467FAMB moved to Enrolling". Storage attributes that event
+ * to FAMB alone (census); the panel was still holding FAMB's settled family model when it overlaid
+ * Ava's mission, and the Process card read FAMB's activity under Ava's name.
+ */
+describe("the child overlay never carries another family's settled truth", () => {
+    const withActivity = () => {
+        const m = settledModel("enrolling");
+        const ctx = m.context as unknown as { truth: Record<string, unknown> };
+        ctx.truth = { ...ctx.truth, _activity_timeline_events: [{ id: "famb-event", summary: "Ava ZZQA1467FAMB moved to Enrolling" }] };
+        (m as unknown as { cardReadiness: Map<string, string> }).cardReadiness = new Map([["household", "ready"], ["workflow_history", "ready"]]);
+        return m;
+    };
+    const commitForFamily = (familyId: string) => {
+        const c = childCommit({ situationStageKey: "enrolling" }) as unknown as { subjectIdentityTruth: Record<string, unknown> };
+        c.subjectIdentityTruth = { ...c.subjectIdentityTruth, "child.family_opportunity_id": familyId };
+        return c as unknown as FocusPanelCommitCriticalInput;
+    };
+
+    it("settled model of ANOTHER family: its activity is dropped and its family cards are held", () => {
+        const overlaid = overlayChildMissionOntoSettledFocusModel(withActivity(), commitForFamily("opp-OTHER"));
+        expect((overlaid.context.truth as Record<string, unknown>)._activity_timeline_events).toBeUndefined();
+        expect(overlaid.cardReadiness.get("household")).toBe("reserved");
+        expect(overlaid.cardReadiness.get("workflow_history")).toBe("reserved");
+        expect(overlaid.cardReadiness.get("current_work")).toBe("ready");
+    });
+
+    it("settled model of THIS child's family: the family's activity stays", () => {
+        const overlaid = overlayChildMissionOntoSettledFocusModel(withActivity(), commitForFamily("opp-1"));
+        expect((overlaid.context.truth as Record<string, unknown>)._activity_timeline_events).toBeDefined();
+        expect(overlaid.cardReadiness.get("household")).toBe("ready");
+    });
+});
