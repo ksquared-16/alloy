@@ -27,6 +27,7 @@ import { createChargeTemplate } from "@/lib/financials/chargeTemplates/chargeTem
 import { writeTemplateDraftCharge } from "@/lib/financials/chargeLifecycle/chargeLifecycleService";
 import { recordAndApplyChildcarePayment } from "@/lib/financials/childcarePaymentService";
 import {
+    findEpisodeFeeChargeId,
     resolveEnrollmentFeeObligations,
     reverseEnrollmentFeeObligation,
 } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
@@ -88,7 +89,7 @@ const template = (templateKey: string, amountCents: number) =>
         effectiveStart: "2020-01-01",
     } as never);
 
-const resolveFee = (templateKey: string, children: { customerMemberId: string; agreementId: string | null }[]) =>
+const resolveFee = (templateKey: string, children: { customerMemberId: string; agreementId: string | null }[], dueOn = TODAY) =>
     resolveEnrollmentFeeObligations(supabase, {
         orgId: ORG,
         requirementId: `fee_${templateKey}`,
@@ -96,7 +97,7 @@ const resolveFee = (templateKey: string, children: { customerMemberId: string; a
         scope: "each_child",
         customerId: HOUSEHOLD,
         enrollingChildren: children,
-        dueOn: TODAY,
+        dueOn,
         actorUserId: ACTOR,
     });
 
@@ -255,4 +256,34 @@ describe.skipIf(!env)("registration fee lifecycle — live", () => {
         expect(forChild.position?.outstandingCents).toBe(10000);
         expect(forSibling.reversedByChargeId).toBeTruthy();
     });
+
+    it("7 — a later due day in the same episode (relaunch, billing-day change) finds the same fee", async () => {
+        const before = (await chargesFor(FEE_KEY)).length;
+        const r = await resolveFee(FEE_KEY, [{ customerMemberId: CHILD, agreementId: null }], addDays(TODAY, -3));
+        expect(r.outcomes.map((o) => o.status)).toEqual(["unchanged"]);
+        expect((await chargesFor(FEE_KEY)).length).toBe(before);
+    });
+
+    it("8 — a reversed fee is never re-billed in its episode", async () => {
+        // SIBLING's fee was reversed in test 6; replaying its completion writes nothing new.
+        const before = (await chargesFor(FEE_KEY)).filter((r) => r.metadata.subject_customer_member_id === SIBLING).length;
+        const r = await resolveFee(FEE_KEY, [{ customerMemberId: SIBLING, agreementId: null }]);
+        expect(r.outcomes.map((o) => o.status)).toEqual(["unchanged"]);
+        expect((await chargesFor(FEE_KEY)).filter((r) => r.metadata.subject_customer_member_id === SIBLING).length).toBe(before);
+    });
+
+    it("9 — a fee from an EARLIER episode never counts as a later episode's fee", async () => {
+        // Real due days are completions (today or earlier), so a later episode is represented by its
+        // later due day: the guard must not see this episode's fee, dated before it, as that one's.
+        const later = addDays(TODAY, 30);
+        expect(await findEpisodeFeeChargeId(supabase, { orgId: ORG, customerId: HOUSEHOLD, subjectCustomerMemberId: CHILD, chargeTemplateKey: FEE_KEY, dueOn: later })).toBeNull();
+        const same = await findEpisodeFeeChargeId(supabase, { orgId: ORG, customerId: HOUSEHOLD, subjectCustomerMemberId: CHILD, chargeTemplateKey: FEE_KEY, dueOn: TODAY });
+        expect(same?.id).toBeTruthy();
+    });
 });
+
+function addDays(ymd: string, days: number): string {
+    const d = new Date(`${ymd}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}

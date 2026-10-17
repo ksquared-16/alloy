@@ -198,6 +198,44 @@ export async function findAgreementFeeChargeId(
 }
 
 /**
+ * THIS CHILD'S FEE FOR THIS EPISODE, whatever key it was written under.
+ *
+ * The idempotency key carries the charge's occurs-on day, and that day is resolved by Financials
+ * (template strategy, billing calendar). A change to that configuration between the completion and a
+ * replay would yield a different key — and a second fee. So before writing, a live (non-void) charge
+ * for this household, this child and this template dated ON OR AFTER the episode's due day is the
+ * same obligation. Last year's fee is dated before this episode's due day and never blocks it. A
+ * reversed fee is still found: a correction is Financials' answer, and Enrollment never re-bills it.
+ */
+export async function findEpisodeFeeChargeId(
+    supabase: SupabaseClient,
+    args: {
+        readonly orgId: string;
+        readonly customerId: string;
+        readonly subjectCustomerMemberId: string;
+        readonly chargeTemplateKey: string;
+        readonly dueOn: string;
+    },
+): Promise<{ id: string; posted: boolean; resolutionKey: string } | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .select("id, status, occurs_on, metadata")
+        .eq("org_id", args.orgId)
+        .eq("billable_source_type", "customer")
+        .eq("billable_source_id", args.customerId)
+        .eq("metadata->>charge_template_key", args.chargeTemplateKey)
+        .eq("metadata->>subject_customer_member_id", args.subjectCustomerMemberId)
+        .gte("occurs_on", args.dueOn.slice(0, 10));
+    if (error) throw new Error(`enrollment fee charges could not be read (${error.message.trim()})`);
+    const row = ((data ?? []) as { id: string; status: string | null; metadata: Record<string, unknown> | null }[]).find(
+        (r) => r.status !== "void",
+    );
+    if (!row) return null;
+    const key = (row.metadata ?? {}).resolution_key;
+    return { id: row.id, posted: row.status === "posted", resolutionKey: typeof key === "string" ? key : "" };
+}
+
+/**
  * Create (or reuse) exactly the obligations this fee requirement intends. Idempotent.
  */
 export async function resolveEnrollmentFeeObligations(
@@ -228,6 +266,26 @@ export async function resolveEnrollmentFeeObligations(
                     subjectCustomerMemberId,
                     billableSource: { type: "enrollment_agreement", id: legacyAgreementId },
                     posted: prior.posted,
+                });
+                continue;
+            }
+        }
+        if (source.type === "customer" && subjectCustomerMemberId) {
+            const sameEpisode = await findEpisodeFeeChargeId(supabase, {
+                orgId: input.orgId,
+                customerId: source.id,
+                subjectCustomerMemberId,
+                chargeTemplateKey: input.chargeTemplateKey,
+                dueOn: input.dueOn,
+            });
+            if (sameEpisode) {
+                outcomes.push({
+                    status: "unchanged",
+                    chargeId: sameEpisode.id,
+                    resolutionKey: sameEpisode.resolutionKey,
+                    subjectCustomerMemberId,
+                    billableSource: source,
+                    posted: sameEpisode.posted,
                 });
                 continue;
             }

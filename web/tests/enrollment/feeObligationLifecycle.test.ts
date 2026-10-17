@@ -14,7 +14,7 @@ vi.mock("@/lib/enrollment/financial/resolveEnrollmentFeeObligations", async (ori
     resolveEnrollmentFeeObligations: (...a: unknown[]) => resolveFee(...a),
 }));
 
-import { realizeEnrollmentFeesForProcessInstance, calendarDayIn } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
+import { realizeEnrollmentFeesForProcessInstance, calendarDayIn, sweepUnrealizedEnrollmentFees } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
 import { currentTemplateForKey, financialRequirementRefusals } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
 import { parseStageRequirementsV1 } from "@/lib/lifecycle/stageRequirementsV1";
 
@@ -25,14 +25,17 @@ const FEE = parseStageRequirementsV1({
     ],
 })!.requirements;
 
-function fakeSupabase(rows: Record<string, Record<string, unknown> | null>) {
+function fakeSupabase(rows: Record<string, Record<string, unknown> | Record<string, unknown>[] | null>) {
     return {
         from: (table: string) => {
             const q = {
                 select: () => q,
                 eq: () => q,
-                limit: async () => ({ data: rows[table] ? [rows[table]] : [], error: null }),
-                maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
+                not: () => q,
+                gte: () => q,
+                order: () => q,
+                limit: async () => ({ data: Array.isArray(rows[table]) ? rows[table] : rows[table] ? [rows[table]] : [], error: null }),
+                maybeSingle: async () => ({ data: (Array.isArray(rows[table]) ? (rows[table] as unknown[])[0] : rows[table]) ?? null, error: null }),
             };
             return q;
         },
@@ -41,7 +44,7 @@ function fakeSupabase(rows: Record<string, Record<string, unknown> | null>) {
 
 function journey(outstanding: number, opts: { completedAt?: string | null; state?: string } = {}) {
     progress.mockImplementation(async (_s: unknown, input: { captureLoaded?: (l: unknown) => void }) => {
-        input.captureLoaded?.({ session: { id: "sess-1" }, items: [], formBySessionItem: new Map(), subjectId: "child-1", requirements: FEE });
+        input.captureLoaded?.({ session: null, items: [], formBySessionItem: new Map(), subjectId: "child-1", requirements: FEE });
         return {
             ok: true,
             value: {
@@ -68,6 +71,11 @@ beforeEach(() => {
 });
 
 describe("the fee becomes a charge at the child's milestone, once", () => {
+    /*
+     * As production sees it: at completion the session is no longer CURRENT (in_progress), so the
+     * progress resolver hands back no session. The milestone is the journey's latest COMPLETED
+     * session, read directly — the H3-2 version read the current one and never came due.
+     */
     it("is not charged while other paperwork is outstanding", async () => {
         const r = await realizeEnrollmentFeesForProcessInstance(journey(1), { orgId: "org", processInstanceId: "pi-1" });
         expect(r).toEqual({ status: "not_due", outstanding: 1 });
@@ -132,5 +140,40 @@ describe("a financial requirement must name a template Financials has", () => {
         expect(financialRequirementRefusals(reqs("registration_fee"), templates)).toEqual([]);
         expect(financialRequirementRefusals(reqs("old_fee"), templates)[0]?.detail).toMatch(/No active charge template "old_fee"/);
         expect(financialRequirementRefusals(reqs("typo_fee"), templates)).toHaveLength(1);
+    });
+});
+
+
+describe("the recovery sweep re-asks the same writer, and is safe to repeat", () => {
+    const sessions = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({ org_id: "org", process_instance_id: `pi-${i}`, status: "completed", completed_at: "2026-09-02T05:30:00.000Z" }));
+    const withSessions = (n: number, state = "enrolling", outstanding = 0) => {
+        journey(outstanding, { state });
+        return fakeSupabase({
+            process_instances: { state },
+            form_packet_sessions: sessions(n),
+            customer_members: { customer_id: "hh-1" },
+            child_enrollment_agreements: null,
+        });
+    };
+
+    it("creates a missed fee through the realizer, once", async () => {
+        resolveFee.mockResolvedValueOnce({ templateResolved: true, resolvesToZero: false, outcomes: [{ status: "created", chargeId: "c1" }] });
+        const r = await sweepUnrealizedEnrollmentFees(withSessions(1));
+        expect(r).toEqual({ examined: 1, realized: 1, created: 1, failed: 0 });
+        expect(resolveFee).toHaveBeenCalledTimes(1);
+        expect((resolveFee.mock.calls[0]![1] as { dueOn: string }).dueOn).toBe("2026-09-01");
+    });
+
+    it("a repeated sweep finds the existing charge and creates nothing", async () => {
+        resolveFee.mockResolvedValue({ templateResolved: true, resolvesToZero: false, outcomes: [{ status: "skipped_posted", chargeId: "c1" }] });
+        const r = await sweepUnrealizedEnrollmentFees(withSessions(1));
+        expect(r.created).toBe(0);
+    });
+
+    it("skips a withdrawn journey and a journey whose fee is not yet due", async () => {
+        expect((await sweepUnrealizedEnrollmentFees(withSessions(1, "withdrawn"))).realized).toBe(0);
+        expect((await sweepUnrealizedEnrollmentFees(withSessions(1, "enrolling", 1))).realized).toBe(0);
+        expect(resolveFee).not.toHaveBeenCalled();
     });
 });

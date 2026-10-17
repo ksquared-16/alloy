@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ensureScheduledWorkConsumersRegistered } from "@/lib/scheduledWork/scheduledWorkConsumers";
 import { runScheduledWorkWake } from "@/lib/scheduledWork/scheduledWorkRuntime";
 import { sweepPendingContactAttempts } from "@/lib/communications/contactAttemptOnProviderAcceptance";
+import { sweepUnrealizedEnrollmentFees } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,20 @@ async function wake(): Promise<NextResponse> {
         } catch {
             contactAttemptsAssociated = 0;
         }
-        return NextResponse.json({ ok: true, ...result, contact_attempts_associated: contactAttemptsAssociated });
+        // Backstop for Enrollment fees: a completed child packet whose fee did not become a charge at
+        // completion (a transient failure there is logged, never a failed submit). Same idempotent writer.
+        let enrollmentFees: Awaited<ReturnType<typeof sweepUnrealizedEnrollmentFees>> | null = null;
+        try {
+            enrollmentFees = await sweepUnrealizedEnrollmentFees(supabase);
+        } catch {
+            enrollmentFees = null;
+        }
+        return NextResponse.json({
+            ok: true,
+            ...result,
+            contact_attempts_associated: contactAttemptsAssociated,
+            enrollment_fees: enrollmentFees,
+        });
     } catch (err) {
         const message = err instanceof Error ? err.message : "wake failed";
         return NextResponse.json({ ok: false, error: "WAKE_FAILED", message }, { status: 500 });
