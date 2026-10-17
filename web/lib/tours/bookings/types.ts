@@ -105,4 +105,6 @@ export type CancelTourBookingInput = {
     canceledBy: string;
     cancelReason?: string | null;
     correlationId?: string | null;
+    /** Set when a terminal Tour outcome closed this booking; carried on the lifecycle event. */
+    closedByOutcome?: { outcome_key: string | null; outcome_label: string } | null;
 };

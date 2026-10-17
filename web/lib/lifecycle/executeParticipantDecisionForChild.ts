@@ -36,6 +36,7 @@ import {
 } from "@/lib/lifecycle/applyParticipantDecisionInputs";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
 import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
+import { recordParticipantDecisionActivity } from "@/lib/lifecycle/recordBusinessActivity";
 import {
     childParticipationIdentityFromWire,
     namesAChild,
@@ -518,6 +519,25 @@ export async function executeParticipantDecisionForChild(
             transaction,
         };
     }
+
+    // The operator's action, in Activity: "Offer spot · Ava · Toddler room". The status and stage
+    // lines this decision wrote are folded into it by the activity normalizer.
+    await recordParticipantDecisionActivity({
+        supabase: input.supabase,
+        orgId: input.orgId,
+        opportunityId,
+        userId: input.userId,
+        stageKey: input.stageKey,
+        decisionKey,
+        decisionLabel: decision.label?.trim() || decisionKey,
+        answers: bound.answers,
+        child: {
+            customerMemberId,
+            opportunityCustomerMemberId: identity.legacyOcmId ?? null,
+            childDisplayName: input.participantLabel ?? null,
+        },
+        correlationId: transaction.correlation_id,
+    });
 
     return {
         ok: true,

@@ -83,9 +83,12 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                 });
 
                 dispatchOpportunityDrawerOperationalTasksRefresh(opportunityId);
-                if (result.queue_refresh_opportunity_id) {
-                    dispatchOpportunityQueueUpdated(result.queue_refresh_opportunity_id, "stage_work_outcome");
-                }
+                // Always: a child subject's outcome can carry no refresh id, and then nothing told the
+                // Work View list that membership moved. The family being worked on is the scope.
+                dispatchOpportunityQueueUpdated(
+                    result.queue_refresh_opportunity_id ?? opportunityId,
+                    "stage_work_outcome",
+                );
                 await reloadOpportunityDisplayVm();
                 return result;
             } catch (e: unknown) {

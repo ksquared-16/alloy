@@ -151,14 +151,18 @@ export async function closeScheduledTour(input: {
     actorUserId: string;
     plan: Extract<ScheduledTourClosePlan, { kind: "close" }>;
     outcomeLabel: string;
+    outcomeKey?: string | null;
     correlationId?: string | null;
 }): Promise<TourBookingRow> {
     const { cancelTourBooking, markTourBookingCompleted } = await import("@/lib/tours/bookings/tourBookingService");
     const bookingId = input.plan.booking.id;
+    // Named on the booking's lifecycle event, so Activity tells the outcome — not "Tour cancelled".
+    const closedByOutcome = { outcome_key: input.outcomeKey ?? null, outcome_label: input.outcomeLabel };
     if (input.plan.mode === "complete") {
         return markTourBookingCompleted(input.supabase, input.orgId, bookingId, {
             actorUserId: input.actorUserId,
             correlationId: input.correlationId ?? null,
+            closedByOutcome,
         });
     }
     const row = await cancelTourBooking(input.supabase, input.orgId, bookingId, {
@@ -166,6 +170,7 @@ export async function closeScheduledTour(input: {
         cancelReason: `Closed by outcome: ${input.outcomeLabel}`,
         correlationId: input.correlationId ?? null,
         deferLifecycleComms: true,
+        closedByOutcome,
     });
     const { cancelPendingTourSchedulingRemindersForBooking } = await import(
         "@/lib/tours/comms/tourSchedulingScheduledSends"

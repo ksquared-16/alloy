@@ -3,6 +3,7 @@
  * payload.opportunity_id when they are not emitted on entity_type=opportunities.
  */
 
+import { collapseBusinessEventMechanics } from "@/lib/admin/collapseBusinessEventMechanics";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -113,7 +114,7 @@ export async function loadOpportunityActivityEvents(params: {
         orgId,
         rows: merged,
     });
-    return collapseTourActivityDuplicates(enriched).slice(0, limit);
+    return collapseBusinessEventMechanics(collapseTourActivityDuplicates(enriched)).slice(0, limit);
 }
 
 /**

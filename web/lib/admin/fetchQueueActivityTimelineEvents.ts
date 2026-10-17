@@ -3,6 +3,7 @@
  * Shape matches `resolveLayoutRuntimeActivityTimeline` raw event rows.
  */
 
+import { collapseBusinessEventMechanics } from "@/lib/admin/collapseBusinessEventMechanics";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -141,7 +142,7 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
             maxPerEntity * 2,
         );
         for (const [entityId, events] of grouped) {
-            out.set(entityId, collapseTourActivityDuplicates(events).slice(0, maxPerEntity));
+            out.set(entityId, collapseBusinessEventMechanics(collapseTourActivityDuplicates(events)).slice(0, maxPerEntity));
         }
     }
 

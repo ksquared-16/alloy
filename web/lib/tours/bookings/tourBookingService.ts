@@ -768,6 +768,7 @@ export async function cancelTourBooking(
                 previous_status_key: prior.status_key,
                 previous_start_at: prior.start_at,
                 previous_end_at: prior.end_at,
+                ...(input.closedByOutcome ? { closed_by_outcome: input.closedByOutcome } : {}),
             },
         }),
         comms: (row) =>
@@ -784,7 +785,12 @@ export async function markTourBookingCompleted(
     supabase: SupabaseClient,
     orgId: string,
     bookingId: string,
-    opts?: { correlationId?: string | null; actorUserId?: string | null }
+    opts?: {
+        correlationId?: string | null;
+        actorUserId?: string | null;
+        /** Set when a terminal Tour outcome closed this booking; carried on the lifecycle event. */
+        closedByOutcome?: { outcome_key: string | null; outcome_label: string } | null;
+    }
 ): Promise<TourBookingRow> {
     return runTourBookingLifecycleTransition({
         supabase,
@@ -814,7 +820,10 @@ export async function markTourBookingCompleted(
         }),
         lifecycleEvent: (_row, existing) => ({
             key: "tour_completed",
-            previous: { previous_status_key: existing.status_key },
+            previous: {
+                previous_status_key: existing.status_key,
+                ...(opts?.closedByOutcome ? { closed_by_outcome: opts.closedByOutcome } : {}),
+            },
         }),
         comms: (row) => ({
             label: "complete",

@@ -40,6 +40,11 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     // membership classification is required for off-screen / cross-lane refetch + pill counts.
     "waitlist_child",
     "move_to_waitlist",
+    // A per-child Decision path (Offer spot, Waitlist, Begin Enrolling, Not Enrolling) moves that
+    // child between child-grain lanes (Offers, Waitlist, Registration) and can move the family in or
+    // out of Decision. The event id is the family; those rows are process instances, so without
+    // membership classification nothing on a child lane ever matched and the list stayed stale.
+    "participant_decision",
     // Records/Operations child mutations. Neither has an Opportunity subject, so both broadcast —
     // but both change what derived surfaces COUNT: `child.add` adds a durable child, and
     // `enrollment.start` creates a journey and its participant packet. Listed here so listeners

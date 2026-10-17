@@ -34,6 +34,12 @@ export type ActivityTimelineEntry = {
     atSortKey: number;
     source: "direct" | "related";
     relatedScope?: ActivityTimelineRelatedScope;
+    /**
+     * A row that is not something anyone DID: a delivery state (queued / delivered / failed) or a
+     * notification sent as the consequence of another action. Shown on the timeline; never chosen as
+     * the Last action.
+     */
+    notAnAction?: boolean;
 };
 
 type RawActivityEventRow = {
@@ -70,6 +76,7 @@ const WORKFLOW_EVENT_TYPE_TO_CATEGORY: Record<string, ActivityTimelineEventType>
     note_added: "notes",
     action_executed: "tasks_work",
     stage_work_outcome_recorded: "tasks_work",
+    participant_decision_recorded: "tasks_work",
     opportunity_enrollment_packet_created: "forms_documents",
     opportunity_enrollment_packet_opened: "forms_documents",
     opportunity_enrollment_packet_step_completed: "forms_documents",
@@ -107,7 +114,7 @@ function formatEventRow(
     row: RawActivityEventRow,
     surfaceKey: ActivityTimelineSurfaceKey,
     timeZone?: string | null,
-): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType"> {
+): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType" | "notAnAction"> {
     const payload =
         row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? row.payload
@@ -135,6 +142,11 @@ function formatEventRow(
         at: atText,
         atSortKey: parseSortKey(occurredAt),
         eventType,
+        notAnAction:
+            payload._consequence === true
+            || eventTypeKey === "message_queued"
+            || eventTypeKey === "message_delivered"
+            || eventTypeKey === "message_failed",
     };
 }
 

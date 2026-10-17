@@ -23,6 +23,8 @@ export type LeadActivityPreviewEntry = {
      * preview producer below has no event id of its own.
      */
     id?: string;
+    /** Not something anyone did (delivery state / consequence notification). @see ActivityTimelineEntry */
+    notAnAction?: boolean;
     kind: LeadActivityPreviewKind;
     label: string;
     detail: string | null;

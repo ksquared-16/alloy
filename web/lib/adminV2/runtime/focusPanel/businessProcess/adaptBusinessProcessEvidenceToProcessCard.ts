@@ -35,6 +35,8 @@ export type ProcessCardActivityItem = {
     when: string;
     kind?: string | null;
     detail?: string | null;
+    /** A delivery state or a notification sent because of another action — not what anyone did. */
+    notAnAction?: boolean;
 };
 
 /**
@@ -49,6 +51,8 @@ const NOT_AN_ACTION = /^(tour invitation prepared|tour time selected|action comp
 export function selectLastAction(activity: readonly ProcessCardActivityItem[]): ProcessLastAction | null {
     for (const row of activity) {
         if (!row.label?.trim()) continue;
+        // "SMS queued" after a cancellation is the system reporting delivery, not the operator's act.
+        if (row.notAnAction) continue;
         if (row.kind && !LAST_ACTION_KINDS.has(row.kind)) continue;
         if (NOT_AN_ACTION.test(row.label.trim())) continue;
         return { label: row.label.trim(), detail: row.detail?.trim() || null, when: row.when };

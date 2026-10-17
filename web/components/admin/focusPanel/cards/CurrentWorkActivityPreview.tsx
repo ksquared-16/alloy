@@ -17,6 +17,8 @@ export type CurrentWorkActivityPreviewItem = {
     category?: string | null;
     kind?: LeadActivityPreviewKind | null;
     occurredAt?: string | null;
+    /** Delivery state or consequence notification — never the Last action. */
+    notAnAction?: boolean;
 };
 
 
