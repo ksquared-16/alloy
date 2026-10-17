@@ -27,6 +27,7 @@ import {
     type EnrollingChild,
 } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
 import {
+    combineEnrollmentFinancialProjections,
     projectEnrollmentFinancialRequirement,
     type EnrollmentFeeObligation,
     type EnrollmentFinancialRequirementProjection,
@@ -195,4 +196,69 @@ export async function readEnrollmentFeeProjection(
         resolvesToZero: false,
         obligations,
     });
+}
+
+/** One child of a family read: its OWN stage requirements and its OWN dueness. */
+export type FamilyFeeChild = EnrollingChild & {
+    /** The requirements of this child's pinned revision at this child's current stage. */
+    readonly requirements: readonly StageRequirementV1[];
+    /** Whether every non-financial requirement of THIS child is resolved. */
+    readonly due: boolean;
+};
+
+export type FamilyFeeRead = {
+    readonly requirements: readonly StageRequirementV1[];
+    readonly enrollingChildren: readonly EnrollingChild[];
+    readonly due: boolean;
+};
+
+/**
+ * WHICH READS A FAMILY'S FEES TAKE — pure, so the ownership rule is testable on its own.
+ *
+ * A per-child fee belongs to the child whose stage authors it: read against that child alone, due when
+ * that child's paperwork is done. A sibling at another stage cannot remove it (the family list was
+ * once whichever child was read last) and cannot hold it back (every child's open fields once counted
+ * against every fee).
+ *
+ * A household-scoped fee is authored once on a stage, so it is read once — for the children whose
+ * stage carries it, and due when all of THOSE children are done. Children at a stage that does not
+ * author it have no say in it.
+ */
+export function planFamilyFeeReads(children: readonly FamilyFeeChild[]): readonly FamilyFeeRead[] {
+    const reads: FamilyFeeRead[] = [];
+    const shared = new Map<string, { requirement: StageRequirementV1; carriers: FamilyFeeChild[] }>();
+    for (const child of children) {
+        const child_ = { customerMemberId: child.customerMemberId, agreementId: child.agreementId };
+        const own = child.requirements.filter((r) => r.ref.kind === "financial" && r.scope === "each_child");
+        if (own.length > 0) reads.push({ requirements: own, enrollingChildren: [child_], due: child.due });
+        for (const r of child.requirements) {
+            if (r.ref.kind !== "financial" || r.scope === "each_child") continue;
+            const entry = shared.get(r.requirement_id) ?? { requirement: r, carriers: [] };
+            entry.carriers.push(child);
+            shared.set(r.requirement_id, entry);
+        }
+    }
+    for (const { requirement, carriers } of shared.values()) {
+        reads.push({
+            requirements: [requirement],
+            enrollingChildren: carriers.map((c) => ({ customerMemberId: c.customerMemberId, agreementId: c.agreementId })),
+            due: carriers.every((c) => c.due),
+        });
+    }
+    return reads;
+}
+
+/**
+ * The family's fees, each read under its own children's requirements, combined. Read-only, like the
+ * single read it is made of.
+ */
+export async function readFamilyEnrollmentFeeProjection(
+    supabase: SupabaseClient,
+    input: { readonly orgId: string; readonly customerId: string; readonly children: readonly FamilyFeeChild[] },
+): Promise<EnrollmentFinancialRequirementProjection> {
+    const parts: EnrollmentFinancialRequirementProjection[] = [];
+    for (const read of planFamilyFeeReads(input.children)) {
+        parts.push(await readEnrollmentFeeProjection(supabase, { orgId: input.orgId, customerId: input.customerId, ...read }));
+    }
+    return combineEnrollmentFinancialProjections(parts);
 }

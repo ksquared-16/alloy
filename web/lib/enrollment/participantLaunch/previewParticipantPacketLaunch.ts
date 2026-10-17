@@ -31,6 +31,7 @@ import { activeLifecycleProcess } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequirements";
 import { planRequirementDerivedPacket } from "@/lib/enrollment/participantLaunch/requirementDerivedPacket";
 import { resolveCurrentEnrollmentSession } from "@/lib/pos/packet/enrollmentObjectiveSession";
+import { resolveEnrollmentLaunchRecipient } from "@/lib/enrollment/participantLaunch/resolveEnrollmentLaunchRecipient";
 
 /** One thing the family will be asked for, in the operator's words. */
 export type PreviewRequirement = {
@@ -275,31 +276,22 @@ export async function previewParticipantPacketLaunch(
           }
         : null;
 
-    // Who receives it. The launch defaults to the household's primary person when the operator names
-    // nobody, so the preview reads the same default rather than inventing one.
-    let recipientName: string | null = null;
-    if (child.customer_id) {
-        const { data: cust } = await supabase
-            .from("customers").select("primary_contact_id").eq("org_id", orgId).eq("id", child.customer_id).maybeSingle();
-        const contactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
-        if (contactId) {
-            const { data: contact } = await supabase
-                .from("contacts").select("person_id").eq("org_id", orgId).eq("id", contactId).maybeSingle();
-            const personId = (contact as { person_id?: string | null } | null)?.person_id ?? null;
-            if (personId) {
-                const { data: person } = await supabase
-                    .from("persons").select("first_name, last_name").eq("org_id", orgId).eq("id", personId).maybeSingle();
-                const pr = person as { first_name?: string | null; last_name?: string | null } | null;
-                recipientName =
-                    [pr?.first_name, pr?.last_name].map((x) => (x ?? "").trim()).filter(Boolean).join(" ") || null;
-            }
-        }
-    }
+    /*
+     * Who receives it — the SAME resolver the launch records from, so the name shown here is the
+     * person the link will be bound to (and the only person who can pay from it). The obsolete
+     * `customers.primary_contact_id` is not read: nothing live writes it, so it named nobody.
+     */
+    const recipient = await resolveEnrollmentLaunchRecipient(supabase, { orgId, customerId: child.customer_id });
+    const recipientName = recipient.ok ? recipient.value.name : null;
 
     const blocker =
         requirements.length === 0
             ? `The ${stageKey} stage requires no forms in the governing revision, so there is nothing to send.`
-            : null;
+            : // A resume reopens the link that already exists and mints nothing, so only a NEW packet
+              // needs a recipient to be launchable.
+              !existing && !recipient.ok
+              ? recipient.refusal.detail
+              : null;
 
     return {
         ok: true,

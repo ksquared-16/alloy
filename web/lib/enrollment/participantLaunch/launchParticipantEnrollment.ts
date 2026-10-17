@@ -74,6 +74,10 @@ import {
     readShareEmbedPath,
     SHARE_EMBED_PATH_META_KEY,
 } from "@/lib/admin/forms/distributionLinkReuse";
+import {
+    resolveEnrollmentLaunchRecipient,
+    type EnrollmentLaunchRecipientRefusal,
+} from "@/lib/enrollment/participantLaunch/resolveEnrollmentLaunchRecipient";
 
 export type ParticipantLaunchRefusal =
     | RequirementDerivedPacketRefusal
@@ -81,6 +85,8 @@ export type ParticipantLaunchRefusal =
     | { readonly code: "no_governing_revision"; readonly detail: string }
     /** Neither a persisted stage nor a declared entry stage — nothing to read requirements for. */
     | { readonly code: "no_effective_stage"; readonly detail: string }
+    /** No canonical recipient — the link would name no payer. See `resolveEnrollmentLaunchRecipient`. */
+    | EnrollmentLaunchRecipientRefusal
     | { readonly code: "link_failed"; readonly detail: string }
     | { readonly code: "session_failed"; readonly detail: string };
 
@@ -235,6 +241,22 @@ export async function launchParticipantEnrollment(
         };
     }
 
+    /*
+     * THE RECIPIENT IS BOUND AT MINT, and only at mint.
+     *
+     * The link is the participant's identity: the payment route reads its `recipient_person_id` as
+     * the payer and nothing else. A link minted without one can never take a payment, so a household
+     * with no canonical primary contact is refused here — before a token exists — with a sentence the
+     * operator can act on, rather than issued a link that silently cannot finish the journey.
+     *
+     * A RESUMED launch (above) returns the existing link untouched. Re-binding an already-issued link
+     * is an amendment to a participant's authority, not a launch, and is deliberately not done here.
+     */
+    const household =
+        (input.customerId ?? "").trim() || (await householdOfChild(supabase, orgId, instance.subject_id));
+    const recipient = await resolveEnrollmentLaunchRecipient(supabase, { orgId, customerId: household });
+    if (!recipient.ok) return { ok: false, refusal: recipient.refusal };
+
     const minted = await mintPacketPublicLinkForAdmin({
         supabase,
         orgId,
@@ -246,6 +268,7 @@ export async function launchParticipantEnrollment(
                 created_via: "enrollment_start",
                 derived_from_business_process_revision_id: revisionId,
                 stage_key: stageKey,
+                recipient_person_id: recipient.value.personId,
             },
         },
     });
@@ -297,4 +320,21 @@ export async function launchParticipantEnrollment(
             outcome: launched.value.outcome,
         },
     };
+}
+
+/** The child's household, when the caller did not hand one forward (a context-free start). */
+async function householdOfChild(
+    supabase: SupabaseClient,
+    orgId: string,
+    childId: string | null,
+): Promise<string | null> {
+    const id = (childId ?? "").trim();
+    if (!id) return null;
+    const { data } = await supabase
+        .from("customer_members")
+        .select("customer_id")
+        .eq("org_id", orgId)
+        .eq("id", id)
+        .maybeSingle();
+    return ((data as { customer_id?: string | null } | null)?.customer_id ?? "").trim() || null;
 }

@@ -368,3 +368,47 @@ export function projectEnrollmentFinancialRequirement(
         ),
     };
 }
+
+/**
+ * ONE FAMILY, SEVERAL INDEPENDENTLY-READ FEES — combined without re-deciding any of them.
+ *
+ * A household can have children at different stages under different revisions: Ava enrolling with a
+ * registration fee due, Ben waitlisted with no fee at all. Each part was projected from ITS OWN
+ * children's requirements and dueness, so combining is only aggregation — the parts' obligations side
+ * by side (each still child-attributed, never merged), their quoted amounts summed, and the family
+ * state the most severe of the parts. No state is recomputed from money here.
+ *
+ * Parts that do not apply contribute nothing; when none applies the family has no fee. A charge that
+ * appears in two parts is counted once, so a family can never be shown a fee twice.
+ */
+export function combineEnrollmentFinancialProjections(
+    parts: readonly EnrollmentFinancialRequirementProjection[],
+): EnrollmentFinancialRequirementProjection {
+    const applicable = parts.filter((p) => p.state !== "NOT_APPLICABLE");
+    if (applicable.length === 0) return projectEnrollmentFinancialRequirement({ configured: false, due: false, resolvesToZero: false, obligations: [] });
+    if (applicable.length === 1) return applicable[0]!;
+
+    const seen = new Set<string>();
+    const obligations: EnrollmentFinancialRequirementProjection["obligations"][number][] = [];
+    for (const part of applicable) {
+        for (const o of part.obligations) {
+            const key = o.position?.chargeId ?? `${o.requirementId}:${o.subjectCustomerMemberId ?? "household"}:${o.billableSource.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            obligations.push(o);
+        }
+    }
+    const state = worst(applicable.map((p) => p.state));
+    const amounts = sum(obligations);
+    return {
+        state,
+        needsAttention: applicable.some((p) => p.needsAttention),
+        amounts,
+        obligations,
+        // A part with no obligation (not yet due, or due with nothing materialized) speaks for itself;
+        // otherwise the family sentence is the same one a single read would give.
+        explanation:
+            applicable.find((p) => p.state === state && p.obligations.length === 0)?.explanation
+            ?? explain(state, amounts, obligations.length, obligations.length > 0 && obligations.every((o) => Boolean(o.reversedByChargeId))),
+    };
+}
