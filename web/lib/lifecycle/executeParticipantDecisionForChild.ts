@@ -363,6 +363,7 @@ export async function executeParticipantDecisionForChild(
     const degraded: string[] = [];
     let writeError: ParticipantWriteCountFailure | undefined;
     const applied: Array<{ run: () => Promise<void> }> = [];
+    let priorJourneyMetadata: Record<string, unknown> | null = null;
 
     const transaction = await runPlatformTransaction({
         capability: PARTICIPANT_DECISION_CAPABILITY,
@@ -424,6 +425,62 @@ export async function executeParticipantDecisionForChild(
                     }
                 },
             },
+            /*
+             * WHAT THE OPERATOR ANSWERED IS PART OF THE DECISION.
+             *
+             * A decision's inputs were validated and then, unless one happened to bind onto a target
+             * field, discarded — so "Offer spot" could ask which placement and keep nothing. The
+             * answers are recorded on the child's own journey, keyed by the decision, with who and
+             * when: durable, readable by whatever comes next (Registration), and undone with the rest.
+             */
+            ...(bound.answers.length ?
+                [
+                    {
+                        name: "record_decision_answers",
+                        stage: "business_process" as const,
+                        run: async () => {
+                            const { data, error } = await input.supabase
+                                .from("process_instances")
+                                .select("metadata")
+                                .eq("org_id", input.orgId)
+                                .eq("id", processInstanceId)
+                                .maybeSingle();
+                            if (error) throw new Error(`read journey: ${error.message}`);
+                            const current = ((data as { metadata?: unknown } | null)?.metadata ?? {}) as Record<string, unknown>;
+                            priorJourneyMetadata = current;
+                            const answers = (current.decision_answers_v1 ?? {}) as Record<string, unknown>;
+                            const next = {
+                                ...current,
+                                decision_answers_v1: {
+                                    ...answers,
+                                    [decisionKey]: {
+                                        answers: bound.answers,
+                                        decided_at: new Date().toISOString(),
+                                        decided_by: input.userId,
+                                        stage_key: input.stageKey,
+                                    },
+                                },
+                            };
+                            const { error: writeErr } = await input.supabase
+                                .from("process_instances")
+                                .update({ metadata: next, updated_at: new Date().toISOString() })
+                                .eq("org_id", input.orgId)
+                                .eq("id", processInstanceId);
+                            if (writeErr) throw new Error(`record decision answers: ${writeErr.message}`);
+                            return true;
+                        },
+                        compensate: async () => {
+                            if (!priorJourneyMetadata) return;
+                            const { error } = await input.supabase
+                                .from("process_instances")
+                                .update({ metadata: priorJourneyMetadata, updated_at: new Date().toISOString() })
+                                .eq("org_id", input.orgId)
+                                .eq("id", processInstanceId);
+                            if (error) throw new Error(`restore journey metadata: ${error.message}`);
+                        },
+                    },
+                ]
+            :   []),
         ],
     });
 

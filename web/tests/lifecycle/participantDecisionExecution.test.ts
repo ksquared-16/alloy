@@ -534,6 +534,26 @@ describe("per-child Decision — required-input binding", () => {
         expect(rowOf(world, EMMA).close_reason_key).toBeNull();
         expect(rowOf(world, LIAM).close_reason_key).toBeNull();
     });
+
+    it("records what the operator answered on that child's journey, with who and when", async () => {
+        const world = makeWorld();
+
+        await run(world, {
+            decisionKey: "child_not_enrolling",
+            customerMemberId: NOAH,
+            label: "Noah",
+            inputValues: { close_reason_key: "chose_another_provider" },
+        });
+
+        const recorded = (rowOf(world, NOAH) as unknown as { metadata?: Record<string, any> }).metadata
+            ?.decision_answers_v1?.child_not_enrolling;
+        expect(recorded?.answers).toEqual([
+            { key: "close_reason_key", label: "Reason", value: "chose_another_provider", value_label: "Chose another provider" },
+        ]);
+        expect(recorded?.decided_by).toBe("user-1");
+        expect(recorded?.stage_key).toBe("decision");
+        expect((rowOf(world, EMMA) as unknown as { metadata?: unknown }).metadata).toBeUndefined();
+    });
 });
 
 describe("per-child Decision — failure containment and refresh contract", () => {

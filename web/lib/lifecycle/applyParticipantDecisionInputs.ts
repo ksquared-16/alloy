@@ -38,7 +38,17 @@ export type ParticipantDecisionInputIssue = {
 };
 
 export type ApplyParticipantDecisionInputsResult =
-    | { ok: true; targets: StageOutcomeRuleTargetV1[]; boundValues: Record<string, string> }
+    | {
+          ok: true;
+          targets: StageOutcomeRuleTargetV1[];
+          boundValues: Record<string, string>;
+          /**
+           * Every validated answer, bound or not, with the label the operator saw. An unbound input
+           * (e.g. which placement is being offered) is still the operator's decision, and dropping it
+           * made the question decoration.
+           */
+          answers: Array<{ key: string; label: string; value: string; value_label: string }>;
+      }
     | { ok: false; issues: ParticipantDecisionInputIssue[] };
 
 function readSuppliedValue(values: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -82,6 +92,7 @@ export function applyParticipantDecisionInputs(input: {
     const inputs = input.decision.required_inputs ?? [];
     const issues: ParticipantDecisionInputIssue[] = [];
     const boundValues: Record<string, string> = {};
+    const answers: Array<{ key: string; label: string; value: string; value_label: string }> = [];
 
     // Start from a copy so a refusal cannot leave a partially-bound target array behind, and so the
     // configured decision object is never mutated by executing it.
@@ -115,6 +126,13 @@ export function applyParticipantDecisionInputs(input: {
             }
         }
 
+        answers.push({
+            key: spec.key,
+            label: spec.label,
+            value,
+            value_label: spec.options?.find((o) => o.value === value)?.label ?? value,
+        });
+
         if (!spec.binds_to_target_field) continue;
 
         if (targetsAccepting(targets, spec.binds_to_target_field) === 0) {
@@ -140,5 +158,5 @@ export function applyParticipantDecisionInputs(input: {
     }
 
     if (issues.length) return { ok: false, issues };
-    return { ok: true, targets, boundValues };
+    return { ok: true, targets, boundValues, answers };
 }
