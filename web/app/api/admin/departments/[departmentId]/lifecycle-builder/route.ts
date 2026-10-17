@@ -496,7 +496,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 if (!pid) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
                 const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
                 if (missingProcess) return missingProcess;
-                config = addStageToProcess(config, pid, label, { description });
+                /*
+                 * WHICH TRACK THE NEW STAGE BELONGS TO. `addStageToProcess` has always accepted it,
+                 * but this action never passed it on, so a stage added to a tracked process (family
+                 * track → child track) belonged to no track: the child status control and the config
+                 * reader, which select stages by track, could never see it. Only a track the process
+                 * declares is accepted.
+                 */
+                const trackKey = typeof body.track_key === "string" ? body.track_key.trim() : "";
+                if (trackKey) {
+                    const tracks = config.processes.find((p) => p.id === pid)?.tracks_v1?.tracks ?? [];
+                    if (!tracks.some((t) => t.key === trackKey)) {
+                        return NextResponse.json(
+                            { error: `Track "${trackKey}" is not declared by this process.` },
+                            { status: 400 },
+                        );
+                    }
+                }
+                config = addStageToProcess(config, pid, label, {
+                    description,
+                    ...(trackKey ? { track_key: trackKey } : {}),
+                });
                 break;
             }
             case "update_stage_description": {
