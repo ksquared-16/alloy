@@ -427,6 +427,14 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
         // whether the family opportunity is still parked on this stage work unit.
         const opp = resolveContextOpportunity(pi, refs);
         if (!opp) continue;
+        /*
+         * A CLOSED JOURNEY IS AT NO LIVE STAGE. A close reason is what ends a child's journey, and
+         * family-grain membership already drops closed participants — but a stage lane did not, so a
+         * child whose offer the family declined (Not Enrolling, `declined_offer`) stayed in Offers
+         * beside the offers still waiting for an answer (deployed QA). Closed children are found
+         * through the stage-independent participation lens and the record itself, not in a work lane.
+         */
+        if (typeof pi.close_reason_key === "string" && pi.close_reason_key.trim()) continue;
         // Effective-stage membership: keep only children whose PI.stage_key ?? opp.stage_key == lane.
         const oppStageKey = typeof opp.stage_key === "string" ? opp.stage_key : null;
         if (!processInstanceBelongsToLane({ piStageKey: pi.stage_key, contextStageKey: oppStageKey, laneStageKey: stageKey })) {
