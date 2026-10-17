@@ -8,6 +8,7 @@
  * @see enrollmentSessionConfirmations.ts — D-99, and why confirmation is bound to the value
  */
 
+import { householdProvisionalValue, isSharedHouseholdKey } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
 import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
 import {
@@ -358,6 +359,15 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
     } else if (usableValue(canonicalValue)) {
         current_value = canonicalValue;
         value_source = "canonical_prefill";
+    } else {
+        // Last: what a sibling's journey told us about the household — never this child's own fact.
+        const provisional = isSharedHouseholdKey(identity.shared_value_key ?? "")
+            ? householdProvisionalValue(input.canonicalValues, identity.shared_value_key)
+            : undefined;
+        if (usableValue(provisional)) {
+            current_value = provisional;
+            value_source = "household_provisional";
+        }
     }
 
     const has_value = value_source !== "none";
@@ -421,7 +431,8 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
 
     let state: EnrollmentNeedState;
     if (confirmed) state = "confirmed";
-    else if (mustConfirm) state = "known_requires_confirmation";
+    // A sibling's answer is never settled on this child's behalf: the family confirms it here.
+    else if (mustConfirm || value_source === "household_provisional") state = "known_requires_confirmation";
     else state = "known";
 
     return {

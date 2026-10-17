@@ -9,6 +9,7 @@
  * choose which canonical fact they are overwriting.
  */
 
+import { canonicalValuesWithHouseholdProvisional } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const before = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
-        canonicalValues: canonical.values,
+        canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues),
         // The session row the access check already read — one fewer serial round trip.
         preloadedSession: access.value.session,
     });

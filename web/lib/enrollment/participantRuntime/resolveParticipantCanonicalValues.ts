@@ -32,6 +32,7 @@
  * means "we have this", and a null under that contract would claim knowledge of nothing.
  */
 
+import { readHouseholdProvisionalAnswers } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Canonical child fields the platform holds durably, mapped to the keys a need carries. */
@@ -81,6 +82,12 @@ export type ParticipantCanonicalContext = {
      * conversation needs on every turn would be a second source for the same fact.
      */
     readonly subjectDisplayName: string | null;
+    /**
+     * Household facts a SIBLING's journey already holds, offered for confirmation in this one.
+     * Never merged into `values`: they are Form answers, not records. See
+     * `householdProvisionalAnswers`.
+     */
+    readonly provisionalValues?: Readonly<Record<string, unknown>>;
 };
 
 /**
@@ -163,7 +170,10 @@ export async function resolveParticipantCanonicalContext(
             [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
             null;
 
-        return { values: out, subjectDisplayName: displayName };
+        const provisionalValues = customerId
+            ? await readHouseholdProvisionalAnswers(supabase, { orgId: input.orgId, customerId, processInstanceId: input.processInstanceId })
+            : {};
+        return { values: out, subjectDisplayName: displayName, provisionalValues };
     } catch {
         return { values: {}, subjectDisplayName: null };
     }
