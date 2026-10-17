@@ -168,6 +168,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Attendance (L4 facts — doctrine) | `platform/modules/attendance-system.md` |
 | Financial platform domain (canonical entities — frozen) | `platform/modules/financial-platform-domain.md` |
 | Billing & financials platform (L5 — doctrine) | `platform/modules/billing-financials-platform.md` |
+| Payments attempt integrity (payer-scoped attempts, decline recovery, durable posting) | `platform/financials/payments-attempt-integrity.md` |
 | Trust Platform (cognitive / reasoning) | `platform/trust/trust-platform.md` — corpus index `platform/trust/README.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |

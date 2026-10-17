@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-10-16
+supersedes: []
+---
+
 # Payments — attempt integrity, decline recovery and durable posting
 
 Baseline: `origin/staging` @ `95da6741d` (deployed at discovery). Branch `agent/payments-attempt-integrity`.
