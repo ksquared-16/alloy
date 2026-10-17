@@ -1648,6 +1648,47 @@ async function draftCorrectionConsumption(
  * atomic reconciliation RPC (draftCorrectionConsumption); the `original` path
  * below is byte-behavior unchanged.
  */
+const ENROLLMENT_REGISTRATION_EVENT_KEY = "enrollment.registration";
+
+/**
+ * Has this agreement's child already been charged this template's fee — by Enrollment (a household
+ * charge whose subject is the child) or against this agreement? Non-void charges only: a voided
+ * charge owes nothing, and a reversed one is Financials' correction to explain, not a reason to bill
+ * again.
+ */
+export async function registrationFeeAlreadyCharged(
+    supabase: SupabaseClient,
+    orgId: string,
+    agreementId: string,
+    chargeTemplateId: string,
+): Promise<string | null> {
+    const [{ data: template }, { data: agreement }] = await Promise.all([
+        supabase.from("financial_charge_templates").select("template_key").eq("org_id", orgId).eq("id", chargeTemplateId).maybeSingle(),
+        supabase.from("child_enrollment_agreements").select("customer_member_id").eq("org_id", orgId).eq("id", agreementId).maybeSingle(),
+    ]);
+    const templateKey = ((template as { template_key?: string | null } | null)?.template_key ?? "").trim();
+    const childId = ((agreement as { customer_member_id?: string | null } | null)?.customer_member_id ?? "").trim();
+    if (!templateKey) return null;
+    const live = (rows: unknown) => ((rows ?? []) as { id: string; status: string | null }[]).find((r) => r.status !== "void")?.id ?? null;
+    const onAgreement = await supabase
+        .from("charges")
+        .select("id, status")
+        .eq("org_id", orgId)
+        .eq("billable_source_type", "enrollment_agreement")
+        .eq("billable_source_id", agreementId)
+        .eq("metadata->>charge_template_key", templateKey);
+    const fromAgreement = live(onAgreement.data);
+    if (fromAgreement || !childId) return fromAgreement;
+    const forChild = await supabase
+        .from("charges")
+        .select("id, status")
+        .eq("org_id", orgId)
+        .eq("billable_source_type", "customer")
+        .eq("metadata->>charge_template_key", templateKey)
+        .eq("metadata->>subject_customer_member_id", childId);
+    return live(forChild.data);
+}
+
 export async function draftConsumption(
     supabase: SupabaseClient,
     orgId: string,
@@ -1678,7 +1719,23 @@ export async function draftConsumption(
         let draftChargeId: string | null = null;
         let draftChargeStatus: string | null = null;
 
-        if (obligation.draftable && obligation.chargeTemplateId && agreementId && obligation.amountCents != null && obligation.amountCents > 0) {
+        /*
+         * ONE REGISTRATION FEE PER CHILD (H3-2).
+         *
+         * Enrollment now charges a child's registration fee when the child's paperwork is done —
+         * before any agreement exists — as a household charge whose subject is the child. Agreement
+         * activation's `enrollment.registration` event resolves the same template against the
+         * AGREEMENT, a different billable source and therefore a different idempotency key, so without
+         * this it would bill the family a second time. Narrowed to that one event: no other
+         * consumption rule changes.
+         */
+        const alreadyCharged =
+            fact.eventKey === ENROLLMENT_REGISTRATION_EVENT_KEY && obligation.chargeTemplateId && agreementId
+                ? await registrationFeeAlreadyCharged(supabase, orgId, agreementId, obligation.chargeTemplateId)
+                : null;
+        if (alreadyCharged) {
+            draftChargeStatus = "already_charged";
+        } else if (obligation.draftable && obligation.chargeTemplateId && agreementId && obligation.amountCents != null && obligation.amountCents > 0) {
             const result = await writeTemplateDraftCharge(supabase, orgId, {
                 templateId: obligation.chargeTemplateId,
                 agreementId,

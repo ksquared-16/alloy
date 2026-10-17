@@ -535,8 +535,21 @@ function emulateReconcileConsumptionCorrection(
 
 type Filter = { col: string; op: "eq" | "neq" | "in" | "is" | "lte" | "gte"; value: unknown };
 
+/**
+ * A filter column as PostgREST reads it: `metadata->>charge_template_key` is the text value of that
+ * key, not a column named with arrows. Without this every JSON-path filter matched nothing.
+ */
+function columnValue(row: Row, col: string): unknown {
+    const arrow = col.indexOf("->>");
+    if (arrow < 0) return row[col];
+    const json = row[col.slice(0, arrow)] as Record<string, unknown> | null | undefined;
+    const v = json && typeof json === "object" ? json[col.slice(arrow + 3)] : undefined;
+    return v === undefined || v === null ? v : String(v);
+}
+
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
-    return rows.filter((row) => {
+    return rows.filter((rowIn) => {
+        const row = new Proxy(rowIn, { get: (t, k) => (typeof k === "string" ? columnValue(t, k) : undefined) }) as Row;
         for (const f of filters) {
             if (f.op === "eq" && row[f.col] !== f.value) return false;
             if (f.op === "neq" && row[f.col] === f.value) return false;

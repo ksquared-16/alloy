@@ -56,7 +56,13 @@ type ChargeRow = { id: string; metadata: Record<string, unknown> | null };
 
 async function existingFeeCharges(
     supabase: SupabaseClient,
-    args: { orgId: string; source: { type: string; id: string }; chargeTemplateKey: string },
+    args: {
+        orgId: string;
+        source: { type: string; id: string };
+        chargeTemplateKey: string;
+        /** The child a per-child household fee is for — siblings' fees share the household source. */
+        subjectCustomerMemberId?: string | null;
+    },
 ): Promise<readonly string[]> {
     /*
      * THE TEMPLATE KEY IS MATCHED IN THE QUERY, NOT AFTERWARDS.
@@ -72,13 +78,17 @@ async function existingFeeCharges(
      * readable charges, and the fee written moments earlier was invisible. Filtering in the database
      * returns the one row that matters, so the cap stops being reachable.
      */
-    const { data, error } = await supabase
+    let query = supabase
         .from("charges")
         .select("id, metadata")
         .eq("org_id", args.orgId)
         .eq("billable_source_type", args.source.type)
         .eq("billable_source_id", args.source.id)
         .eq("metadata->>charge_template_key", args.chargeTemplateKey);
+    if (args.source.type === "customer" && args.subjectCustomerMemberId) {
+        query = query.eq("metadata->>subject_customer_member_id", args.subjectCustomerMemberId);
+    }
+    const { data, error } = await query;
     if (error) throw new Error(`enrollment fee charges could not be read (${error.message.trim()})`);
     return ((data ?? []) as ChargeRow[]).map((c) => c.id);
 }
@@ -111,12 +121,26 @@ export async function readEnrollmentFeeProjection(
             customerId: input.customerId,
             enrollingChildren: input.enrollingChildren,
         });
-        for (const { source, subjectCustomerMemberId } of sources) {
-            for (const chargeId of await existingFeeCharges(supabase, {
-                orgId: input.orgId,
-                source,
-                chargeTemplateKey: req.chargeTemplateKey,
-            })) {
+        for (const { source, subjectCustomerMemberId, legacyAgreementId } of sources) {
+            const agreementSource = legacyAgreementId ? { type: "enrollment_agreement" as const, id: legacyAgreementId } : null;
+            const found: { chargeId: string; source: { type: "enrollment_agreement" | "customer"; id: string } }[] = [
+                ...(await existingFeeCharges(supabase, {
+                    orgId: input.orgId,
+                    source,
+                    chargeTemplateKey: req.chargeTemplateKey,
+                    subjectCustomerMemberId,
+                })).map((chargeId) => ({ chargeId, source })),
+                // A per-child fee an earlier path wrote against the child's agreement is the same
+                // obligation, reported against the source it was actually written to.
+                ...(agreementSource
+                    ? (await existingFeeCharges(supabase, {
+                          orgId: input.orgId,
+                          source: agreementSource,
+                          chargeTemplateKey: req.chargeTemplateKey,
+                      })).map((chargeId) => ({ chargeId, source: agreementSource }))
+                    : []),
+            ];
+            for (const { chargeId, source } of found) {
                 const reversedByChargeId = await findReversalChargeId(supabase, { orgId: input.orgId, chargeId });
                 /*
                  * A charge that exists but cannot be positioned is reported WITHOUT a position rather

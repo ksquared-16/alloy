@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
+import { financialRequirementRefusals } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
 import {
     STAGE_ANNOTATION_PROJECTIONS,
     isStageAnnotationProjectionKey,
@@ -443,6 +445,26 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                         },
                         { status: 422 },
                     );
+                }
+                /*
+                 * A financial requirement must name a charge template Financials actually has — a
+                 * missing one would only surface when a family's fee could not be resolved.
+                 */
+                if (parsed.requirements.some((r) => r.ref.kind === "financial")) {
+                    const financialRefusals = financialRequirementRefusals(
+                        parsed.requirements,
+                        await listChargeTemplates(createAdminClient(), ctx.orgId),
+                    );
+                    if (financialRefusals.length) {
+                        return NextResponse.json(
+                            {
+                                error: financialRefusals.map((r) => r.detail).join(" "),
+                                code: "unknown_charge_template",
+                                refusals: financialRefusals,
+                            },
+                            { status: 422 },
+                        );
+                    }
                 }
                 for (const requirement of parsed.requirements) {
                     if (isAuthorableRequirementKind(requirement.ref.kind)) continue;

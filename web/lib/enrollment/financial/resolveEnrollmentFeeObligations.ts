@@ -50,12 +50,23 @@ import type { RequirementScope } from "@/lib/lifecycle/requirementTimingTypes";
  * Owned here rather than imported because Financials exposes no public helper for it — only
  * `listChargeTemplates`. Kept exported so the rule is testable on its own.
  */
-export function currentTemplateForKey<T extends { template_key?: string | null; is_active?: boolean | null; effective_start?: string | null }>(
-    templates: readonly T[],
-    templateKey: string,
-): T | null {
+export function currentTemplateForKey<
+    T extends { template_key?: string | null; is_active?: boolean | null; effective_start?: string | null; effective_end?: string | null },
+>(templates: readonly T[], templateKey: string, asOf?: string | null): T | null {
+    /*
+     * AS OF THE DAY THE FEE FELL DUE, when that day is known. A fee owed on 1 September is the
+     * version in effect on 1 September — not whichever version was authored last, which would let a
+     * price change dated next January reach back and re-price a fee already owed.
+     */
+    const day = typeof asOf === "string" && /^\d{4}-\d{2}-\d{2}/.test(asOf) ? asOf.slice(0, 10) : null;
     const lineage = templates
         .filter((t) => t.template_key === templateKey && t.is_active !== false)
+        .filter((t) => {
+            if (!day) return true;
+            const start = String(t.effective_start ?? "").slice(0, 10);
+            const end = String(t.effective_end ?? "").slice(0, 10);
+            return (!start || start <= day) && (!end || end >= day);
+        })
         .sort((a, b) => String(b.effective_start ?? "").localeCompare(String(a.effective_start ?? "")));
     return lineage[0] ?? null;
 }
@@ -141,23 +152,49 @@ export function billableSourcesForScope(input: {
 }): readonly {
     source: { type: "enrollment_agreement" | "customer"; id: string };
     subjectCustomerMemberId: string | null;
+    /** The child's agreement, when it has one — only to recognise a fee an earlier path wrote there. */
+    legacyAgreementId: string | null;
 }[] {
     if (input.scope === "each_child") {
         /*
-         * A child with no agreement is SKIPPED, not folded into the household.
+         * ONE OBLIGATION PER ENROLLING CHILD, AGREEMENT OR NOT (Director decision, H3-2).
          *
-         * The alternative — charging the family instead — loses the attribution that per-child grain
-         * exists for, and does it silently. Skipping leaves the requirement unsatisfied, which is
-         * visible and fixable; a mis-attributed charge is neither.
+         * A registration fee is owed when the child's paperwork is done, which is before any tuition
+         * agreement need exist. Skipping a child without an agreement left the fee unbillable; folding
+         * it into a plain household charge merged two siblings due the same day into one. The
+         * household is the billable source — Financials' own answer for a pre-enrolment charge — and
+         * the child is the charge's SUBJECT, which keeps one obligation per child, attributable and
+         * correctable per child, with the household as payer.
          */
-        return input.enrollingChildren
-            .filter((c) => Boolean(c.agreementId))
-            .map((c) => ({
-                source: { type: "enrollment_agreement" as const, id: c.agreementId as string },
-                subjectCustomerMemberId: c.customerMemberId,
-            }));
+        return input.enrollingChildren.map((c) => ({
+            source: { type: "customer" as const, id: input.customerId },
+            subjectCustomerMemberId: c.customerMemberId,
+            legacyAgreementId: c.agreementId,
+        }));
     }
-    return [{ source: { type: "customer" as const, id: input.customerId }, subjectCustomerMemberId: null }];
+    return [{ source: { type: "customer" as const, id: input.customerId }, subjectCustomerMemberId: null, legacyAgreementId: null }];
+}
+
+/**
+ * A per-child fee an earlier path already charged against the child's AGREEMENT.
+ *
+ * Before H3-2 the only per-child writer was keyed to the agreement. Such a fee is the same
+ * obligation, so it is recognised rather than charged a second time against the household.
+ */
+export async function findAgreementFeeChargeId(
+    supabase: SupabaseClient,
+    args: { readonly orgId: string; readonly agreementId: string; readonly chargeTemplateKey: string },
+): Promise<{ id: string; posted: boolean } | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .select("id, status")
+        .eq("org_id", args.orgId)
+        .eq("billable_source_type", "enrollment_agreement")
+        .eq("billable_source_id", args.agreementId)
+        .eq("metadata->>charge_template_key", args.chargeTemplateKey);
+    if (error) throw new Error(`enrollment fee charges could not be read (${error.message.trim()})`);
+    const row = ((data ?? []) as { id: string; status: string | null }[]).find((r) => r.status !== "void");
+    return row ? { id: row.id, posted: row.status === "posted" } : null;
 }
 
 /**
@@ -168,7 +205,7 @@ export async function resolveEnrollmentFeeObligations(
     input: ResolveEnrollmentFeeInput,
 ): Promise<ResolveEnrollmentFeeResult> {
     const templates = await listChargeTemplates(supabase, input.orgId);
-    const template = currentTemplateForKey(templates, input.chargeTemplateKey);
+    const template = currentTemplateForKey(templates, input.chargeTemplateKey, input.dueOn);
     if (!template) return { templateResolved: false, resolvesToZero: false, outcomes: [] };
 
     const templateId = (template as unknown as { id: string }).id;
@@ -176,11 +213,30 @@ export async function resolveEnrollmentFeeObligations(
     const outcomes: FeeObligationOutcome[] = [];
     let resolvesToZero = false;
 
-    for (const { source, subjectCustomerMemberId } of sources) {
+    for (const { source, subjectCustomerMemberId, legacyAgreementId } of sources) {
+        if (legacyAgreementId) {
+            const prior = await findAgreementFeeChargeId(supabase, {
+                orgId: input.orgId,
+                agreementId: legacyAgreementId,
+                chargeTemplateKey: input.chargeTemplateKey,
+            });
+            if (prior) {
+                outcomes.push({
+                    status: "unchanged",
+                    chargeId: prior.id,
+                    resolutionKey: "",
+                    subjectCustomerMemberId,
+                    billableSource: { type: "enrollment_agreement", id: legacyAgreementId },
+                    posted: prior.posted,
+                });
+                continue;
+            }
+        }
         const args = {
             templateId,
             billableSource: source,
             agreementId: source.type === "enrollment_agreement" ? source.id : null,
+            subjectCustomerMemberId,
             eventDate: input.dueOn,
             today: input.dueOn,
         };
@@ -266,4 +322,32 @@ export async function reverseEnrollmentFeeObligation(
         kind: "reversal",
         actorUserId: input.actorUserId ?? null,
     });
+}
+
+/**
+ * A financial requirement must name a charge template this organisation has.
+ *
+ * Authored without this check, a mistyped or retired key saved cleanly and surfaced only at runtime,
+ * when a family's fee could not be resolved — after the paperwork was done. The key is checked when it
+ * is authored, against active templates; the amount and its effective dates stay Financials'.
+ */
+export function financialRequirementRefusals(
+    requirements: readonly { requirement_id: string; ref: { kind: string; charge_template_key?: string } }[],
+    templates: readonly { template_key?: string | null; is_active?: boolean | null }[],
+): { requirement_id: string; charge_template_key: string; detail: string }[] {
+    const known = new Set(templates.filter((t) => t.is_active !== false).map((t) => (t.template_key ?? "").trim()).filter(Boolean));
+    const out: { requirement_id: string; charge_template_key: string; detail: string }[] = [];
+    for (const r of requirements) {
+        if (r.ref.kind !== "financial") continue;
+        const key = (r.ref.charge_template_key ?? "").trim();
+        if (key && known.has(key)) continue;
+        out.push({
+            requirement_id: r.requirement_id,
+            charge_template_key: key,
+            detail: key
+                ? `No active charge template "${key}" exists in Financials for this organization.`
+                : "A financial requirement needs a charge template.",
+        });
+    }
+    return out;
 }
