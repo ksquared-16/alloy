@@ -65,7 +65,19 @@ export type CollectionRefusalReason =
     | "method_rail_mismatch"
     | "method_unavailable_at_provider"
     /* W3 — the stored method's owner is not the payer this attempt claims. */
-    | "method_payer_mismatch";
+    | "method_payer_mismatch"
+    /* The named payer is not a person in this organization. */
+    | "payer_not_found"
+    /* The provider declined a stored method. The attempt is recorded, terminal, and retryable. */
+    | "payment_declined"
+    /*
+     * A declined attempt could not be retired at the provider because it has moved on — usually a
+     * payer who re-entered a card in a tab that was still open. Its outcome must land before a new
+     * attempt may be opened, or the same person could be charged twice.
+     */
+    | "previous_attempt_unresolved"
+    /* One payer has had more declined attempts at this exact intent today than a retry warrants. */
+    | "too_many_attempts";
 
 export type CreateCardCollectionResult =
     | {
@@ -85,7 +97,13 @@ export type CreateCardCollectionResult =
            */
           paymentMethodId?: string | null;
       }
-    | { ok: false; reason: CollectionRefusalReason; message: string };
+    | {
+          ok: false;
+          reason: CollectionRefusalReason;
+          message: string;
+          /** The attempt the refusal is about, when one exists — a recorded decline has one. */
+          attemptId?: string;
+      };
 
 /**
  * The durable, Alloy-owned identity of one collection intention.
@@ -121,15 +139,66 @@ async function resolveChargeAccount(
     return "";
 }
 
+/**
+ * WHO an attempt is for, as the intent key names it.
+ *
+ * The canonical payer when there is one — a person resolved server-side, never a name or an email.
+ * When nobody is named (an operator collecting at the desk), the operator who asked stands in for
+ * the payer, so two operators taking two cards are two attempts rather than one shared session.
+ */
+export function attemptPayerKey(input: { payerPersonId?: string | null; actorUserId?: string | null }): string {
+    if (t(input.payerPersonId)) return `person:${t(input.payerPersonId)}`;
+    if (t(input.actorUserId)) return `actor:${t(input.actorUserId)}`;
+    return "unattributed";
+}
+
+/**
+ * The intent key — and why the payer and the method are in it.
+ *
+ * TWO PAYERS ARE TWO PAYMENTS. The key used to be charge, amount, rail and day, and two parents
+ * paying the same fee from their own links on the same day produced the same key — so the second
+ * parent was handed the FIRST parent's PaymentIntent and its client secret. Nothing about that is a
+ * retry. The payer is part of what makes an intent the same intent, and so is the stored method: the
+ * same person paying with a different instrument is a different request of the provider.
+ *
+ * `v2` separates these keys from every key minted before the payer was part of them, so a historical
+ * attempt can never be mistaken for a current one; historical attempts stay reachable exactly as
+ * before, by their id and by their provider transaction.
+ *
+ * GENERATION is the retry after a terminal outcome. Generation 0 is the first attempt; a declined or
+ * canceled attempt is never handed out again, and the next request opens generation 1 under its own
+ * key — which is also its own provider idempotency key, so the provider cannot replay the decline.
+ */
 export function deriveIntentKey(input: {
     chargeId: string;
     amountCents: number;
     rail: string;
     day?: string;
+    payerKey?: string;
+    paymentMethodId?: string | null;
+    generation?: number;
 }): string {
     const day = input.day ?? new Date().toISOString().slice(0, 10);
-    return ["collect", input.chargeId, String(input.amountCents), input.rail, day].join(":");
+    const parts = [
+        "collect",
+        "v2",
+        input.chargeId,
+        String(input.amountCents),
+        input.rail,
+        input.payerKey || "unattributed",
+        t(input.paymentMethodId) ? `method:${t(input.paymentMethodId)}` : "present",
+        day,
+    ];
+    const generation = Math.max(0, Math.floor(input.generation ?? 0));
+    if (generation > 0) parts.push(`g${generation}`);
+    return parts.join(":");
 }
+
+/** Provider outcomes an attempt never comes back from. A new request opens a new attempt. */
+export const RETIRED_ATTEMPT_STATES: ReadonlySet<string> = new Set(["failed", "canceled"]);
+
+/** Bounded: a person retrying a declined card this many times today is not retrying any more. */
+const MAX_ATTEMPT_GENERATIONS = 10;
 
 const t = (v: unknown): string => (v != null ? String(v).trim() : "");
 
@@ -155,28 +224,57 @@ const defaultStripeCall: StripeCall = async (path, body, headers) => {
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 };
 
+/** A provider read, on a connected account. Injected by tests; real Stripe otherwise. */
+export type StripeRead = (
+    path: string,
+    connectedAccountRef: string,
+) => Promise<{ status: number; body: Record<string, unknown> }>;
+
+const defaultStripeRead: StripeRead = async (path, connectedAccountRef) => {
+    const secret = process.env.STRIPE_SECRET_KEY ?? "";
+    if (!secret) throw new Error("STRIPE_SECRET_KEY is not configured for this runtime");
+    const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+        headers: { Authorization: `Bearer ${secret}`, "Stripe-Account": connectedAccountRef },
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+};
+
+/** The columns a reused attempt is judged by. */
+type ExistingAttempt = {
+    id: string;
+    provider_transaction_id: string | null;
+    processor_state: string;
+    payer_person_id: string | null;
+    payment_method_id: string | null;
+    provider_account_ref: string;
+    created_by: string | null;
+};
+
+const EXISTING_ATTEMPT_COLUMNS =
+    "id, provider_transaction_id, processor_state, payer_person_id, payment_method_id, provider_account_ref, created_by";
+
 /**
  * An attempt that already has a PaymentIntent, described without creating anything.
  *
  * The client secret is re-read from Stripe rather than stored: it is the browser's handle on the
  * intent, and keeping a copy in Alloy's database would be storing a credential-shaped value for no
  * reason. Read on the CONNECTED account, because that is where the intent lives.
+ *
+ * Only ever called for an attempt whose payer is THIS request's payer — see `payerOwnsAttempt`.
  */
 async function describeExistingAttempt(
     supabase: SupabaseClient,
-    attemptId: string,
+    existing: ExistingAttempt,
     providerTransactionId: string,
     connectedAccountRef: string,
     input: CreateCardCollectionInput,
     currency: string,
+    stripeRead: StripeRead,
 ): Promise<CreateCardCollectionResult> {
-    const secret = process.env.STRIPE_SECRET_KEY ?? "";
-    const res = await fetch(`https://api.stripe.com/v1/payment_intents/${providerTransactionId}`, {
-        headers: { Authorization: `Bearer ${secret}`, "Stripe-Account": connectedAccountRef },
-    });
-    const body = (await res.json()) as { client_secret?: string; status?: string };
+    const res = await stripeRead(`payment_intents/${encodeURIComponent(providerTransactionId)}`, connectedAccountRef);
+    const body = res.body as { client_secret?: string; status?: string };
 
-    if (res.ok && body.status) {
+    if (res.status === 200 && body.status) {
         // Keep the projection honest even on a pure retry: the provider may have moved on since the
         // row was last written, and a retry is a perfectly good moment to notice.
         await supabase
@@ -186,19 +284,104 @@ async function describeExistingAttempt(
                 processor_state_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             })
-            .eq("id", attemptId)
+            .eq("id", existing.id)
             .neq("processor_state", mapStripeStatus(body.status));
     }
 
     return {
         ok: true,
-        attemptId,
+        attemptId: existing.id,
         providerTransactionId,
         clientSecret: String(body.client_secret ?? ""),
         connectedAccountRef,
         amountCents: input.requestedAmountCents,
         currency,
         reused: true,
+        /*
+         * The stored method the ORIGINAL attempt used. This was omitted, so a reused stored-method
+         * attempt looked like a present-payer one and the operator surface opened card entry for a
+         * card that had already been charged off-session.
+         */
+        paymentMethodId: existing.payment_method_id ?? null,
+    };
+}
+
+/**
+ * Whether the attempt a key resolved to really is this payer's.
+ *
+ * The key already contains the payer, so a mismatch means a key was reached some other way — a
+ * hand-built key, a historical row. Handing out that attempt's session would give one payer another
+ * payer's credentials, so it is checked rather than assumed.
+ */
+function payerOwnsAttempt(
+    existing: ExistingAttempt,
+    payerPersonId: string | null,
+    actorUserId: string | null,
+): boolean {
+    if (payerPersonId) return t(existing.payer_person_id) === payerPersonId;
+    if (t(existing.payer_person_id)) return false;
+    return t(existing.created_by) === t(actorUserId);
+}
+
+/**
+ * RETIRE A DECLINED ATTEMPT AT THE PROVIDER before a new one is opened.
+ *
+ * A declined PaymentIntent is not dead at Stripe — it sits in `requires_payment_method`, and the tab
+ * that holds its client secret can still confirm it with another card. Opening a second attempt
+ * beside it would leave two live intents for one payment. So the old one is canceled first; its
+ * attempt keeps `failed`, which is what happened to it.
+ *
+ * If the provider says it has moved on (`processing`, `succeeded`), the old attempt is NOT retired
+ * and no new one is opened: its money is on the way, and the webhook or recognition will post it.
+ */
+async function retireDeclinedIntent(
+    existing: ExistingAttempt,
+    stripeCall: StripeCall,
+    stripeRead: StripeRead,
+): Promise<{ ok: true } | { ok: false; providerStatus: string }> {
+    const pi = t(existing.provider_transaction_id);
+    if (!pi || existing.processor_state === "canceled") return { ok: true };
+
+    const cancel = await stripeCall(
+        `payment_intents/${encodeURIComponent(pi)}/cancel`,
+        { cancellation_reason: "abandoned" },
+        { "Stripe-Account": existing.provider_account_ref },
+    );
+    if (cancel.status === 200) return { ok: true };
+
+    // Not cancelable. Ask what it IS rather than guessing from the error text.
+    const read = await stripeRead(`payment_intents/${encodeURIComponent(pi)}`, existing.provider_account_ref);
+    const status = String((read.body as { status?: unknown }).status ?? "");
+    if (read.status === 200 && status === "canceled") return { ok: true };
+    return { ok: false, providerStatus: status || `unreadable (${read.status})` };
+}
+
+/**
+ * A provider refusal of an off-session confirmation, as Stripe reports it: an HTTP 402 whose error
+ * carries the PaymentIntent it created. Null when the error is anything else.
+ */
+function declinedIntentFrom(response: { status: number; body: Record<string, unknown> }): {
+    intentId: string;
+    intentStatus: string;
+    code: string | null;
+    declineCode: string | null;
+    message: string | null;
+} | null {
+    if (response.status === 200) return null;
+    const err = (response.body.error ?? {}) as {
+        code?: unknown;
+        decline_code?: unknown;
+        message?: unknown;
+        payment_intent?: { id?: unknown; status?: unknown } | null;
+    };
+    const intentId = t(err.payment_intent?.id);
+    if (!intentId) return null;
+    return {
+        intentId,
+        intentStatus: t(err.payment_intent?.status),
+        code: t(err.code) || null,
+        declineCode: t(err.decline_code) || null,
+        message: t(err.message) || null,
     };
 }
 
@@ -206,6 +389,7 @@ export async function createCardCollection(
     supabase: SupabaseClient,
     input: CreateCardCollectionInput,
     stripeCall: StripeCall = defaultStripeCall,
+    stripeRead: StripeRead = defaultStripeRead,
 ): Promise<CreateCardCollectionResult> {
     const rail = input.rail ?? "card";
 
@@ -215,6 +399,30 @@ export async function createCardCollection(
             reason: "invalid_amount",
             message: "A collection amount must be a positive whole number of cents.",
         };
+    }
+
+    /*
+     * ── 0. THE NAMED PAYER IS A PERSON IN THIS ORGANIZATION ──────────────────────────────────────
+     *
+     * The payer is part of the attempt's identity and is written onto the receipt, so it is checked
+     * against the canonical person record rather than carried through on a caller's say-so. Scoped
+     * by the session's org: a person in another tenant reads as absent.
+     */
+    const namedPayer = t(input.payerPersonId) || null;
+    if (namedPayer) {
+        const { data: person } = await supabase
+            .from("persons")
+            .select("id")
+            .eq("org_id", input.orgId)
+            .eq("id", namedPayer)
+            .maybeSingle();
+        if (!person) {
+            return {
+                ok: false,
+                reason: "payer_not_found",
+                message: "The payer named for this collection is not a person in this organization.",
+            };
+        }
     }
 
     // ── 1. WHOSE MERCHANT ACCOUNT. Refuses rather than falling back to the platform. ─────────────
@@ -339,6 +547,18 @@ export async function createCardCollection(
          * it is looked up rather than given up on.
          */
         const accountCustomerId = await resolveChargeAccount(supabase, input.orgId, source);
+        /*
+         * An obligation whose account cannot be resolved has nothing to scope a stored method to,
+         * and "we could not tell whose this is" must not open the gate. A present-payer collection
+         * is unaffected; only charging an instrument on file needs to know whose file.
+         */
+        if (!accountCustomerId) {
+            return {
+                ok: false,
+                reason: "method_wrong_account",
+                message: "This obligation's account could not be resolved, so no stored method can be used for it.",
+            };
+        }
         const resolution = await resolveCollectionMethod(supabase, {
             orgId: input.orgId,
             methodId: t(input.paymentMethodId),
@@ -384,10 +604,14 @@ export async function createCardCollection(
          * This does not touch responsibility. Person B may own the card, pay with it, and owe
          * nothing; who owes is Thread 6's and is not written here.
          */
+        /*
+         * With a payer named, ONLY that person's own method qualifies. An agency-owned method used
+         * to pass this check because it is not a person — so a participant link could charge a
+         * method that belonged to nobody it named.
+         */
         if (
-            t(input.payerPersonId)
-            && storedMethod.payerEntityType === "person"
-            && storedMethod.payerEntityId !== t(input.payerPersonId)
+            namedPayer
+            && (storedMethod.payerEntityType !== "person" || storedMethod.payerEntityId !== namedPayer)
         ) {
             return {
                 ok: false,
@@ -409,81 +633,171 @@ export async function createCardCollection(
         clonedMethodRef = materialized.clonedMethodRef;
     }
 
-    const intentKey = deriveIntentKey({
-        chargeId: input.chargeId,
-        amountCents: input.requestedAmountCents,
-        rail,
-    });
+    /*
+     * WHO IS PAYING, settled once. A caller who names a payer wins; otherwise a stored method's
+     * owner is the payer, because that is whose money it is. Evidence only — it never rewrites who
+     * is RESPONSIBLE for the obligation.
+     */
+    const payerPersonId =
+        namedPayer
+        || (storedMethod?.payerEntityType === "person" ? storedMethod.payerEntityId : null)
+        || null;
+    const actorUserId = t(input.actorUserId) || null;
+    const payerKey = attemptPayerKey({ payerPersonId, actorUserId });
+    const keyFor = (generation: number) =>
+        deriveIntentKey({
+            chargeId: input.chargeId,
+            amountCents: input.requestedAmountCents,
+            rail,
+            payerKey,
+            paymentMethodId: storedMethod?.id ?? null,
+            generation,
+        });
+    const baseKey = keyFor(0);
 
     /*
-     * ── 4. ONE ATTEMPT PER INTENT ────────────────────────────────────────────────────────────────
+     * ── 3c. MONEY ALREADY ON ITS WAY COUNTS AGAINST THE CEILING ──────────────────────────────────
+     *
+     * The collectible ceiling is Financials' and counts only recognised money. A bank debit that is
+     * `processing` for three days, or a card the provider has taken that is not posted yet, is not
+     * in it — so a second payer could be asked for the whole balance while the first payer's money
+     * was still in flight, and the family would pay twice. Those attempts are subtracted here.
+     *
+     * This narrows what may be ASKED for; it never changes what is owed. The ledger's own allocation
+     * bound is still what guarantees a charge is never over-applied when two payments race. This
+     * request's own earlier attempts (same payer, same intent) are excluded, so a genuine retry is
+     * still a retry rather than a refusal.
+     */
+    const { data: inFlightRows } = await supabase
+        .from("payment_collection_attempts")
+        .select("intent_key, processor_state, canonical_payment_id, requested_amount_cents")
+        .eq("org_id", input.orgId)
+        .eq("charge_id", input.chargeId)
+        .in("processor_state", ["processing", "succeeded"])
+        .is("canonical_payment_id", null);
+    const inFlightCents = ((inFlightRows ?? []) as Array<{ intent_key: string; requested_amount_cents: number }>)
+        .filter((r) => r.intent_key !== baseKey && !String(r.intent_key).startsWith(`${baseKey}:`))
+        .reduce((sum, r) => sum + (Number(r.requested_amount_cents) || 0), 0);
+    if (inFlightCents > 0 && input.requestedAmountCents > collectible.currentlyCollectibleCents - inFlightCents) {
+        const room = Math.max(0, collectible.currentlyCollectibleCents - inFlightCents);
+        return {
+            ok: false,
+            reason: "amount_exceeds_collectible",
+            message: room > 0
+                ? `Another payment of ${inFlightCents} cents on this obligation is still settling. The most that can be collected now is ${room} cents.`
+                : "Another payment on this obligation is still settling and covers what is owed. Nothing more can be collected until it lands.",
+        };
+    }
+
+    /*
+     * ── 4. ONE ATTEMPT PER INTENT, AND A NEW ONE AFTER A TERMINAL OUTCOME ────────────────────────
      *
      * The insert races deliberately. Two concurrent submissions both reach here; the unique index on
      * (org_id, intent_key) lets exactly one win, and the loser reads the winner's row rather than
      * creating a second PaymentIntent. A read-then-insert would let both through.
+     *
+     * THE ATTEMPT LIFECYCLE:
+     *
+     *   initiated → requires_payment_method / requires_action / processing → succeeded
+     *                                                                       ↘ failed   (declined)
+     *                                                                       ↘ canceled
+     *
+     *   • A NON-TERMINAL attempt is reused: that is a network retry, a second tab, a double click.
+     *   • A SUCCEEDED attempt is reused: asking again must never charge again.
+     *   • A FAILED or CANCELED attempt is NEVER reused. It used to be — a declined card's retry
+     *     received the declined intent back, and when that intent later succeeded the webhook
+     *     refused to post it because the attempt "was terminal". Now the declined intent is retired
+     *     at the provider and the next generation opens its own attempt. The failed one keeps its
+     *     history and its state.
      */
-    const { data: created, error: insertError } = await supabase
-        .from("payment_collection_attempts")
-        .insert({
-            org_id: input.orgId,
-            processor: "stripe",
-            merchant_id: merchant.merchantId,
-            provider_account_ref: merchant.providerAccountRef,
-            rail,
-            billable_source_type: source.billable_source_type,
-            billable_source_id: source.billable_source_id,
-            charge_id: input.chargeId,
-            /*
-             * WHO ACTUALLY PAID. When a stored method is used and the caller named no payer, the
-             * payer is the person whose instrument it was — that is the whole point of recording
-             * ownership on the method. It is evidence, not authority: it never rewrites who is
-             * RESPONSIBLE for the obligation, which is exactly the distinction this program keeps.
-             *
-             * A caller who names a payer wins, and an agency-owned method contributes nothing here
-             * because `payer_person_id` is a person.
-             */
-            payer_person_id:
-                t(input.payerPersonId)
-                || (storedMethod?.payerEntityType === "person" ? storedMethod.payerEntityId : null)
-                || null,
-            currency,
-            requested_amount_cents: input.requestedAmountCents,
-            intent_key: intentKey,
-            /*
-             * W3 PROVENANCE. Which stored instrument this attempt used — durable, and never nulled
-             * or repointed when the method is later revoked or replaced. The attempt names what
-             * actually happened.
-             */
-            payment_method_id: storedMethod?.id ?? null,
-            processor_state: "initiated",
-            created_by: input.actorUserId ?? null,
-            updated_by: input.actorUserId ?? null,
-        })
-        .select("id, provider_transaction_id")
-        .single();
-
-    let attemptId: string;
+    let attemptId = "";
     let existingTxn: string | null = null;
     let reused = false;
+    let intentKey = baseKey;
+    let reusedRow: ExistingAttempt | null = null;
 
-    if (insertError) {
+    for (let generation = 0; ; generation += 1) {
+        if (generation >= MAX_ATTEMPT_GENERATIONS) {
+            return {
+                ok: false,
+                reason: "too_many_attempts",
+                message: "This payment has been declined too many times today. Try a different payment method or try again tomorrow.",
+            };
+        }
+        intentKey = keyFor(generation);
+
+        const { data: created, error: insertError } = await supabase
+            .from("payment_collection_attempts")
+            .insert({
+                org_id: input.orgId,
+                processor: "stripe",
+                merchant_id: merchant.merchantId,
+                provider_account_ref: merchant.providerAccountRef,
+                rail,
+                billable_source_type: source.billable_source_type,
+                billable_source_id: source.billable_source_id,
+                charge_id: input.chargeId,
+                payer_person_id: payerPersonId,
+                currency,
+                requested_amount_cents: input.requestedAmountCents,
+                intent_key: intentKey,
+                /*
+                 * W3 PROVENANCE. Which stored instrument this attempt used — durable, and never
+                 * nulled or repointed when the method is later revoked or replaced.
+                 */
+                payment_method_id: storedMethod?.id ?? null,
+                processor_state: "initiated",
+                created_by: actorUserId,
+                updated_by: actorUserId,
+            })
+            .select("id, provider_transaction_id")
+            .single();
+
+        if (!insertError) {
+            const row = created as unknown as { id: string; provider_transaction_id: string | null };
+            attemptId = row.id;
+            existingTxn = row.provider_transaction_id;
+            break;
+        }
+
         if (!String(insertError.message).includes("uq_payment_collection_attempts_org_intent")) {
             throw new Error(`could not open a collection attempt: ${insertError.message}`);
         }
         const { data: winner } = await supabase
             .from("payment_collection_attempts")
-            .select("id, provider_transaction_id")
+            .select(EXISTING_ATTEMPT_COLUMNS)
             .eq("org_id", input.orgId)
             .eq("intent_key", intentKey)
             .single();
-        const row = winner as { id: string; provider_transaction_id: string | null };
-        attemptId = row.id;
-        existingTxn = row.provider_transaction_id;
-        reused = true;
-    } else {
-        const row = created as unknown as { id: string; provider_transaction_id: string | null };
-        attemptId = row.id;
-        existingTxn = row.provider_transaction_id;
+        const row = winner as unknown as ExistingAttempt | null;
+        if (!row) throw new Error("could not read the collection attempt that already holds this intent");
+
+        if (!payerOwnsAttempt(row, payerPersonId, actorUserId)) {
+            // Never hand one payer another payer's session — not even on a key collision.
+            throw new Error("a collection attempt for this intent belongs to a different payer; refusing to reuse it");
+        }
+
+        if (!RETIRED_ATTEMPT_STATES.has(row.processor_state)) {
+            attemptId = row.id;
+            existingTxn = row.provider_transaction_id;
+            reused = true;
+            reusedRow = row;
+            break;
+        }
+
+        // A terminal failure: retire its intent at the provider, then open the next generation.
+        const retired = await retireDeclinedIntent(row, stripeCall, stripeRead);
+        if (!retired.ok) {
+            return {
+                ok: false,
+                reason: "previous_attempt_unresolved",
+                attemptId: row.id,
+                message:
+                    retired.providerStatus === "succeeded" || retired.providerStatus === "processing"
+                        ? "An earlier try at this payment went through after it was declined, and is being recorded now. Nothing new was started."
+                        : "An earlier try at this payment could not be closed with the provider, so a new one was not started. Try again shortly.",
+            };
+        }
     }
 
     /*
@@ -500,21 +814,29 @@ export async function createCardCollection(
      * create one, which is what makes a crashed first request recoverable instead of permanently
      * stuck.
      */
-    if (existingTxn) {
-        return await describeExistingAttempt(supabase, attemptId, existingTxn, merchant.providerAccountRef, input, currency);
+    if (existingTxn && reusedRow) {
+        return await describeExistingAttempt(
+            supabase, reusedRow, existingTxn, merchant.providerAccountRef, input, currency, stripeRead,
+        );
     }
 
-    if (reused) {
+    if (reused && reusedRow) {
         for (let i = 0; i < 10; i += 1) {
             await new Promise((r) => setTimeout(r, 150));
             const { data: polled } = await supabase
                 .from("payment_collection_attempts")
-                .select("provider_transaction_id")
+                .select("provider_transaction_id, processor_state")
                 .eq("id", attemptId)
                 .single();
-            const txn = (polled as { provider_transaction_id: string | null } | null)?.provider_transaction_id;
-            if (txn) {
-                return await describeExistingAttempt(supabase, attemptId, txn, merchant.providerAccountRef, input, currency);
+            const p = polled as { provider_transaction_id: string | null; processor_state: string } | null;
+            if (p?.processor_state === "failed" && p.provider_transaction_id) {
+                // The winner's stored-method charge was declined while we waited. Same answer.
+                return declinedRefusal(attemptId, null, rail);
+            }
+            if (p?.provider_transaction_id) {
+                return await describeExistingAttempt(
+                    supabase, reusedRow, p.provider_transaction_id, merchant.providerAccountRef, input, currency, stripeRead,
+                );
             }
         }
     }
@@ -577,6 +899,38 @@ export async function createCardCollection(
         },
     );
 
+    /*
+     * ── 5b. A DECLINE IS AN OUTCOME, NOT AN EXCEPTION ────────────────────────────────────────────
+     *
+     * A stored method is confirmed in this call, so the provider's refusal arrives HERE — as a 402
+     * carrying the PaymentIntent it created. This used to throw. The attempt was left `initiated`
+     * with no provider id: the webhook that followed could not find it, the operator surface read
+     * it as "Processing" indefinitely, and the declined card looked like money on its way.
+     *
+     * Now the intent is recorded and the attempt is `failed` — terminal, kept, and never reused, so
+     * the next request opens a fresh attempt. Bounded provider detail only; never card data.
+     */
+    const declined = declinedIntentFrom(stripeResponse);
+    if (declined && (declined.intentStatus === "requires_payment_method" || declined.intentStatus === "canceled")) {
+        await supabase
+            .from("payment_collection_attempts")
+            .update({
+                provider_transaction_id: declined.intentId,
+                processor_state: "failed",
+                processor_state_at: new Date().toISOString(),
+                last_provider_detail: {
+                    source: "confirm",
+                    status: declined.intentStatus,
+                    failure_code: declined.code,
+                    decline_code: declined.declineCode,
+                },
+                updated_at: new Date().toISOString(),
+                updated_by: actorUserId,
+            })
+            .eq("id", attemptId);
+        return declinedRefusal(attemptId, declined.message, rail);
+    }
+
     if (stripeResponse.status !== 200) {
         const err = (stripeResponse.body.error ?? {}) as { message?: string };
         throw new Error(`Stripe refused the collection request: ${err.message ?? stripeResponse.status}`);
@@ -612,7 +966,7 @@ export async function createCardCollection(
             expected_settlement_on: expectedSettlementFromIntent(intent),
             processor_state_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            updated_by: input.actorUserId ?? null,
+            updated_by: actorUserId,
         })
         .eq("id", attemptId);
 
@@ -626,6 +980,17 @@ export async function createCardCollection(
         currency,
         reused: reused || Boolean(existingTxn),
         paymentMethodId: storedMethod?.id ?? null,
+    };
+}
+
+/** What a payer or operator is told when a stored method is declined. Nothing was collected. */
+function declinedRefusal(attemptId: string, providerMessage: string | null, rail: "card" | "ach"): CreateCardCollectionResult {
+    const lead = providerMessage || (rail === "ach" ? "The bank account was declined." : "The card was declined.");
+    return {
+        ok: false,
+        reason: "payment_declined",
+        attemptId,
+        message: `${lead} Nothing was collected and the balance is unchanged. You can try again or use a different payment method.`,
     };
 }
 

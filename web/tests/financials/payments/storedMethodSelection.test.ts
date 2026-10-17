@@ -74,7 +74,9 @@ describe("the payer owns the method — enforced, not merely displayed", () => {
          */
         const src = code(ATTEMPT);
         expect(src).toMatch(/method_payer_mismatch/);
-        expect(src).toMatch(/storedMethod\.payerEntityId !== t\(input\.payerPersonId\)/);
+        // The named payer must OWN the method — a person, and exactly that person. An agency-owned
+        // method no longer slips through for not being a person.
+        expect(src).toMatch(/storedMethod\.payerEntityType !== "person" \|\| storedMethod\.payerEntityId !== namedPayer/);
     });
 
     it("the canonical read carries the owner, so the filter has something true to use", () => {

@@ -19,7 +19,9 @@ import { resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
+import { collectionLifecycle, lifecycleLabel } from "@/lib/financials/payments/collectionLifecycle";
 import {
     readUnrecognizedCollections,
     recognizeCollectionAttempt,
@@ -28,7 +30,7 @@ import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMe
 import { defaultStripeFormCall } from "@/lib/financials/payments/providerPaymentMethod";
 import { requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 
-import { ensureAccountingPeriodCovers, governedTestAccount } from "./certEnvironment";
+import { ensureAccountingPeriodCovers, ensureCertificationPersons, governedTestAccount } from "./certEnvironment";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     try {
@@ -81,7 +83,10 @@ async function postCharge(amountCents: number): Promise<string> {
             org_id: ORG, job_id: null,
             billable_source_type: "customer", billable_source_id: CUSTOMER,
             charge_type: "fee", charge_category: "fee", status: "draft",
-            currency_code: "USD", amount_cents: amountCents,
+            currency_code: "USD",
+            // A childcare charge names its billing period (charges_billing_period_childcare_chk); the legacy shape needs no period row.
+            billing_period_generation: "legacy", legacy_billing_period_key: new Date().toISOString().slice(0, 7),
+            amount_cents: amountCents,
             service_date: TODAY, occurs_on: TODAY, billable_on: TODAY,
             description: "W3 collection completion certification", metadata: {},
             created_by: ACTOR, updated_by: ACTOR,
@@ -96,7 +101,7 @@ async function postCharge(amountCents: number): Promise<string> {
 }
 
 /** A real platform-side method of the given rail, stored canonically. */
-async function storeMethod(rail: "card" | "ach", payerId: string): Promise<string> {
+async function storeMethod(rail: "card" | "ach", payerId: string, cardToken = "tok_visa"): Promise<string> {
     const customer = await defaultStripeFormCall("POST", "customers", { name: `W3 ${rail} payer` }, {});
     const customerRef = String((customer.body as { id?: string }).id ?? "");
 
@@ -104,9 +109,9 @@ async function storeMethod(rail: "card" | "ach", payerId: string): Promise<strin
     let brand: string | null = null;
     let last4: string | null = null;
     if (rail === "card") {
-        const pm = await defaultStripeFormCall("POST", "payment_methods", { type: "card", "card[token]": "tok_visa" }, {});
+        const pm = await defaultStripeFormCall("POST", "payment_methods", { type: "card", "card[token]": cardToken }, {});
         methodRef = String((pm.body as { id?: string }).id ?? "");
-        brand = "visa"; last4 = "4242";
+        brand = "visa"; last4 = cardToken === "tok_visa" ? "4242" : "0341";
         await defaultStripeFormCall("POST", `payment_methods/${methodRef}/attach`, { customer: customerRef }, {});
     } else {
         /*
@@ -148,6 +153,7 @@ describe.runIf(runnable)("collection completion — live", () => {
         );
         await client.from("customers").upsert({ id: CUSTOMER, org_id: ORG, name: "W3 cert account" }, { onConflict: "id" });
         await ensureAccountingPeriodCovers(client, ORG, TODAY);
+        await ensureCertificationPersons(client, ORG, [PAYER, OTHER_PAYER]);
 
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_methods").delete().eq("org_id", ORG);
@@ -203,6 +209,61 @@ describe.runIf(runnable)("collection completion — live", () => {
         expect(row.rail).toBe("card");
         expect(row.payer_person_id).toBe(PAYER);
     }, 120_000);
+
+    /**
+     * A SAVED CARD DECLINED AT CONFIRMATION. Stripe's `tok_chargeCustomerFail` attaches cleanly and
+     * declines when charged — exactly a family's card on file that stops working. The decline used to
+     * throw, leaving the attempt `initiated` with no provider id: invisible to its webhook and shown
+     * to the operator as "Processing" for good.
+     */
+    it("a declined saved card is a recorded, terminal, retryable failure — never Processing", async () => {
+        const chargeId = await postCharge(11_000);
+        const decliningMethodId = await storeMethod("card", PAYER, "tok_chargeCustomerFail");
+        const args = {
+            orgId: ORG, chargeId, requestedAmountCents: 11_000, actorUserId: ACTOR,
+            payerPersonId: PAYER, paymentMethodId: decliningMethodId,
+        };
+        const declined = await createCardCollection(supabase!, args);
+        expect(declined.ok).toBe(false);
+        if (declined.ok) return;
+        expect(declined.reason).toBe("payment_declined");
+        expect(declined.attemptId).toBeTruthy();
+
+        const { data } = await supabase!
+            .from("payment_collection_attempts")
+            .select("processor_state, provider_transaction_id, provider_account_ref, last_provider_detail, rail, provider_action_type")
+            .eq("id", declined.attemptId!).single();
+        const row = data as {
+            processor_state: string; provider_transaction_id: string | null; provider_account_ref: string;
+            last_provider_detail: { failure_code?: string; decline_code?: string }; rail: string; provider_action_type: string | null;
+        };
+        expect(row.processor_state).toBe("failed");
+        expect(row.provider_transaction_id, "the webhook can find it").toMatch(/^pi_/);
+        expect(row.last_provider_detail.failure_code).toBe("card_declined");
+        const state = collectionLifecycle({
+            rail: "card", processorState: row.processor_state, providerActionType: row.provider_action_type,
+            canonicallyRecognized: false, providerFailureCode: row.last_provider_detail.failure_code ?? null,
+            providerDeclineCode: row.last_provider_detail.decline_code ?? null,
+        });
+        expect(state).toBe("declined");
+        expect(lifecycleLabel(state, "card")).not.toMatch(/processing/i);
+
+        // Trying the same card again is a NEW attempt — and the declined intent is retired first.
+        const again = await createCardCollection(supabase!, args);
+        expect(again.ok).toBe(false);
+        if (again.ok) return;
+        expect(again.reason).toBe("payment_declined");
+        expect(again.attemptId).not.toBe(declined.attemptId);
+        const old = await defaultStripeFormCall(
+            "GET", `payment_intents/${row.provider_transaction_id}`, {}, { "Stripe-Account": row.provider_account_ref },
+        );
+        expect((old.body as { status?: string }).status).toBe("canceled");
+
+        // The family's other card works, and nothing about the balance moved in between.
+        expect((await readChargeBalance(supabase!, ORG, chargeId)).outstandingCents).toBe(11_000);
+        const working = await createCardCollection(supabase!, { ...args, paymentMethodId: cardMethodId });
+        expect(working.ok, !working.ok ? working.message : "").toBe(true);
+    }, 180_000);
 
     /**
      * THE PAYER INVARIANT. Charging Person B's card while recording Person A as the payer would put

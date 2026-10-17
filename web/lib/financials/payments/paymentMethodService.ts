@@ -730,7 +730,13 @@ export async function resolveCollectionMethod(
     if (!method) {
         return { ok: false, reason: "not_found", message: "That payment method is not on this organization." };
     }
-    if (method.customerId && t(args.customerId) && method.customerId !== t(args.customerId)) {
+    /*
+     * SCOPE IS REQUIRED, NOT OPTIONAL. This used to skip the comparison whenever either side was
+     * empty — so a method with no account scope (which the table defines as "owned but not yet usable
+     * for collection anywhere") could settle ANY account's obligation in the organization, and so
+     * could any method when the obligation's account failed to resolve. Both now fail closed.
+     */
+    if (!method.customerId || !t(args.customerId) || method.customerId !== t(args.customerId)) {
         return {
             ok: false,
             reason: "wrong_account",

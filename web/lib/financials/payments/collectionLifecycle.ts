@@ -29,6 +29,12 @@ export type CollectionLifecycleState =
     | "finalizing"
     /** Canonical recognition happened. This is the only state that means money. */
     | "received"
+    /**
+     * The payer's bank or card issuer refused it. Nothing was collected, the balance is unchanged,
+     * and another method may be tried. Distinct from `failed` because it is the payer's next move,
+     * not an operator's investigation.
+     */
+    | "declined"
     /** It failed before anything was recognised. No receipt exists. */
     | "failed"
     /** Recognised money the provider later took back. */
@@ -46,7 +52,33 @@ export type LifecycleInput = {
     canonicallyRecognized: boolean;
     /** Whether a provider-initiated reversal has been recognised against that receipt. */
     providerReversed?: boolean;
+    /**
+     * The provider's failure code for the attempt's last failure, from `last_provider_detail`
+     * (`failure_code`). `card_declined` — or any decline code at all — makes a failure a decline.
+     */
+    providerFailureCode?: string | null;
+    /** The issuer's decline code, from `last_provider_detail.decline_code`, when there was one. */
+    providerDeclineCode?: string | null;
 };
+
+/** Provider failure codes that mean "the payer's instrument was refused", not "something broke". */
+const DECLINE_CODES: ReadonlySet<string> = new Set([
+    "card_declined",
+    "expired_card",
+    "incorrect_cvc",
+    "incorrect_number",
+    "insufficient_funds",
+    "authentication_required",
+    "payment_method_not_available",
+    "bank_account_declined",
+    "debit_not_authorized",
+]);
+
+/** Whether an attempt's recorded failure is a decline of the payer's instrument. */
+export function isDeclineFailure(code?: string | null, declineCode?: string | null): boolean {
+    if ((declineCode ?? "").trim()) return true;
+    return DECLINE_CODES.has((code ?? "").trim());
+}
 
 /**
  * The one place a collection's state becomes a word.
@@ -83,7 +115,7 @@ export function collectionLifecycle(input: LifecycleInput): CollectionLifecycleS
              */
             return "selected";
         case "failed":
-            return "failed";
+            return isDeclineFailure(input.providerFailureCode, input.providerDeclineCode) ? "declined" : "failed";
         case "canceled":
             return "canceled";
         case "initiated":
@@ -108,8 +140,10 @@ export function lifecycleLabel(state: CollectionLifecycleState, rail: Collection
             return "Payment received — finalizing";
         case "received":
             return "Received";
+        case "declined":
+            return rail === "ach" ? "Declined by the bank — retry available" : "Declined — retry available";
         case "failed":
-            return "Failed";
+            return "Failed — retry available";
         case "returned":
             return "Returned by the bank";
         case "canceled":
@@ -128,6 +162,17 @@ export function lifecycleLabel(state: CollectionLifecycleState, rail: Collection
  */
 export function meansSettledCash(state: CollectionLifecycleState): boolean {
     return state === "received";
+}
+
+/**
+ * Whether the payer may start a NEW attempt after this one.
+ *
+ * True only when the attempt ended without money: declined, failed or canceled. The attempt itself
+ * is never reused — the collection service opens a new one — and nothing about the obligation moved,
+ * so the outstanding balance is exactly what it was before the attempt.
+ */
+export function retryAvailable(state: CollectionLifecycleState): boolean {
+    return state === "declined" || state === "failed" || state === "canceled";
 }
 
 /**

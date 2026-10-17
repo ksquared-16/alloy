@@ -217,3 +217,22 @@ export async function certificationPoolAccount(
     if (existing && typeof existing.id === "string") return existing.id;
     return await create();
 }
+
+/**
+ * PAYERS ARE PEOPLE. The collection service checks a named payer against `persons` in the session's
+ * org before it opens an attempt, because the payer is part of the attempt's identity and is written
+ * onto the receipt. Suites that name a payer create that person first; a fabricated id — or a
+ * customer-member id standing in for one — is refused, which is the point.
+ */
+export async function ensureCertificationPersons(
+    client: SupabaseClient,
+    orgId: string,
+    personIds: readonly string[],
+): Promise<void> {
+    for (const id of personIds) {
+        const { error } = await client
+            .from("persons")
+            .upsert({ id, org_id: orgId, first_name: "Certification", last_name: "Payer" }, { onConflict: "id" });
+        if (error) throw new Error(`could not seed certification payer ${id}: ${error.message}`);
+    }
+}

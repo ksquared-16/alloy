@@ -216,13 +216,70 @@ const SUPPORTED = new Set([
     "charge.dispute.updated",
 ]);
 
-const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
+/*
+ * TWO KINDS OF "TERMINAL", and conflating them was a money defect.
+ *
+ * `succeeded` and `canceled` are FINAL at the provider: a PaymentIntent in either never changes
+ * again. `failed` is not. Stripe's `payment_intent.payment_failed` leaves the intent in
+ * `requires_payment_method`, and the payer's still-open tab can confirm it with another card. Alloy
+ * treated `failed` as final too, so when that second card succeeded the webhook called the success
+ * "older provider truth" and the money was never posted.
+ *
+ * So `failed` is terminal for REUSE — the collection service never hands a failed attempt out again
+ * — but the provider's own later success still lands on it, and posts. Nothing else moves it: a
+ * late `processing` or `requires_action` from before the decline is stale, and the cancellation of a
+ * superseded declined intent is recorded as evidence without overwriting what happened to it.
+ */
+const FINAL = new Set(["succeeded", "canceled"]);
+
+/** A claim on an event that never finished is abandoned after this long, and may be re-taken. */
+const ABANDONED_CLAIM_MS = 2 * 60 * 1000;
 
 /** The event type's own implied state, for types whose object status lags or is absent. */
 function stateForEvent(eventType: string, objectStatus: string | undefined): string {
     if (eventType === "payment_intent.payment_failed") return "failed";
     if (eventType === "payment_intent.canceled") return "canceled";
     return mapStripeStatus(objectStatus);
+}
+
+/** The provider's reason codes for the last failure on an intent, when there was one. */
+function failureDetail(object: Record<string, unknown>): Record<string, string> {
+    const err = object.last_payment_error as { code?: unknown; decline_code?: unknown } | null | undefined;
+    if (!err || typeof err !== "object") return {};
+    const out: Record<string, string> = {};
+    if (typeof err.code === "string" && err.code) out.failure_code = err.code;
+    if (typeof err.decline_code === "string" && err.decline_code) out.decline_code = err.decline_code;
+    return out;
+}
+
+/**
+ * Re-take an event claim that was abandoned mid-processing, or return null.
+ *
+ * Null means the event either finished (a real duplicate) or is being processed right now by
+ * another delivery. Only a claim still `received` and older than the abandonment window is taken,
+ * and only by the delivery whose compare-and-set lands.
+ */
+async function reclaimAbandonedEvent(supabase: SupabaseClient, eventId: string): Promise<string | null> {
+    const { data } = await supabase
+        .from("payment_provider_events")
+        .select("id, disposition, received_at")
+        .eq("processor", "stripe")
+        .eq("provider_event_id", eventId)
+        .maybeSingle();
+    const row = data as { id: string; disposition: string; received_at: string } | null;
+    if (!row || row.disposition !== "received") return null;
+    const claimedAt = Date.parse(row.received_at);
+    if (!Number.isFinite(claimedAt) || Date.now() - claimedAt < ABANDONED_CLAIM_MS) return null;
+
+    const { data: taken } = await supabase
+        .from("payment_provider_events")
+        .update({ received_at: new Date().toISOString(), disposition_detail: "reclaimed after an unfinished delivery" })
+        .eq("id", row.id)
+        .eq("disposition", "received")
+        .eq("received_at", row.received_at)
+        .select("id");
+    const won = ((taken ?? []) as Array<{ id: string }>).length === 1;
+    return won ? row.id : null;
 }
 
 /** The provider's own name for what the payer still has to do, or null when nothing is pending. */
@@ -288,17 +345,36 @@ export async function handleStripeWebhook(
         .select("id")
         .single();
 
+    let eventRowId: string;
     if (claimError) {
-        if (String(claimError.message).includes("uq_payment_provider_events_processor_event")) {
+        if (!String(claimError.message).includes("uq_payment_provider_events_processor_event")) {
+            throw new Error(`could not record provider event: ${claimError.message}`);
+        }
+        /*
+         * ── 2a. A CLAIM THAT NEVER FINISHED IS NOT A DUPLICATE ───────────────────────────────────
+         *
+         * The claim is written BEFORE the work. If the work then threw — a transient database
+         * error converging the attempt — the route answered 500, Stripe redelivered, and the
+         * redelivery found the claim and was told "duplicate". The event was lost for good: the
+         * provider had done the right thing and Alloy never acted on it.
+         *
+         * A claim still `received` long after it was taken is abandoned. It is re-taken with a
+         * compare-and-set on its own `received_at`, so of two redeliveries exactly one proceeds.
+         * Everything downstream is idempotent — the attempt's state trigger and the posting anchor —
+         * so re-running an event that had in fact half-finished is harmless.
+         */
+        const reclaimed = await reclaimAbandonedEvent(supabase, eventId);
+        if (!reclaimed) {
             return {
                 status: 200,
                 outcome: "duplicate",
                 detail: "this event was already recorded; nothing was done a second time",
             };
         }
-        throw new Error(`could not record provider event: ${claimError.message}`);
+        eventRowId = reclaimed;
+    } else {
+        eventRowId = (claimed as { id: string }).id;
     }
-    const eventRowId = (claimed as { id: string }).id;
 
     const finish = async (
         outcome: WebhookOutcome,
@@ -634,9 +710,22 @@ export async function handleStripeWebhook(
         });
     }
 
-    // A DIFFERENT terminal state arriving is a regression and is refused. The SAME one arriving
-    // again, for a success Alloy has not yet recognised, is the recovery path above — not stale.
-    if (TERMINAL.has(attempt.processor_state) && !awaitingPosting) {
+    /*
+     * A DIFFERENT terminal state arriving is a regression and is refused. The SAME one arriving
+     * again, for a success Alloy has not yet recognised, is the recovery path above — not stale.
+     *
+     * The one exception is the provider's success on a DECLINED attempt: the intent was retried
+     * with another method and the money arrived. That is newer provider truth, not older, and it
+     * must post. (`awaitingPosting` is exactly that case when the attempt is `failed`.)
+     */
+    if (FINAL.has(attempt.processor_state) && !awaitingPosting) {
+        return await finish(
+            "stale",
+            `attempt is terminal at ${attempt.processor_state}; ${nextState} is older provider truth and was not applied`,
+            { org_id: orgId, collection_attempt_id: attempt.id },
+        );
+    }
+    if (attempt.processor_state === "failed" && nextState !== "succeeded") {
         return await finish(
             "stale",
             `attempt is terminal at ${attempt.processor_state}; ${nextState} is older provider truth and was not applied`,
@@ -665,7 +754,16 @@ export async function handleStripeWebhook(
              * about the collection any more.
              */
             provider_action_type: nextAction(object),
-            last_provider_detail: { event_id: eventId, event_type: eventType, status: object.status ?? null },
+            last_provider_detail: {
+                event_id: eventId,
+                event_type: eventType,
+                status: object.status ?? null,
+                /*
+                 * WHY it failed, when it did — the difference between "Declined" (the payer can
+                 * try another card) and "Failed". The provider's codes only; never card data.
+                 */
+                ...failureDetail(object),
+            },
             updated_at: new Date().toISOString(),
         })
         .eq("id", attempt.id);
