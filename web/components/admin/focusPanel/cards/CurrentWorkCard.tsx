@@ -179,6 +179,7 @@ export default function CurrentWorkCard({
     const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
     const [completionSummary, setCompletionSummary] = useState<CurrentWorkCompletionSummary | null>(null);
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+    const [recordedNotice, setRecordedNotice] = useState<string | null>(null);
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
     /** Work Items → Focus Panel deep-link: highlight the shared work identity when present. */
@@ -631,7 +632,35 @@ export default function CurrentWorkCard({
     const handleConfirmOutcome = useCallback(() => {
         if (!pendingOutcomeKey || !activeProjection || !activeWorkItem) return;
         setCompletionPhase("processing");
-        void completeOutcome(activeProjection, pendingOutcomeKey).then(() => {
+        void (async () => {
+            let result = await completeOutcome(activeProjection, pendingOutcomeKey);
+            /*
+             * A terminal Tour outcome while the Tour is still ahead: nothing was written. The operator
+             * is asked in the platform's words; declining leaves everything exactly as it was.
+             */
+            if (result?.confirmation_required) {
+                const confirmed = window.confirm(result.confirmation_required.message);
+                if (!confirmed) {
+                    setCompletionPhase("confirm");
+                    return;
+                }
+                result = await completeOutcome(activeProjection, pendingOutcomeKey, { confirmCloseScheduledTour: true });
+            }
+            // A refused outcome returns to the confirmation with its error — never to "Completed".
+            if (!result?.ok) {
+                setCompletionPhase("confirm");
+                return;
+            }
+            /*
+             * THE RECORD LEFT THIS STAGE — there is nothing to continue here. The "What's Next /
+             * Continue Work" interstitial described work the record no longer has; the Focus Panel
+             * closes and re-renders at the new stage, with one line saying the outcome was recorded.
+             */
+            if (result.moved_stage) {
+                closeWorkspace();
+                setRecordedNotice("Outcome recorded");
+                return;
+            }
             const effectLines = stageWorkOutcomeEffectLines(activeWorkItem, pendingOutcomeKey);
             setCompletionSummary(
                 buildOutcomeCompletionSummary({
@@ -642,8 +671,14 @@ export default function CurrentWorkCard({
             );
             setCompletionPhase("complete");
             setPendingOutcomeKey(null);
-        });
-    }, [completeOutcome, pendingOutcomeKey, activeProjection, activeWorkItem]);
+        })();
+    }, [completeOutcome, pendingOutcomeKey, activeProjection, activeWorkItem, closeWorkspace]);
+
+    useEffect(() => {
+        if (!recordedNotice) return;
+        const timer = window.setTimeout(() => setRecordedNotice(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [recordedNotice]);
 
     // #6: the status is expressed through the SHARED UniversalCard status-chip system (one canonical
     // chip aligned with the card title), never a bespoke pill nested inside the card's own status
@@ -840,6 +875,11 @@ export default function CurrentWorkCard({
                 receded={receded}
                 footerAction={footerAction}
             >
+                {recordedNotice && !isWorkspace ?
+                    <p className="alloy-os-household__row-detail" role="status" data-work-outcome-recorded="true">
+                        {recordedNotice}
+                    </p>
+                :   null}
                 {body}
             </UniversalCard>
         </div>

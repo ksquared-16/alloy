@@ -6,7 +6,10 @@ import {
     dispatchOpportunityDrawerOperationalTasksRefresh,
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { completeStageWorkWithSelectedOutcome } from "@/lib/lifecycle/stageWorkOutcomePickerClient";
+import {
+    completeStageWorkWithSelectedOutcome,
+    type StageWorkOutcomeCompletion,
+} from "@/lib/lifecycle/stageWorkOutcomePickerClient";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import { fetchFreshOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/fetchFreshOpportunityDrawerViewModel";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
@@ -42,9 +45,18 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
     }, [drawerCtx]);
 
     const completeOutcome = useCallback(
-        async (projection: WorkIntentRuntimeProjection, outcomeKey: string) => {
-            if (projection.state !== "open" || !projection.work_id) return;
-            if (!projection.outcomes.length) return;
+        /**
+         * Resolves to what the outcome did, or `null` when it failed (the error is on `error`). It used
+         * to resolve the same way either way, so a refused outcome was followed by the "completed"
+         * screen. `confirmation_required` is neither: nothing was written, and the caller asks.
+         */
+        async (
+            projection: WorkIntentRuntimeProjection,
+            outcomeKey: string,
+            opts?: { confirmCloseScheduledTour?: boolean },
+        ): Promise<StageWorkOutcomeCompletion | null> => {
+            if (projection.state !== "open" || !projection.work_id) return null;
+            if (!projection.outcomes.length) return null;
             const { execution, stage_key: stageKey, work_id: workId } = projection;
 
             setBusy(true);
@@ -56,7 +68,9 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                     workId,
                     outcomeKey,
                     subject: execution.subject,
+                    confirmCloseScheduledTour: opts?.confirmCloseScheduledTour === true,
                 });
+                if (result.confirmation_required) return result;
                 if (!result.ok) {
                     throw new Error(result.error ?? "Failed to complete work");
                 }
@@ -73,8 +87,10 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                     dispatchOpportunityQueueUpdated(result.queue_refresh_opportunity_id, "stage_work_outcome");
                 }
                 await reloadOpportunityDisplayVm();
+                return result;
             } catch (e: unknown) {
                 setError((e as Error).message || "Failed to complete work");
+                return null;
             } finally {
                 setBusy(false);
             }

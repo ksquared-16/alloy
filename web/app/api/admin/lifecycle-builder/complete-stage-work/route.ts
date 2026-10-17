@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
         work_id?: string;
         outcome_key?: string;
         subject?: StageOutcomeExecutionSubject;
+        /** The operator confirmed closing a Tour that is still ahead. */
+        confirm_close_scheduled_tour?: boolean;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
         workId,
         outcomeKey,
         subject,
+        confirmCloseScheduledTour: body.confirm_close_scheduled_tour === true,
         correlationId,
         // A double-submitted outcome joins the running transaction instead of executing twice.
         idempotencyKey: `${ctx.orgId}:${workId}:${outcomeKey}`,
@@ -76,6 +79,21 @@ export async function POST(request: NextRequest) {
         result.outcome_execution ?
             (({ undo: _undo, ...rest }) => rest)(result.outcome_execution)
         :   undefined;
+
+    // Not a failure: the outcome would close a Tour that is still ahead, and nothing was written. The
+    // caller asks the operator and resubmits with `confirm_close_scheduled_tour: true`.
+    if (!result.ok && result.confirmation_required) {
+        return NextResponse.json(
+            {
+                error: result.confirmation_required.message,
+                code: result.confirmation_required.kind,
+                confirmation_required: result.confirmation_required,
+                changed: false,
+                correlation_id: result.correlation_id ?? correlationId,
+            },
+            { status: 409, headers },
+        );
+    }
 
     if (!result.ok) {
         return NextResponse.json(
@@ -99,6 +117,7 @@ export async function POST(request: NextRequest) {
             ok: true,
             outcome_execution: outcomeExecution,
             queue_refresh_opportunity_id: result.outcome_execution?.queue_refresh_opportunity_id,
+            scheduled_tour_closed: result.scheduled_tour_closed ?? null,
             transaction: result.transaction,
             correlation_id: result.correlation_id ?? correlationId,
         },
