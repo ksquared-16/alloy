@@ -35,7 +35,7 @@ import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollme
 import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstances";
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
-import { readEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
+import { readFamilyEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
 import type { EnrollmentFinancialRequirementProjection } from "@/lib/enrollment/financial/enrollmentFinancialRequirement";
 import {
     composeFamilyEnrollmentExperience,
@@ -176,31 +176,37 @@ export async function resolveFamilyEnrollmentExperience(
      * is recomputed here and no rollup is stored.
      */
     const children: FamilyChildJourney[] = [];
-    /** The stage's authored requirements, as each child's own resolver read them. */
-    let authoredRequirements: readonly StageRequirementV1[] = [];
     /*
-     * DUENESS, over the OTHER requirements. A fee that counted itself could never come due: it blocks,
-     * so not everything is resolved, so it never becomes due. Counted across children because a
-     * household fee is owed once the family's paperwork is done, not once one child's is.
+     * EACH CHILD'S OWN REQUIREMENTS, AND EACH CHILD'S OWN DUENESS.
+     *
+     * Siblings can be at different stages under different revisions — Ava enrolling with a fee, Ben
+     * waitlisted with fields to fill. This once kept ONE family list that the last child read
+     * overwrote, so Ben's waitlist fields replaced Ava's requirements, her fee read NOT_APPLICABLE and
+     * the payment step vanished; and one family-wide count of open fields held every fee back until
+     * every sibling's unrelated work was done. Now each child carries its own, and the fee reader
+     * decides per fee which children it belongs to.
+     *
+     * Dueness is over the OTHER requirements: a fee that counted itself could never come due.
      */
-    let outstandingNonFinancial = 0;
+    const requirementsByChild = new Map<string, { requirements: readonly StageRequirementV1[]; due: boolean }>();
     for (const pi of instances) {
         const subject = pi.subject_id as string;
         const session = sessionByInstance.get(pi.id) ?? null;
         const submitted = (session?.status ?? "") === "submitted" || (session?.status ?? "") === "completed";
 
+        let childRequirements: readonly StageRequirementV1[] = [];
         const progress = await resolveEnrollmentParticipantProgress(supabase, {
             orgId: input.orgId,
             processInstanceId: pi.id,
             captureLoaded: (loaded) => {
-                if (loaded.requirements.length > 0) authoredRequirements = loaded.requirements;
+                childRequirements = loaded.requirements;
             },
         });
         if (progress.ok) {
-            for (const r of progress.value.requirements) {
-                if (r.kind === "financial") continue;
-                if (r.status !== "satisfied") outstandingNonFinancial += 1;
-            }
+            const outstanding = progress.value.requirements.filter(
+                (r) => r.kind !== "financial" && r.status !== "satisfied",
+            ).length;
+            requirementsByChild.set(subject, { requirements: childRequirements, due: outstanding === 0 });
         }
 
         children.push({
@@ -259,15 +265,21 @@ export async function resolveFamilyEnrollmentExperience(
      */
     const rawProjection =
         input.financials ? null
-        :   await readEnrollmentFeeProjection(supabase, {
+        :   await readFamilyEnrollmentFeeProjection(supabase, {
                 orgId: input.orgId,
                 customerId,
-                enrollingChildren: children.map((c) => ({
-                    customerMemberId: c.customerMemberId,
-                    agreementId: agreementByChild.get(c.customerMemberId) ?? null,
-                })),
-                requirements: authoredRequirements,
-                due: outstandingNonFinancial === 0,
+                // A child whose progress could not be read contributes no fee rather than a guessed one.
+                children: children.flatMap((c) => {
+                    const own = requirementsByChild.get(c.customerMemberId);
+                    return own
+                        ? [{
+                              customerMemberId: c.customerMemberId,
+                              agreementId: agreementByChild.get(c.customerMemberId) ?? null,
+                              requirements: own.requirements,
+                              due: own.due,
+                          }]
+                        : [];
+                }),
             });
     const financials =
         input.financials ?? (rawProjection ? familyFinancialsFromProjection(rawProjection) : null);

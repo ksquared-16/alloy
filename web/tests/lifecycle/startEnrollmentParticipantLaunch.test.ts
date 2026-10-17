@@ -45,10 +45,17 @@ import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/particip
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import { readShareEmbedPath } from "@/lib/admin/forms/distributionLinkReuse";
 import { __clearConfigReadCacheForTests } from "@/lib/runtime/provisioning/configReadCache";
+import { previewParticipantPacketLaunch } from "@/lib/enrollment/participantLaunch/previewParticipantPacketLaunch";
+import {
+    NO_PRIMARY_CONTACT_DETAIL,
+    resolveEnrollmentLaunchRecipient,
+} from "@/lib/enrollment/participantLaunch/resolveEnrollmentLaunchRecipient";
+import { resolveParticipantPayer } from "@/lib/enrollment/financial/participantEnrollmentPayment";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const CHILD = "22222222-2222-4222-8222-222222222222";
 const HOUSEHOLD = "33333333-3333-4333-8333-333333333333";
+const PARENT = "7a7a7a7a-7a7a-47a7-87a7-7a7a7a7a7a7a";
 const REVISION = "44444444-4444-4444-8444-444444444444";
 const DEPARTMENT = "44444444-4444-4444-8444-4444444444de";
 const FORM_A = "55555555-5555-4555-8555-555555555555";
@@ -118,6 +125,12 @@ function makeDb(payload: unknown): Record<string, Row[]> {
         customer_members: [
             { id: CHILD, org_id: ORG, customer_id: HOUSEHOLD, relationship: "child", display_name: "Ada" },
         ],
+        // The household's canonical primary contact — who the participant link is addressed to, and
+        // therefore who may pay from it.
+        customer_persons: [
+            { org_id: ORG, customer_id: HOUSEHOLD, person_id: PARENT, role_type: "primary_contact", is_primary: true, created_at: "2026-01-01T00:00:00Z" },
+        ],
+        persons: [{ id: PARENT, org_id: ORG, first_name: "Pat", last_name: "Parent" }],
         process_instances: [],
         // The D-96 pin is resolved by the REAL resolver, so the publication row it reads has to
         // exist. One department publishing Enrollment is the unambiguous D-98 case — the sole
@@ -835,5 +848,113 @@ describe("B1 — republishing and unrelated links are unaffected", () => {
         // journey — NOT an invalid link, and not an error.
         expect(access.ok).toBe(false);
         expect(!access.ok && access.error.code).toBe("NO_SESSION");
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payer binding — the link is addressed to the household's canonical primary contact
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("payer binding — a Start Enrollment link names the household's canonical primary contact", () => {
+    const OTHER_HOUSEHOLD = "3b3b3b3b-3b3b-43b3-83b3-3b3b3b3b3b3b";
+    const GUARDIAN = "6c6c6c6c-6c6c-46c6-86c6-6c6c6c6c6c6c";
+    const LEGACY = "5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d";
+
+    async function startWith(mutate: (db: Record<string, Row[]>) => void) {
+        __clearConfigReadCacheForTests();
+        const db = makeDb(revisionPayload());
+        mutate(db);
+        const supabase = client(db);
+        const result = await startEnrollment(supabase, { orgId: ORG, customerMemberId: CHILD });
+        return { db, supabase, result };
+    }
+
+    it("launch records the primary contact, the payment payer is that person, and preview names them", async () => {
+        const { db, supabase, result } = await startWith(() => undefined);
+        expect(result.participantLaunch.realized).toBe(true);
+        expect(db.form_public_links).toHaveLength(1);
+        const link = db.form_public_links[0];
+        expect((link.metadata as Row).recipient_person_id).toBe(PARENT);
+
+        const payer = await resolveParticipantPayer(supabase, { orgId: ORG, linkId: String(link.id), customerId: HOUSEHOLD });
+        expect(payer?.personId).toBe(PARENT);
+
+        const preview = await previewParticipantPacketLaunch(supabase, { orgId: ORG, customerMemberId: CHILD });
+        expect(preview.ok).toBe(true);
+        if (!preview.ok) return;
+        // Preview and launch agree: the name shown is the person the link is bound to.
+        expect(preview.value.recipientName).toBe("Pat Parent");
+    });
+
+    it("no primary contact → no link at all, and the operator is told why (preview and launch alike)", async () => {
+        const { db, supabase, result } = await startWith((d) => {
+            d.customer_persons = [];
+        });
+        expect(result.participantLaunch.realized).toBe(false);
+        if (result.participantLaunch.realized) return;
+        expect(result.participantLaunch.code).toBe("no_primary_contact");
+        expect(result.participantLaunch.detail).toBe(NO_PRIMARY_CONTACT_DETAIL);
+        // Refused BEFORE a token exists: nothing a parent could open, nothing that could never pay.
+        expect(db.form_public_links).toHaveLength(0);
+        expect(db.form_packet_sessions).toHaveLength(0);
+
+        const preview = await previewParticipantPacketLaunch(supabase, { orgId: ORG, customerMemberId: CHILD });
+        expect(preview.ok && preview.value.blocker).toBe(NO_PRIMARY_CONTACT_DETAIL);
+        expect(preview.ok && preview.value.recipientName).toBeNull();
+    });
+
+    it("never silently picks another household member: a guardian, or another household's primary contact", async () => {
+        const { db, result } = await startWith((d) => {
+            d.customer_persons = [
+                { org_id: ORG, customer_id: HOUSEHOLD, person_id: GUARDIAN, role_type: "guardian", is_primary: true, created_at: "2026-01-01T00:00:00Z" },
+                { org_id: ORG, customer_id: OTHER_HOUSEHOLD, person_id: PARENT, role_type: "primary_contact", is_primary: true, created_at: "2026-01-01T00:00:00Z" },
+            ];
+            d.persons.push({ id: GUARDIAN, org_id: ORG, first_name: "Gale", last_name: "Guardian" });
+        });
+        expect(result.participantLaunch.realized).toBe(false);
+        if (result.participantLaunch.realized) return;
+        expect(result.participantLaunch.code).toBe("no_primary_contact");
+        expect(db.form_public_links).toHaveLength(0);
+    });
+
+    it("the obsolete customers.primary_contact_id controls nothing", async () => {
+        const legacyOnly = await startWith((d) => {
+            d.customer_persons = [];
+            d.customers = [{ id: HOUSEHOLD, org_id: ORG, name: "Parent Household", primary_contact_id: "contact-1" }];
+            d.contacts = [{ id: "contact-1", org_id: ORG, person_id: LEGACY }];
+            d.persons.push({ id: LEGACY, org_id: ORG, first_name: "Lee", last_name: "Legacy" });
+        });
+        expect(legacyOnly.result.participantLaunch.realized).toBe(false);
+
+        const both = await startWith((d) => {
+            d.customers = [{ id: HOUSEHOLD, org_id: ORG, name: "Parent Household", primary_contact_id: "contact-1" }];
+            d.contacts = [{ id: "contact-1", org_id: ORG, person_id: LEGACY }];
+            d.persons.push({ id: LEGACY, org_id: ORG, first_name: "Lee", last_name: "Legacy" });
+        });
+        expect((both.db.form_public_links[0].metadata as Row).recipient_person_id).toBe(PARENT);
+    });
+
+    it("a primary contact who no longer exists as a person is refused, not trusted", async () => {
+        __clearConfigReadCacheForTests();
+        const db = makeDb(revisionPayload());
+        db.persons = [];
+        const r = await resolveEnrollmentLaunchRecipient(client(db), { orgId: ORG, customerId: HOUSEHOLD });
+        expect(r.ok).toBe(false);
+        expect(!r.ok && r.refusal.code).toBe("recipient_not_in_household");
+    });
+
+    it("an already-issued link is resumed untouched — no recipient is written onto it", async () => {
+        // A link issued before payer binding: launched, then its recipient stripped to model history.
+        const { db, supabase } = await startWith(() => undefined);
+        const link = db.form_public_links[0];
+        delete (link.metadata as Row).recipient_person_id;
+        const before = JSON.stringify(link.metadata);
+
+        const again = await startEnrollment(supabase, { orgId: ORG, customerMemberId: CHILD });
+        expect(again.participantLaunch.realized && again.participantLaunch.value.outcome).toBe("resumed");
+        expect(db.form_public_links).toHaveLength(1);
+        expect(JSON.stringify(db.form_public_links[0].metadata)).toBe(before);
+        // And that historical link still yields no payer — the payment route's refusal stands.
+        expect(await resolveParticipantPayer(supabase, { orgId: ORG, linkId: String(link.id), customerId: HOUSEHOLD })).toBeNull();
     });
 });
