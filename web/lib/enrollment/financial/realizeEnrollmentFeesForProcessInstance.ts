@@ -61,14 +61,12 @@ export async function realizeEnrollmentFeesForProcessInstance(
     input: { readonly orgId: string; readonly processInstanceId: string; readonly actorUserId?: string | null },
 ): Promise<RealizeEnrollmentFeesResult> {
     let requirements: readonly StageRequirementV1[] = [];
-    let sessionId: string | null = null;
     let childId: string | null = null;
     const progress = await resolveEnrollmentParticipantProgress(supabase, {
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,
         captureLoaded: (loaded) => {
             requirements = loaded.requirements;
-            sessionId = loaded.session?.id ?? null;
             childId = loaded.subjectId;
         },
     });
@@ -90,15 +88,28 @@ export async function realizeEnrollmentFeesForProcessInstance(
     const state = ((pi as { state?: string | null } | null)?.state ?? "").trim();
     if (NOT_BILLABLE_STATES.has(state)) return { status: "not_applicable", reason: `journey_${state}` };
 
-    // THE DATE: the persisted completion of this child's packet session — never "now".
-    if (!sessionId) return { status: "no_due_milestone" };
-    const { data: sessionRow } = await supabase
+    /*
+     * THE DATE: the persisted completion of this child's packet session — never "now".
+     *
+     * Read directly, by status. The progress resolver's session is the CURRENT one, and "current"
+     * means in_progress: at the moment of completion the session has just become history, so it was
+     * never there to read and the fee never came due (found in the H3-3 census; the H3-2 unit test
+     * had mocked the session the runtime does not see).
+     *
+     * The FIRST completed session is the milestone, not the latest. The day is part of the charge's
+     * idempotency key, so it must never move for a journey: a packet relaunched and completed again
+     * would otherwise yield a later day, a different key and a second fee. A new enrolment episode is
+     * a new process instance with sessions of its own, so it still gets a fee of its own.
+     */
+    const { data: sessionRows } = await supabase
         .from("form_packet_sessions")
         .select("status, completed_at")
         .eq("org_id", input.orgId)
-        .eq("id", sessionId)
-        .maybeSingle();
-    const session = sessionRow as { status?: string | null; completed_at?: string | null } | null;
+        .eq("process_instance_id", input.processInstanceId)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: true })
+        .limit(1);
+    const session = ((sessionRows ?? []) as { status?: string | null; completed_at?: string | null }[])[0] ?? null;
     if (!session?.completed_at) return { status: "no_due_milestone" };
     const dueOn = calendarDayIn(session.completed_at, await fetchOrgTimeZoneIana(supabase, input.orgId));
     if (!dueOn) return { status: "no_due_milestone" };
@@ -136,4 +147,48 @@ export async function realizeEnrollmentFeesForProcessInstance(
         results.push({ requirementId: req.requirementId, chargeTemplateKey: req.chargeTemplateKey, result });
     }
     return { status: "realized", dueOn, requirements: results };
+}
+
+/**
+ * THE BACKSTOP. A fee that should have become a charge at packet completion and did not.
+ *
+ * The completion trigger is best-effort — a transient failure is logged, never a failed submit — so
+ * without this a family could finish their paperwork and never be billed. This re-asks the SAME
+ * realizer for recently completed sessions; it is not a second writer. Because the realizer is
+ * idempotent on the child, the template and the session's own completion day, a session whose fee
+ * already exists resolves to that charge and writes nothing.
+ *
+ * Bounded in time and count, and run from the scheduled wake. Never from a page view: rendering must
+ * not bring money into existence.
+ */
+export async function sweepUnrealizedEnrollmentFees(
+    supabase: SupabaseClient,
+    opts: { readonly sinceHours?: number; readonly limit?: number; readonly now?: Date } = {},
+): Promise<{ examined: number; realized: number; created: number; failed: number }> {
+    const since = new Date((opts.now ?? new Date()).getTime() - (opts.sinceHours ?? 72) * 3_600_000).toISOString();
+    const { data } = await supabase
+        .from("form_packet_sessions")
+        .select("org_id, process_instance_id")
+        .eq("status", "completed")
+        .not("process_instance_id", "is", null)
+        .gte("completed_at", since)
+        .order("completed_at", { ascending: false })
+        .limit(opts.limit ?? 50);
+    const rows = (data ?? []) as { org_id: string; process_instance_id: string }[];
+    let realized = 0;
+    let created = 0;
+    let failed = 0;
+    for (const row of rows) {
+        try {
+            const r = await realizeEnrollmentFeesForProcessInstance(supabase, { orgId: row.org_id, processInstanceId: row.process_instance_id });
+            if (r.status !== "realized") continue;
+            realized += 1;
+            for (const req of r.requirements) {
+                for (const o of req.result.outcomes) if (o.status === "created") created += 1;
+            }
+        } catch {
+            failed += 1;
+        }
+    }
+    return { examined: rows.length, realized, created, failed };
 }
