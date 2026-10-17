@@ -533,7 +533,11 @@ export function alignTourSupportingActionsForBookingState(
             return { ...action, label: "Reschedule Tour" };
         }
         if (key === "cancel_tour") {
-            return { ...action, label: "Cancel Tour", actionRef: action.actionRef || bookingId };
+            // The booking is what is cancelled. A CONFIGURED Cancel Tour carries its config ref
+            // ("cancel_tour") here, and execution reads `actionRef` as the booking id — so it would
+            // have asked to cancel a booking called "cancel_tour". Provenance still traces through
+            // `key` / `handlerKey`.
+            return { ...action, label: "Cancel Tour", actionRef: bookingId ?? action.actionRef };
         }
         return action;
     });
