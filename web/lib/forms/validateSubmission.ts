@@ -459,6 +459,122 @@ function mergeLookup(chain: Record<string, unknown>[]): (id: string) => unknown 
     };
 }
 
+/**
+ * The name lines that make a collected member a PERSON.
+ *
+ * A collection-bound group (Emergency contacts, Authorized pickup, Physicians) is applied by creating
+ * or linking a person, and the canonical commit refuses to create one without a name
+ * (`personDraftFromFacts`). So for those groups a member with no name is not a member, whatever else
+ * was typed. Read from the lines' own canonical keys, never their labels.
+ */
+function memberNameFields(groupField: FormField & { type: "group" }): FormField[] {
+    if (!(groupField as { collection_binding?: unknown }).collection_binding) return [];
+    return groupField.fields.filter((c) => {
+        const key = (c as { field_source?: { field_key?: string } }).field_source?.field_key;
+        return key === "full_name" || key === "first_name" || key === "last_name";
+    });
+}
+
+export type GroupMemberState = "blank" | "incomplete" | "complete";
+
+/**
+ * What one row of a repeatable group IS — the single definition the validator counts with, and the
+ * participant surfaces read, so "at least 2 emergency contacts" means two members everywhere.
+ *
+ *  - blank:      nothing visible was answered. A row the form seeded so there was somewhere to type
+ *                is not a member, and never counts toward a minimum.
+ *  - incomplete: something was answered, but a visible required line is missing, a value is invalid,
+ *                or (for a people collection) the member has no name. Kept, and reported on the
+ *                member's own lines — a half-entered contact is never silently dropped.
+ *  - complete:   everything the member needs is there.
+ */
+export function groupMemberState(
+    groupField: FormField & { type: "group" },
+    row: (Pick<FormPayloadGroupRow, "values"> & Partial<Pick<FormPayloadGroupRow, "groups" | "signatures">>) | undefined,
+    schema: FormSchemaV1,
+    lookupChain: Record<string, unknown>[] = [],
+    /** The option lists hydrated at runtime, when the caller has them (as the submission does). */
+    optionValuesByFieldId?: Record<string, readonly string[]>,
+): { state: GroupMemberState; missing: string[] } {
+    const values = row?.values ?? {};
+    const rowLookup = mergeLookup([...lookupChain, values]);
+    let answered = false;
+    let invalid = false;
+    const missing: string[] = [];
+    for (const child of groupField.fields) {
+        if (child.type === "group") {
+            const nested = row?.groups?.[child.id] ?? [];
+            if (nested.some((r) => groupMemberState(child, r, schema, [...lookupChain, values], optionValuesByFieldId).state !== "blank")) answered = true;
+            continue;
+        }
+        if (!evaluateFieldVisibility(child.id, schema, rowLookup)) continue;
+        if (child.type === "signature") {
+            if (row?.signatures?.[child.id] !== undefined) answered = true;
+            else if (child.required) missing.push(child.id);
+            continue;
+        }
+        const raw = values[child.id];
+        if (!isRequiredValueMissing(child, raw)) {
+            answered = true;
+            // A choice whose options are supplied at runtime cannot be judged without them; the
+            // submission, which has them, is the authority on it.
+            const runtimeChoices =
+                (child.type === "select" || child.type === "multiselect")
+                && !optionValuesByFieldId
+                && !((child as { options?: unknown[] }).options?.length);
+            if (!runtimeChoices && validateScalarValue(child, raw, "submit", optionValuesByFieldId, [child.id]).length > 0) invalid = true;
+        } else if (child.required) {
+            missing.push(child.id);
+        }
+    }
+    if (!answered) return { state: "blank", missing: [] };
+    const names = memberNameFields(groupField);
+    if (names.length) {
+        const full = names.find((c) => (c as { field_source?: { field_key?: string } }).field_source?.field_key === "full_name");
+        const needed = full ? [full] : names;
+        for (const n of needed) {
+            if (isRequiredValueMissing(n, values[n.id]) && !missing.includes(n.id)) missing.push(n.id);
+        }
+    }
+    return { state: missing.length || invalid ? "incomplete" : "complete", missing };
+}
+
+/** How many of a group's rows are complete members. */
+export function completeGroupMemberCount(
+    groupField: FormField & { type: "group" },
+    rows: ReadonlyArray<Pick<FormPayloadGroupRow, "values"> & Partial<Pick<FormPayloadGroupRow, "groups" | "signatures">>> | undefined,
+    schema: FormSchemaV1,
+    lookupChain: Record<string, unknown>[] = [],
+    optionValuesByFieldId?: Record<string, readonly string[]>,
+): number {
+    return (rows ?? []).filter((r) => groupMemberState(groupField, r, schema, lookupChain, optionValuesByFieldId).state === "complete").length;
+}
+
+/**
+ * The required collections a participant has not yet filled with enough COMPLETE members.
+ *
+ * The same counting the submit validator refuses with, exposed so a participant surface can say so
+ * before the parent signs — "Everything looks good" on a packet missing an emergency contact was a
+ * promise the submit then broke.
+ */
+export function outstandingRequiredCollections(
+    schema: FormSchemaV1,
+    payload: Pick<FormPayload, "values" | "groups">,
+): Array<{ field_id: string; label: string; needed: number; complete: number }> {
+    const values = (payload.values ?? {}) as Record<string, unknown>;
+    const lookup = mergeLookup([values]);
+    const out: Array<{ field_id: string; label: string; needed: number; complete: number }> = [];
+    for (const field of schema.fields) {
+        if (field.type !== "group") continue;
+        const needed = Math.max(field.repeat?.min ?? 0, field.required ? 1 : 0);
+        if (needed === 0) continue;
+        if (!evaluateFieldVisibility(field.id, schema, lookup)) continue;
+        const complete = completeGroupMemberCount(field, payload.groups?.[field.id], schema, [values]);
+        if (complete < needed) out.push({ field_id: field.id, label: field.label ?? "", needed, complete });
+    }
+    return out;
+}
+
 function validateGroupInstances(
     groupField: FormField & { type: "group" },
     instances: FormPayloadGroupRow[] | undefined,
@@ -473,17 +589,34 @@ function validateGroupInstances(
     const min = rep.min;
     const max = rep.max;
     const list = instances ?? [];
+    const states = list.map((row) => groupMemberState(groupField, row, schema, lookupChain, optionValuesByFieldId));
 
     if (mode === "submit") {
-        if (list.length < min) {
+        // A minimum is a number of MEMBERS, not of allocated rows: two blank rows the form seeded so
+        // there was somewhere to type are zero emergency contacts.
+        const complete = states.filter((s) => s.state === "complete").length;
+        const members = states.filter((s) => s.state !== "blank").length;
+        if (complete < min) {
             errors.push(err([...pathPrefix, groupField.id], `Expected at least ${min} group instance(s)`, "too_small"));
         }
-        if (max !== undefined && list.length > max) {
+        if (max !== undefined && members > max) {
             errors.push(err([...pathPrefix, groupField.id], `Expected at most ${max} group instance(s)`, "too_big"));
         }
-        if (groupField.required && list.length < 1) {
+        if (groupField.required && complete < 1) {
             errors.push(err([...pathPrefix, groupField.id], "Required group must have at least one instance", "custom"));
         }
+        // A started member with no name cannot become a person; say so on that member's name line.
+        const names = new Set(memberNameFields(groupField).map((n) => n.id));
+        states.forEach((s, i) => {
+            if (s.state === "blank") return;
+            for (const id of s.missing) {
+                if (!names.has(id)) continue;
+                const child = groupField.fields.find((c) => c.id === id);
+                if (child && !child.required) {
+                    errors.push(err([...pathPrefix, groupField.id, String(i), "values", id], "Required field missing", "custom"));
+                }
+            }
+        });
     }
 
     const allowedChildIds = new Set(groupField.fields.map((c) => c.id));
@@ -497,6 +630,9 @@ function validateGroupInstances(
     for (let i = 0; i < list.length; i++) {
         const row = list[i];
         const rowPath = [...pathPrefix, groupField.id, String(i)];
+        // A blank row is not a member: its required lines are not asked for. Whether the group has
+        // enough members is the cardinality check above.
+        const rowBlank = states[i]?.state === "blank";
 
         for (const k of Object.keys(row.values)) {
             if (!allowedChildIds.has(k)) {
@@ -548,6 +684,7 @@ function validateGroupInstances(
                     }
                     continue;
                 }
+                if (rowBlank && sig === undefined) continue;
                 errors.push(...validateSignaturePayload(child, sig, mode, sigPath));
                 continue;
             }
@@ -560,7 +697,7 @@ function validateGroupInstances(
                 continue;
             }
 
-            if (mode === "submit" && child.required) {
+            if (mode === "submit" && child.required && !rowBlank) {
                 if (isRequiredValueMissing(child, raw)) {
                     errors.push(err([...rowPath, "values", child.id], "Required field missing", "custom"));
                 }

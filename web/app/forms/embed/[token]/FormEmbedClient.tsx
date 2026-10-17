@@ -23,6 +23,7 @@ import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
+import { outstandingRequiredCollections } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
@@ -1048,6 +1049,7 @@ export function FormEmbedClient({
                */
               (resolvedArtifactValues ?? payload.values ?? {}) as Record<string, unknown>,
               sourceMapping as Parameters<typeof compileParticipantArtifact>[2],
+              payload.groups,
           )
         : null;
     /**
@@ -1074,6 +1076,12 @@ export function FormEmbedClient({
             ? outstandingUploadRequests(schema, (payload.values ?? {}) as Record<string, unknown>)
             : [];
     const requiredUploadsOutstanding = outstandingUploads.filter((r) => r.required).length;
+    /*
+     * Required people collections short of COMPLETE members — the submit validator's own count, so
+     * "Everything looks good" cannot be pressed on paperwork the submit would refuse.
+     */
+    const collectionsOutstanding =
+        schema && enrollmentReview ? outstandingRequiredCollections(schema, payload) : [];
     const attachedUploads: Record<string, { document_id: string; filename: string } | undefined> = {};
     for (const request of uploadRequests) {
         const held = (payload.values ?? {})[request.field_id];
@@ -1697,14 +1705,23 @@ export function FormEmbedClient({
                                             ? "One more thing to attach above."
                                             : `${requiredUploadsOutstanding} more things to attach above.`}
                                     </span>
+                                ) : collectionsOutstanding.length > 0 ? (
+                                    <span className="text-[14px] text-alloy-midnight/55" data-collections-outstanding="true">
+                                        {collectionsOutstanding
+                                            .map((c) => `${c.label || "This list"} needs ${c.needed} complete (${c.complete} so far)`)
+                                            .join(" · ")}
+                                        {" — use Make a change."}
+                                    </span>
                                 ) : null}
                                 <button
                                     type="button"
-                                    disabled={requiredUploadsOutstanding > 0}
+                                    disabled={requiredUploadsOutstanding > 0 || collectionsOutstanding.length > 0}
                                     onClick={() => setReviewStep("sign")}
                                     className={clsx(
                                         "rounded-xl px-5 py-2.5 text-[15px] font-medium text-white",
-                                        requiredUploadsOutstanding > 0 ? "bg-alloy-midnight/30" : "bg-alloy-midnight",
+                                        requiredUploadsOutstanding > 0 || collectionsOutstanding.length > 0
+                                            ? "bg-alloy-midnight/30"
+                                            : "bg-alloy-midnight",
                                     )}
                                     data-everything-looks-good="true"
                                 >

@@ -3,6 +3,7 @@
  */
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { groupMemberState } from "@/lib/forms/validateSubmission";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 import {
     findCanonicalCollectionProvider,
@@ -222,7 +223,8 @@ export function adaptFormSubmissionToRelatedRecordProposals(
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]!;
-            if (seenKeys.has(row.instance_key)) {
+            const duplicate = seenKeys.has(row.instance_key);
+            if (duplicate) {
                 groupDiagnostics.push({
                     code: "duplicate_instance_key",
                     message: `Duplicate instance_key "${row.instance_key}".`,
@@ -230,6 +232,19 @@ export function adaptFormSubmissionToRelatedRecordProposals(
                 });
             }
             seenKeys.add(row.instance_key);
+            /*
+             * A row the form seeded and nobody filled in is not a person to propose. Only a CLEAN
+             * blank row is dropped: one that links an existing record (the record is the answer), or
+             * that carries a wrong provider or a duplicate key (an anomaly the operator must see), is
+             * kept and adapted as before.
+             */
+            const cleanBlank =
+                row.origin !== "existing"
+                && !duplicate
+                && row.provider_ref === binding.collection_provider_ref
+                && row.iteration_entity_type === binding.iteration_entity_type
+                && groupMemberState(field, { values: row.values ?? {} }, schema).state === "blank";
+            if (cleanBlank) continue;
 
             instances.push(
                 buildInstanceProposal({

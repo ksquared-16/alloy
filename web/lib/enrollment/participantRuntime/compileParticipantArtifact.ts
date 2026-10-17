@@ -44,6 +44,8 @@ import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/partic
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
+import { completeGroupMemberCount } from "@/lib/forms/groupMembers";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 
 export type CompiledControlKind =
     /** A shared fact the conversation settled. Shown as a fact, editable on request. */
@@ -204,8 +206,30 @@ export function compileParticipantArtifact(
      * document) every label is authored by definition, so nothing is suppressed.
      */
     sourceMapping?: SourceFieldMapping,
+    /**
+     * The participant's group rows, when the caller holds them. A people collection is satisfied by
+     * its COMPLETE members — the Forms authority's own member count — and without the rows it can
+     * only be reported as outstanding.
+     */
+    groups?: Readonly<Record<string, ReadonlyArray<{ values: Record<string, unknown> }>>>,
 ): CompiledArtifact {
     const controls: CompiledArtifactControl[] = [];
+    /*
+     * Calculated values, from the Form's own derived authority. A destination whose inputs are not
+     * there yet is absent — the dependency is the participant's work, never the calculation.
+     */
+    let derivedValues: Record<string, string> = {};
+    try {
+        derivedValues = resolveFormDerivedValues(schema as FormSchemaV1, values as Record<string, unknown>, {});
+    } catch {
+        derivedValues = {};
+    }
+    const labelOf = (id: string | undefined) => {
+        if (!id) return null;
+        const hit = (schema.fields as FormField[]).find((f) => f.id === id);
+        return hit?.label?.trim() || null;
+    };
+    const groupSatisfied = new Set<string>();
     const sourceNames = sourceFieldNamesByFieldId(sourceMapping);
 
     const shown = (fieldId: string) =>
@@ -229,6 +253,11 @@ export function compileParticipantArtifact(
                  */
                 const g = field as FormField & { fields: FormField[]; collection_binding?: unknown; repeat?: { min?: number } };
                 if (g.collection_binding) {
+                    const needed = Math.max(g.repeat?.min ?? 0, g.required === true ? 1 : 0);
+                    const complete = groups
+                        ? completeGroupMemberCount(field as FormField & { type: "group" }, groups[g.id], schema as FormSchemaV1, [values as Record<string, unknown>])
+                        : null;
+                    if (complete != null && complete >= needed) groupSatisfied.add(g.id);
                     controls.push({
                         field_id: g.id,
                         label: g.label ?? "",
@@ -236,8 +265,10 @@ export function compileParticipantArtifact(
                         kind: "unresolved_artifact_specific",
                         input_type: "group",
                         options: [],
-                        required: g.required === true || (g.repeat?.min ?? 0) > 0,
-                        value: null,
+                        required: needed > 0,
+                        // How many COMPLETE members it has against how many it needs, so the minimum
+                        // stays visible beside the group rather than appearing first as a refusal.
+                        value: complete == null ? null : { complete, needed },
                         content: null,
                         shared_key: null,
                     });
@@ -249,6 +280,33 @@ export function compileParticipantArtifact(
             const value = values[field.id];
             const sharedKey = sharedKeyOf(field);
             const participantLabel = participantFacingLabel(field.label, sourceNames[field.id]);
+            /*
+             * A CALCULATED value is placed, never asked. It is either resolved, or waiting on the
+             * answer it is calculated from — which is that question's work, not this one's.
+             */
+            const derived = (field as { derived?: { kind?: string; source_key?: string; as_of_key?: string } }).derived;
+            if (derived) {
+                const caption = participantLabel ?? field.label ?? "";
+                const resolved = derivedValues[field.id];
+                const from = [labelOf(derived.source_key), labelOf(derived.as_of_key)].filter(Boolean).join(" and ");
+                controls.push({
+                    field_id: field.id,
+                    label: field.label ?? "",
+                    participant_label: participantLabel,
+                    kind: "display_content",
+                    input_type: field.type,
+                    options: [],
+                    required: false,
+                    value: resolved ?? null,
+                    content: resolved
+                        ? `${caption}: ${resolved} (calculated)`
+                        : derived.kind === "execution_date"
+                          ? `${caption} is filled in when you sign.`
+                          : `${caption} is calculated${from ? ` from ${from}` : ""}.`,
+                    shared_key: null,
+                });
+                continue;
+            }
             controls.push({
                 field_id: field.id,
                 label: field.label ?? "",
@@ -278,7 +336,7 @@ export function compileParticipantArtifact(
     return {
         sections,
         resolved: controls.filter((c) => c.kind === "resolved_shared_value"),
-        outstanding: controls.filter((c) => c.kind === "unresolved_artifact_specific"),
+        outstanding: controls.filter((c) => c.kind === "unresolved_artifact_specific" && !groupSatisfied.has(c.field_id)),
         acknowledgments: controls.filter((c) => c.kind === "acknowledgment"),
         signatures: controls.filter((c) => c.kind === "signature"),
     };
