@@ -43,7 +43,7 @@ import {
 import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import { fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
+import { fieldIdsControllingVisibility, fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
 import { completeGroupMemberCount } from "@/lib/forms/groupMembers";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 
@@ -142,6 +142,7 @@ function classify(
     sharedKey: string | null,
     value: unknown,
     participantLabel: string | null,
+    controlsVisibility = false,
 ): CompiledControlKind {
     if (!formFieldCollectsValue(field)) return "display_content";
     if (field.type === "signature") return "signature";
@@ -175,7 +176,7 @@ function classify(
      */
     const bound = sharedKey != null;
     if (!bound && field.type === "boolean") {
-        return fieldIsAcknowledgement(field, { bound }) ? "acknowledgment" : "unresolved_artifact_specific";
+        return fieldIsAcknowledgement(field, { bound, controlsVisibility }) ? "acknowledgment" : "unresolved_artifact_specific";
     }
     if (bound && hasValue(value)) return "resolved_shared_value";
     return "unresolved_artifact_specific";
@@ -234,6 +235,7 @@ export function compileParticipantArtifact(
 
     const shown = (fieldId: string) =>
         fieldShownForAnswers(schema as FormSchemaV1, fieldId, (id) => values[id]);
+    const visibilityControllers = fieldIdsControllingVisibility(schema as FormSchemaV1);
 
     const walk = (fields: readonly FormField[]) => {
         for (const field of fields) {
@@ -311,7 +313,7 @@ export function compileParticipantArtifact(
                 field_id: field.id,
                 label: field.label ?? "",
                 participant_label: participantLabel,
-                kind: classify(field, sharedKey, value, participantLabel),
+                kind: classify(field, sharedKey, value, participantLabel, visibilityControllers.has(field.id)),
                 input_type: field.type,
                 options: readOptions(field),
                 required: field.required === true,
