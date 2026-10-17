@@ -51,6 +51,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             orgId: access.value.orgId,
             session,
             focusedCustomerMemberId: focused,
+            // Siblings' links are offered only when addressed to the same person as this one.
+            linkId: access.value.linkId,
             /*
              * Left unset so the resolver reads the canonical projection itself. Passing null here is
              * what previously made the family page silent about money; passing a computed figure would

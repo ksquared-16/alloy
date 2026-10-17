@@ -31,8 +31,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
-import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstances";
+import {
+    groupHouseholdEnrollmentJourneys,
+    journeyIsConcluded,
+} from "@/lib/enrollment/family/groupHouseholdEnrollmentJourneys";
+import { readShareEmbedPath } from "@/lib/admin/forms/distributionLinkReuse";
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
 import { readFamilyEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
@@ -84,6 +87,12 @@ export async function resolveFamilyEnrollmentExperience(
         readonly session: SessionRowLike;
         /** The child whose link the participant arrived on, so the shell can focus it. */
         readonly focusedCustomerMemberId?: string | null;
+        /**
+         * The link the participant arrived on. Siblings' own links are offered only when they were
+         * addressed to the same person — the family shell navigates between a recipient's links, it
+         * never hands one person another's.
+         */
+        readonly linkId?: string | null;
         /** Injected so this resolver never reaches into Financials itself. */
         readonly financials?: FamilyEnrollmentFinancials | null;
     },
@@ -93,37 +102,50 @@ export async function resolveFamilyEnrollmentExperience(
         return { ok: false, refusal: { code: "no_household", detail: "This session names no household." } };
     }
 
-    const live = await resolveLiveEnrollmentContextForHousehold(supabase, input.orgId, customerId);
-    if (!live.context) {
+    /*
+     * THE SESSION'S OWN CHILD MUST BELONG TO THE HOUSEHOLD IT NAMES.
+     *
+     * The household comes from the snapshot the launch stamped, and nothing public writes it — but
+     * the session's journey is the stronger fact, so the two are held to each other rather than the
+     * snapshot being trusted alone. A disagreement shows no family at all.
+     */
+    if (input.session.process_instance_id) {
+        const { data: own } = await supabase
+            .from("process_instances")
+            .select("subject_id")
+            .eq("org_id", input.orgId)
+            .eq("id", input.session.process_instance_id)
+            .maybeSingle();
+        const ownChild = ((own as { subject_id?: string | null } | null)?.subject_id ?? "").trim();
+        if (ownChild) {
+            const { data: ownMember } = await supabase
+                .from("customer_members")
+                .select("customer_id")
+                .eq("org_id", input.orgId)
+                .eq("id", ownChild)
+                .maybeSingle();
+            if ((ownMember as { customer_id?: string | null } | null)?.customer_id !== customerId) {
+                return {
+                    ok: false,
+                    refusal: { code: "no_household", detail: "This session's child does not belong to the household it names." },
+                };
+            }
+        }
+    }
+
+    const grouping = await groupHouseholdEnrollmentJourneys(supabase, { orgId: input.orgId, customerId });
+    if (!grouping) {
         /*
-         * "No live episode" is an ordinary answer, not a failure — the context resolver says so in
-         * as many words. A single child enrolling with nothing else running has no family journey to
-         * show, and manufacturing one would invent a grouping nobody asked for.
+         * Nothing running for this household, in an episode or out of one. "No live episode" is an
+         * ordinary answer — there is no family journey to show, and inventing one would be worse.
          */
         return {
             ok: false,
             refusal: { code: "no_live_episode", detail: "This household has no live enrolment episode." },
         };
     }
-
-    const { opportunityId } = live.context;
-
-    /*
-     * THE CHILDREN COME FROM THE EPISODE, NOT FROM THE HOUSEHOLD.
-     *
-     * A household's `customer_members` includes siblings who are not enrolling, children who
-     * finished years ago, and children added by a respondent but never launched. Listing those as
-     * part of THIS journey would show a parent work they do not have.
-     */
-    const { data: piRows, error: piErr } = await supabase
-        .from("process_instances")
-        .select("id, subject_id, state, stage_key")
-        .eq("org_id", input.orgId)
-        .in("subject_id", live.context.runningSubjectIds.length > 0 ? live.context.runningSubjectIds : ["-"]);
-    if (piErr) throw new Error(piErr.message);
-    const instances = ((piRows ?? []) as Array<{ id: string; subject_id: string | null; state: string | null; stage_key: string | null }>)
-        .filter((p) => !CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((p.state ?? "").trim().toLowerCase()));
-
+    const opportunityId = grouping.opportunityId;
+    const instances = grouping.instances;
     const subjectIds = [...new Set(instances.map((p) => p.subject_id).filter((v): v is string => Boolean(v)))];
 
     // Names, from the canonical member records, org-filtered.
@@ -189,19 +211,34 @@ export async function resolveFamilyEnrollmentExperience(
      * Dueness is over the OTHER requirements: a fee that counted itself could never come due.
      */
     const requirementsByChild = new Map<string, { requirements: readonly StageRequirementV1[]; due: boolean }>();
+    const siblingPaths = await siblingParticipantPaths(supabase, {
+        orgId: input.orgId,
+        linkId: input.linkId ?? null,
+        sessions: [...sessionByInstance.values()],
+    });
     for (const pi of instances) {
         const subject = pi.subject_id as string;
+        // Only the household's own children, by the canonical member record — never a fallback name
+        // for a subject that is not this family's.
+        if (!nameById.has(subject)) continue;
         const session = sessionByInstance.get(pi.id) ?? null;
         const submitted = (session?.status ?? "") === "submitted" || (session?.status ?? "") === "completed";
+        const concluded = journeyIsConcluded(pi.state);
 
         let childRequirements: readonly StageRequirementV1[] = [];
-        const progress = await resolveEnrollmentParticipantProgress(supabase, {
-            orgId: input.orgId,
-            processInstanceId: pi.id,
-            captureLoaded: (loaded) => {
-                childRequirements = loaded.requirements;
-            },
-        });
+        /*
+         * A CONCLUDED CHILD IS SHOWN, NOT WORKED. Their outcome stands on its own; their requirements
+         * are not re-projected, are not outstanding, and take no part in a sibling's fee dueness.
+         */
+        const progress = concluded
+            ? ({ ok: false } as const)
+            : await resolveEnrollmentParticipantProgress(supabase, {
+                  orgId: input.orgId,
+                  processInstanceId: pi.id,
+                  captureLoaded: (loaded) => {
+                      childRequirements = loaded.requirements;
+                  },
+              });
         if (progress.ok) {
             const outstanding = progress.value.requirements.filter(
                 (r) => r.kind !== "financial" && r.status !== "satisfied",
@@ -218,7 +255,8 @@ export async function resolveFamilyEnrollmentExperience(
              * Each child keeps its OWN link. The family shell navigates between them; it never
              * re-points one child's token at another child's session.
              */
-            participantPath: null,
+            participantPath: session?.id ? siblingPaths.get(session.id) ?? null : null,
+            state: familyChildState(pi.state, pi.stage_key),
             locationName: null,
             totalRequirements: progress.ok ? progress.value.total_requirements : 0,
             satisfiedRequirements: progress.ok ? progress.value.satisfied_requirements : 0,
@@ -320,4 +358,64 @@ export async function resolveFamilyEnrollmentExperience(
             focusedCustomerMemberId: input.focusedCustomerMemberId ?? null,
         }),
     };
+}
+
+/** The family-facing state of one child's journey. Never an internal status key. */
+function familyChildState(state: string | null, stageKey: string | null): FamilyChildJourney["state"] {
+    const st = (state ?? "").trim().toLowerCase();
+    if (st === "enrolled") return "enrolled";
+    if (st === "withdrawn") return "withdrawn";
+    if (st === "not_enrolling") return "not_enrolling";
+    if ((stageKey ?? "").trim().toLowerCase() === "waitlist") return "waitlisted";
+    return "in_progress";
+}
+
+/**
+ * Each sibling session's participant path — offered only when its link was addressed to the SAME
+ * person as the link the participant arrived on. Links are per child and per recipient; the family
+ * shell may move a recipient between their own links, never into someone else's.
+ */
+async function siblingParticipantPaths(
+    supabase: SupabaseClient,
+    input: { orgId: string; linkId: string | null; sessions: ReadonlyArray<{ id: string }> },
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (!input.linkId || input.sessions.length === 0) return out;
+    const recipientOf = (metadata: unknown) => {
+        const v = (metadata as Record<string, unknown> | null)?.recipient_person_id;
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    };
+    const { data: own } = await supabase
+        .from("form_public_links")
+        .select("metadata")
+        .eq("org_id", input.orgId)
+        .eq("id", input.linkId)
+        .maybeSingle();
+    const recipient = recipientOf((own as { metadata?: unknown } | null)?.metadata);
+    if (!recipient) return out;
+
+    const { data: sessionLinks } = await supabase
+        .from("form_packet_sessions")
+        .select("id, started_via_public_link_id")
+        .eq("org_id", input.orgId)
+        .in("id", input.sessions.map((s) => s.id));
+    const linkBySession = new Map(
+        ((sessionLinks ?? []) as Array<{ id: string; started_via_public_link_id: string | null }>)
+            .filter((r) => r.started_via_public_link_id)
+            .map((r) => [r.id, r.started_via_public_link_id as string]),
+    );
+    if (linkBySession.size === 0) return out;
+    const { data: links } = await supabase
+        .from("form_public_links")
+        .select("id, metadata")
+        .eq("org_id", input.orgId)
+        .in("id", [...new Set(linkBySession.values())]);
+    const linkById = new Map(((links ?? []) as Array<{ id: string; metadata: unknown }>).map((l) => [l.id, l.metadata]));
+    for (const [sessionId, linkId] of linkBySession) {
+        const metadata = linkById.get(linkId);
+        if (recipientOf(metadata) !== recipient) continue;
+        const path = readShareEmbedPath(metadata);
+        if (path) out.set(sessionId, path);
+    }
+    return out;
 }

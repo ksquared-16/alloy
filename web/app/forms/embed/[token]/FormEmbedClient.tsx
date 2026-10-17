@@ -43,6 +43,7 @@ import {
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
 import ParticipantPaymentCard from "./ParticipantPaymentCard";
+import FamilyEnrollmentCard from "./FamilyEnrollmentCard";
 import { CompiledArtifactReview } from "./CompiledArtifactReview";
 import { ParticipantDocumentCanvas } from "./ParticipantDocumentCanvas";
 import { SemanticFactEditor } from "./SemanticFactEditor";
@@ -873,6 +874,7 @@ export function FormEmbedClient({
                         {/* The journey's next step. The fee comes due when the paperwork is done, so
                             this is where a returning parent finds it — and where they see it settled. */}
                         <ParticipantPaymentCard token={token} />
+                        <FamilyEnrollmentCard token={token} />
                     </>
                 ) : (
                     <IntakeCompletion
@@ -906,6 +908,7 @@ export function FormEmbedClient({
                             registration fee becomes due at exactly this moment, so this screen is
                             where it is paid. The card shows nothing when no fee applies. */}
                         <ParticipantPaymentCard token={token} />
+                        <FamilyEnrollmentCard token={token} />
                     </>
                 ) : (
                     <IntakeCompletion
@@ -936,6 +939,7 @@ export function FormEmbedClient({
                             body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
                         />
                         <ParticipantPaymentCard token={token} />
+                        <FamilyEnrollmentCard token={token} />
                     </>
                 ) : (
                     <IntakeCompletion
@@ -1492,7 +1496,12 @@ export function FormEmbedClient({
              * paid it says why instead of offering a button that would fail. Every figure on it is
              * quoted from canonical Financials through the participant projection.
              */}
-            {enrollmentObjective ? <ParticipantPaymentCard token={token} /> : null}
+            {enrollmentObjective ? (
+                <>
+                    <FamilyEnrollmentCard token={token} />
+                    <ParticipantPaymentCard token={token} />
+                </>
+            ) : null}
             {/**
              * RAW FORM SUPPRESSION.
              *
