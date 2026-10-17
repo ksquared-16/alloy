@@ -14,9 +14,15 @@ import { describe, expect, it, beforeEach } from "vitest";
 
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import { projectRequirementsProgress } from "@/lib/enrollment/participantProgress/projectEnrollmentParticipantProgress";
-import { summarizeEnrollmentRequirementProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
+import { summarizeEnrollmentRequirementProgress, type EnrollmentRequirementProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import { formSubmissionIsComplete } from "@/lib/forms/formSubmissionCompletion";
 import { __clearConfigReadCacheForTests } from "@/lib/runtime/provisioning/configReadCache";
+
+/** Form-submission evidence only — a financial requirement carries a different evidence shape. */
+const formEvidence = (r: { evidence?: { kind: string } }) =>
+    r.evidence?.kind === "form_submission"
+        ? (r.evidence as Extract<NonNullable<EnrollmentRequirementProgress["evidence"]>, { kind: "form_submission" }>)
+        : undefined;
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const PI = "aaaa1111-0000-4000-8000-000000000001";
@@ -376,8 +382,8 @@ describe("resume and version stability", () => {
                 submissions: { "sub-a": "submitted" },
             }),
         );
-        expect(p.requirements[0]!.evidence?.form_definition_version_id).toBe(VERSION_A1);
-        expect(p.requirements[0]!.evidence?.form_definition_version_id).not.toBe(VERSION_A2);
+        expect(formEvidence(p.requirements[0]!)?.form_definition_version_id).toBe(VERSION_A1);
+        expect(formEvidence(p.requirements[0]!)?.form_definition_version_id).not.toBe(VERSION_A2);
     });
 });
 
@@ -426,7 +432,7 @@ describe("stability of the active denominator", () => {
                 submissions: { "sub-a": "submitted" },
             }),
         );
-        expect(p.requirements[0]!.evidence?.form_definition_version_id).toBe(VERSION_A1);
+        expect(formEvidence(p.requirements[0]!)?.form_definition_version_id).toBe(VERSION_A1);
     });
 
     it("14. no Opportunity is required anywhere in the chain", async () => {
@@ -558,7 +564,7 @@ describe("18. two required Forms, one complete -> exactly 1 of 2", () => {
         );
         expect(p.total_requirements).toBe(1);
         expect(p.satisfied_requirements).toBe(1);
-        expect(p.requirements[0]!.evidence?.session_item_id).toBe("si-a2");
+        expect(formEvidence(p.requirements[0]!)?.session_item_id).toBe("si-a2");
     });
 });
 

@@ -88,6 +88,11 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
     const [chargeId, setChargeId] = useState<string>("");
     const [methodId, setMethodId] = useState<string>("");
     const [amount, setAmount] = useState<string>("");
+    /**
+     * Card or bank. Only a rail the server reports this merchant can take is ever offered, and the
+     * saved methods are re-read for the chosen rail — a card is never offered as a bank account.
+     */
+    const [rail, setRail] = useState<"card" | "ach">("card");
 
     /** Present-payer confirmation state: Stripe's own fields, mounted only when needed. */
     const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -101,9 +106,10 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-payment`, {
-                credentials: "same-origin",
-            });
+            const res = await fetch(
+                `/api/public/forms/${encodeURIComponent(token)}/enrollment-payment?rail=${rail}`,
+                { credentials: "same-origin" },
+            );
             const json = (await res.json()) as { ok?: boolean; data?: { payment: PaymentView; publishableKey: string | null }; error?: string };
             if (!res.ok || !json.ok || !json.data) throw new Error(json.error ?? "We could not load your fee.");
             setView(json.data.payment);
@@ -113,14 +119,25 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
             const first = json.data.payment.lines.find((l) => l.chargeId && l.collectibleNowCents > 0);
             setChargeId((prev) => prev || first?.chargeId || "");
             setAmount((prev) => prev || (first ? String((first.collectibleNowCents / 100).toFixed(2)) : ""));
-            const preferred = json.data.payment.methods.find((m) => m.isDefault) ?? json.data.payment.methods[0];
-            setMethodId((prev) => prev || preferred?.id || "");
+            const methods = json.data.payment.methods.filter((m) => m.rail === rail);
+            const preferred = methods.find((m) => m.isDefault) ?? methods[0];
+            setMethodId((prev) => (prev && methods.some((m) => m.id === prev) ? prev : preferred?.id || ""));
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token, rail]);
+
+    /**
+     * After money moves, the next default is what is LEFT — not the figure the parent typed before.
+     * A partial payment therefore lands on "Pay the remainder", a full one on the next child's fee.
+     */
+    const reloadAfterPayment = useCallback(async () => {
+        setChargeId("");
+        setAmount("");
+        await load();
+    }, [load]);
 
     useEffect(() => {
         void load();
@@ -179,7 +196,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                     action: "collect",
                     charge_id: chargeId,
                     amount_cents: cents,
-                    rail: "card",
+                    rail,
                     ...(methodId ? { payment_method_id: methodId } : {}),
                 }),
             });
@@ -201,20 +218,21 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                         ? "Payment received."
                         : "Payment processing — we will update this when it settles.",
                 );
-                await load();
+                await reloadAfterPayment();
                 return;
             }
 
-            /* A present payer enters card details in Stripe's own fields. */
+            /* A present payer enters details in Stripe's own fields. For a bank account those fields
+               carry Stripe's own account verification and the debit mandate — Alloy adds neither. */
             setClientSecret(json.data.clientSecret);
             setConnectedAccount(json.data.connectedAccountRef);
-            setNotice("Enter your card details below to finish.");
+            setNotice(rail === "ach" ? "Connect your bank account below to finish." : "Enter your card details below to finish.");
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(false);
         }
-    }, [view, amount, chargeId, methodId, token, recognize, load]);
+    }, [view, amount, chargeId, methodId, rail, token, recognize, reloadAfterPayment]);
 
     const confirmCard = useCallback(async () => {
         const stripe = stripeRef.current;
@@ -224,7 +242,9 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
         setError(null);
         const result = await stripe.confirmPayment({ elements, redirect: "if_required" });
         if (result.error) {
-            setError(result.error.message ?? "That card could not be charged.");
+            /* A decline leaves the same intent open: the parent corrects the details and presses Pay
+               again, which confirms that intent — never a second charge. */
+            setError(result.error.message ?? "That payment could not be completed. You can try again.");
             setBusy(false);
             return;
         }
@@ -238,8 +258,8 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
         setClientSecret(null);
         setAttemptId(null);
         setBusy(false);
-        await load();
-    }, [attemptId, recognize, load]);
+        await reloadAfterPayment();
+    }, [attemptId, recognize, reloadAfterPayment]);
 
     if (loading) return <p data-participant-payment="loading">Loading your fee…</p>;
     if (error && !view) return <p data-participant-payment="error" role="alert">{error}</p>;
@@ -290,6 +310,27 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
 
                     <p data-participant-payment="payer">Paying as {view.payer?.name}</p>
 
+                    {view.rails.length > 1 ? (
+                        <label>
+                            Pay by
+                            <select
+                                data-participant-payment="rail"
+                                value={rail}
+                                disabled={Boolean(clientSecret)}
+                                onChange={(e) => {
+                                    setRail(e.target.value === "ach" ? "ach" : "card");
+                                    setMethodId("");
+                                }}
+                            >
+                                {view.rails.map((r) => (
+                                    <option key={r} value={r}>
+                                        {r === "ach" ? "Bank account (ACH)" : "Card"}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    ) : null}
+
                     <label>
                         Payment method
                         <select
@@ -297,14 +338,14 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                             value={methodId}
                             onChange={(e) => setMethodId(e.target.value)}
                         >
-                            {view.methods.map((m) => (
+                            {view.methods.filter((m) => m.rail === rail).map((m) => (
                                 <option key={m.id} value={m.id}>
                                     {methodLabel(m)}
                                 </option>
                             ))}
                             {/* Paying once without saving anything is a first-class choice, not a
                                 fallback — nobody should have to create a stored method to pay. */}
-                            <option value="">Use a new card for this payment</option>
+                            <option value="">{rail === "ach" ? "Use a new bank account for this payment" : "Use a new card for this payment"}</option>
                         </select>
                     </label>
 
@@ -330,7 +371,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                         <button type="button" data-participant-payment="pay" disabled={busy} onClick={pay}>
                             {busy
                                 ? "Starting…"
-                                : `Pay ${money(Math.round(Number(amount) * 100) || line?.collectibleNowCents || 0, view.currencyCode)}`}
+                                : `${view.state === "PARTIALLY_SATISFIED" ? "Pay remainder · " : "Pay "}${money(Math.round(Number(amount) * 100) || line?.collectibleNowCents || 0, view.currencyCode)}`}
                         </button>
                     )}
                 </>

@@ -37,6 +37,9 @@ import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { departmentForOpportunityContext } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
 import { PROCESS_INSTANCES_TABLE } from "@/lib/process/processInstances";
+import { readEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
+import type { EnrollmentRequirementProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
+import { projectFinancialRequirementProgress } from "@/lib/enrollment/participantProgress/projectEnrollmentParticipantProgress";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
 import {
     summarizeEnrollmentRequirementProgress,
@@ -293,7 +296,13 @@ export async function resolveEnrollmentParticipantProgress(
     }
 
     const realized = await loadRealizedFormItems(supabase, input.orgId, evidence.items as SessionItemRow[]);
-    const projected = projectRequirementsProgress(requirements, realized);
+    const formProjected = projectRequirementsProgress(requirements, realized);
+    const projected = await projectFinancialRequirementsForChild(supabase, {
+        orgId: input.orgId,
+        childId: String((instance as { subject_id?: string | null }).subject_id ?? "").trim() || null,
+        requirements,
+        projected: formProjected,
+    });
 
     input.captureLoaded?.({
         session: (session ?? null) as EnrollmentProgressLoaded["session"],
@@ -314,4 +323,68 @@ export async function resolveEnrollmentParticipantProgress(
             requirements: projected,
         },
     };
+}
+
+/**
+ * FINANCIAL REQUIREMENTS, FROM CANONICAL FINANCIALS, FOR THIS CHILD.
+ *
+ * Each configured financial requirement is answered by the fee projection — the same read the
+ * family's journey and the payment step use — narrowed to this child. It is due only once every
+ * non-financial requirement is satisfied (a fee that counted itself could never come due), and
+ * reading it never creates a charge: charges are created by the completion trigger alone.
+ *
+ * Read failures leave the requirement as it was ("unsupported", i.e. blocking): an unreadable
+ * balance must never read as a paid one.
+ */
+async function projectFinancialRequirementsForChild(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        childId: string | null;
+        requirements: readonly StageRequirementV1[];
+        projected: EnrollmentRequirementProgress[];
+    },
+): Promise<EnrollmentRequirementProgress[]> {
+    const financial = args.requirements.filter((r) => r.ref.kind === "financial");
+    if (!financial.length || !args.childId) return args.projected;
+    try {
+        const { data: member } = await supabase
+            .from("customer_members")
+            .select("customer_id")
+            .eq("org_id", args.orgId)
+            .eq("id", args.childId)
+            .maybeSingle();
+        const customerId = String((member as { customer_id?: string | null } | null)?.customer_id ?? "").trim();
+        if (!customerId) return args.projected;
+        const { data: agreements } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id")
+            .eq("org_id", args.orgId)
+            .eq("customer_member_id", args.childId)
+            .limit(1);
+        const agreementId = ((agreements ?? []) as { id: string }[])[0]?.id ?? null;
+        const due = args.projected.every((p) => p.kind === "financial" || p.status === "satisfied");
+
+        const out = [...args.projected];
+        for (const requirement of financial) {
+            const projection = await readEnrollmentFeeProjection(supabase, {
+                orgId: args.orgId,
+                customerId,
+                enrollingChildren: [{ customerMemberId: args.childId, agreementId }],
+                requirements: [requirement],
+                due,
+            });
+            const childOnly = {
+                ...projection,
+                obligations: projection.obligations.filter(
+                    (o) => !o.subjectCustomerMemberId || o.subjectCustomerMemberId === args.childId,
+                ),
+            };
+            const index = out.findIndex((p) => p.requirement_id === requirement.requirement_id);
+            if (index >= 0) out[index] = projectFinancialRequirementProgress(requirement, childOnly);
+        }
+        return out;
+    } catch {
+        return args.projected;
+    }
 }

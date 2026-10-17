@@ -858,12 +858,16 @@ export function FormEmbedClient({
                     Same conditional as the other two terminal states, and the generic copy stays
                     byte-identical for every non-enrollment link. */}
                 {enrollmentObjective ? (
-                    <IntakeCompletion
-                        tone="neutral"
-                        title="You're all set."
-                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has already been submitted. Our staff will review it and follow up if anything else is needed.`}
-                        hint="You can close this window."
-                    />
+                    <>
+                        <IntakeCompletion
+                            tone="neutral"
+                            title="Paperwork submitted."
+                            body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has already been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        />
+                        {/* The journey's next step. The fee comes due when the paperwork is done, so
+                            this is where a returning parent finds it — and where they see it settled. */}
+                        <ParticipantPaymentCard token={token} />
+                    </>
                 ) : (
                     <IntakeCompletion
                         tone="neutral"
@@ -887,11 +891,16 @@ export function FormEmbedClient({
                     their child's enrollment paperwork, not "a packet". The generic packet copy
                     stays for every non-enrollment link, byte-identical. */}
                 {enrollmentObjective ? (
-                    <IntakeCompletion
-                        title="You're all set."
-                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
-                        hint="You can close this window."
-                    />
+                    <>
+                        <IntakeCompletion
+                            title="Paperwork submitted."
+                            body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        />
+                        {/* PAYMENT IS THE NEXT STEP OF THE JOURNEY, not a footer of the form: the
+                            registration fee becomes due at exactly this moment, so this screen is
+                            where it is paid. The card shows nothing when no fee applies. */}
+                        <ParticipantPaymentCard token={token} />
+                    </>
                 ) : (
                     <IntakeCompletion
                         title="All done — thank you."
@@ -915,11 +924,13 @@ export function FormEmbedClient({
         return (
             <IntakeFrame brand={brand} chrome={chrome} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 {enrollmentObjective ? (
-                    <IntakeCompletion
-                        title="You're all set."
-                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
-                        hint="You can close this window."
-                    />
+                    <>
+                        <IntakeCompletion
+                            title="Paperwork submitted."
+                            body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        />
+                        <ParticipantPaymentCard token={token} />
+                    </>
                 ) : (
                     <IntakeCompletion
                         title="Thank you — your form was submitted."
