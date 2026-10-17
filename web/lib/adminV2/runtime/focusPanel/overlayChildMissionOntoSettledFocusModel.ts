@@ -283,6 +283,18 @@ export function overlayChildMissionOntoSettledFocusModel(
                 stageKey: situation?.stageKey ?? childOwnStageKey,
             },
             stageWorkRuntime,
+            /*
+             * THE CHILD'S OWN CARD TRUTH, OR NONE — NEVER THE FAMILY'S.
+             *
+             * Current Work renders, and executes, from `operationalProjection.currentWork` — the
+             * server's projection for the subject it was composed for. Spreading the settled context
+             * kept the FAMILY's when the operator opened the family first and then a child: the card
+             * showed the child's work but carried the family's execution subject, which names no
+             * child, and "Enrollment complete" was refused at the child-subject guard every time.
+             * The child's own answer carries its own projection; while the answer still describes
+             * another child, there is no truthful one to show.
+             */
+            operationalProjection: missionIsForAnotherChild ? null : (commitCritical.operationalProjection ?? null),
             publishedStageInputs,
             signals: {
                 ...settled.context.signals,

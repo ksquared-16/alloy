@@ -48,6 +48,7 @@ import {
 import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import { deriveParticipantDecisionProgress } from "@/lib/lifecycle/projectParticipantDecisionRows";
 import { readFamilyDecisionParticipants } from "@/lib/lifecycle/listFamilyDecisionParticipants";
+import { childOfStageWork, STAGE_WORK_CHILD_JOURNEY_METADATA_KEY } from "@/lib/lifecycle/stageWorkChildSubject";
 import {
     TOUR_STILL_SCHEDULED_CODE,
     closeScheduledTour,
@@ -672,6 +673,9 @@ async function resolveOutcomeExecutionPlan(
         }
     }
 
+    const ownership = await verifyStageWorkSubjectOwnership(input);
+    if (!ownership.ok) return ownership;
+
     /**
      * PREFLIGHT THE WHOLE EFFECT SEQUENCE (Law 6).
      *
@@ -707,6 +711,55 @@ async function resolveOutcomeExecutionPlan(
         closeDecision: shouldCloseWorkAfterStageOutcome(plan, outcomeKey),
         departmentMetadata,
     };
+}
+
+/**
+ * THE SUBJECT MUST OWN THE WORK IT COMPLETES.
+ *
+ * The guard above demands that a child-grain outcome NAME a child; nothing checked that the child it
+ * names is the one the work belongs to. The work item records its owner (`entity_id` is the family,
+ * `bp_subject_customer_member_id` the child — #1471), so an outcome can be held to it: one family's
+ * work cannot be completed under another family, one child's under a sibling, and a child's work
+ * cannot be completed as the family's. Work from before items named their child carries no owner and
+ * is judged on the family alone, exactly as the rest of the runtime treats it.
+ *
+ * Read-only, and before any write — a refusal here touches nothing.
+ */
+async function verifyStageWorkSubjectOwnership(
+    input: CompleteStageWorkWithOutcomeInput,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+    const { data } = await input.supabase
+        .from("operational_tasks")
+        .select("entity_type, entity_id, metadata")
+        .eq("id", input.workId)
+        .eq("org_id", input.orgId)
+        .maybeSingle();
+    // An absent work row is reported where the work is loaded; this check judges ownership only.
+    if (!data) return { ok: true };
+    const row = data as { entity_type?: string | null; entity_id?: string | null; metadata?: unknown };
+    const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+    const family = text(input.subject?.opportunity_id);
+    const workFamily = row.entity_type === "opportunities" ? text(row.entity_id) : null;
+    if (family && workFamily && family !== workFamily) {
+        return { ok: false, message: "This work belongs to a different family." };
+    }
+
+    const owner = childOfStageWork(row.metadata);
+    if (!owner) return { ok: true };
+    if (input.subject?.journey_segment !== "child") {
+        return { ok: false, message: "This work belongs to a child and cannot be completed as the family's." };
+    }
+    const namedChild = text(input.subject?.customer_member_id);
+    if (namedChild && namedChild !== owner) {
+        return { ok: false, message: "This work belongs to another child." };
+    }
+    const ownerJourney = text((row.metadata as Record<string, unknown> | null)?.[STAGE_WORK_CHILD_JOURNEY_METADATA_KEY]);
+    const namedJourney = text(input.subject?.process_instance_id);
+    if (ownerJourney && namedJourney && ownerJourney !== namedJourney) {
+        return { ok: false, message: "This work belongs to another child." };
+    }
+    return { ok: true };
 }
 
 /** Mutable work-row fields captured before the persist step, so it has an exact inverse. */
