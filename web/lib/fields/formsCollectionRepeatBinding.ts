@@ -72,6 +72,24 @@ export function validateNestedFieldForIterationEntity(field: FormField, iteratio
     return isFormFieldAvailableForIteration(field, ctx);
 }
 
+/**
+ * DOES THIS MEMBER LINE CLAIM A CANONICAL DESTINATION?
+ *
+ * A line inside a people collection either names where its answer goes (`field_source`) or it does
+ * not. One that does is checked against the collection's iteration context — a child's date of birth
+ * cannot be a guardian's fact. One that does not is a FORM-ONLY answer about that member: it is kept
+ * on the submission and carried to Processing as the member's own fact (keyed by the line's id, with
+ * its label and lineage), and it is written to no canonical record.
+ *
+ * Publish and submit both ask this ONE question. They used to disagree: publish checked only lines
+ * with a destination, submit checked every non-empty line, so a form that published cleanly refused
+ * every guardian and emergency contact a family typed ("Custom or unmapped fields require an explicit
+ * binding before publish") and no family could finish the Admissions Packet.
+ */
+export function collectionMemberFieldClaimsCanonicalDestination(field: FormField): boolean {
+    return field.type !== "group" && Boolean(field.field_source);
+}
+
 /** Structured availability for nested fields inside a collection-bound group. */
 export function nestedFieldAvailabilityForBinding(
     field: FormField,

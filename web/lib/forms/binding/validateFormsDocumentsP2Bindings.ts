@@ -12,6 +12,7 @@ import {
     collectionBindingAuthoringEnabledForRef,
     collectionContextIsValid,
     groupFieldHasCollectionBinding,
+    collectionMemberFieldClaimsCanonicalDestination,
     nestedFieldAvailabilityForBinding,
 } from "@/lib/fields/formsCollectionRepeatBinding";
 import { evaluateFormsRelationshipProviderEligibility } from "@/lib/fields/formsProviderEligibility";
@@ -179,7 +180,7 @@ function validateCollectionGroup(field: FormField & { type: "group" }, violation
                 `Nested collection repeaters are not supported (field "${child.id}").`,
             );
         }
-        if (child.type !== "group" && child.field_source) {
+        if (collectionMemberFieldClaimsCanonicalDestination(child)) {
             const availability = nestedFieldAvailabilityForBinding(child, binding);
             if (!availability.available) {
                 pushViolation(

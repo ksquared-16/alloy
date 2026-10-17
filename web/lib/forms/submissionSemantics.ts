@@ -47,6 +47,26 @@ export function fieldShownForAnswers(
     return true;
 }
 
+/**
+ * The fields whose answer decides whether ANOTHER field is shown.
+ *
+ * Such a field is a question by construction: its answer changes what the family must do next
+ * ("Do you have other children?" → the Other children collection). Every participant runtime reads
+ * this one set, so none of them can present a controlling answer as something else — a tick box at
+ * signing, say — and leave the collection it opens unreachable.
+ */
+export function fieldIdsControllingVisibility(schema: FormSchemaV1): ReadonlySet<string> {
+    const out = new Set<string>();
+    const walk = (fields: readonly FormField[]) => {
+        for (const f of fields) {
+            for (const cond of f.visibility?.all ?? []) out.add(cond.field_id);
+            if (f.type === "group") walk((f as GroupField).fields);
+        }
+    };
+    walk(schema.fields);
+    return out;
+}
+
 function hasAnswer(v: unknown): boolean {
     if (v === undefined || v === null) return false;
     if (typeof v === "string") return v.trim() !== "";

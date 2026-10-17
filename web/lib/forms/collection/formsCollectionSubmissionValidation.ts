@@ -9,6 +9,7 @@ import {
     groupFieldHasCollectionBinding,
     collectionBindingAuthoringEnabledForRef,
     nestedFieldAvailabilityForBinding,
+    collectionMemberFieldClaimsCanonicalDestination,
 } from "@/lib/fields/formsCollectionRepeatBinding";
 import { findFormsCollectionBindingProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 
@@ -52,7 +53,9 @@ export function validateCollectionPayloadContract(
 
             if (mode === "submit") {
                 for (const nested of field.fields) {
-                    if (nested.type === "group") continue;
+                    // A form-only member line names no destination, so there is no iteration
+                    // context to check it against — the same rule publish applies.
+                    if (!collectionMemberFieldClaimsCanonicalDestination(nested)) continue;
                     const val = row.values[nested.id];
                     if (val === undefined || val === null || val === "") continue;
                     const availability = nestedFieldAvailabilityForBinding(nested, binding);

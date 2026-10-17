@@ -54,7 +54,19 @@ export type ParticipantCollectionMode = (typeof PARTICIPANT_COLLECTION_MODES)[nu
  * Measured on the certification tenant: `f_ack` — "I acknowledge the information above is accurate."
  * — is unbound, boolean and required, and sits immediately before the signature field it attests to.
  */
-export function fieldIsAcknowledgement(field: FormField, opts: { readonly bound: boolean }): boolean {
+export function fieldIsAcknowledgement(
+    field: FormField,
+    opts: { readonly bound: boolean; readonly controlsVisibility?: boolean },
+): boolean {
+    /*
+     * A boolean whose answer shows or hides another field is a QUESTION, whatever else it shares
+     * with an acknowledgment. "Do you have other children in your household?" is unbound, boolean
+     * and required — and it opens the required Other children collection. Classified as an
+     * acknowledgment it was never asked, it appeared only as a tick box at signing, and ticking it
+     * there activated a collection the family could no longer reach: the review gate before the
+     * signing step refused to open, and the question that caused it sat behind that gate.
+     */
+    if (opts.controlsVisibility === true) return false;
     return !opts.bound && field.type === "boolean" && field.required === true;
 }
 
@@ -71,7 +83,7 @@ export function fieldIsAcknowledgement(field: FormField, opts: { readonly bound:
  */
 export function participantCollectionMode(
     field: FormField,
-    opts: { readonly bound?: boolean } = {},
+    opts: { readonly bound?: boolean; readonly controlsVisibility?: boolean } = {},
 ): ParticipantCollectionMode {
     if (!formFieldAsksParticipant(field)) return "system";
     if (field.type === "signature") return "signature";
@@ -82,7 +94,7 @@ export function participantCollectionMode(
      * attestation about "the information above" was asked in the conversation, BEFORE any document
      * existed for there to be anything above.
      */
-    if (opts.bound !== undefined && fieldIsAcknowledgement(field, { bound: opts.bound })) {
+    if (opts.bound !== undefined && fieldIsAcknowledgement(field, { bound: opts.bound, controlsVisibility: opts.controlsVisibility })) {
         return "acknowledgement";
     }
     return "conversational";

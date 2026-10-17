@@ -108,6 +108,8 @@ export type NeedIdentityInput = {
     readonly subjectId: string | null;
     /** From `fieldIsInsideCollectionBoundGroup`: repeats never join shared_values dedupe. */
     readonly insideCollectionBoundGroup: boolean;
+    /** From `fieldIdsControllingVisibility`: its answer shows or hides another field. */
+    readonly controlsVisibility?: boolean;
     /** The entity this destination sits among, when it declares none. Grammar only. */
     readonly inferredEntityType?: string | null;
     /** Provenance, used only to keep artifact-specific occurrences distinct. */
@@ -182,7 +184,10 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
      * `bound` comes from the SAME derivation the artifact compiler uses (`canonicalKeyFor` →
      * basis), so the conversation and the document cannot disagree about what a field is.
      */
-    const collection_mode = participantCollectionMode(field, { bound: parts.basis !== "unbound" });
+    const collection_mode = participantCollectionMode(field, {
+        bound: parts.basis !== "unbound",
+        controlsVisibility: input.controlsVisibility,
+    });
 
     /*
      * A question with no canonical identity is still a question.
