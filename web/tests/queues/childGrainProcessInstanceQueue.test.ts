@@ -123,6 +123,19 @@ describe("child-grain read cutover — process_instances", () => {
         expect(new Set(rows.map((r) => r.opportunity_id))).toEqual(new Set([LEAD]));
     });
 
+    it("a sibling whose journey is closed leaves the stage lane; the open sibling stays", async () => {
+        const supabase = mockSupabase({
+            process_instances: [
+                pi("pi-1", "child-A", "offered", "waitlisted"),
+                { ...pi("pi-2", "child-B", "offered", "not_enrolling"), close_reason_key: "declined_offer" },
+            ],
+            opportunities: [opp(LEAD)],
+            customer_members: [cm("child-A", "Mia Rivera"), cm("child-B", "Leo Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceTrackRows({ supabase, orgId: ORG, workUnitId: WU, stageKey: "offered" });
+        expect(rows.map((r) => r.customer_member_id)).toEqual(["child-A"]);
+    });
+
     it("siblings can be in different stages — each stage query returns only its own", async () => {
         const all = {
             process_instances: [
