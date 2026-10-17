@@ -76,6 +76,7 @@ export function OrderedActionRows({
     onMoveUp,
     onMoveDown,
     testIdPrefix,
+    rename,
 }: {
     title: string;
     refs: string[];
@@ -86,6 +87,15 @@ export function OrderedActionRows({
     onMoveUp: (index: number) => void;
     onMoveDown: (index: number) => void;
     testIdPrefix: string;
+    /**
+     * The label operators see, authored separately from the command's stable key. The key decides
+     * what runs; this only decides what the button says. Empty restores the platform's own label.
+     */
+    rename?: {
+        authored: (ref: string) => string | null;
+        platformLabel: (ref: string) => string;
+        onRename: (ref: string, label: string | null) => void;
+    };
 }) {
     if (!refs.length) {
         return (
@@ -115,6 +125,29 @@ export function OrderedActionRows({
                             :   null}
                             {invalid ?
                                 <span className="block text-[0.6875rem] text-amber-800">{invalid}</span>
+                            :   null}
+                            {rename ?
+                                <label className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-alloy-midnight/55">
+                                    <span className="shrink-0">Label</span>
+                                    <input
+                                        key={`${ref}-${rename.authored(ref) ?? ""}`}
+                                        type="text"
+                                        className="min-w-0 flex-1 rounded border border-alloy-forge/15 bg-white px-1.5 py-0.5 text-[0.6875rem] text-alloy-midnight"
+                                        defaultValue={rename.authored(ref) ?? ""}
+                                        placeholder={rename.platformLabel(ref)}
+                                        maxLength={60}
+                                        aria-label={`Label for ${rename.platformLabel(ref)}`}
+                                        data-testid={`${testIdPrefix}-${ref}-label`}
+                                        onBlur={(e) => {
+                                            const next = e.currentTarget.value.trim();
+                                            if (next === (rename.authored(ref) ?? "")) return;
+                                            rename.onRename(ref, next || null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") e.currentTarget.blur();
+                                        }}
+                                    />
+                                </label>
                             :   null}
                         </span>
                         <div className="flex shrink-0 items-center gap-1">
