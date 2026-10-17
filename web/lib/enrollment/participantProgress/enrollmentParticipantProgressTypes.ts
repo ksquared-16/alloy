@@ -84,12 +84,19 @@ export type EnrollmentRequirementArtifact = {
  * Populated only when satisfied. `form_definition_version_id` is the D-94 session pin — the version
  * the participant actually transacted against, which is not necessarily the newest published one.
  */
-export type EnrollmentSatisfactionEvidence = {
-    readonly kind: "form_submission";
-    readonly form_submission_id: string;
-    readonly form_definition_version_id: string | null;
-    readonly session_item_id: string;
-};
+export type EnrollmentSatisfactionEvidence =
+    | {
+          readonly kind: "form_submission";
+          readonly form_submission_id: string;
+          readonly form_definition_version_id: string | null;
+          readonly session_item_id: string;
+      }
+    | {
+          /** Canonical Financials says this child's fee is settled (paid, zero-cost, or reversed). */
+          readonly kind: "financial_obligation";
+          readonly charge_ids: readonly string[];
+          readonly financial_state: string;
+      };
 
 export type EnrollmentRequirementProgress = {
     readonly requirement_id: string;
@@ -99,7 +106,10 @@ export type EnrollmentRequirementProgress = {
     readonly status: EnrollmentRequirementStatus;
     /** Present only when `status === "satisfied"`. */
     readonly evidence?: EnrollmentSatisfactionEvidence;
-    /** Present only when `status === "unrealized"` or `"unsupported"` — why, in one phrase. */
+    /**
+     * Why, in one phrase: for `unrealized` / `"unsupported"`, and for an outstanding financial
+     * requirement (Financials' own explanation — not due yet, due, partly paid, needs attention).
+     */
     readonly reason?: string;
 };
 

@@ -39,6 +39,7 @@ import {
 import {
     buildParticipantPaymentView,
     payableChargeIds,
+    recognizableChargeIds,
     resolveParticipantPayer,
 } from "@/lib/enrollment/financial/participantEnrollmentPayment";
 import { readPayerUsableMethods } from "@/lib/financials/payments/paymentMethodService";
@@ -55,6 +56,8 @@ type Loaded = {
     customerId: string;
     view: ReturnType<typeof buildParticipantPaymentView>;
     payable: ReadonlySet<string>;
+    /** Every fee on this family's journey — the scope a recognise is held to. */
+    recognizable: ReadonlySet<string>;
     payerPersonId: string | null;
 };
 
@@ -130,6 +133,7 @@ async function load(token: string, rail: "card" | "ach"): Promise<
             customerId,
             view: buildParticipantPaymentView({ projection, payer, methods, merchant, childNames }),
             payable: payableChargeIds(projection),
+            recognizable: recognizableChargeIds(projection),
             payerPersonId: payer?.personId ?? null,
         },
     };
@@ -178,7 +182,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const loaded = await load(token, rail);
         if (!loaded.ok) return publicErr(loaded.message, loaded.status);
-        const { orgId, customerId, view, payable, payerPersonId } = loaded.value;
+        const { orgId, customerId, view, payable, recognizable, payerPersonId } = loaded.value;
         const supabase = loaded.supabase;
 
         if (action === "recognize") {
@@ -188,7 +192,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
              */
             const attemptId = String(body.attempt_id ?? "").trim();
             if (!attemptId) return publicErr("No payment was named.", 400);
-            const recognized = await recognizeCollectionAttempt(supabase, { orgId, attemptId });
+            /*
+             * HELD TO THIS LINK'S OWN PAYER AND THIS FAMILY'S OWN FEES.
+             *
+             * Recognition looked an attempt up by id within the organisation, so any participant link
+             * could prompt the recognition of another family's payment. The engine already accepts a
+             * scope; it was simply never given one. The payer is the link's canonical recipient (never
+             * the browser's word), and the charges are this family's journey fees. An attempt outside
+             * either answers exactly as an absent one does — no hint that it exists elsewhere.
+             */
+            if (!payerPersonId) {
+                return publicErr("This link names no payer, so no payment can be recognised from it.", 409);
+            }
+            const recognized = await recognizeCollectionAttempt(supabase, {
+                orgId,
+                attemptId,
+                scope: { chargeIds: recognizable, payerPersonId },
+            });
             if (!recognized.ok) {
                 // `not_settled` is an ordinary answer for ACH and for a card still processing: the
                 // attempt is real and the money has not arrived. It is not an error the parent caused.

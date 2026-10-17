@@ -232,3 +232,21 @@ export function payableChargeIds(projection: EnrollmentFinancialRequirementProje
     }
     return out;
 }
+
+/**
+ * THE CHARGES WHOSE PAYMENTS THIS LINK MAY RECOGNISE — every fee on this family's own journey.
+ *
+ * Wider than `payableChargeIds`, deliberately: an attempt the webhook already posted leaves its
+ * charge with nothing collectible, and a recognise that arrives after that must still be told
+ * "already recorded" rather than "not found". Reversed obligations stay in: their attempts are
+ * this family's, and what recognising them means is the engine's decision. A charge on another
+ * household or another child's journey is never in this set.
+ */
+export function recognizableChargeIds(projection: EnrollmentFinancialRequirementProjection): ReadonlySet<string> {
+    const out = new Set<string>();
+    for (const o of projection.obligations) {
+        const id = o.position?.chargeId;
+        if (id) out.add(id);
+    }
+    return out;
+}

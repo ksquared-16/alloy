@@ -13,6 +13,7 @@ import {
     formSubmissionStatusIsComplete,
 } from "@/lib/forms/formSubmissionCompletion";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
+import type { EnrollmentFinancialRequirementProjection } from "@/lib/enrollment/financial/enrollmentFinancialRequirement";
 import type {
     EnrollmentRequirementProgress,
     EnrollmentSatisfactionEvidence,
@@ -169,4 +170,54 @@ export function projectRequirementsProgress(
 ): EnrollmentRequirementProgress[] {
     const index = indexRealizedFormItems(realizedItems);
     return requirements.map((requirement) => projectRequirementProgress(requirement, index));
+}
+
+/**
+ * A FINANCIAL REQUIREMENT, ANSWERED BY FINANCIALS.
+ *
+ * It projected "unsupported", which completion treats as blocking — so a configured fee blocked
+ * every enrolment forever, paid or not. Whether the fee is settled is canonical Financials' answer
+ * (the fee projection over charges, payments and the collectible position); this only translates
+ * that answer into requirement progress, for one child, and keeps no balance of its own.
+ *
+ *  - SATISFIED (paid, zero-cost, or reversed)   → satisfied, with the charges as evidence
+ *  - NOT_DUE / DUE / PARTIALLY_SATISFIED / PROCESSING → outstanding, with Financials' explanation
+ *  - ATTENTION_REQUIRED (incl. an unresolved charge template) → outstanding, flagged for an operator
+ *
+ * Pure: the projection is read by the caller.
+ */
+export function projectFinancialRequirementProgress(
+    requirement: StageRequirementV1,
+    projection: EnrollmentFinancialRequirementProjection | null,
+): EnrollmentRequirementProgress {
+    const base = {
+        requirement_id: requirement.requirement_id,
+        kind: requirement.ref.kind,
+        artifact: { kind: requirement.ref.kind, id: artifactIdFor(requirement.ref) },
+        level: requirement.level,
+    } as const;
+    if (!projection || projection.state === "NOT_APPLICABLE") {
+        return { ...base, status: "unsupported", reason: UNSUPPORTED_KIND_REASON.financial };
+    }
+    if (projection.state === "SATISFIED") {
+        return {
+            ...base,
+            status: "satisfied",
+            evidence: {
+                kind: "financial_obligation",
+                charge_ids: projection.obligations
+                    .map((o) => o.position?.chargeId ?? null)
+                    .filter((id): id is string => Boolean(id)),
+                financial_state: projection.state,
+            },
+        };
+    }
+    return {
+        ...base,
+        status: "outstanding",
+        reason:
+            projection.state === "ATTENTION_REQUIRED"
+                ? `Needs attention: ${projection.explanation}`
+                : projection.explanation,
+    };
 }
