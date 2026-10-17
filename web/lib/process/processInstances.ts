@@ -702,14 +702,18 @@ export async function listEnrollmentInstancesForLead(
     supabase: SupabaseClient,
     args: { orgId: string; opportunityId: string },
 ): Promise<ProcessInstanceRow[]> {
-    const { data, error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .select("*")
-        .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId);
-    if (error) return [];
-    return (data ?? []) as ProcessInstanceRow[];
+    /*
+     * THE SAME ANSWER AS THE STRICT READER, ONLY LENIENT ON FAILURE.
+     *
+     * This matched `context_id = opportunity` alone, which is the legacy anchor. A child added
+     * through the operator's Add Child has a journey anchored to its Enrollment Participation, so
+     * every display reader built on this (the Decision surface's per-child paths among them) saw a
+     * two-child family as having no children — deployed: "Review each child's path" rendered no
+     * rows and no child could be offered, waitlisted or enrolled from Decision. The strict reader
+     * already widens to both anchors; this now asks it, and keeps answering `[]` when it cannot.
+     */
+    const read = await readEnrollmentInstancesForLead(supabase, args);
+    return read.ok ? read.rows : [];
 }
 
 export type EnrollmentInstanceReadResult =

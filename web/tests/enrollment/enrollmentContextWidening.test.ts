@@ -134,3 +134,38 @@ describe("journeys -> the Opportunity behind each", () => {
         expect(calls).toHaveLength(0);
     });
 });
+
+describe("the lenient lead reader sees participation-anchored journeys too", () => {
+    it("lists a journey anchored to the child's participation, not only to the Opportunity", async () => {
+        const { listEnrollmentInstancesForLead } = await import("@/lib/process/processInstances");
+        const journeys = [
+            { id: "pi-legacy", org_id: ORG, process_key: "enrollment", context_id: OPP, subject_id: "child-a" },
+            { id: "pi-added", org_id: ORG, process_key: "enrollment", context_id: OCM, subject_id: "child-b" },
+            { id: "pi-other", org_id: ORG, process_key: "enrollment", context_id: OTHER_OPP, subject_id: "child-c" },
+        ];
+        const tables: Record<string, Array<Record<string, unknown>>> = {
+            opportunity_customer_members: [{ id: OCM, opportunity_id: OPP }],
+            process_instances: journeys,
+        };
+        const supabase = {
+            from: (table: string) => {
+                let inCol = "";
+                let inVals: unknown[] = [];
+                const b: Record<string, unknown> = {
+                    select: () => b,
+                    eq: () => b,
+                    in: (c: string, v: unknown[]) => {
+                        inCol = c;
+                        inVals = v;
+                        return b;
+                    },
+                    then: (resolve: (r: { data: unknown; error: null }) => void) =>
+                        resolve({ data: (tables[table] ?? []).filter((r) => inVals.includes(r[inCol])), error: null }),
+                };
+                return b;
+            },
+        } as never;
+        const rows = await listEnrollmentInstancesForLead(supabase, { orgId: ORG, opportunityId: OPP });
+        expect(rows.map((r) => r.id).sort()).toEqual(["pi-added", "pi-legacy"]);
+    });
+});
