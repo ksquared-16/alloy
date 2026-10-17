@@ -8,6 +8,7 @@
  * Read only. Opening this never launches a session or writes participant state.
  */
 
+import { canonicalValuesWithHouseholdProvisional } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const objective = {
         ok: true as const,
         value: recomputeParticipantObjectiveFromContext(
-            { ...resolved.context, canonicalValues: canonical.values },
+            { ...resolved.context, canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues) },
             resolved.context.needsContext.session,
         ),
     };

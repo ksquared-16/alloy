@@ -56,7 +56,12 @@ export const ENROLLMENT_NEED_STATES = [
 export type EnrollmentNeedState = (typeof ENROLLMENT_NEED_STATES)[number];
 
 /** Where the current usable value came from. Only categories the repository already distinguishes. */
-export type EnrollmentNeedValueSource = "session_shared_value" | "canonical_prefill" | "none";
+export type EnrollmentNeedValueSource =
+    | "session_shared_value"
+    | "canonical_prefill"
+    /** A household fact a sibling's journey holds — offered, and always confirmed here first. */
+    | "household_provisional"
+    | "none";
 
 /** One place this need is consumed — kept so a future conversation can name its targets. */
 export type EnrollmentNeedOccurrence = {

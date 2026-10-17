@@ -105,7 +105,9 @@ describe("known facts are confirmed, not asked for", () => {
         ]) {
             const src = read(rel);
             expect(src, `${rel} must resolve canonical values`).toContain("resolveParticipantCanonicalContext");
-            expect(src).toContain("canonicalValues: canonical.values");
+            // The canonical record is passed — now together with a sibling's household answers, which
+            // the helper attaches below canonical precedence and the projection always confirms.
+            expect(src).toContain("canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues)");
         }
     });
 

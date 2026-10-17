@@ -15,6 +15,7 @@
  * That ordering is the point: Enrollment completion must never depend on model uptime.
  */
 
+import { canonicalValuesWithHouseholdProvisional } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ]);
     timing.mark("objective", parallelStart);
     if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
-    const currentContext = { ...resolved.context, canonicalValues: canonical.values };
+    const currentContext = { ...resolved.context, canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues) };
     const current = {
         ok: true as const,
         value: recomputeParticipantObjectiveFromContext(currentContext, resolved.context.needsContext.session),
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
             processInstanceId: access.value.processInstanceId,
-            canonicalValues: canonical.values,
+            canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues),
         });
         if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
         const partyResponse = publicOk({
@@ -292,7 +293,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // The SAME canonical record the turn was selected against. Recomputing the objective after
         // the write without it would flip every still-unanswered known fact back to `missing`, and
         // the participant would be asked next for something they were about to confirm.
-        canonicalValues: canonical.values,
+        canonicalValues: canonicalValuesWithHouseholdProvisional(canonical.values, canonical.provisionalValues),
         nowIso: new Date().toISOString(),
         // The turn this request already resolved, with its context — the apply layer fetches
         // nothing it already knows and recomputes the objective purely from post-write state.
