@@ -238,6 +238,51 @@ async function maintainOpportunityTourFacts(
 }
 
 /**
+ * A CANCELLED TOUR TAKES ITS DATE WITH IT.
+ *
+ * Scheduling mirrors the booking's wall date/time onto `metadata.tour_date` / `tour_time`, and the
+ * Work View row stamps booking truth over that mirror only while a booking is ACTIVE. The cancel
+ * branch never touched the mirror, so a cancelled future tour kept its date: the family stayed in
+ * "Tours in the next 7 days" and on every reader of `tour_date`, at Decision, with no tour (measured
+ * on staging, the Fifteen Family and the 1467 QA family).
+ *
+ * Only the mirror of THIS booking is removed — the keys are cleared when they still hold exactly the
+ * date and time this booking wrote — so a date that came from anywhere else is left alone.
+ */
+async function clearCanceledTourMirror(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    booking: TourBookingRow,
+): Promise<TourBookingOpportunityIntegrationResult> {
+    let mirror: { tour_date: string; tour_time: string };
+    try {
+        mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
+    } catch {
+        return {};
+    }
+    const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
+    if (!opp) return {};
+    const md = asMetadataRecord(opp.metadata);
+    if (md.tour_date !== mirror.tour_date) return {};
+    const priorMetadata = opp.metadata;
+    delete md.tour_date;
+    if (md.tour_time === mirror.tour_time) delete md.tour_time;
+    const { error } = await supabase.from("opportunities").update({ metadata: md }).eq("id", opportunityId).eq("org_id", orgId);
+    if (error) throw new Error(`tour_booking: clear cancelled tour mirror failed — ${error.message}`);
+    return {
+        undo: async () => {
+            const { error: undoErr } = await supabase
+                .from("opportunities")
+                .update({ metadata: priorMetadata })
+                .eq("id", opportunityId)
+                .eq("org_id", orgId);
+            if (undoErr) throw new Error(`tour_booking: restore opportunity mirror failed — ${undoErr.message}`);
+        },
+    };
+}
+
+/**
  * Keep `opportunities` metadata + `status_key` aligned for enrollment CRM / queue consumers.
  * Call after the `tour_bookings` row is committed, before tour lifecycle workflow events.
  */
@@ -275,7 +320,7 @@ export async function applyTourBookingOpportunityIntegration(
          * explicitly, for exactly that reason.
          */
         await maintainOpportunityTourFacts(supabase, orgId, opportunityId);
-        return {};
+        return clearCanceledTourMirror(supabase, orgId, opportunityId, booking);
     }
 
     if (kind === "confirmed_mirror" || kind === "reschedule_mirror") {

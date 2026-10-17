@@ -193,6 +193,33 @@ describe("applyTourBookingOpportunityIntegration (post enrollment status-collaps
         );
     });
 
+    it("canceled removes the date and time THIS booking mirrored, and nothing else", async () => {
+        const booking = baseBooking({ status_key: "canceled" });
+        const { supabase, captured } = makeSupabase({
+            id: "opp-1",
+            org_id: "org-1",
+            status_key: "open",
+            metadata: { tour_date: "2026-05-11", tour_time: "08:00", source: "web" },
+            work_unit_id: null,
+        });
+        const result = await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "canceled" });
+        expect(captured.patch).toEqual({ metadata: { source: "web" } });
+        expect(result.undo).toBeTypeOf("function");
+    });
+
+    it("canceled leaves a tour date that another booking or source wrote", async () => {
+        const booking = baseBooking({ status_key: "canceled" });
+        const { supabase, captured } = makeSupabase({
+            id: "opp-1",
+            org_id: "org-1",
+            status_key: "open",
+            metadata: { tour_date: "2026-05-20", tour_time: "09:00" },
+            work_unit_id: null,
+        });
+        await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "canceled" });
+        expect(captured.patch).toBeNull();
+    });
+
     it("confirmed_mirror skips when the booking is not firm", async () => {
         const booking = baseBooking({ status_key: "pending_approval" });
         const { supabase, captured } = makeSupabase({
