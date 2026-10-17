@@ -74,6 +74,24 @@ export function overlayChildMissionOntoSettledFocusModel(
     const missionIsForAnotherChild =
         attentionSubjectId != null && attentionSubjectId !== commitCritical.subjectId;
 
+    /*
+     * THE SETTLED CONTEXT MUST BE THIS CHILD'S FAMILY.
+     *
+     * The family cards and the activity feed come from the settled model — the family Drawer VM —
+     * while the child's mission comes from the child's answer. When the operator moves from one
+     * family's row to another family's child, the settled model can still be the FIRST family for a
+     * moment, and the Process card's "Last action" then read that family's events under this child's
+     * name (deployed: "Ava ZZQA1467FAMB moved to Enrolling" on Family C's Ava, though every event is
+     * correctly attributed in storage). Family-derived truth from another family is never shown:
+     * those cards hold in the calm reserved state until the right family settles.
+     */
+    const childFamily = (() => {
+        const v = commitCritical.subjectIdentityTruth?.["child.family_opportunity_id"];
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    })();
+    const settledFamily = typeof settled.subject?.id === "string" && settled.subject.id.trim() ? settled.subject.id.trim() : null;
+    const settledIsAnotherFamily = childFamily != null && settledFamily != null && childFamily !== settledFamily;
+
     const stageWorkRuntime = commitCritical.stageWorkRuntime;
     const publishedStageInputs = commitCritical.publishedStageInputs;
     const situation = commitCritical.situation;
@@ -89,6 +107,9 @@ export function overlayChildMissionOntoSettledFocusModel(
     );
 
     const cardReadiness = new Map(settled.cardReadiness);
+    if (settledIsAnotherFamily) {
+        for (const key of cardReadiness.keys()) cardReadiness.set(key, "reserved");
+    }
     cardReadiness.set("current_work", "ready");
 
     const subjectType = commitCritical.subjectGrain?.subjectType ?? "child";
@@ -305,7 +326,8 @@ export function overlayChildMissionOntoSettledFocusModel(
             },
             truth: {
                 ...mergeSubjectIdentityTruthOntoSettled(
-                    settled.context.truth,
+                    // Another family's truth (its activity feed included) is not this child's.
+                    settledIsAnotherFamily ? ({ id: commitCritical.subjectId } as typeof settled.context.truth) : settled.context.truth,
                     commitCritical.subjectIdentityTruth,
                 ),
                 ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
