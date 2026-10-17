@@ -91,6 +91,7 @@ export async function postProviderConfirmedCollection(
     if (!attempt.charge_id) {
         return { posted: false, reason: "posting_failed", detail: "attempt names no obligation to apply to" };
     }
+    const chargeId: string = attempt.charge_id;
 
     // ── F5. Neither side wins a disagreement; the disagreement itself is the finding. ────────────
     if (provider.amountCents != null && provider.amountCents !== attempt.requested_amount_cents) {
@@ -108,32 +109,51 @@ export async function postProviderConfirmedCollection(
         };
     }
 
+    /*
+     * ── ONE RETRY, FOR ONE RACE ──────────────────────────────────────────────────────────────────
+     *
+     * Two payers' successes posting at the same moment both read the same outstanding balance and
+     * both ask to apply against it. The ledger's allocation bound (row-locked in the database) lets
+     * exactly one through and refuses the other as an over-payment — correctly. But the refused one
+     * had already written its receipt, and was left unapplied with money still owed on the charge.
+     *
+     * Re-running is safe because the receipt is keyed by this attempt: the second pass finds it
+     * rather than writing another, re-reads what is outstanding NOW, and applies the smaller of the
+     * two. Only the over-payment refusal is retried; anything else is a real refusal and is kept.
+     */
+    const post = () => recordAndApplyChildcarePayment(supabase, {
+        orgId: attempt.org_id,
+        chargeId,
+        amountCents: attempt.requested_amount_cents,
+        // The rail is how value was tendered; the processor is who executed it. Both are recorded,
+        // and neither is the other.
+        //
+        // This read `"card"` until Thread 8C, which was true while card was the only rail and
+        // silently wrong the moment a bank debit settled: certification found a receipt for a
+        // real ACH collection filed as a card payment. The receipt is what an operator reconciles
+        // against a bank statement, so the rail has to survive recognition, not just authorisation.
+        paymentMethod: railPaymentMethod(attempt.rail),
+        processor: "stripe",
+        processorTransactionId: attempt.provider_transaction_id,
+        /*
+         * WHO ACTUALLY PAID, when the collection knew. Evidence only — Thread 6 owns
+         * responsibility, and a grandparent paying a fee does not become responsible for it.
+         * The column pair is all-or-nothing, so an unknown payer stays wholly null.
+         */
+        payerEntityType: attempt.payer_person_id ? "person" : null,
+        payerEntityId: attempt.payer_person_id,
+        idempotencyKey: postingIdempotencyKey(attempt.id),
+        actorUserId: null,
+    });
+
     let result;
     try {
-        result = await recordAndApplyChildcarePayment(supabase, {
-            orgId: attempt.org_id,
-            chargeId: attempt.charge_id,
-            amountCents: attempt.requested_amount_cents,
-            // The rail is how value was tendered; the processor is who executed it. Both are recorded,
-            // and neither is the other.
-            //
-            // This read `"card"` until Thread 8C, which was true while card was the only rail and
-            // silently wrong the moment a bank debit settled: certification found a receipt for a
-            // real ACH collection filed as a card payment. The receipt is what an operator reconciles
-            // against a bank statement, so the rail has to survive recognition, not just authorisation.
-            paymentMethod: railPaymentMethod(attempt.rail),
-            processor: "stripe",
-            processorTransactionId: attempt.provider_transaction_id,
-            /*
-             * WHO ACTUALLY PAID, when the collection knew. Evidence only — Thread 6 owns
-             * responsibility, and a grandparent paying a fee does not become responsible for it.
-             * The column pair is all-or-nothing, so an unknown payer stays wholly null.
-             */
-            payerEntityType: attempt.payer_person_id ? "person" : null,
-            payerEntityId: attempt.payer_person_id,
-            idempotencyKey: postingIdempotencyKey(attempt.id),
-            actorUserId: null,
-        });
+        try {
+            result = await post();
+        } catch (first) {
+            if (!/over-pay/i.test(first instanceof Error ? first.message : "")) throw first;
+            result = await post();
+        }
     } catch (e) {
         // F13. The provider's success is not in doubt and is not discarded. The attempt keeps
         // `succeeded` with a null `canonical_payment_id`, which reads as "money arrived, not yet

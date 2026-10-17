@@ -28,7 +28,7 @@ import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMe
 import { defaultStripeFormCall } from "@/lib/financials/payments/providerPaymentMethod";
 import { requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 
-import { ensureAccountingPeriodCovers, governedTestAccount } from "./certEnvironment";
+import { ensureAccountingPeriodCovers, ensureCertificationPersons, governedTestAccount } from "./certEnvironment";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     try {
@@ -148,6 +148,7 @@ describe.runIf(runnable)("collection completion — live", () => {
         );
         await client.from("customers").upsert({ id: CUSTOMER, org_id: ORG, name: "W3 cert account" }, { onConflict: "id" });
         await ensureAccountingPeriodCovers(client, ORG, TODAY);
+        await ensureCertificationPersons(client, ORG, [PAYER, OTHER_PAYER]);
 
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_methods").delete().eq("org_id", ORG);

@@ -25,7 +25,7 @@ import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamily
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
-import { ensureAccountingPeriodCovers, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
+import { ensureAccountingPeriodCovers, ensureCertificationPersons, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
 import { runHex } from "./certificationPeriod";
 
 function readTrusted(key: string): string | null {
@@ -59,7 +59,11 @@ if (secret && !process.env.STRIPE_SECRET_KEY) process.env.STRIPE_SECRET_KEY = se
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const AGREEMENT = "fc500000-0000-4000-8000-0000000a0001";
-const CHILD = "fc500000-0000-4000-8000-0000000c0002";
+/*
+ * The actual payer, as a PERSON. This was the child's customer-member id, which the collection
+ * service accepted as a person until payers were checked against `persons`.
+ */
+const CHILD = "fc500000-0000-4000-8000-0000000e00c2";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -176,6 +180,7 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
          * "journals exactly once" assertion went red while every money assertion passed.
          */
         await ensureAccountingPeriodCovers(client, ORG, new Date().toISOString().slice(0, 10));
+        await ensureCertificationPersons(client, ORG, [CHILD]);
         const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").upsert({

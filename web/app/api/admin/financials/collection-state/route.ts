@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { collectionLifecycle, retryAvailable } from "@/lib/financials/payments/collectionLifecycle";
 
 /**
  * GET /api/admin/financials/collection-state?attempt_id=…
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("payment_collection_attempts")
-        .select("id, processor_state, canonical_payment_id, requested_amount_cents, currency")
+        .select("id, processor_state, canonical_payment_id, requested_amount_cents, currency, rail, provider_action_type, last_provider_detail")
         .eq("org_id", ctx.orgId)
         .eq("id", attemptId)
         .maybeSingle();
@@ -64,22 +65,50 @@ export async function GET(request: NextRequest) {
         canonical_payment_id: string | null;
         requested_amount_cents: number;
         currency: string;
+        rail: string | null;
+        provider_action_type: string | null;
+        last_provider_detail: { failure_code?: unknown; decline_code?: unknown } | null;
     };
+
+    /*
+     * ONE VOCABULARY. This used to map every state it did not name — `initiated`,
+     * `requires_payment_method` — to "processing", so a saved card declined at confirmation (left
+     * `initiated` with no provider id) read as money on its way, indefinitely. The shared lifecycle
+     * module decides instead, and a decline now arrives here as `failed` with its reason.
+     */
+    const lifecycle = collectionLifecycle({
+        rail: row.rail === "ach" ? "ach" : "card",
+        processorState: row.processor_state,
+        providerActionType: row.provider_action_type,
+        canonicallyRecognized: Boolean(row.canonical_payment_id),
+        providerFailureCode: typeof row.last_provider_detail?.failure_code === "string"
+            ? row.last_provider_detail.failure_code
+            : null,
+        providerDeclineCode: typeof row.last_provider_detail?.decline_code === "string"
+            ? row.last_provider_detail.decline_code
+            : null,
+    });
 
     return NextResponse.json({
         ok: true,
         // Operator-facing meaning, not the raw column: the surface should not have to know the
         // provider's vocabulary to say something true.
         stage:
-            row.canonical_payment_id
+            lifecycle === "received"
                 ? "recognized"
-                : row.processor_state === "succeeded"
+                : lifecycle === "finalizing"
                     ? "finalizing"
-                    : row.processor_state === "failed" || row.processor_state === "canceled"
-                        ? "failed"
-                        : row.processor_state === "requires_action"
-                            ? "requires_action"
-                            : "processing",
+                    : lifecycle === "declined"
+                        ? "declined"
+                        : lifecycle === "failed" || lifecycle === "canceled"
+                            ? "failed"
+                            : lifecycle === "action_required" || lifecycle === "verification_required"
+                                ? "requires_action"
+                                : lifecycle === "selected"
+                                    ? "awaiting_payment"
+                                    : "processing",
+        /** Nothing was collected and a new attempt may be started. The balance is unchanged. */
+        retryAvailable: retryAvailable(lifecycle),
         recognized: Boolean(row.canonical_payment_id),
         amountCents: row.requested_amount_cents,
         currency: row.currency,

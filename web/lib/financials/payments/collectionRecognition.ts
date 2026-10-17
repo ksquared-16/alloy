@@ -80,9 +80,40 @@ const ATTEMPT_COLUMNS =
  * authority's own unique key is what makes that correct rather than merely likely when two actors
  * arrive together.
  */
+/**
+ * WHOSE attempt a caller may act on, beyond the organization.
+ *
+ * An operator acts for the whole organization and passes none of this. A PARTICIPANT surface must:
+ * an org-only lookup lets a family's link name another family's attempt id and be told its state,
+ * its receipt id, and — if it had settled — post it. Each field narrows; a mismatch reads as
+ * absent, never as forbidden, so an id from another family cannot be confirmed to exist.
+ */
+export type RecognitionScope = {
+    /** The obligations this caller may pay. The attempt's charge must be one of them. */
+    chargeIds?: Iterable<string>;
+    /** The payer this caller is. The attempt's recorded payer must be exactly this person. */
+    payerPersonId?: string | null;
+};
+
+export function attemptWithinScope(
+    attempt: { charge_id: string | null; payer_person_id: string | null },
+    scope: RecognitionScope | undefined,
+): boolean {
+    if (!scope) return true;
+    if (scope.chargeIds !== undefined) {
+        const allowed = new Set([...scope.chargeIds].map((c) => String(c)));
+        if (!attempt.charge_id || !allowed.has(String(attempt.charge_id))) return false;
+    }
+    if (scope.payerPersonId !== undefined) {
+        const payer = String(scope.payerPersonId ?? "").trim();
+        if (!payer || String(attempt.payer_person_id ?? "") !== payer) return false;
+    }
+    return true;
+}
+
 export async function recognizeCollectionAttempt(
     supabase: SupabaseClient,
-    args: { orgId: string; attemptId: string; actorUserId?: string | null },
+    args: { orgId: string; attemptId: string; actorUserId?: string | null; scope?: RecognitionScope },
     readIntent: ProviderIntentRead = defaultIntentRead,
 ): Promise<RecognizeResult> {
     const orgId = String(args.orgId ?? "").trim();
@@ -112,6 +143,15 @@ export async function recognizeCollectionAttempt(
         provider_account_ref: string;
         payment_method_id: string | null;
     };
+
+    if (!attemptWithinScope(attempt, args.scope)) {
+        return {
+            ok: false,
+            reason: "attempt_not_found",
+            message: "That collection is not in this organization.",
+            attemptId: null,
+        };
+    }
 
     /*
      * ALREADY DONE IS A SUCCESS, NOT A REFUSAL.
@@ -184,6 +224,25 @@ export async function recognizeCollectionAttempt(
             currency: (body as { currency?: unknown }).currency ? String((body as { currency: unknown }).currency) : null,
         },
     );
+
+    /*
+     * The provider said `succeeded` and the money is now recognised, so the cached state says so
+     * too. Without this an attempt recognised here — because its webhook never came — kept whatever
+     * it last held (`requires_payment_method`, or `failed` after an earlier decline), and every
+     * surface reading processor state disagreed with the receipt. The state trigger admits this move
+     * from every non-final state, including a decline.
+     */
+    if (posting.posted || posting.reason === "already_posted") {
+        await supabase
+            .from("payment_collection_attempts")
+            .update({
+                processor_state: "succeeded",
+                processor_state_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", attempt.id)
+            .neq("processor_state", "succeeded");
+    }
 
     if (posting.posted) {
         return { ok: true, recognized: true, paymentId: posting.paymentId, attemptId: attempt.id };
