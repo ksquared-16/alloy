@@ -20,6 +20,10 @@ import {
     resolveFollowUpWorkDueAt,
     type StageFollowUpWorkDuePolicyV1,
 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import {
+    RECORD_TOUR_OUTCOME_WORK_DEFINITION_KEY,
+    readActiveTourBooking,
+} from "@/lib/lifecycle/scheduledTourOutcomeInvariant";
 
 export type InstantiateStageWorkFromTemplateResult =
     | { status: "created"; work_id: string }
@@ -132,7 +136,7 @@ export async function instantiateStageWorkFromTemplate(params: {
     } else {
         dueAtOverride =
             dueAtFromTargetDays(params.dueDaysOverride, now)
-            ?? dueAtIsoFromPolicy(params.template.due_policy, now);
+            ?? dueAtIsoFromPolicy(params.template.due_policy, await tourOutcomeDueAnchor(params, workDefinitionKey, now));
     }
 
     const result = await instantiateWorkFromDefinition({
@@ -173,4 +177,28 @@ export async function instantiateStageWorkFromTemplate(params: {
         status: "rejected",
         error: result.status === "rejected" ? (result.message ?? result.reason) : "instantiate_failed",
     };
+}
+
+/**
+ * RECORDING A TOUR'S OUTCOME IS DUE AFTER THE TOUR, NOT AFTER THE BOOKING.
+ *
+ * The template's due policy was counted from the moment the work was created — which, for Tour work,
+ * is when the tour was booked. A tour booked for next week therefore made "record the outcome" overdue
+ * days before the family had visited. The policy is unchanged (same day / N days); only its anchor
+ * moves, to the scheduled end of the family's active tour, read from the booking itself. With no active
+ * booking there is nothing to anchor to and the creation time is used, exactly as before.
+ */
+export async function tourOutcomeDueAnchor(
+    params: { supabase: SupabaseClient; orgId: string; opportunityId: string },
+    workDefinitionKey: string,
+    now: Date,
+): Promise<Date> {
+    if (workDefinitionKey !== RECORD_TOUR_OUTCOME_WORK_DEFINITION_KEY) return now;
+    try {
+        const booking = await readActiveTourBooking(params.supabase, params.orgId.trim(), params.opportunityId.trim());
+        const end = booking ? new Date(booking.end_at) : null;
+        return end && Number.isFinite(end.getTime()) && end.getTime() > now.getTime() ? end : now;
+    } catch {
+        return now;
+    }
 }

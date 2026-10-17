@@ -87,7 +87,7 @@ describe("the label states the durable booking state", () => {
             // and this assertion cannot quietly change meaning on the day the date goes by.
             { timeZone: "UTC", now: Date.parse("2026-09-01T00:00:00Z") },
         );
-        expect(out.label).toBe("Tour scheduled · Sep 8, 5:00 PM");
+        expect(out.label).toBe("Tour · Sep 8, 5:00 PM");
     });
 
     it("still names the state when the instant is missing or unusable", () => {
@@ -259,7 +259,7 @@ describe("a tour that has already happened states its status, not its date", () 
             signal({ scheduled: true, statusKey: "confirmed", startAt: "2026-09-08T17:00:00Z" }),
             { timeZone: "UTC", now: NOW },
         );
-        expect(out.label).toBe("Tour scheduled · Sep 8, 5:00 PM");
+        expect(out.label).toBe("Tour · Sep 8, 5:00 PM");
     });
 
     it("leaves an un-negotiated slot as what it is, minus the stale date", () => {

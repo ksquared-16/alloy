@@ -36,7 +36,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch {
         /* empty body ok */
     }
-    const canceledBy = String(body.canceled_by ?? "admin").trim() || "admin";
+    // The operator who cancelled, so Activity can say who — "admin" named nobody.
+    const canceledBy = String(body.canceled_by ?? ctx.userId ?? "admin").trim() || "admin";
 
     const supabase = createAdminClient();
     try {

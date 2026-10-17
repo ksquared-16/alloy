@@ -38,6 +38,7 @@ import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focus
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { runCurrentWorkPlanInline } from "@/lib/adminV2/runtime/focusPanel/currentWork/runCurrentWorkPlanInline";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 
 type Props = {
@@ -106,11 +107,12 @@ export default function BusinessProcessCard({
             context={context}
             receded={receded}
             coordination={coordination}
+            mutation={mutation}
         />
     );
 }
 
-function BusinessProcessSummary({ model, context, receded = false, coordination }: Props) {
+function BusinessProcessSummary({ model, context, receded = false, coordination, mutation }: Props) {
     /*
      * THE SERVER DECIDED THIS. The card reads it.
      *
@@ -200,6 +202,10 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
     const invoke = useCallback(
         (command: ProcessCardCommand) => {
             const plan = planCurrentWorkActionExecution(command.action);
+            // A plan that is one canonical mutation on something this card names (cancelling the
+            // scheduled tour) runs here, behind its confirmation; it used to open a workspace that
+            // never ran it.
+            if (runCurrentWorkPlanInline(plan, { mutation })) return;
             switch (plan.kind) {
                 case "blocked":
                 case "unsupported":
@@ -330,7 +336,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                     coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
             }
         },
-        [coordination],
+        [coordination, mutation, context],
     );
 
     /*
@@ -397,6 +403,19 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
 
         if (!tourPresentation.grouped) return projection.commands.map(toInput);
 
+        /*
+         * WHILE A TOUR STANDS, RECORDING ITS OUTCOME IS A TOUR OPERATION.
+         *
+         * The outcome affordance sat apart from the Tour control, so the operator met the Tour in
+         * two places: "Tour ▾" for arranging it and a loose "Record outcome" for concluding it. While
+         * a booking is standing (scheduled, or awaiting its outcome) the same command joins the
+         * Tour menu — the same command object, so execution is unchanged. With no standing tour it
+         * stays where it was.
+         */
+        const tourStanding = tourPresentation.statusKey === "confirmed" || tourPresentation.statusKey === "rescheduled";
+        const outcomeCommand = tourStanding ? projection.commands.find((c) => c.key === "record_outcome") ?? null : null;
+        const members = outcomeCommand ? [...tourPresentation.tour, outcomeCommand] : tourPresentation.tour;
+
         // The group takes the position of the first Tour command, so configuration's ordering
         // survives collapsing: a Tour concept configured second stays second.
         const firstTourIndex = projection.commands.findIndex((c) => tourPresentation.tour.includes(c));
@@ -411,12 +430,12 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             // Reaching the group IS intent toward its members — the menu item is one hover away,
             // and the member commands are the ones carrying a prepare step.
             onIntent: () => tourPresentation.tour.forEach(warmCommand),
-            menu: tourPresentation.tour.map(toInput),
+            menu: members.map(toInput),
         };
 
         const out: ProcessCardActionInput[] = [];
         projection.commands.forEach((command, index) => {
-            if (tourPresentation.tour.includes(command)) {
+            if (members.includes(command)) {
                 if (index === firstTourIndex) out.push(grouped);
                 return;
             }

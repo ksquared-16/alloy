@@ -146,6 +146,19 @@ export default function LifecycleStageCommandsEditor({
                 onMoveUp={(index) => move(index, index - 1)}
                 onMoveDown={(index) => move(index, index + 1)}
                 testIdPrefix="stage-commands"
+                rename={{
+                    authored: (ref) => commands.find((row) => row.action_ref === ref)?.override_label?.trim() || null,
+                    platformLabel: (ref) =>
+                        optionByRef(options.helpfulActionOptions, ref)?.label || ref.replace(/_/g, " "),
+                    onRename: (ref, label) =>
+                        commit(
+                            commands.map((row) => {
+                                if (row.action_ref !== ref) return row;
+                                const { override_label: _previous, ...rest } = row;
+                                return label ? { ...rest, override_label: label } : rest;
+                            }),
+                        ),
+                }}
             />
         </section>
     );

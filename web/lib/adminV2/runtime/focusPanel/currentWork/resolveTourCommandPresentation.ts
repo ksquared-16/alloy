@@ -242,9 +242,15 @@ export function resolveTourCommandPresentation<T extends { key: string; handlerK
         carriesTime && !elapsed
             ? formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null)
             : null;
+    /*
+     * A standing, confirmed appointment reads as the appointment itself — "Tour · Oct 21, 9:00 AM".
+     * "scheduled" restated what the time already says; the other states keep their stem because
+     * the stem is the news (requested, pending approval, rescheduled).
+     */
+    const timedStem = when && statusKey === "confirmed" ? "Tour" : statedStem;
     return {
         grouped: true,
-        label: when ? `${statedStem} · ${when}` : statedStem,
+        label: when ? `${timedStem} · ${when}` : statedStem,
         statusKey,
         tour: tourActions,
         rest,

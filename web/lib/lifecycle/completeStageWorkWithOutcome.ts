@@ -47,6 +47,15 @@ import {
 import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import { deriveParticipantDecisionProgress } from "@/lib/lifecycle/projectParticipantDecisionRows";
 import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import {
+    TOUR_STILL_SCHEDULED_CODE,
+    closeScheduledTour,
+    planScheduledTourClose,
+    reopenClosedScheduledTour,
+    scheduledTourConfirmationMessage,
+    type ScheduledTourClosePlan,
+    type ScheduledTourSummary,
+} from "@/lib/lifecycle/scheduledTourOutcomeInvariant";
 
 /**
  * Execution provenance for a discharged Current Work requirement. Distinguishes an
@@ -76,6 +85,13 @@ export type CompleteStageWorkWithOutcomeInput = {
     correlationId?: string | null;
     /** Suppresses duplicate execution from a double-submit of the same outcome. */
     idempotencyKey?: string | null;
+    /**
+     * The operator confirmed that recording this outcome closes a Tour that is still ahead. Without it
+     * such an outcome is refused before anything is written (`confirmation_required` on the result).
+     */
+    confirmCloseScheduledTour?: boolean;
+    /** Clock for the "is the tour still ahead" question; tests only. */
+    now?: Date;
     onTrace?: (trace: PlatformTransactionTrace) => void;
 };
 
@@ -94,6 +110,10 @@ export type CompleteStageWorkWithOutcomeResult = {
     changed?: boolean;
     integrity_breach?: PlatformTransactionResult<undefined>["integrity_breach"];
     correlation_id?: string;
+    /** Set when the outcome would close a Tour that is still ahead and the operator has not confirmed. */
+    confirmation_required?: { kind: typeof TOUR_STILL_SCHEDULED_CODE; message: string; tour: ScheduledTourSummary };
+    /** The family's tour this outcome closed, and how. */
+    scheduled_tour_closed?: ScheduledTourSummary & { closed_as: "completed" | "canceled" };
 };
 
 /** Capability key — the same string the configured action registry uses. */
@@ -118,6 +138,31 @@ export async function completeStageWorkWithOutcome(
     let workState: WorkStateResult = { work_closed: false };
     let outcome_execution: StageOutcomeExecutionResult | undefined;
     let provenanceSnapshot: Record<string, unknown> | null = null;
+    let tourClosed = false;
+    let confirmationRequired: CompleteStageWorkWithOutcomeResult["confirmation_required"];
+
+    /*
+     * THE SCHEDULED TOUR — a terminal Tour outcome may not leave the same Tour scheduled. A read, like
+     * the plan resolution above: it decides which steps exist. The confirmation question is asked in
+     * `validate`, before any write, so an unconfirmed close of a future Tour changes nothing.
+     */
+    let tourClose = { kind: "none" } as ScheduledTourClosePlan;
+    let tourCloseError: string | null = null;
+    if (resolved.ok) {
+        try {
+            tourClose = await planScheduledTourClose({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                opportunityId: input.subject.opportunity_id,
+                plan: resolved.plan,
+                outcomeKey,
+                closeDecision: resolved.closeDecision,
+                now: input.now,
+            });
+        } catch (e) {
+            tourCloseError = e instanceof Error ? e.message : String(e);
+        }
+    }
 
     const transaction = await runPlatformTransaction({
         capability: RECORD_OUTCOME_CAPABILITY,
@@ -169,6 +214,12 @@ export async function completeStageWorkWithOutcome(
             });
             if (sufficiency.blocked) {
                 return { ok: false, message: sufficiency.message ?? "Enrollment cannot be completed yet." };
+            }
+            if (tourCloseError) return { ok: false, message: tourCloseError };
+            if (tourClose.kind === "close" && tourClose.requires_confirmation && !input.confirmCloseScheduledTour) {
+                const message = scheduledTourConfirmationMessage(formatTourWhen(tourClose.summary));
+                confirmationRequired = { kind: TOUR_STILL_SCHEDULED_CODE, message, tour: tourClose.summary };
+                return { ok: false, code: TOUR_STILL_SCHEDULED_CODE, message };
             }
             return { ok: true };
         },
@@ -267,6 +318,38 @@ export async function completeStageWorkWithOutcome(
                     }
                 },
             });
+
+            // The family's scheduled tour closes with the outcome that concluded it — through the
+            // booking's own transition, so the Tours view, the card, the reminders and the activity
+            // all follow from the same fact.
+            if (tourClose.kind === "close") {
+                const close = tourClose;
+                steps.push({
+                    name: "close_scheduled_tour",
+                    stage: "business_process",
+                    compensateOnFailure: true,
+                    run: async (ctx) => {
+                        await closeScheduledTour({
+                            supabase: input.supabase,
+                            orgId: input.orgId,
+                            actorUserId: input.userId,
+                            plan: close,
+                            outcomeLabel: outcome.label,
+                            correlationId: ctx.correlationId,
+                        });
+                        tourClosed = true;
+                        return close.mode;
+                    },
+                    compensate: async () => {
+                        await reopenClosedScheduledTour({
+                            supabase: input.supabase,
+                            orgId: input.orgId,
+                            booking: close.booking,
+                        });
+                        tourClosed = false;
+                    },
+                });
+            }
 
             // ── activity ─────────────────────────────────────────────────────────────
             // Execution provenance — stamped on the discharged work regardless of trace
@@ -368,6 +451,7 @@ export async function completeStageWorkWithOutcome(
             changed: transaction.changed,
             integrity_breach: transaction.integrity_breach,
             correlation_id: transaction.correlation_id,
+            ...(confirmationRequired ? { confirmation_required: confirmationRequired } : {}),
         };
     }
 
@@ -379,7 +463,32 @@ export async function completeStageWorkWithOutcome(
         transaction,
         changed: true,
         correlation_id: transaction.correlation_id,
+        ...(tourClosed && tourClose.kind === "close" ?
+            {
+                scheduled_tour_closed: {
+                    ...tourClose.summary,
+                    closed_as: tourClose.mode === "complete" ? ("completed" as const) : ("canceled" as const),
+                },
+            }
+        :   {}),
     };
+}
+
+/** "Oct 21, 9:00 AM" in the tour's own zone — the time the family was given. */
+function formatTourWhen(tour: ScheduledTourSummary): string {
+    const at = new Date(tour.start_at);
+    if (Number.isNaN(at.getTime())) return "a later date";
+    try {
+        return new Intl.DateTimeFormat("en-US", {
+            timeZone: tour.timezone || "UTC",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        }).format(at);
+    } catch {
+        return at.toISOString();
+    }
 }
 
 /**

@@ -15,6 +15,7 @@ import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/
 import { recordTourStageSyncFollowUp } from "@/lib/tours/opportunity/tourStageSyncFollowUp";
 import type { TourStageSyncFailure } from "@/lib/tours/opportunity/tourStageSyncFollowUp";
 import { associateTourBookingToStageWork } from "@/lib/lifecycle/associateTourBookingToStageWork";
+import { shiftTourOutcomeWorkDue } from "@/lib/lifecycle/scheduledTourOutcomeInvariant";
 import {
     orchestrateTourBookingCanceled,
     orchestrateTourBookingCompleted,
@@ -625,8 +626,9 @@ export async function rescheduleTourBooking(
     input: RescheduleTourBookingInput
 ): Promise<TourBookingRow> {
     let firmForOppMirror = false;
+    let previousEndAt: string | null = null;
 
-    return runTourBookingLifecycleTransition({
+    const row = await runTourBookingLifecycleTransition({
         supabase,
         capability: "reschedule_tour",
         orgId,
@@ -642,6 +644,7 @@ export async function rescheduleTourBooking(
                 return { ok: false, message: "tour_bookings: end_at must be after start_at" };
             }
             firmForOppMirror = existing.status_key === "confirmed" || existing.status_key === "rescheduled";
+            previousEndAt = existing.end_at;
             const nextLoc =
                 input.locationId != null && String(input.locationId).trim() !== "" ?
                     String(input.locationId).trim()
@@ -702,6 +705,23 @@ export async function rescheduleTourBooking(
                       run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
                   },
     });
+
+    // The open "record tour outcome" work follows the tour to its new time. Soft, like the other
+    // post-commit Business Process follow-ups: the reschedule is committed and must not be revoked.
+    if (previousEndAt) {
+        try {
+            await shiftTourOutcomeWorkDue({
+                supabase,
+                orgId,
+                opportunityId: row.opportunity_id,
+                previousEndAt,
+                nextEndAt: row.end_at,
+            });
+        } catch (e) {
+            console.warn("[tour] reschedule: tour outcome work due not moved", errorText(e));
+        }
+    }
+    return row;
 }
 
 export async function cancelTourBooking(

@@ -611,13 +611,21 @@ export default function MyTasksPanel({
             setActionId(workId);
             setError(null);
             try {
-                const result = await completeStageWorkWithSelectedOutcome({
-                    departmentId: outcomeContext.department_id,
-                    stageKey: outcomeContext.stage_key,
-                    workId: outcomeContext.work_id,
-                    outcomeKey,
-                    subject: outcomeContext.subject,
-                });
+                const submit = (confirmCloseScheduledTour: boolean) =>
+                    completeStageWorkWithSelectedOutcome({
+                        departmentId: outcomeContext.department_id!,
+                        stageKey: outcomeContext.stage_key!,
+                        workId,
+                        outcomeKey,
+                        subject: outcomeContext.subject!,
+                        confirmCloseScheduledTour,
+                    });
+                let result = await submit(false);
+                // A terminal Tour outcome while the Tour is still ahead: nothing was written yet.
+                if (result.confirmation_required) {
+                    if (!window.confirm(result.confirmation_required.message)) return;
+                    result = await submit(true);
+                }
                 if (!result.ok) throw new Error(result.error ?? "Failed to complete work item");
                 clearForms();
                 await load({ force: true });
