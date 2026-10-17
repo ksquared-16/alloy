@@ -31,6 +31,9 @@ function fakeSupabase(rows: Record<string, Record<string, unknown> | null>) {
             const q = {
                 select: () => q,
                 eq: () => q,
+                not: () => q,
+                gte: () => q,
+                order: () => q,
                 limit: async () => ({ data: rows[table] ? [rows[table]] : [], error: null }),
                 maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
             };
@@ -41,7 +44,7 @@ function fakeSupabase(rows: Record<string, Record<string, unknown> | null>) {
 
 function journey(outstanding: number, opts: { completedAt?: string | null; state?: string } = {}) {
     progress.mockImplementation(async (_s: unknown, input: { captureLoaded?: (l: unknown) => void }) => {
-        input.captureLoaded?.({ session: { id: "sess-1" }, items: [], formBySessionItem: new Map(), subjectId: "child-1", requirements: FEE });
+        input.captureLoaded?.({ session: null, items: [], formBySessionItem: new Map(), subjectId: "child-1", requirements: FEE });
         return {
             ok: true,
             value: {
@@ -68,6 +71,11 @@ beforeEach(() => {
 });
 
 describe("the fee becomes a charge at the child's milestone, once", () => {
+    /*
+     * As production sees it: at completion the session is no longer CURRENT (in_progress), so the
+     * progress resolver hands back no session. The milestone is the journey's latest COMPLETED
+     * session, read directly — the H3-2 version read the current one and never came due.
+     */
     it("is not charged while other paperwork is outstanding", async () => {
         const r = await realizeEnrollmentFeesForProcessInstance(journey(1), { orgId: "org", processInstanceId: "pi-1" });
         expect(r).toEqual({ status: "not_due", outstanding: 1 });
