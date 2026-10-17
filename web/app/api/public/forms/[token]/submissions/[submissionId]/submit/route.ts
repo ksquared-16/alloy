@@ -41,6 +41,7 @@ import {
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { fetchOrgTimeZoneIana } from "@/lib/admin/orgLocalDayBounds";
+import { realizeEnrollmentFeesForProcessInstance } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
 import {
     extractCollectionSubmissionEnvelope,
     validateCollectionPayloadOrgSecurity,
@@ -545,6 +546,33 @@ export async function POST(
             orgId: ctx.orgId,
             packetSessionId: ctx.packet.packet_session_id,
         });
+
+        /*
+         * THE CHILD'S PAPERWORK IS DONE: its per-child Enrollment fee becomes a charge now, dated by
+         * this completion. Idempotent and best-effort — a failure is logged, never a failed submit,
+         * and a retry of the same completion resolves to the same charge.
+         */
+        try {
+            const { data: sessionRow } = await supabase
+                .from("form_packet_sessions")
+                .select("process_instance_id")
+                .eq("org_id", ctx.orgId)
+                .eq("id", ctx.packet.packet_session_id)
+                .maybeSingle();
+            const processInstanceId = (sessionRow as { process_instance_id?: string | null } | null)?.process_instance_id ?? null;
+            if (processInstanceId) {
+                const fee = await realizeEnrollmentFeesForProcessInstance(supabase, { orgId: ctx.orgId, processInstanceId });
+                if (fee.status === "realized") {
+                    for (const r of fee.requirements) {
+                        if (!r.result.templateResolved) {
+                            console.error("[public submit] enrollment fee template not found:", r.chargeTemplateKey);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[public submit] enrollment fee realization failed:", e instanceof Error ? e.message : String(e));
+        }
     }
 
     const packetExtras: Record<string, unknown> = {};

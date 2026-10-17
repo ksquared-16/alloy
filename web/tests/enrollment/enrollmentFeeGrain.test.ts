@@ -24,32 +24,37 @@ describe("fee grain", () => {
     it("per family is exactly one obligation, against the household", () => {
         const sources = billableSourcesForScope({ ...WRIGHT, scope: "record" });
         expect(sources).toEqual([
-            { source: { type: "customer", id: "cust-wright" }, subjectCustomerMemberId: null },
+            { source: { type: "customer", id: "cust-wright" }, subjectCustomerMemberId: null, legacyAgreementId: null },
         ]);
     });
 
-    it("per child is one obligation per child, each against its own agreement", () => {
+    /*
+     * PER CHILD (Director decision, H3-2): one obligation per enrolling child, owed when the child's
+     * paperwork is done — before any agreement need exist. The household is the billable source (the
+     * payer); the child is the charge's subject. The agreement, when there is one, is carried only to
+     * recognise a fee an earlier path wrote against it.
+     */
+    it("per child is one obligation per child, against the household with the child as subject", () => {
         const sources = billableSourcesForScope({ ...WRIGHT, scope: "each_child" });
         expect(sources).toEqual([
-            { source: { type: "enrollment_agreement", id: "agr-emma" }, subjectCustomerMemberId: "emma" },
-            { source: { type: "enrollment_agreement", id: "agr-liam" }, subjectCustomerMemberId: "liam" },
+            { source: { type: "customer", id: "cust-wright" }, subjectCustomerMemberId: "emma", legacyAgreementId: "agr-emma" },
+            { source: { type: "customer", id: "cust-wright" }, subjectCustomerMemberId: "liam", legacyAgreementId: "agr-liam" },
         ]);
     });
 
     it("two children never collapse into one obligation, even at the same price", () => {
-        // Identical fees are exactly when a lost attribution stops being visible.
+        // Identical fees are exactly when a lost attribution stops being visible: siblings share the
+        // payer, so it is the SUBJECT that keeps them two obligations.
         const sources = billableSourcesForScope({ ...WRIGHT, scope: "each_child" });
         expect(sources).toHaveLength(2);
-        expect(new Set(sources.map((s) => s.source.id)).size).toBe(2);
+        expect(new Set(sources.map((s) => s.subjectCustomerMemberId)).size).toBe(2);
     });
 
     /*
-     * A child with no agreement is SKIPPED, never charged to the household instead.
-     *
-     * Falling back to the family would satisfy the requirement with a charge nobody can attribute,
-     * and would do it silently. An unsatisfied requirement is visible and fixable.
+     * A child with no agreement is still owed its fee — and still attributed to that child, never
+     * folded into an anonymous household charge.
      */
-    it("skips a child that has no agreement rather than charging the family", () => {
+    it("a child without an agreement is still one obligation, attributed to that child", () => {
         const sources = billableSourcesForScope({
             customerId: "cust-wright",
             enrollingChildren: [
@@ -58,9 +63,12 @@ describe("fee grain", () => {
             ],
             scope: "each_child",
         });
-        expect(sources).toHaveLength(1);
-        expect(sources[0].subjectCustomerMemberId).toBe("emma");
-        expect(sources.some((s) => s.source.type === "customer")).toBe(false);
+        expect(sources).toHaveLength(2);
+        expect(sources.find((s) => s.subjectCustomerMemberId === "noah")).toEqual({
+            source: { type: "customer", id: "cust-wright" },
+            subjectCustomerMemberId: "noah",
+            legacyAgreementId: null,
+        });
     });
 
     it("per family ignores how many children are enrolling", () => {
