@@ -39,8 +39,16 @@ export type FamilyChildJourney = {
     /** Null when the child has not been launched yet — a real state, not an error. */
     readonly processInstanceId: string | null;
     readonly sessionId: string | null;
-    /** The participant path for THIS child. Each child keeps its own link. */
+    /**
+     * The participant path for THIS child. Each child keeps its own link, and it is offered only to
+     * the person that link was addressed to.
+     */
     readonly participantPath: string | null;
+    /**
+     * Where this child's own journey stands, in the family's words. Each child's state is its own —
+     * a sibling's enrolment never completes, and a sibling's waitlist never blocks, another child.
+     */
+    readonly state?: "in_progress" | "waitlisted" | "enrolled" | "withdrawn" | "not_enrolling";
     readonly locationName: string | null;
     readonly totalRequirements: number;
     readonly satisfiedRequirements: number;
@@ -81,8 +89,8 @@ export type FamilyProgressRow = {
 };
 
 export type FamilyEnrollmentExperience = {
-    /** The enrolment episode every child journey below belongs to. */
-    readonly opportunityId: string;
+    /** The enrolment episode the children belong to, or null when grouped by household alone. */
+    readonly opportunityId: string | null;
     readonly familyName: string;
     readonly headline: string;
     readonly childCount: number;
@@ -96,7 +104,7 @@ export type FamilyEnrollmentExperience = {
 };
 
 export type ComposeFamilyEnrollmentInput = {
-    readonly opportunityId: string;
+    readonly opportunityId: string | null;
     readonly familyName: string;
     readonly children: readonly FamilyChildJourney[];
     /** Whether the household's own shared information has been given. */
@@ -105,7 +113,16 @@ export type ComposeFamilyEnrollmentInput = {
     readonly focusedCustomerMemberId?: string | null;
 };
 
+/** A child whose own journey has ended or is parked: shown with its outcome, never as work. */
+function childIsSettled(child: FamilyChildJourney): boolean {
+    return child.state === "enrolled" || child.state === "withdrawn" || child.state === "not_enrolling";
+}
+
 function childDetail(child: FamilyChildJourney): string {
+    if (child.state === "enrolled") return "Enrolled";
+    if (child.state === "withdrawn") return "Withdrawn";
+    if (child.state === "not_enrolling") return "Not enrolling";
+    if (child.state === "waitlisted") return "On the waitlist";
     if (child.processInstanceId === null) return "Not started";
     if (child.submitted) return child.processingState ? `Submitted · ${child.processingState}` : "Submitted";
     /*
@@ -155,7 +172,7 @@ export function composeFamilyEnrollmentExperience(
              * unfinished while its own screen said complete. Not-started is `processInstanceId ===
              * null`, which is asked directly.
              */
-            complete: c.submitted || (c.processInstanceId !== null && c.remainingRequirements === 0),
+            complete: childIsSettled(c) || c.submitted || (c.processInstanceId !== null && c.remainingRequirements === 0),
             customerMemberId: c.customerMemberId,
         })),
     ];
@@ -175,7 +192,13 @@ export function composeFamilyEnrollmentExperience(
         });
     }
 
-    const everyChildSubmitted = children.length > 0 && children.every((c) => c.submitted);
+    /*
+     * The family is finished when every child with paperwork to do has done it. An enrolled child has
+     * nothing left; a waitlisted child has no Enrollment paperwork yet — neither holds the family open
+     * or closed on another child's behalf.
+     */
+    const working = children.filter((c) => !childIsSettled(c) && c.state !== "waitlisted");
+    const everyChildSubmitted = children.length > 0 && working.every((c) => c.submitted);
     const moneySettled =
         !input.financials ||
         input.financials.state === "NOT_APPLICABLE" ||
