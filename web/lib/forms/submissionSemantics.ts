@@ -67,6 +67,31 @@ export function fieldIdsControllingVisibility(schema: FormSchemaV1): ReadonlySet
     return out;
 }
 
+/**
+ * A SUB-SCHEMA FOR CONTROLS ALREADY KNOWN TO BE SHOWN.
+ *
+ * A review surface renders one control at a time through the shared engine, in a schema that holds
+ * only that control. Its visibility was already decided — against the WHOLE form and the family's
+ * answers — by whoever chose to list it. Left on the field, the condition is re-evaluated inside the
+ * sub-schema, where the field it names does not exist, and evaluates false: the Other children
+ * collection that "Do you have other children? → Yes" had just made required rendered as nothing,
+ * while the review demanded a member be added to it.
+ *
+ * Only the listed fields' OWN conditions are dropped. Lines nested inside them keep theirs, because
+ * the fields those name are inside the sub-schema with them.
+ */
+export function withListedFieldsShown(schema: FormSchemaV1, listedFieldIds: Iterable<string>): FormSchemaV1 {
+    const listed = new Set(listedFieldIds);
+    return {
+        ...schema,
+        fields: schema.fields.map((f) => {
+            if (!listed.has(f.id) || !f.visibility) return f;
+            const { visibility: _resolved, ...rest } = f;
+            return rest as FormField;
+        }),
+    };
+}
+
 function hasAnswer(v: unknown): boolean {
     if (v === undefined || v === null) return false;
     if (typeof v === "string") return v.trim() !== "";
