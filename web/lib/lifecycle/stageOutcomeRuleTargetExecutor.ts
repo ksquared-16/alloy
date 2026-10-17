@@ -875,6 +875,14 @@ export async function applyStageOutcomeRuleTarget(
                 template: workTpl,
                 dueDaysOverride: target.due_days,
                 followUpDuePolicy: target.follow_up_due_policy ?? null,
+                // Follow-up for a child is that child's work, not a sibling's to share.
+                childSubject:
+                    subject.journey_segment === "child" && subject.customer_member_id?.trim()
+                        ? {
+                              customerMemberId: subject.customer_member_id.trim(),
+                              processInstanceId: subject.process_instance_id ?? null,
+                          }
+                        : null,
             });
             if (result.status === "rejected") {
                 return { error: result.error };
@@ -983,6 +991,7 @@ export async function applyStageOutcomeRuleTarget(
             let undoStageMove: (() => Promise<void>) | undefined;
             let stageMovePreviousKey: string | null = null;
             let stageMoveChildId: string | null = null;
+            let stageMoveJourneyId: string | null = null;
             if (subject.journey_segment === "child") {
                 // Authoritative + only writer: the child's process instance owns stage_key.
                 // (The OCM stage_key mirror write was removed — OCM is no longer a runtime dependency
@@ -1042,6 +1051,7 @@ export async function applyStageOutcomeRuleTarget(
                 });
                 if (pi.error) return { error: pi.error };
                 const movedInstanceId = stageInstanceId ?? pi.instanceId ?? null;
+                stageMoveJourneyId = movedInstanceId ?? track.instanceId ?? null;
                 if (priorStage != null) {
                     undoStageMove = async () => {
                         const restored = await moveEnrollmentInstanceStageByScope(supabase, {
@@ -1185,6 +1195,11 @@ export async function applyStageOutcomeRuleTarget(
                     destinationStageKey: targetStageKey,
                     departmentMetadata,
                     initiatingWorkId: subject.work_id ?? null,
+                    // A child's move settles that child's work only; siblings and the family keep theirs.
+                    childSubject:
+                        subject.journey_segment === "child" && stageMoveChildId
+                            ? { customerMemberId: stageMoveChildId, processInstanceId: stageMoveJourneyId }
+                            : null,
                 });
                 if (reconciled.degraded) {
                     spawnDegraded = reconciled.degraded;

@@ -121,6 +121,7 @@ export async function applyEnrollmentPacketBusinessProcessIntegration(params: {
             opportunityId,
             previousStatusKey: previous,
             nextStatusKey: "enrolling",
+            childSubject: params.customerMemberId?.trim() ? { customerMemberId: params.customerMemberId.trim() } : null,
         });
         return;
     }

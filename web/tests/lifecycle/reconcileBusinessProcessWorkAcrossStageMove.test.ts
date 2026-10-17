@@ -345,3 +345,79 @@ describe("reconcileBusinessProcessWorkAcrossStageMove", () => {
         expect(second.idempotent_noop).toBe(true);
     });
 });
+
+describe("a child's stage move settles that child's work only", () => {
+    const childWork = (id: string, child: string | null, stage: string, template: string): Row => ({
+        id,
+        title: template,
+        status: "open",
+        source: "lifecycle_stage_work",
+        metadata: {
+            lifecycle_provenance: "lifecycle_template",
+            operating_plan_template: true,
+            operating_plan_template_key: template,
+            work_intent_key: template,
+            work_definition_key: template,
+            lifecycle_stage_key: stage,
+            ...(child ? { bp_subject_customer_member_id: child } : {}),
+        },
+        updated_at: "2026-01-01T00:00:00.000Z",
+    });
+
+    beforeEach(() => {
+        vi.mocked(instantiateStageWorkFromTemplate).mockClear();
+        vi.mocked(instantiateStageWorkFromTemplate).mockResolvedValue({ status: "created", work_id: "work-new" });
+    });
+
+    it("Ava Lead→Tour leaves Ben's work and the family's work open, and creates Ava's entry work for Ava", async () => {
+        const rows: Row[] = [
+            childWork("ava-contact", "ava", "lead", "contact_family"),
+            childWork("ben-contact", "ben", "lead", "contact_family"),
+            childWork("family-review", null, "lead", "contact_family"),
+        ];
+        const result = await reconcileBusinessProcessWorkAcrossStageMove({
+            supabase: makeSupabase(rows) as never,
+            orgId: "org-1",
+            userId: "user-1",
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            sourceStageKey: "lead",
+            destinationStageKey: "tour",
+            departmentMetadata: deptMetadataWithPlans(),
+            childSubject: { customerMemberId: "ava", processInstanceId: "pi-ava" },
+        });
+        expect(result.items.find((i) => i.work_id === "ava-contact")?.result).toMatch(/canceled|superseded/);
+        expect(rows.find((r) => r.id === "ben-contact")!.status).toBe("open");
+        expect(rows.find((r) => r.id === "family-review")!.status).toBe("open");
+        expect(result.items.some((i) => i.work_id === "ben-contact" || i.work_id === "family-review")).toBe(false);
+        expect(vi.mocked(instantiateStageWorkFromTemplate).mock.calls[0]?.[0]).toMatchObject({
+            childSubject: { customerMemberId: "ava", processInstanceId: "pi-ava" },
+        });
+    });
+
+    it("a family move leaves every child's work alone", async () => {
+        const rows: Row[] = [childWork("ava-contact", "ava", "lead", "contact_family"), childWork("family-contact", null, "lead", "contact_family")];
+        await reconcileBusinessProcessWorkAcrossStageMove({
+            supabase: makeSupabase(rows) as never,
+            orgId: "org-1",
+            userId: "user-1",
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            sourceStageKey: "lead",
+            destinationStageKey: "tour",
+            departmentMetadata: deptMetadataWithPlans(),
+        });
+        expect(rows.find((r) => r.id === "ava-contact")!.status).toBe("open");
+        expect(rows.find((r) => r.id === "family-contact")!.status).not.toBe("open");
+    });
+
+    it("gives each child a distinct work identity, and parses it", () => {
+        const base = { orgId: "org-1", entityType: "opportunities", entityId: "opp-1", workDefinitionKey: "offer_spot" };
+        const ava = buildBusinessProcessWorkRuntimeFingerprint({ ...base, subjectChildId: "ava" });
+        const ben = buildBusinessProcessWorkRuntimeFingerprint({ ...base, subjectChildId: "ben" });
+        expect(ava).toBe("bpw:org-1:opportunities:opp-1:offer_spot:child:ava");
+        expect(ava).not.toBe(ben);
+        expect(buildBusinessProcessWorkRuntimeFingerprint(base)).toBe("bpw:org-1:opportunities:opp-1:offer_spot");
+        expect(parseBusinessProcessWorkRuntimeFingerprint(ava)).toMatchObject({ semanticWorkKey: "offer_spot", entityId: "opp-1" });
+    });
+});

@@ -347,6 +347,9 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
                 opportunityId,
                 previousStatusKey: previous,
                 nextStatusKey: next,
+                childSubject: input.scope.customerMemberId?.trim()
+                    ? { customerMemberId: input.scope.customerMemberId.trim() }
+                    : null,
             });
             if (stage_entry_spawn.action === "skipped" && stage_entry_spawn.reason === "instantiate_failed") {
                 errors.push(stage_entry_spawn.reason);

@@ -22,6 +22,8 @@ export type FamilyDecisionParticipant = {
     /** The child's journey, when they have one yet. */
     process_instance_id: string | null;
     state: string | null;
+    /** The child's own stage, when they have moved off the family's. */
+    stage_key: string | null;
 };
 
 export type FamilyDecisionParticipantsRead =
@@ -47,12 +49,17 @@ export async function readFamilyDecisionParticipants(
     for (const row of journeys.rows) {
         const id = row.subject_id?.trim();
         if (!id || byChild.has(id)) continue;
-        byChild.set(id, { customer_member_id: id, process_instance_id: row.id, state: row.state?.trim() || null });
+        byChild.set(id, {
+            customer_member_id: id,
+            process_instance_id: row.id,
+            state: row.state?.trim() || null,
+            stage_key: row.stage_key?.trim() || null,
+        });
     }
     for (const row of data as { customer_member_id?: string | null }[]) {
         const id = row.customer_member_id?.trim();
         if (!id || byChild.has(id)) continue;
-        byChild.set(id, { customer_member_id: id, process_instance_id: null, state: null });
+        byChild.set(id, { customer_member_id: id, process_instance_id: null, state: null, stage_key: null });
     }
     return { ok: true, participants: [...byChild.values()], journeys: journeys.rows };
 }

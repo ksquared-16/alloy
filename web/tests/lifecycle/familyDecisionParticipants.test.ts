@@ -84,8 +84,8 @@ describe("the family's children at Decision", () => {
     it("lists children with no journey yet as live and undecided", async () => {
         const read = await readFamilyDecisionParticipants(fake(world()), { orgId: ORG, opportunityId: LEAD });
         expect(read.ok && read.participants).toEqual([
-            { customer_member_id: "ava", process_instance_id: null, state: null },
-            { customer_member_id: "ben", process_instance_id: null, state: null },
+            { customer_member_id: "ava", process_instance_id: null, state: null, stage_key: null },
+            { customer_member_id: "ben", process_instance_id: null, state: null, stage_key: null },
         ]);
     });
 
@@ -97,7 +97,36 @@ describe("the family's children at Decision", () => {
             customer_member_id: "ava",
             process_instance_id: "pi-ava",
             state: "waitlisted",
+            stage_key: null,
         });
+    });
+
+    it("names an offered child's path Offer spot, not the Waitlist path that shares its disposition", async () => {
+        const w = world();
+        w.process_instances.push({ id: "pi-ava", org_id: ORG, process_key: "enrollment", context_id: "ocm-ava", subject_id: "ava", state: "waitlisted", stage_key: "offered" });
+        const twoPaths = {
+            ...plan,
+            work_templates: [
+                {
+                    ...plan.work_templates[0],
+                    participant_decisions: [
+                        {
+                            decision_key: "child_waitlist",
+                            action_ref: "waitlist_child",
+                            label: "Waitlist",
+                            subject_grain: "child",
+                            targets: [
+                                { kind: "update_child_enrollment_status", disposition_key: "waitlisted" },
+                                { kind: "move_to_stage", stage_key: "waitlist" },
+                            ],
+                        },
+                        ...(plan.work_templates[0].participant_decisions ?? []),
+                    ],
+                },
+            ],
+        } as unknown as StageOperatingPlanV1;
+        const surface = await projectParticipantDecisionRows({ supabase: fake(w), orgId: ORG, opportunityId: LEAD, plan: twoPaths, templateKey: "review_child_paths" });
+        expect(surface?.rows.find((r) => r.label === "Ava Q")?.state_label).toBe("Offer spot");
     });
 
     it("renders a row and an enabled Offer spot for each child, and counts both as undecided", async () => {

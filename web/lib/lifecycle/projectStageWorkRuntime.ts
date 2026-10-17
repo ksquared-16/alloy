@@ -26,6 +26,7 @@
  * configuration, exactly as before.
  */
 
+import { childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
@@ -165,11 +166,12 @@ function spawnStageFromTaskProvenance(md: Record<string, unknown>): string | nul
     const provenance = md.provenance;
     if (provenance && typeof provenance === "object" && !Array.isArray(provenance)) {
         const idem = trimOrNull((provenance as Record<string, unknown>).idempotency_key);
-        // lifecycle_intent:{orgId}:{opportunityId}:{stageKey}:{templateKey}
+        // lifecycle_intent:{orgId}:{opportunityId}:{stageKey}:{templateKey}[:child:{customerMemberId}]
+        // Read by position: a child's work appends a child segment after the template.
         if (idem?.startsWith("lifecycle_intent:")) {
             const parts = idem.split(":");
             if (parts.length >= 5) {
-                const stage = parts[parts.length - 2]?.trim();
+                const stage = parts[3]?.trim();
                 if (stage) return stage;
             }
         }
@@ -517,9 +519,23 @@ export function projectStageWorkRuntimeSync(
     const stageTemplateKeys = new Set(plan.work_templates.map((t) => t.template_key));
     const matches = (row: TaskDbRow, template: StageWorkTemplateV1) =>
         taskMatchesStageWorkTemplate(row, stageKey, template, stageTemplateKeys);
+    /*
+     * WHOSE WORK THIS IS. At a child stage each child owns their own item; a sibling's item is never
+     * this child's, however well it matches the template. Work from before items named their child
+     * carries no owner and is still found, after the child's own. Family subjects are unaffected.
+     */
+    const ownChildId = journeySegment === "child" ? trimOrNull(params.customerMemberId) : null;
+    const pick = (list: TaskDbRow[], template: StageWorkTemplateV1): TaskDbRow | null => {
+        if (!ownChildId) return list.find((row) => matches(row, template)) ?? null;
+        return (
+            list.find((row) => matches(row, template) && childOfStageWork(row.metadata) === ownChildId)
+            ?? list.find((row) => matches(row, template) && childOfStageWork(row.metadata) === null)
+            ?? null
+        );
+    };
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
-        const openRow = openList.find((row) => matches(row, template)) ?? null;
-        const completedRow = !openRow ? completedList.find((row) => matches(row, template)) ?? null : null;
+        const openRow = pick(openList, template);
+        const completedRow = !openRow ? pick(completedList, template) : null;
         return buildWorkItemProjection({
             template,
             role: index === 0 ? "primary" : "secondary",
