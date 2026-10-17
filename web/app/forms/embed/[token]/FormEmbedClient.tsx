@@ -22,6 +22,10 @@ import {
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { withListedFieldsShown } from "@/lib/forms/submissionSemantics";
+import {
+    collectionPrompt,
+    collectionsAwaitingMembers,
+} from "@/lib/enrollment/participantRuntime/collectionsAwaitingMembers";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { outstandingRequiredCollections } from "@/lib/forms/validateSubmission";
@@ -379,7 +383,9 @@ export function FormEmbedClient({
      * SIGN. Distinct states, one token route, no step numbers — the parent sees pages, not a
      * wizard.
      */
-    const [reviewStep, setReviewStep] = useState<"handoff" | "review" | "edit" | "sign">("handoff");
+    const [reviewStep, setReviewStep] = useState<"handoff" | "people" | "review" | "edit" | "sign">("handoff");
+    /** The relationship collection the "people" step is asking about, held until the parent moves on. */
+    const [peopleFocus, setPeopleFocus] = useState<string | null>(null);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     /**
      * The review presents the document FITTED, with a way to open it larger.
@@ -1471,7 +1477,14 @@ export function FormEmbedClient({
                     {documentFlow && reviewStep === "handoff" ? (
                         <button
                             type="button"
-                            onClick={() => setReviewStep("review")}
+                            onClick={() => {
+                                /* The people first: a shown relationship collection still short of its
+                                   minimum is asked for as its own step, in the same rows the review
+                                   edits — never discovered as a document that cannot be finished. */
+                                const first = collectionsAwaitingMembers(compiled)[0] ?? null;
+                                setPeopleFocus(first?.fieldId ?? null);
+                                setReviewStep(first ? "people" : "review");
+                            }}
                             /*
                              * BEND PINE, like every other primary action in Participant Runtime.
                              *
@@ -1522,7 +1535,53 @@ export function FormEmbedClient({
                     /* THE DOCUMENT-FIRST PROGRESSION — conversation, review, sign: distinct
                        participant states under one token. The handoff state renders nothing here;
                        the conversation card above owns that screen and its [Review paperwork]. */
-                    reviewStep === "handoff" ? null : reviewStep === "edit" ? (
+                    reviewStep === "handoff" ? null : reviewStep === "people" && peopleFocus ? (
+                        (() => {
+                            const control = compiled.sections.flatMap((sec) => sec.controls).find((c) => c.field_id === peopleFocus) ?? null;
+                            const count = (control?.value ?? null) as { complete?: number; needed?: number } | null;
+                            const complete = count?.complete ?? 0;
+                            const needed = count?.needed ?? 0;
+                            const prompt = collectionPrompt({ fieldId: peopleFocus, label: control?.participant_label ?? control?.label ?? "", complete, needed });
+                            const next = collectionsAwaitingMembers(compiled).find((c) => c.fieldId !== peopleFocus) ?? null;
+                            return (
+                                <IntakeCard>
+                                    <div data-participant-collection={peopleFocus}>
+                                        <IntakeHeading title={prompt.title} subtitle={prompt.detail} />
+                                        <div className="[&_header]:hidden">
+                                            <FormEngineRenderer
+                                                schema={reviewControlSubSchema(schema, [peopleFocus], participantLabels)}
+                                                payload={payload}
+                                                onChange={(nextPayload) => {
+                                                    setValidationErrors(null);
+                                                    setMessage(null);
+                                                    setPayload(nextPayload);
+                                                    void persistDraft(nextPayload);
+                                                    scheduleDocumentRefresh();
+                                                }}
+                                                mode="edit"
+                                                optionValuesByFieldId={optionValuesByFieldId}
+                                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                                variant="embed"
+                                                validationErrors={validationErrors ?? undefined}
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            data-participant-collection-continue="true"
+                                            disabled={complete < needed}
+                                            onClick={() => {
+                                                setPeopleFocus(next?.fieldId ?? null);
+                                                setReviewStep(next ? "people" : "review");
+                                            }}
+                                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white disabled:bg-alloy-midnight/25"
+                                        >
+                                            {complete < needed ? `${needed - complete} more needed` : next ? "Continue" : "Continue to your paperwork"}
+                                        </button>
+                                    </div>
+                                </IntakeCard>
+                            );
+                        })()
+                    ) : reviewStep === "edit" ? (
                         <IntakeCard>
                             <IntakeHeading
                                 title="Make a change"
