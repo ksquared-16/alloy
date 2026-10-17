@@ -336,3 +336,44 @@ describe("the child mission overlay never lets the family answer for the child",
         );
     });
 });
+
+/**
+ * CURRENT WORK EXECUTES FROM THE CHILD'S OWN PROJECTION.
+ *
+ * Deployed (ad30be55): opening the family first and then Ava kept the FAMILY's
+ * `operationalProjection` on Ava's panel. Current Work renders and executes from it, so "Enrollment
+ * complete" carried the family's execution subject — no child — and was refused every time. Opened
+ * on Ava directly it carried Ava. The overlay now takes the child's own projection.
+ */
+describe("the child overlay carries the child's operational projection, never the family's", () => {
+    const familyProjection = { currentWork: { subject: { journey_segment: "child", opportunity_id: "opp-1" } }, marker: "family" };
+    const childProjection = {
+        currentWork: { subject: { journey_segment: "child", opportunity_id: "opp-1", customer_member_id: "cm_lennon", process_instance_id: "pi_lennon" } },
+        marker: "child",
+    };
+    const settledFamily = () => {
+        const m = settledModel("decision");
+        (m.context as unknown as { operationalProjection: unknown }).operationalProjection = familyProjection;
+        return m;
+    };
+    const commitWith = (projection: unknown) =>
+        ({ ...childCommit({ situationStageKey: "enrolling" }), operationalProjection: projection }) as unknown as FocusPanelCommitCriticalInput;
+
+    it("family first, then the child: the child's projection replaces the family's", () => {
+        const overlaid = overlayChildMissionOntoSettledFocusModel(settledFamily(), commitWith(childProjection));
+        expect(overlaid.context.operationalProjection).toBe(childProjection);
+        expect(overlaid.context.operationalProjection).not.toBe(familyProjection);
+    });
+
+    it("a child answer without a projection shows none — it does not inherit the family's", () => {
+        const overlaid = overlayChildMissionOntoSettledFocusModel(settledFamily(), commitWith(null));
+        expect(overlaid.context.operationalProjection).toBeNull();
+    });
+
+    it("while the answer still describes the child the operator left, nothing executable is shown", () => {
+        const overlaid = overlayChildMissionOntoSettledFocusModel(settledFamily(), commitWith(childProjection), {
+            attentionSubjectId: "cm_someone_else",
+        });
+        expect(overlaid.context.operationalProjection).toBeNull();
+    });
+});
