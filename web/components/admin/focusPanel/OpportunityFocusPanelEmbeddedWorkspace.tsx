@@ -56,10 +56,22 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
         markDrawerFamilyWorkspaceTiming("activity_mounted", { entity_id: drawerId });
     }, [drawerId]);
 
-    const ribbonEntries = resolveLayoutRuntimeActivityTimeline({
+    /*
+     * THE RIBBON IS FOR WHAT PEOPLE DID. Delivery states and the notifications an action sent are real
+     * and stay on the full timeline below, but in a three-event ribbon they crowded out the action that
+     * caused them (an explicit Cancel Tour showed "SMS failed · Email sent · SMS queued"). Business rows
+     * lead; non-actions only fill the ribbon when there are not enough actions to show.
+     */
+    const timelineEntries = resolveLayoutRuntimeActivityTimeline({
         record: proofRecord,
         surfaceKey: "opportunity_drawer",
-    }).slice(0, RIBBON_EVENT_COUNT);
+    });
+    const ribbonEntries = [
+        ...timelineEntries.filter((entry) => !entry.notAnAction),
+        ...timelineEntries.filter((entry) => entry.notAnAction),
+    ]
+        .slice(0, RIBBON_EVENT_COUNT)
+        .sort((a, b) => b.atSortKey - a.atSortKey);
 
     return (
         <div

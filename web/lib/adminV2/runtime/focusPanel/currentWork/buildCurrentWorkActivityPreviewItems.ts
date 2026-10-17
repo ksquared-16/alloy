@@ -102,7 +102,11 @@ export function resolveCanonicalCurrentWorkActivityEntries(
         timeZone: options?.timeZone,
     });
     // Newest-first compact subset — keep Tour scheduled visible when invitation spam would starve it.
-    return preferTourScheduledTimelineEntries(timeline, limit).map((entry) => ({
+    // And keep what people DID ahead of delivery states / consequence notifications: those only fill
+    // the compact list when there are not enough actions to show (the full timeline keeps them all).
+    const actionsFirst = [...timeline.filter((e) => !e.notAnAction), ...timeline.filter((e) => e.notAnAction)];
+    const chosen = new Set(preferTourScheduledTimelineEntries(actionsFirst, limit));
+    return timeline.filter((entry) => chosen.has(entry)).map((entry) => ({
         /*
          * NAMESPACE THE CANONICAL ID BY ITS SOURCE.
          *
