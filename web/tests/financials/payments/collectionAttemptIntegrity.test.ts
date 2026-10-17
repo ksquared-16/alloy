@@ -32,6 +32,7 @@ vi.mock("@/lib/financials/payments/paymentMethodService", async (importActual) =
 
 import {
     attemptPayerKey,
+    commandDigest,
     createCardCollection,
     deriveIntentKey,
     type StripeRead,
@@ -428,5 +429,77 @@ describe("money already on its way counts against what may be asked", () => {
         tables.payment_collection_attempts[0].processor_state = "failed";
         const dad = await createCardCollection(client, { orgId: ORG, chargeId: CHARGE, requestedAmountCents: 10_000, payerPersonId: DAD }, p.call, p.read);
         expect(dad.ok).toBe(true);
+    });
+});
+
+describe("a deliberate repeat payment is not a retry", () => {
+    it("without a command key, a match on a SUCCEEDED attempt is refused — never silently reused", async () => {
+        const { client, tables } = store();
+        const p = provider();
+        const args = { orgId: ORG, chargeId: CHARGE, requestedAmountCents: 2_000, payerPersonId: MOM, paymentMethodId: "pm-mom-card" };
+        const first = await createCardCollection(client, args, p.call, p.read);
+        expect(first.ok).toBe(true);
+        expect(tables.payment_collection_attempts[0].processor_state).toBe("succeeded");
+
+        const again = await createCardCollection(client, args, p.call, p.read);
+        expect(again.ok).toBe(false);
+        if (again.ok || !first.ok) return;
+        expect(again.reason).toBe("already_collected");
+        expect(again.attemptId).toBe(first.attemptId);
+        expect(p.creates(), "nothing new was charged").toHaveLength(1);
+    });
+
+    it("the same command key retried returns the same attempt, even after it succeeded", async () => {
+        const { client } = store();
+        const p = provider();
+        const args = { orgId: ORG, chargeId: CHARGE, requestedAmountCents: 2_000, payerPersonId: MOM, paymentMethodId: "pm-mom-card", commandKey: "cmd-0001-aaaa" };
+        const first = await createCardCollection(client, args, p.call, p.read);
+        const retry = await createCardCollection(client, args, p.call, p.read);
+        expect(first.ok && retry.ok).toBe(true);
+        if (!first.ok || !retry.ok) return;
+        expect(retry.attemptId).toBe(first.attemptId);
+        expect(retry.reused).toBe(true);
+        expect(p.creates()).toHaveLength(1);
+    });
+
+    it("a NEW command key is a new payment of the same amount — its own attempt and its own provider charge", async () => {
+        const { client } = store();
+        const p = provider();
+        const base = { orgId: ORG, chargeId: CHARGE, requestedAmountCents: 2_000, payerPersonId: MOM, paymentMethodId: "pm-mom-card" };
+        const one = await createCardCollection(client, { ...base, commandKey: "cmd-0001-aaaa" }, p.call, p.read);
+        const two = await createCardCollection(client, { ...base, commandKey: "cmd-0002-bbbb" }, p.call, p.read);
+        expect(one.ok && two.ok).toBe(true);
+        if (!one.ok || !two.ok) return;
+        expect(two.attemptId).not.toBe(one.attemptId);
+        expect(p.creates()).toHaveLength(2);
+        expect(new Set(p.creates().map((c) => c.headers["Idempotency-Key"])).size).toBe(2);
+    });
+
+    it("an earlier command's money still counts as in flight for the next one", async () => {
+        const { client, tables } = store();
+        const p = provider();
+        const base = { orgId: ORG, chargeId: CHARGE, payerPersonId: MOM };
+        await createCardCollection(client, { ...base, requestedAmountCents: 6_000, commandKey: "cmd-0001-aaaa" }, p.call, p.read);
+        tables.payment_collection_attempts[0].processor_state = "processing";
+        const over = await createCardCollection(client, { ...base, requestedAmountCents: 6_000, commandKey: "cmd-0002-bbbb" }, p.call, p.read);
+        expect(over.ok).toBe(false);
+        if (!over.ok) expect(over.reason).toBe("amount_exceeds_collectible");
+    });
+
+    it("refuses an unusable command key, and keeps every key within the provider's 255-character limit", async () => {
+        const { client } = store();
+        const p = provider();
+        const bad = await createCardCollection(client, { orgId: ORG, chargeId: CHARGE, requestedAmountCents: 2_000, payerPersonId: MOM, commandKey: "has space" }, p.call, p.read);
+        expect(bad.ok).toBe(false);
+        if (!bad.ok) expect(bad.reason).toBe("invalid_command_key");
+
+        const uuid = "00000000-0000-4000-8000-000000000001";
+        const key = deriveIntentKey({
+            chargeId: uuid, amountCents: 99_999_999, rail: "card", day: "2026-10-16",
+            payerKey: `person:${uuid}`, paymentMethodId: uuid, commandKey: "x".repeat(200), generation: 9,
+        });
+        expect(`${uuid}:${key}`.length).toBeLessThanOrEqual(255);
+        expect(commandDigest("cmd-0001-aaaa")).toBe(commandDigest("cmd-0001-aaaa"));
+        expect(commandDigest("cmd-0001-aaaa")).not.toBe(commandDigest("cmd-0002-bbbb"));
     });
 });

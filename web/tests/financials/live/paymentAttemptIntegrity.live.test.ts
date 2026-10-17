@@ -29,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
+import { reconcileUnrecognizedCollections } from "@/lib/financials/payments/collectionReconciliation";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 import {
@@ -394,4 +395,47 @@ describeLive("payment-attempt integrity, live", () => {
         expect(row.provider_transaction_id).toBe(created.providerTransactionId);
         expect((await readChargeBalance(supabase!, ORG, chargeId)).outstandingCents, "the balance is not hidden").toBe(2_500);
     }, 90_000);
+
+    it("money the provider collected with NO webhook and NO browser is posted by the server sweep, once", async () => {
+        const chargeId = await postCharge(4_500);
+        const paid = await createCardCollection(supabase!, {
+            orgId: ORG, chargeId, requestedAmountCents: 4_500, payerPersonId: PAYER_A,
+        });
+        const abandoned = await createCardCollection(supabase!, {
+            orgId: ORG, chargeId, requestedAmountCents: 1_000, payerPersonId: PAYER_B,
+        });
+        expect(paid.ok && abandoned.ok).toBe(true);
+        if (!paid.ok || !abandoned.ok) return;
+
+        // The payer pays and closes the tab. No webhook is delivered to this runtime.
+        expect((await confirmWith(paid.providerTransactionId, "pm_card_visa")).body.status).toBe("succeeded");
+        expect((await attemptRow(paid.attemptId)).canonical_payment_id, "nothing has told Alloy yet").toBeNull();
+
+        // Quiet long enough that a webhook would normally have landed.
+        const past = new Date(Date.now() - 20 * 60_000).toISOString();
+        await supabase!.from("payment_collection_attempts").update({ updated_at: past })
+            .in("id", [paid.attemptId, abandoned.attemptId]);
+
+        const only = [paid.attemptId, abandoned.attemptId];
+        const first = await reconcileUnrecognizedCollections(supabase!, { onlyAttemptIds: only });
+        expect(first).toMatchObject({ examined: 2, recognized: 1, notSettled: 1, refused: 0 });
+        const posted = await attemptRow(paid.attemptId);
+        expect(posted.canonical_payment_id).toBeTruthy();
+        expect(posted.processor_state, "the cached state converged with the receipt").toBe("succeeded");
+        expect((await readChargeBalance(supabase!, ORG, chargeId)).outstandingCents).toBe(0);
+
+        // The abandoned form was read, left alone, and stamped so the next wake moves on.
+        const left = await attemptRow(abandoned.attemptId);
+        expect(left.canonical_payment_id).toBeNull();
+        expect(left.processor_state).toBe("requires_payment_method");
+        expect((left.last_provider_detail as Record<string, unknown>).reconciled_reason).toBe("not_settled");
+
+        // A second sweep, and the real event arriving late: neither posts again.
+        const second = await reconcileUnrecognizedCollections(supabase!, { onlyAttemptIds: only, quietForMs: 0 });
+        expect(second.recognized).toBe(0);
+        const late = await deliver(await providerEvent("payment_intent.succeeded", paid.providerTransactionId));
+        expect(late.outcome).toBe("duplicate");
+        expect(await receiptsFor(chargeId)).toHaveLength(1);
+        expect((await readChargeBalance(supabase!, ORG, chargeId)).outstandingCents).toBe(0);
+    }, 120_000);
 });

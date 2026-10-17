@@ -23,3 +23,5 @@ export const BILLING_PERIOD_CLOSE_HANDLER_KEY = "financials.billing_period_close
  * occurrence needs to know which calendar edge was being evaluated.
  */
 export const FUTURE_PERIOD_ACTIVATION_HANDLER_KEY = "financials.future_period_charge.activate";
+/** Payments: provider-collected money whose webhook never arrived, re-read and posted. System-wide. */
+export const PAYMENT_RECONCILIATION_HANDLER_KEY = "payments.collection.reconcile";

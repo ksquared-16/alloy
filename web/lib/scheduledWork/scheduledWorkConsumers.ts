@@ -1,4 +1,5 @@
 import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
+import { evaluateCollectionReconciliationOccurrence } from "@/lib/financials/payments/collectionReconciliation";
 import { evaluateBillingPeriodCloseOccurrence } from "@/lib/financials/billingPeriods/billingPeriodCloseHandler";
 import { evaluateFuturePeriodActivationOccurrence } from "@/lib/financials/posting/futurePeriodActivation";
 import { evaluatePeriodicBillingOccurrence } from "@/lib/financials/periodicBilling/periodicBillingHandler";
@@ -10,6 +11,7 @@ import {
     BILLING_PERIODIC_HANDLER_KEY,
     CHARGE_AGING_HANDLER_KEY,
     FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
+    PAYMENT_RECONCILIATION_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -48,6 +50,7 @@ export {
     CHARGE_AGING_HANDLER_KEY,
     AUTOPAY_HANDLER_KEY,
     FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
+    PAYMENT_RECONCILIATION_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 
 /** Shared shape so the remaining stub reads like the real ones. */
@@ -130,6 +133,15 @@ export function registerScheduledWorkConsumers(): void {
      */
     registerScheduledWorkHandler(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY, async (ctx) =>
         evaluateFuturePeriodActivationOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * PAYMENT RECONCILIATION. Money a provider collected whose webhook never arrived and whose
+     * payer's browser never asked. It re-reads the provider and posts through the one posting
+     * authority (`recognizeCollectionAttempt`), so a concurrent webhook or a second wake is harmless.
+     */
+    registerScheduledWorkHandler(PAYMENT_RECONCILIATION_HANDLER_KEY, async (ctx) =>
+        evaluateCollectionReconciliationOccurrence(ctx, { supabase: createAdminClient() }),
     );
 }
 

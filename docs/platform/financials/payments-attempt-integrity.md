@@ -104,12 +104,24 @@ share a PaymentIntent/client secret. No route change is required for that fix.
 4. Tests: a link for family A presenting family B's attempt id gets 409/`attempt_not_found` and no state
    change; family A's own attempt still recognises.
 
-## 5. Not built here (by instruction)
+## 5. Repeat payments and missing-webhook recovery (follow-up slice)
 
-Participant Payment step, ACH UI, split-payer invitations, payer-link onboarding, scheduled
-reconciliation sweep. A sweep for attempts whose webhook never arrived and whose browser never called
-`recognize` is the remaining reliability gap: Stripe redelivers failed webhooks for up to three days and
-redelivery is now processed, and the operator queue covers locally-succeeded attempts, but an attempt
-still `requires_payment_method`/`processing` locally while Stripe says `succeeded` is only found by a
-manual `recognize`. Wiring that sweep needs the scheduled-work wake path, which the Enrollment lane is
-modifying concurrently, so it is deferred to a follow-up rather than opened as a competing edit.
+**Command identity.** `createCardCollection` accepts `commandKey` (the action passes
+`payload.idempotency_key`, the convention `payment.record` uses). The same key is the same command —
+retries return the same attempt, succeeded or not. A different key is a different, deliberate payment
+and opens its own attempt. With no key, a match on an attempt that already **succeeded** is refused as
+`already_collected` (naming that attempt) — never silently handed back, never charged again. The key
+is digested into the intent key so the provider idempotency key stays under Stripe's 255 characters.
+
+**Reconciliation.** `payments.collection.reconcile` is a registered scheduled-work handler with one
+system-wide schedule (every 15 minutes, migration `20261123160000`). It reads attempts that reached the
+provider, have no receipt, have been quiet for 10 minutes and are under 7 days old (20 per wake, each
+re-read at most every 30 minutes), and calls `recognizeCollectionAttempt` under each attempt's own org —
+so provider truth is re-read and posting goes through the one anchor. Posting refusals land as
+`recognition_reason`, where the operator queue reads them. The wake route itself is unchanged.
+
+## 6. Not built here (by instruction)
+
+Participant Payment step, ACH UI, split-payer invitations, payer-link onboarding. The operator Financials
+card does not yet send a per-form `idempotency_key`, so an operator repeating an identical same-day payment
+is told `already_collected` rather than offered the repeat.
