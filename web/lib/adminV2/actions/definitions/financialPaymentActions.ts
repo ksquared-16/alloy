@@ -870,6 +870,14 @@ const collectCardPayment: RegisteredAction = {
                  * request on a merchant the provider has not enabled for it.
                  */
                 rail: t(payload.rail) === "ach" ? "ach" : "card",
+                /*
+                 * WHICH COMMAND THIS IS, when the caller says — the same `idempotency_key` convention
+                 * `payment.record` uses. A retry of one command carries the same key; a deliberate
+                 * second payment of the same amount carries a new one. Without it, a repeat of an
+                 * amount that already succeeded today is refused as `already_collected`, never
+                 * silently answered with the earlier transaction.
+                 */
+                commandKey: t(payload.idempotency_key) || null,
             });
 
             if (!created.ok) {

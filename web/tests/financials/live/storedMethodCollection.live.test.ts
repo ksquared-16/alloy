@@ -200,23 +200,34 @@ describe.runIf(runnable)("stored-method collection — live", () => {
     }, 120_000);
 
     it("a retry of the same intention collapses onto the same attempt, not a second charge", async () => {
-        const chargeId = await postCharge(21_000);
-
-        const first = await createCardCollection(supabase!, {
-            orgId: ORG, chargeId, requestedAmountCents: 21_000, actorUserId: ACTOR, paymentMethodId: storedMethodId,
-        });
-        const second = await createCardCollection(supabase!, {
-            orgId: ORG, chargeId, requestedAmountCents: 21_000, actorUserId: ACTOR, paymentMethodId: storedMethodId,
-        });
+        // Room for two payments: the first stays "settling" (no webhook here) and counts as in flight.
+        const chargeId = await postCharge(42_000);
+        /*
+         * A stored card is confirmed off-session, so the first request has already SUCCEEDED by the
+         * time a retry arrives. With a command identity, the retry is that command and returns the
+         * same attempt. Without one, the server cannot tell a retry from a deliberate second payment,
+         * so it neither charges again nor silently hands back the old transaction: `already_collected`.
+         */
+        const command = { orgId: ORG, chargeId, requestedAmountCents: 21_000, actorUserId: ACTOR, paymentMethodId: storedMethodId, commandKey: `cert-${chargeId}` };
+        const first = await createCardCollection(supabase!, command);
+        const second = await createCardCollection(supabase!, command);
 
         expect(first.ok && second.ok).toBe(true);
         if (!first.ok || !second.ok) return;
         expect(second.providerTransactionId).toBe(first.providerTransactionId);
         expect(second.reused).toBe(true);
 
+        const keyless = await createCardCollection(supabase!, { ...command, commandKey: null });
+        const keylessAgain = await createCardCollection(supabase!, { ...command, commandKey: null });
+        expect(keyless.ok, "the first keyless request is its own command").toBe(true);
+        expect(keylessAgain.ok).toBe(false);
+        if (keylessAgain.ok || !keyless.ok) return;
+        expect(keylessAgain.reason).toBe("already_collected");
+        expect(keylessAgain.attemptId).toBe(keyless.attemptId);
+
         const { data: attempts } = await supabase!
             .from("payment_collection_attempts").select("id").eq("org_id", ORG).eq("charge_id", chargeId);
-        expect(attempts, "a retry is not a second PaymentIntent against the family's card").toHaveLength(1);
+        expect(attempts, "two commands, two attempts — never a third for a retry").toHaveLength(2);
     }, 120_000);
 
     it("a revoked method cannot collect, and nothing is attempted at the provider", async () => {

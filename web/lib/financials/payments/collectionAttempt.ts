@@ -47,6 +47,21 @@ export type CreateCardCollectionInput = {
      * here, so a browser cannot charge an instrument Alloy has not recorded.
      */
     paymentMethodId?: string | null;
+    /**
+     * THE CALLER'S COMMAND IDENTITY — which deliberate request this is (`payload.idempotency_key`,
+     * the convention `payment.record` already uses).
+     *
+     * The derived intent key cannot tell a network retry of one command from a second, intentional
+     * payment of the same amount by the same payer with the same method on the same day: both look
+     * identical. A command key can. The same key is the same command — retried as often as the
+     * network needs, it returns the same attempt, succeeded or not. A different key is a different
+     * payment and opens its own attempt.
+     *
+     * Absent, a match on an attempt that already SUCCEEDED is refused as `already_collected` rather
+     * than handed back as though it were this request's: nothing new is charged, and nothing is
+     * silently reused.
+     */
+    commandKey?: string | null;
 };
 
 export type CollectionRefusalReason =
@@ -77,7 +92,14 @@ export type CollectionRefusalReason =
      */
     | "previous_attempt_unresolved"
     /* One payer has had more declined attempts at this exact intent today than a retry warrants. */
-    | "too_many_attempts";
+    | "too_many_attempts"
+    /*
+     * The same payer already paid this exact amount, with this method, on this charge today, and no
+     * command identity says this request is a different payment. Nothing new was started.
+     */
+    | "already_collected"
+    /* A command identity was supplied but is not a usable one. */
+    | "invalid_command_key";
 
 export type CreateCardCollectionResult =
     | {
@@ -177,6 +199,7 @@ export function deriveIntentKey(input: {
     payerKey?: string;
     paymentMethodId?: string | null;
     generation?: number;
+    commandKey?: string | null;
 }): string {
     const day = input.day ?? new Date().toISOString().slice(0, 10);
     const parts = [
@@ -189,10 +212,34 @@ export function deriveIntentKey(input: {
         t(input.paymentMethodId) ? `method:${t(input.paymentMethodId)}` : "present",
         day,
     ];
+    // Hashed, not embedded: the intent key is also the provider idempotency key, which Stripe caps at
+    // 255 characters, and a caller's command identity has no business being readable in it.
+    if (t(input.commandKey)) parts.push(`cmd:${commandDigest(t(input.commandKey))}`);
     const generation = Math.max(0, Math.floor(input.generation ?? 0));
     if (generation > 0) parts.push(`g${generation}`);
     return parts.join(":");
 }
+
+/**
+ * A short, stable digest of a command key (two FNV-1a passes, 64 bits as hex).
+ *
+ * Pure arithmetic rather than `node:crypto`: this module is reachable from the action registry, which
+ * reaches the client bundle. Collisions only matter between two commands of one payer, one charge,
+ * one amount, one method and one day, where 64 bits is far beyond enough.
+ */
+export function commandDigest(value: string): string {
+    let a = 0x811c9dc5;
+    let b = 0x01000193 ^ 0x9e3779b9;
+    for (let i = 0; i < value.length; i += 1) {
+        const c = value.charCodeAt(i);
+        a = Math.imul(a ^ c, 0x01000193) >>> 0;
+        b = Math.imul(b ^ c ^ (i & 0xff), 0x01000193) >>> 0;
+    }
+    return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+/** A command key is opaque but bounded: 8–200 printable characters, no whitespace. */
+const COMMAND_KEY_SHAPE = /^[\x21-\x7e]{8,200}$/;
 
 /** Provider outcomes an attempt never comes back from. A new request opens a new attempt. */
 export const RETIRED_ATTEMPT_STATES: ReadonlySet<string> = new Set(["failed", "canceled"]);
@@ -408,6 +455,15 @@ export async function createCardCollection(
      * against the canonical person record rather than carried through on a caller's say-so. Scoped
      * by the session's org: a person in another tenant reads as absent.
      */
+    const commandKey = t(input.commandKey) || null;
+    if (commandKey && !COMMAND_KEY_SHAPE.test(commandKey)) {
+        return {
+            ok: false,
+            reason: "invalid_command_key",
+            message: "The request identity must be 8 to 200 visible characters.",
+        };
+    }
+
     const namedPayer = t(input.payerPersonId) || null;
     if (namedPayer) {
         const { data: person } = await supabase
@@ -652,8 +708,13 @@ export async function createCardCollection(
             payerKey,
             paymentMethodId: storedMethod?.id ?? null,
             generation,
+            commandKey,
         });
     const baseKey = keyFor(0);
+    /* This request's own attempts: its key, and the retry generations after a decline. */
+    const isOwnAttemptKey = (key: string) =>
+        key === baseKey
+        || (key.startsWith(`${baseKey}:g`) && /^\d+$/.test(key.slice(baseKey.length + 2)));
 
     /*
      * ── 3c. MONEY ALREADY ON ITS WAY COUNTS AGAINST THE CEILING ──────────────────────────────────
@@ -676,7 +737,7 @@ export async function createCardCollection(
         .in("processor_state", ["processing", "succeeded"])
         .is("canonical_payment_id", null);
     const inFlightCents = ((inFlightRows ?? []) as Array<{ intent_key: string; requested_amount_cents: number }>)
-        .filter((r) => r.intent_key !== baseKey && !String(r.intent_key).startsWith(`${baseKey}:`))
+        .filter((r) => !isOwnAttemptKey(String(r.intent_key)))
         .reduce((sum, r) => sum + (Number(r.requested_amount_cents) || 0), 0);
     if (inFlightCents > 0 && input.requestedAmountCents > collectible.currentlyCollectibleCents - inFlightCents) {
         const room = Math.max(0, collectible.currentlyCollectibleCents - inFlightCents);
@@ -775,6 +836,24 @@ export async function createCardCollection(
         if (!payerOwnsAttempt(row, payerPersonId, actorUserId)) {
             // Never hand one payer another payer's session — not even on a key collision.
             throw new Error("a collection attempt for this intent belongs to a different payer; refusing to reuse it");
+        }
+
+        /*
+         * A SUCCEEDED match with no command identity. It might be a network retry of the request
+         * that succeeded, or a deliberate second payment of the same amount — and the two cannot be
+         * told apart. Handing back the old transaction would silently swallow the second payment;
+         * charging again would double-charge the retry. So neither: the caller is told, and a
+         * deliberate repeat is made with a command key.
+         */
+        if (row.processor_state === "succeeded" && !commandKey) {
+            return {
+                ok: false,
+                reason: "already_collected",
+                attemptId: row.id,
+                message:
+                    "This payer already paid this exact amount on this obligation today, so nothing new was started. "
+                    + "To make another payment of the same amount, submit it as a new payment.",
+            };
         }
 
         if (!RETIRED_ATTEMPT_STATES.has(row.processor_state)) {
