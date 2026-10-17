@@ -29,6 +29,15 @@ function requestKey(targets: readonly QueueViewTotalTargetInput[], selectedSiteI
     return `site:${selectedSiteId ?? "_"}\n${rows}`;
 }
 
+/**
+ * Forget coalesced totals. Called when truth moved (a lifecycle mutation), so the next count read is
+ * a new request rather than the response from just before the mutation.
+ */
+export function clearQueueViewTotalsBatchedDedupe(): void {
+    inflightBatched.clear();
+    shortResponseCache.clear();
+}
+
 /** @internal test hook */
 export function clearQueueViewTotalsBatchedDedupeForTests(): void {
     inflightBatched.clear();

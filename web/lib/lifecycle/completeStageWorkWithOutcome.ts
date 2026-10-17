@@ -38,6 +38,7 @@ import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWor
 import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
+import { recordStageOutcomeActivity } from "@/lib/lifecycle/recordBusinessActivity";
 import { preflightStageChangingOutcomeReadiness } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
 import { preflightEnrollmentCompletionSufficiency } from "@/lib/enrollment/completion/preflightEnrollmentCompletionSufficiency";
 import {
@@ -335,6 +336,7 @@ export async function completeStageWorkWithOutcome(
                             actorUserId: input.userId,
                             plan: close,
                             outcomeLabel: outcome.label,
+                            outcomeKey,
                             correlationId: ctx.correlationId,
                         });
                         tourClosed = true;
@@ -430,6 +432,32 @@ export async function completeStageWorkWithOutcome(
                         // Previously the return was discarded, so an outcome could be recorded
                         // with no activity trace and the operator would never know.
                         if (traced.error) throw new Error(`contact outcome trace: ${traced.error}`);
+                        // Only follow-up contact attempts write a trace. Every other outcome is still
+                        // the operator's business action and gets its own Activity event — the stage
+                        // and status lines it causes are folded into it by the activity normalizer.
+                        if (!traced.logged) {
+                            await recordStageOutcomeActivity({
+                                supabase: input.supabase,
+                                orgId: input.orgId,
+                                opportunityId: traceOpportunityId,
+                                userId: input.userId,
+                                stageKey,
+                                workId: input.workId,
+                                workTemplateKey,
+                                outcomeKey,
+                                outcomeLabel: outcome.label,
+                                child:
+                                    input.subject.journey_segment === "child" ?
+                                        {
+                                            customerMemberId: input.subject.customer_member_id ?? null,
+                                            opportunityCustomerMemberId:
+                                                input.subject.opportunity_customer_member_id ?? null,
+                                            childDisplayName: input.subject.participant_label ?? null,
+                                        }
+                                    :   null,
+                                correlationId: ctx.correlationId,
+                            });
+                        }
                         return traced;
                     },
                 });

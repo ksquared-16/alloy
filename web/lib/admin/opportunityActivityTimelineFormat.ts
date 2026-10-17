@@ -146,6 +146,32 @@ export function formatOpportunityActivityTimelineEvent(event: ActivityTimelineEv
         return base;
     }
 
+    // The operator's own action, as one line: "Offer accepted · Ava", "Tour Completed — Interested".
+    // Its status/stage mechanics are folded into it by `collapseBusinessEventMechanics`.
+    if (eventType === "stage_work_outcome_recorded" && payload.business_outcome === true) {
+        const outcomeLabel = firstNonEmptyString(payload.outcome_label, payload.outcome_key);
+        if (outcomeLabel) {
+            const child = firstNonEmptyString(payload.child_display_name);
+            return { ...base, title: child ? `${outcomeLabel} · ${child}` : outcomeLabel, detail: null };
+        }
+    }
+    if (eventType === "participant_decision_recorded") {
+        const decisionLabel = firstNonEmptyString(payload.decision_label, payload.decision_key);
+        if (decisionLabel) {
+            const child = firstNonEmptyString(payload.child_display_name);
+            const answers = Array.isArray(payload.answers)
+                ? (payload.answers as Array<Record<string, unknown>>)
+                      .map((a) => firstNonEmptyString(a?.value_label))
+                      .filter((v): v is string => Boolean(v))
+                : [];
+            return {
+                ...base,
+                title: [decisionLabel, child, ...answers].filter(Boolean).join(" · "),
+                detail: null,
+            };
+        }
+    }
+
     // Contact-attempt / stage work outcome: headline = attempt fact; detail = outcome label.
     if (eventType === "stage_work_outcome_recorded") {
         const outcomeLabel = firstNonEmptyString(payload.outcome_label, payload.outcome_key);

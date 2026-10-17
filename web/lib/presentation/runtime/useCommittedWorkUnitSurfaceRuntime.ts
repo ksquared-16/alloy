@@ -31,7 +31,12 @@ import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRunti
 import { resolveQueueRowOpportunityId } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { seedOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
-import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import {
+    clearProvisioningPrefetchCache,
+    prefetchWorkUnitProvisioning,
+} from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCacheBust";
+import { clearQueueViewTotalsBatchedDedupe } from "@/lib/presentation/runtime/fetchQueueViewTotalsBatched";
 import {
     beginWorkUnitPrimaryReveal,
     endWorkUnitPrimaryReveal,
@@ -662,6 +667,13 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     const recommitForTruthMovement = useCallback(() => {
         const current = kernel.attention.get();
         if (!current) return;
+        /*
+         * TRUTH MOVED — NOTHING PREWARMED BEFORE IT MAY ANSWER FOR IT. The re-prepare below reads the
+         * URL-keyed provisioning prefetch first; a row hover or neighbour prewarm from before the
+         * mutation would hand back the pre-mutation answer, and the list stayed stale until reload.
+         */
+        clearProvisioningPrefetchCache();
+        bustOperatorRuntimeReadCaches();
         kernel.provisioning.invalidate(provisioningKey(current));
         if (current.subject) {
             kernel.attention.move({
@@ -693,7 +705,11 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             subscribeWorkUnitConvergence({
                 target: typeof window === "undefined" ? null : window,
                 getVisibleOpportunityIds: () => visibleOpportunityIdsRef.current,
-                onRefreshSummaries: () => setSettlementRefreshToken((n) => n + 1),
+                onRefreshSummaries: () => {
+                    // The counts must be re-read, not served from the coalesced pre-mutation response.
+                    clearQueueViewTotalsBatchedDedupe();
+                    setSettlementRefreshToken((n) => n + 1);
+                },
                 onRefetchRows: recommitForTruthMovement,
             }),
         [recommitForTruthMovement],

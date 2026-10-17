@@ -51,6 +51,7 @@ function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPrev
         category: detail ? null : (KIND_CATEGORY[entry.kind] ?? null),
         kind: entry.kind,
         occurredAt: entry.at,
+        ...(entry.notAnAction ? { notAnAction: true } : {}),
     };
 }
 
@@ -110,6 +111,7 @@ export function resolveCanonicalCurrentWorkActivityEntries(
          * legitimately separate rows separate without deduplicating either of them.
          */
         id: `${entry.source}:${entry.relatedScope ?? "direct"}:${entry.id}`,
+        ...(entry.notAnAction ? { notAnAction: true } : {}),
         kind: timelineEventToPreviewKind(entry.eventType),
         label: entry.title,
         detail: entry.detail,
