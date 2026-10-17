@@ -22,10 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyChildTrackState } from "@/lib/lifecycle/familyCloseGuard";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
-import {
-    listEnrollmentInstancesForLead,
-    type ProcessInstanceRow,
-} from "@/lib/process/processInstances";
+import { readFamilyDecisionParticipants } from "@/lib/lifecycle/listFamilyDecisionParticipants";
 import type {
     StageOperatingPlanV1,
     StageParticipantDecisionInputV1,
@@ -47,7 +44,10 @@ export type ParticipantDecisionOptionVM = {
 export type ParticipantDecisionRowVM = {
     /** `customer_members.id` — the durable child. Identity for execution, never rendered. */
     customer_member_id: string;
-    /** `process_instances.id` — this child's journey through this lead. Never rendered. */
+    /**
+     * `process_instances.id` — this child's journey through this lead. Never rendered. Empty when
+     * the child has no journey yet; their first decision starts one.
+     */
     process_instance_id: string;
     /** Operator-facing name. */
     label: string;
@@ -192,18 +192,13 @@ export async function projectParticipantDecisionRows(params: {
     const labelFor =
         params.resolveDecisionLabel ?? ((d: StageWorkParticipantDecisionV1) => d.label?.trim() || d.decision_key);
 
-    const instances = await listEnrollmentInstancesForLead(params.supabase, {
+    const read = await readFamilyDecisionParticipants(params.supabase, {
         orgId: params.orgId,
         opportunityId: params.opportunityId,
     });
+    const participants = read.ok ? read.participants : [];
 
-    const memberIds = [
-        ...new Set(
-            instances
-                .map((row) => row.subject_id?.trim())
-                .filter((id): id is string => Boolean(id)),
-        ),
-    ];
+    const memberIds = participants.map((p) => p.customer_member_id);
 
     const memberNames = new Map<string, string>();
     if (memberIds.length) {
@@ -224,12 +219,11 @@ export async function projectParticipantDecisionRows(params: {
     // that is going to be refused.
     const visible = configured.filter((d) => d.available !== false);
 
-    const rows: ParticipantDecisionRowVM[] = instances
-        .filter((row): row is ProcessInstanceRow & { subject_id: string } => Boolean(row.subject_id))
+    const rows: ParticipantDecisionRowVM[] = participants
         .map((row) => {
-            const customerMemberId = row.subject_id.trim();
+            const customerMemberId = row.customer_member_id;
             const label = participantLabelFrom(memberNames, customerMemberId);
-            const state = row.state?.trim() || null;
+            const state = row.state;
             const chosen = decisionForState(configured, state);
 
             const decisions: ParticipantDecisionOptionVM[] = visible.map((decision) => {
@@ -253,7 +247,7 @@ export async function projectParticipantDecisionRows(params: {
 
             return {
                 customer_member_id: customerMemberId,
-                process_instance_id: row.id,
+                process_instance_id: row.process_instance_id ?? "",
                 label,
                 state_label: stateLabelFor(state, chosen, labelFor),
                 resolved: chosen != null,
@@ -269,10 +263,7 @@ export async function projectParticipantDecisionRows(params: {
         template_key: params.templateKey.trim(),
         rows,
         progress: deriveParticipantDecisionProgress({
-            participants: rows.map((r) => ({
-                state:
-                    instances.find((i) => i.id === r.process_instance_id)?.state?.trim() ?? null,
-            })),
+            participants: participants.map((p) => ({ state: p.state })),
             decisions: configured,
         }),
     };

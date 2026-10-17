@@ -80,7 +80,7 @@ type PendingDecision = {
     decisionLabel: string;
     participantLabel: string;
     customerMemberId: string;
-    processInstanceId: string;
+    processInstanceId: string | null;
     inputs: StageParticipantDecisionInputV1[];
     /** Set when the child already has a different active path — needs an explicit yes. */
     changingFrom?: string;
@@ -237,7 +237,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
             rowKey: string;
             decisionKey: string;
             customerMemberId: string;
-            processInstanceId: string;
+            processInstanceId: string | null;
             participantLabel: string;
             values?: Record<string, string>;
         }) => {
@@ -372,7 +372,8 @@ export default function CurrentWorkParticipantDecisionsPanel({
             {configured && rows.length ?
                 <div className="mt-2 space-y-1.5">
                     {rows.map((row) => {
-                        const rowKey = row.process_instance_id;
+                        // A child with no journey yet has no journey id; the child is the identity then.
+                        const rowKey = row.process_instance_id || row.customer_member_id;
                         const isPending = pending?.rowKey === rowKey;
                         const rowBusy = busyKey?.startsWith(`${rowKey}:`) === true;
                         return (
@@ -438,7 +439,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                                                 decisionLabel: decision.label,
                                                                 participantLabel: row.label,
                                                                 customerMemberId: row.customer_member_id,
-                                                                processInstanceId: row.process_instance_id,
+                                                                processInstanceId: row.process_instance_id || null,
                                                                 inputs: decision.required_inputs ?? [],
                                                                 ...(changingFrom ? { changingFrom } : {}),
                                                             });
@@ -448,7 +449,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                                             rowKey,
                                                             decisionKey: decision.decision_key,
                                                             customerMemberId: row.customer_member_id,
-                                                            processInstanceId: row.process_instance_id,
+                                                            processInstanceId: row.process_instance_id || null,
                                                             participantLabel: row.label,
                                                         });
                                                     }}
