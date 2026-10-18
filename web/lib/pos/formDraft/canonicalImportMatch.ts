@@ -35,6 +35,7 @@
  * binding writes a real child's record; a missing one costs a click.
  */
 
+import { detectRelationshipDefinitionForTitle } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { FormFieldSource } from "@/lib/forms/schema";
 import { mergeLifecycleFieldPaletteForStage } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
@@ -88,6 +89,10 @@ function subjectOf(question: string, sectionTitle: string): CatalogSubject | nul
         if (candidate.re.test(question)) return candidate.subject;
     }
     // A section heading supplies the subject a bare question omits — "Gender" under "Child Information".
+    // Not when the heading names ANOTHER person's relationship ("Authorized pick-up (not a parent)",
+    // "Emergency contact"): that person is not the household's parent, child or account.
+    const sectionRelationship = detectRelationshipDefinitionForTitle(sectionTitle);
+    if (sectionRelationship && sectionRelationship.operational_role_key !== "guardian") return null;
     for (const candidate of SUBJECT_WORDS) {
         if (candidate.re.test(sectionTitle)) return candidate.subject;
     }

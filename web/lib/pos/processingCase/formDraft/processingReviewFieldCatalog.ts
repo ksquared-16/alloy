@@ -117,6 +117,9 @@ export function suggestReviewDestinationField(input: {
     type: string;
     subject: QuestionSubject;
 }): ReviewFieldSuggestion | null {
+    // Another adult (an emergency contact, a pick-up) is not the guardian: no guardian field is ever
+    // SUGGESTED for them. The operator may still pick a destination by hand.
+    if (input.subject === "other_adult") return null;
     const eligible = eligibleCanonicalFieldsForSubject(input.subject);
     if (eligible.length === 0) return null;
 
