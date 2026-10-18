@@ -37,7 +37,6 @@ import {
 } from "@/lib/ui-v2/waitlistAdjustPositionOptions";
 import { useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { ATTENTION_SCOPE, type AttentionSource } from "@/lib/runtime/kernel/attention";
-import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
 
 type Props = {
     placementCandidateId: string;
@@ -217,7 +216,7 @@ function WaitlistPlacementAdjustPopover({
         const current = kernel.attention.get();
         const lens = current?.lens ?? current?.destination?.workViewId;
         if (current && (current.lens || current.target)) {
-            kernel.provisioning.invalidate(provisioningKey(current));
+            kernel.provisioning.invalidateDestination(current);
         }
         if (lens) {
             kernel.attention.move({

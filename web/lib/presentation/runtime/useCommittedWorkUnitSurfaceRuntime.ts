@@ -98,7 +98,6 @@ function prewarmSubjectDestination(
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
 import { subscribeWorkUnitConvergence } from "./workUnitConvergencePlan";
-import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
 import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
 import { useAttentionLens, useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
@@ -683,7 +682,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
          */
         clearProvisioningPrefetchCache();
         bustOperatorRuntimeReadCaches();
-        kernel.provisioning.invalidate(provisioningKey(current));
+        kernel.provisioning.invalidateDestination(current);
         if (current.subject) {
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.SUBJECT,
