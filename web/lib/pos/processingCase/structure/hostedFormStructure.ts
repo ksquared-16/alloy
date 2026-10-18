@@ -142,6 +142,21 @@ function promptBefore(html: string, at: number, forLabel: string | null): { labe
     const item = containers.length ? lookback.slice(containers[containers.length - 1].index ?? 0) : lookback;
 
     let label = forLabel ?? "";
+    /*
+     * A CONTROL INSIDE ITS OWN <label> IS NAMED BY THAT LABEL.
+     *
+     * `<label>Phone <input></label>` is standard HTML for an implicit label. The nearest COMPLETE
+     * `<label>…</label>` before the control is then the PREVIOUS field's, so every such field took its
+     * neighbour's wording — an emergency contact's Phone read "Name", a guardian's Email read "Phone",
+     * and the first field lost its prompt entirely. An unclosed `<label>` opened before the control is
+     * the one that wraps it; its text up to the control is the prompt.
+     */
+    if (!label) {
+        const lastOpen = lookback.search(/<label\b[^>]*>(?![\s\S]*<label\b)/i);
+        if (lastOpen >= 0 && !/<\/label>/i.test(lookback.slice(lastOpen))) {
+            label = visibleText(lookback.slice(lastOpen).replace(/^<label\b[^>]*>/i, ""));
+        }
+    }
     if (!label) {
         // Nearest preceding prompt element inside this item: a <label>, or an element whose class
         // marks it a question (a signature widget's prompt is a <span>, not a <label>).
@@ -348,7 +363,12 @@ export function headingTitleAndOverflow(text: string): { title: string; overflow
 
 function collectHeadings(html: string): RawHeading[] {
     const out: RawHeading[] = [];
-    const re = /<h([1-3])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+    /*
+     * A `<legend>` names its `<fieldset>` — the standard grouping of form controls ("Emergency
+     * Contact", "Parent / Guardian"). Reading only <h1>–<h3> collapsed a fieldset-structured form into
+     * one section titled by the page heading, so relationship discovery had no heading to read.
+     */
+    const re = /<(h[1-3]|legend)\b[^>]*>([\s\S]*?)<\/\1>/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(html))) {
         const text = visibleText(m[2]);

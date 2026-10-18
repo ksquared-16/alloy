@@ -22,6 +22,7 @@
  * @see docs/platform/core/data/relationship-model.md
  */
 
+import { relationshipNamedByLine } from "@/lib/pos/discovery/semanticModel";
 import {
     detectRelationshipDefinitionForTitle,
     relationshipDefinitionForRole,
@@ -90,6 +91,25 @@ export function projectRelationshipCollection(input: {
         for (const fid of s.field_ids) {
             const f = byId.get(fid);
             if (!f) continue;
+            suppressedFieldIds.push(fid);
+            sourceLabels.push(f.label);
+        }
+    }
+    /*
+     * A SECTION THAT NAMES NO RELATIONSHIP STILL HOLDS LINES THAT NAME THEIR OWN.
+     *
+     * A document extracted as one section ("Form fields") has no heading to own "Emergency Contact
+     * Name / Phone"; discovery proposes the relationship from those lines (semanticModel), so the
+     * collection owns exactly those lines too — otherwise the family was asked for the same person
+     * twice, once in the collection and once as loose fields. Lines that name no one are never claimed.
+     */
+    for (const s of draft.sections) {
+        if (detectRelationshipDefinitionForTitle(s.title ?? "")) continue;
+        if ((s.disposition ?? "fields") !== "fields" || /\bcopy\b/i.test(s.title ?? "")) continue;
+        for (const fid of s.field_ids) {
+            const f = byId.get(fid);
+            if (!f || suppressedFieldIds.includes(fid)) continue;
+            if (relationshipNamedByLine(f.label)?.definition_key !== def.definition_key) continue;
             suppressedFieldIds.push(fid);
             sourceLabels.push(f.label);
         }

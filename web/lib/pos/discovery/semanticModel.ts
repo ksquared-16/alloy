@@ -12,6 +12,7 @@
  */
 
 import type { DocumentStructureCandidate } from "@/lib/pos/processingCase/structure/types";
+import { partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import {
     detectRelationshipDefinitionForTitle,
@@ -139,6 +140,26 @@ const PARTYLESS_LINE_RE = /^\s*(full\s+|first\s+|last\s+)?(name|phone|telephone|
  * one ("Phone") is never assigned to anyone here: it stays put, and the document carries a warning
  * that it needs a person to decide.
  */
+/**
+ * The relationship a single LINE names for itself ("Emergency Contact Phone" → emergency contacts), when
+ * it asks for something about a person. Guardian lines are not returned: they bind to the guardian's
+ * own facts. Shared with the collection projection so discovery and the draft agree on ownership.
+ */
+export function relationshipNamedByLine(label: string): RelationshipDefinition | undefined {
+    if (!PERSON_ATTRIBUTE_RE.test(label)) return undefined;
+    const def = detectRelationshipDefinitionForTitle(label);
+    if (!def || def.operational_role_key === "guardian") return undefined;
+    /*
+     * A party with no canonical person-field home (physician, dentist) is already routed from its own
+     * line: configurationMatching proposes a relationship binding for "Primary Care Doctor's Phone"
+     * wherever it sits. Re-grouping those lines here changed nothing about ownership and broke the
+     * certified packet's fact and provider counts. Only parties a person field could wrongly absorb
+     * (emergency contacts, pick-ups) are separated.
+     */
+    if (partyHasNoCanonicalHome(def.operational_role_key as ConceptParty)) return undefined;
+    return def;
+}
+
 export function separateLabelNamedRelationships(sections: SemanticSection[], warnings: string[]): SemanticSection[] {
     const out: SemanticSection[] = [];
     for (const section of sections) {
@@ -149,8 +170,8 @@ export function separateLabelNamedRelationships(sections: SemanticSection[], war
         const byDefinition = new Map<string, { def: RelationshipDefinition; fields: SemanticField[] }>();
         const kept: SemanticField[] = [];
         for (const f of section.fields) {
-            const def = !f.repeat_group_id && PERSON_ATTRIBUTE_RE.test(f.label) ? detectRelationshipDefinitionForTitle(f.label) : undefined;
-            if (def && def.operational_role_key !== "guardian") {
+            const def = !f.repeat_group_id ? relationshipNamedByLine(f.label) : undefined;
+            if (def) {
                 const entry = byDefinition.get(def.definition_key) ?? { def, fields: [] };
                 entry.fields.push(f);
                 byDefinition.set(def.definition_key, entry);

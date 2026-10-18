@@ -59,6 +59,9 @@ function classifySection(section: SemanticSection): SectionContext {
     return { subject: "child" };
 }
 
+/** Carried on a concept whose owner nothing names; a match may suggest it, never bind it unreviewed. */
+export const OWNER_AMBIGUOUS_SIGNAL = "no person named by the label or its section — the owner is ambiguous";
+
 // ── scalar concept key inference (semantic identity, registry-independent) ─────
 
 interface ScalarSemantics {
@@ -153,8 +156,19 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
         };
     }
     if (/\b(date of birth|birth\s*date|birthdate|d\.?o\.?b)\b/.test(l)) return { subject: "child", concept_key: "child.date_of_birth", band: "high", signals: sig("label matches date-of-birth") };
-    if (/\bemail\b/.test(l)) return { subject: "person", concept_key: "person.email", band: "high", signals: sig("label matches email") };
-    if (/\b(phone|telephone|mobile|cell|contact number)\b/.test(l)) return { subject: "person", concept_key: "person.phone", band: "high", signals: sig("label matches phone") };
+    /*
+     * A BARE "Email" / "Phone" WHOSE OWNER NOTHING NAMES IS A QUESTION FOR A PERSON.
+     *
+     * Reaching here means the label names no party and the section names no other relationship. Only
+     * a guardian heading names the owner. Otherwise — a one-section PDF ("Form fields"), a generic
+     * "Contact Information" — the line may be the parent's, the emergency contact's or the doctor's,
+     * and filing it `high` let initializeStrongUnderstanding bind it to `person.*` at import, the very
+     * assignment the import mapping refuses. It stays a proposal for the operator (`review`).
+     */
+    const ownerNamed = ctx.role === "guardian";
+    const ownerless = ownerNamed ? [] : [OWNER_AMBIGUOUS_SIGNAL];
+    if (/\bemail\b/.test(l)) return { subject: "person", concept_key: "person.email", band: ownerNamed ? "high" : "review", signals: [...sig("label matches email"), ...ownerless] };
+    if (/\b(phone|telephone|mobile|cell|contact number)\b/.test(l)) return { subject: "person", concept_key: "person.phone", band: ownerNamed ? "high" : "review", signals: [...sig("label matches phone"), ...ownerless] };
     if (/\b(address|street|city|state|zip|postal)\b/.test(l)) return { subject: "household", concept_key: "household.address", band: "review", signals: sig("label matches address component") };
     if (/\ballerg/.test(l)) return { subject: "child", concept_key: "child.allergies", band: "high", signals: sig("label matches allergies") };
     if (/\brelationship to child\b/.test(l)) return { subject: "person", concept_key: "relationship.relationship_type", band: "high", signals: sig("label matches relationship-to-child") };

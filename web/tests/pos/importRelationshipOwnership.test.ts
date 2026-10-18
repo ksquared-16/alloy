@@ -103,16 +103,18 @@ describe("2. a document read as one section still finds its relationships — an
     it("lines that name their relationship become that relationship's own section; the rest stay", () => {
         const titles = model.sections.map((s) => [s.title, s.fields.map((f) => f.label)]);
         expect(titles).toEqual([
-            ["Form fields", ["Child Name", "Parent/Guardian Name", "Parent/Guardian Phone", "Phone", "Authorized to give medication?"]],
+            // A physician keeps its certified line-level route (a relationship binding), so it is not moved.
+            ["Form fields", ["Child Name", "Parent/Guardian Name", "Parent/Guardian Phone", "Physician Name", "Phone", "Authorized to give medication?"]],
             ["Emergency Contacts", ["Emergency Contact Name", "Emergency Contact Phone", "Emergency Contact Relationship to Child"]],
-            ["Physician Name", ["Physician Name"]],
         ]);
-        expect(model.sections.filter((s) => s.repeated_person).map((s) => s.title)).toEqual(["Emergency Contacts", "Physician Name"]);
+        expect(model.sections.filter((s) => s.repeated_person).map((s) => s.title)).toEqual(["Emergency Contacts"]);
     });
 
-    it("relationship discovery proposes the emergency-contact and physician relationships", () => {
-        const roles = discoverConcepts(model).filter((c) => c.kind === "relationship_group").map((c) => c.relationship_role);
-        expect(roles).toEqual(expect.arrayContaining(["emergency_contact", "physician"]));
+    it("relationship discovery proposes the emergency-contact relationship; the physician line is its own", () => {
+        const concepts = discoverConcepts(model);
+        expect(concepts.filter((c) => c.kind === "relationship_group").map((c) => c.relationship_role)).toEqual(["emergency_contact"]);
+        const doctor = concepts.find((c) => c.source.labels.includes("Physician Name"));
+        expect(doctor?.concept_key).toMatch(/^physician\./);
     });
 
     it("is not silent: the document warns about the separation and about the line that names no one", () => {
