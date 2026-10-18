@@ -90,6 +90,64 @@ Only the dry-run census and the after-census run in bulk.
 
 ---
 
+## 2a. Payerless links — EXECUTION PLAN (requires Director approval; nothing executed)
+
+The workflow is built (closeout PR): `GET /api/admin/enrollment/links/{linkId}/payer` previews, and
+`POST` with `{ person_id, confirm: true }` binds. The authority is `web/lib/enrollment/participantLaunch/linkPayerBinding.ts`,
+gated on Enrollment decision authority (`enrollment.decide`).
+
+**What the workflow refuses:**
+- a link that is not an Enrollment link;
+- an inactive or expired link;
+- a link whose paperwork is not open;
+- a link that already has a payer;
+- a household with no primary contact;
+- a person who is not this household's primary contact;
+- a bind without confirmation.
+
+**How it writes:**
+- The write is compare-and-set on "no payer yet", so a payer is never replaced.
+- It records `recipient_bound_at`, `recipient_bound_by` and `recipient_bound_via` on the link, and an
+  `enrollment_link_payer_bound` workflow event.
+- It keeps the same link and session, with no notification.
+
+**Per real link, once approved:**
+1. A census reads the 3 active payerless links (ids only), their open sessions and the household
+   primary-contact count.
+2. For each link the operator opens the preview.
+   - If there is one candidate, the operator confirms that person.
+   - If there are several candidates (one household has two primary contacts), the operator names the
+     right one. That needs the Director's or the family's answer first, so the link is held until then.
+3. The bind runs, one governed approval per link.
+4. A census afterwards checks that each link names a payer of its own household, that no other link
+   changed, and that the participant payment screen now offers payment.
+
+---
+
+## 2b. Child-specific paperwork eligibility (bf7bb266) — finding
+
+The real child `bf7bb266` had paperwork while still `new_inquiry`. That paperwork was a **manual packet
+share** from the Forms/Processing packet builder (`/api/admin/forms/packet-links` →
+`mintPacketPublicLinkForAdmin`, `launch_from_entity` on 2026-09-17). It was not an Enrollment launch:
+- no `created_via=enrollment_start`;
+- no stage;
+- no journey link;
+- no payer.
+
+The sibling's live journey did not let it through, so it is a **historical exception**. The path is still
+open, though. Restricting the generic packet share for Enrollment packets is a **Director decision**,
+because the same route serves non-Enrollment packets.
+
+**Separately, the real gap is closed in this PR.** Start Enrollment skipped its admission check whenever
+the family had a live episode. Today it would have sent a `new_inquiry` or waitlisted sibling the
+Enrolling paperwork. The check now runs whatever the episode state.
+
+**Side finding (not touched):** the same real household (`0658832a`) holds 15 more children with
+stageless `enrollment_start` journeys and derived-packet sessions dated 2026-08-18 to 2026-08-21. These
+look like build-out test debris on a real family and need their own review.
+
+---
+
 ## 3. Disposable QA data (item 10) — inventory and cleanup plan (PLAN ONLY — NOTHING DELETED)
 
 **Inventory** (`certification/enrollment/v05-qa-cleanup-inventory-census.sql`, gar_7b20f1b121fecc).
@@ -124,6 +182,7 @@ and `packet_step_document_upload_mu1tpout`.
 | Family C — ZZQA1467FAMC | `350ef2ea` |
 | Family C — FAMB | `9867a5a0` |
 | Family C — X4F9 | `a69f9525` |
+| ZZQA1499G (closeout acceptance: launch guard, Offers refresh) | `e68d61c5` |
 
 **Order of operations.** Each step is its own governed approval, and nothing is hard-deleted.
 1. Freeze the keep-list, and census-snapshot it.
