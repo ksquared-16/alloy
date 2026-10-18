@@ -24,7 +24,34 @@ export async function loadRelatedRecordProposalForCase(args: {
         .eq("processing_case_id", args.caseId);
     if (sourceError) throw new Error(sourceError.message);
 
+    /*
+     * A PACKET SESSION'S PROPOSALS ARE ITS SUBMISSIONS'.
+     *
+     * An Enrollment packet opens its case from the packet session (packet completion), not from each
+     * form submission. The case view already expands such a source into the submissions of its items
+     * (`processingCaseEvidenceDb`), so an operator SAW a family's proposed new child — and commit,
+     * which read form-submission sources only, answered "Proposal not found for case" for every one.
+     * The same expansion here, org-scoped, so what the operator sees is what they can commit.
+     */
+    const expanded: { source_kind: string; source_id: string }[] = [];
     for (const source of (sources ?? []) as { source_kind: string; source_id: string }[]) {
+        if (source.source_kind === "form_submission") {
+            expanded.push(source);
+            continue;
+        }
+        if (source.source_kind !== "form_packet_session") continue;
+        const { data: items, error: itemError } = await args.supabase
+            .from("form_packet_session_items")
+            .select("form_submission_id")
+            .eq("org_id", args.orgId)
+            .eq("packet_session_id", source.source_id);
+        if (itemError) throw new Error(itemError.message);
+        for (const item of (items ?? []) as { form_submission_id: string | null }[]) {
+            if (item.form_submission_id) expanded.push({ source_kind: "form_submission", source_id: item.form_submission_id });
+        }
+    }
+
+    for (const source of expanded) {
         if (source.source_kind !== "form_submission") continue;
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
