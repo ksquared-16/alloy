@@ -56,9 +56,81 @@ const STATUS_WORDS: Record<string, string> = {
     enrolled: "Enrolled",
 };
 
+type ChildRequest = { requestId: string; displayName: string; status: "pending" | "declined" };
+
+const REQUEST_WORDS: Record<ChildRequest["status"], string> = {
+    pending: "Sent to the school for review",
+    declined: "The school didn't add this child — please contact them",
+};
+
+/** A new child the school doesn't know yet: the family's words, sent for review — never a child record. */
+function AddNewChild({ token, onSent }: { token: string; onSent: () => void }) {
+    const [first, setFirst] = useState("");
+    const [last, setLast] = useState("");
+    const [dob, setDob] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [sent, setSent] = useState(false);
+
+    const send = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-request`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ new_child: { first_name: first, last_name: last, date_of_birth: dob } }),
+            });
+            const json = (await res.json()) as { ok?: boolean; error?: string };
+            if (!res.ok || !json.ok) {
+                setError(json.error ?? "We couldn't send your request just now.");
+                return;
+            }
+            setSent(true);
+            setFirst("");
+            setLast("");
+            setDob("");
+            onSent();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div data-family-enrollment="new-child">
+            <p>Tell the school about a child who isn't listed. The school will review the details before anything is added or enrolled.</p>
+            <label>
+                First name
+                <input data-family-enrollment="new-child-first-name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="off" />
+            </label>
+            <label>
+                Last name
+                <input data-family-enrollment="new-child-last-name" value={last} onChange={(e) => setLast(e.target.value)} autoComplete="off" />
+            </label>
+            <label>
+                Date of birth
+                <input data-family-enrollment="new-child-dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+            </label>
+            <button
+                type="button"
+                data-family-enrollment="new-child-send"
+                disabled={busy || !first.trim() || !last.trim() || !dob}
+                onClick={() => void send()}
+            >
+                {busy ? "Sending…" : "Send to the school"}
+            </button>
+            {sent ? <p role="status" data-family-enrollment="new-child-sent">Your request has been sent to the school for review.</p> : null}
+            {error ? <p role="alert" data-family-enrollment="new-child-error">{error}</p> : null}
+        </div>
+    );
+}
+
 function AddAnotherChild({ token, onRequested }: { token: string; onRequested: () => void }) {
     const [open, setOpen] = useState(false);
     const [children, setChildren] = useState<HouseholdChild[] | null>(null);
+    const [requests, setRequests] = useState<ChildRequest[]>([]);
+    const [mode, setMode] = useState<"existing" | "new">("existing");
     const [canRequest, setCanRequest] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
@@ -66,12 +138,13 @@ function AddAnotherChild({ token, onRequested }: { token: string; onRequested: (
 
     const load = useCallback(async () => {
         const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-request`, { credentials: "same-origin" });
-        const json = (await res.json()) as { ok?: boolean; data?: { children: HouseholdChild[]; canRequest: boolean }; error?: string };
+        const json = (await res.json()) as { ok?: boolean; data?: { children: HouseholdChild[]; requests?: ChildRequest[]; canRequest: boolean }; error?: string };
         if (!res.ok || !json.ok || !json.data) {
             setError(json.error ?? "We couldn't load your children just now.");
             return;
         }
         setChildren(json.data.children);
+        setRequests(json.data.requests ?? []);
         setCanRequest(json.data.canRequest);
     }, [token]);
 
@@ -121,6 +194,27 @@ function AddAnotherChild({ token, onRequested }: { token: string; onRequested: (
                 <p data-family-enrollment="add-child-unavailable">We can't add a request here right now. Please contact the school and they'll help you.</p>
             ) : null}
             {children !== null && canRequest ? (
+                <div data-family-enrollment="add-child-choice">
+                    <button type="button" data-family-enrollment="choose-existing" aria-pressed={mode === "existing"} onClick={() => setMode("existing")}>
+                        Choose a child already in your family
+                    </button>
+                    <button type="button" data-family-enrollment="choose-new" aria-pressed={mode === "new"} onClick={() => setMode("new")}>
+                        Add a new child
+                    </button>
+                </div>
+            ) : null}
+            {children !== null && canRequest && mode === "new" ? <AddNewChild token={token} onSent={() => { void load(); onRequested(); }} /> : null}
+            {requests.length > 0 ? (
+                <ul data-family-enrollment="child-requests">
+                    {requests.map((r) => (
+                        <li key={r.requestId} data-child-request-status={r.status}>
+                            <span>{r.displayName}</span>
+                            <span> — {REQUEST_WORDS[r.status] ?? r.status}</span>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            {children !== null && canRequest && mode === "existing" ? (
                 <ul data-family-enrollment="household-children">
                     {children.map((c) => (
                         <li key={c.customerMemberId} data-household-child-status={c.status}>

@@ -94,3 +94,56 @@ describe("+ Add another child", () => {
         expect(host.querySelector('[data-family-enrollment="request-sent"]')?.textContent).toMatch(/asked the school to consider Eve.*isn't an enrollment yet/);
     });
 });
+
+describe("+ Add another child → Add a new child", () => {
+    it("sends the family's details for review, says so, and lists what was sent", async () => {
+        const calls: Array<{ method: string; body?: string }> = [];
+        let sent = false;
+        vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+            calls.push({ method: init?.method ?? "GET", body: init?.body as string | undefined });
+            if (url.endsWith("/family-enrollment")) return { ok: true, json: async () => ({ ok: true, data: { family: family(1) } }) } as Response;
+            if ((init?.method ?? "GET") === "POST") {
+                sent = true;
+                return { ok: true, json: async () => ({ ok: true, data: { sentForReview: true, created: true } }) } as Response;
+            }
+            return {
+                ok: true,
+                json: async () => ({ ok: true, data: {
+                    canRequest: true,
+                    children: [{ customerMemberId: "ava", displayName: "Ava", status: "in_progress" }],
+                    requests: sent ? [{ requestId: "r1", displayName: "Dex Example", status: "pending" }] : [],
+                } }),
+            } as Response;
+        });
+        const host = document.createElement("div");
+        const tick = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+        await act(async () => createRoot(host).render(<FamilyEnrollmentCard token="tok" />));
+        await tick();
+        await act(async () => (host.querySelector('[data-family-enrollment="add-child"]') as HTMLButtonElement).click());
+        await tick();
+        expect(host.querySelector('[data-family-enrollment="choose-existing"]')?.textContent).toBe("Choose a child already in your family");
+        await act(async () => (host.querySelector('[data-family-enrollment="choose-new"]') as HTMLButtonElement).click());
+
+        const type = async (sel: string, value: string) => {
+            const input = host.querySelector(`[data-family-enrollment="${sel}"]`) as HTMLInputElement;
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+            await act(async () => {
+                setter.call(input, value);
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+            });
+        };
+        const sendButton = () => host.querySelector('[data-family-enrollment="new-child-send"]') as HTMLButtonElement;
+        expect(sendButton().disabled).toBe(true);
+        await type("new-child-first-name", "Dex");
+        await type("new-child-last-name", "Example");
+        await type("new-child-dob", "2021-05-01");
+        expect(sendButton().disabled).toBe(false);
+        await act(async () => sendButton().click());
+        await tick();
+
+        const post = calls.find((c) => c.method === "POST")!;
+        expect(JSON.parse(post.body!)).toEqual({ new_child: { first_name: "Dex", last_name: "Example", date_of_birth: "2021-05-01" } });
+        expect(host.querySelector('[data-family-enrollment="new-child-sent"]')?.textContent).toBe("Your request has been sent to the school for review.");
+        expect([...host.querySelectorAll("[data-child-request-status]")].map((li) => li.textContent)).toEqual(["Dex Example — Sent to the school for review"]);
+    });
+});

@@ -30,6 +30,7 @@
  */
 
 import { listHouseholdChildrenForRequest } from "@/lib/enrollment/family/participantEnrollmentRequest";
+import { listOpenParticipantChildRequests } from "@/lib/pos/processingCase/sources/participantChildRequest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -286,6 +287,28 @@ export async function resolveFamilyEnrollmentExperience(
                 sessionId: null,
                 participantPath: null,
                 state: "requested",
+                locationName: null,
+                totalRequirements: 0,
+                satisfiedRequirements: 0,
+                remainingRequirements: 0,
+                submitted: false,
+                processingState: null,
+            });
+        }
+        /*
+         * NEW CHILDREN THE FAMILY TOLD THE SCHOOL ABOUT. Not children yet — a Processing request the
+         * school reviews. Once committed the child is a real household child and appears above as
+         * requested; until then (or if the school did not add it) the family still sees what it sent.
+         */
+        const requests = await listOpenParticipantChildRequests(supabase, { orgId: input.orgId, customerId }).catch(() => []);
+        for (const r of requests) {
+            children.push({
+                customerMemberId: `request:${r.id}`,
+                displayName: `${r.first_name} ${r.last_name}`,
+                processInstanceId: null,
+                sessionId: null,
+                participantPath: null,
+                state: r.status === "declined" ? "not_added" : "sent_for_review",
                 locationName: null,
                 totalRequirements: 0,
                 satisfiedRequirements: 0,
