@@ -28,7 +28,7 @@ vi.mock("@/lib/pos/processingCase/commit/verifyRelationshipCommitAuthorization",
 }));
 vi.mock("@/lib/pos/processingCase/commit/loadResolvedProcessingCaseContext", () => ({
     loadResolvedProcessingCaseContext: async () => ({ customer_id: "house-1", customer_member_ids: ["ben", "ava"], resolution_revision: "r1" }),
-    resolveCommitHousehold: () => ({ ok: true, customer_id: "house-1", revision: "r1", context: { customer_member_ids: ["ben", "ava"] } }),
+    resolveCommitHousehold: () => ({ ok: true, customer_id: "house-1", revision: "r1", context: { customer_id: "house-1", customer_member_ids: ["ben", "ava"] } }),
 }));
 vi.mock("@/lib/pos/processingCase/commit/resolveRelationshipAnchor", () => ({
     resolveRelationshipAnchor: (input: { request: unknown }) => {
