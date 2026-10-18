@@ -226,10 +226,26 @@ export async function resolveFinancialWorkQueue(
         (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
     );
 
-    const memberIds = [...new Set([...agreements.values()].map((a) => a.customer_member_id).filter((v): v is string => !!v))];
+    /*
+     * A household-billed charge can name the child it is for (the registration fee records
+     * metadata.subject_customer_member_id). That child is shown as a LABEL only — the charge stays the
+     * household's: no member id, arrangement, amount or ledger changes — and only when the child is in
+     * this org and in the household the charge is billed to.
+     */
+    const subjectOf = (c: { billable_source_type: string; metadata: Record<string, unknown> | null }) => {
+        const v = c.billable_source_type === "customer" ? c.metadata?.subject_customer_member_id : null;
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    };
+    const memberIds = [...new Set([
+        ...[...agreements.values()].map((a) => a.customer_member_id).filter((v): v is string => !!v),
+        ...charges.map(subjectOf).filter((v): v is string => !!v),
+    ])];
     const { data: memberRows } = memberIds.length
-        ? await supabase.from("customer_members").select("id, display_name, first_name, last_name").eq("org_id", args.orgId).in("id", memberIds)
+        ? await supabase.from("customer_members").select("id, customer_id, display_name, first_name, last_name").eq("org_id", args.orgId).in("id", memberIds)
         : { data: [] };
+    const memberHousehold = new Map(
+        (((memberRows ?? []) as unknown) as Array<Record<string, unknown>>).map((m) => [String(m.id), String(m.customer_id ?? "")]),
+    );
     const memberNames = new Map(
         (((memberRows ?? []) as unknown) as Array<Record<string, unknown>>).map((m) => [
             String(m.id),
@@ -298,7 +314,12 @@ export async function resolveFinancialWorkQueue(
             customerMemberId: agreement?.customer_member_id ?? null,
             enrollmentAgreementId: charge.billable_source_type === "enrollment_agreement" ? charge.billable_source_id : null,
             householdName: customerId ? customerNames.get(customerId) ?? null : null,
-            childName: agreement?.customer_member_id ? memberNames.get(agreement.customer_member_id) ?? null : null,
+            childName: agreement?.customer_member_id
+                ? memberNames.get(agreement.customer_member_id) ?? null
+                : (() => {
+                      const subject = subjectOf(charge);
+                      return subject && customerId && memberHousehold.get(subject) === customerId ? memberNames.get(subject) ?? null : null;
+                  })(),
             categoryKey,
             categoryLabel: chargeCategoryLabel(categoryKey),
             description: charge.description,
