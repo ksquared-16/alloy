@@ -77,14 +77,14 @@ describe("relationship proposals: commit or reject from the case", () => {
 });
 
 describe("an ambiguous person: the operator chooses or corrects", () => {
-    const candidates = [{ person_id: "p-other", display_name: "Parent ZMU7A", in_household: false, same_name: false }];
-    async function ambiguous() {
+    const candidates: Array<Record<string, unknown>> = [{ person_id: "p-other", display_name: "Parent ZMU7A", in_household: false, same_name: false }];
+    async function ambiguous(list: Array<Record<string, unknown>> = candidates) {
         const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
         let n = 0;
         vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
             calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) });
             n += 1;
-            if (n === 1) return { ok: false, json: async () => ({ error: "A person with this email or phone already exists — choose them, or correct the details.", code: "relationship_identity_choice_required", identity_candidates: candidates }) } as Response;
+            if (n === 1) return { ok: false, json: async () => ({ error: "A person with this email or phone already exists — choose them, or correct the details.", code: "relationship_identity_choice_required", identity_candidates: list }) } as Response;
             return { ok: true, json: async () => ({ data: { outcome: "applied" } }) } as Response;
         });
         const host = document.createElement("div");
@@ -118,5 +118,21 @@ describe("an ambiguous person: the operator chooses or corrects", () => {
         await act(async () => (host.querySelector('[data-testid="relationship-fix-save"]') as HTMLButtonElement).click());
         await act(async () => new Promise((r) => setTimeout(r, 0)));
         expect(calls[1]!.body).toMatchObject({ person_corrections: { first_name: "Parent", last_name: "ZZQA1496Q", phone: "5550147199" } });
+    });
+
+    it("only the NAME resembles someone in this family: the operator uses them, or confirms a different person", async () => {
+        const { host, calls } = await ambiguous([{ person_id: "p-parent", display_name: "Parent ZZQA1496R", in_household: true, same_name: true, contact_match: false }]);
+        expect(host.querySelector('[data-testid="relationship-candidates"]')?.textContent).toMatch(/Parent ZZQA1496R.*already in this family.*same name/);
+        expect(host.querySelector('[data-testid="relationship-correct"]')).toBeNull();
+        await act(async () => (host.querySelector('[data-testid="relationship-confirm-new"]') as HTMLButtonElement).click());
+        await act(async () => new Promise((r) => setTimeout(r, 0)));
+        expect(calls[1]!.body).toMatchObject({ confirm_new_person: true });
+        expect(calls[1]!.body).not.toHaveProperty("selected_person_id");
+    });
+
+    it("an email/phone match is never confirmable as new — only chosen or corrected", async () => {
+        const { host } = await ambiguous();
+        expect(host.querySelector('[data-testid="relationship-confirm-new"]')).toBeNull();
+        expect(host.querySelector('[data-testid="relationship-correct"]')).not.toBeNull();
     });
 });

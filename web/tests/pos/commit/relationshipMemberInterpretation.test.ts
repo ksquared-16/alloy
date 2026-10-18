@@ -147,13 +147,14 @@ function world(guardians: FormPayloadGroupRow[], contacts: FormPayloadGroupRow[]
         .collections.flatMap((c) => c.instances.map((i) => ({ ref: c.collection_provider_ref, id: i.proposal_id })));
     return { tables, ids };
 }
-const commit = (tables: Record<string, Row[]>, proposalId: string, opts: { anchor?: string | null; decision?: "approve" | "reject"; personCorrections?: Record<string, string> } = {}) =>
+const commit = (tables: Record<string, Row[]>, proposalId: string, opts: { anchor?: string | null; decision?: "approve" | "reject"; personCorrections?: Record<string, string>; confirmNewPerson?: boolean } = {}) =>
     executeRelationshipProposalCommit({
         supabase: db(tables), orgId: "org", userId: "op", actorRole: "admin", accessScope: null, caseId: "case-1", proposalId,
         decision: { proposal_id: proposalId, instance_decision: opts.decision ?? "approve", field_decisions: [] },
         metadata: (tables.processing_cases![0]!.metadata ?? {}) as Record<string, unknown>,
         anchorCustomerMemberId: opts.anchor ?? null,
         personCorrections: opts.personCorrections ?? null,
+        confirmNewPerson: opts.confirmNewPerson ?? false,
     } as never);
 
 beforeEach(() => { m.invocations = []; });
@@ -247,6 +248,16 @@ describe("final certification repairs (staging aa797393, disposable families ZZQ
         const { tables, ids } = world([guardian()], []);
         await commit(tables, ids.find((x) => x.ref === "person.contact_role.parents")!.id, { personCorrections: { phone: "5550199999" } });
         expect(m.invocations[0]!.invocation.inputValues.createPersonDraft).toEqual({ first_name: "Parent", last_name: "ZMU7B", phone: "5550199999" });
+    });
+
+    it("the operator's 'a different person' confirmation reaches the identity rule, and only when given", async () => {
+        const { tables, ids } = world([guardian()], []);
+        const id = ids.find((x) => x.ref === "person.contact_role.parents")!.id;
+        await commit(tables, id);
+        expect(m.invocations[0]!.invocation.inputValues.createPersonDraft).not.toHaveProperty("confirmed_new_person");
+        const second = world([guardian()], []);
+        await commit(second.tables, second.ids.find((x) => x.ref === "person.contact_role.parents")!.id, { confirmNewPerson: true });
+        expect(m.invocations.at(-1)!.invocation.inputValues.createPersonDraft).toMatchObject({ first_name: "Parent", last_name: "ZMU7B", confirmed_new_person: true });
     });
 
     it("a correction cannot remove the identity a person needs", async () => {

@@ -210,7 +210,7 @@ function relationshipDecisionLabel(instance: ProcessingCollectionInstanceProposa
  * Commit or reject a proposed relationship through the existing guarded routes. The server derives the
  * role, the household and the child the paperwork is about; nothing here asserts them.
  */
-type RelationshipIdentityCandidate = { person_id: string; display_name: string; in_household: boolean; same_name: boolean };
+type RelationshipIdentityCandidate = { person_id: string; display_name: string; in_household: boolean; same_name: boolean; contact_match?: boolean };
 
 /**
  * Commit or reject a proposed relationship through the existing guarded routes. The server derives the
@@ -282,7 +282,13 @@ function RelationshipDecisionBlock({ instance, caseId, label, onCommitted }: { i
                             </button>
                         </div>
                     ))}
-                    {!correcting ? (
+                    {candidates.length > 0 && candidates.every((c) => c.contact_match === false) ? (
+                        // Only the name resembles someone in this family (their email and phone differ): the
+                        // operator confirms a different person — nothing is merged or overwritten.
+                        <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy} onClick={() => void act("commit", { confirm_new_person: true })} data-testid="relationship-confirm-new">
+                            It's a different person — add them
+                        </button>
+                    ) : !correcting ? (
                         <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy} onClick={() => setCorrecting(true)} data-testid="relationship-correct">
                             It's a different person — correct the details
                         </button>
