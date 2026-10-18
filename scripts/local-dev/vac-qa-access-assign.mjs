@@ -157,6 +157,13 @@ if (configuredOrg) {
     orgSource = "derived";
 }
 
+// Profile first: a membership must have an access profile at commit (deferred constraint trigger),
+// and each PostgREST call commits on its own. An existing profile is left untouched.
+const profile = await admin
+    .from("user_access_profiles")
+    .upsert({ user_id: user.id, org_id: orgId, department_scope: "all", site_scope: "all" }, { onConflict: "user_id,org_id", ignoreDuplicates: true });
+if (profile.error) fail("access_profile_failed", profile.error.message);
+
 const inserted = await admin.from("user_roles").insert({ user_id: user.id, org_id: orgId, role }).select("user_id, org_id, role");
 if (inserted.error) fail("assignment_failed", inserted.error.message);
 

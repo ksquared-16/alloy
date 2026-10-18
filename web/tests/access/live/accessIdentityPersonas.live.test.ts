@@ -184,8 +184,9 @@ describeLive("Access & Identity V2 personas — live", () => {
     beforeAll(async () => {
         // Idempotent: a previous interrupted run must not make this one a no-op or a duplicate.
         await supabase.from("user_site_access").delete().in("user_id", ALL_USERS);
-        await supabase.from("user_access_profiles").delete().in("user_id", ALL_USERS);
+        // Roles before profiles: a profile cannot be deleted while its membership remains.
         await supabase.from("user_roles").delete().in("user_id", ALL_USERS);
+        await supabase.from("user_access_profiles").delete().in("user_id", ALL_USERS);
         for (const roleKey of Object.values(CUSTOM_ROLES)) {
             await supabase.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", roleKey);
             await supabase.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", roleKey);
@@ -221,6 +222,16 @@ describeLive("Access & Identity V2 personas — live", () => {
         /* Named humans first: a money-capable role is conferred only on a linked login (W7-F002). */
         await linkPrincipals(ORG, ALL_USERS.filter((u) => u !== P.otherOrgAdmin), "AccessPersonaCert");
         await linkPrincipals(OTHER_ORG, [P.otherOrgAdmin], "AccessPersonaCertOther");
+        // Profile first: a membership must have an access profile at commit. Every persona starts
+        // organization-wide; the scope test below narrows the director's own profile.
+        const { error: profileSeedErr } = await supabase.from("user_access_profiles").upsert(
+            [
+                ...ALL_USERS.filter((u) => u !== P.otherOrgAdmin).map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+                { user_id: P.otherOrgAdmin, org_id: OTHER_ORG, department_scope: "all", site_scope: "all" },
+            ],
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
+        expect(profileSeedErr, profileSeedErr?.message).toBeNull();
         const { error: memberErr } = await supabase.from("user_roles").insert([
             { user_id: P.admin, org_id: ORG, role: "admin" },
             { user_id: P.regionalLead, org_id: ORG, role: "regional_lead" },
@@ -237,8 +248,9 @@ describeLive("Access & Identity V2 personas — live", () => {
         await unlinkPrincipals(ORG, ALL_USERS, "AccessPersonaCert");
         await unlinkPrincipals(OTHER_ORG, [P.otherOrgAdmin], "AccessPersonaCertOther");
         await supabase.from("user_site_access").delete().in("user_id", ALL_USERS);
-        await supabase.from("user_access_profiles").delete().in("user_id", ALL_USERS);
+        // Roles before profiles: a profile cannot be deleted while its membership remains.
         await supabase.from("user_roles").delete().in("user_id", ALL_USERS);
+        await supabase.from("user_access_profiles").delete().in("user_id", ALL_USERS);
         for (const roleKey of Object.values(CUSTOM_ROLES)) {
             await supabase.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", roleKey);
             await supabase.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", roleKey);
@@ -489,12 +501,14 @@ describeLive("Access & Identity V2 personas — live", () => {
         it("a director restricted to two sites keeps their capability and narrows their reach", async () => {
             const capabilityBefore = (await keysFor(P.schoolDirector)).sort();
 
-            const { error: profileErr } = await supabase.from("user_access_profiles").insert({
+            // The director already holds an organization-wide profile (a membership needs one), so
+            // narrowing it is an update of that profile, not a first insert.
+            const { error: profileErr } = await supabase.from("user_access_profiles").upsert({
                 user_id: P.schoolDirector,
                 org_id: ORG,
                 department_scope: "all",
                 site_scope: "restricted",
-            });
+            }, { onConflict: "user_id,org_id" });
             expect(profileErr, profileErr?.message).toBeNull();
             const { error: siteErr } = await supabase.from("user_site_access").insert([
                 { user_id: P.schoolDirector, org_id: ORG, location_id: RIVERSIDE },

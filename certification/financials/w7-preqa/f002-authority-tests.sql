@@ -17,6 +17,12 @@ BEGIN
 END $$;
 -- fixtures (inside the rolled-back transaction)
 INSERT INTO persons (id, org_id, first_name, last_name) VALUES ('f0020000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','Named','Probe');
+-- Profile first: a membership must have an access profile at commit, so the direct user_roles
+-- probes below exercise the money-link guard, not the profile invariant.
+INSERT INTO user_access_profiles (user_id, org_id, department_scope, site_scope) VALUES
+  ('c0000000-0000-4000-8000-00000000d0c4','00000000-0000-4000-8000-000000000001','all','all'),
+  ('72f10cc6-fbd2-4b3c-a107-8a5c196da384','00000000-0000-4000-8000-000000000001','all','all')
+ON CONFLICT (user_id, org_id) DO NOTHING;
 SELECT pg_temp.try('1 direct: unlinked user + money role (admin)',
   $q$INSERT INTO user_roles (org_id,user_id,role) VALUES ('00000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-00000000d0c4','admin')$q$);
 SELECT pg_temp.try('2 direct: unlinked user + non-money role',

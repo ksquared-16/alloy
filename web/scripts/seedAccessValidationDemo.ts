@@ -783,15 +783,16 @@ async function main() {
         const regionalId = process.env.ACCESS_VALIDATION_REGIONAL_USER_ID?.trim();
         const directorId = process.env.ACCESS_VALIDATION_DIRECTOR_USER_ID?.trim();
 
+        // Profile first: a membership must have an access profile at commit.
         if (corporateId) {
-            await ensureUserRoleIfAbsent(supabase, orgId, corporateId, "admin", "Corporate Admin");
             await applyUserAccessProfile(supabase, orgId, corporateId, "all", "all", [], []);
+            await ensureUserRoleIfAbsent(supabase, orgId, corporateId, "admin", "Corporate Admin");
             console.log("\nCorporate user: role admin (admin shell); profile all/all for", corporateId);
         }
         if (regionalId) {
+            await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthCampusId, siteSouthCampusId]);
             const rOps = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "ops", "Regional Lead");
             const rLead = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead", "Regional Lead");
-            await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthCampusId, siteSouthCampusId]);
             console.log(
                 "Regional user: roles ops + regional_lead (admin shell + persona); scope = all departments, both seeded campuses. inserted:",
                 { ops: rOps.inserted, regional_lead: rLead.inserted },
@@ -799,9 +800,9 @@ async function main() {
             );
         }
         if (directorId) {
+            await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptEnrollmentId], [siteNorthCampusId]);
             const dOps = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "ops", "School Director");
             const dDir = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director", "School Director");
-            await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptEnrollmentId], [siteNorthCampusId]);
             console.log(
                 "Director user: roles ops + school_director; scope = Enrollment dept + North Campus only. inserted:",
                 { ops: dOps.inserted, school_director: dDir.inserted },

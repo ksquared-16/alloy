@@ -189,8 +189,9 @@ describeLive("D2 access change audit — live", () => {
         await unlinkPrincipals(ORG, ids, "D2AccessCert");
         await supabase.from("user_site_access").delete().in("user_id", ids);
         await supabase.from("user_department_access").delete().in("user_id", ids);
-        await supabase.from("user_access_profiles").delete().in("user_id", ids);
+        // Roles before profiles: a profile cannot be deleted while its membership remains.
         await supabase.from("user_roles").delete().in("user_id", ids);
+        await supabase.from("user_access_profiles").delete().in("user_id", ids);
         for (const rk of ALL_ROLES) {
             await supabase.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", rk);
             await supabase.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", rk);
@@ -237,6 +238,12 @@ describeLive("D2 access change audit — live", () => {
             });
             if (error) throw new Error(`${rk}: ${error.message}`);
         }
+        // Profile first: a membership must have an access profile at commit.
+        const { error: apErr } = await supabase.from("user_access_profiles").upsert(
+            Object.values(P).map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
+        if (apErr) throw new Error(apErr.message);
         const { error: urErr } = await supabase.from("user_roles").insert([
             { user_id: P.subject, org_id: ORG, role: ROLE.target },
             { user_id: P.subject, org_id: ORG, role: ROLE.second },
@@ -737,6 +744,11 @@ describeLive("D2 access change audit — live", () => {
         });
         expect(grantErr).toBeNull();
         await supabase.from("user_roles").delete().eq("user_id", P.other).eq("org_id", ORG);
+        // Profile first: a membership must have an access profile at commit.
+        await supabase.from("user_access_profiles").upsert(
+            { user_id: P.other, org_id: ORG, department_scope: "all", site_scope: "all" },
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
         const { error: urErr } = await supabase.from("user_roles").insert({ user_id: P.other, org_id: ORG, role: ROLE.target });
         expect(urErr).toBeNull();
 

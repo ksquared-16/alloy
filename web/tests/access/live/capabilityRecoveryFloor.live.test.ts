@@ -121,6 +121,11 @@ describeLive("Governed capability recovery floor — live", () => {
             { org_id: ORG, role_key: "rf_inactive", role_label: "Deactivated", is_system: false, is_active: false },
             { org_id: OTHER_ORG, role_key: "rf_foreign", role_label: "Other tenant", is_system: false, is_active: true },
         ]);
+        // Profile first: a membership must have an access profile at commit.
+        await sb.from("user_access_profiles").upsert(
+            [memberA, memberB].map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
         await sb.from("user_roles").insert([
             { org_id: ORG, user_id: memberA, role: "rf_two_members" },
             { org_id: ORG, user_id: memberB, role: "rf_two_members" },

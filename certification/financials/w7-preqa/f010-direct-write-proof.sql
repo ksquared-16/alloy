@@ -4,6 +4,8 @@ BEGIN;
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
 VALUES ('f0100000-0000-4000-8000-0000000000aa', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'f010-probe@cert.invalid', '', now(), now(), now(), '{}', '{}');
+-- Profile first: a membership must have an access profile at commit.
+INSERT INTO public.user_access_profiles (user_id, org_id, department_scope, site_scope) VALUES ('f0100000-0000-4000-8000-0000000000aa', '00000000-0000-4000-8000-000000000001', 'all', 'all') ON CONFLICT (user_id, org_id) DO NOTHING;
 INSERT INTO public.user_roles (org_id, user_id, role) VALUES ('00000000-0000-4000-8000-000000000001', 'f0100000-0000-4000-8000-0000000000aa', 'ops');
 
 CREATE TEMP TABLE f010 (cond text, probe text, result text);

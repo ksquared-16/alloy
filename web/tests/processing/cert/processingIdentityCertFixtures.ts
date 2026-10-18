@@ -112,6 +112,10 @@ async function seedProcessingIdentityCertFixturesInner(admin: SupabaseClient): P
         await ensureAuthUser(admin, id, email);
     }
     for (const [userId, , orgId, role] of users) {
+        // Profile first: a membership must have an access profile at commit.
+        await admin
+            .from("user_access_profiles")
+            .upsert({ user_id: userId, org_id: orgId, department_scope: "all", site_scope: "all" }, { onConflict: "user_id,org_id", ignoreDuplicates: true });
         await admin.from("user_roles").upsert({ user_id: userId, org_id: orgId, role }, { onConflict: "user_id,org_id,role" });
     }
 

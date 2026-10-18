@@ -99,6 +99,8 @@ describeLive("W-17 — additive role assignment, live", () => {
                 );
             }
         }
+        // Profile first: a membership must have an access profile at commit. It is never deleted
+        // before afterAll, so every resetTo() below inserts roles against an existing profile.
         await sb.from("user_access_profiles").upsert(
             { user_id: SUBJECT, org_id: ORG, department_scope: "restricted", site_scope: "restricted" },
             { onConflict: "user_id,org_id" },

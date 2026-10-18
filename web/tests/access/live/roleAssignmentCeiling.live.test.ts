@@ -156,6 +156,14 @@ describeLive("W-18 role-assignment ceiling — live", () => {
             org_id: OTHER_ORG, role_key: ROLE.powerful, permission_key: "fin.adjust", allowed: true,
         });
 
+        // Profile first: a membership must have an access profile at commit. Only the principals this
+        // file writes user_roles for DIRECTLY (actor, target) get one here; `second` is left to the
+        // governed RPCs so the create-membership cases (M/N) still start from no profile. The
+        // scope-separation case later narrows target's profile itself, so its intent is unchanged.
+        await supabase.from("user_access_profiles").upsert(
+            [actor, target].map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
         await supabase.from("user_roles").insert({ org_id: ORG, user_id: actor, role: ROLE.userAdmin });
     }, 120_000);
 

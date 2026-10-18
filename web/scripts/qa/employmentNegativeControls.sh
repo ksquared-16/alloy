@@ -9,7 +9,8 @@
 #
 # NC3 — disable duplicate resolution: the identity gate stops forcing operator
 #       choice, so Add Staff silently creates a second Jane Wilson.
-# NC4 — let employment grant access: addStaff also writes a user_roles row.
+# NC4 — let employment grant access: addStaff also writes an access profile and a
+#       user_roles row (profile first, as the database requires).
 #
 # Companion database controls (eligibility revert, org-scope bypass) live in
 # supabase/tests/employment/employment_negative_controls.sql.
@@ -72,8 +73,13 @@ restore
 # NC4 — let employment grant access
 # ---------------------------------------------------------------------------
 echo
-echo "NC4: letting employment grant access (addStaff writes user_roles)"
-perl -0pi -e 's/    const employment = await createEmployment\(supabase, \{/    await supabase.from("user_roles").insert({ user_id: personId, org_id: orgId, role: "ops" }); \/\/ NEGATIVE CONTROL\n    const employment = await createEmployment(supabase, {/' "$SERVICE"
+echo "NC4: letting employment grant access (addStaff writes user_access_profiles + user_roles)"
+# The injected grant writes the access profile FIRST, then the role: the database now refuses a
+# profileless membership at commit (membership_requires_access_profile), so a profileless insert
+# would model a grant that can no longer happen. The suite runs against a mocked client
+# (tests/employment/mockEmploymentSupabase.ts), so the refusal itself cannot be asserted here — it
+# is proven by the migration's own self-test. Either write lands in ACCESS_TABLES and must go RED.
+perl -0pi -e 's/    const employment = await createEmployment\(supabase, \{/    await supabase.from("user_access_profiles").upsert({ user_id: personId, org_id: orgId, department_scope: "all", site_scope: "all" }, { onConflict: "user_id,org_id", ignoreDuplicates: true }); \/\/ NEGATIVE CONTROL\n    await supabase.from("user_roles").insert({ user_id: personId, org_id: orgId, role: "ops" }); \/\/ NEGATIVE CONTROL\n    const employment = await createEmployment(supabase, {/' "$SERVICE"
 if grep -q "NEGATIVE CONTROL" "$SERVICE"; then
     if run_suite; then
         echo "FAIL  NC4 — the suite stayed GREEN while employment granted a role."
