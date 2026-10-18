@@ -2,6 +2,7 @@
  * Forms source adapter — map form submission collection envelope to canonical related-record proposals (read-only).
  */
 
+import { interpretRelationshipMemberFields } from "@/lib/fields/relationship/relationshipNestedFields";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { groupMemberState } from "@/lib/forms/validateSubmission";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
@@ -68,6 +69,25 @@ function buildFieldProposals(
         });
     }
     return out;
+}
+
+/** Person facts for a relationship row, from bound members and uniquely interpretable unbound ones. */
+function relationshipPersonFacts(
+    def: NonNullable<ReturnType<typeof relationshipDefinitionForRef>>,
+    nestedFields: FormField[],
+    values: Record<string, unknown>,
+): Pick<RelatedRecordRelationshipIntent, "proposed_person_facts" | "unresolved_member_field_ids"> {
+    const { interpreted, unresolved } = interpretRelationshipMemberFields(def, nestedFields);
+    const has = (id: string) => Object.prototype.hasOwnProperty.call(values, id);
+    return {
+        proposed_person_facts: nestedFields
+            .filter((n) => interpreted.has(n.id) && has(n.id))
+            .map((n) => {
+                const i = interpreted.get(n.id)!;
+                return { entity_type: i.field_source.entity_type, field_key: i.field_source.field_key, value: values[n.id], source_field_id: n.id, basis: i.basis };
+            }),
+        unresolved_member_field_ids: unresolved.filter(has),
+    };
 }
 
 function buildInstanceProposal(args: {
@@ -157,13 +177,9 @@ function buildInstanceProposal(args: {
               supported_scopes: relationshipDef.scopes,
               identity_action: row.origin === "existing" ? "link_existing_person" : "create_proposed_person",
               ...(row.item_id ? { existing_person_id: row.item_id } : {}),
-              proposed_person_facts: nestedFields
-                  .filter((n) => n.field_source && Object.prototype.hasOwnProperty.call(row.values, n.id))
-                  .map((n) => ({
-                      entity_type: n.field_source!.entity_type,
-                      field_key: n.field_source!.field_key,
-                      value: row.values[n.id],
-                  })),
+              // A member's own binding first; otherwise the definition's declared member it uniquely
+              // matches (relationshipNestedFields). Values are submitted as-is; provenance travels.
+              ...relationshipPersonFacts(relationshipDef, nestedFields, row.values),
           }
         : undefined;
 

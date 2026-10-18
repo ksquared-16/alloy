@@ -82,7 +82,17 @@ export type RelatedRecordRelationshipIntent = {
     /** Canonical person id when the instance references a known Person. */
     existing_person_id?: string;
     /** Person facts proposed from the nested responses (create/update candidates). */
-    proposed_person_facts: Array<{ entity_type: string; field_key: string; value: unknown }>;
+    proposed_person_facts: Array<{
+        entity_type: string;
+        field_key: string;
+        value: unknown;
+        /** The submitted member field the fact came from. */
+        source_field_id?: string;
+        /** `bound`: the field's own binding. `definition_member`: matched to the definition's declared member. */
+        basis?: "bound" | "definition_member";
+    }>;
+    /** Submitted members of this collection that matched no declared member uniquely — left unresolved. */
+    unresolved_member_field_ids?: string[];
 };
 
 export type RelatedRecordInstanceProposal = {
