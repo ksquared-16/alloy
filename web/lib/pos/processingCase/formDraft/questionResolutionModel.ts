@@ -7,6 +7,7 @@
 
 import type { FormFieldSource } from "@/lib/forms/schema";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
+import { detectRelationshipDefinitionForTitle } from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     reviewFieldOptionById,
     suggestReviewDestinationField,
@@ -159,10 +160,56 @@ const BARE_NAME_LABEL_RE = /^\s*(full\s*|legal\s*|first\s*|last\s*|middle\s*|pre
 function sectionIdentityIntent(sectionTitle: string): QuestionIntent | null {
     const t = sectionTitle.trim();
     if (!t) return null;
-    if (/\bemergency\b/i.test(t)) return "emergency_contact";
-    if (/\b(parent|guardian|mother|father|caregiver)s?\b/i.test(t)) return "guardian_identity";
-    if (/\b(child|student|pupil)\b/i.test(t)) return "child_identity";
+    const party = sectionParty(t);
+    if (party === "guardian") return "guardian_identity";
+    if (party === "emergency_contact") return "emergency_contact";
+    if (party === "child") return "child_identity";
     return null;
+}
+
+/**
+ * WHOSE LINE THIS IS, FROM THE SECTION IT SITS UNDER — through the canonical relationship definitions.
+ *
+ * A heading names a relationship ("Emergency Contact", "Authorized Pick-Up", "Child's Physician") and
+ * every bare line beneath it — "Name", "Phone", "Email" — belongs to THAT person. The definitions own
+ * detection (and its priority, so "Emergency Contact (other than parent)" is not the guardian's), so
+ * no label list here can drift from what Forms and Discovery recognise.
+ *
+ *   guardian            the parents/guardians definition
+ *   emergency_contact   the emergency-contacts definition
+ *   related_person      any other relationship (pick-up, physician, dentist, …)
+ *   child               a child/student heading
+ */
+export type SectionParty = "guardian" | "emergency_contact" | "related_person" | "child";
+
+export function sectionParty(sectionTitle: string): SectionParty | null {
+    const t = sectionTitle.trim();
+    if (!t) return null;
+    const def = detectRelationshipDefinitionForTitle(t);
+    if (def) {
+        if (def.operational_role_key === "guardian") return "guardian";
+        if (def.operational_role_key === "emergency_contact") return "emergency_contact";
+        return "related_person";
+    }
+    if (/\b(child|student|pupil)\b/i.test(t)) return "child";
+    return null;
+}
+
+/** A line that names its own person ("Parent phone", "Doctor's email") does not borrow one from its section. */
+const LABEL_NAMES_A_PARTY_RE =
+    /\b(parent|guardian|mother|father|caregiver|child|student|pupil|emergency|pick\s*-?\s*up|authorized|physician|pediatrician|doctor|dentist|dental)\b/i;
+
+/** A contact or name line with no person of its own: its owner is whoever the section says. */
+const PARTYLESS_CONTACT_RE = /\b(phone|telephone|mobile|cell|e-?mail|address|name)\b/i;
+
+/**
+ * A bare contact line ("Phone") whose owner nothing names — not the label, not a canonical section.
+ * Such a line is AMBIGUOUS: it may be offered as a suggestion, never applied as a person's fact.
+ */
+export function contactLineHasNoParty(label: string, sectionTitle = ""): boolean {
+    const text = label.trim();
+    if (!PARTYLESS_CONTACT_RE.test(text) || LABEL_NAMES_A_PARTY_RE.test(text)) return false;
+    return sectionParty(sectionTitle) === null;
 }
 
 export function inferQuestionIntent(label: string, sectionTitle = ""): QuestionIntent {
@@ -174,6 +221,13 @@ export function inferQuestionIntent(label: string, sectionTitle = ""): QuestionI
     if (BARE_NAME_LABEL_RE.test(text)) {
         const fromSection = sectionIdentityIntent(sectionTitle);
         if (fromSection) return fromSection;
+    }
+    // A bare contact line under another person's heading is THAT person's — never the guardian's.
+    if (PARTYLESS_CONTACT_RE.test(text) && !LABEL_NAMES_A_PARTY_RE.test(text) && !/\bcarrier\b/i.test(text)) {
+        const party = sectionParty(sectionTitle);
+        if (party === "emergency_contact") return "emergency_contact";
+        // Pick-up, physician, dentist: a relationship collection owns these people; no scalar is theirs.
+        if (party === "related_person") return "generic";
     }
     if (/\b(signature|sign\s*here|e-?sign)\b/i.test(text)) return "signature";
     if (/\b(child|student|pupil)('?s)?\s*name\b|\bname\s*of\s*(child|student)\b/i.test(text)) return "child_identity";
@@ -263,6 +317,15 @@ export function deriveFieldSources(input: {
 }): FormFieldSource | undefined {
     if (input.subject === "processing_only") return undefined;
 
+    // An emergency contact is a different person from the guardian, reached through the
+    // `emergency_contacts` relationship collection. No scalar destination is theirs — not a picked
+    // catalog entry, not a suggestion — so nothing below may answer for them: binding the line to a
+    // guardian field wrote the contact's phone over the parent's. Discovery's collection proposal, or
+    // the operator, decides.
+    if (input.intent === "emergency_contact" || input.subject === "other_adult") {
+        return undefined;
+    }
+
     if (input.destinationFieldId) {
         const selected = reviewFieldOptionById(input.destinationFieldId);
         if (selected) return selected.fieldSource;
@@ -296,14 +359,6 @@ export function deriveFieldSources(input: {
             return registrySource("guardian", "guardian_first_name", "guardian_first_name");
         }
         return registrySource("guardian", "guardian_first_name", "guardian_first_name");
-    }
-
-    // An emergency contact is a different person from the guardian, reached through the
-    // `emergency_contacts` relationship collection. Binding the line to the guardian's first name
-    // wrote the contact's name over the parent's. There is no scalar destination for it: discovery's
-    // collection proposal, or the operator, decides.
-    if (input.intent === "emergency_contact" || input.subject === "other_adult") {
-        return undefined;
     }
 
     if (input.intent === "health" || input.subject === "enrollment") {

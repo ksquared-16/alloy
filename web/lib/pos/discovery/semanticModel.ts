@@ -13,7 +13,11 @@
 
 import type { DocumentStructureCandidate } from "@/lib/pos/processingCase/structure/types";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
-import { relationshipDetectionPattern } from "@/lib/fields/relationship/relationshipDefinitions";
+import {
+    detectRelationshipDefinitionForTitle,
+    relationshipDetectionPattern,
+    type RelationshipDefinition,
+} from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     DISCOVERY_CONTRACT_VERSION,
     type SemanticBlockRole,
@@ -107,9 +111,85 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
         };
     });
 
+    const warnings = [...structure.warnings];
     return {
         contract_version: DISCOVERY_CONTRACT_VERSION,
-        sections,
-        warnings: [...structure.warnings],
+        sections: separateLabelNamedRelationships(sections, warnings),
+        warnings,
     };
+}
+
+/** A label that asks for something ABOUT a person, so a relationship word in it names whose. */
+const PERSON_ATTRIBUTE_RE = /\b(names?|phones?|telephones?|mobile|cell|e-?mails?|address(es)?|relationship)\b/i;
+/** A contact line that names no one ("Phone", "Email", "Name"). */
+const PARTYLESS_LINE_RE = /^\s*(full\s+|first\s+|last\s+)?(name|phone|telephone|mobile|cell|e-?mail|address)( number)?\s*:?\s*$/i;
+
+/**
+ * RELATIONSHIPS ON A DOCUMENT READ AS ONE SECTION.
+ *
+ * Relationship discovery groups people by the SECTION heading ("Emergency Contacts"). A PDF whose
+ * extraction yields a single generic section ("Form fields", "Detected fields") has no such heading,
+ * so every emergency contact, pick-up and physician line was read as a loose scalar and no
+ * relationship was proposed — with no warning.
+ *
+ * A line can still name its own relationship ("Emergency Contact Phone", "Physician Name"). Such
+ * lines are moved into a derived section titled by the CANONICAL definition, so the definition-
+ * driven discovery downstream proposes the relationship exactly as it would for a real heading.
+ * Guardian lines stay where they are (they bind to the guardian's own facts). A line that names no
+ * one ("Phone") is never assigned to anyone here: it stays put, and the document carries a warning
+ * that it needs a person to decide.
+ */
+export function separateLabelNamedRelationships(sections: SemanticSection[], warnings: string[]): SemanticSection[] {
+    const out: SemanticSection[] = [];
+    for (const section of sections) {
+        if (section.disposition !== "fields" || section.output_copy || detectRelationshipDefinitionForTitle(section.title)) {
+            out.push(section);
+            continue;
+        }
+        const byDefinition = new Map<string, { def: RelationshipDefinition; fields: SemanticField[] }>();
+        const kept: SemanticField[] = [];
+        for (const f of section.fields) {
+            const def = !f.repeat_group_id && PERSON_ATTRIBUTE_RE.test(f.label) ? detectRelationshipDefinitionForTitle(f.label) : undefined;
+            if (def && def.operational_role_key !== "guardian") {
+                const entry = byDefinition.get(def.definition_key) ?? { def, fields: [] };
+                entry.fields.push(f);
+                byDefinition.set(def.definition_key, entry);
+            } else {
+                kept.push(f);
+            }
+        }
+        if (byDefinition.size === 0) {
+            out.push(section);
+        } else {
+            out.push({ ...section, fields: kept });
+            for (const { def, fields } of byDefinition.values()) {
+                // The derived heading must be one the definition itself recognises, or downstream
+                // classification would not see the relationship it names ("Physicians" is not matched by
+                // the word-bounded "physician" pattern; the line that named it always is).
+                const title = detectRelationshipDefinitionForTitle(def.label)?.definition_key === def.definition_key ? def.label : fields[0]!.label;
+                out.push({
+                    section_key: `${section.section_key}__${def.definition_key}`,
+                    title,
+                    page: section.page,
+                    disposition: "fields",
+                    repeated_person: true,
+                    output_copy: false,
+                    static_text: null,
+                    fields,
+                });
+            }
+            warnings.push(
+                `"${section.title || "Untitled section"}" was read without separate headings for other people; ` +
+                    `${[...byDefinition.values()].map((v) => v.def.label).join(", ")} were identified from their own labels.`,
+            );
+        }
+        const partyless = kept.filter((f) => PARTYLESS_LINE_RE.test(f.label));
+        if (partyless.length > 0 && !detectRelationshipDefinitionForTitle(section.title)) {
+            warnings.push(
+                `"${section.title || "Untitled section"}" has lines that name no person (${[...new Set(partyless.map((f) => f.label.trim()))].join(", ")}); ` +
+                    "Alloy could not tell whose they are, so they are left for review rather than assigned to a parent.",
+            );
+        }
+    }
+    return out;
 }

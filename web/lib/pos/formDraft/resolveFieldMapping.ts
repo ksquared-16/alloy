@@ -28,6 +28,7 @@ import type { DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
 import { matchCanonicalDestination } from "./canonicalImportMatch";
 import {
     classifyReviewQuestionMapping,
+    contactLineHasNoParty,
     defaultSubjectForIntent,
     deriveFieldSources,
     deriveResolutionStatus,
@@ -215,7 +216,13 @@ export function resolveFieldMapping(
         };
     }
 
-    if (SETTLED.has(status)) {
+    /*
+     * A bare "Phone" whose owner nothing names — not the label, not a canonical section heading — is
+     * ambiguous: on a one-section document it is as likely the emergency contact's as the parent's.
+     * It is offered as a suggestion for a person to confirm, never applied as the guardian's fact.
+     */
+    const ambiguousOwner = intent === "contact_info" && contactLineHasNoParty(seeded.evidenceLabel || seeded.displayLabel, sectionTitle);
+    if (SETTLED.has(status) && !ambiguousOwner) {
         return {
             state: "mapped",
             destinationLabel: label,

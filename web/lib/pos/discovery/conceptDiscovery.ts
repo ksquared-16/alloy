@@ -139,6 +139,19 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
             attribute,
         };
     }
+    // A bare "Phone" / "Email" / "Address" under another person's heading is THAT person's. The
+    // section's definition-derived role names the party; it is never the generic person's phone, which
+    // binds to the guardian.
+    if (!party && attribute && attribute !== "name" && attribute !== "date_of_birth" && ctx.role && ctx.role !== "guardian") {
+        return {
+            subject: "person",
+            concept_key: `${ctx.role}.${attribute}`,
+            band: "review",
+            signals: [`no party in the label; the section names the ${ctx.role.replace(/_/g, " ")}`],
+            party: (ctx.role === "authorized_pickup" ? "emergency_contact" : ctx.role) as import("./bindingSafety").ConceptParty,
+            attribute,
+        };
+    }
     if (/\b(date of birth|birth\s*date|birthdate|d\.?o\.?b)\b/.test(l)) return { subject: "child", concept_key: "child.date_of_birth", band: "high", signals: sig("label matches date-of-birth") };
     if (/\bemail\b/.test(l)) return { subject: "person", concept_key: "person.email", band: "high", signals: sig("label matches email") };
     if (/\b(phone|telephone|mobile|cell|contact number)\b/.test(l)) return { subject: "person", concept_key: "person.phone", band: "high", signals: sig("label matches phone") };
