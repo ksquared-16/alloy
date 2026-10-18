@@ -28,6 +28,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { previewParticipantPacketLaunch } from "@/lib/enrollment/participantLaunch/previewParticipantPacketLaunch";
 import { startEnrollment } from "@/lib/records/startEnrollmentService";
+import { RecordCreationError } from "@/lib/records/recordCreationErrors";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,12 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (e) {
+        // A refusal the Enrollment authority classified (e.g. child_not_admitted_to_enrollment) keeps its
+        // code and status — nothing was written.
+        if (e instanceof RecordCreationError && e.code !== "db_error") {
+            const code = typeof e.details?.code === "string" ? e.details.code : e.code;
+            return NextResponse.json({ error: e.message, code }, { status: e.code === "not_found" ? 404 : 409 });
+        }
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "The enrollment packet could not be sent." },
             { status: 500 },

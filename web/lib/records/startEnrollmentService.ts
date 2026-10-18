@@ -42,7 +42,7 @@ import {
     ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
 } from "@/lib/process/processInstances";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
-import { ENROLLING_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { ENROLLING_CHILD_STATUS_KEY, isReusableActiveParticipationStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
 import { RecordCreationError } from "@/lib/records/recordCreationErrors";
 import {
@@ -129,6 +129,40 @@ export async function startEnrollment(
         ? { context: null }
         : await resolveLiveEnrollmentContextForHousehold(supabase, orgId, customerId);
     const opportunityId = resolved.context?.opportunityId ?? null;
+
+    /*
+     * NO SECOND, COMPETING PARTICIPATION FOR A CHILD STILL IN ADMISSIONS.
+     *
+     * Measured on staging (ZZQA1496Q): paperwork launched directly for a brand-new lead's child found no
+     * live episode, so it created a context-free `enrolling` participation and journey BESIDE the child's
+     * open `new_inquiry` participation on the family's opportunity — two answers to "where is this child?",
+     * and a journey the Registration view never shows. The screen only offers the launch after its
+     * preview passes; the server now refuses the same thing for every caller (the packet-launch route and
+     * the enrollment.start action alike, with or without force_context_free), before anything is written.
+     * The child reaches Enrollment through the offer (accept → the child's own enrolling track), which
+     * this check never blocks: that track is a live episode, and its participation is `enrolling`.
+     */
+    if (!resolved.context) {
+        const { data: open, error: openError } = await supabase
+            .from("opportunity_customer_members")
+            .select("id, opportunity_id, outcome_status_key")
+            .eq("org_id", orgId)
+            .eq("customer_member_id", customerMemberId);
+        if (openError) throw new RecordCreationError("db_error", openError.message);
+        const inAdmissions = ((open ?? []) as Array<{ opportunity_id: string | null; outcome_status_key: string | null }>).find(
+            (r) =>
+                r.opportunity_id !== null &&
+                isReusableActiveParticipationStatus(r.outcome_status_key) &&
+                String(r.outcome_status_key ?? "").trim() !== ENROLLING_CHILD_STATUS_KEY,
+        );
+        if (inAdmissions) {
+            throw new RecordCreationError(
+                "invalid_state",
+                "This child is still in admissions. Accept their offer first — Enrollment starts from there.",
+                { code: "child_not_admitted_to_enrollment", opportunity_id: inAdmissions.opportunity_id, status_key: inAdmissions.outcome_status_key },
+            );
+        }
+    }
 
     /*
      * THE ENROLLMENT PARTICIPATION IS ESTABLISHED HERE, NOT AT COMPLETION.
