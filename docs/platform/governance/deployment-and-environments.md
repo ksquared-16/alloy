@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-10-18
 supersedes: []
 ---
 
@@ -18,6 +18,30 @@ supersedes: []
 | **Local** | Developer machine + local or linked Supabase |
 | **Staging** | Pre-production validation — schema exports reflect staging when regenerated |
 | **Production** | Customer-facing — apply migrations only after staging verification |
+
+### Environment identity (verified 2026-10-18)
+
+Each environment is a **separate Supabase project**. Identify an environment by
+its project ref, never by a label — tooling vocabulary has called the staging
+database "production" and "the deployed primary", and both were wrong.
+
+| Identity (Vacilando) | Supabase project | Host | Evidence |
+|---|---|---|---|
+| `ALLOY_STAGING` | `ikaxilmwmrmbagoidedu` | staging.workwithalloy.com (Vercel preview build of `staging`) | `/api/build-info` `supabaseProjectRef` |
+| `ALLOY_PRODUCTION` | `vslwnntzzgpnmrpjipat` | www.workwithalloy.com (production build of `main`) | Supabase URL in the live login bundle |
+| `ALLOY_LOCAL_CERTIFICATION` | local `alloy-cert` stack (127.0.0.1:54422) | — | `certification/supabase/config.toml` |
+
+- Every Vacilando governed database action against Alloy — census, migration
+  parity, `database.apply_migration`, `database.apply_promoted_migration` (the
+  "promoted"/"production" apply), ledger repair — and deployed QA-session
+  restore targets **`ALLOY_STAGING`**. Vacilando's legacy identifier for it,
+  `alloy_deployed_primary`, is a compatibility alias for the staging project.
+- **Production is not reachable from Vacilando**: no target, alias or
+  credential names `vslwnntzzgpnmrpjipat`. Production migrations are outside
+  Vacilando's governed actions.
+- Lanes share the staging database with the deployed staging site; a lane's QA
+  is therefore not isolated from other lanes. Pre-merge isolation is the local
+  certification stack.
 
 ---
 

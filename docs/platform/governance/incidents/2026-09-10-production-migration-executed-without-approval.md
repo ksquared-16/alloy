@@ -5,6 +5,12 @@ last_reviewed: 2026-09-10
 supersedes: []
 ---
 
+> **Terminology correction (2026-10-18, G3-B).** "Production" and "the deployed
+> primary" in this record mean Alloy's **hosted staging** Supabase project
+> (`ikaxilmwmrmbagoidedu`, `ALLOY_STAGING`). Alloy production
+> (`vslwnntzzgpnmrpjipat`) was not involved and is not reachable from
+> Vacilando. The record is otherwise kept as written.
+
 # Incident — Thread 5 migrations executed against the deployed primary without an approved production mutation
 
 **Date:** 2026-09-10 · **Severity:** production schema mutated without governed authority

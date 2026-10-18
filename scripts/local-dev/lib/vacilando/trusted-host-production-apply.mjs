@@ -94,6 +94,13 @@ export const PRODUCTION_CREDENTIAL_BINDING = Object.freeze({
 });
 
 /**
+ * TERMINOLOGY CORRECTION (2026-10-18, G3-B): this "production" project ref is
+ * Alloy's hosted STAGING project (ALLOY_STAGING; staging.workwithalloy.com
+ * reports it). Alloy production is vslwnntzzgpnmrpjipat and nothing here
+ * reaches it. This file is the historical in-repo copy; the running toolkit is
+ * Vacilando's, where the constant is ALLOY_STAGING_PROJECT_REF (with this name
+ * kept as a compatibility alias).
+ *
  * THE REGISTERED PRODUCTION PROJECT, REVIEWED IN THIS REPOSITORY.
  *
  * A Supabase project ref is public — the browser sends it on every API call —
