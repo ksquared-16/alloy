@@ -137,6 +137,8 @@ export async function executeRelationshipProposalCommit(args: {
     selectedPersonId?: string | null;
     /** The operator's corrections to the submitted person (name, phone, email) — reviewed, not inferred. */
     personCorrections?: { first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null } | null;
+    /** The operator confirmed a different person from the same-name person already in this family. */
+    confirmNewPerson?: boolean;
     selectedCustomerMemberIds?: readonly string[] | null;
     /**
      * Household children loaded server-side. Optional: when omitted they are taken from the RESOLVED
@@ -390,7 +392,7 @@ export async function executeRelationshipProposalCommit(args: {
                     ...(args.selectedPersonId
                         ? { selectedPersonId: args.selectedPersonId }
                         : resolved.existingPersonId ? { selectedPersonId: resolved.existingPersonId } : {}),
-                    ...(draft && !args.selectedPersonId ? { createPersonDraft: draft } : {}),
+                    ...(draft && !args.selectedPersonId ? { createPersonDraft: args.confirmNewPerson ? { ...draft, confirmed_new_person: true } : draft } : {}),
                     confirmationRequired: true,
                 },
             },

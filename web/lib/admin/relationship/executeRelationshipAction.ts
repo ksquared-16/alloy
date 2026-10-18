@@ -39,6 +39,7 @@ import {
 } from "@/lib/admin/relationship/relationshipActionRoleResolution";
 import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
 import { linkHouseholdGuardianAtomically, RelationshipActionError } from "@/lib/admin/relationship/guardianLinkTransaction";
+import { decideRelationshipIdentity, findRelationshipIdentityCandidates, identityChoiceRequired } from "@/lib/admin/relationship/relationshipIdentity";
 import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 import {
     resolveRelationshipScopeMemberIds,
@@ -105,6 +106,7 @@ async function loadHouseholdChildren(
 async function resolvePersonId(
     supabase: SupabaseClient,
     orgId: string,
+    customerId: string,
     input: ExecuteRelationshipActionInput,
 ): Promise<string> {
     const existing = trim(input.selectedPersonId);
@@ -129,6 +131,12 @@ async function resolvePersonId(
         phone: draft.phone ?? null,
     });
     if (validationError) throw new Error(validationError);
+
+    // One identity rule (relationshipIdentity): reuse only this household's own same-name person; an
+    // ambiguous match — another family's email/phone, or a same-name household member — is the operator's choice.
+    const decision = decideRelationshipIdentity(await findRelationshipIdentityCandidates(supabase, { orgId, customerId, draft }), draft);
+    if (decision.kind === "choose") throw identityChoiceRequired(decision.candidates);
+    if (decision.kind === "reuse") return decision.personId;
 
     const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
         org_id: orgId,
@@ -398,6 +406,13 @@ export async function executeRelationshipAction(
                 phone: input.createPersonDraft.phone ?? null,
             });
             if (validationError) throw new RelationshipActionError("relationship_identity_insufficient", validationError);
+            // The transaction decides email/phone matches under its lock; a same-name household member with
+            // different contact details is asked about here, never silently duplicated.
+            const decision = decideRelationshipIdentity(
+                await findRelationshipIdentityCandidates(supabase, { orgId, customerId, draft: input.createPersonDraft }),
+                input.createPersonDraft,
+            );
+            if (decision.kind === "choose") throw identityChoiceRequired(decision.candidates);
         }
         const linked = await linkHouseholdGuardianAtomically(supabase, {
             orgId,
@@ -414,7 +429,7 @@ export async function executeRelationshipAction(
         affectedPreview.push({ label: "Household adult role", table: "customer_persons" });
         affectedPreview.push({ label: "Child-scoped contact links", table: "customer_member_contacts", record_ids: memberIds });
     } else {
-        personId = await resolvePersonId(supabase, orgId, input);
+        personId = await resolvePersonId(supabase, orgId, customerId, input);
         contactId = await ensureContactForPerson(supabase, { orgId, customerId, personId });
 
         if (entry.writeTargets.includes("customer_persons") && roleKey) {

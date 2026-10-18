@@ -364,20 +364,32 @@ export async function resolveChargeDetail(
         customerId = charge.billable_source_id;
     }
 
+    /*
+     * The child a household-billed charge is FOR (the registration fee records it as
+     * metadata.subject_customer_member_id) is shown by name only. It never becomes customerMemberId:
+     * that id selects the child's own payment arrangement below, and a label must not move money.
+     */
+    const subjectValue = charge.billable_source_type === "customer" ? charge.metadata?.subject_customer_member_id : null;
+    const labelMemberId = customerMemberId ?? (typeof subjectValue === "string" && subjectValue.trim() ? subjectValue.trim() : null);
+
     const [householdName, childName] = await Promise.all([
         (async () => {
             if (!customerId) return null;
-            const { data } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+            const { data } = await supabase.from("customers").select("name").eq("org_id", args.orgId).eq("id", customerId).maybeSingle();
             return (data as unknown as { name: string | null } | null)?.name ?? null;
         })(),
         (async () => {
-            if (!customerMemberId) return null;
+            if (!labelMemberId) return null;
             const { data } = await supabase
                 .from("customer_members")
-                .select("display_name")
-                .eq("id", customerMemberId)
+                .select("display_name, customer_id")
+                .eq("org_id", args.orgId)
+                .eq("id", labelMemberId)
                 .maybeSingle();
-            return (data as unknown as { display_name: string | null } | null)?.display_name ?? null;
+            const member = data as unknown as { display_name: string | null; customer_id: string | null } | null;
+            // The named child must belong to the household the charge is billed to.
+            if (!member || (customerId && member.customer_id !== customerId)) return null;
+            return member.display_name ?? null;
         })(),
     ]);
 

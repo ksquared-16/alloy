@@ -485,6 +485,31 @@ export class ProvisioningRuntime {
         if (c) c.invalidated = true;
     }
 
+    /**
+     * Truth moved for a whole DESTINATION (a lifecycle outcome changes which rows a work view holds) —
+     * every completed snapshot of that work view is unusable, whatever its subject: the lens answer
+     * and every prewarmed neighbour, not just the record the operator acted on.
+     *
+     * Measured on staging (716053f5): after "Offer accepted", the subject re-prepare answered
+     * subject_unavailable and the lens fallback REUSED the lens snapshot from before the outcome — the
+     * accepted child stayed in Offers, still "Offered", with Record outcome live, until a reload.
+     * Speculative warms already in flight for the destination answer for the old truth too, so they are
+     * disposed rather than joined. Explicit (operator) preparations are left alone.
+     */
+    invalidateDestination(ref: AttentionRef): void {
+        const target = JSON.parse(provisioningKey({ ...ref, subject: null })) as Record<string, unknown>;
+        const sameDestination = (key: string) => {
+            try {
+                const k = JSON.parse(key) as Record<string, unknown>;
+                return k.workUnit === target.workUnit && k.workView === target.workView && k.principal === target.principal && k.tenant === target.tenant;
+            } catch {
+                return false;
+            }
+        };
+        for (const [key, c] of this.completed) if (sameDestination(key)) c.invalidated = true;
+        for (const f of this.inflight.values()) if (f.speculative && !f.disposed && sameDestination(f.key)) this.dispose(f, "cancelled");
+    }
+
     /** Retention boundary: a tenant/principal change FLUSHES. A context never crosses a tenant. */
     flushForPrincipalChange(): void {
         for (const f of this.inflight.values()) if (!f.disposed) this.dispose(f, "cancelled");

@@ -262,3 +262,39 @@ describe("Direct Enroll refuses to produce an operationally unusable child", () 
         expect(readiness.resolvedSchedulePatternId).toBe("pattern-full-day");
     });
 });
+
+describe("a child still in admissions cannot be started past the offer (staging ZZQA1496Q)", () => {
+    const LEAD_OPP = "opp-new-lead";
+    const LEAD_UNIT = "unit-new-lead";
+    const newLead = (status: string) =>
+        mock({
+            work_units: [{ id: LEAD_UNIT, org_id: ORG_ID, is_active: true }],
+            opportunities: [{ id: LEAD_OPP, org_id: ORG_ID, customer_id: HOUSEHOLD, work_unit_id: LEAD_UNIT }],
+            opportunity_customer_members: [
+                { id: "ocm-a", org_id: ORG_ID, opportunity_id: LEAD_OPP, customer_member_id: CHILD_A, outcome_status_key: status },
+            ],
+        });
+
+    it.each(["new_inquiry", "waitlisted"])("a %s child is refused before anything is written — no second participation, no stageless journey", async (status) => {
+        const m = newLead(status);
+        const err = await startEnrollment(m.supabase, { orgId: ORG_ID, customerMemberId: CHILD_A }).catch((e) => e);
+        expect(err?.details?.code).toBe("child_not_admitted_to_enrollment");
+        expect(m.writes).toEqual([]);
+    });
+
+    it("force_context_free does not get around it", async () => {
+        const m = newLead("new_inquiry");
+        const err = await startEnrollment(m.supabase, { orgId: ORG_ID, customerMemberId: CHILD_A, forceContextFree: true }).catch((e) => e);
+        expect(err?.details?.code).toBe("child_not_admitted_to_enrollment");
+        expect(m.writes).toEqual([]);
+    });
+
+    it("a child whose earlier episode concluded (enrolled) is not refused — the start proceeds to its participation", async () => {
+        // (This mock cannot complete the journey insert — the same limit the sibling tests above meet on the
+        // base — so the assertion is the guard's: no refusal, and the participation write happened.)
+        const m = newLead("enrolled");
+        const err = await startEnrollment(m.supabase, { orgId: ORG_ID, customerMemberId: CHILD_A }).catch((e) => e);
+        expect(err?.details?.code).not.toBe("child_not_admitted_to_enrollment");
+        expect(m.writes.some((w) => w.table === "opportunity_customer_members")).toBe(true);
+    });
+});

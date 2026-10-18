@@ -88,6 +88,8 @@ export type RelationshipActionCreatePersonDraft = {
     last_name: string;
     email?: string;
     phone?: string;
+    /** The operator confirmed a different person from a same-name household member (relationshipIdentity). */
+    confirmed_new_person?: boolean;
 };
 
 export type RelationshipActionCreateChildDraft = {

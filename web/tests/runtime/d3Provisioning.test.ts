@@ -270,6 +270,47 @@ describe("D3 — K2 Provisioning Runtime", () => {
         expect(onReused).toHaveBeenCalledTimes(1);
     });
 
+    it("16b. an outcome invalidates the WHOLE work view — the lens answer and prewarmed neighbours, not just the acted-on subject", async () => {
+        // Staging (716053f5): after "Offer accepted" the subject re-prepare answered subject_unavailable and
+        // the lens fallback REUSED the pre-outcome lens snapshot — the accepted child stayed in Offers.
+        let rows = ["pi-a", "pi-b"];
+        const entry = vi.fn<EntryResource>((ref) => {
+            const a = answer("operational") as unknown as Record<string, unknown>;
+            a.rows = rows.map((id) => ({ id, stageKey: "offered", statusKey: "open", updatedAt: null, title: id }));
+            a.recordOfAttention = { id: ref.subject ?? rows[0], strategy: "requested", strategySource: "attention" };
+            return Promise.resolve(a as unknown as ProvisioningAnswer);
+        });
+        const k2 = runtimeWith(entry);
+        const o = owner("offers_view");
+        const lensRef = refAt(o);
+        await k2.prepare(lensRef);
+        const neighbour = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "pi-b", source: "subject_selection" });
+        await k2.prepare(neighbour, { speculative: true });
+        const acted = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "pi-a", source: "subject_selection" });
+        await k2.prepare(acted);
+        expect(entry).toHaveBeenCalledTimes(3);
+
+        rows = ["pi-b"]; // the outcome moved pi-a out of Offers
+        k2.invalidateDestination(acted);
+
+        const lensAgain = o.move({ scope: ATTENTION_SCOPE.LENS, lens: "offers_view", source: "command" });
+        const t = await k2.prepare(lensAgain);
+        expect(entry).toHaveBeenCalledTimes(4); // refetched, not the pre-outcome snapshot
+        expect(t?.snapshot.terminal === "operational" && t.snapshot.rows.map((r) => r.id)).toEqual(["pi-b"]);
+        await k2.prepare(o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "pi-b", source: "subject_selection" }));
+        expect(entry).toHaveBeenCalledTimes(5); // the prewarmed neighbour is not reused either
+    });
+
+    it("16c. destination invalidation never reaches another work view or another principal", async () => {
+        const entry = vi.fn(resolves());
+        const k2 = runtimeWith(entry);
+        const other = refAt(owner("registration_view"));
+        await k2.prepare(other);
+        k2.invalidateDestination(refAt(owner("offers_view")));
+        await k2.prepare(other);
+        expect(entry).toHaveBeenCalledTimes(1);
+    });
+
     it("18. the Queue Lane failure is unreachable from K2", () => {
         const src = require("fs").readFileSync(
             require("path").join(__dirname, "../../lib/runtime/kernel/provisioning.ts"), "utf8",

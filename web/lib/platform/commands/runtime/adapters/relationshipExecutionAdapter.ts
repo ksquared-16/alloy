@@ -145,6 +145,7 @@ function readCreatePersonDraft(
         last_name: last,
         email: asString(draft.email) || undefined,
         phone: asString(draft.phone) || undefined,
+        ...(draft.confirmed_new_person === true ? { confirmed_new_person: true } : {}),
     };
 }
 

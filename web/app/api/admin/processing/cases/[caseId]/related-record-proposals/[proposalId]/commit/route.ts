@@ -36,6 +36,8 @@ type Body = {
     selected_person_id?: string;
     /** The operator's corrections to the submitted person before it is created. */
     person_corrections?: unknown;
+    /** The operator confirmed the submitted person is NOT the same-name person already in this family. */
+    confirm_new_person?: boolean;
     /** Explicit selection for selected-children scope — every id is validated. */
     selected_customer_member_ids?: unknown[];
 };
@@ -197,6 +199,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 personCorrections: body.person_corrections && typeof body.person_corrections === "object" && !Array.isArray(body.person_corrections)
                     ? (body.person_corrections as { first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null })
                     : null,
+                confirmNewPerson: body.confirm_new_person === true,
                 selectedCustomerMemberIds: Array.isArray(body.selected_customer_member_ids)
                     ? body.selected_customer_member_ids.filter((x): x is string => typeof x === "string")
                     : null,
