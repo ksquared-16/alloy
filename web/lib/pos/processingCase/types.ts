@@ -25,7 +25,9 @@ export type ProcessingCaseSourceKind =
     | "email_attachment"
     | "import"
     | "recreated_document"
-    | "create_lead";
+    | "create_lead"
+    /** A family's statement about a new child, from the family view (processing_participant_child_requests). */
+    | "participant_child_request";
 
 export type ProcessingCaseSourceRole = "primary" | "related";
 

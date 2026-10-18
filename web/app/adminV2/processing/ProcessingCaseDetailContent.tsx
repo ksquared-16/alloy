@@ -49,6 +49,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
     email_attachment: "Email",
     import: "Import",
     recreated_document: "Recreated",
+    participant_child_request: "Family request",
 };
 
 const RECORD_TYPE_LABELS: Record<string, string> = {

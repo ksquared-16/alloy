@@ -240,6 +240,7 @@ function NewChildCommitBlock({ instance, caseId, onCommitted }: { instance: Proc
     const [done, setDone] = useState<string | null>(null);
     const [candidates, setCandidates] = useState<IdentityCandidate[] | null>(null);
     const [reason, setReason] = useState("");
+    const [rejectReason, setRejectReason] = useState("");
 
     const send = async (extra: Record<string, unknown>) => {
         setBusy(true);
@@ -265,6 +266,27 @@ function NewChildCommitBlock({ instance, caseId, onCommitted }: { instance: Proc
             }
             setCandidates(null);
             setDone(json.data?.alreadyDone ? "Already committed" : json.data?.identity_outcome === "already_in_household" ? "Linked to the existing child" : "Child created");
+            onCommitted?.();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const reject = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/related-record-proposals/${encodeURIComponent(instance.proposal_id)}/reject`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reason: rejectReason || null }),
+            });
+            const json = (await res.json()) as { error?: string };
+            if (!res.ok) {
+                setError(json.error ?? "The proposal could not be rejected.");
+                return;
+            }
+            setDone("Rejected — no child was created");
             onCommitted?.();
         } finally {
             setBusy(false);
@@ -301,9 +323,15 @@ function NewChildCommitBlock({ instance, caseId, onCommitted }: { instance: Proc
                     </div>
                 </div>
             ) : (
-                <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy || !first.trim() || !last.trim()} onClick={() => void send({})} data-testid="new-child-commit-create">
-                    {busy ? "Creating..." : "Create child"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy || !first.trim() || !last.trim()} onClick={() => void send({})} data-testid="new-child-commit-create">
+                        {busy ? "Working..." : "Create child"}
+                    </button>
+                    <input aria-label="Reason to reject" placeholder="Reason (optional)" className="min-w-[10rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} data-testid="new-child-reject-reason" />
+                    <button type="button" className="rounded border border-stone-200 px-2 py-1 text-[11px] disabled:opacity-50" disabled={busy} onClick={() => void reject()} data-testid="new-child-reject">
+                        Reject
+                    </button>
+                </div>
             )}
             {error ? <p className="text-[11px] text-amber-800">{error}</p> : null}
         </div>

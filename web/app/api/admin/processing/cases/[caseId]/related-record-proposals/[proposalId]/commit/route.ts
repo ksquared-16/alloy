@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { executeNewChildProposalCommit } from "@/lib/pos/processingCase/commit/executeNewChildProposalCommit";
+import {
+    claimParticipantChildRequestForCommit,
+    isRejectedProposal,
+    releaseParticipantChildRequestClaim,
+    settleParticipantChildRequestAfterCommit,
+} from "@/lib/pos/processingCase/commit/participantChildRequestCommit";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
@@ -97,28 +103,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ) {
             const nc = (body.new_child && typeof body.new_child === "object" ? body.new_child : {}) as Record<string, unknown>;
             const str = (v: unknown) => (typeof v === "string" ? v : null);
-            const outcome = await executeNewChildProposalCommit({
-                supabase,
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-                caseId,
-                proposalId,
-                metadata,
-                choice: {
-                    firstName: str(nc.first_name),
-                    lastName: str(nc.last_name),
-                    dob: str(nc.dob),
-                    chosenCustomerMemberId: str(nc.chosen_customer_member_id),
-                    createNewChild: nc.create_new_child === true,
-                    createNewReason: str(nc.create_new_reason),
-                },
-            });
+            if (isRejectedProposal(metadata, proposalId)) {
+                return NextResponse.json({ error: "This proposal was rejected, so it cannot be committed.", code: "declined" }, { status: 409 });
+            }
+            // A family's own request: one commit at a time (atomic claim on the request row).
+            const request = proposalContext.participantChildRequest ?? null;
+            let claimed = false;
+            if (request) {
+                const claim = await claimParticipantChildRequestForCommit(supabase, { orgId: ctx.orgId, request, userId: ctx.userId });
+                if (!claim.ok) return NextResponse.json({ error: claim.error, code: claim.code }, { status: claim.status });
+                claimed = !("alreadyCommitted" in claim);
+            }
+            const release = async () => {
+                if (claimed && request) await releaseParticipantChildRequestClaim(supabase, { orgId: ctx.orgId, requestId: request.id });
+            };
+            let outcome: Awaited<ReturnType<typeof executeNewChildProposalCommit>>;
+            try {
+                outcome = await executeNewChildProposalCommit({
+                    supabase,
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    caseId,
+                    proposalId,
+                    metadata,
+                    choice: {
+                        firstName: str(nc.first_name),
+                        lastName: str(nc.last_name),
+                        dob: str(nc.dob),
+                        chosenCustomerMemberId: str(nc.chosen_customer_member_id),
+                        createNewChild: nc.create_new_child === true,
+                        createNewReason: str(nc.create_new_reason),
+                    },
+                });
+            } catch (e) {
+                await release();
+                throw e;
+            }
             if (!outcome.ok) {
+                await release();
                 return NextResponse.json(
                     { error: outcome.error, ...(outcome.candidates ? { candidates: outcome.candidates } : {}) },
                     { status: outcome.status },
                 );
             }
+            // The family's request records the one child it became, the case completes, and the
+            // family's Enrollment REQUEST is made (never an offer, Enrolling, packet or fee).
+            const recordId = (outcome.result as { record_id?: string | null }).record_id ?? null;
+            const settled = request && recordId
+                ? await settleParticipantChildRequestAfterCommit(supabase, { orgId: ctx.orgId, userId: ctx.userId, caseId, request, customerMemberId: recordId })
+                : null;
             return jsonData({
                 caseId,
                 proposalId,
@@ -126,6 +159,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 result: outcome.result,
                 identity_outcome: outcome.identity_outcome,
                 audit_event_id: outcome.audit_event_id,
+                participant_child_request: settled,
             });
         }
 

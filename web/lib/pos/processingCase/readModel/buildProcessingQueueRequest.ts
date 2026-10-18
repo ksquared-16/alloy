@@ -31,6 +31,7 @@ const SOURCE_KIND_VALUES: ProcessingCaseSourceKind[] = [
     "email_attachment",
     "import",
     "recreated_document",
+    "participant_child_request",
 ];
 const SORT_KEYS: ProcessingCaseQueueSortKey[] = ["created_at", "status_changed_at"];
 
