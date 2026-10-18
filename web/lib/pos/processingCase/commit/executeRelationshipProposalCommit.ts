@@ -220,9 +220,31 @@ export async function executeRelationshipProposalCommit(args: {
         };
     }
     const anchorCustomerId = household.customer_id;
+    /*
+     * THE CANDIDATES ARE THE CHILDREN OF THE HOUSEHOLD BEING WRITTEN TO.
+     *
+     * A packet case carries no identity resolution, so the household comes from the submission
+     * (rule 2 of resolveCommitHousehold). The resolved context then holds no children, and every anchor
+     * — even the child the paperwork is about — was "not found in the resolved household": no
+     * relationship from a submitted Enrollment packet could ever be committed. When the household is
+     * not the resolved one, its own active children are loaded, server-side; the anchor is still
+     * validated against them, and nothing is inferred.
+     */
+    let householdChildIds = household.context.customer_member_ids;
+    if (!args.householdChildren && household.context.customer_id !== anchorCustomerId) {
+        const { data: kids, error: kidsError } = await args.supabase
+            .from("customer_members")
+            .select("id")
+            .eq("org_id", args.orgId)
+            .eq("customer_id", anchorCustomerId)
+            .eq("relationship", "child")
+            .eq("is_active", true);
+        if (kidsError) throw new Error(kidsError.message);
+        householdChildIds = ((kids ?? []) as { id: string }[]).map((k) => k.id);
+    }
     const anchorCandidates: readonly AnchorCandidate[] =
         args.householdChildren ??
-        household.context.customer_member_ids.map((id) => ({
+        householdChildIds.map((id) => ({
             customer_member_id: id,
             customer_id: anchorCustomerId,
             org_id: args.orgId,
