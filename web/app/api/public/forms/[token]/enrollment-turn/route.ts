@@ -27,6 +27,11 @@ import {
 } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
+import {
+    changedSessionValues,
+    writeSettledAnswersIntoDrafts,
+    type DraftValueUpdates,
+} from "@/lib/enrollment/participantRuntime/settledAnswersIntoDrafts";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import type { StructuredCandidate } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
@@ -108,6 +113,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     };
 
     /**
+     * A NEWER ANSWER REPLACES THE OLDER ONE IN THE PAPERWORK TOO.
+     *
+     * Every write below settles values in the session. Whatever it CHANGED is written into this
+     * session's open drafts (only the destinations bound to the changed answers), and returned so the
+     * browser holding a draft takes the same values. Without it the draft's older answer outranked the
+     * conversation's newer one in review, the document, a reload and submission. A failure here never
+     * undoes the conversation's own write; it is logged and the draft is reconciled on the next change.
+     */
+    const sessionValuesBefore = ((current.context.needsContext.session as { shared_values?: Record<string, unknown> | null } | null)?.shared_values ?? {}) as Record<string, unknown>;
+    const syncDrafts = async (): Promise<DraftValueUpdates> => {
+        const sessionId = access.value.sessionId;
+        if (!sessionId) return {};
+        try {
+            const { data } = await supabase
+                .from("form_packet_sessions")
+                .select("shared_values")
+                .eq("org_id", access.value.orgId)
+                .eq("id", sessionId)
+                .maybeSingle();
+            const after = ((data as { shared_values?: Record<string, unknown> | null } | null)?.shared_values ?? {}) as Record<string, unknown>;
+            return await writeSettledAnswersIntoDrafts(supabase, {
+                orgId: access.value.orgId,
+                sessionId,
+                changed: changedSessionValues(sessionValuesBefore, after),
+            });
+        } catch (e) {
+            console.warn("[enrollment-turn] draft reconciliation", e instanceof Error ? e.message : e);
+            return {};
+        }
+    };
+
+    /**
      * A GROUPED CONFIRMATION — one gesture, N independent confirmations.
      *
      * The browser sends an intent and nothing else. Which facts the card held is re-derived here
@@ -123,8 +160,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             current: { objective: current.value, context: current.context },
         });
         if (!settled.ok) return publicErr(settled.refusal.detail, 409, { code: settled.refusal.code });
+        const groupDraftValues = await syncDrafts();
         const groupResponse = publicOk({
             outcome: settled.confirmed.length > 0 ? "confirm_value" : "no_change",
+            draft_values: groupDraftValues,
             // How many semantic facts this one gesture settled — the ask-once ratio of a group,
             // reported honestly, including when some members did not settle.
             confirmed_count: settled.confirmed.length,
@@ -159,8 +198,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!edited.ok) {
             return publicErr(edited.refusal.detail, 409, { code: edited.refusal.code });
         }
+        const editDraftValues = await syncDrafts();
         const editResponse = publicOk({
             outcome: "write_shared_value",
+            draft_values: editDraftValues,
             objective: participantObjectiveWireModel(edited.objective, {
                 subjectDisplayName: canonical.subjectDisplayName,
             }),
@@ -302,9 +343,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     timing.mark("write_recompute", writeStart);
     if (!applied.ok) return publicErr(applied.refusal.detail, 409, { code: applied.refusal.code });
 
+    // Any outcome that may have settled a value (a write, a confirmation of a value offered from a
+    // sibling, a decline) is reconciled; the diff decides whether anything actually moved.
+    const draftValues = ["refused", "no_change", "clarify"].includes(applied.disposition.action) ? {} : await syncDrafts();
     const response = publicOk({
         // A refusal is reported, not hidden: the participant is told plainly and asked again.
         outcome: applied.disposition.action,
+        draft_values: draftValues,
         ...(applied.disposition.action === "refused" ? { reason: applied.disposition.reason } : {}),
         // The provider's bounded clarifying question, presentation-only: shown as Alloy's next
         // line while the SAME deterministic turn and controls stand. It is not persisted, not a

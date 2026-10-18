@@ -1442,6 +1442,14 @@ export function FormEmbedClient({
                          */
                         onObjectiveAdvanced={setEnrollmentObjective}
                         artifactRenderable={artifactRenderable}
+                        onDraftValues={(updates) => {
+                            // The server replaced an older answer in this draft: hold the same values,
+                            // so review agrees and the next autosave cannot restore the old one.
+                            const mine = submissionId ? updates[submissionId] : undefined;
+                            if (!mine) return;
+                            setPayload((prev) => ({ ...prev, values: { ...((prev.values ?? {}) as Record<string, unknown>), ...mine } }));
+                            setResolvedArtifactValues((prev) => (prev ? { ...prev, ...mine } : prev));
+                        }}
                         onValueSettled={(fieldIds, value) => {
                             // Merge into the rendered artifact immediately. The session already
                             // holds this; the paperwork should not wait for a reload to agree.
