@@ -145,6 +145,8 @@ export async function rejectNewChildProposal(
         readonly metadata: Record<string, unknown>;
         readonly reason: string | null;
         readonly request: ParticipantChildRequestRow | null;
+        /** What is being rejected: a proposed new child, or a proposed relationship (guardian, contact…). */
+        readonly commitKind?: "new_child" | "relationship";
         readonly now?: string;
     },
 ): Promise<RejectNewChildProposalResult> {
@@ -152,6 +154,9 @@ export async function rejectNewChildProposal(
     const stored = processingProposalMetadata(input.metadata);
     if (stored.commit_results?.[input.proposalId]?.record_id || input.request?.status === "committed") {
         return { ok: false, status: 409, error: "This child has already been committed, so the proposal cannot be rejected." };
+    }
+    if (relationshipAlreadyApplied(input.metadata, input.proposalId)) {
+        return { ok: false, status: 409, error: "This relationship has already been committed, so the proposal cannot be rejected." };
     }
     const already = stored.decisions?.[input.proposalId]?.instance_decision === "reject";
 
@@ -169,7 +174,7 @@ export async function rejectNewChildProposal(
             metadata: input.metadata,
             proposalId: input.proposalId,
             decision: { proposal_id: input.proposalId, instance_decision: "reject", field_decisions: [] },
-            decisionVersion: "new_child",
+            decisionVersion: input.commitKind ?? "new_child",
             userId: input.userId,
             now,
         });
@@ -185,7 +190,7 @@ export async function rejectNewChildProposal(
             payload: {
                 processing_case_id: input.caseId,
                 proposal_id: input.proposalId,
-                commit_kind: "new_child",
+                commit_kind: input.commitKind ?? "new_child",
                 operator_id: input.userId,
                 reason: input.reason,
                 participant_child_request_id: input.request?.id ?? null,
@@ -205,4 +210,13 @@ export async function rejectNewChildProposal(
 /** A rejected proposal never commits. */
 export function isRejectedProposal(metadata: unknown, proposalId: string): boolean {
     return processingProposalMetadata(metadata).decisions?.[proposalId]?.instance_decision === "reject";
+}
+
+/** A relationship proposal the canonical relationship ledger already applied (any anchor, any revision). */
+export function relationshipAlreadyApplied(metadata: unknown, proposalId: string): boolean {
+    const ledger = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).relationship_collection_commits : null;
+    if (!ledger || typeof ledger !== "object") return false;
+    return Object.values(ledger as Record<string, { proposal_id?: string; outcome?: string }>).some(
+        (r) => r?.proposal_id === proposalId && (r.outcome === "applied" || r.outcome === "already_applied"),
+    );
 }

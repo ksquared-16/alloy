@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -14,6 +16,11 @@ import {
 export type RelatedRecordProposalCaseContext = {
     proposal: RelatedRecordInstanceProposal;
     expectedCustomerId: string | null;
+    /**
+     * The child the SOURCE itself is about — a form submission's own `customer_member_id`. Evidence,
+     * not inference: a child-scoped relationship from Ben's paperwork is Ben's.
+     */
+    expectedCustomerMemberId?: string | null;
     source: { source_kind: string; source_id: string };
     /** Present when the source is a family's new-child statement. */
     participantChildRequest?: ParticipantChildRequestRow;
@@ -72,12 +79,12 @@ export async function loadRelatedRecordProposalForCase(args: {
         if (source.source_kind !== "form_submission") continue;
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_id")
+            .select("id, payload, form_definition_version_id, customer_id, customer_member_id")
             .eq("org_id", args.orgId)
             .eq("id", source.source_id)
             .maybeSingle();
         if (subError) throw new Error(subError.message);
-        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null } | null;
+        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null; customer_member_id?: string | null } | null;
         if (!subRow) continue;
 
         let schemaJson: unknown = null;
@@ -109,43 +116,47 @@ export async function loadRelatedRecordProposalForCase(args: {
         );
         for (const collection of bundle.collections) {
             const proposal = collection.instances.find((inst) => inst.proposal_id === args.proposalId);
-            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, source };
+            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, source };
         }
     }
     return null;
 }
 
+export type ProposalNotFoundCategory = "case_has_no_sources" | "no_source_holds_proposal" | "source_unreadable";
+
 /**
- * Why a proposal was not found for a case — operator-only diagnostics, no personal data: the case's
- * source kinds, which participant requests resolved, and the proposal ids the loader computed.
+ * A proposal the case does not hold: 404 with a CATEGORY and a correlation id — never proposal ids,
+ * source ids or database text. The same correlation id and the case's source kinds are logged
+ * server-side, so a deployed "not found" can be explained without shipping a diagnostic build.
+ * (Replaces the temporary #1491 lookup body; the cause it found was a malformed request id.)
  */
-export async function describeProposalLookup(args: {
+export async function proposalNotFound(args: {
     supabase: SupabaseClient;
     orgId: string;
     caseId: string;
     proposalId: string;
-}): Promise<Record<string, unknown>> {
-    const { data: sources, error } = await args.supabase
-        .from("processing_case_sources")
-        .select("source_kind, source_id")
-        .eq("org_id", args.orgId)
-        .eq("processing_case_id", args.caseId);
-    const rows = (sources ?? []) as { source_kind: string; source_id: string }[];
-    const participantIds = rows.filter((r) => r.source_kind === PARTICIPANT_CHILD_REQUEST_SOURCE_KIND).map((r) => r.source_id);
-    let computed: string[] = [];
-    let requestError: string | null = null;
+}): Promise<NextResponse> {
+    const correlationId = randomUUID();
+    let category: ProposalNotFoundCategory = "no_source_holds_proposal";
+    let kinds: string[] = [];
     try {
-        const requests = await loadParticipantChildRequests(args.supabase, args.orgId, participantIds);
-        computed = requests.flatMap((r) => adaptParticipantChildRequestToRelatedRecordProposals(r).collections.flatMap((c) => c.instances.map((i) => i.proposal_id)));
-    } catch (e) {
-        requestError = e instanceof Error ? e.message : String(e);
+        const { data, error } = await args.supabase
+            .from("processing_case_sources")
+            .select("source_kind")
+            .eq("org_id", args.orgId)
+            .eq("processing_case_id", args.caseId);
+        if (error) category = "source_unreadable";
+        kinds = ((data ?? []) as { source_kind: string }[]).map((r) => r.source_kind);
+        if (!error && kinds.length === 0) category = "case_has_no_sources";
+    } catch {
+        category = "source_unreadable";
     }
-    return {
-        source_error: error?.message ?? null,
-        source_kinds: rows.map((r) => r.source_kind),
-        participant_requests: participantIds.length,
-        participant_proposals_computed: computed,
-        requested_proposal_id: args.proposalId,
-        request_error: requestError,
-    };
+    console.warn("[processing] proposal_not_found", JSON.stringify({
+        correlation_id: correlationId,
+        category,
+        case_id: args.caseId,
+        source_kinds: kinds,
+        proposal_id_shape: args.proposalId.split(":").map((part, i) => (i < 2 ? part : `${part.length}`)).join(":"),
+    }));
+    return NextResponse.json({ error: "Proposal not found for case", code: "proposal_not_found", category, correlation_id: correlationId }, { status: 404 });
 }
