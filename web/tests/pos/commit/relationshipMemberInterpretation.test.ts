@@ -13,11 +13,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ invocations: [] as Array<{ invocation: { inputValues: Record<string, unknown> } }> }));
+const m = vi.hoisted(() => ({ invocations: [] as Array<{ invocation: { inputValues: Record<string, unknown> } }>, next: null as unknown }));
 type Inv = { request: { invocation: { inputValues: Record<string, unknown> } } };
 vi.mock("@/lib/platform/commands/runtime/executeCommandInvocation", () => ({
     executeCommandInvocation: async (inv: { request: { invocation: { inputValues: Record<string, unknown> } } }) => {
         m.invocations.push(inv.request);
+        if (m.next) { const r = m.next; m.next = null; return r; }
         return { ok: true, status: "succeeded", output: { person_id: "person-new", links_written: 1 } };
     },
 }));
@@ -209,5 +210,23 @@ describe("committing relationships from the published packet", () => {
         expect(out.ok).toBe(false);
         expect(out.record.outcome).toBe("rejected");
         expect(m.invocations).toHaveLength(0);
+    });
+});
+
+describe("a refused guardian write keeps the relationship authority's structured answer", () => {
+    it("code, safe message, correlation id and the identity candidates reach the Processing record (409)", async () => {
+        const { tables, ids } = world([guardian()], []);
+        const candidates = [{ person_id: "p-orphan", display_name: "Parent ZMU7B", in_household: true, same_name: false }];
+        m.next = {
+            ok: false,
+            status: "failed",
+            invocationId: "inv-123",
+            error: { code: "relationship_identity_choice_required", operatorMessage: "A person with this email or phone already exists — choose them, or correct the details." },
+            diagnostics: [{ code: "relationship_identity_choice_required", message: "x" }, { code: "relationship_identity_candidates", message: JSON.stringify(candidates) }],
+        };
+        const out = await commit(tables, ids.find((x) => x.ref === "person.contact_role.parents")!.id);
+        expect(out.status).toBe(409);
+        expect(out.record).toMatchObject({ code: "relationship_identity_choice_required", correlation_id: "inv-123", identity_candidates: candidates });
+        expect(out.record.reason).toMatch(/choose them/);
     });
 });

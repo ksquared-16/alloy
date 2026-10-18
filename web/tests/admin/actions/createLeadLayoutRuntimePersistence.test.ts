@@ -149,7 +149,8 @@ function createRoleAwareSupabase(options: {
                     if (table === "customer_member_contact_roles") {
                         resolve({
                             data: (options.roleKeys ?? ["guardian", "secondary_guardian", "emergency_contact", "billing_contact", "payer"]).map(
-                                (role_key) => ({ role_key }),
+                                // The real table always carries is_active; the effective-role authority reads it.
+                                (role_key) => ({ role_key, is_active: true }),
                             ),
                             error: null,
                         });

@@ -589,21 +589,24 @@ export async function executeCommandInvocation(
                 message && !/stack|at\s+\S+\s+\(|postgres|sqlstate/i.test(message)
                     ? message
                     : "Something went wrong. Please try again.";
+            // A refusal the relationship authority classified keeps its own stable code and safe message,
+            // and an identity choice keeps its candidates — a consumer must not have to guess from text.
+            const classified = e as { code?: unknown; operatorMessage?: unknown; candidates?: unknown };
+            const ownCode = typeof classified.code === "string" && /^relationship_[a-z_]+$/.test(classified.code) ? classified.code : null;
+            const fallbackCode = preDelegation ? "invalid_relationship_intent" : "relationship_executor_error";
             return fail({
                 status: preDelegation ? "invalid" : "failed",
                 invocationId,
                 canonicalCapabilityKey: snapshot.canonicalCapabilityKey,
                 executionOwner: "relationship_runtime",
-                code: preDelegation ? "invalid_relationship_intent" : "relationship_executor_error",
-                operatorMessage,
+                code: ownCode ?? fallbackCode,
+                operatorMessage: ownCode && typeof classified.operatorMessage === "string" ? classified.operatorMessage : operatorMessage,
                 delegated: guard.hasDelegated(),
                 diagnostics: [
-                    {
-                        code: preDelegation
-                            ? "invalid_relationship_intent"
-                            : "relationship_executor_error",
-                        message: raw,
-                    },
+                    { code: ownCode ?? fallbackCode, message: raw },
+                    ...(ownCode && Array.isArray(classified.candidates)
+                        ? [{ code: "relationship_identity_candidates", message: JSON.stringify(classified.candidates) }]
+                        : []),
                 ],
             });
         }

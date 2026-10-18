@@ -68,6 +68,10 @@ export type RelationshipCommitRecord = {
     code: string | null;
     /** Which case resolution this commit consumed — the household reviewed is the household written. */
     resolution_revision?: string | null;
+    /** The command runtime's invocation id for a failed write — the correlation id in the server log. */
+    correlation_id?: string | null;
+    /** Existing persons the operator must choose between (identity_choice_required). */
+    identity_candidates?: unknown[] | null;
     resolved_customer_id?: string | null;
 };
 
@@ -129,6 +133,8 @@ export async function executeRelationshipProposalCommit(args: {
      * anchor is rejected rather than resolved to "the only child" or expanded to every child.
      */
     anchorCustomerMemberId: string | null;
+    /** The operator's explicit choice of an existing person (after identity_choice_required). */
+    selectedPersonId?: string | null;
     selectedCustomerMemberIds?: readonly string[] | null;
     /**
      * Household children loaded server-side. Optional: when omitted they are taken from the RESOLVED
@@ -306,7 +312,7 @@ export async function executeRelationshipProposalCommit(args: {
     // Identity: link the canonical Person when known, otherwise propose one from the submitted facts.
     const facts = auth.proposal.relationship_intent?.proposed_person_facts ?? [];
     const draft = resolved.identityAction === "create_proposed_person" ? personDraftFromFacts(facts) : null;
-    if (resolved.identityAction === "create_proposed_person" && !draft) {
+    if (resolved.identityAction === "create_proposed_person" && !draft && !args.selectedPersonId) {
         return {
             ok: false,
             status: 400,
@@ -357,8 +363,10 @@ export async function executeRelationshipProposalCommit(args: {
                     anchorCustomerMemberId: anchor.anchorCustomerMemberId,
                     selectedChildCustomerMemberIds: anchor.memberIds,
                     scope: anchor.scope,
-                    ...(resolved.existingPersonId ? { selectedPersonId: resolved.existingPersonId } : {}),
-                    ...(draft ? { createPersonDraft: draft } : {}),
+                    ...(args.selectedPersonId
+                        ? { selectedPersonId: args.selectedPersonId }
+                        : resolved.existingPersonId ? { selectedPersonId: resolved.existingPersonId } : {}),
+                    ...(draft && !args.selectedPersonId ? { createPersonDraft: draft } : {}),
                     confirmationRequired: true,
                 },
             },
@@ -376,11 +384,20 @@ export async function executeRelationshipProposalCommit(args: {
     } as never);
 
     if (!result.ok) {
-        const code = "code" in result ? String(result.code ?? "relationship_execution_failed") : "relationship_execution_failed";
-        const reason = "operatorMessage" in result ? String(result.operatorMessage ?? "Relationship execution failed.") : "Relationship execution failed.";
+        // The runtime's structured refusal: its stable code, its operator-safe message and its invocation
+        // id (the correlation id for the server log) — never collapsed into one generic sentence.
+        const failure = result as unknown as { error?: { code?: string; operatorMessage?: string }; invocationId?: string; diagnostics?: Array<{ code: string; message: string }> };
+        const code = failure.error?.code ?? "relationship_execution_failed";
+        const reason = failure.error?.operatorMessage ?? "Relationship execution failed.";
+        const correlationId = failure.invocationId ?? null;
+        let identityCandidates: unknown[] | null = null;
+        const candidateDiag = (failure.diagnostics ?? []).find((d) => d.code === "relationship_identity_candidates");
+        if (candidateDiag) {
+            try { identityCandidates = JSON.parse(candidateDiag.message) as unknown[]; } catch { identityCandidates = null; }
+        }
         return {
             ok: false,
-            status: 400,
+            status: code === "relationship_identity_choice_required" || code === "relationship_contact_conflict" ? 409 : 400,
             record: {
                 ...base,
                 outcome: "failed",
@@ -392,6 +409,8 @@ export async function executeRelationshipProposalCommit(args: {
                 idempotency_key: key,
                 reason,
                 code,
+                correlation_id: correlationId,
+                ...(identityCandidates ? { identity_candidates: identityCandidates } : {}),
             },
         };
     }
