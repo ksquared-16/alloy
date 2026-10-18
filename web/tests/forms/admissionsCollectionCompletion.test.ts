@@ -215,9 +215,13 @@ describe("Processing receives each member as itself", () => {
         expect(contacts.instances.map((i) => facts(i).emergency_contacts_3_full_name)).toEqual(["Ec One", "Ec Two"]);
         // A guardian's answer never appears on an emergency contact, nor the reverse.
         expect(contacts.instances.some((i) => "emergency_contacts_full_name" in facts(i))).toBe(false);
-        // Form-only member lines claim no canonical destination: nothing is invented for them.
+        // The unbound member lines are read through each collection's OWN relationship definition
+        // (Director decision, Enrollment V0.5 relationship commit repair): every fact is that member's
+        // own answer, with its source field and basis — nothing invented, nothing crossing people.
         for (const i of [...guardians.instances, ...contacts.instances]) {
-            expect(i.relationship_intent?.proposed_person_facts ?? []).toEqual([]);
+            const pf = i.relationship_intent?.proposed_person_facts ?? [];
+            expect(pf.map((f) => f.field_key)).toEqual(["full_name", "phone", "relationship_type"]);
+            expect(pf.every((f) => f.basis === "definition_member" && f.source_field_id && f.value === facts(i)[f.source_field_id])).toBe(true);
         }
     });
 });
