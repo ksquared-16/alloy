@@ -714,6 +714,10 @@ function openPrProposal(req) {
 }
 
 const PRODUCTION_MIGRATION_CONSEQUENCES = Object.freeze([
+  // TERMINOLOGY CORRECTION (2026-10-18, G3-B): false as written — the target is
+  // Alloy's hosted STAGING database (ALLOY_STAGING). Kept verbatim in this
+  // historical copy only because its suite pins the string; the running
+  // Vacilando toolkit states the true target.
   "Schema changes are applied to the LIVE production database that serves real tenants.",
   "The migrations run in ascending version order and stop on the first failure.",
   "Vacilando cannot undo this. Reversing a migration is a separate, human decision.",
