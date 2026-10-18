@@ -5338,6 +5338,16 @@
         "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY \u2014 the same resolver named in the sibling reviews \u2014 refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the sibling public participant routes rather than left seeded `pending`, because the family has a settled answer and this is not an open question. READ-ONLY: it returns the household's Enrollment shape \u2014 who is enrolling and how far each child has got \u2014 and every selector is server-derived from the token (household from the session's crm_snapshot, episode from canonical process state, focused child from the session snapshot rather than the query string). Sibling exposure is bounded to a name and progress; no other child's answers, uploads, documents or submissions are returned."
       }
     },
+    "app/api/public/forms/[token]/enrollment-request/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Resolution goes through resolveParticipantEnrollmentFromToken (resolvePublicFormLinkByToken exactly), refusing an inactive or expired link before any side effect. Every selector is server-derived: household from the session's crm_snapshot held to the session's own child, episode from the family resolution, and the link's recipient must belong to that household. GET returns the household's own active children with a plain-language status. POST writes only the selected child's new_inquiry participation through ensureOpportunityCustomerMemberParticipation (a REQUEST into admissions): no child, offer, journey, packet or fee."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Resolution goes through resolveParticipantEnrollmentFromToken (resolvePublicFormLinkByToken exactly), refusing an inactive or expired link before any side effect. Every selector is server-derived: household from the session's crm_snapshot held to the session's own child, episode from the family resolution, and the link's recipient must belong to that household. GET returns the household's own active children with a plain-language status. POST writes only the selected child's new_inquiry participation through ensureOpportunityCustomerMemberParticipation (a REQUEST into admissions): no child, offer, journey, packet or fee."
+      }
+    },
     "app/api/public/forms/[token]/resolve/route.ts": {
       "GET": {
         "status": "none",

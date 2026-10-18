@@ -29,6 +29,7 @@
  * is confined to the same organization, the same household and the same live episode.
  */
 
+import { listHouseholdChildrenForRequest } from "@/lib/enrollment/family/participantEnrollmentRequest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -264,6 +265,35 @@ export async function resolveFamilyEnrollmentExperience(
             submitted,
             processingState: caseBySubject.get(subject) ?? null,
         });
+    }
+
+    /*
+     * CHILDREN THE FAMILY ASKED ABOUT, NOT YET IN A JOURNEY.
+     *
+     * A request (`participantEnrollmentRequest`) is a participation the school is considering, with no
+     * Enrollment journey yet — so it would otherwise be invisible to the family that made it. Shown as
+     * requested, never as Enrolling, with no requirements and no part in any fee.
+     */
+    {
+        const shown = new Set(children.map((c) => c.customerMemberId));
+        const household = await listHouseholdChildrenForRequest(supabase, { orgId: input.orgId, customerId });
+        for (const c of household) {
+            if (shown.has(c.customerMemberId) || c.status !== "being_reviewed") continue;
+            children.push({
+                customerMemberId: c.customerMemberId,
+                displayName: c.displayName,
+                processInstanceId: null,
+                sessionId: null,
+                participantPath: null,
+                state: "requested",
+                locationName: null,
+                totalRequirements: 0,
+                satisfiedRequirements: 0,
+                remainingRequirements: 0,
+                submitted: false,
+                processingState: null,
+            });
+        }
     }
 
     /*
