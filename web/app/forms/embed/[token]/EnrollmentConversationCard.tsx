@@ -104,6 +104,14 @@ export type EnrollmentConversationCardProps = {
      * had not been told.
      */
     readonly onValueSettled?: (fieldIds: readonly string[], value: unknown) => void;
+    /**
+     * The draft values the server wrote when this turn CHANGED an answer, per submission id.
+     *
+     * The server writes a newer answer into every open draft that asks the same question. The browser
+     * holding one of those drafts takes the same values, so its next autosave cannot put the older
+     * answer back — including answers given in words, which `onValueSettled` never sees.
+     */
+    readonly onDraftValues?: (updates: Readonly<Record<string, Readonly<Record<string, unknown>>>>) => void;
 };
 
 type TurnResponse = {
@@ -113,6 +121,8 @@ type TurnResponse = {
         reason?: string;
         /** A bounded, provider-authored clarifying question — presentation only. */
         clarification?: string;
+        /** submission id → field values the server wrote because this turn changed an answer. */
+        draft_values?: Record<string, Record<string, unknown>>;
         objective: ParticipantObjectiveWire;
     };
     error?: string;
@@ -736,6 +746,7 @@ export function EnrollmentConversationCard({
     onObjectiveAdvanced,
     artifactRenderable = true,
     onValueSettled,
+    onDraftValues,
 }: EnrollmentConversationCardProps) {
     const [objective, setObjective] = useState(initialObjective);
     /**
@@ -954,6 +965,7 @@ export function EnrollmentConversationCard({
                 }
 
                 setObjective(json.data.objective);
+                if (json.data.draft_values && Object.keys(json.data.draft_values).length > 0) onDraftValues?.(json.data.draft_values);
                 setText("");
                 if (payload.editFact) {
                     const ref = payload.editFact.ref;
@@ -996,7 +1008,7 @@ export function EnrollmentConversationCard({
                 setAwaitingTurn(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, objective],
+        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, onDraftValues, objective],
     );
 
     const turn = objective.next_turn;

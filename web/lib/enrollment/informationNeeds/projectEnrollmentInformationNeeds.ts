@@ -150,6 +150,13 @@ export function projectEnrollmentInformationNeeds(
          * current answer is read through the same identity and precedence the needs below use
          * (session value over canonical prefill), and the shared rule decides what is shown.
          */
+        /*
+         * The SAME identity the needs below resolve — including `controlsVisibility`. Without it an
+         * unbound, required yes/no controller was classified here as an acknowledgement (no session
+         * key), while the need below classified it as a question with a key: the conversation wrote
+         * the answer under that key, and the condition it controls never read it.
+         */
+        const visibilityControllers = fieldIdsControllingVisibility(form.schema);
         const valueByFieldId = new Map<string, unknown>();
         walkScalarFormFields(form.schema, (field) => {
             const id = resolveEnrollmentNeedIdentity({
@@ -157,6 +164,7 @@ export function projectEnrollmentInformationNeeds(
                 subjectId: input.subjectId,
                 formDefinitionId: form.form_definition_id,
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
+                controlsVisibility: visibilityControllers.has(field.id),
                 inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
@@ -167,7 +175,6 @@ export function projectEnrollmentInformationNeeds(
             if (value !== undefined) valueByFieldId.set(field.id, value);
         });
         const shown = (fieldId: string) => fieldShownForAnswers(form.schema, fieldId, (id) => valueByFieldId.get(id));
-        const visibilityControllers = fieldIdsControllingVisibility(form.schema);
 
         walkScalarFormFields(form.schema, (field) => {
             // Not a participant need unless the participant is the one who supplies it. Display-only
