@@ -147,12 +147,13 @@ function world(guardians: FormPayloadGroupRow[], contacts: FormPayloadGroupRow[]
         .collections.flatMap((c) => c.instances.map((i) => ({ ref: c.collection_provider_ref, id: i.proposal_id })));
     return { tables, ids };
 }
-const commit = (tables: Record<string, Row[]>, proposalId: string, opts: { anchor?: string | null; decision?: "approve" | "reject" } = {}) =>
+const commit = (tables: Record<string, Row[]>, proposalId: string, opts: { anchor?: string | null; decision?: "approve" | "reject"; personCorrections?: Record<string, string> } = {}) =>
     executeRelationshipProposalCommit({
         supabase: db(tables), orgId: "org", userId: "op", actorRole: "admin", accessScope: null, caseId: "case-1", proposalId,
         decision: { proposal_id: proposalId, instance_decision: opts.decision ?? "approve", field_decisions: [] },
         metadata: (tables.processing_cases![0]!.metadata ?? {}) as Record<string, unknown>,
         anchorCustomerMemberId: opts.anchor ?? null,
+        personCorrections: opts.personCorrections ?? null,
     } as never);
 
 beforeEach(() => { m.invocations = []; });
@@ -228,5 +229,30 @@ describe("a refused guardian write keeps the relationship authority's structured
         expect(out.status).toBe(409);
         expect(out.record).toMatchObject({ code: "relationship_identity_choice_required", correlation_id: "inv-123", identity_candidates: candidates });
         expect(out.record.reason).toMatch(/choose them/);
+    });
+});
+
+describe("final certification repairs (staging aa797393, disposable families ZZQA1496Q/R)", () => {
+    it("an approved (routed) packet case still accepts its relationship commits", async () => {
+        const { tables, ids } = world([guardian()], []);
+        // What /approve writes for a packet case: no household, no identity attempt.
+        tables.processing_cases![0]!.metadata = { operational_result: { kind: "routed", note: "No form-submission source to promote." } };
+        tables.processing_cases![0]!.status = "completed";
+        const out = await commit(tables, ids.find((x) => x.ref === "person.contact_role.parents")!.id);
+        expect(out.record.reason ?? null).toBeNull();
+        expect(out.ok).toBe(true);
+    });
+
+    it("the operator's corrections reach the canonical write, field by field", async () => {
+        const { tables, ids } = world([guardian()], []);
+        await commit(tables, ids.find((x) => x.ref === "person.contact_role.parents")!.id, { personCorrections: { phone: "5550199999" } });
+        expect(m.invocations[0]!.invocation.inputValues.createPersonDraft).toEqual({ first_name: "Parent", last_name: "ZMU7B", phone: "5550199999" });
+    });
+
+    it("a correction cannot remove the identity a person needs", async () => {
+        const { tables, ids } = world([guardian(null)], []);
+        const out = await commit(tables, ids.find((x) => x.ref === "person.contact_role.parents")!.id, { personCorrections: { phone: "5550199999" } });
+        expect(out.record.code).toBe("insufficient_person_identity");
+        expect(m.invocations).toHaveLength(0);
     });
 });

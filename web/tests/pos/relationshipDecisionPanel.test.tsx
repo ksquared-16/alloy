@@ -75,3 +75,48 @@ describe("relationship proposals: commit or reject from the case", () => {
         expect(host.querySelector('[data-testid="relationship-decision"]')).toBeNull();
     });
 });
+
+describe("an ambiguous person: the operator chooses or corrects", () => {
+    const candidates = [{ person_id: "p-other", display_name: "Parent ZMU7A", in_household: false, same_name: false }];
+    async function ambiguous() {
+        const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+        let n = 0;
+        vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+            calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) });
+            n += 1;
+            if (n === 1) return { ok: false, json: async () => ({ error: "A person with this email or phone already exists — choose them, or correct the details.", code: "relationship_identity_choice_required", identity_candidates: candidates }) } as Response;
+            return { ok: true, json: async () => ({ data: { outcome: "applied" } }) } as Response;
+        });
+        const host = document.createElement("div");
+        const group = { group_id: "g", collection_provider_ref: "person.contact_role.parents", collection_label: "x", instances: [{ ...instance("person.contact_role.parents"), field_bindings: [
+            { field_id: "emergency_contacts_full_name", provider_ref: "emergency_contacts_full_name", display_value: "Parent ZZQA1496Q" },
+            { field_id: "emergency_contacts_phone", provider_ref: "emergency_contacts_phone", display_value: "5550101111" },
+        ] }], status: "valid", diagnostics: [] };
+        await act(async () => createRoot(host).render(<ProcessingCollectionEvidencePanel groups={[group as never]} caseId="case-1" />));
+        await act(async () => (host.querySelector('[data-testid="relationship-commit"]') as HTMLButtonElement).click());
+        await act(async () => new Promise((r) => setTimeout(r, 0)));
+        return { host, calls };
+    }
+
+    it("shows who already holds the email/phone, and adds them only when chosen", async () => {
+        const { host, calls } = await ambiguous();
+        expect(host.querySelector('[data-testid="relationship-candidates"]')?.textContent).toMatch(/Parent ZMU7A.*in another family.*different name/);
+        await act(async () => (host.querySelector('[data-testid="relationship-use-person"]') as HTMLButtonElement).click());
+        await act(async () => new Promise((r) => setTimeout(r, 0)));
+        expect(calls[1]!.body).toMatchObject({ selected_person_id: "p-other" });
+        expect(host.querySelector('[data-testid="relationship-decision-done"]')).not.toBeNull();
+    });
+
+    it("a different person: the operator corrects the submitted details, prefilled from the paperwork", async () => {
+        const { host, calls } = await ambiguous();
+        await act(async () => (host.querySelector('[data-testid="relationship-correct"]') as HTMLButtonElement).click());
+        const phone = host.querySelector('[data-testid="relationship-fix-phone"]') as HTMLInputElement;
+        expect((host.querySelector('[data-testid="relationship-fix-first"]') as HTMLInputElement).value).toBe("Parent");
+        expect(phone.value).toBe("5550101111");
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+        await act(async () => { setter.call(phone, "5550147199"); phone.dispatchEvent(new Event("input", { bubbles: true })); });
+        await act(async () => (host.querySelector('[data-testid="relationship-fix-save"]') as HTMLButtonElement).click());
+        await act(async () => new Promise((r) => setTimeout(r, 0)));
+        expect(calls[1]!.body).toMatchObject({ person_corrections: { first_name: "Parent", last_name: "ZZQA1496Q", phone: "5550147199" } });
+    });
+});
