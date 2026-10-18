@@ -14,6 +14,10 @@ import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptS
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
+import {
+    adaptParticipantChildRequestToRelatedRecordProposals,
+    loadParticipantChildRequests,
+} from "@/lib/pos/processingCase/sources/participantChildRequest";
 
 function stringifyValue(v: unknown): string | null {
     if (v === null || v === undefined) return null;
@@ -164,10 +168,33 @@ function makeDocumentEvidenceLoader(): SourceEvidenceLoader {
     };
 }
 
+/** A family's new-child statement: what they told us, and the one proposal it makes. */
+function makeParticipantChildRequestEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
+    return async (ids) => {
+        const out = new Map<string, SourceEvidenceRaw>();
+        for (const row of await loadParticipantChildRequests(supabase, orgId, ids)) {
+            out.set(row.id, {
+                proposedValues: [
+                    { label: "First name", value: row.first_name, entityType: "customer_member", fieldKey: "first_name" },
+                    { label: "Last name", value: row.last_name, entityType: "customer_member", fieldKey: "last_name" },
+                    { label: "Date of birth", value: row.date_of_birth, entityType: "customer_member", fieldKey: "date_of_birth" },
+                    { label: "Request", value: row.status, entityType: null },
+                ],
+                documentId: null,
+                collectionEvidence: projectRelatedRecordProposalsToEvidence(adaptParticipantChildRequestToRelatedRecordProposals(row), {
+                    processingCaseId: null,
+                }),
+            });
+        }
+        return out;
+    };
+}
+
 export function makeDefaultSourceEvidenceRegistry(supabase: SupabaseClient, orgId: string): SourceEvidenceRegistry {
     return new Map([
         ["form_submission", makeFormSubmissionEvidenceLoader(supabase, orgId)],
         ["form_packet_session", makePacketEvidenceLoader(supabase, orgId)],
         ["document", makeDocumentEvidenceLoader()],
+        ["participant_child_request", makeParticipantChildRequestEvidenceLoader(supabase, orgId)],
     ]);
 }

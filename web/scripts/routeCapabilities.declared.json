@@ -4175,6 +4175,14 @@
         "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
+    "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/reject/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Enrollment V0.5 Document & Processing Convergence. Rejecting a proposed new child is the operator's Processing decision, the same authority as committing it."
+      }
+    },
     "app/api/admin/processing/cases/[caseId]/route.ts": {
       "GET": {
         "status": "pending"

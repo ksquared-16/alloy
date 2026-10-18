@@ -29,7 +29,9 @@ function db() {
                 limit: () => api,
                 maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
                 insert: (row: Row) => {
-                    pendingInsert = { id: `new-${writes.length + 1}`, ...row };
+                    // Column defaults the database supplies.
+                    const defaults = table === "processing_participant_child_requests" ? { status: "pending", created_at: "2026-10-18T00:00:00Z" } : {};
+                    pendingInsert = { id: `new-${writes.length + 1}`, ...defaults, ...row };
                     writes.push({ table, row: pendingInsert });
                     (tables[table] ??= []).push(pendingInsert);
                     return api;
@@ -194,5 +196,63 @@ describe("the route: only the household adult the link was addressed to may ask"
 
     it("another household's child is refused through the route too", async () => {
         expect((await post({ customer_member_id: "zed" })).status).toBe(404);
+    });
+});
+
+describe("the route: a NEW child is sent to Processing for review — never created", () => {
+    const post = async (body: unknown) => {
+        const { POST } = await import("@/app/api/public/forms/[token]/enrollment-request/route");
+        const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify(body) }) as never, { params: Promise.resolve({ token: "t" }) });
+        return { status: res.status, json: await res.json() };
+    };
+    const dex = { new_child: { first_name: "Dex", last_name: "Example", date_of_birth: "2021-05-01" } };
+
+    beforeEach(() => {
+        tables.form_public_links = [{ id: "link-1", org_id: ORG, metadata: { recipient_person_id: "parent-1" } }];
+        tables.customer_persons = [{ org_id: ORG, customer_id: HOUSE, person_id: "parent-1" }];
+    });
+
+    it("records the family's statement for THIS household and opens its Processing case; no child, no participation", async () => {
+        const r = await post(dex);
+        expect(r.status).toBe(200);
+        expect(r.json.data).toEqual({ sentForReview: true, created: true });
+        const byTable = (t: string) => writes.filter((w) => w.table === t).map((w) => w.row);
+        expect(byTable("processing_participant_child_requests")).toEqual([
+            expect.objectContaining({ org_id: ORG, customer_id: HOUSE, opportunity_id: OPP, requested_by_person_id: "parent-1", first_name: "Dex", last_name: "Example" }),
+        ]);
+        expect(byTable("processing_case_sources")).toEqual([expect.objectContaining({ source_kind: "participant_child_request", role: "primary" })]);
+        expect(byTable("customer_members")).toEqual([]);
+        expect(byTable("opportunity_customer_members")).toEqual([]);
+    });
+
+    it("missing details are refused with the field", async () => {
+        const r = await post({ new_child: { first_name: "Dex", last_name: "", date_of_birth: "2021-05-01" } });
+        expect(r.status).toBe(422);
+        expect(r.json.missing_fields).toEqual(["last_name"]);
+        expect(writes).toHaveLength(0);
+    });
+
+    it("a child already in the household is pointed at, not proposed again", async () => {
+        tables.customer_members.push({ id: "fay", org_id: ORG, customer_id: HOUSE, relationship: "child", is_active: true, first_name: "Dex", last_name: "Example" });
+        const r = await post(dex);
+        expect(r.status).toBe(409);
+        expect(r.json.code).toBe("already_in_household");
+        expect(writes).toHaveLength(0);
+    });
+
+    it("only the household's own addressed parent can send one", async () => {
+        tables.form_public_links = [{ id: "link-1", org_id: ORG, metadata: { recipient_person_id: "stranger" } }];
+        expect((await post(dex)).status).toBe(403);
+        tables.form_public_links = [{ id: "link-1", org_id: ORG, metadata: {} }];
+        expect((await post(dex)).status).toBe(403);
+        expect(writes).toHaveLength(0);
+    });
+
+    it("the family sees what it sent, until the school decides", async () => {
+        await post(dex);
+        const { GET } = await import("@/app/api/public/forms/[token]/enrollment-request/route");
+        const res = await GET(new Request("http://x") as never, { params: Promise.resolve({ token: "t" }) });
+        const json = await res.json();
+        expect(json.data.requests).toEqual([{ requestId: expect.any(String), displayName: "Dex Example", status: "pending" }]);
     });
 });

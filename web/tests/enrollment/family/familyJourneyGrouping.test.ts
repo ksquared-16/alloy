@@ -203,4 +203,29 @@ describe("a child the family asked about appears as requested — never as Enrol
         expect(rows).toEqual({ Charlie: ["1 of 2 complete", false], Dee: ["Requested — the school will review", false] });
         expect(r.value.children.find((c) => c.displayName === "Dee")?.processInstanceId).toBeNull();
     });
+
+    it("a new child the family told the school about shows as sent for review, or not added — never as a child's journey", async () => {
+        live.context = { opportunityId: "opp-1", runningSubjectIds: ["cy"] };
+        tables.process_instances = [pi("pi-cy", "cy", { context_id: "ocm-cy" })];
+        tables.processing_participant_child_requests = [
+            { id: "r1", org_id: ORG, customer_id: HOUSE, first_name: "Dex", last_name: "Example", status: "pending", created_at: "2026-10-18T00:00:00Z" },
+            { id: "r2", org_id: ORG, customer_id: HOUSE, first_name: "Fay", last_name: "Example", status: "declined", created_at: "2026-10-18T00:00:01Z" },
+            { id: "r3", org_id: ORG, customer_id: HOUSE, first_name: "Gus", last_name: "Example", status: "committed", created_at: "2026-10-18T00:00:02Z" },
+            { id: "r4", org_id: ORG, customer_id: "other-house", first_name: "Zed", last_name: "Other", status: "pending", created_at: "2026-10-18T00:00:03Z" },
+        ];
+        const r = await resolveFamilyEnrollmentExperience(db(), {
+            orgId: ORG,
+            session: { id: "s", process_instance_id: "pi-cy", status: "in_progress", crm_snapshot: { customer_id: HOUSE } },
+        });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const rows = Object.fromEntries(r.value.progress.filter((p) => p.customerMemberId).map((p) => [p.label, [p.detail, p.complete]]));
+        expect(rows).toEqual({
+            Charlie: ["1 of 2 complete", false],
+            "Dex Example": ["Sent to the school for review", false],
+            "Fay Example": ["Not added — please contact the school", false],
+        });
+        // A request is never the child still working, and holds nothing open for the family.
+        expect(r.value.children.filter((c) => c.state === "sent_for_review" || c.state === "not_added").every((c) => c.processInstanceId === null && c.totalRequirements === 0)).toBe(true);
+    });
 });

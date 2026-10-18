@@ -4,11 +4,19 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
+import {
+    adaptParticipantChildRequestToRelatedRecordProposals,
+    loadParticipantChildRequests,
+    PARTICIPANT_CHILD_REQUEST_SOURCE_KIND,
+    type ParticipantChildRequestRow,
+} from "@/lib/pos/processingCase/sources/participantChildRequest";
 
 export type RelatedRecordProposalCaseContext = {
     proposal: RelatedRecordInstanceProposal;
     expectedCustomerId: string | null;
     source: { source_kind: string; source_id: string };
+    /** Present when the source is a family's new-child statement. */
+    participantChildRequest?: ParticipantChildRequestRow;
 };
 
 export async function loadRelatedRecordProposalForCase(args: {
@@ -35,6 +43,15 @@ export async function loadRelatedRecordProposalForCase(args: {
      */
     const expanded: { source_kind: string; source_id: string }[] = [];
     for (const source of (sources ?? []) as { source_kind: string; source_id: string }[]) {
+        // A family's new-child statement IS its one proposal; its household is the one it was made for.
+        if (source.source_kind === PARTICIPANT_CHILD_REQUEST_SOURCE_KIND) {
+            const [row] = await loadParticipantChildRequests(args.supabase, args.orgId, [source.source_id]);
+            if (!row) continue;
+            const proposal = adaptParticipantChildRequestToRelatedRecordProposals(row).collections[0]?.instances
+                .find((inst) => inst.proposal_id === args.proposalId);
+            if (proposal) return { proposal, expectedCustomerId: row.customer_id, source, participantChildRequest: row };
+            continue;
+        }
         if (source.source_kind === "form_submission") {
             expanded.push(source);
             continue;

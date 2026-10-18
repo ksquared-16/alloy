@@ -47,4 +47,5 @@ export const POS_SOURCE_KIND_LABELS: Record<string, string> = {
     email_attachment: "Email attachment",
     import: "Import",
     recreated_document: "Recreated document",
+    participant_child_request: "Family request (new child)",
 };

@@ -48,7 +48,17 @@ export type FamilyChildJourney = {
      * Where this child's own journey stands, in the family's words. Each child's state is its own —
      * a sibling's enrolment never completes, and a sibling's waitlist never blocks, another child.
      */
-    readonly state?: "requested" | "in_progress" | "waitlisted" | "enrolled" | "withdrawn" | "not_enrolling";
+    readonly state?:
+        | "requested"
+        /** A new child the family told the school about; the school has not reviewed it yet. */
+        | "sent_for_review"
+        /** The school reviewed the family's new child and did not add it. */
+        | "not_added"
+        | "in_progress"
+        | "waitlisted"
+        | "enrolled"
+        | "withdrawn"
+        | "not_enrolling";
     readonly locationName: string | null;
     readonly totalRequirements: number;
     readonly satisfiedRequirements: number;
@@ -124,6 +134,8 @@ function childDetail(child: FamilyChildJourney): string {
     if (child.state === "not_enrolling") return "Not enrolling";
     if (child.state === "waitlisted") return "On the waitlist";
     if (child.state === "requested") return "Requested — the school will review";
+    if (child.state === "sent_for_review") return "Sent to the school for review";
+    if (child.state === "not_added") return "Not added — please contact the school";
     if (child.processInstanceId === null) return "Not started";
     if (child.submitted) return child.processingState ? `Submitted · ${child.processingState}` : "Submitted";
     /*
@@ -200,7 +212,9 @@ export function composeFamilyEnrollmentExperience(
      * or closed on another child's behalf.
      */
     // A requested child has no paperwork yet — the school decides first.
-    const working = children.filter((c) => !childIsSettled(c) && c.state !== "waitlisted" && c.state !== "requested");
+    const working = children.filter(
+        (c) => !childIsSettled(c) && c.state !== "waitlisted" && c.state !== "requested" && c.state !== "sent_for_review" && c.state !== "not_added",
+    );
     const everyChildSubmitted = children.length > 0 && working.every((c) => c.submitted);
     const moneySettled =
         !input.financials ||
