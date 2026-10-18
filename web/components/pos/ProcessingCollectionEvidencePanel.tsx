@@ -190,9 +190,122 @@ function InstanceBlock({ instance, caseId, onCommitted }: { instance: Processing
                 </div>
             ) : null}
 
+            {caseId && isNewChildCommitEligible(instance) ? <NewChildCommitBlock instance={instance} caseId={caseId} onCommitted={onCommitted} /> : null}
             {result ? <p className="mt-2 text-[11px] font-medium text-alloy-juniper">Commit result: {result.status}</p> : null}
             {error ? <p className="mt-2 text-[11px] text-amber-800">{error}</p> : null}
             {hasWarnings ? <ul className="mt-2 space-y-0.5 text-[11px] text-amber-800">{instance.diagnostics.map((d, i) => <li key={`${d.code}:${i}`}>{d.message}</li>)}</ul> : null}
+        </div>
+    );
+}
+
+function isNewChildCommitEligible(instance: ProcessingCollectionInstanceProposal): boolean {
+    return instance.collection_provider_ref === "children"
+        && instance.iteration_entity_type === "customer_member"
+        && instance.origin === "respondent_added"
+        && instance.status === "valid";
+}
+
+/** Prefill from what the family submitted: `…first_name` / `…last_name` / `…full_name` / `…date_of_birth`. */
+function submittedChildIdentity(instance: ProcessingCollectionInstanceProposal): { first: string; last: string; dob: string } {
+    let first = "", last = "", full = "", dob = "";
+    for (const b of instance.field_bindings) {
+        const key = `${b.provider_ref ?? ""} ${b.field_id}`.toLowerCase();
+        const v = (b.display_value ?? "").trim();
+        if (!v) continue;
+        if (/first_name\b/.test(key)) first ||= v;
+        else if (/last_name\b/.test(key)) last ||= v;
+        else if (/full_name\b/.test(key)) full ||= v;
+        else if (/(date_of_birth|\bdob)\b/.test(key)) dob ||= v;
+    }
+    if ((!first || !last) && full) {
+        const parts = full.split(/\s+/);
+        if (parts.length > 1) { first ||= parts.slice(0, -1).join(" "); last ||= parts[parts.length - 1]!; } else first ||= full;
+    }
+    return { first, last, dob };
+}
+
+type IdentityCandidate = { record_id: string; customer_member_id: string | null; display_name: string; explanation: string; in_household: boolean };
+
+/**
+ * A NEW CHILD THE FAMILY TOLD US ABOUT — reviewed, corrected if needed, created once.
+ * Duplicate-safe: a possible match is shown and must be linked, or a new child created with a reason.
+ */
+function NewChildCommitBlock({ instance, caseId, onCommitted }: { instance: ProcessingCollectionInstanceProposal; caseId: string; onCommitted?: () => void }) {
+    const submitted = useMemo(() => submittedChildIdentity(instance), [instance]);
+    const [first, setFirst] = useState(submitted.first);
+    const [last, setLast] = useState(submitted.last);
+    const [dob, setDob] = useState(submitted.dob);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState<string | null>(null);
+    const [candidates, setCandidates] = useState<IdentityCandidate[] | null>(null);
+    const [reason, setReason] = useState("");
+
+    const send = async (extra: Record<string, unknown>) => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/related-record-proposals/${encodeURIComponent(instance.proposal_id)}/commit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    decision: { proposal_id: instance.proposal_id, field_decisions: [] },
+                    new_child: { first_name: first, last_name: last, dob: dob || null, ...extra },
+                }),
+            });
+            const json = (await res.json()) as { error?: string; candidates?: IdentityCandidate[]; data?: { alreadyDone?: boolean; identity_outcome?: string | null } };
+            if (res.status === 409 && json.candidates) {
+                setCandidates(json.candidates);
+                setError(json.error ?? "This child may already be in Alloy.");
+                return;
+            }
+            if (!res.ok) {
+                setError(json.error ?? "The child could not be created.");
+                return;
+            }
+            setCandidates(null);
+            setDone(json.data?.alreadyDone ? "Already committed" : json.data?.identity_outcome === "already_in_household" ? "Linked to the existing child" : "Child created");
+            onCommitted?.();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (done) return <p className="mt-2 text-[11px] font-medium text-alloy-juniper" data-testid="new-child-commit-done">{done}</p>;
+    return (
+        <div className="mt-2 space-y-1.5 border-t border-stone-100 pt-2" data-testid="new-child-commit">
+            <p className="text-[11px] text-stone-500">New child from the family. Check the details, then create the child. Creating the child does not enroll them.</p>
+            <div className="flex flex-wrap gap-1.5">
+                <input aria-label="First name" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={first} onChange={(e) => setFirst(e.target.value)} data-testid="new-child-first-name" />
+                <input aria-label="Last name" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={last} onChange={(e) => setLast(e.target.value)} data-testid="new-child-last-name" />
+                <input aria-label="Date of birth" type="date" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={dob} onChange={(e) => setDob(e.target.value)} data-testid="new-child-dob" />
+            </div>
+            {candidates ? (
+                <div className="space-y-1" data-testid="new-child-candidates">
+                    {candidates.map((c) => (
+                        <div key={c.record_id} className="flex flex-wrap items-center gap-2 text-[11.5px]">
+                            <span className="font-medium">{c.display_name}</span>
+                            <span className="text-stone-500">{c.explanation}</span>
+                            {c.in_household && c.customer_member_id ? (
+                                <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy} onClick={() => void send({ chosen_customer_member_id: c.customer_member_id })}>
+                                    Use this existing child
+                                </button>
+                            ) : null}
+                        </div>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input aria-label="Reason to create a new child" placeholder="Why this is a different child" className="min-w-[14rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="new-child-reason" />
+                        <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy || !reason.trim()} onClick={() => void send({ create_new_child: true, create_new_reason: reason })}>
+                            Create a new child anyway
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy || !first.trim() || !last.trim()} onClick={() => void send({})} data-testid="new-child-commit-create">
+                    {busy ? "Creating..." : "Create child"}
+                </button>
+            )}
+            {error ? <p className="text-[11px] text-amber-800">{error}</p> : null}
         </div>
     );
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { executeNewChildProposalCommit } from "@/lib/pos/processingCase/commit/executeNewChildProposalCommit";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 
 type Body = {
     decision?: RelatedRecordProposalDecision;
+    /** New-child commit: operator corrections and the identity choice (see executeNewChildProposalCommit). */
+    new_child?: unknown;
     /** Allowed: an operator scope override, validated against the definition's supported scopes. */
     scope?: string;
     /** Optional assertions — compared against the server's answer and REJECTED on conflict. */
@@ -86,6 +89,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         } catch {
             proposalContext = null;
         }
+        // A NEW child the family told us about: reviewed, identity-safe creation through the
+        // Processing new-child commit. Existing-child and relationship paths are unchanged.
+        if (
+            proposalContext?.proposal.origin === "proposed_new_record" &&
+            proposalContext.proposal.collection_provider_ref === "children"
+        ) {
+            const nc = (body.new_child && typeof body.new_child === "object" ? body.new_child : {}) as Record<string, unknown>;
+            const str = (v: unknown) => (typeof v === "string" ? v : null);
+            const outcome = await executeNewChildProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId,
+                caseId,
+                proposalId,
+                metadata,
+                choice: {
+                    firstName: str(nc.first_name),
+                    lastName: str(nc.last_name),
+                    dob: str(nc.dob),
+                    chosenCustomerMemberId: str(nc.chosen_customer_member_id),
+                    createNewChild: nc.create_new_child === true,
+                    createNewReason: str(nc.create_new_reason),
+                },
+            });
+            if (!outcome.ok) {
+                return NextResponse.json(
+                    { error: outcome.error, ...(outcome.candidates ? { candidates: outcome.candidates } : {}) },
+                    { status: outcome.status },
+                );
+            }
+            return jsonData({
+                caseId,
+                proposalId,
+                alreadyDone: outcome.alreadyDone,
+                result: outcome.result,
+                identity_outcome: outcome.identity_outcome,
+                audit_event_id: outcome.audit_event_id,
+            });
+        }
+
         if (proposalContext?.proposal.execution_kind === "configured_relationship") {
 
             const relOutcome = await executeRelationshipProposalCommit({
