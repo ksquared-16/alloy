@@ -185,3 +185,22 @@ describe("the family's completion is each child's own", () => {
         expect(done.progress.find((p) => p.label === "Ben")?.complete).toBe(false);
     });
 });
+
+describe("a child the family asked about appears as requested — never as Enrolling", () => {
+    it("shows the requested child with no requirements and leaves siblings unchanged", async () => {
+        live.context = { opportunityId: "opp-1", runningSubjectIds: ["cy"] };
+        tables.customer_members = tables.customer_members.map((m) => ({ ...m, relationship: "child", is_active: true }));
+        tables.customer_members.push({ id: "dee", org_id: ORG, customer_id: HOUSE, display_name: "Dee", relationship: "child", is_active: true });
+        tables.process_instances = [pi("pi-cy", "cy", { context_id: "ocm-cy" })];
+        tables.opportunity_customer_members = [{ org_id: ORG, customer_member_id: "dee", opportunity_id: "opp-1", outcome_status_key: "new_inquiry" }];
+        const r = await resolveFamilyEnrollmentExperience(db(), {
+            orgId: ORG,
+            session: { id: "s", process_instance_id: "pi-cy", status: "in_progress", crm_snapshot: { customer_id: HOUSE } },
+        });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const rows = Object.fromEntries(r.value.progress.filter((p) => p.customerMemberId).map((p) => [p.label, [p.detail, p.complete]]));
+        expect(rows).toEqual({ Charlie: ["1 of 2 complete", false], Dee: ["Requested — the school will review", false] });
+        expect(r.value.children.find((c) => c.displayName === "Dee")?.processInstanceId).toBeNull();
+    });
+});

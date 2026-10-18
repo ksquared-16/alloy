@@ -48,7 +48,7 @@ export type FamilyChildJourney = {
      * Where this child's own journey stands, in the family's words. Each child's state is its own —
      * a sibling's enrolment never completes, and a sibling's waitlist never blocks, another child.
      */
-    readonly state?: "in_progress" | "waitlisted" | "enrolled" | "withdrawn" | "not_enrolling";
+    readonly state?: "requested" | "in_progress" | "waitlisted" | "enrolled" | "withdrawn" | "not_enrolling";
     readonly locationName: string | null;
     readonly totalRequirements: number;
     readonly satisfiedRequirements: number;
@@ -123,6 +123,7 @@ function childDetail(child: FamilyChildJourney): string {
     if (child.state === "withdrawn") return "Withdrawn";
     if (child.state === "not_enrolling") return "Not enrolling";
     if (child.state === "waitlisted") return "On the waitlist";
+    if (child.state === "requested") return "Requested — the school will review";
     if (child.processInstanceId === null) return "Not started";
     if (child.submitted) return child.processingState ? `Submitted · ${child.processingState}` : "Submitted";
     /*
@@ -198,7 +199,8 @@ export function composeFamilyEnrollmentExperience(
      * nothing left; a waitlisted child has no Enrollment paperwork yet — neither holds the family open
      * or closed on another child's behalf.
      */
-    const working = children.filter((c) => !childIsSettled(c) && c.state !== "waitlisted");
+    // A requested child has no paperwork yet — the school decides first.
+    const working = children.filter((c) => !childIsSettled(c) && c.state !== "waitlisted" && c.state !== "requested");
     const everyChildSubmitted = children.length > 0 && working.every((c) => c.submitted);
     const moneySettled =
         !input.financials ||
