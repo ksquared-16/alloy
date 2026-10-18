@@ -38,6 +38,7 @@ import {
     resolveRelationshipRoleKeyForAction,
 } from "@/lib/admin/relationship/relationshipActionRoleResolution";
 import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
+import { linkHouseholdGuardianAtomically, RelationshipActionError } from "@/lib/admin/relationship/guardianLinkTransaction";
 import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 import {
     resolveRelationshipScopeMemberIds,
@@ -380,6 +381,38 @@ export async function executeRelationshipAction(
             }
         }
         customerMemberId = memberId;
+    } else if (entry.executorKind === "guardian") {
+        /*
+         * THE GUARDIAN IS WRITTEN IN ONE TRANSACTION (relationship_link_household_guardian).
+         *
+         * Person, contact, household link and child links used to be four separate writes; a refusal
+         * at the child link left the person and household link behind. They now commit together or not
+         * at all, under one per-household lock, with household-scoped identity reuse.
+         */
+        if (!roleKey) throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+        if (!input.selectedPersonId && input.createPersonDraft) {
+            const validationError = validatePersonIdentityFields({
+                first_name: input.createPersonDraft.first_name,
+                last_name: input.createPersonDraft.last_name,
+                email: input.createPersonDraft.email ?? null,
+                phone: input.createPersonDraft.phone ?? null,
+            });
+            if (validationError) throw new RelationshipActionError("relationship_identity_insufficient", validationError);
+        }
+        const linked = await linkHouseholdGuardianAtomically(supabase, {
+            orgId,
+            customerId,
+            memberIds,
+            roleKey,
+            selectedPersonId: input.selectedPersonId ?? null,
+            draft: input.createPersonDraft ?? null,
+            source: "relationship_action",
+        });
+        personId = linked.personId;
+        contactId = linked.contactId;
+        linksWritten += linked.linksWritten;
+        affectedPreview.push({ label: "Household adult role", table: "customer_persons" });
+        affectedPreview.push({ label: "Child-scoped contact links", table: "customer_member_contacts", record_ids: memberIds });
     } else {
         personId = await resolvePersonId(supabase, orgId, input);
         contactId = await ensureContactForPerson(supabase, { orgId, customerId, personId });
@@ -462,8 +495,7 @@ export async function executeRelationshipAction(
                 });
             }
         }
-    }
-
+        }
     const scopedLinks = await refreshScopedContactLinks(supabase, orgId, householdChildren);
     const memberChildIds = new Map(
         householdChildren.map((child) => [child.customer_member_id, child.child_person_id]),

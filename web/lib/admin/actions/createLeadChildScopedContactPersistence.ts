@@ -54,33 +54,37 @@ export function pickFirstAvailableMemberContactRoleKey(
     return null;
 }
 
+/** The platform's default member-contact roles — used ONLY by an organization that configured none. */
+export const PLATFORM_DEFAULT_MEMBER_CONTACT_ROLE_KEYS: readonly string[] = ["guardian", "emergency_contact", "billing_contact", "payer"];
+
+/**
+ * THE EFFECTIVE MEMBER-CONTACT ROLES — one authority for the resolver AND the writer.
+ *
+ *   no configuration at all    → the platform defaults (existing policy; nothing is seeded)
+ *   any configuration          → exactly the organization's ACTIVE roles; a disabled role is refused,
+ *                                and an organization whose roles are all disabled has none
+ *   configuration unreadable   → refused (an error is not permission to use defaults)
+ *
+ * Before this, the resolver fell back to defaults while the link writer re-checked the configured rows:
+ * on an organization with no rows the resolver chose "guardian", the writer refused it, and the person
+ * and household link written in between were left behind (staging, QA person 2a1cc5df).
+ */
 export async function loadActiveMemberContactRoleKeys(
     supabase: SupabaseClient,
     orgId: string,
 ): Promise<Set<string>> {
     const { data, error } = await supabase
         .from("customer_member_contact_roles")
-        .select("role_key")
-        .eq("org_id", orgId)
-        .eq("is_active", true);
+        .select("role_key, is_active")
+        .eq("org_id", orgId);
 
     if (error) {
-        console.warn("[create_lead_child_scoped_contacts] role_config_load_failed", {
-            org_id: orgId,
-            message: error.message,
-        });
-        return new Set(["guardian", "emergency_contact", "billing_contact", "payer"]);
+        console.warn("[member_contact_roles] role_config_load_failed", { org_id: orgId, message: error.message });
+        throw new Error("Contact roles could not be read for this organization.");
     }
-
-    const keys = new Set(
-        (data ?? [])
-            .map((row: { role_key?: string | null }) => trim(row.role_key))
-            .filter(Boolean),
-    );
-    if (keys.size === 0) {
-        return new Set(["guardian", "emergency_contact", "billing_contact", "payer"]);
-    }
-    return keys;
+    const rows = (data ?? []) as Array<{ role_key?: string | null; is_active?: boolean | null }>;
+    if (rows.length === 0) return new Set(PLATFORM_DEFAULT_MEMBER_CONTACT_ROLE_KEYS);
+    return new Set(rows.filter((r) => r.is_active === true).map((r) => trim(r.role_key)).filter(Boolean));
 }
 
 export function resolveGuardianMemberContactRoleKey(
@@ -330,20 +334,10 @@ export async function upsertCustomerMemberContactLink(
 ): Promise<{ inserted: boolean; skipped_invalid_role: boolean }> {
     const { orgId, customerId, customerMemberId, contactId, roleKey } = input;
 
-    const { data: roleRow, error: roleErr } = await supabase
-        .from("customer_member_contact_roles")
-        .select("role_key")
-        .eq("org_id", orgId)
-        .eq("role_key", roleKey)
-        .eq("is_active", true)
-        .maybeSingle();
-
-    if (roleErr || !roleRow) {
-        console.warn("[create_lead_child_scoped_contacts] skipped_invalid_role_key", {
-            org_id: orgId,
-            role_key: roleKey,
-            message: roleErr?.message ?? "role_not_configured",
-        });
+    // The SAME effective-role authority the resolver uses — the two can no longer disagree.
+    const effective = await loadActiveMemberContactRoleKeys(supabase, orgId);
+    if (!effective.has(roleKey)) {
+        console.warn("[create_lead_child_scoped_contacts] skipped_invalid_role_key", { org_id: orgId, role_key: roleKey });
         return { inserted: false, skipped_invalid_role: true };
     }
 
