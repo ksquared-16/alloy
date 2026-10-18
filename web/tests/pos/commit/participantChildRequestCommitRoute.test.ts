@@ -34,6 +34,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 }));
 vi.mock("@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase", () => ({
     loadRelatedRecordProposalForCase: async () => m.context,
+    describeProposalLookup: async () => ({ source_kinds: [] }),
 }));
 vi.mock("@/lib/pos/processingCase/commit/executeNewChildProposalCommit", () => ({
     executeNewChildProposalCommit: (...a: unknown[]) => m.execute(...a),

@@ -114,3 +114,38 @@ export async function loadRelatedRecordProposalForCase(args: {
     }
     return null;
 }
+
+/**
+ * Why a proposal was not found for a case — operator-only diagnostics, no personal data: the case's
+ * source kinds, which participant requests resolved, and the proposal ids the loader computed.
+ */
+export async function describeProposalLookup(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+    caseId: string;
+    proposalId: string;
+}): Promise<Record<string, unknown>> {
+    const { data: sources, error } = await args.supabase
+        .from("processing_case_sources")
+        .select("source_kind, source_id")
+        .eq("org_id", args.orgId)
+        .eq("processing_case_id", args.caseId);
+    const rows = (sources ?? []) as { source_kind: string; source_id: string }[];
+    const participantIds = rows.filter((r) => r.source_kind === PARTICIPANT_CHILD_REQUEST_SOURCE_KIND).map((r) => r.source_id);
+    let computed: string[] = [];
+    let requestError: string | null = null;
+    try {
+        const requests = await loadParticipantChildRequests(args.supabase, args.orgId, participantIds);
+        computed = requests.flatMap((r) => adaptParticipantChildRequestToRelatedRecordProposals(r).collections.flatMap((c) => c.instances.map((i) => i.proposal_id)));
+    } catch (e) {
+        requestError = e instanceof Error ? e.message : String(e);
+    }
+    return {
+        source_error: error?.message ?? null,
+        source_kinds: rows.map((r) => r.source_kind),
+        participant_requests: participantIds.length,
+        participant_proposals_computed: computed,
+        requested_proposal_id: args.proposalId,
+        request_error: requestError,
+    };
+}
