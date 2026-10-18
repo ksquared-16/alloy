@@ -6,6 +6,19 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/web-typecheck.yml"
+  # POST-MERGE VERIFICATION (Vacilando G3-B S6). Every revision merged to
+  # staging is typechecked ON ITS OWN SHA, so "merged" and "verified" are
+  # different facts and a staging revision that does not compile is seen at the
+  # merge, not hours later. Unfiltered on purpose: a verifier waiting for these
+  # check names on a merged SHA must never wait for a run a filter suppressed.
+  push:
+    branches: [staging]
+
+# One group per event and SHA: a newer staging push never cancels (or replaces
+# the pending run of) an older merged revision's verification.
+concurrency:
+  group: web-typecheck-${{ github.event_name }}-${{ github.sha }}
+  cancel-in-progress: false
 
 defaults:
   run:

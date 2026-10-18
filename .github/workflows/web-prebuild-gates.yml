@@ -38,6 +38,14 @@
 name: Web prebuild gates
 on:
   pull_request:
+  # POST-MERGE VERIFICATION (Vacilando G3-B S6): the same prebuild chain on the
+  # merged staging SHA itself, never cancelled by a newer push.
+  push:
+    branches: [staging]
+
+concurrency:
+  group: web-prebuild-gates-${{ github.event_name }}-${{ github.sha }}
+  cancel-in-progress: false
 
 defaults:
   run:
