@@ -34,6 +34,8 @@ type Body = {
     anchor_customer_member_id?: string;
     /** The operator's choice of an existing person — validated by the relationship authority. */
     selected_person_id?: string;
+    /** The operator's corrections to the submitted person before it is created. */
+    person_corrections?: unknown;
     /** Explicit selection for selected-children scope — every id is validated. */
     selected_customer_member_ids?: unknown[];
 };
@@ -192,6 +194,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 anchorCustomerMemberId:
                     typeof body.anchor_customer_member_id === "string" ? body.anchor_customer_member_id : null,
                 selectedPersonId: typeof body.selected_person_id === "string" && body.selected_person_id.trim() ? body.selected_person_id.trim() : null,
+                personCorrections: body.person_corrections && typeof body.person_corrections === "object" && !Array.isArray(body.person_corrections)
+                    ? (body.person_corrections as { first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null })
+                    : null,
                 selectedCustomerMemberIds: Array.isArray(body.selected_customer_member_ids)
                     ? body.selected_customer_member_ids.filter((x): x is string => typeof x === "string")
                     : null,

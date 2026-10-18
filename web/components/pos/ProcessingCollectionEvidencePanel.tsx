@@ -210,14 +210,28 @@ function relationshipDecisionLabel(instance: ProcessingCollectionInstanceProposa
  * Commit or reject a proposed relationship through the existing guarded routes. The server derives the
  * role, the household and the child the paperwork is about; nothing here asserts them.
  */
+type RelationshipIdentityCandidate = { person_id: string; display_name: string; in_household: boolean; same_name: boolean };
+
+/**
+ * Commit or reject a proposed relationship through the existing guarded routes. The server derives the
+ * role, the household and the child the paperwork is about; nothing here asserts them.
+ *
+ * WHEN THE PERSON IS AMBIGUOUS (an email or phone already belongs to someone), the operator decides:
+ * use that existing person, or correct the details the family submitted and add a new person. The
+ * relationship authority validates either choice; nothing is guessed.
+ */
 function RelationshipDecisionBlock({ instance, caseId, label, onCommitted }: { instance: ProcessingCollectionInstanceProposal; caseId: string; label: string; onCommitted?: () => void }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<string | null>(null);
     const [reason, setReason] = useState("");
+    const [candidates, setCandidates] = useState<RelationshipIdentityCandidate[] | null>(null);
+    const [correcting, setCorrecting] = useState(false);
+    const submitted = useMemo(() => submittedPersonIdentity(instance), [instance]);
+    const [fix, setFix] = useState(submitted);
     const base = `/api/admin/processing/cases/${caseId}/related-record-proposals/${encodeURIComponent(instance.proposal_id)}`;
 
-    const act = async (kind: "commit" | "reject") => {
+    const act = async (kind: "commit" | "reject", extra: Record<string, unknown> = {}) => {
         setBusy(true);
         setError(null);
         try {
@@ -225,14 +239,18 @@ function RelationshipDecisionBlock({ instance, caseId, label, onCommitted }: { i
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(kind === "commit"
-                    ? { decision: { proposal_id: instance.proposal_id, instance_decision: "approve", field_decisions: [] } }
+                    ? { decision: { proposal_id: instance.proposal_id, instance_decision: "approve", field_decisions: [] }, ...extra }
                     : { reason: reason || null }),
             });
-            const json = (await res.json()) as { error?: string; data?: { outcome?: string; alreadyDone?: boolean } };
+            const json = (await res.json()) as { error?: string; code?: string; identity_candidates?: RelationshipIdentityCandidate[]; data?: { outcome?: string } };
             if (!res.ok) {
+                if (json.code === "relationship_identity_choice_required" || json.code === "relationship_contact_conflict") {
+                    setCandidates(json.identity_candidates ?? []);
+                }
                 setError(json.error ?? (kind === "commit" ? "The relationship could not be added." : "The proposal could not be rejected."));
                 return;
             }
+            setCandidates(null);
             setDone(kind === "commit" ? `Added to the record as ${label.toLowerCase()}` : "Rejected — nothing was added");
             onCommitted?.();
         } finally {
@@ -242,17 +260,68 @@ function RelationshipDecisionBlock({ instance, caseId, label, onCommitted }: { i
 
     if (done) return <p className="mt-2 text-[11px] font-medium text-alloy-juniper" data-testid="relationship-decision-done">{done}</p>;
     return (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-2" data-testid="relationship-decision">
-            <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void act("commit")} data-testid="relationship-commit">
-                {busy ? "Working..." : `Add to ${label}`}
-            </button>
-            <input aria-label="Reason to reject" placeholder="Reason (optional)" className="min-w-[10rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="relationship-reject-reason" />
-            <button type="button" className="rounded border border-stone-200 px-2 py-1 text-[11px] disabled:opacity-50" disabled={busy} onClick={() => void act("reject")} data-testid="relationship-reject">
-                Reject
-            </button>
-            {error ? <p className="w-full text-[11px] text-amber-800">{error}</p> : null}
+        <div className="mt-2 space-y-1.5 border-t border-stone-100 pt-2" data-testid="relationship-decision">
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void act("commit")} data-testid="relationship-commit">
+                    {busy ? "Working..." : `Add to ${label}`}
+                </button>
+                <input aria-label="Reason to reject" placeholder="Reason (optional)" className="min-w-[10rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="relationship-reject-reason" />
+                <button type="button" className="rounded border border-stone-200 px-2 py-1 text-[11px] disabled:opacity-50" disabled={busy} onClick={() => void act("reject")} data-testid="relationship-reject">
+                    Reject
+                </button>
+            </div>
+            {error ? <p className="text-[11px] text-amber-800" data-testid="relationship-decision-error">{error}</p> : null}
+            {candidates ? (
+                <div className="space-y-1 rounded border border-amber-200 bg-amber-50/50 px-2 py-1.5" data-testid="relationship-candidates">
+                    {candidates.map((c) => (
+                        <div key={c.person_id} className="flex flex-wrap items-center gap-2 text-[11.5px]">
+                            <span className="font-medium">{c.display_name || "Unnamed person"}</span>
+                            <span className="text-stone-500">{c.in_household ? "already in this family" : "in another family"}{c.same_name ? " · same name" : " · different name"}</span>
+                            <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy} onClick={() => void act("commit", { selected_person_id: c.person_id })} data-testid="relationship-use-person">
+                                Use this person
+                            </button>
+                        </div>
+                    ))}
+                    {!correcting ? (
+                        <button type="button" className="rounded border border-stone-200 px-2 py-0.5 text-[11px]" disabled={busy} onClick={() => setCorrecting(true)} data-testid="relationship-correct">
+                            It's a different person — correct the details
+                        </button>
+                    ) : (
+                        <div className="flex flex-wrap items-center gap-1.5" data-testid="relationship-correction">
+                            <input aria-label="First name" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={fix.first_name} onChange={(e) => setFix({ ...fix, first_name: e.target.value })} data-testid="relationship-fix-first" />
+                            <input aria-label="Last name" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={fix.last_name} onChange={(e) => setFix({ ...fix, last_name: e.target.value })} data-testid="relationship-fix-last" />
+                            <input aria-label="Phone" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={fix.phone} onChange={(e) => setFix({ ...fix, phone: e.target.value })} data-testid="relationship-fix-phone" />
+                            <input aria-label="Email" className="rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={fix.email} onChange={(e) => setFix({ ...fix, email: e.target.value })} data-testid="relationship-fix-email" />
+                            <button type="button" className="rounded bg-alloy-midnight px-2 py-0.5 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy || !fix.first_name.trim() || !fix.last_name.trim() || !(fix.phone.trim() || fix.email.trim())} onClick={() => void act("commit", { person_corrections: fix })} data-testid="relationship-fix-save">
+                                Add with these details
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : null}
         </div>
     );
+}
+
+/** What the family submitted for this person, split for correction: `…full_name`, `…phone`, `…email`. */
+function submittedPersonIdentity(instance: ProcessingCollectionInstanceProposal): { first_name: string; last_name: string; phone: string; email: string } {
+    let full = "", first = "", last = "", phone = "", email = "";
+    for (const b of instance.field_bindings) {
+        const key = `${b.provider_ref ?? ""} ${b.field_id}`.toLowerCase();
+        const v = (b.display_value ?? "").trim();
+        if (!v) continue;
+        if (/first_name/.test(key)) first ||= v;
+        else if (/last_name/.test(key)) last ||= v;
+        else if (/full_name/.test(key)) full ||= v;
+        else if (/phone/.test(key)) phone ||= v;
+        else if (/email/.test(key)) email ||= v;
+    }
+    if (full && (!first || !last)) {
+        const parts = full.split(/\s+/);
+        first ||= parts[0] ?? "";
+        last ||= parts.slice(1).join(" ");
+    }
+    return { first_name: first, last_name: last, phone, email };
 }
 
 function isNewChildCommitEligible(instance: ProcessingCollectionInstanceProposal): boolean {

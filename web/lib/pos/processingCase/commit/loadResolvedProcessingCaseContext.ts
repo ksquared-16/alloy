@@ -85,9 +85,19 @@ export async function loadResolvedProcessingCaseContext(
         memberIds = (kids ?? []).map((k: { id: string }) => k.id);
     }
 
+    /*
+     * A ROUTED CASE ATTEMPTED NO IDENTITY RESOLUTION.
+     *
+     * Approving a packet case records `{ kind: "routed" }` ("No form-submission source to promote"):
+     * nothing was resolved, and nothing failed. Reading it as `failed` meant that an operator who
+     * approved the case before recording its guardians and contacts could never record them
+     * (staging, case 70e44031: "Case identity resolution did not complete"). It is unresolved, so the
+     * submission's own household still governs, exactly as before approval.
+     */
+    const routed = str(op?.kind) === "routed";
     const status: ProcessingCaseResolutionStatus = customerId
         ? "resolved"
-        : op
+        : op && !routed
           ? "failed"
           : "unresolved";
 

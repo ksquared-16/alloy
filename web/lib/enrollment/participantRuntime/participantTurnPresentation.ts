@@ -474,6 +474,16 @@ function indefiniteArticle(label: string): string {
     return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
 }
 
+/** "a street address", "any eating habits", "a ZIP / postal code" — spoken, not printed. */
+export function optionalAttributePhrase(label: string): string {
+    const trimmed = label.trim();
+    const firstWord = trimmed.split(/\s+/)[0] ?? "";
+    const spoken = /^[A-Z][A-Z]/.test(firstWord) ? trimmed : trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+    const lastWord = (spoken.split(/\s+/).pop() ?? "").toLowerCase();
+    const plural = /[^s]s$/.test(lastWord);
+    return plural ? `any ${spoken}` : `${indefiniteArticle(spoken)} ${spoken}`;
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
@@ -545,7 +555,12 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         if (turn.optional) {
             // A yes/no shape for an optional attribute — the same shape allergies already uses, and
             // what a specialist actually says: "Does Malik have a middle name?"
-            return `Does ${them} have ${indefiniteArticle(label)} ${label}?`;
+            // "Do you have a street address?", "Does Ben have any eating habits?" — the verb agrees with
+            // the subject, the label is spoken in lower case (an acronym keeps its capitals), and a
+            // plural takes "any" rather than "a". The staging walk read "Does you have a Street
+            // address?" and "Does Ben have an Eating habits?".
+            const verb = them === "you" ? "Do" : "Does";
+            return `${verb} ${them} have ${optionalAttributePhrase(label)}?`;
         }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;

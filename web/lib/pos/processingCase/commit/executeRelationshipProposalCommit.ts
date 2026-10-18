@@ -135,6 +135,8 @@ export async function executeRelationshipProposalCommit(args: {
     anchorCustomerMemberId: string | null;
     /** The operator's explicit choice of an existing person (after identity_choice_required). */
     selectedPersonId?: string | null;
+    /** The operator's corrections to the submitted person (name, phone, email) — reviewed, not inferred. */
+    personCorrections?: { first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null } | null;
     selectedCustomerMemberIds?: readonly string[] | null;
     /**
      * Household children loaded server-side. Optional: when omitted they are taken from the RESOLVED
@@ -311,7 +313,29 @@ export async function executeRelationshipProposalCommit(args: {
 
     // Identity: link the canonical Person when known, otherwise propose one from the submitted facts.
     const facts = auth.proposal.relationship_intent?.proposed_person_facts ?? [];
-    const draft = resolved.identityAction === "create_proposed_person" ? personDraftFromFacts(facts) : null;
+    /*
+     * The operator may correct what the family submitted before the person is created — the same
+     * review step a new child has. Corrections win field by field; nothing is filled that neither the
+     * family nor the operator supplied.
+     */
+    const submittedDraft = resolved.identityAction === "create_proposed_person" ? personDraftFromFacts(facts) : null;
+    const fix = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+    const corrections = args.personCorrections ?? null;
+    const corrected = corrections
+        ? {
+              first_name: fix(corrections.first_name) ?? submittedDraft?.first_name,
+              last_name: fix(corrections.last_name) ?? submittedDraft?.last_name,
+              phone: fix(corrections.phone) ?? submittedDraft?.phone,
+              email: fix(corrections.email) ?? submittedDraft?.email,
+          }
+        : null;
+    const draft = resolved.identityAction === "create_proposed_person"
+        ? corrected
+            ? corrected.first_name && corrected.last_name
+                ? { first_name: corrected.first_name, last_name: corrected.last_name, ...(corrected.email ? { email: corrected.email } : {}), ...(corrected.phone ? { phone: corrected.phone } : {}) }
+                : null
+            : submittedDraft
+        : null;
     if (resolved.identityAction === "create_proposed_person" && !draft && !args.selectedPersonId) {
         return {
             ok: false,
