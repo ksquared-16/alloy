@@ -831,7 +831,13 @@ export type ProcessActivityRow = {
 };
 
 /** The most recent MEANINGFUL activity row — a projection of `activity`, never a store of its own. */
-export type ProcessLastAction = { label: string; detail: string | null; when: string };
+export type ProcessLastAction = {
+    label: string;
+    detail: string | null;
+    when: string;
+    /** "family": shared family activity shown on a child's panel — labelled, never passed off as the child's. */
+    scope?: "family";
+};
 
 export type ProcessEvidence = {
     caseLabel: string;

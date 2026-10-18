@@ -25,6 +25,8 @@ export type LeadActivityPreviewEntry = {
     id?: string;
     /** Not something anyone did (delivery state / consequence notification). @see ActivityTimelineEntry */
     notAnAction?: boolean;
+    /** The child the row is about; null = family activity. Absent when the producer cannot say. */
+    subject?: import("@/lib/admin/collapseBusinessEventMechanics").ActivityRowSubject | null;
     kind: LeadActivityPreviewKind;
     label: string;
     detail: string | null;

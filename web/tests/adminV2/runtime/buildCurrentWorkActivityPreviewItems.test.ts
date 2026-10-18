@@ -60,6 +60,19 @@ describe("buildCurrentWorkActivityPreviewItems", () => {
         expect(items[0]?.label).toContain("Program preference");
     });
 
+    it("each item says which child it is about — or that it is the family's — from the event payload", () => {
+        const record = {
+            _activity_timeline_events: [
+                { id: "ev-ava", event_type: "child_lifecycle_status_changed", occurred_at: "2026-10-17T11:24:00.000Z", payload: { opportunity_customer_member_id: "ocm-ava", child_display_name: "Ava Z", to_status: "enrolling" } },
+                { id: "ev-tour", event_type: "message_sent", occurred_at: "2026-10-17T10:00:00.000Z", payload: { summary: "Email sent", channel: "email" } },
+            ],
+        } as ProofRuntimeRecord;
+        const items = buildCurrentWorkActivityPreviewItemsFromContext(context(record), { limit: 10 });
+        const byId = new Map(items.map((i) => [String(i.id).split(":").pop(), i]));
+        expect(byId.get("ev-ava")?.subject).toEqual({ childIds: ["ocm-ava"], childName: "Ava Z" });
+        expect(byId.get("ev-tour")?.subject).toBeNull();
+    });
+
     it("returns empty array for genuine empty state", () => {
         expect(buildCurrentWorkActivityPreviewItemsFromContext(context({}))).toEqual([]);
     });

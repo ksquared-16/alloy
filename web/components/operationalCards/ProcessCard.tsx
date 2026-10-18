@@ -190,7 +190,7 @@ export default function ProcessCard({
                         {evidence.lastAction ? (
                             <p className="alloy-os-process__needed" data-process-last-action="true">
                                 <span className="alloy-os-process__needed-label">Last action</span>
-                                {[evidence.lastAction.label, evidence.lastAction.detail, evidence.lastAction.when]
+                                {[evidence.lastAction.scope === "family" ? "Family" : null, evidence.lastAction.label, evidence.lastAction.detail, evidence.lastAction.when]
                                     .filter(Boolean)
                                     .join(" · ")}
                             </p>

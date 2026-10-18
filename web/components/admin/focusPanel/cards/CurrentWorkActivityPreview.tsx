@@ -19,6 +19,8 @@ export type CurrentWorkActivityPreviewItem = {
     occurredAt?: string | null;
     /** Delivery state or consequence notification — never the Last action. */
     notAnAction?: boolean;
+    /** The child the row is about; null = family activity. Absent when the producer cannot say. */
+    subject?: import("@/lib/admin/collapseBusinessEventMechanics").ActivityRowSubject | null;
 };
 
 

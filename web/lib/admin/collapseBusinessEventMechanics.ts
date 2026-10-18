@@ -72,6 +72,17 @@ function subjectOf(row: Row): Subject {
     return { family: true };
 }
 
+/**
+ * Whose activity is this row? The child it names (participation / child ids, or the child's display
+ * name), or null when it is the FAMILY's (a tour, a family message). The same reading the collapse uses.
+ */
+export type ActivityRowSubject = { childIds: string[]; childName: string | null };
+
+export function activityRowSubject(rowPayload: unknown): ActivityRowSubject | null {
+    const s = subjectOf({ payload: rowPayload } as Row);
+    return "child" in s ? { childIds: [...s.child.ids], childName: s.child.name } : null;
+}
+
 function sameChild(a: { ids: Set<string>; name: string | null }, b: { ids: Set<string>; name: string | null }): boolean {
     for (const id of a.ids) if (b.ids.has(id)) return true;
     return Boolean(a.name && b.name && a.name.toLowerCase() === b.name.toLowerCase());
