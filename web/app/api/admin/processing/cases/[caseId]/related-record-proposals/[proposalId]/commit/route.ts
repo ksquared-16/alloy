@@ -164,6 +164,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         if (proposalContext?.proposal.execution_kind === "configured_relationship") {
+            // A rejected relationship never commits (the decision is recorded by the reject route).
+            if (isRejectedProposal(metadata, proposalId)) {
+                return NextResponse.json({ error: "This proposal was rejected, so it cannot be committed.", code: "declined" }, { status: 409 });
+            }
 
             const relOutcome = await executeRelationshipProposalCommit({
                 supabase,

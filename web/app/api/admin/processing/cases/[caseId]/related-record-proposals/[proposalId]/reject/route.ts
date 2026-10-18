@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
-import { describeProposalLookup, loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
+import { loadRelatedRecordProposalForCase, proposalNotFound } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 import { rejectNewChildProposal } from "@/lib/pos/processingCase/commit/participantChildRequestCommit";
 
 export const dynamic = "force-dynamic";
@@ -41,13 +41,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!caseRow) return jsonError("Not found", 404);
 
     const context = await loadRelatedRecordProposalForCase({ supabase, orgId: ctx.orgId, caseId, proposalId });
-    if (!context) {
-        // Operator-only diagnostics: why the proposal the case view shows did not resolve here.
-        const lookup = await describeProposalLookup({ supabase, orgId: ctx.orgId, caseId, proposalId }).catch(() => null);
-        return NextResponse.json({ error: "Proposal not found for case", lookup }, { status: 404 });
-    }
-    if (context.proposal.origin !== "proposed_new_record" || context.proposal.collection_provider_ref !== "children") {
-        return jsonError("Only a proposed new child can be rejected here", 403);
+    if (!context) return proposalNotFound({ supabase, orgId: ctx.orgId, caseId, proposalId });
+    const isNewChild = context.proposal.origin === "proposed_new_record" && context.proposal.collection_provider_ref === "children";
+    const isRelationship = context.proposal.execution_kind === "configured_relationship";
+    if (!isNewChild && !isRelationship) {
+        return jsonError("Only a proposed new child or a proposed relationship can be rejected here", 403);
     }
 
     const outcome = await rejectNewChildProposal(supabase, {
@@ -58,6 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         metadata: ((caseRow as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>,
         reason,
         request: context.participantChildRequest ?? null,
+        commitKind: isNewChild ? "new_child" : "relationship",
     });
     if (!outcome.ok) return jsonError(outcome.error, outcome.status);
     return jsonData({ caseId, proposalId, rejected: true, alreadyDone: outcome.alreadyDone });

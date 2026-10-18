@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ProcessingCollectionGroupEvidence, ProcessingCollectionInstanceProposal } from "@/lib/pos/processingCase/collection/types";
 import { instanceOriginLabel } from "@/lib/pos/processingCase/collection/collectionDisplayAdapters";
 import type { RelatedRecordFieldDecisionKind, RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
+import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
 
 function formatValue(display: string | null | undefined): string {
     if (display === null || display === undefined || display === "") return "—";
@@ -191,9 +192,65 @@ function InstanceBlock({ instance, caseId, onCommitted }: { instance: Processing
             ) : null}
 
             {caseId && isNewChildCommitEligible(instance) ? <NewChildCommitBlock instance={instance} caseId={caseId} onCommitted={onCommitted} /> : null}
+            {caseId && relationshipDecisionLabel(instance) ? <RelationshipDecisionBlock instance={instance} caseId={caseId} label={relationshipDecisionLabel(instance)!} onCommitted={onCommitted} /> : null}
             {result ? <p className="mt-2 text-[11px] font-medium text-alloy-juniper">Commit result: {result.status}</p> : null}
             {error ? <p className="mt-2 text-[11px] text-amber-800">{error}</p> : null}
             {hasWarnings ? <ul className="mt-2 space-y-0.5 text-[11px] text-amber-800">{instance.diagnostics.map((d, i) => <li key={`${d.code}:${i}`}>{d.message}</li>)}</ul> : null}
+        </div>
+    );
+}
+
+/** A valid proposed relationship (guardian, emergency contact, pick-up, physician…) the operator may decide. */
+function relationshipDecisionLabel(instance: ProcessingCollectionInstanceProposal): string | null {
+    if (instance.status !== "valid" || instance.origin !== "respondent_added") return null;
+    return relationshipDefinitionForRef(instance.collection_provider_ref)?.label ?? null;
+}
+
+/**
+ * Commit or reject a proposed relationship through the existing guarded routes. The server derives the
+ * role, the household and the child the paperwork is about; nothing here asserts them.
+ */
+function RelationshipDecisionBlock({ instance, caseId, label, onCommitted }: { instance: ProcessingCollectionInstanceProposal; caseId: string; label: string; onCommitted?: () => void }) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState<string | null>(null);
+    const [reason, setReason] = useState("");
+    const base = `/api/admin/processing/cases/${caseId}/related-record-proposals/${encodeURIComponent(instance.proposal_id)}`;
+
+    const act = async (kind: "commit" | "reject") => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`${base}/${kind}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(kind === "commit"
+                    ? { decision: { proposal_id: instance.proposal_id, instance_decision: "approve", field_decisions: [] } }
+                    : { reason: reason || null }),
+            });
+            const json = (await res.json()) as { error?: string; data?: { outcome?: string; alreadyDone?: boolean } };
+            if (!res.ok) {
+                setError(json.error ?? (kind === "commit" ? "The relationship could not be added." : "The proposal could not be rejected."));
+                return;
+            }
+            setDone(kind === "commit" ? `Added to the record as ${label.toLowerCase()}` : "Rejected — nothing was added");
+            onCommitted?.();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (done) return <p className="mt-2 text-[11px] font-medium text-alloy-juniper" data-testid="relationship-decision-done">{done}</p>;
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-2" data-testid="relationship-decision">
+            <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void act("commit")} data-testid="relationship-commit">
+                {busy ? "Working..." : `Add to ${label}`}
+            </button>
+            <input aria-label="Reason to reject" placeholder="Reason (optional)" className="min-w-[10rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="relationship-reject-reason" />
+            <button type="button" className="rounded border border-stone-200 px-2 py-1 text-[11px] disabled:opacity-50" disabled={busy} onClick={() => void act("reject")} data-testid="relationship-reject">
+                Reject
+            </button>
+            {error ? <p className="w-full text-[11px] text-amber-800">{error}</p> : null}
         </div>
     );
 }

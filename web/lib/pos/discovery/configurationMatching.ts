@@ -19,6 +19,7 @@
  * canonical/platform matcher and new-field proposals so it is fully unit-testable.)
  */
 
+import { OWNER_AMBIGUOUS_SIGNAL } from "./conceptDiscovery";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
 import { ownershipHoldFor } from "./canonicalOwnershipHolds";
@@ -417,7 +418,11 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             ...base,
             disposition: "reuse_canonical_field",
             target_field_source: semanticSafe.field_source,
-            confidence: conf(semantic.band, [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`]),
+            // A confident match to a field cannot settle WHOSE the answer is. When nothing names the
+            // owner, the destination is a suggestion for the operator, never a binding applied at import.
+            confidence: concept.confidence.signals.includes(OWNER_AMBIGUOUS_SIGNAL)
+                ? conf("review", [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`, OWNER_AMBIGUOUS_SIGNAL])
+                : conf(semantic.band, [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
             explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(semantic.field_key)}`,
         };

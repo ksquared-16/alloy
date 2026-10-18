@@ -236,7 +236,15 @@ export async function executeRelationshipProposalCommit(args: {
         request: {
             customerId: anchorCustomerId,
             scope: resolved.scope,
-            customerMemberId: args.anchorCustomerMemberId,
+            /*
+             * An operator's explicit child wins. Otherwise the child the SOURCE is about — the
+             * submission's own `customer_member_id`, server-loaded — anchors a child-scoped commit.
+             * That is the paperwork's subject, not "the only child of the household": it is still
+             * validated against the resolved household below, and a source naming no child still
+             * refuses. Without it every child-scoped commit from the operator panel (which sends no
+             * anchor) was refused "requires an explicit child".
+             */
+            customerMemberId: args.anchorCustomerMemberId ?? proposalContext?.expectedCustomerMemberId ?? null,
             selectedCustomerMemberIds: args.selectedCustomerMemberIds,
         },
     });

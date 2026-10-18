@@ -34,7 +34,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 }));
 vi.mock("@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase", () => ({
     loadRelatedRecordProposalForCase: async () => m.context,
-    describeProposalLookup: async () => ({ source_kinds: [] }),
+    proposalNotFound: async () => new Response(JSON.stringify({ error: "Proposal not found for case", code: "proposal_not_found" }), { status: 404 }),
 }));
 vi.mock("@/lib/pos/processingCase/commit/executeNewChildProposalCommit", () => ({
     executeNewChildProposalCommit: (...a: unknown[]) => m.execute(...a),
