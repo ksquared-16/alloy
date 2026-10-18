@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
-import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
+import { describeProposalLookup, loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 import { rejectNewChildProposal } from "@/lib/pos/processingCase/commit/participantChildRequestCommit";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!caseRow) return jsonError("Not found", 404);
 
     const context = await loadRelatedRecordProposalForCase({ supabase, orgId: ctx.orgId, caseId, proposalId });
-    if (!context) return jsonError("Proposal not found for case", 404);
+    if (!context) {
+        // Operator-only diagnostics: why the proposal the case view shows did not resolve here.
+        const lookup = await describeProposalLookup({ supabase, orgId: ctx.orgId, caseId, proposalId }).catch(() => null);
+        return NextResponse.json({ error: "Proposal not found for case", lookup }, { status: 404 });
+    }
     if (context.proposal.origin !== "proposed_new_record" || context.proposal.collection_provider_ref !== "children") {
         return jsonError("Only a proposed new child can be rejected here", 403);
     }
