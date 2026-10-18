@@ -195,6 +195,25 @@ describe("a live episode is joined, not duplicated", () => {
         expect(inserted.context_id).toBe(result.enrollmentParticipationId);
         expect(inserted.context_id).not.toBe(LIVE_OPP);
     });
+
+    it.each(["new_inquiry", "waitlisted"])(
+        "a %s sibling is NOT carried into Enrollment by the other child's live journey (staging bf7bb266)",
+        async (status) => {
+            const m = mock({
+                opportunities: [{ id: LIVE_OPP, org_id: ORG_ID, customer_id: HOUSEHOLD, work_unit_id: null }],
+                process_instances: [
+                    { id: "pi-a", org_id: ORG_ID, process_key: "enrollment", subject_type: "child", subject_id: CHILD_A, context_id: LIVE_OPP, state: "enrolling" },
+                ],
+                opportunity_customer_members: [
+                    { id: "ocm-a", org_id: ORG_ID, opportunity_id: LIVE_OPP, customer_member_id: CHILD_A, outcome_status_key: "enrolling" },
+                    { id: "ocm-b", org_id: ORG_ID, opportunity_id: LIVE_OPP, customer_member_id: CHILD_B, outcome_status_key: status },
+                ],
+            });
+            const err = await startEnrollment(m.supabase, { orgId: ORG_ID, customerMemberId: CHILD_B }).catch((e) => e);
+            expect(err?.details?.code).toBe("child_not_admitted_to_enrollment");
+            expect(m.writes).toEqual([]);
+        },
+    );
 });
 
 describe("Direct Enroll refuses to produce an operationally unusable child", () => {
