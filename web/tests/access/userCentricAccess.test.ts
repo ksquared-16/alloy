@@ -196,10 +196,13 @@ describe("Invite collects identity and location access, and reports both halves 
         expect(src).toContain("inviteSiteSelectionIsComplete");
     });
 
-    it("does not report plain success when the account was created but the scope was not", () => {
-        // Two writes. Calling the whole thing a failure would be false — the account exists — and
-        // calling it a success would claim a restriction that was never stored.
-        expect(src).toContain("scopeFailure");
-        expect(src).toContain("their location access was not set");
+    it("sends the location answer WITH the invitation — no second write that could leave an organization-wide account", () => {
+        // The answer used to be a second request after the account existed; when it failed, the account
+        // kept organization-wide access the operator had declined. It is now one write, so "created but
+        // not scoped" cannot happen (behaviour: tests/access/inviteWithLocationScopeAtomic.test.ts).
+        const sendInvite = src.slice(src.indexOf("const sendInvite"), src.indexOf("const mutateRole"));
+        expect(sendInvite).toContain("...scope,");
+        expect(sendInvite).not.toContain("access-scope");
+        expect(code("app/api/admin/users/route.ts")).toContain("createMembershipWithAccessScope");
     });
 });

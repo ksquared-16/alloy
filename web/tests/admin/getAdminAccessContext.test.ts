@@ -245,7 +245,7 @@ function createOrgMemberMockSupabase(config: {
 }
 
 describe("resolveAdminAccessCore", () => {
-    it("admin membership resolves portalEligible with default all/all when profile missing", async () => {
+    it("admin membership with no profile stays portal-eligible but reaches no department or site (W-7: absent scope denies)", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "admin" }],
             // W-13 — `portalEligible` is read from this list now, not from the role name, so an
@@ -259,14 +259,15 @@ describe("resolveAdminAccessCore", () => {
         expect(core!.orgId).toBe("org-x");
         expect(core!.roleKeys).toEqual(["admin"]);
         expect(core!.permissionKeys).toEqual(["crm.read", "portal.access"]);
-        expect(core!.departmentScope).toBe("all");
-        expect(core!.siteScope).toBe("all");
-        expect(core!.allowedDepartmentIds).toBeNull();
-        expect(core!.allowedSiteLocationIds).toBeNull();
+        // Capabilities still come from grants; only the absent profile's scope is denied, never widened.
+        expect(core!.departmentScope).toBe("restricted");
+        expect(core!.siteScope).toBe("restricted");
+        expect(core!.allowedDepartmentIds).toEqual([]);
+        expect(core!.allowedSiteLocationIds).toEqual([]);
         expect(core!.portalEligible).toBe(true);
     });
 
-    it("ops membership resolves all/all when profile missing", async () => {
+    it("ops membership with no profile reaches no department or site (W-7: absent scope denies)", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "ops" }],
             grants: [{ permission_key: "portal.access" }],
@@ -275,8 +276,8 @@ describe("resolveAdminAccessCore", () => {
         const core = await resolveAdminAccessCore(sb, "user-1");
         expect(core?.portalEligible).toBe(true);
         expect(core?.roleKeys).toEqual(["ops"]);
-        expect(core?.departmentScope).toBe("all");
-        expect(core?.siteScope).toBe("all");
+        expect(core?.departmentScope).toBe("restricted");
+        expect(core?.siteScope).toBe("restricted");
     });
 
     it("custom role resolves roleKeys with portalEligible false", async () => {

@@ -76,16 +76,16 @@ export function normalizeRoleKey(raw: unknown): string {
  * - `legacy-all` — the historical fail-open: both dimensions resolve `all`.
  * - `deny`       — W-7's target: the membership sees nothing.
  *
- * MUST remain `legacy-all` until M1 (`20260807140000_backfill_membership_access_profiles.sql`)
- * is APPLIED on the shared target. W-0 Q4 stands at 2 `(user, org)` pairs with no profile row,
- * so flipping this ahead of the backfill locks out those 2 principals — the exact L1 outcome
- * W-7 exists to avoid. Plan §5 Q4: "W-7 cannot precede it."
- *
- * Flipping this constant to `deny` and deleting the two lines above it is the whole switch.
+ * `deny` since the Enrollment V0.5 access closeout. The precondition W-7 waited on is measured, not
+ * assumed: migration 20261126090000 backfilled every profileless membership as all/all (deployed
+ * staging census 2026-10-19: 13 (user, org) pairs, 13 profiles, 0 without one; the seven demo
+ * admins at all/all with their 80 permissions unchanged) and installed a deferred constraint that
+ * refuses, at commit, a membership without a profile. So this branch has no population left: a
+ * membership that somehow had no profile would see nothing rather than everything.
  */
 export type AbsentProfileMode = "legacy-all" | "deny";
 
-export const ABSENT_PROFILE_ENFORCEMENT: AbsentProfileMode = "legacy-all";
+export const ABSENT_PROFILE_ENFORCEMENT: AbsentProfileMode = "deny";
 
 export type ProfileScopeRow =
     | { department_scope?: unknown; site_scope?: unknown; attendance_capture_scope?: unknown }

@@ -85,6 +85,33 @@ export async function createMembershipWithAccessProfile(
 }
 
 /**
+ * Add a membership whose access is limited to selected SITES, in one transaction: the membership
+ * (delegation ceiling, profile first) and the restricted site scope (audited) commit together or not
+ * at all — never an organization-wide account left behind by a second request that failed.
+ * Departments stay all (OD-8). Location ids are validated by the caller AND by the function.
+ */
+export async function createMembershipWithAccessScope(
+    supabase: SupabaseClient,
+    params: { userId: string; orgId: string; role: string; siteLocationIds: readonly string[]; audit?: AccessMutationAudit }
+): Promise<MembershipWriteResult> {
+    const { data, error } = await supabase.rpc("create_membership_with_access_scope", {
+        p_user_id: params.userId,
+        p_org_id: params.orgId,
+        p_role: params.role,
+        p_actor_user_id: params.audit?.actorUserId ?? null,
+        p_site_scope: "restricted",
+        p_site_location_ids: [...params.siteLocationIds],
+        p_origin: params.audit?.origin ?? "operator",
+        p_correlation_id: params.audit?.correlationId ?? null,
+    });
+
+    if (error) return classify(error.code, error.message);
+    const row = (Array.isArray(data) ? data[0] : data) as MembershipRow | null;
+    if (!row) return { ok: false, kind: "error", error: "Membership RPC returned no row" };
+    return { ok: true, row };
+}
+
+/**
  * Replace every role row for (user, org) with a single role and guarantee the
  * access profile, atomically. `not_found` means the pair holds no membership.
  */

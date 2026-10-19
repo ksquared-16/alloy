@@ -17,13 +17,12 @@
  * reassurance."* So `configured` carries three values, not two: `all`, `restricted`, and
  * **`unset`** — the membership has no `user_access_profiles` row at all.
  *
- * **`unset` is not the same as "no access", and this module refuses to imply it is.**
- * `ABSENT_PROFILE_ENFORCEMENT` is `legacy-all` today (`resolveAdminAccessCore.ts`): a membership
- * with no profile row is currently enforced as organization-wide. `W-7` flips that constant to
- * `deny`; until it does, rendering *"No access configured"* alone would replace one false
- * certainty with another. So the projection carries **both** facts — what is configured, and what
- * the enforcing constant does with it — and it derives the second by calling the enforcing
- * resolver rather than restating its rule. `IA-R4`'s *"MUST NOT have a second implementation"*
+ * **`unset` and what it is enforced as are reported separately.** `ABSENT_PROFILE_ENFORCEMENT` is
+ * `deny` (`resolveAdminAccessCore.ts`, W-7): a membership with no profile row reaches nothing — and
+ * since migration 20261126090000 the database refuses such a membership, so `unset` should not occur.
+ * The projection still carries **both** facts — what is configured, and what the enforcing constant
+ * does with it — and derives the second by calling the enforcing resolver rather than restating its
+ * rule, so a future change of that constant cannot leave this screen describing the old one. `IA-R4`'s *"MUST NOT have a second implementation"*
  * applied a wave early, because it costs one import.
  *
  * **Lifecycle is derived, never asserted.** `IA-R2` requires invitation state, last sign-in, lock
@@ -93,8 +92,8 @@ export type MemberScopeProjection = {
 };
 
 export const ABSENT_PROFILE_DIVERGENCE_REASON =
-    "No access profile exists for this membership. Alloy currently treats an absent profile as " +
-    "organization-wide (legacy behaviour); scope is not restricted until a profile is configured.";
+    "No access profile exists for this membership, so it reaches no departments or locations " +
+    "until a profile is configured.";
 
 /**
  * @param profileRow - the `user_access_profiles` row, or `null`/`undefined` when none exists.

@@ -87,11 +87,18 @@ function mockSupabase(fixture: Fixture, failTable?: string): SupabaseClient {
 }
 
 /** A membership that is admitted and has NO profile row — resolves `all` while reads are healthy. */
-const ADMITTED_NO_PROFILE: Fixture = {
+/*
+ * The fault fixture holds an all/all PROFILE. Since the absent-profile mode is `deny` (every
+ * membership has a profile — migration 20261126090000), a member with NO profile already resolves
+ * restricted on healthy reads, so it can no longer show that a read FAULT is what denies. A member
+ * whose stored scope is all/all can: healthy reads give `all`, a failed read gives `restricted`.
+ */
+const ADMITTED_WITH_PROFILE: Fixture = {
     user_roles: [{ org_id: ORG, role: "admin" }],
     grants: [{ permission_key: "settings.users_roles" }],
-    profile: null,
+    profile: { department_scope: "all", site_scope: "all" },
 };
+const ADMITTED_NO_PROFILE: Fixture = { ...ADMITTED_WITH_PROFILE, profile: null };
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
 let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -106,17 +113,25 @@ afterEach(() => {
 });
 
 describe("W-43 — the enforcing resolver denies on every read failure (F15)", () => {
-    it("control: with all reads healthy, an absent profile resolves `all` — so `restricted` below can only come from the fault", async () => {
-        expect(ABSENT_PROFILE_ENFORCEMENT).toBe("legacy-all");
-        const core = await resolveAdminAccessCore(mockSupabase(ADMITTED_NO_PROFILE), USER);
+    it("control: with all reads healthy, an all/all profile resolves `all` — so `restricted` below can only come from the fault", async () => {
+        const core = await resolveAdminAccessCore(mockSupabase(ADMITTED_WITH_PROFILE), USER);
         expect(core).not.toBeNull();
         expect(core?.departmentScope).toBe("all");
         expect(core?.siteScope).toBe("all");
     });
 
+    it("W-7: an ABSENT profile with healthy reads is denied too, never widened to all", async () => {
+        expect(ABSENT_PROFILE_ENFORCEMENT).toBe("deny");
+        const core = await resolveAdminAccessCore(mockSupabase(ADMITTED_NO_PROFILE), USER);
+        expect(core?.departmentScope).toBe("restricted");
+        expect(core?.siteScope).toBe("restricted");
+        expect(core?.allowedDepartmentIds).toEqual([]);
+        expect(core?.allowedSiteLocationIds).toEqual([]);
+    });
+
     it("user_access_profiles error denies both scopes — the widest fail-open, closed", async () => {
         const core = await resolveAdminAccessCore(
-            mockSupabase(ADMITTED_NO_PROFILE, "user_access_profiles"),
+            mockSupabase(ADMITTED_WITH_PROFILE, "user_access_profiles"),
             USER
         );
         expect(core).not.toBeNull();
@@ -130,7 +145,7 @@ describe("W-43 — the enforcing resolver denies on every read failure (F15)", (
     });
 
     it("a failed profile read is NOT recorded in W-7's divergence window", async () => {
-        await resolveAdminAccessCore(mockSupabase(ADMITTED_NO_PROFILE, "user_access_profiles"), USER);
+        await resolveAdminAccessCore(mockSupabase(ADMITTED_WITH_PROFILE, "user_access_profiles"), USER);
         const divergence = warnSpy.mock.calls.flat().join(" ");
         expect(divergence).not.toContain("scope-divergence");
         expect(divergence).not.toContain("absent_profile_row");
@@ -143,7 +158,7 @@ describe("W-43 — the enforcing resolver denies on every read failure (F15)", (
 
     it("role_permission_grants error denies the whole resolution, not just the permission set", async () => {
         const core = await resolveAdminAccessCore(
-            mockSupabase(ADMITTED_NO_PROFILE, "role_permission_grants"),
+            mockSupabase(ADMITTED_WITH_PROFILE, "role_permission_grants"),
             USER
         );
         // `[]` would have been indistinguishable from a role that holds no grants, and the
@@ -152,7 +167,7 @@ describe("W-43 — the enforcing resolver denies on every read failure (F15)", (
     });
 
     it("user_roles error denies", async () => {
-        expect(await resolveAdminAccessCore(mockSupabase(ADMITTED_NO_PROFILE, "user_roles"), USER)).toBeNull();
+        expect(await resolveAdminAccessCore(mockSupabase(ADMITTED_WITH_PROFILE, "user_roles"), USER)).toBeNull();
     });
 
     it("user_department_access error yields an empty allow-list, not an absent one", async () => {
@@ -230,15 +245,15 @@ describe("W-20 — the legacy admin/ops grant path is gone, not merely hardened"
 });
 
 describe("W-43 — the preview resolver denies identically", () => {
-    it("control: healthy reads, absent profile, resolves `all`", async () => {
-        const d = await resolveAdminAccessDimensionsForOrgMember(mockSupabase(ADMITTED_NO_PROFILE), USER, ORG);
+    it("control: healthy reads, an all/all profile, resolves `all`", async () => {
+        const d = await resolveAdminAccessDimensionsForOrgMember(mockSupabase(ADMITTED_WITH_PROFILE), USER, ORG);
         expect(d?.departmentScope).toBe("all");
         expect(d?.siteScope).toBe("all");
     });
 
     it("user_access_profiles error denies — the preview must not render All locations when enforcement denies", async () => {
         const d = await resolveAdminAccessDimensionsForOrgMember(
-            mockSupabase(ADMITTED_NO_PROFILE, "user_access_profiles"),
+            mockSupabase(ADMITTED_WITH_PROFILE, "user_access_profiles"),
             USER,
             ORG
         );
@@ -251,7 +266,7 @@ describe("W-43 — the preview resolver denies identically", () => {
     it("role_permission_grants error denies the preview too", async () => {
         expect(
             await resolveAdminAccessDimensionsForOrgMember(
-                mockSupabase(ADMITTED_NO_PROFILE, "role_permission_grants"),
+                mockSupabase(ADMITTED_WITH_PROFILE, "role_permission_grants"),
                 USER,
                 ORG
             )
@@ -260,11 +275,11 @@ describe("W-43 — the preview resolver denies identically", () => {
 
     it("preview and enforcement agree on the failed-read answer", async () => {
         const core = await resolveAdminAccessCore(
-            mockSupabase(ADMITTED_NO_PROFILE, "user_access_profiles"),
+            mockSupabase(ADMITTED_WITH_PROFILE, "user_access_profiles"),
             USER
         );
         const preview = await resolveAdminAccessDimensionsForOrgMember(
-            mockSupabase(ADMITTED_NO_PROFILE, "user_access_profiles"),
+            mockSupabase(ADMITTED_WITH_PROFILE, "user_access_profiles"),
             USER,
             ORG
         );
