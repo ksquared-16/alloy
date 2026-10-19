@@ -39,6 +39,13 @@ export const dynamic = "force-dynamic";
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    /*
+     * PROCESSING AUTHORITY FOR EVERY CASE, not only lead intake. The check used to sit inside the
+     * form-submission branch, so a packet case — every Enrollment paperwork case — could be completed by
+     * any admin session without `processing.operate` (the commit, preview and reject routes all require it).
+     */
+    const deniedForCase = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+    if (deniedForCase) return deniedForCase;
 
     const { caseId: rawCaseId } = await params;
     const caseId = parseUuidParam(rawCaseId, "caseId");
