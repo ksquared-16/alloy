@@ -1974,6 +1974,13 @@
         "helper": "requireEnrollmentCapability"
       }
     },
+    "app/api/admin/enrollment/links/needing-payer/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "enrollment.decide",
+        "helper": "requireEnrollmentCapability"
+      }
+    },
     "app/api/admin/enrollment/packet-launch/route.ts": {
       "GET": {
         "status": "none",
