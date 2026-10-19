@@ -732,8 +732,20 @@ export async function removeEnrollmentCertificationFixture(
             .select("id")
             .eq("org_id", orgId)
             .in("subject_id", memberIds);
-        counts.journeys = ((journeys ?? []) as Array<{ id: string }>).length;
-        await supabase.from("process_instances").delete().eq("org_id", orgId).in("subject_id", memberIds);
+        const journeyIds = ((journeys ?? []) as Array<{ id: string }>).map((r) => r.id);
+        counts.journeys = journeyIds.length;
+        /*
+         * Dependency order, and every step checked. A journey's packet sessions RESTRICT its delete, and
+         * this reset used to ignore that error and go on to delete the children and households beneath the
+         * surviving journeys — 254 orphaned journeys on staging. Sessions first (their items cascade), then
+         * the journeys; the database now also refuses to delete a child under a journey.
+         */
+        if (journeyIds.length) {
+            const sessions = await supabase.from("form_packet_sessions").delete().eq("org_id", orgId).in("process_instance_id", journeyIds);
+            if (sessions.error) throw new Error(`fixture reset: packet sessions could not be removed (${sessions.error.message})`);
+            const removed = await supabase.from("process_instances").delete().eq("org_id", orgId).in("id", journeyIds);
+            if (removed.error) throw new Error(`fixture reset: journeys could not be removed (${removed.error.message})`);
+        }
 
         const { data: participations } = await supabase
             .from("opportunity_customer_members")
@@ -741,13 +753,15 @@ export async function removeEnrollmentCertificationFixture(
             .eq("org_id", orgId)
             .in("customer_member_id", memberIds);
         counts.participations = ((participations ?? []) as Array<{ id: string }>).length;
-        await supabase
+        const ocm = await supabase
             .from("opportunity_customer_members")
             .delete()
             .eq("org_id", orgId)
             .in("customer_member_id", memberIds);
+        if (ocm.error) throw new Error(`fixture reset: participations could not be removed (${ocm.error.message})`);
 
-        await supabase.from("customer_members").delete().eq("org_id", orgId).in("id", memberIds);
+        const members = await supabase.from("customer_members").delete().eq("org_id", orgId).in("id", memberIds);
+        if (members.error) throw new Error(`fixture reset: children could not be removed (${members.error.message})`);
     }
 
     // Opportunities before households: the household link is the only selector that reaches them.
