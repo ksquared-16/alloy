@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { collapseBusinessEventMechanics } from "@/lib/admin/collapseBusinessEventMechanics";
+import { activityRowSubject, collapseBusinessEventMechanics } from "@/lib/admin/collapseBusinessEventMechanics";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { selectLastAction } from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
 
@@ -65,5 +65,33 @@ describe("Last action", () => {
                 { label: "Tour cancelled", when: "now", kind: "communication" },
             ]),
         ).toMatchObject({ label: "Tour cancelled" });
+    });
+
+    // Staging (6e02feb4): Ben ZZQA1467FAMB's panel read "Ava ZZQA1467FAMB moved to Enrolling" as HIS last action.
+    const ava = { childIds: ["ocm-ava"], childName: "Ava Z" };
+    const ben = { childIds: ["cm-ben", "ocm-ben"], childName: "Ben Z" };
+    const feed = [
+        { label: "Ava Z moved to Enrolling", when: "3", kind: "activity", subject: ava },
+        { label: "Tour booked", when: "2", kind: "activity", subject: null },
+        { label: "Offer accepted", when: "1", kind: "activity", subject: ben },
+    ];
+    const benScope = { ids: ["pi-ben", "cm-ben", "ocm-ben"], name: "Ben Z" };
+
+    it("a child's panel never shows a sibling's event as its own — shared family activity is labelled", () => {
+        expect(selectLastAction(feed, benScope)).toEqual({ label: "Tour booked", detail: null, when: "2", scope: "family" });
+    });
+
+    it("…and shows the child's own event when it is the newest relevant one", () => {
+        expect(selectLastAction(feed.filter((r) => r.subject !== null), benScope)).toEqual({ label: "Offer accepted", detail: null, when: "1" });
+        expect(selectLastAction([{ label: "Offer accepted", when: "1", kind: "activity", subject: { childIds: [], childName: "ben z" } }], benScope)).toMatchObject({ label: "Offer accepted" });
+    });
+
+    it("a family panel is unchanged: the newest action, whoever it is about", () => {
+        expect(selectLastAction(feed)).toEqual({ label: "Ava Z moved to Enrolling", detail: null, when: "3" });
+    });
+
+    it("the subject is read from the event payload the timeline already carries", () => {
+        expect(activityRowSubject({ opportunity_customer_member_id: "ocm-ava", child_display_name: "Ava Z" })).toEqual({ childIds: ["ocm-ava"], childName: "Ava Z" });
+        expect(activityRowSubject({ opportunity_id: "opp-1" })).toBeNull();
     });
 });

@@ -140,9 +140,14 @@ export async function startEnrollment(
      * preview passes; the server now refuses the same thing for every caller (the packet-launch route and
      * the enrollment.start action alike, with or without force_context_free), before anything is written.
      * The child reaches Enrollment through the offer (accept → the child's own enrolling track), which
-     * this check never blocks: that track is a live episode, and its participation is `enrolling`.
+     * this check never blocks: that participation is `enrolling`.
+     *
+     * The check holds INSIDE a live family episode too. A sibling's enrolling journey makes the
+     * household's episode live, and that used to skip this check: a `new_inquiry` or `waitlisted`
+     * child of the same family was handed the Enrolling paperwork through the sibling's episode.
+     * Eligibility is the child's own participation, never a sibling's.
      */
-    if (!resolved.context) {
+    {
         const { data: open, error: openError } = await supabase
             .from("opportunity_customer_members")
             .select("id, opportunity_id, outcome_status_key")

@@ -65,6 +65,12 @@ describeLive("W7-F002 — money-capable grants require a named operator, live", 
         personId = (person.data as { id: string }).id;
         expect((await db.from("role_definitions").insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, role_label: "F002 probe", is_system: false, is_active: true })).error).toBeNull();
         expect((await db.from("role_permission_grants").insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, permission_key: "reports.read", allowed: true })).error).toBeNull();
+        // Profile first: a membership must have an access profile at commit. TARGET's profile is
+        // written here too, so its later direct role writes are judged by the money guard alone.
+        expect((await db.from("user_access_profiles").upsert(
+            [TARGET, HOLDER].map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        )).error).toBeNull();
         expect((await db.from("user_roles").insert({ org_id: ORG, user_id: HOLDER, role: UNLINKED_HOLDER_ROLE })).error).toBeNull();
     }, 120_000);
 

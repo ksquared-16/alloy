@@ -54,6 +54,12 @@ describeLive("W7-F010 — direct session writes to money tables are refused, liv
         personId = randomUUID();
         expect((await admin.from("persons").insert({ id: personId, org_id: ORG, first_name: "Session", last_name: `Probe ${RUN}` })).error).toBeNull();
         expect((await admin.from("user_person_links").insert({ org_id: ORG, user_id: userId, person_id: personId, status: "active", note: "W7-F010 live probe" })).error).toBeNull();
+        // Profile first: a membership must have an access profile at commit.
+        const profile = await admin.from("user_access_profiles").upsert(
+            { user_id: userId, org_id: ORG, department_scope: "all", site_scope: "all" },
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
+        expect(profile.error, profile.error?.message).toBeNull();
         const role = await admin.from("user_roles").insert({ org_id: ORG, user_id: userId, role: "ops" });
         expect(role.error, role.error?.message).toBeNull();
 

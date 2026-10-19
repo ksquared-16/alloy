@@ -136,6 +136,11 @@ ON CONFLICT (provider_id, provider) DO UPDATE SET identity_data = EXCLUDED.ident
 -- auth.users -> user_roles -> orgs is the org-resolution chain
 -- (web/lib/admin/resolveAdminAccessCore.ts). PORTAL_ROLES = {admin, ops};
 -- mutations additionally require role = 'admin'.
+-- Profile first: a membership must have an access profile at commit.
+INSERT INTO public.user_access_profiles (user_id, org_id, department_scope, site_scope)
+VALUES (:'USER_ID'::uuid, :'ORG_ID'::uuid, 'all', 'all')
+ON CONFLICT (user_id, org_id) DO NOTHING;
+
 INSERT INTO public.user_roles (user_id, org_id, role)
 VALUES (:'USER_ID'::uuid, :'ORG_ID'::uuid, 'admin')
 ON CONFLICT (user_id, org_id, role) DO NOTHING;

@@ -2002,19 +2002,20 @@ async function wireDemoUserScopes(
     const regional = process.env.DEMO_REGIONAL_USER_ID?.trim();
     const director = process.env.DEMO_DIRECTOR_USER_ID?.trim();
 
+    // Profile first: a membership must have an access profile at commit.
     if (corp) {
-        await ensureUserRoleIfAbsent(supabase, orgId, corp, "admin", "Corporate Admin");
         await applyUserAccessProfile(supabase, orgId, corp, "all", "all", [], []);
+        await ensureUserRoleIfAbsent(supabase, orgId, corp, "admin", "Corporate Admin");
     }
     if (regional) {
+        await applyUserAccessProfile(supabase, orgId, regional, "all", "restricted", [], [northId, southId]);
         await ensureUserRoleIfAbsent(supabase, orgId, regional, "ops", "Regional Lead");
         await ensureUserRoleIfAbsent(supabase, orgId, regional, "regional_lead", "Regional Lead");
-        await applyUserAccessProfile(supabase, orgId, regional, "all", "restricted", [], [northId, southId]);
     }
     if (director) {
+        await applyUserAccessProfile(supabase, orgId, director, "restricted", "restricted", [enrollmentDeptId], [northId]);
         await ensureUserRoleIfAbsent(supabase, orgId, director, "ops", "School Director");
         await ensureUserRoleIfAbsent(supabase, orgId, director, "school_director", "School Director");
-        await applyUserAccessProfile(supabase, orgId, director, "restricted", "restricted", [enrollmentDeptId], [northId]);
     }
 }
 

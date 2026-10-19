@@ -252,6 +252,14 @@ describeLive("a new organization is born able to administer itself — live", ()
             org_id: NEW_ORG, user_id: NEW_ORG_ADMIN, person_id: (founder as { id: string }).id, status: "active", note: "new-org bootstrap fixture",
         });
         expect(founderLinkErr, founderLinkErr?.message).toBeNull();
+        // Profile first: a membership must have an access profile at commit.
+        const { error: profileErr } = await supabase
+            .from("user_access_profiles")
+            .upsert(
+                { user_id: NEW_ORG_ADMIN, org_id: NEW_ORG, department_scope: "all", site_scope: "all" },
+                { onConflict: "user_id,org_id", ignoreDuplicates: true },
+            );
+        expect(profileErr, profileErr?.message).toBeNull();
         const { error: memberErr } = await supabase
             .from("user_roles")
             .insert({ user_id: NEW_ORG_ADMIN, org_id: NEW_ORG, role: "admin" });

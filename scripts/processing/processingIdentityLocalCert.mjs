@@ -231,6 +231,12 @@ async function main() {
          VALUES ($1, $2, $3, 'active', 'processing identity cert fixture'), ($4, $5, $6, 'active', 'processing identity cert fixture')`,
         [orgA, userA, adminPersonA, orgB, userB, adminPersonB],
     );
+    // Profile first: a membership must have an access profile at commit.
+    await client.query(
+        `INSERT INTO user_access_profiles (user_id, org_id, department_scope, site_scope)
+         VALUES ($1, $2, 'all', 'all'), ($3, $4, 'all', 'all') ON CONFLICT (user_id, org_id) DO NOTHING`,
+        [userA, orgA, userB, orgB],
+    );
     await client.query(
         `INSERT INTO user_roles (user_id, org_id, role) VALUES ($1, $2, 'admin'), ($3, $4, 'admin')`,
         [userA, orgA, userB, orgB],
@@ -312,6 +318,8 @@ async function main() {
     await client.query(`DELETE FROM user_person_links WHERE org_id IN ($1, $2)`, [orgA, orgB]);
     await client.query(`DELETE FROM persons WHERE org_id IN ($1, $2)`, [orgA, orgB]);
     await client.query(`DELETE FROM user_roles WHERE user_id IN ($1, $2)`, [userA, userB]);
+    // Roles before profiles: a profile cannot be deleted while its membership remains.
+    await client.query(`DELETE FROM user_access_profiles WHERE user_id IN ($1, $2)`, [userA, userB]);
     await client.query(`DELETE FROM auth.users WHERE id IN ($1, $2)`, [userA, userB]);
     await client.query(`DELETE FROM orgs WHERE id IN ($1, $2)`, [orgA, orgB]);
 

@@ -462,8 +462,9 @@ export async function setup() {
     const runCorrelationId = crypto.randomUUID();
     const ids = Object.values(P).map((p) => p.id);
     await sb.from("user_site_access").delete().in("user_id", ids);
-    await sb.from("user_access_profiles").delete().in("user_id", ids);
+    // Roles before profiles: a profile cannot be deleted while its membership remains.
     await sb.from("user_roles").delete().in("user_id", ids);
+    await sb.from("user_access_profiles").delete().in("user_id", ids);
     for (const rk of Object.values(CUSTOM)) {
         await sb.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", rk);
         await sb.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", rk);
@@ -869,8 +870,9 @@ export async function teardown() {
     const ids = Object.values(P).map((p) => p.id);
     await sb.from("user_department_access").delete().in("user_id", ids);
     await sb.from("user_site_access").delete().in("user_id", ids);
-    await sb.from("user_access_profiles").delete().in("user_id", ids);
+    // Roles before profiles: a profile cannot be deleted while its membership remains.
     await sb.from("user_roles").delete().in("user_id", ids);
+    await sb.from("user_access_profiles").delete().in("user_id", ids);
     for (const rk of Object.values(CUSTOM)) {
         await sb.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", rk);
         await sb.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", rk);

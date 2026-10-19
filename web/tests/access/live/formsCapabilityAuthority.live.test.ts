@@ -101,6 +101,12 @@ describeLive("Forms authority is a capability, not a job title — live", () => 
         ]);
 
         await sb.from("user_roles").delete().in("user_id", Object.values(USER));
+        // Profile first: a membership must have an access profile at commit. The profiles stay for
+        // the whole suite, so later role re-inserts for these users need no second write.
+        await sb.from("user_access_profiles").upsert(
+            Object.values(USER).map((user_id) => ({ user_id, org_id: ORG, department_scope: "all", site_scope: "all" })),
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
         await sb.from("user_roles").insert([
             { org_id: ORG, user_id: USER.author, role: ROLE.author },
             { org_id: ORG, user_id: USER.submissions, role: ROLE.submissions },

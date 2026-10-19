@@ -52,6 +52,7 @@ function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPrev
         kind: entry.kind,
         occurredAt: entry.at,
         ...(entry.notAnAction ? { notAnAction: true } : {}),
+        ...(entry.subject !== undefined ? { subject: entry.subject } : {}),
     };
 }
 
@@ -116,6 +117,7 @@ export function resolveCanonicalCurrentWorkActivityEntries(
          */
         id: `${entry.source}:${entry.relatedScope ?? "direct"}:${entry.id}`,
         ...(entry.notAnAction ? { notAnAction: true } : {}),
+        ...(entry.subject !== undefined ? { subject: entry.subject } : {}),
         kind: timelineEventToPreviewKind(entry.eventType),
         label: entry.title,
         detail: entry.detail,

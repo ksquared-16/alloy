@@ -16,6 +16,7 @@
  * that re-decided any of that would be a second answer, which is exactly how the two drifted apart.
  */
 
+import type { ActivityRowSubject } from "@/lib/admin/collapseBusinessEventMechanics";
 import type {
     BusinessProcessCardEvidence,
     BusinessProcessParticipant,
@@ -37,7 +38,12 @@ export type ProcessCardActivityItem = {
     detail?: string | null;
     /** A delivery state or a notification sent because of another action — not what anyone did. */
     notAnAction?: boolean;
+    /** The child the row is about; null = family activity; absent = unknown. */
+    subject?: ActivityRowSubject | null;
 };
+
+/** The child a child-grain panel is about: every id that can name it, and its name as a fallback. */
+export type LastActionChildScope = { ids: readonly string[]; name: string | null };
 
 /**
  * LAST ACTION — the newest row of the canonical activity timeline that records something an operator
@@ -48,14 +54,32 @@ export type ProcessCardActivityItem = {
 const LAST_ACTION_KINDS = new Set(["communication", "task", "activity"]);
 const NOT_AN_ACTION = /^(tour invitation prepared|tour time selected|action completed)$/i;
 
-export function selectLastAction(activity: readonly ProcessCardActivityItem[]): ProcessLastAction | null {
+export function selectLastAction(
+    activity: readonly ProcessCardActivityItem[],
+    childScope?: LastActionChildScope | null,
+): ProcessLastAction | null {
+    const ids = new Set((childScope?.ids ?? []).filter(Boolean));
+    const name = childScope?.name?.trim().toLowerCase() || null;
     for (const row of activity) {
         if (!row.label?.trim()) continue;
         // "SMS queued" after a cancellation is the system reporting delivery, not the operator's act.
         if (row.notAnAction) continue;
         if (row.kind && !LAST_ACTION_KINDS.has(row.kind)) continue;
         if (NOT_AN_ACTION.test(row.label.trim())) continue;
-        return { label: row.label.trim(), detail: row.detail?.trim() || null, when: row.when };
+        const picked = { label: row.label.trim(), detail: row.detail?.trim() || null, when: row.when };
+        /*
+         * A CHILD'S PANEL SHOWS THE CHILD'S LAST ACTION. The feed is the family's (staging: Ben's panel
+         * read "Ava … moved to Enrolling"). A row about another child is skipped; a row that names no
+         * child (a tour, a family message — or a producer that cannot say) is shown labelled as family
+         * activity, never as the child's own.
+         */
+        if (childScope) {
+            if (!row.subject) return { ...picked, scope: "family" };
+            const mine = row.subject.childIds.some((id) => ids.has(id))
+                || Boolean(name && row.subject.childName && row.subject.childName.trim().toLowerCase() === name);
+            if (!mine) continue;
+        }
+        return picked;
     }
     return null;
 }
@@ -119,6 +143,8 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
     subjectLabel: string | null;
     activity: readonly ProcessCardActivityItem[];
     actions: readonly ProcessCardActionInput[];
+    /** Set on a child-grain panel: Last action is that child's, or labelled family activity. */
+    childScope?: LastActionChildScope | null;
 }): ProcessEvidence {
     const { evidence } = input;
 
@@ -147,7 +173,7 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         kind: a.kind ?? null,
         detail: a.detail ?? null,
     }));
-    const lastAction = selectLastAction(input.activity);
+    const lastAction = selectLastAction(input.activity, input.childScope ?? null);
 
     /*
      * IDENTITY IS CARRIED, NOT REBUILT. The command's `key` is what execution and the shared

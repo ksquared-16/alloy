@@ -112,6 +112,15 @@ describeLive("the school_director persona — live", () => {
         await createPrincipal(DIRECTOR, "demo.director@northwind.invalid");
         await createPrincipal(NOBODY, "demo.regional@northwind.invalid");
         await supabase.from("user_roles").delete().in("user_id", [DIRECTOR, NOBODY]);
+        // Profile first: a membership must have an access profile at commit.
+        const { error: profileError } = await supabase.from("user_access_profiles").upsert(
+            [
+                { user_id: DIRECTOR, org_id: ORG, department_scope: "all", site_scope: "all" },
+                { user_id: NOBODY, org_id: ORG, department_scope: "all", site_scope: "all" },
+            ],
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
+        expect(profileError, profileError?.message).toBeNull();
         // Real membership rows, in the canonical table the resolver reads.
         const { error } = await supabase.from("user_roles").insert([
             { user_id: DIRECTOR, org_id: ORG, role: "school_director" },

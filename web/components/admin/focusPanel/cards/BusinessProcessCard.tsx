@@ -488,6 +488,22 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
         context.businessProcess.stageKey,
     ]);
 
+    // A child's panel (participant scope): every id that names this child — its participation, the
+    // durable child, and the participation the evidence places it on — so Last action is the child's own.
+    const scopeParticipationId = context.participantScope?.participationId ?? null;
+    const scopeChildId = context.participantScope?.customerMemberId ?? null;
+    const scopeChildName = context.participantScope?.displayName ?? null;
+    const lastActionChildScope = useMemo(() => {
+        if (!scopeParticipationId && !scopeChildId) return null;
+        const placed = scopeChildId
+            ? evidence.participants.filter((p) => p.customerMemberId === scopeChildId).map((p) => p.id)
+            : [];
+        return {
+            ids: [scopeParticipationId, scopeChildId, ...placed].filter((v): v is string => Boolean(v)),
+            name: scopeChildName,
+        };
+    }, [scopeParticipationId, scopeChildId, scopeChildName, evidence.participants]);
+
     const processEvidence = useMemo(
         () =>
             adaptBusinessProcessEvidenceToProcessCard({
@@ -502,10 +518,12 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
                     kind: a.kind ?? null,
                     detail: a.detail ?? null,
                     ...(a.notAnAction ? { notAnAction: true } : {}),
+                    ...(a.subject !== undefined ? { subject: a.subject } : {}),
                 })),
                 actions,
+                childScope: lastActionChildScope,
             }),
-        [evidence, context.subject?.label, activity, actions],
+        [evidence, context.subject?.label, activity, actions, lastActionChildScope],
     );
 
     /*

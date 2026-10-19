@@ -78,6 +78,14 @@ describeLive("W-17 — the same role label means what each organization configur
         ]);
 
         await sb.from("user_roles").delete().in("user_id", [USER_A, USER_B]);
+        // Profile first: a membership must have an access profile at commit.
+        await sb.from("user_access_profiles").upsert(
+            [
+                { user_id: USER_A, org_id: ORG_A, department_scope: "all", site_scope: "all" },
+                { user_id: USER_B, org_id: ORG_B, department_scope: "all", site_scope: "all" },
+            ],
+            { onConflict: "user_id,org_id", ignoreDuplicates: true },
+        );
         await sb.from("user_roles").insert([
             { org_id: ORG_A, user_id: USER_A, role: SHARED_KEY },
             { org_id: ORG_B, user_id: USER_B, role: SHARED_KEY },

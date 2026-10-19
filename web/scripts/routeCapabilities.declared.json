@@ -1962,6 +1962,18 @@
         "reason": "Creates and POSTS canonical Financials charges for a configured Enrollment fee, which is minting money \u2014 so it takes the Financials write key, not organization context. Declared with the same capability and helper as app/api/admin/financial/charge-templates POST, whose own review records the rule this follows: portal admission is not financial authority. `requireAdminOrOps` is kept alongside, matching that sibling, so admission and financial authority are both required. The route invents no amount: it resolves the requirement's charge-definition key through canonical Financials and delegates creation, posting and idempotency to the charge lifecycle."
       }
     },
+    "app/api/admin/enrollment/links/[linkId]/payer/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "enrollment.decide",
+        "helper": "requireEnrollmentCapability"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "enrollment.decide",
+        "helper": "requireEnrollmentCapability"
+      }
+    },
     "app/api/admin/enrollment/packet-launch/route.ts": {
       "GET": {
         "status": "none",

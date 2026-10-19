@@ -7,6 +7,7 @@
  * - `_related_activity_timeline_events` when includeRelatedRecords is enabled
  */
 
+import { activityRowSubject, type ActivityRowSubject } from "@/lib/admin/collapseBusinessEventMechanics";
 import { formatActivityTimelineEvent } from "@/lib/admin/activityTimelineFormat";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import {
@@ -40,6 +41,8 @@ export type ActivityTimelineEntry = {
      * the Last action.
      */
     notAnAction?: boolean;
+    /** The child this row is about, or null for family activity (@see activityRowSubject). */
+    subject?: ActivityRowSubject | null;
 };
 
 type RawActivityEventRow = {
@@ -114,7 +117,7 @@ function formatEventRow(
     row: RawActivityEventRow,
     surfaceKey: ActivityTimelineSurfaceKey,
     timeZone?: string | null,
-): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType" | "notAnAction"> {
+): Pick<ActivityTimelineEntry, "title" | "detail" | "actorLabel" | "at" | "atSortKey" | "eventType" | "notAnAction" | "subject"> {
     const payload =
         row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? row.payload
@@ -147,6 +150,7 @@ function formatEventRow(
             || eventTypeKey === "message_queued"
             || eventTypeKey === "message_delivered"
             || eventTypeKey === "message_failed",
+        subject: activityRowSubject(payload),
     };
 }
 

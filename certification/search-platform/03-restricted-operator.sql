@@ -99,17 +99,18 @@ BEGIN
      WHERE p.org_id = v_org AND p.external_source = 'alloy_search_cert_fixture' AND p.external_id = 'qa.restricted'
        AND NOT EXISTS (SELECT 1 FROM public.user_person_links l WHERE l.org_id = v_org AND l.user_id = v_user AND l.status = 'active');
 
-    -- Capability: an ordinary operator role, not owner/admin.
-    INSERT INTO public.user_roles (user_id, org_id, role)
-    VALUES (v_user, v_org, 'ops')
-    ON CONFLICT (user_id, org_id, role) DO NOTHING;
-
+    -- Profile first: a membership must have an access profile at commit.
     -- Data scope: all departments, but ONLY the Riverside site.
     INSERT INTO public.user_access_profiles (user_id, org_id, department_scope, site_scope)
     VALUES (v_user, v_org, 'all', 'restricted')
     ON CONFLICT (user_id, org_id) DO UPDATE
         SET department_scope = EXCLUDED.department_scope,
             site_scope       = EXCLUDED.site_scope;
+
+    -- Capability: an ordinary operator role, not owner/admin.
+    INSERT INTO public.user_roles (user_id, org_id, role)
+    VALUES (v_user, v_org, 'ops')
+    ON CONFLICT (user_id, org_id, role) DO NOTHING;
 
     INSERT INTO public.user_site_access (user_id, org_id, location_id)
     VALUES (v_user, v_org, v_site_a)
