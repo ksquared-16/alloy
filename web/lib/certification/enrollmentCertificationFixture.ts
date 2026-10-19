@@ -743,7 +743,7 @@ export async function removeEnrollmentCertificationFixture(
         if (journeyIds.length) {
             const sessions = await supabase.from("form_packet_sessions").delete().eq("org_id", orgId).in("process_instance_id", journeyIds);
             if (sessions.error) throw new Error(`fixture reset: packet sessions could not be removed (${sessions.error.message})`);
-            const removed = await supabase.from("process_instances").delete().eq("org_id", orgId).in("id", journeyIds);
+            const removed = await supabase.from("process_instances").delete().eq("org_id", orgId).in("subject_id", memberIds);
             if (removed.error) throw new Error(`fixture reset: journeys could not be removed (${removed.error.message})`);
         }
 

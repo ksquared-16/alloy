@@ -116,6 +116,10 @@ describe("what reset must never touch", () => {
         const body = await removeFixtureBody();
         const deletedTables = [...body.matchAll(/from\("([a-z_]+)"\)\s*\.delete\(\)/g)].map((m) => m[1]);
         const permitted = new Set([
+            // A journey's packet sessions RESTRICT its delete; they are owned THROUGH the fixture's own
+            // journeys (process_instance_id in the journeys selected by the fixture's child ids). Skipping
+            // them is what left 254 orphaned journeys when the journey delete failed silently.
+            "form_packet_sessions",
             "process_instances",
             "opportunity_customer_members",
             "customer_members",
