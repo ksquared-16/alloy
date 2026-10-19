@@ -60,6 +60,8 @@ export async function countUnworkedProcessingCases(supabase: SupabaseClient, org
             .select("id, status, metadata")
             .eq("org_id", orgId)
             .in("status", PROCESSING_ACTIONABLE_STATUSES)
+            // A case whose family or child no longer exists is evidence, not work: never counted as new.
+            .eq("processing_case_subject_removed", false)
             .order("id", { ascending: true })
             .range(from, from + PAGE - 1);
         if (error) throw new Error(error.message);

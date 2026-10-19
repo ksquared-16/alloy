@@ -68,6 +68,8 @@ export interface ProcessingCaseQueueRow {
     statusChangedAt: string;
     primarySource: SourceRef | null;
     relatedSourceCount: number;
+    /** The family or child this case was for no longer exists: evidence only, never actionable. */
+    subjectRemoved?: boolean;
     sourceDisplay: SourceDisplayDescriptor | null;
     /**
      * Configurable case title (`metadata.case_title`) resolved at intake from the form's title
@@ -107,6 +109,8 @@ export interface ProcessingCaseDetail {
     createdAt: string;
     updatedAt: string | null;
     archivedAt: string | null;
+    /** The family or child this case was for no longer exists: evidence only — no approve, no commit. */
+    subjectRemoved: boolean;
     sources: Array<SourceRef & { display: SourceDisplayDescriptor }>;
     /** Configurable case title (`metadata.case_title`): person + purpose. Null when not computed. */
     caseTitle: string | null;
@@ -143,6 +147,13 @@ export interface ProcessingCaseQueueQuery {
      * in the ordering.
      */
     caseIds?: string[];
+    /**
+     * Which side of the subject-removed line to read (`processing_case_subject_removed`). Unset or
+     * false: active work only — a case whose family or child no longer exists is evidence, not work.
+     * True: only those cases (the "Subject removed" history folder). Ignored when `caseIds` names the
+     * cases: a deep link to an evidence-only case must still open it.
+     */
+    subjectRemoved?: boolean;
     statuses?: ProcessingCaseStatus[];
     sourceKinds?: ProcessingCaseSourceKind[];
     caseTypes?: string[];
@@ -171,6 +182,8 @@ export interface ReadModelCaseRow {
     status_changed_at: string;
     updated_at: string | null;
     archived_at: string | null;
+    /** Computed field `processing_case_subject_removed`: the case's family or child no longer exists. */
+    processing_case_subject_removed?: boolean | null;
     /** Present only on detail reads (getCase); carries `metadata.classification` for FP9. */
     metadata?: Record<string, unknown> | null;
 }

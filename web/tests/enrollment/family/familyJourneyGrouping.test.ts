@@ -97,6 +97,13 @@ describe("grouping the family's child journeys", () => {
         expect(g?.instances.map((i) => i.id).sort()).toEqual(["pi-ava", "pi-ben"]);
     });
 
+    it("an archived child's journey is history, not family progress", async () => {
+        tables.customer_members.push({ id: "built", org_id: ORG, customer_id: HOUSE, display_name: "Built-out", is_active: false });
+        tables.process_instances = [pi("pi-ava", "ava"), pi("pi-built", "built")];
+        const g = await groupHouseholdEnrollmentJourneys(db(), { orgId: ORG, customerId: HOUSE });
+        expect(g?.instances.map((i) => i.id)).toEqual(["pi-ava"]);
+    });
+
     it("never includes another household's child, another process, or a non-child subject", async () => {
         tables.process_instances = [
             pi("pi-ava", "ava"),

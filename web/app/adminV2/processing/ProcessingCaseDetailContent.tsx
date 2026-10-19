@@ -706,7 +706,7 @@ export default function ProcessingCaseDetailContent({
                 />
 
                 {/* Core POS moment: what Alloy understood + what it recommends */}
-                {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
+                {!isClosed && !detail.subjectRemoved ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
 
                 {/* D3 — identity review → plan → approval → explicit commit (canonical operator workflow). */}
                 <IdentityReviewPanel caseId={caseId} />
@@ -796,7 +796,12 @@ export default function ProcessingCaseDetailContent({
 
             {/* Docked action bar */}
             <div className="shrink-0 border-t border-stone-200 bg-stone-50/80 px-4 py-3">
-                {isClosed ? (
+                {detail.subjectRemoved ? (
+                    <div className="text-[12.5px] text-stone-700" data-processing-subject-removed="banner">
+                        <span className="font-semibold">Evidence only</span> — the family or child this paperwork was for no
+                        longer exists. It is kept as a record and cannot be approved or committed.
+                    </div>
+                ) : isClosed ? (
                     <div className="flex items-center gap-2 text-[12.5px] text-stone-700">
                         <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-alloy-bend-pine/[0.14] text-alloy-bend-pine">✓</span>
                         <span>

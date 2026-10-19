@@ -165,7 +165,18 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                 {/* Before approval: the recommendation + concise plan. After: one calm conclusion
                     (title + ✓ outcomes + "Complete."), the natural end of the conversation (§5 + completed). */}
-                {!isClosed ? (
+                {detail.subjectRemoved ? (
+                    <div
+                        className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.06] px-2.5 py-2 text-[11px] text-alloy-midnight/70"
+                        data-processing-subject-removed="banner"
+                    >
+                        <div className="font-semibold text-alloy-midnight">Evidence only</div>
+                        <p className="mt-0.5 leading-snug">
+                            The family or child this paperwork was for no longer exists. It is kept as a record and
+                            cannot be approved or committed.
+                        </p>
+                    </div>
+                ) : !isClosed ? (
                     <>
                         <ReviewDecideCard view={rec} loading={recLoading} compact planLines={planLines} />
                         <p className="px-1 text-[11px] leading-snug text-alloy-midnight/40">
@@ -186,8 +197,8 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
                 )}
             </div>
 
-            {/* Approve bar */}
-            {!isClosed ? (
+            {/* Approve bar — never for evidence-only cases (the server refuses them too). */}
+            {!isClosed && !detail.subjectRemoved ? (
                 <WorkspaceActionBar eyebrow="Decide">
                     {reviewRequired ? (
                         <div className="mb-2 rounded-md border border-alloy-gold/40 bg-alloy-gold/[0.12] px-2.5 py-1.5 text-[11px] text-alloy-gold-dark">

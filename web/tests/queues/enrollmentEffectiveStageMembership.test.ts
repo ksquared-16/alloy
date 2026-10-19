@@ -100,3 +100,19 @@ describe("queryEnrollmentProcessInstanceTrackRows applies effective stage", () =
         expect((await queryEnrollmentProcessInstanceTrackRows({ supabase: db, orgId: "org-1", workUnitId: "wu-1", stageKey: "waitlist" })).length).toBe(1);
     });
 });
+
+describe("a stage lane holds only children who exist and are active", () => {
+    it("a journey whose child was deleted or archived is not work at the family's stage", async () => {
+        const db = mockSupabase({
+            process_instances: [
+                piRow({ subject_id: "cm-a" }),
+                piRow({ subject_id: "cm-gone" }), // child row deleted; family opportunity still resolves
+                piRow({ subject_id: "cm-archived" }),
+            ],
+            opportunities: LEAD_OPP,
+            customer_members: [...MEMBERS, { id: "cm-archived", display_name: "Built-out child", is_active: false }],
+        });
+        const lead = await queryEnrollmentProcessInstanceTrackRows({ supabase: db, orgId: "org-1", workUnitId: "wu-1", stageKey: "lead" });
+        expect(lead.map((r) => (r as { id?: string }).id ?? r)).toHaveLength(1);
+    });
+});

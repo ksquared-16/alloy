@@ -60,6 +60,10 @@ export type PacketLaunchPreview = {
         readonly sessionId: string;
         readonly status: string | null;
         readonly participantPath: string | null;
+        /** The link the family holds for this packet (`started_via_public_link_id`). */
+        readonly linkId: string | null;
+        /** Whether that link names a payer. A link without one cannot take a payment. */
+        readonly payerBound: boolean;
     } | null;
     /** What pressing confirm will do, in one sentence. */
     readonly outcomeSentence: string;
@@ -268,11 +272,28 @@ export async function previewParticipantPacketLaunch(
     }
 
     const existingSession = await resolveCurrentEnrollmentSession(supabase, { orgId, processInstanceId: open.id });
+    /*
+     * The open packet's OWN link and payer. A link minted before payer binding (#1477) names no
+     * recipient, and nobody can pay from it until an operator chooses the payer — the preview must say
+     * so, not claim the household's current contact as if the link recorded them.
+     */
+    let existingLinkId: string | null = null;
+    let existingPayerId: string | null = null;
+    if (existingSession.session) {
+        existingLinkId = String((existingSession.session as { started_via_public_link_id?: string | null }).started_via_public_link_id ?? "") || null;
+        if (existingLinkId) {
+            const { data: linkRow } = await supabase.from("form_public_links").select("metadata").eq("org_id", orgId).eq("id", existingLinkId).maybeSingle();
+            const meta = ((linkRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+            existingPayerId = typeof meta.recipient_person_id === "string" && meta.recipient_person_id.trim() ? meta.recipient_person_id.trim() : null;
+        }
+    }
     const existing = existingSession.session
         ? {
               sessionId: (existingSession.session as { id: string }).id,
               status: (existingSession.session as { status?: string | null }).status ?? null,
               participantPath: null as string | null,
+              linkId: existingLinkId,
+              payerBound: existingPayerId !== null,
           }
         : null;
 
@@ -282,7 +303,16 @@ export async function previewParticipantPacketLaunch(
      * `customers.primary_contact_id` is not read: nothing live writes it, so it named nobody.
      */
     const recipient = await resolveEnrollmentLaunchRecipient(supabase, { orgId, customerId: child.customer_id });
-    const recipientName = recipient.ok ? recipient.value.name : null;
+    let recipientName = recipient.ok ? recipient.value.name : null;
+    if (existing) {
+        // A resume reopens the existing link: its recorded payer is who it goes to, or nobody.
+        recipientName = null;
+        if (existingPayerId) {
+            const { data: person } = await supabase.from("persons").select("first_name, last_name").eq("org_id", orgId).eq("id", existingPayerId).maybeSingle();
+            const p = person as { first_name?: string | null; last_name?: string | null } | null;
+            recipientName = p ? [p.first_name, p.last_name].map((x) => (x ?? "").trim()).filter(Boolean).join(" ") || null : null;
+        }
+    }
 
     const blocker =
         requirements.length === 0

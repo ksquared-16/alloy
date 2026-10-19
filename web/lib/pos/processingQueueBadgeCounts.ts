@@ -12,6 +12,11 @@
  * on loaded rows (a lower bound the rail does not claim is a total).
  */
 const CLOSED_STATUSES: ReadonlySet<string> = new Set(["completed", "archived"]);
+/**
+ * Not a status: the evidence-only cases (family or child no longer exists). The status counts already
+ * exclude them, and they are neither incoming nor completed — they have their own folder.
+ */
+const NOT_A_STATUS: ReadonlySet<string> = new Set(["subject_removed"]);
 
 export function processingStatusFolderCounts(
     serverCounts: Record<string, number> | null | undefined,
@@ -22,6 +27,7 @@ export function processingStatusFolderCounts(
     let incoming = 0;
     let completed = 0;
     for (const [status, n] of entries) {
+        if (NOT_A_STATUS.has(status)) continue;
         if (CLOSED_STATUSES.has(status)) completed += n;
         else incoming += n;
     }

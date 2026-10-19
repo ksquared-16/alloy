@@ -884,6 +884,24 @@ describe("payer binding — a Start Enrollment link names the household's canoni
         if (!preview.ok) return;
         // Preview and launch agree: the name shown is the person the link is bound to.
         expect(preview.value.recipientName).toBe("Pat Parent");
+        expect(preview.value.existing).toMatchObject({ linkId: link.id, payerBound: true });
+    });
+
+    it("a reopened packet whose link has no payer says so — it never names the household contact as if bound", async () => {
+        const { db, supabase, result } = await startWith(() => undefined);
+        expect(result.participantLaunch.realized).toBe(true);
+        const link = db.form_public_links[0]!;
+        // A link minted before payer binding (#1477): the same link, no recipient recorded.
+        const { recipient_person_id: _dropped, ...rest } = link.metadata as Row;
+        link.metadata = rest;
+
+        const preview = await previewParticipantPacketLaunch(supabase, { orgId: ORG, customerMemberId: CHILD });
+        expect(preview.ok).toBe(true);
+        if (!preview.ok) return;
+        expect(preview.value.existing).toMatchObject({ linkId: link.id, payerBound: false });
+        expect(preview.value.recipientName).toBeNull();
+        // Reading the preview binds nobody.
+        expect((link.metadata as Row).recipient_person_id).toBeUndefined();
     });
 
     it("no primary contact → no link at all, and the operator is told why (preview and launch alike)", async () => {

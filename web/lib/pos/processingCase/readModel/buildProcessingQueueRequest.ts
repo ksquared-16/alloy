@@ -68,6 +68,8 @@ export function buildProcessingQueueRequest(
 ): ParsedProcessingQueueRequest {
     const statuses = parseCsvEnum(params.get("status"), STATUS_VALUES);
     const caseIds = parseCsv(params.get("case_ids"));
+    // `subject=removed` reads the evidence-only cases (family or child no longer exists); default is active work.
+    const subjectRemoved = params.get("subject") === "removed";
     const sourceKinds = parseCsvEnum(params.get("source_kind"), SOURCE_KIND_VALUES);
     const caseTypes = parseCsv(params.get("case_type"));
     const receivedFrom = params.get("received_from") ?? undefined;
@@ -99,6 +101,7 @@ export function buildProcessingQueueRequest(
     const query: ProcessingCaseQueueQuery = {
         orgId,
         caseIds,
+        subjectRemoved,
         statuses,
         sourceKinds,
         caseTypes,
