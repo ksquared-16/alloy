@@ -201,7 +201,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         });
         if (!minted.ok) {
             return NextResponse.json(
-                { error: minted.message, created_links_partial: created },
+                { error: minted.message, ...(minted.code ? { code: minted.code } : {}), created_links_partial: created },
                 { status: minted.status >= 400 && minted.status < 600 ? minted.status : 400 }
             );
         }

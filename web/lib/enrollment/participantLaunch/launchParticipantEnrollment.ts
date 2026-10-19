@@ -261,6 +261,7 @@ export async function launchParticipantEnrollment(
         supabase,
         orgId,
         embedBaseUrl: null,
+        purpose: "enrollment_start",
         body: {
             packet_definition_id: packet.packetDefinitionId,
             label: `Enrollment — ${stageKey}`,

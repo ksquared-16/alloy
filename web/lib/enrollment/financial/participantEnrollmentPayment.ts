@@ -123,6 +123,20 @@ export async function resolveParticipantPayer(
         .eq("id", personId)
         .maybeSingle();
     if (!person) return null;
+    /*
+     * …and in THIS household. The recipient is bound at mint to the household's canonical contact, but
+     * a link's metadata is not the household: a payer who is not (or is no longer) a member of the
+     * paperwork's household is not offered — never a person from another family paying for this one.
+     */
+    const { data: member } = await supabase
+        .from("customer_persons")
+        .select("person_id")
+        .eq("org_id", args.orgId)
+        .eq("customer_id", args.customerId)
+        .eq("person_id", personId)
+        .limit(1)
+        .maybeSingle();
+    if (!member) return null;
     const row = person as { id: string; first_name?: string | null; last_name?: string | null };
     const name = [row.first_name, row.last_name].map((p) => (p ?? "").trim()).filter(Boolean).join(" ");
     return { personId: row.id, name: name || "You" };
