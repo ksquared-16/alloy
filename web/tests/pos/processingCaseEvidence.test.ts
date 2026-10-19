@@ -13,6 +13,7 @@ function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role:
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: null,
         archivedAt: null,
+        subjectRemoved: false,
         sources: sources.map((s) => ({
             kind: s.kind,
             id: s.id,

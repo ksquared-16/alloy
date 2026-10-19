@@ -52,7 +52,7 @@ type AdoptionReport = {
         stage_routing_changes: { stage_key: string; label: string; grain: string; track_key: string }[];
         omitted_outcomes: { outcome_key: string; label: string; missing_stage_key: string }[];
     };
-    observed_instances: { stage_keys: string[]; instance_count: number };
+    observed_instances: { stage_keys: string[]; instance_count: number; orphaned_instance_count?: number };
 };
 
 export default function BusinessProcessTrackAdoptionCard({
@@ -199,6 +199,9 @@ export default function BusinessProcessTrackAdoptionCard({
                                 {report.preview.stage_routing_changes.length} stages.{" "}
                                 {report.observed_instances.instance_count} records are currently in this
                                 process.
+                                {report.observed_instances.orphaned_instance_count ?
+                                    ` ${report.observed_instances.orphaned_instance_count} more belong to children who no longer exist; they appear nowhere and are not affected.`
+                                :   ""}
                             </p>
                             <div className="grid gap-2 sm:grid-cols-2">
                                 {report.preview.after.tracks.map((track) => (

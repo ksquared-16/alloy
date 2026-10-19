@@ -435,6 +435,14 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
          * through the stage-independent participation lens and the record itself, not in a work lane.
          */
         if (typeof pi.close_reason_key === "string" && pi.close_reason_key.trim()) continue;
+        /*
+         * NO CHILD, NO WORK. A journey whose child no longer exists, or was archived, is not a child
+         * waiting at this stage — the same liveness the participation lens applies. A missing context
+         * already drops most such journeys above; this holds when the family opportunity still resolves
+         * (a household's archived build-out children sat in Waitlist on the family's stage).
+         */
+        const child = refs.cmById.get(pi.subject_id) ?? null;
+        if (!child || child.is_active === false) continue;
         // Effective-stage membership: keep only children whose PI.stage_key ?? opp.stage_key == lane.
         const oppStageKey = typeof opp.stage_key === "string" ? opp.stage_key : null;
         if (!processInstanceBelongsToLane({ piStageKey: pi.stage_key, contextStageKey: oppStageKey, laneStageKey: stageKey })) {

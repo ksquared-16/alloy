@@ -75,14 +75,17 @@ export async function groupHouseholdEnrollmentJourneys(
 ): Promise<HouseholdEnrollmentGrouping | null> {
     const { orgId, customerId } = input;
 
-    // The household's children — the only subjects that can ever appear.
+    // The household's children — the only subjects that can ever appear. An ARCHIVED child
+    // (is_active = false) is not in progress: its journey is history, not family progress.
     const { data: memberRows, error: memberErr } = await supabase
         .from("customer_members")
-        .select("id")
+        .select("id, is_active")
         .eq("org_id", orgId)
         .eq("customer_id", customerId);
     if (memberErr) throw new Error(memberErr.message);
-    const householdChildren = new Set(((memberRows ?? []) as { id: string }[]).map((m) => m.id));
+    const householdChildren = new Set(
+        ((memberRows ?? []) as { id: string; is_active?: boolean | null }[]).filter((m) => m.is_active !== false).map((m) => m.id),
+    );
     if (householdChildren.size === 0) return null;
 
     const select = "id, subject_id, state, stage_key, created_at, process_key, subject_type";

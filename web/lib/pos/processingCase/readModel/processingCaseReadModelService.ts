@@ -82,6 +82,7 @@ export async function listProcessingCaseQueue(
             statusChangedAt: c.status_changed_at,
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
+            subjectRemoved: c.processing_case_subject_removed === true,
             sourceDisplay,
             caseTitle: (() => {
                 const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
@@ -145,6 +146,7 @@ export async function getProcessingCaseDetail(
         createdAt: c.created_at,
         updatedAt: c.updated_at,
         archivedAt: c.archived_at,
+        subjectRemoved: c.processing_case_subject_removed === true,
         sources,
         caseTitle: (() => {
             const raw = (c.metadata as Record<string, unknown> | null)?.case_title;

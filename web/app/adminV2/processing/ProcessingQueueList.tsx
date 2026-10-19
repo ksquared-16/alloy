@@ -91,6 +91,8 @@ const SECONDARY_LANES: { key: ProcessingCaseStatus; label: string }[] = [
  * this same rail/header renders the deeper hierarchy. `all` is always the queue root.
  */
 type ProcessingFolderKey = string;
+/** Fixed folder after Completed: cases kept as evidence because their family or child no longer exists. */
+const SUBJECT_REMOVED_FOLDER = "subject_removed";
 
 /** Lane accent for the eyebrow — quiet, semantic, no rainbow. */
 const LANE_TONE: Record<string, string> = {
@@ -235,6 +237,24 @@ export default function ProcessingQueueList({
         return initial;
     });
     const [menuRowId, setMenuRowId] = useState<string | null>(null);
+    /*
+     * EVIDENCE ONLY: cases whose family or child no longer exists. The queue and its counts exclude them
+     * (`processing_case_subject_removed`), so they are read on demand, only when the operator opens the
+     * folder — history stays reachable without ever reading as work.
+     */
+    const [removedRows, setRemovedRows] = useState<ProcessingCaseQueueRow[] | null>(null);
+    const removedOpen = openFolders[SUBJECT_REMOVED_FOLDER] === true;
+    useEffect(() => {
+        if (!removedOpen || removedRows) return;
+        let live = true;
+        void fetch("/api/admin/processing/queue?subject=removed&limit=100", { credentials: "include" })
+            .then(async (r) => (r.ok ? ((await r.json()) as { data?: { rows?: ProcessingCaseQueueRow[] } }).data?.rows ?? [] : []))
+            .catch(() => [] as ProcessingCaseQueueRow[])
+            .then((list) => live && setRemovedRows(list));
+        return () => {
+            live = false;
+        };
+    }, [removedOpen, removedRows]);
     const [confirmDelete, setConfirmDelete] = useState<QueueDisplayRow | null>(null);
     const [confirmArchive, setConfirmArchive] = useState<QueueDisplayRow | null>(null);
     const [renameTarget, setRenameTarget] = useState<QueueDisplayRow | null>(null);
@@ -621,6 +641,28 @@ export default function ProcessingQueueList({
                                 <ul className="flex flex-col gap-1.5">{completedRows.map((row) => renderRow(row))}</ul>
                             ) : (
                                 <p className="px-3 py-1.5 text-[10px] text-alloy-midnight/35">No completed items</p>
+                            )}
+                        </div>
+                    ) : null}
+                    {(counts as Record<string, number>).subject_removed
+                        ? renderFolderHeader(
+                              SUBJECT_REMOVED_FOLDER,
+                              "Family removed · evidence only",
+                              (counts as Record<string, number>).subject_removed ?? 0,
+                              "stone",
+                          )
+                        : null}
+                    {removedOpen ? (
+                        <div className="py-0.5" data-processing-subject-removed="folder">
+                            <p className="px-3 py-1 text-[10px] text-alloy-midnight/45">
+                                The family or child these were for no longer exists. Kept as evidence — they cannot be approved or committed.
+                            </p>
+                            {removedRows === null ? (
+                                <p className="px-3 py-1.5 text-[10px] text-alloy-midnight/35">Loading…</p>
+                            ) : removedRows.length > 0 ? (
+                                <ul className="flex flex-col gap-1.5">{removedRows.map((row) => renderRow(row))}</ul>
+                            ) : (
+                                <p className="px-3 py-1.5 text-[10px] text-alloy-midnight/35">No items</p>
                             )}
                         </div>
                     ) : null}

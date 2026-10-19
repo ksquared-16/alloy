@@ -13,6 +13,11 @@ import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processin
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import {
+    isProcessingCaseSubjectRemoved,
+    PROCESSING_SUBJECT_REMOVED_FIELD,
+    processingSubjectRemovedResponse,
+} from "@/lib/pos/processingCase/processingCaseSubjectRemoved";
 import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
 
@@ -56,7 +61,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     try {
         const { data: caseRow, error: caseErr } = await supabase
             .from("processing_cases")
-            .select("id, status, case_type, metadata")
+            .select(`id, status, case_type, metadata, ${PROCESSING_SUBJECT_REMOVED_FIELD}`)
             .eq("org_id", ctx.orgId)
             .eq("id", caseId)
             .maybeSingle();
@@ -72,6 +77,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 alreadyDone: true,
             });
         }
+        // Evidence only: there is no family to hand this case's outcome to, so nothing is "approved".
+        if (isProcessingCaseSubjectRemoved(caseRow)) return processingSubjectRemovedResponse();
 
         // Lead intake: run the complete identity commit (full lead → enrollment participation).
         if (row.case_type === "form_submission") {

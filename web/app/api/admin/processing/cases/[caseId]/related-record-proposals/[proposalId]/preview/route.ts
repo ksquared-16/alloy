@@ -8,6 +8,11 @@ import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { previewExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
+import {
+    isProcessingCaseSubjectRemoved,
+    PROCESSING_SUBJECT_REMOVED_FIELD,
+    processingSubjectRemovedResponse,
+} from "@/lib/pos/processingCase/processingCaseSubjectRemoved";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +59,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const { data: caseRow, error: caseError } = await supabase
             .from("processing_cases")
-            .select("id, metadata")
+            .select(`id, metadata, ${PROCESSING_SUBJECT_REMOVED_FIELD}`)
             .eq("org_id", ctx.orgId)
             .eq("id", caseId)
             .maybeSingle();
         if (caseError) throw new Error(caseError.message);
         if (!caseRow) return jsonError("Not found", 404);
+        if (isProcessingCaseSubjectRemoved(caseRow)) return processingSubjectRemovedResponse();
 
         const metadata = ((caseRow as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>;
         // Same execution split as commit: a preview must exercise the identical gate, or it is not a

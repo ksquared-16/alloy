@@ -21,7 +21,13 @@ import type {
 } from "./types";
 import { deriveDocumentDisplayName } from "../formDraft/deriveDocumentTitle";
 
-const CASE_COLUMNS = "id, status, case_type, created_at, status_changed_at, updated_at, archived_at, metadata";
+/**
+ * `processing_case_subject_removed` is a computed field (migration 20261129090000): true when the case's
+ * family or child no longer exists. Filtering on it in the database keeps cursor pages and exact counts
+ * exact; selecting it labels the row.
+ */
+export const SUBJECT_REMOVED_FIELD = "processing_case_subject_removed";
+const CASE_COLUMNS = `id, status, case_type, created_at, status_changed_at, updated_at, archived_at, metadata, ${SUBJECT_REMOVED_FIELD}`;
 const SOURCE_COLUMNS = "processing_case_id, source_kind, source_id, role, linked_at";
 
 const ALL_STATUSES: ProcessingCaseStatus[] = [
@@ -65,6 +71,7 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
 
             let q = supabase.from("processing_cases").select(CASE_COLUMNS).eq("org_id", query.orgId);
             if (query.caseIds && query.caseIds.length > 0) q = q.in("id", query.caseIds);
+            else q = q.eq(SUBJECT_REMOVED_FIELD, query.subjectRemoved === true);
             if (query.statuses && query.statuses.length > 0) q = q.in("status", query.statuses);
             if (query.caseTypes && query.caseTypes.length > 0) q = q.in("case_type", query.caseTypes);
             if (query.receivedFrom) q = q.gte("created_at", query.receivedFrom);
@@ -102,7 +109,8 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
                 allowedCaseIds = await primaryCaseIdsForKinds(supabase, query.orgId, query.sourceKinds);
             }
             const out: Record<string, number> = {};
-            for (const status of ALL_STATUSES) {
+            // Each status counts ACTIVE work only; `subject_removed` counts the evidence-only cases.
+            for (const status of [...ALL_STATUSES, "subject_removed"] as const) {
                 if (allowedCaseIds && allowedCaseIds.length === 0) {
                     out[status] = 0;
                     continue;
@@ -110,8 +118,8 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
                 let q = supabase
                     .from("processing_cases")
                     .select("id", { count: "exact", head: true })
-                    .eq("org_id", query.orgId)
-                    .eq("status", status);
+                    .eq("org_id", query.orgId);
+                q = status === "subject_removed" ? q.eq(SUBJECT_REMOVED_FIELD, true) : q.eq("status", status).eq(SUBJECT_REMOVED_FIELD, false);
                 if (query.caseTypes && query.caseTypes.length > 0) q = q.in("case_type", query.caseTypes);
                 if (query.receivedFrom) q = q.gte("created_at", query.receivedFrom);
                 if (query.receivedTo) q = q.lte("created_at", query.receivedTo);
