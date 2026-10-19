@@ -105,13 +105,13 @@ BEGIN
     END IF;
     RAISE NOTICE 'CASE 6 PASS classification stable on re-read; the case is unchanged';
 
-    -- 7. Who may read it: never anon; authenticated and service_role may (function privilege).
+    -- 7. Who may read it: service_role only — never anon or authenticated (function privilege).
     IF has_function_privilege('anon', 'public.processing_case_subject_removed(public.processing_cases)', v_priv)
-       OR NOT has_function_privilege('authenticated', 'public.processing_case_subject_removed(public.processing_cases)', v_priv)
+       OR has_function_privilege('authenticated', 'public.processing_case_subject_removed(public.processing_cases)', v_priv)
        OR NOT has_function_privilege('service_role', 'public.processing_case_subject_removed(public.processing_cases)', v_priv) THEN
       RAISE EXCEPTION 'CASE 7 FAILED: function grants are wrong';
     END IF;
-    RAISE NOTICE 'CASE 7 PASS anon has no grant; authenticated and service_role do';
+    RAISE NOTICE 'CASE 7 PASS only service_role holds the grant';
 
     -- 8. The payer write is compare-and-set on "no payer yet" (the predicate bindLinkPayer sends): the first
     --    bind lands, a second — another person, another household's contact — changes nothing.

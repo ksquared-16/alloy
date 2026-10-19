@@ -21,7 +21,9 @@
 --
 -- SECURITY DEFINER with a pinned search_path: existence must not depend on what the CALLER may see — a
 -- location-restricted operator whose RLS hides a household must not see that household's case as removed.
--- It returns one boolean about a case row the caller has already read. Idempotent (CREATE OR REPLACE).
+-- EXECUTE for service_role only, like every server-side function behind the org-parameterized boundary:
+-- the Processing routes read through the service client after resolving capability and tenancy.
+-- Idempotent (CREATE OR REPLACE; REVOKE/GRANT).
 
 CREATE OR REPLACE FUNCTION public.processing_case_subject_removed(c public.processing_cases)
 RETURNS boolean
@@ -61,5 +63,5 @@ COMMENT ON FUNCTION public.processing_case_subject_removed(public.processing_cas
     'Processing: true when the case''s primary packet-session source names a household or child that no longer exists — evidence only, never active work. Computed field; stores nothing.';
 
 REVOKE ALL ON FUNCTION public.processing_case_subject_removed(public.processing_cases) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.processing_case_subject_removed(public.processing_cases) FROM anon;
-GRANT EXECUTE ON FUNCTION public.processing_case_subject_removed(public.processing_cases) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.processing_case_subject_removed(public.processing_cases) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.processing_case_subject_removed(public.processing_cases) TO service_role;
