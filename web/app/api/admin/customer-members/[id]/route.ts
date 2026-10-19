@@ -199,6 +199,17 @@ export async function DELETE(
         .eq("org_id", ctx.orgId);
 
     if (error) {
+        // The Enrollment-journey guard (child_has_enrollment_journey / participation_has_enrollment_journey):
+        // a refusal the operator can act on (archive instead), not a server fault. Nothing was deleted.
+        if (/(child|participation)_has_enrollment_journey/.test(error.message ?? "")) {
+            return NextResponse.json(
+                {
+                    error: "This child has an Enrollment record (paperwork or a journey). Archive the child instead of deleting it.",
+                    code: "child_has_enrollment_journey",
+                },
+                { status: 409 },
+            );
+        }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 

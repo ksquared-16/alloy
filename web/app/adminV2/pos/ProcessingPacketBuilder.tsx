@@ -46,6 +46,8 @@ export default function ProcessingPacketBuilder({
     const [links, setLinks] = useState<PacketPublicLinkRow[]>([]);
     const [sessionCount, setSessionCount] = useState(0);
     const [deferred, setDeferred] = useState<PacketDeferredCapability[]>([]);
+    /** The Business-Process-derived Enrollment packet: sent with Start enrollment, never shared as a document. */
+    const [isEnrollmentPacket, setIsEnrollmentPacket] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export default function ProcessingPacketBuilder({
             // What the packet knowingly does not ask for, recorded when it was realized.
             const dc = def.definition.metadata?.deferred_capabilities;
             setDeferred(Array.isArray(dc) ? (dc as PacketDeferredCapability[]) : []);
+            setIsEnrollmentPacket(def.definition.metadata?.derived_from === "business_process_requirements");
             const it = def.items ?? [];
             setItems(it);
 
@@ -211,6 +214,10 @@ export default function ProcessingPacketBuilder({
     };
 
     const mintLink = async () => {
+        if (isEnrollmentPacket) {
+            setErr("This is the Enrollment packet. Send it with Start enrollment from the child's record once their offer is accepted — it is not shared as a document link.");
+            return;
+        }
         setBusy(true);
         setErr(null);
         setOkBanner(null);

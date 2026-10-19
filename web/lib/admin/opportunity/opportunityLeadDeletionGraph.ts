@@ -105,6 +105,28 @@ async function countLinkedJobs(
     return countByEq(supabase, "jobs", { opportunity_id: opportunityId }, orgId);
 }
 
+/**
+ * Enrollment journeys whose child is in this household. A journey's child and participation are
+ * polymorphic references, so deleting them would leave the journey, its packet session and its participant
+ * link pointing at nothing (staging: 254 such journeys). The database now refuses that delete
+ * (child_has_enrollment_journey); this states it before the operator confirms, rather than failing mid-way.
+ */
+async function countEnrollmentJourneysForChildren(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerMemberIds: readonly string[]
+): Promise<number> {
+    if (customerMemberIds.length === 0) return 0;
+    const { count, error } = await supabase
+        .from("process_instances")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .eq("subject_type", "child")
+        .in("subject_id", [...customerMemberIds]);
+    if (error) throw new Error(`deletion preview: journeys could not be read (${error.message})`);
+    return count ?? 0;
+}
+
 async function countLinkedDiscountRedemptions(
     supabase: SupabaseClient,
     orgId: string,
@@ -445,12 +467,16 @@ export async function resolveOpportunityLeadDeletionGraph(
         countLinkedDiscountRedemptions(supabase, orgId, opportunityId),
     ]);
 
-    const blocked = linkedJobs > 0 || linkedDiscountRedemptions > 0;
+    const enrollmentJourneys = await countEnrollmentJourneysForChildren(supabase, orgId, household.customerMemberIds);
+
+    const blocked = linkedJobs > 0 || linkedDiscountRedemptions > 0 || enrollmentJourneys > 0;
     const blockReason =
         linkedJobs > 0 ?
             "This lead has linked jobs. Financial and job record deletion is not supported in this workflow."
         : linkedDiscountRedemptions > 0 ?
             "This lead has discount redemptions. Remove or reassign them before deleting this record."
+        : enrollmentJourneys > 0 ?
+            "A child in this family has started Enrollment (paperwork or an Enrollment record). Archive the lead instead — deleting it would leave that Enrollment history pointing at nothing."
         :   null;
 
     let deletableCustomerId: string | null = null;
