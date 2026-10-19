@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ACCESS_SCOPE_WRITE, ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
-import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { createMembershipWithAccessProfile, createMembershipWithAccessScope } from "@/lib/admin/membershipWithProfile";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
 
@@ -125,13 +125,15 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
-    let body: { email?: string; role?: string; first_name?: string; last_name?: string } = {};
+    let body: { email?: string; role?: string; first_name?: string; last_name?: string; site_scope?: unknown; site_location_ids?: unknown } = {};
     try {
         body = (await request.json()) as {
             email?: string;
             role?: string;
             first_name?: string;
             last_name?: string;
+            site_scope?: unknown;
+            site_location_ids?: unknown;
         };
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -147,6 +149,43 @@ export async function POST(request: Request) {
     const { data: roleRow } = await supabase.from("role_definitions").select("role_key").eq("org_id", access.orgId).eq("role_key", role).eq("is_active", true).maybeSingle();
     if (!roleRow) {
         return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
+    }
+
+    /*
+     * WHERE THE NEW PERSON MAY WORK — decided with the invitation, in the same write.
+     *
+     * The form used to create the membership (always all/all) and then narrow it with a second request;
+     * when that request failed, or the inviter could not write scope, the account kept organization-wide
+     * access the operator had declined. A restriction now travels with the invite and is written in ONE
+     * transaction (create_membership_with_access_scope). It is validated BEFORE the invitation email is
+     * sent, so a refused restriction never leaves an invited account behind. Restricting at invite asks the
+     * same authority the access-scope route asks (ADMIN_ACCESS_SCOPE_WRITE); an all-locations invite
+     * asks nothing more than it did.
+     */
+    const siteScope = body.site_scope == null ? "all" : String(body.site_scope).trim().toLowerCase();
+    if (siteScope !== "all" && siteScope !== "restricted") {
+        return NextResponse.json({ error: "site_scope must be all or restricted" }, { status: 400 });
+    }
+    const siteLocationIds = Array.isArray(body.site_location_ids)
+        ? [...new Set(body.site_location_ids.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))]
+        : [];
+    if (siteScope === "restricted") {
+        if (!access.permissionKeys.includes(ADMIN_ACCESS_SCOPE_WRITE)) {
+            return NextResponse.json({ error: "You cannot set location access, so this invitation cannot be limited to selected locations." }, { status: 403 });
+        }
+        if (siteLocationIds.length === 0) {
+            return NextResponse.json({ error: "restricted site_scope requires at least one site location (empty allow-list denied)" }, { status: 400 });
+        }
+        const { data: locRows, error: lErr } = await supabase
+            .from("locations")
+            .select("id")
+            .eq("org_id", access.orgId)
+            .eq("location_type", "site")
+            .in("id", siteLocationIds);
+        if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
+        if ((locRows ?? []).length !== siteLocationIds.length) {
+            return NextResponse.json({ error: "One or more site locations are not sites of this organization" }, { status: 400 });
+        }
     }
 
     /**
@@ -184,12 +223,20 @@ export async function POST(request: Request) {
      * still mint a colleague holding eighty. The RPC bounds the creation to this actor's own
      * effective authority and refuses what exceeds it, before any row is written.
      */
-    const membership = await createMembershipWithAccessProfile(supabase, {
-        userId: user.id,
-        orgId: access.orgId,
-        role,
-        audit: accessMutationAudit(access),
-    });
+    const membership = siteScope === "restricted"
+        ? await createMembershipWithAccessScope(supabase, {
+              userId: user.id,
+              orgId: access.orgId,
+              role,
+              siteLocationIds,
+              audit: accessMutationAudit(access),
+          })
+        : await createMembershipWithAccessProfile(supabase, {
+              userId: user.id,
+              orgId: access.orgId,
+              role,
+              audit: accessMutationAudit(access),
+          });
     if (!membership.ok) {
         if (membership.kind === "duplicate") {
             return NextResponse.json({ error: "This user already has this role in this org" }, { status: 409 });
@@ -207,5 +254,7 @@ export async function POST(request: Request) {
         display_name: fullName,
         role,
         role_keys: [role],
+        site_scope: siteScope,
+        site_location_ids: siteScope === "restricted" ? siteLocationIds : [],
     });
 }

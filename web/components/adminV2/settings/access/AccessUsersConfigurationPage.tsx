@@ -210,13 +210,11 @@ export default function AccessUsersConfigurationPage({
     const [inviteRole, setInviteRole] = useState("");
     const [inviteBusy, setInviteBusy] = useState(false);
     /**
-     * Location access, asked at invite rather than left for a second visit.
+     * Location access, asked at invite and written WITH the invitation (one transaction).
      *
-     * The default is `all` because that is what the platform ALREADY enforces for an account with
-     * no access profile (`ABSENT_PROFILE_ENFORCEMENT`). Defaulting to the closed direction would
-     * read as safer and be a lie — the control would claim to be restricting an account that the
-     * resolver treats as organization-wide either way. Choosing "Selected locations" is the
-     * narrowing, and it is the one that requires a deliberate act.
+     * The default is `all` because that is what the membership owner writes for an invited account
+     * when nothing narrows it; "Selected locations" is the narrowing, and it is the one that requires
+     * a deliberate act.
      */
     const [inviteSiteMode, setInviteSiteMode] = useState<InviteSiteMode>("all");
     const [inviteSiteIds, setInviteSiteIds] = useState<string[]>([]);
@@ -492,6 +490,8 @@ export default function AccessUsersConfigurationPage({
         setMessage(null);
         setError(null);
         try {
+            const scope = inviteScopePayload({ siteMode: inviteSiteMode, siteLocationIds: inviteSiteIds });
+            if (!scope) throw new Error("Choose at least one location, or All locations.");
             const res = await fetch("/api/admin/users", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -501,43 +501,16 @@ export default function AccessUsersConfigurationPage({
                     // Inputs, not storage: the route derives the canonical `full_name` from these.
                     first_name: inviteFirstName.trim(),
                     last_name: inviteLastName.trim(),
+                    // Written with the membership, in one transaction — never a second request that
+                    // could fail and leave an organization-wide account behind.
+                    ...scope,
                 }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Invite failed");
             setInviteOpen(false);
             const newUserId = (json as { user_id?: string }).user_id;
-
-            /*
-             * Two writes, and the second can fail on its own. The account EXISTS by this point —
-             * reporting "invite failed" would be false, and reporting plain success would claim a
-             * location restriction that was never stored. So the outcome names both halves.
-             *
-             * Order matters: the membership must exist before the scope route will accept a scope
-             * for it (it 404s on a user with no `user_roles` row in the org).
-             */
-            const scope = inviteScopePayload({ siteMode: inviteSiteMode, siteLocationIds: inviteSiteIds });
-            let scopeFailure: string | null = null;
-            if (typeof newUserId === "string" && newUserId && scope) {
-                const scopeRes = await fetch(`/api/admin/users/${encodeURIComponent(newUserId)}/access-scope`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(scope),
-                });
-                if (!scopeRes.ok) {
-                    const scopeJson = (await scopeRes.json().catch(() => ({}))) as { error?: string };
-                    scopeFailure = typeof scopeJson.error === "string" ? scopeJson.error : "scope was not saved";
-                }
-            }
-
-            if (scopeFailure) {
-                setError(
-                    `Invitation sent to ${inviteEmail.trim()}, but their location access was not set: ${scopeFailure}. ` +
-                        "Set it on their Role & Access tab.",
-                );
-            } else {
-                setMessage(`Invitation sent to ${inviteEmail.trim()}.`);
-            }
+            setMessage(`Invitation sent to ${inviteEmail.trim()}.`);
             await reload();
             if (typeof newUserId === "string" && newUserId) selectMember(newUserId);
         } catch (err) {

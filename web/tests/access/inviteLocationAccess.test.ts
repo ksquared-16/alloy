@@ -1,48 +1,29 @@
 /**
- * The invite form's location answer, and the department answer it is forced to supply with it.
+ * The invite form's location answer — sent WITH the invitation and written in the same transaction.
  *
- * The claim under test is narrow and it is the only one that matters: **inviting somebody with a
- * location choice must not change what any department can reach.** The scope route takes both
- * dimensions or neither, so the invite has to say something about departments — and the only safe
- * thing to say is whatever the platform already enforces for an account with no profile.
+ * The claims under test: the answer does not depend on the absent-profile mode (every membership has
+ * a profile, written by the membership owner), it never carries a department answer the operator was
+ * not asked, and an unfinished restriction is not a scope.
  */
 import { describe, expect, it } from "vitest";
-import {
-    ABSENT_PROFILE_ANSWER,
-    inviteScopeNote,
-    inviteScopePayload,
-    inviteSiteSelectionIsComplete,
-} from "@/lib/access/inviteLocationAccess";
-import { ABSENT_PROFILE_ENFORCEMENT, resolveScopeAnswerFromProfile } from "@/lib/admin/resolveAdminAccessCore";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { inviteScopeNote, inviteScopePayload, inviteSiteSelectionIsComplete } from "@/lib/access/inviteLocationAccess";
 
-describe("the department answer is the platform's, not the form's", () => {
-    it("is read from ABSENT_PROFILE_ENFORCEMENT rather than restated", () => {
-        expect(ABSENT_PROFILE_ANSWER).toEqual(resolveScopeAnswerFromProfile(null, ABSENT_PROFILE_ENFORCEMENT));
+describe("the location answer is the operator's, whatever the absent-profile mode", () => {
+    it("produces a payload under deny — the choice is never silently dropped", () => {
+        expect(inviteScopePayload({ siteMode: "all", siteLocationIds: [] })).toEqual({ site_scope: "all", site_location_ids: [] });
+        expect(inviteScopePayload({ siteMode: "restricted", siteLocationIds: ["loc-1"] })).toEqual({ site_scope: "restricted", site_location_ids: ["loc-1"] });
     });
 
-    it("writes the department scope an account without a profile is ALREADY enforced as", () => {
-        // This is the whole safety argument. If the two ever differ, the invite is granting or
-        // removing department authority as a side effect of a question about locations.
-        const payload = inviteScopePayload({ siteMode: "all", siteLocationIds: [] });
-        if (ABSENT_PROFILE_ANSWER.departmentScope === "all" && !ABSENT_PROFILE_ANSWER.denyAll) {
-            expect(payload?.department_scope).toBe(ABSENT_PROFILE_ANSWER.departmentScope);
-            expect(payload?.department_ids).toEqual([]);
-        } else {
-            expect(payload).toBeNull();
-        }
+    it("carries no department answer — departments are what the membership owner writes (all)", () => {
+        const payload = inviteScopePayload({ siteMode: "restricted", siteLocationIds: ["loc-1"] }) as Record<string, unknown>;
+        expect(Object.keys(payload).sort()).toEqual(["site_location_ids", "site_scope"]);
     });
 
-    it("refuses to write anything under a deny default — proved against the mode, not asserted", () => {
-        // The failure this guards is a future one: flipping ABSENT_PROFILE_ENFORCEMENT to "deny"
-        // makes `department_scope: "all"` a genuine widening. The module's refusal is conditioned on
-        // exactly that value, so evaluating the other mode here shows the condition can fire.
-        const deny = resolveScopeAnswerFromProfile(null, "deny");
-        expect(deny.departmentScope).toBe("restricted");
-        expect(deny.denyAll).toBe(true);
-        // …and the guard reads both fields, so a mode that is restricted-but-not-denyAll is caught too.
-        const legacy = resolveScopeAnswerFromProfile(null, "legacy-all");
-        expect(legacy.departmentScope).toBe("all");
-        expect(legacy.denyAll).toBe(false);
+    it("does not read the absent-profile constant at all", () => {
+        const src = readFileSync(join(process.cwd(), "lib/access/inviteLocationAccess.ts"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+        expect(src).not.toMatch(/ABSENT_PROFILE_ENFORCEMENT|resolveScopeAnswerFromProfile/);
     });
 });
 
