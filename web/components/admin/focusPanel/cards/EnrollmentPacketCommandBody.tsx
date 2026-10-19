@@ -27,6 +27,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import LinkPayerPicker from "@/components/admin/enrollment/LinkPayerPicker";
+
 type PreviewRequirement = {
     position: number;
     kind: "form" | "financial";
@@ -42,7 +44,13 @@ type Preview = {
     recipientName: string | null;
     governing: { stageKey: string; businessProcessRevisionId: string | null };
     requirements: PreviewRequirement[];
-    existing: { sessionId: string; status: string | null; participantPath: string | null } | null;
+    existing: {
+        sessionId: string;
+        status: string | null;
+        participantPath: string | null;
+        linkId: string | null;
+        payerBound: boolean;
+    } | null;
     outcomeSentence: string;
     blocker: string | null;
 };
@@ -73,6 +81,8 @@ export default function EnrollmentPacketCommandBody({
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [result, setResult] = useState<LaunchResult | null>(null);
+    const [payerBoundNow, setPayerBoundNow] = useState(false);
+    const needsPayer = Boolean(preview?.existing && preview.existing.linkId && !preview.existing.payerBound && !payerBoundNow);
 
     useEffect(() => {
         let live = true;
@@ -199,8 +209,9 @@ export default function EnrollmentPacketCommandBody({
                         <div className="flex gap-2">
                             <dt className="text-alloy-midnight/55">Goes to</dt>
                             <dd className="text-alloy-midnight" data-enrollment-packet-command="recipient">
-                                {/* Never a guess: the launch defaults to this person, so the preview says so. */}
-                                {preview.recipientName ?? "the family's primary contact"}
+                                {/* Never a guess: a new launch defaults to this person; a reopened link names its own payer or nobody. */}
+                                {preview.recipientName ??
+                                    (preview.existing ? "No payer recorded on this link" : "the family's primary contact")}
                             </dd>
                         </div>
                     </dl>
@@ -223,7 +234,18 @@ export default function EnrollmentPacketCommandBody({
                         </ol>
                     </div>
 
-                    {preview.existing ? (
+                    {preview.existing && needsPayer ? (
+                        <div
+                            className="space-y-2 rounded-lg border border-alloy-ember/30 bg-alloy-ember/[0.04] px-3 py-2"
+                            data-enrollment-packet-command="needs-payer"
+                        >
+                            <p className="text-[0.75rem] text-alloy-midnight/80">
+                                An open packet already exists for this child, but its link has no payer recorded — the
+                                family can&apos;t pay online until you choose who pays. Their completed paperwork is kept.
+                            </p>
+                            <LinkPayerPicker linkId={preview.existing.linkId!} onBound={() => setPayerBoundNow(true)} />
+                        </div>
+                    ) : preview.existing ? (
                         <p
                             className="rounded-lg bg-alloy-midnight/[0.04] px-3 py-2 text-[0.75rem] text-alloy-midnight/70"
                             data-enrollment-packet-command="existing"

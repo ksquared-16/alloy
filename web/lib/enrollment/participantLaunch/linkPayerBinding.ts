@@ -24,7 +24,16 @@ import { HOUSEHOLD_PRIMARY_CONTACT_ROLE_TYPE } from "@/lib/admin/person/househol
 
 export const LINK_PAYER_BOUND_EVENT = "enrollment_link_payer_bound";
 
-export type LinkPayerCandidate = { readonly personId: string; readonly name: string | null };
+/**
+ * A person the operator may choose. Email and phone are shown so two primary contacts with similar
+ * names can be told apart — and so the operator sees which one the family can actually be reached at.
+ */
+export type LinkPayerCandidate = {
+    readonly personId: string;
+    readonly name: string | null;
+    readonly email: string | null;
+    readonly phone: string | null;
+};
 
 export type LinkPayerRefusalCode =
     | "link_not_found"
@@ -97,7 +106,7 @@ export async function previewLinkPayerBinding(
 
     const { data: contacts, error: contactError } = await supabase
         .from("customer_persons")
-        .select("person_id, persons(id, first_name, last_name, org_id)")
+        .select("person_id, persons(id, first_name, last_name, email, phone, org_id)")
         .eq("org_id", input.orgId)
         .eq("customer_id", customerId)
         .eq("role_type", HOUSEHOLD_PRIMARY_CONTACT_ROLE_TYPE);
@@ -108,7 +117,7 @@ export async function previewLinkPayerBinding(
         if (!row.person_id || !p || str(p.org_id) !== input.orgId) continue;
         if (candidates.some((c) => c.personId === row.person_id)) continue;
         const name = [str(p.first_name), str(p.last_name)].filter(Boolean).join(" ") || null;
-        candidates.push({ personId: row.person_id, name });
+        candidates.push({ personId: row.person_id, name, email: str(p.email) || null, phone: str(p.phone) || null });
     }
     if (candidates.length === 0) {
         return refuse("no_primary_contact", "This household has no primary contact. Add one to the household first.");
