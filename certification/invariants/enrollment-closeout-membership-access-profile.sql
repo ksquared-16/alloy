@@ -31,7 +31,13 @@ BEGIN
   VALUES (c_subject, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'closeout-invariant-subject@example.invalid', '{}'::jsonb, '{}'::jsonb, '', '', '', '', now(), now());
   v_user := c_subject;
-  SELECT rd.org_id, rd.role_key INTO v_org, v_role FROM public.role_definitions rd ORDER BY rd.org_id, rd.role_key LIMIT 1;
+  -- A role with NO money-capable grant: a money-capable role is refused by the named-operator guard
+  -- (money_capable_grant_requires_named_operator) before this invariant is reached, which proves nothing here.
+  SELECT rd.org_id, rd.role_key INTO v_org, v_role FROM public.role_definitions rd
+   WHERE NOT EXISTS (SELECT 1 FROM public.role_permission_grants g
+                      WHERE g.org_id = rd.org_id AND g.role_key = rd.role_key AND g.allowed
+                        AND g.permission_key = ANY (public.money_capable_capability_keys()))
+   ORDER BY rd.org_id, rd.role_key LIMIT 1;
   SELECT r.user_id, r.org_id INTO v_member_user, v_member_org FROM public.user_roles r
     JOIN public.user_access_profiles a ON a.user_id = r.user_id AND a.org_id = r.org_id
    WHERE a.department_scope = 'all' AND a.site_scope = 'all'
@@ -39,7 +45,7 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM public.user_site_access x WHERE x.user_id = r.user_id AND x.org_id = r.org_id)
    ORDER BY r.user_id, r.org_id LIMIT 1;
   IF v_org IS NULL OR v_role IS NULL OR v_member_user IS NULL THEN
-    RAISE EXCEPTION 'SETUP subjects unavailable (org %, role %, member %)', v_org, v_role, v_member_user;
+    RAISE EXCEPTION 'SETUP subjects unavailable (org %, non-money role %, member %)', v_org, v_role, v_member_user;
   END IF;
   IF EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = v_user) OR EXISTS (SELECT 1 FROM public.user_access_profiles WHERE user_id = v_user) THEN
     RAISE EXCEPTION 'SETUP subject is not membership-free';
