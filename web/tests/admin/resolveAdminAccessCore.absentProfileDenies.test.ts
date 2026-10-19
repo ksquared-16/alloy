@@ -8,15 +8,13 @@ import {
 /**
  * W-7 — absent scope denies (I-19, lockout class L1).
  *
- * The switch itself is blocked on M1 being applied (W-0 Q4 = 2 pairs with no profile row).
- * These cover the two Tier C cases the plan names, and prove the `deny` answer is correct
- * *before* it is enforced, so the flip is a constant change rather than a re-derivation.
+ * The switch is made: migration 20261126090000 backfilled every profileless membership and the
+ * database now refuses a membership without a profile (deployed census 2026-10-19: 0 without one).
+ * These cover the two Tier C cases the plan names, under the enforced `deny` answer.
  */
 describe("W-7 absent-profile scope resolution", () => {
-    it("enforcement stays legacy-all until M1 is applied", () => {
-        // Guard, not decoration: flipping this constant while M1 is unapplied denies the 2
-        // known profile-less pairs every row. Plan §5 Q4 — "W-7 cannot precede it."
-        expect(ABSENT_PROFILE_ENFORCEMENT).toBe("legacy-all");
+    it("enforcement is deny: an absent profile is never widened to all", () => {
+        expect(ABSENT_PROFILE_ENFORCEMENT).toBe("deny");
     });
 
     describe("under deny (W-7's target answer)", () => {
@@ -25,6 +23,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "restricted",
                 siteScope: "restricted",
+                attendanceCaptureScope: "site",
                 denyAll: true,
             });
         });
@@ -37,6 +36,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -49,6 +49,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "restricted",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -66,11 +67,12 @@ describe("W-7 absent-profile scope resolution", () => {
         });
     });
 
-    describe("under legacy-all (what is enforced today)", () => {
+    describe("under legacy-all (the retired fail-open, kept as the shadow answer)", () => {
         it("a membership with no profile row resolves both dimensions all", () => {
             expect(resolveScopeAnswerFromProfile(null, "legacy-all")).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -80,9 +82,9 @@ describe("W-7 absent-profile scope resolution", () => {
         it("reports divergence exactly when the profile row is absent", () => {
             const absent = dualReadScopeAnswer(null);
             expect(absent.diverges).toBe(true);
-            expect(absent.enforced.departmentScope).toBe("all");
-            expect(absent.shadow.departmentScope).toBe("restricted");
-            expect(absent.shadow.denyAll).toBe(true);
+            expect(absent.enforced.departmentScope).toBe("restricted");
+            expect(absent.enforced.denyAll).toBe(true);
+            expect(absent.shadow.departmentScope).toBe("all");
         });
 
         it("reports no divergence when a profile row exists, whatever it stores", () => {
@@ -112,6 +114,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(read.enforced).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
