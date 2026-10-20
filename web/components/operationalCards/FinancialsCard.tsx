@@ -4,7 +4,7 @@ import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
-import { Stat } from "@/components/operationalCards/FinancialsDetailCard";
+import { FinancialsAccountSummary, Stat } from "@/components/operationalCards/FinancialsDetailCard";
 import type { FinancialsEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -405,47 +405,8 @@ function FinancialsAccountSummaryCard({
                          * clear account in Bend Pine — because that is semantic rather than
                          * hierarchical. Size is not.
                          */}
-                        <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
-                            <Stat label="Current balance" value={period.currentBalance} />
-                            <Stat label="Due" value={period.dueNow} />
-                            {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
-                            {period.upcoming ? <Stat label="Upcoming · not yet posted" value={period.upcoming} /> : null}
-                            <Stat
-                                label="Past due"
-                                value={pastDue ? pastDue.amount : "None"}
-                                tone={pastDue ? "due" : "ok"}
-                            />
-                            {/*
-                             * ── AVAILABLE, ON THE SAME TERMS AS EVERYWHERE ELSE ────────────────
-                             *
-                             * Measured on the certified build: the Focus Panel Summary read
-                             * `Available $125.00` and Details read `AVAILABLE PREPAID $125.00`
-                             * while this strip — the account's ONE summary, in the dedicated
-                             * financial workspace — showed nothing. An operator working in Accounts
-                             * saw Due and Past due for a family whose money the organisation was
-                             * already holding, and chasing them is a real, avoidable error.
-                             *
-                             * The same figure from the same projection: no arithmetic here, no
-                             * second read, and `availablePrepaid` is already null unless the
-                             * authority says the money is genuinely AVAILABLE — pending, failed and
-                             * voided receipts are excluded upstream.
-                             *
-                             * SILENT AT ZERO, which is the ordinary account. A permanent
-                             * "Available $0.00" would be the noise the density doctrine forbids,
-                             * and it is never netted into Current balance: they answer two
-                             * different questions and the balance is the one the family owes.
-                             *
-                             * It is NOT a deposit. A held deposit is a Payments concept with its
-                             * own lifecycle; this is unapplied money the family has already sent.
-                             */}
-                            {period.availablePrepaid ? (
-                                <Stat
-                                    label="Available prepaid"
-                                    value={period.availablePrepaid}
-                                    testId="available-prepaid"
-                                />
-                            ) : null}
-                        </div>
+                        {/* W7-F031: the same account summary Details renders — one name per figure. */}
+                        <FinancialsAccountSummary evidence={evidence} />
                     </div>
                     {/*
                      * PRIMARY ACCOUNT COMMANDS, AS BUTTONS.
@@ -491,7 +452,7 @@ export function AccountSummaryPending() {
         <div className="alloy-os-fdetail__rollup" data-financials-account-summary="pending" aria-busy="true">
             <div className="alloy-os-fdetail__rollup-facts">
                 <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
-                    {["Current balance", "Due", "Past due"].map((label) => (
+                    {["Due now", "Balance", "Scheduled"].map((label) => (
                         <span key={label} className="alloy-os-fdetail__stat">
                             <span className="alloy-os-fdetail__statlabel">{label}</span>
                             {/*

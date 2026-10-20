@@ -1,0 +1,50 @@
+{
+ "build": "2d7f17476b323e4f8b24a70330aac81d42ca0f30",
+ "tag": "before",
+ "accounts": [
+  {
+   "shell": 124.5,
+   "meaningful": 1673.8999999761581,
+   "hydrated": 1673.8999999761581,
+   "emptyFrames": 19
+  },
+  {
+   "shell": 55.89999997615814,
+   "meaningful": 1619.7999999523163,
+   "hydrated": 1619.7999999523163,
+   "emptyFrames": 26
+  },
+  {
+   "shell": 16.700000047683716,
+   "meaningful": 1578.2000000476837,
+   "hydrated": 1578.2000000476837,
+   "emptyFrames": 23
+  },
+  {
+   "shell": 134.10000002384186,
+   "meaningful": 1794.6000000238419,
+   "hydrated": 1794.6000000238419,
+   "emptyFrames": 23
+  },
+  {
+   "shell": 20.899999976158142,
+   "meaningful": 1428.7000000476837,
+   "hydrated": 1428.7000000476837,
+   "emptyFrames": 24
+  }
+ ],
+ "charges": [],
+ "chargeRowSelector": "[data-financials-row-open]",
+ "accounts_median": {
+  "shell": 56,
+  "meaningful": 1620,
+  "hydrated": 1620,
+  "samples": 5
+ },
+ "charges_median": {
+  "shell": null,
+  "meaningful": null,
+  "hydrated": null,
+  "samples": 0
+ }
+}

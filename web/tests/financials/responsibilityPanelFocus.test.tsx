@@ -198,7 +198,7 @@ describe("W7-F003D — the primary control states what it will do, and nothing c
      * and these cases drive it the way an operator does.
      */
     function primary(): HTMLButtonElement {
-        return document.querySelector("[data-financials-responsibility-stage]") as HTMLButtonElement;
+        return document.querySelector("[data-financials-responsibility-confirm]") as HTMLButtonElement;
     }
     function label(el: HTMLElement): string {
         return (el.textContent ?? "").trim();
@@ -259,23 +259,22 @@ describe("W7-F003D — the primary control states what it will do, and nothing c
         for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
     }
 
-    it("opens live, named for the review it is about to perform — not disabled and silent", async () => {
+    /*
+     * W7-F038 (supersedes the two-stage control): the operator SEES the result before saving —
+     * as a live summary of the split, not on a second screen behind an extra click. Save is the
+     * primary; Preview is optional; the command re-validates on save.
+     */
+    it("opens live as Save, with the result of the split already on screen", async () => {
         await mount();
         const button = primary();
         expect(button, "there is one primary control").not.toBeNull();
-        expect(button.getAttribute("data-financials-responsibility-stage")).toBe("review");
-        expect(label(button)).toBe("Review this change");
-        /*
-         * THE ASSERTION THE DEFECT FAILED. Before the repair the primary was Confirm, disabled,
-         * with no sentence anywhere saying why — measured on deployed as `confirmDisabled: true`,
-         * `reconciliationMessage: null`, `anyVisibleRequirement: false`. A reconcilable split now
-         * opens with a live primary and no hidden precondition at all.
-         */
+        expect(label(button)).toBe("Save responsibility");
         expect(button.disabled, "the primary is live when nothing is unmet").toBe(false);
-        /* And it says which half of the sequence it performs, before being pressed. */
-        const hint = document.querySelector("[data-financials-responsibility-stage-hint]") as HTMLElement;
-        expect(hint, "the stage is stated").not.toBeNull();
-        expect(hint.textContent).toContain("Nothing is saved yet");
+        const summary = document.querySelector("[data-financials-responsibility-summary]") as HTMLElement;
+        expect(summary, "the result is stated before saving").not.toBeNull();
+        expect(summary.textContent).toMatch(/2 responsible parties for the account from [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+        expect(summary.textContent).toContain("Dana Alvarez");
+        expect(summary.textContent).toContain("Rosa Alvarez");
     });
 
     it("whenever the primary IS disabled, the unmet requirement is on screen", async () => {
@@ -315,43 +314,30 @@ describe("W7-F003D — the primary control states what it will do, and nothing c
         expect((blocker.textContent ?? "").trim().length, "with an actual sentence in it").toBeGreaterThan(10);
     });
 
-    it("becomes the commit control once the review has answered, and never before", async () => {
+    it("Save commits directly — no review click stands between a valid split and saving", async () => {
         await mount();
-        expect(primary().getAttribute("data-financials-responsibility-stage")).toBe("review");
-
+        const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+        const before = calls.length;
         await act(async () => { primary().click(); });
         for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
-
-        const button = primary();
-        expect(button.getAttribute("data-financials-responsibility-stage")).toBe("commit");
-        expect(label(button)).toContain("Confirm");
-        expect(button.disabled).toBe(false);
-        /* The operator can see what they are committing. */
-        expect(document.querySelector("[data-financials-responsibility-preview]")).not.toBeNull();
+        const bodies = calls.slice(before).map((c) => String((c[1] as RequestInit | undefined)?.body ?? ""));
+        expect(bodies.some((b) => b.includes('"mode":"execute"')), "the first press saves").toBe(true);
     });
 
-    it("falls back to review when the split is edited after being reviewed", async () => {
-        /*
-         * A preview describes ONE split. Pressing Review, editing an amount, then pressing Confirm
-         * used to commit a split nobody had seen — the panel went on displaying the old numbers,
-         * which is worse than displaying nothing.
-         */
+    it("Preview stays available, and an edit clears a preview that no longer describes the split", async () => {
         await mount();
-        await act(async () => { primary().click(); });
+        const previewBtn = document.querySelector("[data-financials-responsibility-preview-btn]") as HTMLButtonElement;
+        expect(previewBtn, "Preview is still offered").not.toBeNull();
+        await act(async () => { previewBtn.click(); });
         for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
-        expect(primary().getAttribute("data-financials-responsibility-stage")).toBe("commit");
+        expect(document.querySelector("[data-financials-responsibility-preview]")).not.toBeNull();
 
         const field = amountInputs()[0]!;
         await act(async () => { typeChar(field, "5"); });
         for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
-
-        expect(
-            primary().getAttribute("data-financials-responsibility-stage"),
-            "an edit returns the control to review",
-        ).toBe("review");
         expect(
             document.querySelector("[data-financials-responsibility-preview]"),
-            "and the stale preview is gone rather than describing a split that changed",
+            "the stale preview is gone rather than describing a split that changed",
         ).toBeNull();
     });
 });

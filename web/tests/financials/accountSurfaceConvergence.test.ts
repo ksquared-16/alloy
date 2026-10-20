@@ -156,7 +156,7 @@ describe("F7 · one truth, two grains", () => {
 
         /* The order now lives where the surface is built, and is asserted there. */
         const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
-        const stats = detail.indexOf('<Stat label="Current balance"');
+        const stats = detail.indexOf("<FinancialsAccountSummary evidence={evidence}");
         const lenses = detail.indexOf('data-financials-lenses="true"');
         expect(stats, "the summary leads").toBeGreaterThan(-1);
         expect(lenses, "and the ledger follows it").toBeGreaterThan(stats);
@@ -627,7 +627,8 @@ describe("F11 · the three metrics are peers", () => {
         const from = card.indexOf("export function AccountSummaryPending");
         const pending = card.slice(from, card.indexOf("\nfunction ", from));
         /* The same three labels, the same two commands, the same classes — so nothing moves. */
-        for (const label of ["Current balance", "Due", "Past due", "Payment", "Add"]) {
+        /* W7-F031: the summary's three answers — the loaded frame's own labels, so nothing renames on load. */
+        for (const label of ["Due now", "Balance", "Scheduled", "Payment", "Add"]) {
             expect(pending, `${label} is present in the pending frame`).toContain(label);
         }
         expect(pending).toContain("alloy-os-fdetail__strip--peers");
@@ -783,7 +784,9 @@ describe("F15 · the ledger names business identities, not model words", () => {
          */
         const ledger = code("components/operationalCards/FinancialsLedger.tsx");
         expect(ledger).toMatch(/<span>Child<\/span>/);
-        expect(ledger).toMatch(/<span>Responsible party<\/span>/);
+        /* W7-F032: "Party" — who owes a charge, who paid a payment; each row says which. */
+        expect(ledger).toMatch(/<span>Party<\/span>/);
+        expect(ledger).not.toMatch(/<span>Responsible party<\/span>/);
         expect(ledger, 'no column is headed "Subject"').not.toMatch(/<span>Subject<\/span>/);
         expect(ledger, 'no column is headed "Source"').not.toMatch(/<span>Source<\/span>/);
 
@@ -993,12 +996,17 @@ describe("F20 · the two Financials headers do not drift by accident", () => {
      * dedicated workspace's three-figure position. What they must never do is give the SAME figure
      * two different names, which is what "Balance" here and "Current balance" there was.
      */
+    /*
+     * W7-F031: not one LABEL in two files — one COMPONENT in both. The Accounts header and Details
+     * render `FinancialsAccountSummary`, which names the balance with the period it is computed for.
+     */
     it("uses one label for the balance on both surfaces", () => {
         const accounts = code("components/operationalCards/FinancialsCard.tsx");
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
-        expect(accounts).toContain('label="Current balance"');
-        expect(detail).toContain('label="Current balance"');
-        expect(detail, "and not the short form it used to carry").not.toMatch(/label="Balance"/);
+        expect(accounts).toContain("<FinancialsAccountSummary evidence={evidence} />");
+        expect(detail).toContain("<FinancialsAccountSummary evidence={evidence} hydrating={hydrating} />");
+        expect(detail).toMatch(/label=\{`Balance · \$\{summary\.balanceScope\}`\}/);
+        expect(accounts, "no second balance label survives").not.toMatch(/label="Current balance"/);
     });
 
     it("keeps one action grammar", () => {
@@ -1112,16 +1120,16 @@ describe("F23 · one financial summary grammar", () => {
         expect(detail, "the card title no longer repeats the balance").not.toMatch(
             /insight=\{`\$\{period\.currentBalance\} balance`\}/,
         );
-        expect(detail, "and the metric row still carries it").toContain('label="Current balance"');
+        expect(detail, "and the summary still carries it, scoped to its period").toMatch(/label=\{`Balance · \$\{summary\.balanceScope\}`\}/);
     });
 
     it("shares the core metrics, in the same words, with the workspace", () => {
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
         const account = code("components/operationalCards/FinancialsCard.tsx");
-        for (const label of ["Current balance", "Due", "Past due"]) {
-            expect(detail, `Focus Panel states ${label}`).toContain(`label="${label}"`);
-            expect(account, `the workspace states ${label}`).toContain(`label="${label}"`);
-        }
+        /* W7-F031: shared by construction — both render FinancialsAccountSummary (Due now, Balance, Scheduled). */
+        expect(detail).toContain('label="Due now"');
+        expect(detail).toContain('label="Scheduled"');
+        expect(account).toContain("<FinancialsAccountSummary evidence={evidence} />");
         /*
          * Autopay is not a metric, and W5 did not make it one.
          *
@@ -1728,14 +1736,20 @@ describe("F37 · the ledger states what it knows, and admits what it does not", 
         expect(body, "and the row says responsibility does not apply to it").toMatch(/responsibilityApplies:\s*false/);
     });
 
-    it("does not call a receipt's missing GL a configuration deficiency", () => {
+    /*
+     * W7-F032: a receipt's account IS now a mapping a tenant can make — each payment method has a
+     * `receipts_<method>` key on the same GL mappings panel — so an unmapped receipt is a real,
+     * fixable configuration state. Only a collection still in flight (no receipt yet) claims nothing.
+     */
+    it("calls a receipt's missing GL unmapped only now that the tenant can map it", () => {
         const ledger = code("components/operationalCards/FinancialsLedger.tsx");
         expect(ledger, "Unmapped is reserved for a mapping a tenant could actually make").toMatch(
             /glApplies === false \? "—" : "Unmapped"|glApplies === false \? "not-applicable" : "unmapped"/,
         );
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
         const payment = detail.slice(detail.indexOf("function ledgerRowFromPayment"));
-        expect(payment.slice(0, payment.indexOf("\n}"))).toMatch(/glApplies:\s*false/);
+        expect(payment.slice(0, payment.indexOf("\n}"))).toMatch(/glApplies: pay\.kind !== "collection"/);
+        expect(code("app/api/admin/financials/gl-mappings/route.ts")).toMatch(/PAYMENT_METHOD_GL_MAPPING_KEY/);
     });
 
     it("puts every financial date through the canonical formatter", () => {

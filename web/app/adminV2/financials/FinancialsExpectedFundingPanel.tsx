@@ -489,7 +489,11 @@ export default function FinancialsExpectedFundingPanel({
                     type="button"
                     className={WS_ACTION_PRIMARY}
                     onClick={() => void run("execute")}
-                    disabled={busy !== null || !preview}
+                    /*
+                     * W7-F035: Preview is optional for one share's expectation. Confirm needs an
+                     * amount; the command re-validates everything (anchor, supersession) before it writes.
+                     */
+                    disabled={busy !== null || !(Number(amount) >= 0) || amount.trim() === ""}
                     data-financials-funding-confirm="true"
                 >
                     {busy === "execute" ? "Saving…" : "Confirm"}

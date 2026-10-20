@@ -145,6 +145,12 @@ export function adaptFinancialsVmToFinancialsCard(input: {
     const funding = groupRows(rows, (r) => FUNDING_CATEGORIES.has(r.categoryKey), currency);
 
     const pastDue = pastDueFor(input.pastDue, currency);
+    /* The Due figure, computed exactly as before — once, so the strip and its context share it. */
+    const dueNowCents = Math.max(
+        0,
+        vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0),
+        Math.min(vm.pastDue?.amountCents ?? 0, vm.collectible.currentlyCollectibleCents),
+    );
 
     /*
      * THE DUE LINE, and it must not assert a date the record does not have.
@@ -308,14 +314,7 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              * subtraction alone can undershoot. What is past due is always due, so Due never reads
              * below it (bounded by what is collectible at all).
              */
-            dueNow: money(
-                Math.max(
-                    0,
-                    vm.collectible.currentlyCollectibleCents - (vm.notYetDue?.amountCents ?? 0),
-                    Math.min(vm.pastDue?.amountCents ?? 0, vm.collectible.currentlyCollectibleCents),
-                ),
-                currency,
-            ),
+            dueNow: money(dueNowCents, currency),
             /* W7-F018: drafts, stated beside the balance they are not part of. */
             upcoming: vm.upcoming && vm.upcoming.amountCents > 0 ? money(vm.upcoming.amountCents, currency) : null,
             notYetDue: vm.notYetDue && vm.notYetDue.amountCents > 0
@@ -356,6 +355,37 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                     ? money(vm.prepaid!.heldCents, currency)
                     : null,
             dueLabel,
+            /*
+             * W7-F031 — WHICH FIGURE EACH NUMBER IS PART OF. Nothing is recomputed: Due now, Current
+             * balance, Responsibility, Paid, Not yet due, Scheduled, prepaid and held are the figures
+             * above. Current balance is THIS PERIOD's (`reconcileRows` over `vm.period`), and it is
+             * Responsibility − Paid exactly, so it is labelled with its period and explained by them.
+             * Past due spans every period; when it exceeds Due now (arrears older than this period's
+             * collectible), the note says so rather than implying it is inside Due.
+             */
+            summary: {
+                dueNow: money(dueNowCents, currency),
+                pastDueNote: input.pastDue && input.pastDue.amountCents > 0
+                    ? `${money(input.pastDue.amountCents, currency)} past due`
+                        + (input.pastDue.amountCents > dueNowCents ? " · includes earlier periods" : "")
+                    : null,
+                pastDueBeyondDue: Boolean(input.pastDue && input.pastDue.amountCents > dueNowCents),
+                balance: money(reconciliation.balanceCents, currency),
+                balanceScope: vm.period.label,
+                balanceNote: `${money(reconciliation.responsibilityCents, currency)} charged · ${money(reconciliation.paymentsCents, currency)} paid`,
+                scheduled: vm.upcoming && vm.upcoming.amountCents > 0 ? money(vm.upcoming.amountCents, currency) : null,
+                context: [
+                    ...(vm.notYetDue && vm.notYetDue.amountCents > 0
+                        ? [{ key: "not-yet-due", text: `${money(vm.notYetDue.amountCents, currency)} not yet due · next ${displayDate(vm.notYetDue.nextDueDate) ?? vm.notYetDue.nextDueDate}` }]
+                        : []),
+                    ...((vm.prepaid?.availableCents ?? 0) > 0
+                        ? [{ key: "prepaid", text: `${money(vm.prepaid!.availableCents, currency)} prepaid available` }]
+                        : []),
+                    ...(vm.prepaid?.heldSupported && (vm.prepaid?.heldCents ?? 0) > 0
+                        ? [{ key: "held", text: `${money(vm.prepaid!.heldCents, currency)} held deposit` }]
+                        : []),
+                ],
+            },
         },
         pastDue,
         // The summary card renders no ledger; the rows are the detail's subject.
@@ -648,27 +678,42 @@ function paymentTimelineEntries(vm: FinancialsCardVM, currency: string): LedgerE
             : p.unappliedCents > 0 ?
                 p.appliedCents > 0 ? `Part applied · ${money(p.unappliedCents, cur)} unapplied` : `${money(p.unappliedCents, cur)} unapplied`
             : "Applied";
+        /*
+         * W7-F032: ONE STATUS WORD, NO SUB-LINE. Received money that answers its obligations simply
+         * reads Received; money still answering nothing is a state an operator acts on, so it reads
+         * Unapplied / Part applied instead. Which charges it answers is Payment Details'.
+         */
+        const status =
+            p.kind === "refund" ? "Refunded"
+            : p.kind === "return" ? "Returned"
+            : !p.isMoney ? p.statusLabel
+            : p.unappliedCents > 0 ? (p.appliedCents > 0 ? "Part applied" : "Unapplied")
+            : "Received";
+        /* W7-F032: who PAID — the payment's own payer; the household only when it names nobody. */
+        const party = row?.payerName ?? (row?.payerKind === "agency" ? "Agency" : row?.payerLabel ?? null);
         return {
             when: displayDate(date) ?? "—",
             dateIso: date,
             subject: "—",
             subjectMemberId: null,
             type: "payment",
-            glCode: null,
+            /* The settlement account this tender maps to — never the revenue of what it paid. */
+            glCode: row?.glCode ? (row.glAccountName ? `${row.glCode} · ${row.glAccountName}` : row.glCode) : null,
             responsibleParty: null,
             responsibilityUnassigned: false,
             label: p.kind === "receipt" ? "Payment" : p.kind === "refund" ? "Refund" : "Returned",
             /* Account-balance direction: money in reduces what is owed, money back out restores it. */
             amount: `${p.kind === "receipt" ? "−" : ""}${money(p.receivedCents, cur)}`,
             kind: p.kind === "receipt" ? "credit" : "charge",
-            status: p.statusLabel,
+            status,
             lens: "payments",
             payment: {
                 paymentId: p.paymentId,
                 kind: p.kind,
-                statusLabel: p.statusLabel,
-                methodLabel: p.methodLabel || null,
-                payerLabel: row?.payerLabel ?? null,
+                statusLabel: status,
+                methodLabel: row?.methodDisplay ?? (p.methodLabel || null),
+                payerLabel: party,
+                payerIsPerson: Boolean(row?.payerName),
                 allocationLabel,
                 unapplied: p.kind === "receipt" && p.isMoney && p.unappliedCents > 0,
                 openable: true,

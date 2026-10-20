@@ -21,6 +21,8 @@
  * @see web/lib/financials/reductions/applyFinancialReductions.ts
  */
 
+import { humanDay } from "@/lib/financials/dates/humanDates";
+import { CHARGE_CATEGORY_GL_MAPPING_KEY } from "@/lib/financials/chargeCategories";
 import { randomUUID } from "crypto";
 
 import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
@@ -40,10 +42,12 @@ import { billingPeriodBindingHttpAnswer } from "@/lib/financials/billingPeriods/
 import { previewProspectiveCorrection } from "@/lib/financials/corrections/prospectiveCorrection";
 import {
     ADJUSTMENT_DIRECTIONS,
-    chargeCategoryForDirection,
+    ADJUSTMENT_PURPOSES,
+    chargeCategoryForIntent,
     directionFromSignedCents,
     signedCentsForIntent,
     type AdjustmentDirection,
+    type AdjustmentPurpose,
 } from "@/lib/financials/corrections/correctionIntent";
 import {
     MANUAL_REDUCTION_CATEGORIES,
@@ -297,7 +301,14 @@ const applyDiscounts: RegisteredAction = {
  * from describing one direction while execute writes the other.
  */
 type NormalizedAdjustment =
-    | { ok: true; amountCents: number; chargeCategory: ManualReductionCategory; direction: AdjustmentDirection | null }
+    | {
+          ok: true;
+          amountCents: number;
+          chargeCategory: ManualReductionCategory;
+          direction: AdjustmentDirection | null;
+          /* W7-F036: a correction is classified under the charge it corrects. */
+          classifyUnderSourceCharge: boolean;
+      }
     | { ok: false; code: string; message: string; field: string };
 
 function normalizeAdjustmentIntent(payload: Record<string, unknown> | null | undefined): NormalizedAdjustment {
@@ -321,11 +332,28 @@ function normalizeAdjustmentIntent(payload: Record<string, unknown> | null | und
             };
         }
         const typed = direction as AdjustmentDirection;
+        const purposeRaw = t(payload?.purpose);
+        if (purposeRaw && !(ADJUSTMENT_PURPOSES as readonly string[]).includes(purposeRaw)) {
+            return { ok: false, code: "invalid_purpose", message: "Say whether this corrects the charge or gives a credit.", field: "purpose" };
+        }
+        const purpose = (purposeRaw || null) as AdjustmentPurpose | null;
+        if (purpose === "correction" && !t(payload?.source_charge_id)) {
+            return {
+                ok: false,
+                code: "correction_needs_charge",
+                message: "Choose the charge whose amount you are correcting.",
+                field: "source_charge_id",
+            };
+        }
+        if (purpose === "credit" && typed !== "reduce") {
+            return { ok: false, code: "credit_reduces", message: "A credit lowers what the family owes.", field: "direction" };
+        }
         return {
             ok: true,
             amountCents: signedCentsForIntent({ direction: typed, magnitudeCents: magnitude }),
-            chargeCategory: chargeCategoryForDirection(typed),
+            chargeCategory: chargeCategoryForIntent(typed, purpose),
             direction: typed,
+            classifyUnderSourceCharge: purpose === "correction",
         };
     }
 
@@ -347,7 +375,58 @@ function normalizeAdjustmentIntent(payload: Record<string, unknown> | null | und
             field: "charge_category",
         };
     }
-    return { ok: true, amountCents: amount, chargeCategory: category as ManualReductionCategory, direction: null };
+    return { ok: true, amountCents: amount, chargeCategory: category as ManualReductionCategory, direction: null, classifyUnderSourceCharge: false };
+}
+
+/**
+ * W7-F036 — "Accounted under 4030 · Supply Fees (the charge's own account)" for a correction, or the
+ * account the credit category maps to. Read from configuration; null when nothing is mapped, so the
+ * preview never claims an account the tenant has not configured.
+ */
+async function describeAdjustmentAccount(
+    supabase: SupabaseClient,
+    orgId: string,
+    args: { chargeCategory: string; sourceChargeId: string | null },
+): Promise<string | null> {
+    try {
+        let key: string | null = CHARGE_CATEGORY_GL_MAPPING_KEY[args.chargeCategory as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY] ?? null;
+        if (args.sourceChargeId) {
+            const { data: source } = await supabase
+                .from("charges")
+                .select("charge_category, charge_type, metadata")
+                .eq("org_id", orgId)
+                .eq("id", args.sourceChargeId)
+                .maybeSingle();
+            const row = (source ?? null) as { charge_category: string | null; charge_type: string | null; metadata: Record<string, unknown> | null } | null;
+            if (row) {
+                const category = (row.charge_category ?? row.charge_type ?? "").trim();
+                key = String(row.metadata?.gl_mapping_key ?? "").trim()
+                    || CHARGE_CATEGORY_GL_MAPPING_KEY[category as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY]
+                    || null;
+            }
+        }
+        if (!key) return null;
+        const { data: mapping } = await supabase
+            .from("gl_account_mappings")
+            .select("gl_account_id, is_active")
+            .eq("org_id", orgId)
+            .eq("key", key)
+            .maybeSingle();
+        const accountId = (mapping as { gl_account_id?: string | null; is_active?: boolean } | null);
+        if (!accountId?.gl_account_id || accountId.is_active === false) return null;
+        const { data: account } = await supabase
+            .from("gl_accounts")
+            .select("code, name")
+            .eq("org_id", orgId)
+            .eq("id", accountId.gl_account_id)
+            .maybeSingle();
+        const a = account as { code?: string; name?: string | null } | null;
+        if (!a?.code) return null;
+        const label = `${a.code}${a.name ? ` · ${a.name}` : ""}`;
+        return args.sourceChargeId ? `Accounted under ${label} — the corrected charge's own account` : `Accounted under ${label}`;
+    } catch {
+        return null;
+    }
 }
 
 const adjustAccount: RegisteredAction = {
@@ -426,16 +505,25 @@ const adjustAccount: RegisteredAction = {
                 effectiveDate: t(payload?.effective_date),
                 sourceChargeId: t(payload?.source_charge_id) || null,
             });
+            /* W7-F036: say where it is accounted — the corrected charge's own account, or the credit's. */
+            const accountedUnder = await describeAdjustmentAccount(supabase as SupabaseClient, ctx.orgId, {
+                chargeCategory: normalized.chargeCategory,
+                sourceChargeId: normalized.classifyUnderSourceCharge ? t(payload?.source_charge_id) || null : null,
+            });
             return {
                 summary: preview.summary,
-                changes: [...preview.changes, `Reason: ${t(payload?.reason) || "—"}`],
+                changes: [
+                    ...preview.changes,
+                    ...(accountedUnder ? [accountedUnder] : []),
+                    `Reason: ${t(payload?.reason) || "—"}`,
+                ],
             };
         } catch (err) {
             /* The same mapping the route boundary uses, so the words match what execute would say. */
             const binding = billingPeriodBindingHttpAnswer(err);
             return {
                 summary: binding?.message ?? "This adjustment cannot be previewed yet.",
-                changes: [`Effective ${t(payload?.effective_date) || "—"}`],
+                changes: [`Effective ${humanDay(t(payload?.effective_date)) || "—"}`],
             };
         }
     },
@@ -478,6 +566,7 @@ const adjustAccount: RegisteredAction = {
                 actorUserId: ctx.userId ?? null,
                 // Caller identity when given, so a double-submit is one credit; otherwise this call.
                 idempotencyKey: t(payload?.idempotency_key) || `fred:manual:${correlationId}`,
+                classifyUnderSourceCharge: normalized.classifyUnderSourceCharge,
             });
             return {
                 ok: true,
@@ -933,7 +1022,7 @@ const assignPolicy: RegisteredAction = {
         return {
             summary: "This child will receive this configured discount.",
             /* What it is WORTH is the policy's answer and the resolver's; this states neither. */
-            changes: [`From ${t(payload?.effective_start)}`],
+            changes: [`From ${humanDay(t(payload?.effective_start)) || "—"}`],
         };
     },
 
@@ -1023,7 +1112,7 @@ const endAssignment: RegisteredAction = {
     },
 
     async buildPreview({ payload }) {
-        return { summary: "This child will stop receiving this discount.", changes: [`From ${t(payload?.effective_end)}`] };
+        return { summary: "This child will stop receiving this discount.", changes: [`From ${humanDay(t(payload?.effective_end)) || "—"}`] };
     },
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {

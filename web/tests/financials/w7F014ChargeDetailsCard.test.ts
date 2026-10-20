@@ -61,7 +61,8 @@ describe("the card's composition", () => {
 describe("modal behaviour", () => {
     const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
     /* W7-F026: the same effect also serves Payment Details, the other record opened from a row. */
-    const effect = card.slice(card.indexOf('if (overlay !== "charge_detail" && overlay !== "payment_detail") return;'));
+    /* W7-F026/F033: the same effect serves the record cards and the money-moving layers. */
+    const effect = card.slice(card.indexOf('overlay !== "charge_detail" && overlay !== "payment_detail"'));
     const fn = effect.slice(0, effect.indexOf("}, [overlay, dismissOneLevel]);"));
 
     it("an outside pointer-down closes Charge Details through the one dismissal path", () => {

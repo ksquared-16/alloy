@@ -32,6 +32,7 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
+import { paymentGlMappingKey, readPaymentLedgerFacts } from "@/lib/financials/payments/paymentLedgerFacts";
 import { awaitingPostingReason, type AwaitingPostingReason } from "@/lib/financials/posting/awaitingPostingReason";
 import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { selectOpenCollections } from "@/lib/adminV2/runtime/focusPanel/financials/selectOpenCollections";
@@ -169,6 +170,18 @@ export type FinancialsPaymentRow = {
      * than no family at all.
      */
     payerLabel: string | null;
+    /**
+     * W7-F032: WHO PAID — the payment's own `payer_entity`, named; null when it names nobody (the
+     * household above is then the honest answer). Never the responsible party.
+     */
+    payerName?: string | null;
+    payerKind?: "person" | "agency" | null;
+    /** "Visa •••• 4242" from the collection's stored method; null for a hand-recorded receipt. */
+    methodDisplay?: string | null;
+    /** The settlement account this tender maps to (`gl_account_mappings`), or null when unmapped. */
+    glCode?: string | null;
+    glAccountName?: string | null;
+    glMappingKey?: string | null;
     /**
      * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
      * is doing something; this says WHICH obligations, and which were undone — the difference between
@@ -1321,6 +1334,11 @@ async function buildFinancialsCardVMInner(
      * makes the whole payments answer unavailable.
      */
     const household = t(args.customerId) || null;
+    /*
+     * W7-F032: the payer, card and method facts are keyed by the household too, so they leave with
+     * this first wave rather than waiting for the payment ids. Never rejects (absence on failure).
+     */
+    const ledgerFactsP = readPaymentLedgerFacts(supabase, args.orgId, household);
 
     /*
      * ── THE TENANT'S POLICIES DEPEND ON THE ORG AND ON NOTHING ELSE ──────────────────────────
@@ -2087,11 +2105,25 @@ async function buildFinancialsCardVMInner(
         const views = paymentsOutcome.views;
         if (views) {
             const byPaymentId = new Map(views.map((v) => [v.paymentId, v]));
+            /* W7-F032: who paid, by what card — started with the first wave, joined here by payment id. */
+            const ledgerFacts = await clock.time("payment_ledger_facts_ms", () => ledgerFactsP);
             vm.payments = vm.payments.map((row) => {
                 const view = byPaymentId.get(row.paymentId);
-                if (!view) return row;
+                const facts = ledgerFacts.get(row.paymentId);
+                const glMappingKey = paymentGlMappingKey(row.method);
+                const account = glMappingKey ? accountByMappingKey.get(glMappingKey) ?? null : null;
+                const enriched = {
+                    payerName: facts?.payerName ?? null,
+                    payerKind: facts?.payerKind ?? null,
+                    methodDisplay: facts?.methodDisplay ?? null,
+                    glMappingKey,
+                    glCode: account?.code ?? null,
+                    glAccountName: account?.name ?? null,
+                };
+                if (!view) return { ...row, ...enriched };
                 return {
                     ...row,
+                    ...enriched,
                     unappliedCents: view.unappliedCents,
                     payerLabel: view.payerLabel,
                     applications: view.applications,

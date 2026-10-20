@@ -6,8 +6,6 @@ import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financial
 import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import {
-    ADJUSTMENT_DIRECTIONS,
-    adjustmentDirectionLabel,
     parseAdjustmentMagnitudeCents,
     type AdjustmentDirection,
 } from "@/lib/financials/corrections/correctionIntent";
@@ -1144,6 +1142,12 @@ export default function FinancialsCard({
      * taxonomy before they could give money back.
      */
     const [adjustDirection, setAdjustDirection] = useState<AdjustmentDirection>("reduce");
+    /*
+     * W7-F036: WHAT THE OPERATOR IS DOING, not only which way the balance moves. "correction" lowers
+     * or raises the chosen charge's own amount (accounted under that charge's account); "credit" is a
+     * goodwill credit. Empty is an account-level increase, which is neither.
+     */
+    const [adjustPurpose, setAdjustPurpose] = useState<"correction" | "credit" | "">("credit");
     const [adjustAmount, setAdjustAmount] = useState("");
     const [adjustReason, setAdjustReason] = useState("");
     /*
@@ -1222,21 +1226,23 @@ export default function FinancialsCard({
         (args: { paymentId: string; allocationId: string }) => {
             closeMovePanels();
             setMovePending(args);
+            push({ kind: "payment_application" });
             const source = vm?.payments
                 .find((p) => p.paymentId === args.paymentId)
                 ?.applications.find((a) => a.allocationId === args.allocationId);
             void loadMoveTargets(args.paymentId, source?.chargeId ?? null);
         },
-        [closeMovePanels, loadMoveTargets, vm],
+        [closeMovePanels, loadMoveTargets, push, vm],
     );
 
     const openApplyPayment = useCallback(
         (args: { paymentId: string }) => {
             closeMovePanels();
             setApplyPending(args);
+            push({ kind: "payment_application" });
             void loadMoveTargets(args.paymentId, null);
         },
-        [closeMovePanels, loadMoveTargets],
+        [closeMovePanels, loadMoveTargets, push],
     );
 
     const actionEntity = useCallback(
@@ -1452,6 +1458,7 @@ export default function FinancialsCard({
         setAdjustAmount("");
         setAdjustReason("");
         setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
         setReverseReason("");
     }, []);
 
@@ -1546,6 +1553,7 @@ export default function FinancialsCard({
         const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
         setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
         setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
         /*
          * THE ORGANISATION'S BUSINESS DATE, shown and editable — never the source charge's date and
          * never the UTC day. Set on open rather than seeded in state, because the VM that carries it
@@ -1581,6 +1589,8 @@ export default function FinancialsCard({
             ?? "";
         setAdjustAgreementId(agreementId);
         setAdjustSourceChargeId(args.chargeId);
+        /* Correcting a named charge is the ordinary meaning of "adjust this charge". */
+        setAdjustPurpose("correction");
         /*
          * STILL TODAY, even though a source charge is bound. §7 of the Adjustment doctrine: a
          * correction must not silently inherit the source's historical date — that is how a
@@ -1597,7 +1607,8 @@ export default function FinancialsCard({
         closeAdjustPanels();
         setAdjustNotice(null);
         setReversePending(args);
-    }, [closeAdjustPanels, closeMovePanels]);
+        push({ kind: "reverse_adjustment" });
+    }, [closeAdjustPanels, closeMovePanels, push]);
 
     /*
      * ── THE THREE ACTS ON HELD MONEY ─────────────────────────────────────────────────────────────
@@ -1615,14 +1626,16 @@ export default function FinancialsCard({
         closeMovePanels();
         closeAdjustPanels();
         setApplyPending({ paymentId: args.paymentId, hold: { holdId: args.holdId, remainingCents: args.remainingCents } });
+        push({ kind: "payment_application" });
         void loadMoveTargets(args.paymentId);
-    }, [closeAdjustPanels, closeMovePanels, loadMoveTargets]);
+    }, [closeAdjustPanels, closeMovePanels, loadMoveTargets, push]);
 
     const openReleaseHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
         closeMovePanels();
         closeAdjustPanels();
         setReleasePending(args);
-    }, [closeAdjustPanels, closeMovePanels]);
+        push({ kind: "release_held" });
+    }, [closeAdjustPanels, closeMovePanels, push]);
 
     const confirmHold = useCallback(async () => {
         if (!holdPending || running) return;
@@ -1747,6 +1760,7 @@ export default function FinancialsCard({
                          * deliberately not sent — sending it would restore the conflict.
                          */
                         direction: adjustDirection,
+                        ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
                         magnitude_cents: magnitudeCents,
                         /* The grain responsibility is asked at, so a child's arrangement governs. */
                         customer_member_id: adjustMemberId || null,
@@ -1772,11 +1786,16 @@ export default function FinancialsCard({
         } finally {
             setRunning(false);
         }
-    }, [actionEntity, adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
+    }, [actionEntity, adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
 
     const confirmAdjustment = useCallback(async () => {
         const magnitudeCents = adjustMagnitudeCents();
-        if (!adjustOpen || running || !adjustPreview || magnitudeCents === null) return;
+        /*
+         * W7-F035: PREVIEW IS OPTIONAL. Confirm is available once the form is valid; execute runs the
+         * same normalizer, obligation bound and period resolution the preview does, so nothing is
+         * committed that preview would have refused — and a refusal is surfaced here, as itself.
+         */
+        if (!adjustOpen || running || magnitudeCents === null || !adjustReason.trim() || !adjustAgreementId) return;
         setRunning(true);
         setAdjustError(null);
         try {
@@ -1784,6 +1803,7 @@ export default function FinancialsCard({
                 enrollment_agreement_id: adjustAgreementId,
                 source_charge_id: adjustSourceChargeId || null,
                 direction: adjustDirection,
+                ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
                 magnitude_cents: magnitudeCents,
                 customer_member_id: adjustMemberId || null,
                 reason: adjustReason,
@@ -1837,7 +1857,7 @@ export default function FinancialsCard({
             setRunning(false);
             await load();
         }
-    }, [adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustPreview, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
+    }, [adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
 
     const previewReversal = useCallback(async () => {
         if (!reversePending || running) return;
@@ -3603,7 +3623,11 @@ export default function FinancialsCard({
      * `dismissOneLevel` coalesces the two into one gesture. Clicks inside the card never dismiss.
      */
     useEffect(() => {
-        if (overlay !== "charge_detail" && overlay !== "payment_detail") return;
+        if (
+            overlay !== "charge_detail" && overlay !== "payment_detail"
+            /* W7-F033: the money-moving layers close on an outside click like every other layer. */
+            && overlay !== "payment_application" && overlay !== "release_held" && overlay !== "reverse_adjustment"
+        ) return;
         const onPointerDown = (event: PointerEvent) => {
             const target = event.target as Element | null;
             if (!target || typeof target.closest !== "function") return;
@@ -3616,6 +3640,35 @@ export default function FinancialsCard({
         document.addEventListener("pointerdown", onPointerDown, true);
         return () => document.removeEventListener("pointerdown", onPointerDown, true);
     }, [overlay, dismissOneLevel]);
+
+    /*
+     * W7-F033: A MONEY-MOVING LAYER LIVES EXACTLY AS LONG AS ITS PENDING ACT. Cancel, a completed
+     * confirm and a partial reallocation all clear that state through the functions that already
+     * owned it; this closes the layer when they do, so no confirm path had to learn about the stack.
+     */
+    useEffect(() => {
+        if (
+            (overlay === "payment_application" && !movePending && !applyPending)
+            || (overlay === "release_held" && !releasePending)
+            || (overlay === "reverse_adjustment" && !reversePending)
+        ) {
+            pop();
+        }
+    }, [overlay, movePending, applyPending, releasePending, reversePending, pop]);
+
+    /* The receipt a reallocation or apply acts on, named in the layer: amount, payer, method, current charge. */
+    const paymentApplicationFacts = useMemo(() => {
+        const paymentId = movePending?.paymentId ?? applyPending?.paymentId ?? null;
+        const row = paymentId ? vm?.payments.find((p) => p.paymentId === paymentId) ?? null : null;
+        if (!row) return null;
+        const who = row.payerName ?? row.payerLabel ?? null;
+        const how = row.methodDisplay ?? (row.method ? row.method.charAt(0).toUpperCase() + row.method.slice(1) : null);
+        const current = movePending ? row.applications.find((a) => a.allocationId === movePending.allocationId) ?? null : null;
+        return {
+            payment: [money(row.amountCents, row.currencyCode || currency), who, how].filter(Boolean).join(" · "),
+            currently: current ? `${current.chargeLabel} · ${money(current.appliedCents, row.currencyCode || currency)}` : null,
+        };
+    }, [movePending, applyPending, vm, currency]);
 
     /*
      * ── ADD CHARGE — the approved command card, over the domain's own preview ──
@@ -3681,6 +3734,7 @@ export default function FinancialsCard({
                                     setAdjustAgreementId(next);
                                     // The charges on offer belong to the enrolment; changing it changes them.
                                     setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
                                     setAdjustPreview(null);
                                 }}
                             />
@@ -3721,6 +3775,8 @@ export default function FinancialsCard({
                                 }))}
                                 onChange={(next) => {
                                     setAdjustSourceChargeId(next);
+                                    setAdjustPurpose(next ? "correction" : "credit");
+                                    if (!next && adjustDirection === "increase") setAdjustPurpose("");
                                     setAdjustPreview(null);
                                 }}
                             />
@@ -3740,20 +3796,39 @@ export default function FinancialsCard({
                           */}
                         <label className="alloy-os-fdetail__movefield">
                             <span>What needs to change</span>
+                            {/*
+                              * W7-F036: THE CHOICE NAMES THE ECONOMIC INTENT, and the accounting follows
+                              * it. Correcting a charge's amount is accounted under that charge's own
+                              * account; a goodwill credit is a credit. A discount is a policy, not a
+                              * manual write — it is managed from Discounts.
+                              */}
                             <AlloySelect
                                 testId="adjustment-direction"
                                 aria-label="What needs to change"
                                 allowEmpty={false}
-                                value={adjustDirection}
-                                options={ADJUSTMENT_DIRECTIONS.map((direction) => ({
-                                    value: direction,
-                                    label: adjustmentDirectionLabel(direction),
-                                }))}
+                                value={`${adjustPurpose}:${adjustDirection}`}
+                                options={
+                                    adjustSourceChargeId
+                                        ? [
+                                              { value: "correction:reduce", label: "Correct the amount — lower this charge" },
+                                              { value: "correction:increase", label: "Correct the amount — raise this charge" },
+                                              { value: "credit:reduce", label: "Give a goodwill credit" },
+                                          ]
+                                        : [
+                                              { value: "credit:reduce", label: "Give a credit — lowers what the family owes" },
+                                              { value: ":increase", label: "Increase what the family owes" },
+                                          ]
+                                }
                                 onChange={(next) => {
-                                    setAdjustDirection(next as AdjustmentDirection);
+                                    const [purpose, direction] = next.split(":");
+                                    setAdjustPurpose((purpose || "") as "correction" | "credit" | "");
+                                    setAdjustDirection(((direction || "reduce") as AdjustmentDirection));
                                     setAdjustPreview(null);
                                 }}
                             />
+                            <span className="alloy-os-fdetail__heldnote" data-testid="adjustment-discount-note">
+                                A discount is a policy, not a one-off adjustment — set it from Manage discounts.
+                            </span>
                         </label>
                         <label className="alloy-os-fdetail__movefield">
                             {/* The label carries the direction, so the figure cannot be read the wrong way. */}
@@ -3812,7 +3887,7 @@ export default function FinancialsCard({
                                   * discovered when the balance does not move.
                                   */}
                                 <span data-testid="adjustment-preview-timing">
-                                    Recorded as a draft — it changes what the family owes once posted.
+                                    Takes effect by itself in its billing period — after review where your organization requires one.
                                 </span>
                             </div>
                         ) : null}
@@ -3835,10 +3910,11 @@ export default function FinancialsCard({
                             >
                                 Preview
                             </button>
+                            {/* W7-F035: Preview is optional; Confirm needs only a valid form, and execute re-validates. */}
                             <button
                                 type="button"
                                 data-testid="adjustment-confirm"
-                                disabled={running || !adjustPreview}
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || adjustMagnitudeCents() === null}
                                 onClick={() => void confirmAdjustment()}
                             >
                                 Confirm
@@ -5132,6 +5208,8 @@ export default function FinancialsCard({
          */
         if (overlay === "payment_detail" && surface?.kind === "payment_detail" && vm) {
             const receipt = vm.payments.find((p) => p.paymentId === surface.paymentId) ?? null;
+            /* The reallocation layer needs the account's own receipts and targets beneath it. */
+            const detailsAreTheSurfaceOrBeneath = detailsAreTheSurface || stack.some((x) => x.kind === "detail");
             const cur = receipt?.currencyCode || currency;
             return (
                 <div
@@ -5199,8 +5277,24 @@ export default function FinancialsCard({
                                                         <span className="alloy-os-financials__note">
                                                             {a.status === "active"
                                                                 ? `Applied${a.allocatedAt ? ` ${formatDisplayDate(a.allocatedAt) || ""}` : ""}`
-                                                                : `Moved off${a.reversalReason ? ` · ${a.reversalReason}` : ""}`}
+                                                                : `Reallocated${a.reversalReason ? ` · ${a.reversalReason}` : ""}`}
                                                         </span>
+                                                        {/*
+                                                          * W7-F033: the named act, on the application it changes. The
+                                                          * receipt does not move — this application does.
+                                                          */}
+                                                        {a.status === "active" && detailsAreTheSurfaceOrBeneath ? (
+                                                            <button
+                                                                type="button"
+                                                                className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                                                data-financials-payment-reallocate={a.allocationId}
+                                                                data-charge-command="payment.reverse_application"
+                                                                disabled={running}
+                                                                onClick={() => openMovePayment({ paymentId: receipt.paymentId, allocationId: a.allocationId })}
+                                                            >
+                                                                Reallocate
+                                                            </button>
+                                                        ) : null}
                                                     </li>
                                                 ))}
                                             </ul>
@@ -5216,6 +5310,23 @@ export default function FinancialsCard({
                             </p>
                         )}
                         <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions" data-financials-card-actions="true">
+                            {/*
+                              * W7-F033: unrestricted money still answering nothing can be applied —
+                              * the same governed apply the ledger icon used to raise, now named.
+                              */}
+                            {receipt && receipt.direction === "inbound" && receipt.status === "posted"
+                                && receipt.unappliedCents - (receipt.heldCents ?? 0) > 0 && detailsAreTheSurfaceOrBeneath ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                                    data-financials-payment-apply={receipt.paymentId}
+                                    data-charge-command="payment.apply_to_charge"
+                                    disabled={running}
+                                    onClick={() => openApplyPayment({ paymentId: receipt.paymentId })}
+                                >
+                                    Apply to a charge
+                                </button>
+                            ) : null}
                             <button
                                 type="button"
                                 className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
@@ -5225,6 +5336,299 @@ export default function FinancialsCard({
                                 Close
                             </button>
                         </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        /*
+         * ── W7-F033: MONEY-MOVING ACTS ARE COMMAND LAYERS, NOT BANDS ABOVE THE CARD ───────────
+         *
+         * Reallocate / Apply payment, Release held deposit and Reverse adjustment rendered as inline
+         * panels pushed above the account card — the one interaction left that did not use the
+         * command shell Add charge, Reverse charge and the record cards use. Same governed actions,
+         * same preview-then-confirm, same testIds; the shell is the change. Each layer stays open
+         * while its pending act exists and closes itself when that act is cleared (Cancel, a
+         * completed confirm, or a partial move whose notice then reads on the account).
+         */
+        if (overlay === "payment_application" && (movePending || applyPending)) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="payment_application"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={movePending ? "Reallocate payment" : applyPending?.hold ? "Apply held deposit" : "Apply payment"}
+                >
+                    <UniversalCard
+                        title={movePending ? "Reallocate payment" : applyPending?.hold ? "Apply held deposit" : "Apply payment"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="payment_application"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="payment-move-panel" data-financials-command="payment_application">
+                        {/*
+                          * W7-F033: WHICH MONEY, AND WHAT CHANGES. The receipt is named — amount, payer,
+                          * method — and, for a reallocation, the charge it currently answers. The
+                          * payment itself never moves: its APPLICATION does, as two governed acts
+                          * (reverse, then apply), and the note says what happens if the second fails.
+                          */}
+                        {paymentApplicationFacts ? (
+                            <dl className="alloy-os-financials__commandfacts" data-testid="payment-move-facts">
+                                <div><dt>Payment</dt><dd>{paymentApplicationFacts.payment}</dd></div>
+                                {paymentApplicationFacts.currently ? (
+                                    <div><dt>Currently applied to</dt><dd>{paymentApplicationFacts.currently}</dd></div>
+                                ) : null}
+                            </dl>
+                        ) : null}
+                        {movePending ? (
+                            <p className="alloy-os-financials__commandnote" data-testid="payment-move-effect">
+                                The payment and its payer stay the same. Its application to the current charge is
+                                reversed, then applied to the charge you choose. If the second step is refused, the
+                                money stays on the account as unapplied and nothing is lost.
+                            </p>
+                        ) : null}
+                        
+                        <div className="alloy-os-fdetail__movefield">
+                            <span>{movePending ? "Reallocate to" : "Apply to"}</span>
+                            <AlloySelect
+                                testId="payment-move-target"
+                                aria-label={movePending ? "Reallocate to" : "Apply to"}
+                                placeholder="Choose a charge…"
+                                value={moveTargetId}
+                                options={moveTargets.map((t) => ({
+                                    value: t.chargeId,
+                                    label:
+                                        `${t.label}`
+                                        + (t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : "")
+                                        + ` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`,
+                                }))}
+                                onChange={(next) => {
+                                    setMoveTargetId(next);
+                                    // A new destination invalidates a preview taken for the old one.
+                                    setMovePreview(null);
+                                }}
+                            />
+                        </div>
+                        {/* A reversal must say why; applying unapplied money undoes nothing. */}
+                        {movePending ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Reason</span>
+                                <input
+                                    data-testid="payment-move-reason"
+                                    value={moveReason}
+                                    onChange={(e) => {
+                                        setMoveReason(e.target.value);
+                                        setMovePreview(null);
+                                    }}
+                                    placeholder="Applied to the wrong charge"
+                                />
+                            </label>
+                        ) : null}
+                        {movePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="payment-move-preview">
+                                <strong>{movePreview.summary}</strong>
+                                {movePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {moveError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="payment-move-error">
+                                {moveError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            {/*
+                              * Preview first, and only for a Move: Confirm stays disabled until the
+                              * ACTION has said what reversing this application will do. Applying
+                              * unapplied money has no reversal to explain.
+                              */}
+                            {movePending ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-financials__action"
+                                    data-testid="payment-move-preview-button"
+                                    disabled={running || !moveReason.trim()}
+                                    onClick={() => void previewMove()}
+                                >
+                                    Preview
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="payment-move-confirm"
+                                disabled={
+                                    running
+                                    || !moveTargetId
+                                    || (movePending ? !movePreview : false)
+                                }
+                                onClick={() => void (movePending ? confirmMove() : confirmApply())}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="payment-move-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        if (overlay === "release_held" && releasePending) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="release_held"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={"Release held deposit"}
+                >
+                    <UniversalCard
+                        title={"Release held deposit"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="release_held"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="deposit-release-panel" data-financials-command="release_held">
+                        
+                        {/*
+                          * WHAT RELEASING ACTUALLY DOES, said plainly. Operators read "release" as
+                          * "give it back", which is a refund. Releasing moves no money at all: the
+                          * restriction ends and the same money becomes spendable against what the
+                          * family owes. Saying so here is cheaper than a reversal later.
+                          */}
+                        <p className="alloy-os-fdetail__heldnote">
+                            {money(releasePending.remainingCents, currency)} stops being held and becomes
+                            available prepaid. No money moves and the family is not refunded.
+                        </p>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="deposit-release-reason"
+                                value={releaseReason}
+                                onChange={(e) => setReleaseReason(e.target.value)}
+                                placeholder="Agreement ended with no damages"
+                            />
+                        </label>
+                        {releaseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="deposit-release-error">
+                                {releaseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="deposit-release-confirm"
+                                disabled={running}
+                                onClick={() => void confirmRelease()}
+                            >
+                                Release {money(releasePending.remainingCents, currency)}
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="deposit-release-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
+        if (overlay === "reverse_adjustment" && reversePending) {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="reverse_adjustment"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={"Reverse adjustment"}
+                >
+                    <UniversalCard
+                        title={"Reverse adjustment"}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="reverse_adjustment"
+                        footerAction={null}
+                    >
+                    <div className="alloy-os-financials__commandbody" data-testid="adjustment-reverse-panel" data-financials-command="reverse_adjustment">
+                        
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reverse-reason"
+                                value={reverseReason}
+                                onChange={(e) => {
+                                    setReverseReason(e.target.value);
+                                    setReversePreview(null);
+                                }}
+                                placeholder="Recorded against the wrong enrolment"
+                            />
+                        </label>
+                        {reversePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-reverse-preview">
+                                <strong>{reversePreview.summary}</strong>
+                                {reversePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-reverse-error">
+                                {reverseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-testid="adjustment-reverse-preview-button"
+                                disabled={running || !reverseReason.trim()}
+                                onClick={() => void previewReversal()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                data-testid="adjustment-reverse-confirm"
+                                disabled={running || !reversePreview}
+                                onClick={() => void confirmReversal()}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" className="alloy-os-financials__quiet" data-testid="adjustment-reverse-cancel" onClick={closeAdjustPanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                     </UniversalCard>
                 </div>
             );
@@ -6284,149 +6688,7 @@ export default function FinancialsCard({
                         {moveNotice}
                     </div>
                 ) : null}
-                {movePending || applyPending ? (
-                    <div className="alloy-os-fdetail__movepanel" data-testid="payment-move-panel">
-                        <div className="alloy-os-fdetail__moveheader">
-                            {/*
-                              * "Apply payment" would be true and useless here: the operator arrived
-                              * from a held lot and needs to see that THIS is the deposit they chose,
-                              * not the receipt it sits inside.
-                              */}
-                            {movePending
-                                ? "Move payment"
-                                : applyPending?.hold
-                                    ? "Apply held deposit"
-                                    : "Apply payment"}
-                        </div>
-                        <div className="alloy-os-fdetail__movefield">
-                            <span>{movePending ? "Move to" : "Apply to"}</span>
-                            <AlloySelect
-                                testId="payment-move-target"
-                                aria-label={movePending ? "Move to" : "Apply to"}
-                                placeholder="Choose a charge…"
-                                value={moveTargetId}
-                                options={moveTargets.map((t) => ({
-                                    value: t.chargeId,
-                                    label:
-                                        `${t.label}`
-                                        + (t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : "")
-                                        + ` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
-                                            style: "currency",
-                                            currency,
-                                        })} outstanding`,
-                                }))}
-                                onChange={(next) => {
-                                    setMoveTargetId(next);
-                                    // A new destination invalidates a preview taken for the old one.
-                                    setMovePreview(null);
-                                }}
-                            />
-                        </div>
-                        {/* A reversal must say why; applying unapplied money undoes nothing. */}
-                        {movePending ? (
-                            <label className="alloy-os-fdetail__movefield">
-                                <span>Reason</span>
-                                <input
-                                    data-testid="payment-move-reason"
-                                    value={moveReason}
-                                    onChange={(e) => {
-                                        setMoveReason(e.target.value);
-                                        setMovePreview(null);
-                                    }}
-                                    placeholder="Applied to the wrong charge"
-                                />
-                            </label>
-                        ) : null}
-                        {movePreview ? (
-                            <div className="alloy-os-fdetail__movepreview" data-testid="payment-move-preview">
-                                <strong>{movePreview.summary}</strong>
-                                {movePreview.changes.map((c) => (
-                                    <span key={c}>{c}</span>
-                                ))}
-                            </div>
-                        ) : null}
-                        {moveError ? (
-                            <div className="alloy-os-fdetail__moveerror" data-testid="payment-move-error">
-                                {moveError}
-                            </div>
-                        ) : null}
-                        <div className="alloy-os-fdetail__moveactions">
-                            {/*
-                              * Preview first, and only for a Move: Confirm stays disabled until the
-                              * ACTION has said what reversing this application will do. Applying
-                              * unapplied money has no reversal to explain.
-                              */}
-                            {movePending ? (
-                                <button
-                                    type="button"
-                                    data-testid="payment-move-preview-button"
-                                    disabled={running || !moveReason.trim()}
-                                    onClick={() => void previewMove()}
-                                >
-                                    Preview
-                                </button>
-                            ) : null}
-                            <button
-                                type="button"
-                                data-testid="payment-move-confirm"
-                                disabled={
-                                    running
-                                    || !moveTargetId
-                                    || (movePending ? !movePreview : false)
-                                }
-                                onClick={() => void (movePending ? confirmMove() : confirmApply())}
-                            >
-                                Confirm
-                            </button>
-                            <button type="button" data-testid="payment-move-cancel" onClick={closeMovePanels}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
 
-                {releasePending ? (
-                    <div className="alloy-os-fdetail__movepanel" data-testid="deposit-release-panel">
-                        <div className="alloy-os-fdetail__moveheader">Release held deposit</div>
-                        {/*
-                          * WHAT RELEASING ACTUALLY DOES, said plainly. Operators read "release" as
-                          * "give it back", which is a refund. Releasing moves no money at all: the
-                          * restriction ends and the same money becomes spendable against what the
-                          * family owes. Saying so here is cheaper than a reversal later.
-                          */}
-                        <p className="alloy-os-fdetail__heldnote">
-                            {money(releasePending.remainingCents, currency)} stops being held and becomes
-                            available prepaid. No money moves and the family is not refunded.
-                        </p>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Reason</span>
-                            <input
-                                data-testid="deposit-release-reason"
-                                value={releaseReason}
-                                onChange={(e) => setReleaseReason(e.target.value)}
-                                placeholder="Agreement ended with no damages"
-                            />
-                        </label>
-                        {releaseError ? (
-                            <div className="alloy-os-fdetail__moveerror" data-testid="deposit-release-error">
-                                {releaseError}
-                            </div>
-                        ) : null}
-                        <div className="alloy-os-fdetail__moveactions">
-                            <button
-                                type="button"
-                                data-testid="deposit-release-confirm"
-                                disabled={running}
-                                onClick={() => void confirmRelease()}
-                            >
-                                Release {money(releasePending.remainingCents, currency)}
-                            </button>
-                            <button type="button" data-testid="deposit-release-cancel" onClick={closeMovePanels}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
 
                 {adjustNotice ? (
                     <div className="alloy-os-fdetail__movenotice" data-testid="adjustment-notice">
@@ -6450,57 +6712,6 @@ export default function FinancialsCard({
                   * authority, is still the only writer.
                   */}
                 {/* REVERSE. The original is never edited; its opposite is appended. */}
-                {reversePending ? (
-                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-reverse-panel">
-                        <div className="alloy-os-fdetail__moveheader">Reverse adjustment</div>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Reason</span>
-                            <input
-                                data-testid="adjustment-reverse-reason"
-                                value={reverseReason}
-                                onChange={(e) => {
-                                    setReverseReason(e.target.value);
-                                    setReversePreview(null);
-                                }}
-                                placeholder="Recorded against the wrong enrolment"
-                            />
-                        </label>
-                        {reversePreview ? (
-                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-reverse-preview">
-                                <strong>{reversePreview.summary}</strong>
-                                {reversePreview.changes.map((c) => (
-                                    <span key={c}>{c}</span>
-                                ))}
-                            </div>
-                        ) : null}
-                        {reverseError ? (
-                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-reverse-error">
-                                {reverseError}
-                            </div>
-                        ) : null}
-                        <div className="alloy-os-fdetail__moveactions">
-                            <button
-                                type="button"
-                                data-testid="adjustment-reverse-preview-button"
-                                disabled={running || !reverseReason.trim()}
-                                onClick={() => void previewReversal()}
-                            >
-                                Preview
-                            </button>
-                            <button
-                                type="button"
-                                data-testid="adjustment-reverse-confirm"
-                                disabled={running || !reversePreview}
-                                onClick={() => void confirmReversal()}
-                            >
-                                Confirm
-                            </button>
-                            <button type="button" data-testid="adjustment-reverse-cancel" onClick={closeAdjustPanels}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
 
                 <FinancialsDetailCard
                     /*
@@ -6580,8 +6791,6 @@ export default function FinancialsCard({
                               }
                             : null
                     }
-                    onMovePayment={openMovePayment}
-                    onApplyPayment={openApplyPayment}
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
                     /* The held-money acts. Unsupplied, the section renders the position with no controls. */
@@ -7395,6 +7604,10 @@ export type FinancialsSurface =
     /* W7-F026: a receipt's record — the same kind of read as a charge's. */
     | { kind: "payment_detail"; paymentId: string }
     | { kind: "adjust_charge"; chargeId: string }
+    /* W7-F033: the money-moving acts, as command layers. Their facts live in the card's pending state. */
+    | { kind: "payment_application" }
+    | { kind: "release_held" }
+    | { kind: "reverse_adjustment" }
     | { kind: "reverse_charge"; chargeId: string; label: string }
     /*
      * WHO OWES ONE OBLIGATION. Row-scoped like the two above, and it carries its MODE because

@@ -91,8 +91,10 @@ describe("THE GATE — zero is silence", () => {
     });
 
     it("renders the metric only when a value exists, on both surfaces", () => {
-        expect(src("components/operationalCards/FinancialsDetailCard.tsx"))
-            .toMatch(/\{period\.availablePrepaid \? \(/);
+        /* W7-F031: the shared account summary states prepaid as context, only when the adapter has it. */
+        expect(src("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts"))
+            .toMatch(/\(vm\.prepaid\?\.availableCents \?\? 0\) > 0\s*\?\s*\[\{ key: "prepaid"/);
+        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/!hydrating && summary\.context\.length \?/);
         expect(src("components/operationalCards/FinancialsCard.tsx"))
             .toMatch(/\{period\.availablePrepaid \? \(/);
     });
@@ -152,13 +154,14 @@ describe("THE GATE — held money is shown, and never merged into available", ()
     });
 
     it("shows held funds as their own line on both surfaces", () => {
-        for (const f of [
-            "components/operationalCards/FinancialsCard.tsx",
-            "components/operationalCards/FinancialsDetailCard.tsx",
-        ]) {
-            const text = code(f);
-            expect(text, `${f} renders the held figure`).toMatch(/period\.heldFunds \? \(/);
-            expect(text, `${f} keeps it separate from available prepaid`).toMatch(/period\.availablePrepaid \? \(/);
+        {
+            const text = code("components/operationalCards/FinancialsCard.tsx");
+            expect(text, "the standard summary renders the held figure").toMatch(/period\.heldFunds \? \(/);
+            expect(text, "and keeps it separate from available prepaid").toMatch(/period\.availablePrepaid \? \(/);
         }
+        /* W7-F031: the account summary carries held and prepaid as two separate context items. */
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter).toMatch(/key: "prepaid", text: `\$\{money\(vm\.prepaid!\.availableCents, currency\)\} prepaid available`/);
+        expect(adapter).toMatch(/key: "held", text: `\$\{money\(vm\.prepaid!\.heldCents, currency\)\} held deposit`/);
     });
 });
