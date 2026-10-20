@@ -39,6 +39,7 @@ import {
 } from "@/lib/communications/inboxThreadRoutingState";
 import { withoutSupersededDuplicates } from "@/lib/communications/supersededDuplicateMessages";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const PREVIEW_FETCH_CAP = 200;
 const DEFAULT_LIMIT = 50;
@@ -118,15 +119,8 @@ export function computeThreadHasUnread(
 }
 
 function formatPhoneDisplay(raw: string): string {
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    return raw.trim() || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 function contactFromRecipientKey(recipientKey: string | null | undefined, channel: string): string | null {

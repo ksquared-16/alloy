@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, type FormEvent } from "react";
 import clsx from "clsx";
+import PhoneInput from "@/components/ui/PhoneInput";
+import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
 import { InlineFieldTokenText } from "@/components/forms/inline/InlineFieldTokenText";
 import { sortDocumentBlocks, type DocumentBlock } from "@/lib/forms/documentComposition";
 import { fieldById as schemaFieldById, resolveDocumentComposition } from "@/lib/forms/documentCompositionAuthoring";
@@ -60,8 +62,8 @@ function fieldUsesEmailShape(field: FormField & { type: "text" }): boolean {
 }
 
 function fieldUsesPhoneShape(field: FormField & { type: "text" }): boolean {
-    const id = field.id.toLowerCase();
-    return id.includes("phone") || id.includes("mobile") || id.includes("tel");
+    const p = field.validate?.pattern;
+    return isPhoneField({ id: field.id, pattern: typeof p === "string" ? p : null });
 }
 
 function titlesEquivalent(a: string, b: string): boolean {
@@ -176,7 +178,9 @@ export function FormEngineRenderer({
                         ? raw.join(", ")
                         : raw === undefined || raw === null || raw === ""
                           ? "—"
-                          : String(raw);
+                          : field.type === "text" && fieldUsesPhoneShape(field)
+                            ? formatPhoneDisplay(String(raw))
+                            : String(raw);
                 const preWrap = field.type === "text" && (field as { multiline?: boolean }).multiline;
                 return (
                     <div className="space-y-1">
@@ -215,7 +219,17 @@ export function FormEngineRenderer({
                         <div className="space-y-1">
                             {commonLabel}
                             {helpText}
-                            {field.multiline && !emailLike ?
+                            {phoneLike && !field.multiline ?
+                                <PhoneInput
+                                    className={clsx(
+                                        "w-full rounded border px-2 py-1.5 text-sm",
+                                        fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
+                                    )}
+                                    value={strVal}
+                                    placeholder={ph ?? "(555) 555-5555"}
+                                    onChange={(next) => onCellChange(field.id, next)}
+                                />
+                            : field.multiline && !emailLike ?
                                 <textarea
                                     rows={5}
                                     className={clsx(
