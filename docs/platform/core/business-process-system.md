@@ -77,13 +77,21 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   (`process_model_unknown`, read from the raw payload) and survives draft saves verbatim — it never
   silently becomes a staged lifecycle.
 - **Publication refuses lifecycle configuration on a projection** (`domain_projection_lifecycle_config`):
-  active stages, `tracks_v1`, `entry_points_v1`, `participation_v1` and `work_views_v1`. Work Views are
-  refused **for now** because every Work View today evaluates the Enrollment lead population; domain-backed
-  Work Views are BP V2 Slice 2.
+  active stages, `tracks_v1`, `entry_points_v1` and `participation_v1`.
+- **A projection's Work Views name a registered projection (BP V2 Slice 2).** Each view carries one
+  `projection_key` from the closed registry for the process's domain
+  (`web/lib/businessProcesses/projections/domainProjectionCatalog.ts`): Assignments `current_assignments`
+  (child and staff-person records), Billing `charges_needing_review` (household records, `fin.read`).
+  Publication refuses an unregistered key and refuses `filters_v1`, sorts, `compat_queue_key` and
+  `row_grain_v1` on such a view (`projection_work_view_invalid`) — the projection is its membership and
+  order. `projection_key` on a staged lifecycle is refused. The runtime contract is
+  [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
 - **Same publication chain.** One department per process; draft → validate → publish → department
   projection, unchanged. The publish RPC is content-agnostic; the gate is `validateBusinessProcessForPublish`.
-- **Workspace.** A projection is its own catalog entry and tile. Until it has Work Views its card has
-  `entryHref: null` and states why in the existing CTA slot (Sidebar: a non-link row). It receives none
+- **Workspace.** A projection is its own catalog entry and tile. Publishing it with Work Views creates its
+  host work unit (one per department, key `domain_projection_host_<department>`); its tile then lists its
+  own views on that host. Until then its card has `entryHref: null` and states why in the existing CTA
+  slot (Sidebar: a non-link row). It receives none
   of the lifecycle fallbacks — department lanes, builder stages, work-unit list, the `new_leads` entry,
   Enrollment surface fields — and no rollup counts. `new_leads` is Enrollment's last-resort entry only.
 - **Identity is declared.** Tile signal family and card identity come from the model (Billing →

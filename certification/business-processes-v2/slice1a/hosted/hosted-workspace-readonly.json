@@ -1,0 +1,143 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "started_at": "2026-10-20T20:06:09.984Z",
+  "finished_at": "2026-10-20T20:06:40.711Z",
+  "final_url": "https://staging.workwithalloy.com/workspace",
+  "tiles": [
+    {
+      "process_id": "3933ac47-077a-4de8-aaac-8aed48d80413:42be9074-443f-4047-bece-d68cd1d22788",
+      "title": "Enrollment",
+      "subtitle": "Pipeline",
+      "status": "No signal",
+      "answer": "38Family Leads39Children",
+      "todays_work": [
+        "AllCatch all including all open leads.65\u203a",
+        "AllCatch all including all open leads.65\u203a",
+        "NewAll new leads that need attention27\u203a",
+        "NewAll new leads that need attention27\u203a",
+        "WaitlistChildren that want to start but no available space.17\u203a",
+        "WaitlistChildren that want to start but no available space.17\u203a",
+        "RegistrationChildren in the enrollment process.16\u203a",
+        "RegistrationChildren in the enrollment process.16\u203a",
+        "Decision9\u203a",
+        "Decision9\u203a",
+        "Offer pendingChildren offered a spot at Decision, waiting for the family's answer.4\u203a",
+        "Offer pendingChildren offered a spot at Decision, waiting for the family's answer.4\u203a",
+        "Enrolled children4\u203a",
+        "Enrolled children4\u203a",
+        "ToursTours in the next 7 days0\u203a",
+        "ToursTours in the next 7 days0\u203a"
+      ],
+      "todays_work_hrefs": [
+        "/workspace/work-unit/all",
+        "/workspace/work-unit/new",
+        "/workspace/work-unit/waitlist",
+        "/workspace/work-unit/registration",
+        "/workspace/work-unit/decision",
+        "/workspace/work-unit/offer-pending",
+        "/workspace/work-unit/enrolled-children",
+        "/workspace/work-unit/tours"
+      ],
+      "cta_href": "/workspace/work-unit/new",
+      "cta_text": "Open\u2192",
+      "unavailable": null,
+      "link_count": 9
+    }
+  ],
+  "sidebar": null,
+  "http_errors": [],
+  "page_errors": [],
+  "failed_requests": [
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/tours/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/new/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb16",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/decision/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c3",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/waitlist/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c3",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/registration/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/offer-pending/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-94",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/view-models/drawer/opportunity/1b655414-c66b-45b3-8d68-218d83c81f46?phased=1",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/view-models/drawer/opportunity/8027227c-1905-4a31-9c2c-4ce782977ad1?phased=1",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://staging.workwithalloy.com/api/admin/view-models/drawer/opportunity/1b655414-c66b-45b3-8d68-218d83c81f46?phased=1",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    }
+  ],
+  "non_get_requests": [
+    {
+      "method": "POST",
+      "url": "https://staging.workwithalloy.com/api/admin/queue-view-totals"
+    }
+  ],
+  "entry": {
+    "url": "https://staging.workwithalloy.com/workspace/work-unit/new",
+    "title": "Where Work Happens"
+  },
+  "build_info": {
+    "gitSha": "4d795dcf0f8f2eb6d425053fe7a9e36e75284495",
+    "gitBranch": "staging"
+  },
+  "identity": {
+    "deployed_target": "alloy_staging_web",
+    "qa_identity": "qa-slot1-product@example.com",
+    "org": "Firefly Early Learning (93667019-bd28-49b5-a688-acc9bb1e0a19)",
+    "mode": "read-only: navigation + GET only; the app itself issued one read POST (queue-view-totals)"
+  },
+  "catalog": {
+    "status": 200,
+    "items": [
+      {
+        "lifecycle_name": "Enrollment",
+        "process_key": "enrollment",
+        "process_model": {
+          "kind": "staged_lifecycle"
+        },
+        "department_key": "lead_management",
+        "stage_count": 7
+      }
+    ]
+  },
+  "departments": {
+    "status": 200,
+    "visible_count": 4,
+    "names": [
+      "Enrollment",
+      "Operations",
+      "Finance",
+      "System"
+    ]
+  },
+  "console_errors": [],
+  "console_warning_count": 29
+}

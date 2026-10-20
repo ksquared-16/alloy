@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { domainProjectionScopeFromAccess } from "@/lib/businessProcesses/projections/domainProjectionRegistry";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import {
@@ -182,6 +183,10 @@ export async function POST(request: NextRequest) {
             recordScopeImpossible,
             viewerDisplayTimeZone,
             spans: evalSpans,
+            // BP V2 S2 — projection departments count under the caller's ACCESS scope (site
+            // restrictions enforced). Not the workspace site filter: the projection's rows are served
+            // under the same access scope, and the two must agree.
+            projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(dim) },
         });
     });
 

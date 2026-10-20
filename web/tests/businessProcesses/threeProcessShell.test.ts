@@ -19,6 +19,7 @@ import {
     PUBLISH_DOMAIN_PROJECTION_LIFECYCLE_CONFIG,
     PUBLISH_EMPTY_PROCESS,
     PUBLISH_PROCESS_MODEL_UNKNOWN,
+    PUBLISH_PROJECTION_WORK_VIEW_INVALID,
     validateBusinessProcessForPublish,
 } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
 import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
@@ -177,7 +178,7 @@ describe("publication gate for domain projections", () => {
         }
     });
 
-    it("refuses active stages, tracks, entry points and Work Views on a projection — by name", () => {
+    it("refuses active stages and entry points by name; a view without a registered projection (S2) too", () => {
         const result = validateBusinessProcessForPublish(
             builder(
                 projectionProcess("billing", {
@@ -191,9 +192,15 @@ describe("publication gate for domain projections", () => {
         expect(refused.map((e) => (e.detail as { section: string }).section).sort()).toEqual([
             "entry_points_v1",
             "stages",
-            "work_views_v1",
         ]);
         expect(refused.every((e) => e.message.includes("Billing process"))).toBe(true);
+        // BP V2 Slice 2: Work Views are allowed on a projection, but only naming a registered
+        // projection — this one names none, so it is still refused, under its own code.
+        expect(
+            result.errors
+                .filter((e) => e.code === PUBLISH_PROJECTION_WORK_VIEW_INVALID)
+                .map((e) => e.path),
+        ).toEqual(["processes[billing].work_views_v1[overdue].projection_key"]);
     });
 
     it("an inactive stage on a projection is not a lifecycle and does not block", () => {

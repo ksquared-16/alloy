@@ -44,6 +44,10 @@ import {
     processModelV1Problem,
     resolveProcessModel,
 } from "@/lib/lifecycle/processModelV1";
+import {
+    domainProjectionKeys,
+    isRegisteredDomainProjectionKey,
+} from "@/lib/businessProcesses/projections/domainProjectionCatalog";
 import { ENROLLED_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type {
     LifecycleBuilderProcessRecord,
@@ -111,19 +115,34 @@ export const PUBLISH_PROCESS_MODEL_UNKNOWN = "process_model_unknown" as const;
 export const PUBLISH_DOMAIN_PROJECTION_LIFECYCLE_CONFIG = "domain_projection_lifecycle_config" as const;
 
 /**
+ * BP V2 S2 — a Work View that cannot be served: on a projection, one naming no registered projection
+ * or carrying lifecycle predicates; on a staged lifecycle, one naming a projection at all.
+ */
+export const PUBLISH_PROJECTION_WORK_VIEW_INVALID = "projection_work_view_invalid" as const;
+
+/**
  * Lifecycle-only sections a domain projection may not publish, with why each is refused. Work Views
- * are here for Slice 1 only: today every Work View evaluates over the Enrollment lead population, so
- * a Billing Work View would show Enrollment records. Domain-backed Work Views are Slice 2.
+ * are NOT here: since Slice 2 a projection's views publish when each names a registered projection
+ * (checked separately below).
  */
 const DOMAIN_PROJECTION_REFUSED_SECTIONS: readonly { key: string; why: string }[] = [
     { key: "stages", why: "it reads another domain’s records and has no lifecycle stages of its own" },
     { key: "tracks_v1", why: "tracks split a staged lifecycle, and it has none" },
     { key: "entry_points_v1", why: "no journey starts in it" },
     { key: "participation_v1", why: "participation belongs to a staged lifecycle" },
-    {
-        key: "work_views_v1",
-        why: "domain-backed Work Views are not available yet, and a stage-population Work View would show Enrollment records",
-    },
+];
+
+/**
+ * Work View fields that only mean something over a lifecycle population. On a projection view the
+ * registered projection IS the membership and the order, so each of these would either be ignored
+ * (a published claim that does nothing) or bind the view to an Enrollment lane.
+ */
+const PROJECTION_VIEW_REFUSED_FIELDS: readonly { key: string; why: string }[] = [
+    { key: "filters_v1", why: "the registered projection is the membership; conditions are not evaluated on it" },
+    { key: "sort_v1", why: "projection rows have one canonical order" },
+    { key: "sorts_v1", why: "projection rows have one canonical order" },
+    { key: "compat_queue_key", why: "it binds the view to a lifecycle queue lane" },
+    { key: "row_grain_v1", why: "the projection declares its own record grains" },
 ];
 
 function isPopulatedSection(value: unknown): boolean {
@@ -341,7 +360,55 @@ export function validateParsedBusinessProcessForPublish(
                     detail: { process_model: model.kind, domain: model.domain, section: section.key },
                 });
             }
+            const rawViews = Array.isArray(rawRecord.work_views_v1) ? rawRecord.work_views_v1 : [];
+            for (const rawView of rawViews) {
+                if (!isRecord(rawView)) continue;
+                const viewId = String(rawView.id ?? "");
+                const projectionKey = typeof rawView.projection_key === "string" ? rawView.projection_key.trim() : "";
+                if (!isRegisteredDomainProjectionKey(model.domain, projectionKey)) {
+                    errors.push({
+                        code: PUBLISH_PROJECTION_WORK_VIEW_INVALID,
+                        path: `processes[${process.key}].work_views_v1[${viewId}].projection_key`,
+                        message:
+                            `Work View “${String(rawView.label ?? viewId)}” must name one of this `
+                            + `${PROCESS_PROJECTION_DOMAIN_LABELS[model.domain]} process's projections `
+                            + `(${domainProjectionKeys(model.domain).join(", ")}).`,
+                        detail: {
+                            work_view_id: viewId,
+                            projection_key: rawView.projection_key ?? null,
+                            known_projection_keys: domainProjectionKeys(model.domain),
+                        },
+                    });
+                }
+                for (const field of PROJECTION_VIEW_REFUSED_FIELDS) {
+                    if (!isPopulatedSection(rawView[field.key])) continue;
+                    errors.push({
+                        code: PUBLISH_PROJECTION_WORK_VIEW_INVALID,
+                        path: `processes[${process.key}].work_views_v1[${viewId}].${field.key}`,
+                        message:
+                            `Work View “${String(rawView.label ?? viewId)}” cannot publish ${field.key}: `
+                            + `${field.why}.`,
+                        detail: { work_view_id: viewId, field: field.key },
+                    });
+                }
+            }
             continue;
+        }
+
+        // A staged lifecycle's views read its own population; a projection key there would be a
+        // second, silent membership authority.
+        const rawLifecycleViews =
+            isRecord(rawProcess) && Array.isArray(rawProcess.work_views_v1) ? rawProcess.work_views_v1 : [];
+        for (const rawView of rawLifecycleViews) {
+            if (!isRecord(rawView) || rawView.projection_key === undefined) continue;
+            errors.push({
+                code: PUBLISH_PROJECTION_WORK_VIEW_INVALID,
+                path: `processes[${process.key}].work_views_v1[${String(rawView.id ?? "")}].projection_key`,
+                message:
+                    `Work View “${String(rawView.label ?? rawView.id ?? "")}” names a domain projection, `
+                    + `but “${process.name}” is a staged lifecycle; its views read its own stages.`,
+                detail: { work_view_id: rawView.id ?? null },
+            });
         }
 
         // THE EXECUTION GRAPH owns everything about transitions and movements: identity,

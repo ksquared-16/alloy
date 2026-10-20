@@ -35,6 +35,7 @@ import {
 } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import { validateBusinessProcessForPublish } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
 import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
+import { ensureHostsForPublishedProjections } from "@/lib/businessProcesses/projections/domainProjectionHost";
 
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -130,6 +131,15 @@ export async function POST(request: NextRequest) {
             loadPublishedConfiguration(supabase, scope),
         ]);
 
+        // BP V2 S2 — a domain projection that now publishes Work Views needs its host work unit (the
+        // canonical location its views route and count against). Idempotent; the publication above is
+        // already committed, so a host failure is REPORTED, never turned into a failed publish.
+        const projectionHosts = await ensureHostsForPublishedProjections(supabase, {
+            orgId: ctx.orgId,
+            departmentId,
+            publishedPayload,
+        });
+
         const state =
             publishedDraft &&
             buildBusinessProcessEditorState({
@@ -153,6 +163,7 @@ export async function POST(request: NextRequest) {
                 already_published: result.alreadyPublished,
             },
             warnings: validation.warnings,
+            ...(projectionHosts.length ? { projection_hosts: projectionHosts } : {}),
             ...(state
                 ? {
                       state,

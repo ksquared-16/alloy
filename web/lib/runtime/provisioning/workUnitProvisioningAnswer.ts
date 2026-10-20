@@ -37,6 +37,10 @@
  * Identity alone is not operational: without current business state AND a truthful primary
  * action the answer does not claim `operational`.
  */
+import { resolveDepartmentDomainProjection } from "@/lib/businessProcesses/projections/domainProjectionDepartment";
+import { domainProjectionProvisioningRow } from "@/lib/businessProcesses/projections/domainProjectionQueueRow";
+import { isDomainProjectionHostWorkUnit } from "@/lib/businessProcesses/projections/domainProjectionHost";
+import type { DomainProjectionScope } from "@/lib/businessProcesses/projections/domainProjectionTypes";
 import { childrenAtFamilyPositionForMission } from "@/lib/process/definitions/enrollment/loadChildrenAtFamilyPosition";
 import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
 import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -184,7 +188,7 @@ import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/foc
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
 
-export type ProvisioningTerminal = "operational" | "empty" | "error";
+export type ProvisioningTerminal = "operational" | "empty" | "error" | "projection";
 
 /**
  * Row Grain — Stage-owned (§0.5.1). NOT Record of Attention.
@@ -570,6 +574,40 @@ export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
      * membership is what forces every consumer to decide, via exhaustiveness, what it renders when no
      * cohort is selected.
      */
+    /**
+     * BP V2 S2 — A DOMAIN-PROJECTION COHORT. The Work View belongs to a `domain_projection` process and
+     * its rows come from the registered projection (`loadDomainProjectionCohort`), not from a lifecycle
+     * population. A distinct terminal, so every consumer that keys on `operational` (opportunity drawer
+     * warming, stage work, primary actions) leaves it alone by construction rather than by guard.
+     *
+     * Rows open the DURABLE record each names (child / person / household) through the existing durable
+     * record panel. Counts are Settlement, exactly as on the operational answer, and come from the same
+     * cohort. `total` here is that cohort's size for the active view, or null when the domain read was
+     * bounded — never the page length.
+     */
+    | {
+          terminal: "projection";
+          orgId: string;
+          workUnit: { id: string; key: string; name: string; departmentId: string | null };
+          businessProcess: { key: string; name: string };
+          activeWorkView: { id: string; label: string };
+          lensSet: LensSetEntry[];
+          contextFrame: { workViewId: string; workViewLabel: string };
+          projection: {
+              domain: "assignments" | "billing";
+              projectionKey: string;
+              total: number | null;
+              truncated: boolean;
+          };
+          /** ONE bounded page of the cohort, in its canonical order. */
+          rows: ProvisioningRow[];
+          /** The row the caller named (`<grain>:<id>`), when it is in this page; otherwise null. */
+          selectedRowId: string | null;
+          presentation: OperationalPresentation;
+          settlement: SettlementLocators;
+          actionsProjection: WorkUnitActionsProjection;
+          timings: ProvisioningTimings;
+      }
     | ContextualFocusAnswer);
 
 export type ProvisioningErrorCode =
@@ -582,7 +620,13 @@ export type ProvisioningErrorCode =
     | "grain_unsupported"
     | "subject_unavailable"
     | "no_truthful_primary_action"
-    | "records_unavailable";
+    | "records_unavailable"
+    /** BP V2 S2 — the view names no registered projection for its process's domain. */
+    | "projection_unsupported"
+    /** BP V2 S2 — the caller lacks the domain's read capability (e.g. Billing without `fin.read`). */
+    | "projection_forbidden"
+    /** BP V2 S2 — the domain read failed, or no access scope reached the projection. */
+    | "projection_unavailable";
 
 /**
  * WHAT KIND of problem this is — the distinction the surface needs and the codes already imply.
@@ -599,6 +643,7 @@ export type ProvisioningErrorKind = "authorization" | "configuration" | "subject
 export function provisioningErrorKind(code: ProvisioningErrorCode): ProvisioningErrorKind {
     switch (code) {
         case "unauthorized":
+        case "projection_forbidden":
             return "authorization";
         // The tenant's configuration is invalid or absent — the surface cannot be composed until it changes.
         case "work_unit_not_found":
@@ -607,12 +652,14 @@ export function provisioningErrorKind(code: ProvisioningErrorCode): Provisioning
         case "grain_ambiguous":
         case "grain_unsupported":
         case "no_truthful_primary_action":
+        case "projection_unsupported":
             return "configuration";
         // Configuration is sound; the requested subject is not present.
         case "subject_unavailable":
             return "subject";
         // The read itself failed — transient, and the only kind a retry can plausibly fix.
         case "records_unavailable":
+        case "projection_unavailable":
             return "records";
     }
 }
@@ -643,6 +690,17 @@ export type ProvisioningRequest = {
     /** U-P1 — resolved ONCE by the caller's route gate; never re-resolved inside. */
     orgId: string;
     currentUserId?: string | null;
+    /**
+     * BP V2 S2 — the caller's server-resolved access scope, for a domain-projection Work View. Absent →
+     * such a view refuses (`projection_unavailable`); it never reads unscoped. Lifecycle views ignore it.
+     */
+    projectionScope?: DomainProjectionScope | null;
+    /**
+     * BP V2 S2 — the projection cohort reader, INJECTED by the server route. This module is reachable
+     * from the browser contract graph, and the registry binds server-only Financials/Scheduling
+     * readers, so it is never imported here as a value. Absent → a projection view refuses.
+     */
+    loadProjectionCohort?: typeof import("@/lib/businessProcesses/projections/domainProjectionRegistry")["loadDomainProjectionCohort"] | null;
     /**
      * Actor for DOCUMENT authorization. Profile photos are documents whose URLs are minted per
      * actor per request (~300s) and never persisted. Optional: an answer composed without one is
@@ -945,12 +1003,15 @@ export async function composeWorkUnitProvisioningAnswer(
     // THE POPULATION IS SHARED WITH THE COUNT PATH. Counts already evaluate on `hostWorkUnitId`;
     // Operational Commit must project the same population or pills and rows diverge.
     const recordsPromise = (async () =>
-        req.supabase
-            .from("opportunities")
-            .select(PROCESS_POPULATION_SELECT)
-            .eq("org_id", req.orgId)
-            .eq("work_unit_id", workUnit.id)
-            .limit(PROCESS_POPULATION_CAP))();
+        isDomainProjectionHostWorkUnit(wuRow)
+            // A projection host hosts no opportunities; its rows come only from the projection branch.
+            ? { data: [] as never[], error: null }
+            : req.supabase
+                  .from("opportunities")
+                  .select(PROCESS_POPULATION_SELECT)
+                  .eq("org_id", req.orgId)
+                  .eq("work_unit_id", workUnit.id)
+                  .limit(PROCESS_POPULATION_CAP))();
 
     // ── Configuration: Business Process, stages, lenses. ONE fetch. ──
     const tCfg = now();
@@ -1345,6 +1406,58 @@ export async function composeWorkUnitProvisioningAnswer(
               }).catch(() => null)
             : Promise.resolve([]);
     void focusPanelSummaryRowsPromise.catch(() => {});
+
+    // ── BP V2 S2: A DOMAIN-PROJECTION VIEW. Rows come from the registered projection, and from nothing
+    //    below: no lens grain, no lifecycle population, no Enrollment enrichment, no stage work. The SAME
+    //    cohort the totals evaluator counts (`loadDomainProjectionCohort`), so rows and counts agree.
+    const departmentProjection = resolveDepartmentDomainProjection(deptRow?.metadata);
+    if (departmentProjection) {
+        if (!req.projectionScope || !req.loadProjectionCohort) {
+            return fail("projection_unavailable", "no access scope reached this projection", workUnit, navFrame);
+        }
+        const tProjection = now();
+        const cohort = await req.loadProjectionCohort(req.supabase, {
+            domain: departmentProjection.domain,
+            projectionKey: activeView.projection_key ?? null,
+            orgId: req.orgId,
+            userId: req.currentUserId ?? null,
+            scope: req.projectionScope,
+        });
+        timings.records_ms = now() - tProjection;
+        if (cohort.status === "refused") return fail(cohort.code, cohort.message, workUnit, navFrame);
+        const [presentation, actionsProjection] = await Promise.all([presentationPromise, actionsProjectionPromise]);
+        timings.presentation_ms = now() - tPres;
+        const rowArgs = {
+            processKey: process.key,
+            domain: cohort.domain,
+            projectionKey: cohort.projectionKey,
+            projectionLabel: activeView.label,
+        };
+        const rows = cohort.rows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => domainProjectionProvisioningRow(r, rowArgs));
+        const requested = (req.requestedSubjectId ?? "").trim();
+        timings.total_ms = now() - t0;
+        return {
+            terminal: "projection",
+            orgId: req.orgId,
+            workUnit,
+            businessProcess: { key: process.key, name: process.name },
+            activeWorkView: { id: activeView.id, label: activeView.label },
+            lensSet,
+            contextFrame,
+            projection: {
+                domain: cohort.domain,
+                projectionKey: cohort.projectionKey,
+                total: cohort.total,
+                truncated: cohort.truncated,
+            },
+            rows,
+            selectedRowId: requested && rows.some((r) => r.id === requested) ? requested : null,
+            presentation,
+            settlement,
+            actionsProjection,
+            timings,
+        };
+    }
 
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);

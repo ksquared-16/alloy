@@ -99,6 +99,8 @@ export async function resolveWorkViewTotalsSeed(input: {
     viewerDisplayTimeZone: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["viewerDisplayTimeZone"];
     /** Interval recorder owned by the caller, so seed offsets share one origin with deptUnits and locator. */
     timeline?: WorkViewTotalsTimeline;
+    /** BP V2 S2 — see `evaluateWorkViewTotalsForGroup`'s `projection`. */
+    projection?: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["projection"];
 }): Promise<WorkViewTotalsSeed> {
     const tSeed = Date.now();
     try {
@@ -174,6 +176,7 @@ export async function resolveWorkViewTotalsSeed(input: {
                     viewerDisplayTimeZone: input.viewerDisplayTimeZone,
                     spans,
                     timeline: input.timeline,
+                    projection: input.projection,
                 }),
             ),
         );

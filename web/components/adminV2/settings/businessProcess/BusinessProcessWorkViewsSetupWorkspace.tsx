@@ -11,6 +11,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     stageGrainByKey,
     queueLanes = [],
     onDraftSaved,
+    projectionDomain = null,
 }: {
     workUnitKey: string | null;
     stageGrains?: (StageGrain | undefined)[];
@@ -19,6 +20,8 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
     /** Called after a successful draft save so the process Apply bar can refresh. */
     onDraftSaved?: () => void | Promise<void>;
+    /** BP V2 S2 — set for a domain-projection process: views pick a registered projection instead. */
+    projectionDomain?: import("@/lib/lifecycle/processModelV1").ProcessProjectionDomain | null;
 }) {
     const {
         selected,
@@ -107,6 +110,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     onSelect={() => {}}
                     onChange={updateSelected}
                     onDelete={drafts.length > 1 ? deleteSelected : undefined}
+                    projectionDomain={projectionDomain ?? null}
                 />
             :   <div className="process-config-setup-card p-8 text-center text-sm text-alloy-midnight/50">
                     Select a Work View to configure.

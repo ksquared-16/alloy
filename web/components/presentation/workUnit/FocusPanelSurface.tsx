@@ -8,6 +8,9 @@
  * a temporary slide-over selector — never a permanent full-width stack above Focus.
  */
 
+import DurableRecordSurface from "@/components/presentation/durableRecord/DurableRecordSurface";
+import { parseDomainProjectionRowId } from "@/lib/businessProcesses/projections/domainProjectionIdentity";
+import { useDomainProjectionFocusFrame } from "./DomainProjectionFocusContext";
 import {
     createContext,
     useCallback,
@@ -105,6 +108,10 @@ export function FocusPanelSurface({
     children: ReactNode;
 }) {
     const { subjectId } = useOperationalSubject();
+    // BP V2 S2 — on a domain-projection surface the selected subject is a DURABLE record, opened through
+    // the existing durable record panel. The opportunity panel is never mounted for it.
+    const projectionFrame = useDomainProjectionFocusFrame();
+    const durableSubject = projectionFrame ? parseDomainProjectionRowId(subjectId) : null;
     const isOpen = subjectId != null;
     const inlineRecordSelected = subjectId != null;
 
@@ -189,8 +196,26 @@ export function FocusPanelSurface({
                         data-component="FocusPanelSurface.boundary"
                         data-build-sha={BUILD_SHA}
                         data-focus-panel-state={inlineRecordSelected ? "record" : "empty"}
+                        data-projection-domain={projectionFrame?.domain}
+                        data-projection-key={projectionFrame?.projectionKey}
+                        data-projection-process={projectionFrame?.businessProcessKey}
+                        data-projection-work-view={projectionFrame?.workViewId}
+                        data-durable-subject={durableSubject ? `${durableSubject.type}:${durableSubject.id}` : undefined}
                     >
-                        {inlineRecordSelected ? (
+                        {projectionFrame ? (
+                            durableSubject ? (
+                                <DurableRecordSurface
+                                    key={`${durableSubject.type}:${durableSubject.id}`}
+                                    subjectType={durableSubject.type}
+                                    subjectId={durableSubject.id}
+                                    presentation="full"
+                                />
+                            ) : subjectRefusal ? (
+                                <FocusPanelSubjectRefusal kind={subjectRefusal.kind} message={subjectRefusal.message} />
+                            ) : (
+                                <FocusPanelPlaceholder />
+                            )
+                        ) : inlineRecordSelected ? (
                             <InlineOpportunityFocusPanel />
                         ) : subjectRefusal ? (
                             <FocusPanelSubjectRefusal

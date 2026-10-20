@@ -12,6 +12,10 @@ import "server-only";
  * re-resolves them. Slug→host-unit resolution can never fail the answer — an unresolvable slug is passed
  * through so the composer returns the same honest terminal error.
  */
+import {
+    domainProjectionScopeFromAccess,
+    loadDomainProjectionCohort,
+} from "@/lib/businessProcesses/projections/domainProjectionRegistry";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { type AdminRouteGateFailure } from "@/lib/admin/adminRouteGate";
@@ -303,6 +307,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                     recordScopeConstraints: scopeBundle.recordScopeConstraints,
                     recordScopeImpossible: scopeBundle.recordScopeImpossible,
                     viewerDisplayTimeZone,
+                    projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(gate.dim) },
                 });
                 if (timing) {
                     const end = performance.now();
@@ -390,6 +395,9 @@ export async function composeProvisioningAnswerForRoute(input: {
         supabase,
         orgId: gate.orgId,
         currentUserId: gate.userId ?? null,
+        // BP V2 S2 — a domain-projection view is read under THIS request's access scope, and only that.
+        projectionScope: domainProjectionScopeFromAccess(gate.dim),
+        loadProjectionCohort: loadDomainProjectionCohort,
         // Child-grain queue rows carry a Person-owned avatar, minted per actor per request and never
         // persisted. Without the actor the rows reach the queue with no image and fall back to
         // initials for children who do have a photo (R-019).

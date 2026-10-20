@@ -70,6 +70,13 @@ export type WorkViewConfigV1Stored = {
     focus_panel_layout_id?: string;
     /** Compatibility-only — maps to synced queue lane for runtime preview until migration. */
     compat_queue_key?: string;
+    /**
+     * BP V2 Slice 2 — the registered domain projection this view reads, on a `domain_projection`
+     * process only (`process_model_v1`). A KEY into a closed code registry, never a query: publication
+     * refuses an unregistered key, and refuses the field on a staged lifecycle.
+     * @see lib/businessProcesses/projections/domainProjectionRegistry.ts
+     */
+    projection_key?: string;
 };
 
 /** Summary label when a Work View includes all eligible process rows (empty `filters_v1`). */
@@ -180,6 +187,7 @@ const WORK_VIEW_OWNED_KEYS = [
     "queue_layout_id",
     "focus_panel_layout_id",
     "compat_queue_key",
+    "projection_key",
 ] as const;
 
 /** Exported for the owned-key completeness test — not part of the runtime contract. */
@@ -202,9 +210,14 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     //     which is how `row_grain_v1` was wiped four times before.
     // Deciding per value satisfies both. `parseStageGrain` is the same acceptance test used below.
     const declaredGrain = parseStageGrain(raw.row_grain_v1);
-    const ownedKeys = declaredGrain
-        ? WORK_VIEW_OWNED_KEYS
-        : WORK_VIEW_OWNED_KEYS.filter((key) => key !== "row_grain_v1");
+    // Same rule for `projection_key`: owned only as a non-empty string, so a malformed value rides the
+    // residue untouched and publication can still name it.
+    const projectionKeyUnderstood = typeof raw.projection_key === "string" && raw.projection_key.trim() !== "";
+    const ownedKeys = WORK_VIEW_OWNED_KEYS.filter(
+        (key) =>
+            (key !== "row_grain_v1" || Boolean(declaredGrain))
+            && (key !== "projection_key" || projectionKeyUnderstood || raw.projection_key === undefined),
+    );
     withUnknownFields(stored, captureUnknownFields(raw, ownedKeys));
     if (typeof raw.mission === "string" && raw.mission.trim()) stored.mission = raw.mission.trim();
     // `match` combinator (V3). Only persist when explicitly `any`; absent/`all` keeps the default AND
@@ -240,6 +253,9 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     }
     if (typeof raw.compat_queue_key === "string" && raw.compat_queue_key.trim()) {
         stored.compat_queue_key = raw.compat_queue_key.trim();
+    }
+    if (typeof raw.projection_key === "string" && raw.projection_key.trim()) {
+        stored.projection_key = raw.projection_key.trim();
     }
     return normalizeCatchAllWorkViewCompatBinding(stored);
 }
