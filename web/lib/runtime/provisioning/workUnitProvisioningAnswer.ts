@@ -597,6 +597,8 @@ export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
               domain: "assignments" | "billing";
               projectionKey: string;
               total: number | null;
+              /** The source facts behind those rows (assignments behind people); null when truncated. */
+              factTotal: number | null;
               truncated: boolean;
           };
           /** ONE bounded page of the cohort, in its canonical order. */
@@ -1448,6 +1450,7 @@ export async function composeWorkUnitProvisioningAnswer(
                 domain: cohort.domain,
                 projectionKey: cohort.projectionKey,
                 total: cohort.total,
+                factTotal: cohort.factTotal,
                 truncated: cohort.truncated,
             },
             rows,

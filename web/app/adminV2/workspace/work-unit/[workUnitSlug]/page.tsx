@@ -98,6 +98,8 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
         cohort,
         aspect,
         deferSettlement: true,
+        // BP V2 S3 — the same selection the client keys its answer on (`workspace_site_id`).
+        workspaceSiteId: one(sp.workspace_site_id),
     }).catch(() => null);
     const composed = route && route.ok ? route.answer : null;
     const settlement = route && route.ok ? (route.settlement ?? null) : null;

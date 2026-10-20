@@ -186,7 +186,9 @@ export async function POST(request: NextRequest) {
             // BP V2 S2 — projection departments count under the caller's ACCESS scope (site
             // restrictions enforced). Not the workspace site filter: the projection's rows are served
             // under the same access scope, and the two must agree.
-            projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(dim) },
+            // BP V2 S3 — and the `/workspace` site selection, which narrows (never widens) it; the
+            // provisioning answer receives the same selection, so rows and counts agree.
+            projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(dim, parsed.selectedSiteId) },
         });
     });
 

@@ -101,6 +101,12 @@ export async function composeProvisioningAnswerForRoute(input: {
      * deliver a SECOND payload may ask for this.
      */
     deferSettlement?: boolean;
+    /**
+     * BP V2 S3 — the `/workspace` site selection the client is showing. Read ONLY for domain-projection
+     * Work Views (rows and their seeded counts); narrows the actor's access scope, never widens it.
+     * Lifecycle (Enrollment) answers ignore it, exactly as before.
+     */
+    workspaceSiteId?: string | null;
 }): Promise<RouteProvisioningResult> {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
@@ -307,7 +313,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                     recordScopeConstraints: scopeBundle.recordScopeConstraints,
                     recordScopeImpossible: scopeBundle.recordScopeImpossible,
                     viewerDisplayTimeZone,
-                    projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(gate.dim) },
+                    projection: { userId: gate.userId, scope: domainProjectionScopeFromAccess(gate.dim, input.workspaceSiteId) },
                 });
                 if (timing) {
                     const end = performance.now();
@@ -396,7 +402,7 @@ export async function composeProvisioningAnswerForRoute(input: {
         orgId: gate.orgId,
         currentUserId: gate.userId ?? null,
         // BP V2 S2 — a domain-projection view is read under THIS request's access scope, and only that.
-        projectionScope: domainProjectionScopeFromAccess(gate.dim),
+        projectionScope: domainProjectionScopeFromAccess(gate.dim, input.workspaceSiteId),
         loadProjectionCohort: loadDomainProjectionCohort,
         // Child-grain queue rows carry a Person-owned avatar, minted per actor per request and never
         // persisted. Without the actor the rows reach the queue with no image and fall back to

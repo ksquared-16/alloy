@@ -10,7 +10,7 @@
 
 import DurableRecordSurface from "@/components/presentation/durableRecord/DurableRecordSurface";
 import { parseDomainProjectionRowId } from "@/lib/businessProcesses/projections/domainProjectionIdentity";
-import { useDomainProjectionFocusFrame } from "./DomainProjectionFocusContext";
+import { preferredDurableContextKey, useDomainProjectionFocusFrame } from "./DomainProjectionFocusContext";
 import {
     createContext,
     useCallback,
@@ -201,6 +201,11 @@ export function FocusPanelSurface({
                         data-projection-process={projectionFrame?.businessProcessKey}
                         data-projection-work-view={projectionFrame?.workViewId}
                         data-durable-subject={durableSubject ? `${durableSubject.type}:${durableSubject.id}` : undefined}
+                        data-projection-source={
+                            projectionFrame?.selectedSource
+                                ? `${projectionFrame.selectedSource.kind}:${projectionFrame.selectedSource.id}`
+                                : undefined
+                        }
                     >
                         {projectionFrame ? (
                             durableSubject ? (
@@ -209,6 +214,7 @@ export function FocusPanelSurface({
                                     subjectType={durableSubject.type}
                                     subjectId={durableSubject.id}
                                     presentation="full"
+                                    contextKey={preferredDurableContextKey(projectionFrame.domain)}
                                 />
                             ) : subjectRefusal ? (
                                 <FocusPanelSubjectRefusal kind={subjectRefusal.kind} message={subjectRefusal.message} />

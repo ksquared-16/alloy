@@ -16,7 +16,21 @@ export type DomainProjectionFocusFrame = {
     workViewId: string;
     domain: "assignments" | "billing";
     projectionKey: string;
+    /**
+     * BP V2 S3 — the selected row's authoritative source (the assignment / agreement / charge that put the
+     * record in this view). Context only: the record that opens is the subject, never this.
+     */
+    selectedSource?: { kind: string; id: string; reason: string | null } | null;
 };
+
+/**
+ * The durable record context a projection's row should open on, when the domain has one. Assignments
+ * rows open on the record's Assignment context (`schedule` — the existing Scheduling card, "Assignments");
+ * other domains open on the record's default context.
+ */
+export function preferredDurableContextKey(domain: DomainProjectionFocusFrame["domain"]): string | null {
+    return domain === "assignments" ? "schedule" : null;
+}
 
 const Ctx = createContext<DomainProjectionFocusFrame | null>(null);
 

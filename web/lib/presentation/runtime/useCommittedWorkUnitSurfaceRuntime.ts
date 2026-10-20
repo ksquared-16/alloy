@@ -713,6 +713,36 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         });
     }, [kernel]);
 
+    /*
+     * BP V2 S3 — A SITE CHANGE RE-PREPARES A PROJECTION VIEW. Its rows are read under the `/workspace`
+     * site selection (the answer is keyed on it) exactly like its counts, so a new selection is a new
+     * answer. Same seam as truth movement: invalidate, then re-commit — at LENS scope, because the record
+     * the operator had open may not be in the new site. Lifecycle answers keep their existing behaviour.
+     */
+    const lastSelectedSiteRef = useRef(selectedSiteId);
+    useEffect(() => {
+        if (lastSelectedSiteRef.current === selectedSiteId) return;
+        lastSelectedSiteRef.current = selectedSiteId;
+        const snapshot = focus.current?.snapshot as { terminal?: string } | undefined;
+        if (snapshot?.terminal !== "projection") return;
+        const current = kernel.attention.get();
+        if (!current) return;
+        clearProvisioningPrefetchCache();
+        kernel.provisioning.invalidateWorkUnit(current);
+        if (current.lens) {
+            kernel.attention.move({ scope: ATTENTION_SCOPE.LENS, lens: current.lens, source: "command" });
+            return;
+        }
+        kernel.attention.move({
+            scope: ATTENTION_SCOPE.SURFACE,
+            target: current.target,
+            lens: null,
+            cohort: current.cohort ?? null,
+            destination: current.destination ?? null,
+            source: "command",
+        });
+    }, [selectedSiteId, focus, kernel]);
+
     useEffect(() => {
         const snapshot = focus.current?.snapshot as { terminal?: string; code?: string } | undefined;
         if (!truthMovedSubjectRef.current || !snapshot) return;

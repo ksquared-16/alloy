@@ -18,10 +18,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { resolveFinancialWorkQueue } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 import { chargeIndexViewOf } from "@/lib/financials/workspace/chargeIndex";
-import type {
-    DomainProjectionContext,
-    DomainProjectionDefinition,
-    DomainProjectionRow,
+import {
+    effectiveProjectionSiteIds,
+    type DomainProjectionContext,
+    type DomainProjectionDefinition,
+    type DomainProjectionRow,
 } from "@/lib/businessProcesses/projections/domainProjectionTypes";
 
 /** The work queue's own maximum for the drafts read. */
@@ -45,13 +46,18 @@ export async function loadChargesNeedingReview(
     });
     if (!verdict.ok) return { ok: false, code: "projection_forbidden", message: verdict.message };
 
+    // BP V2 S3 — the `/workspace` site selection narrows through the Financials reader's own
+    // `activeSiteLocationId`; a selection outside the actor's sites yields nothing, never more.
+    const selected = ctx.scope.selectedSiteId?.trim() || null;
+    if (selected && effectiveProjectionSiteIds(ctx.scope)?.length === 0) return { ok: true, rows: [], truncated: false };
+
     let queue;
     try {
         queue = await (deps.readQueue ?? resolveFinancialWorkQueue)(supabase, {
             orgId: ctx.orgId,
             siteScope: ctx.scope.siteScope,
             allowedSiteLocationIds: ctx.scope.allowedSiteLocationIds,
-            activeSiteLocationId: null,
+            activeSiteLocationId: selected,
             limit: BILLING_DRAFT_READ_LIMIT,
         });
     } catch (e) {
