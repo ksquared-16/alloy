@@ -13,10 +13,19 @@ import type { ReactNode } from "react";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const durableProps: Array<Record<string, unknown>> = [];
 vi.mock("@/components/presentation/durableRecord/DurableRecordSurface", () => ({
-    default: (p: { subjectType: string; subjectId: string; presentation?: string; contextKey?: string | null }) => (
-        <div data-durable-surface={`${p.subjectType}:${p.subjectId}`} data-presentation={p.presentation} data-context-key={p.contextKey ?? ""} />
-    ),
+    default: (p: { subjectType: string; subjectId: string; presentation?: string; contextKey?: string | null; contextSiteId?: string | null }) => {
+        durableProps.push(p as Record<string, unknown>);
+        return (
+            <div
+                data-durable-surface={`${p.subjectType}:${p.subjectId}`}
+                data-presentation={p.presentation}
+                data-context-key={p.contextKey ?? ""}
+                data-context-site={p.contextSiteId ?? ""}
+            />
+        );
+    },
 }));
 vi.mock("@/components/presentation/workUnit/InlineOpportunityFocusPanel", () => ({
     InlineOpportunityFocusPanel: () => <div data-opportunity-panel />,
@@ -58,9 +67,41 @@ describe("Focus Panel on a domain-projection surface", () => {
         expect(el.querySelector("[data-focus-panel-boundary]")?.getAttribute("data-projection-source")).toBe("schedule_assignment:sa-1");
     });
 
+    it("S4: an Assignments row opens the existing record CONTEXTUALLY on its Assignment, at the row's site, with source and reason", () => {
+        durableProps.length = 0;
+        const el = render(
+            surface(`person:${PERSON}`, {
+                ...frame,
+                processLabel: "Assignments",
+                workViewLabel: "Ending soon",
+                selectedSource: { kind: "schedule_assignment", id: "sa-1", reason: "Ends Oct 29 · in 9 days", siteLocationId: "site-r" },
+            }),
+        );
+        const node = el.querySelector("[data-durable-surface]")!;
+        expect(node.getAttribute("data-presentation")).toBe("contextual");
+        expect(node.getAttribute("data-context-key")).toBe("schedule");
+        expect(node.getAttribute("data-context-site")).toBe("site-r");
+        const props = durableProps.at(-1)!;
+        expect(props.focusSource).toEqual({ kind: "schedule_assignment", id: "sa-1", reason: "Ends Oct 29 · in 9 days" });
+        expect(props.origin).toEqual({ label: "Assignments · Ending soon", reason: "Ends Oct 29 · in 9 days" });
+    });
+
+    it("S4: a confirmed record change refreshes the Work View through the existing convergence event", () => {
+        durableProps.length = 0;
+        render(surface(`child:${PERSON}`, { ...frame, selectedSource: { kind: "schedule_assignment", id: "sa-1", reason: null } }));
+        const seen: unknown[] = [];
+        const listener = (e: Event) => seen.push((e as CustomEvent).detail);
+        window.addEventListener("adminv2:opportunity-updated", listener);
+        (durableProps.at(-1)!.onRecordChanged as () => void)();
+        window.removeEventListener("adminv2:opportunity-updated", listener);
+        // No opportunity id: the existing policy refetches rows AND counts for every Work Unit listener.
+        expect(seen).toEqual([{ action_key: "domain_projection_record_changed" }]);
+    });
+
     it("S3: a Billing row opens the household on its default context", () => {
         const el = render(surface(`household:${PERSON}`, { ...frame, domain: "billing", projectionKey: "charges_needing_review" }));
         expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-context-key")).toBe("");
+        expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-presentation")).toBe("full");
     });
 
     it("opens the durable person record with the originating process and view on the boundary", () => {
