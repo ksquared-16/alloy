@@ -754,6 +754,11 @@ export async function POST(request: NextRequest) {
                 opportunityId: String(body.opportunity_id ?? "").trim() || null,
                 patch: {
                     schedule_type: scheduleType,
+                    // The program the editor shows — the room's, when the room implies one. Written so
+                    // the saved proposal prices exactly as the editor's draft tuition did.
+                    ...(String(body.program_category_id ?? "").trim()
+                        ? { program_category_id: String(body.program_category_id).trim() }
+                        : {}),
                     program_room_cohort_key: String(body.room_location_id ?? "").trim() || null,
                     start_date: String(body.start_date ?? "").trim() || null,
                     end_date: String(body.end_date ?? "").trim() || null,

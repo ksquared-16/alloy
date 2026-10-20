@@ -79,8 +79,9 @@ export type AssignmentTuitionView = {
      */
     additional: TuitionOptionView[];
     /**
-     * True when this view was resolved against an UNSAVED room's program (`draftProgramKey`). A
-     * draft view is for display; a commit re-reads the saved assignment and re-resolves.
+     * True when this view was resolved against the editor's UNSAVED choices (`draftFacts`): the
+     * room's program, the selected days, the schedule type, the start date. A draft view is for
+     * display; Save writes the same facts and the commit re-reads and re-resolves them.
      */
     draft: boolean;
     /** Why the others did not, told apart by reason. */
@@ -123,6 +124,31 @@ function toOptionView(o: ApplicableOption): TuitionOptionView {
  *   catalog is the same for all of them, and reading it per child would make the config version vary
  *   across a single answer.
  */
+/**
+ * The Assignment editor's UNSAVED choices, in pricing-fact terms. Each present field replaces the
+ * saved fact; an absent one keeps it. Every field is something the editor's Save writes, so the
+ * saved assignment resolves to the same facts — and the same rates — once saved.
+ */
+export type AssignmentDraftFacts = {
+    programKey?: string | null;
+    attendanceType?: string | null;
+    daysPerWeek?: number | null;
+    asOf?: string | null;
+    locationId?: string | null;
+};
+
+/** Pure: the saved facts with the editor's unsaved choices applied. */
+export function applyDraftFacts(saved: AssignmentPricingFacts, draft: AssignmentDraftFacts | null): AssignmentPricingFacts {
+    if (!draft) return saved;
+    const next = { ...saved };
+    if (draft.programKey !== undefined && draft.programKey) next.programKey = draft.programKey;
+    if (draft.attendanceType !== undefined && draft.attendanceType) next.attendanceType = draft.attendanceType;
+    if (draft.daysPerWeek !== undefined && draft.daysPerWeek != null && draft.daysPerWeek > 0) next.daysPerWeek = draft.daysPerWeek;
+    if (draft.asOf !== undefined && draft.asOf && /^\d{4}-\d{2}-\d{2}$/.test(draft.asOf)) next.asOf = draft.asOf;
+    if (draft.locationId !== undefined && draft.locationId) next.locationId = draft.locationId;
+    return next;
+}
+
 export async function buildAssignmentTuitionView(
     supabase: SupabaseClient,
     args: {
@@ -132,8 +158,8 @@ export async function buildAssignmentTuitionView(
         cadenceKey?: string | null;
         asOf?: string | null;
         exported?: CommercialExport;
-        /** Resolve as if the assignment were in this program (an unsaved room choice). */
-        draftProgramKey?: string | null;
+        /** Resolve against the editor's unsaved choices instead of the saved ones (display only). */
+        draftFacts?: AssignmentDraftFacts | null;
     },
 ): Promise<AssignmentTuitionView | null> {
     const read = await readAssignmentPricingFacts(supabase, {
@@ -168,9 +194,8 @@ export async function buildAssignmentTuitionView(
     const exported =
         args.exported
         ?? (await composeCommercialExport({ supabase, orgId: args.orgId, asOf: read.facts.asOf })).export;
-    const draftProgramKey = (args.draftProgramKey ?? "").trim() || null;
-    const draft = draftProgramKey != null && draftProgramKey !== read.facts.programKey;
-    const facts: AssignmentPricingFacts = draft ? { ...read.facts, programKey: draftProgramKey } : read.facts;
+    const facts = applyDraftFacts(read.facts, args.draftFacts ?? null);
+    const draft = JSON.stringify(facts) !== JSON.stringify(read.facts);
     const resolution = resolveAssignmentPricingOptions(exported, facts);
 
     const accepted = (
@@ -221,8 +246,8 @@ export async function buildOpportunityTuitionViews(
         orgId: string;
         opportunityId: string;
         asOf?: string | null;
-        /** An unsaved room choice for ONE child: resolve that child's view in this program. */
-        draft?: { customerMemberId: string; programKey: string } | null;
+        /** The editor's unsaved choices for ONE child: resolve that child's view against them. */
+        draft?: { customerMemberId: string; facts: AssignmentDraftFacts } | null;
     },
 ): Promise<AssignmentTuitionView[]> {
     /*
@@ -270,9 +295,9 @@ export async function buildOpportunityTuitionViews(
             childLabel,
             asOf: args.asOf ?? null,
             exported,
-            draftProgramKey:
+            draftFacts:
                 args.draft && String(row.customer_member_id) === args.draft.customerMemberId
-                    ? args.draft.programKey
+                    ? args.draft.facts
                     : null,
         });
         if (view) views.push(view);

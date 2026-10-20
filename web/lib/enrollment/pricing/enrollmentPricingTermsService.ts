@@ -495,6 +495,8 @@ export type AcceptedPricingTerm = {
     resolutionKey: string;
     acceptedBy: string | null;
     acceptedAt: string;
+    /** True when the operator replaced the rate's catalog amount with their own (an override). */
+    customAmount: boolean;
 };
 
 function toAcceptedTerm(row: EnrollmentPricingTermRow): AcceptedPricingTerm {
@@ -522,6 +524,7 @@ function toAcceptedTerm(row: EnrollmentPricingTermRow): AcceptedPricingTerm {
         resolutionKey: row.resolution_key,
         acceptedBy: row.accepted_by,
         acceptedAt: row.accepted_at,
+        customAmount: (row.resolved_facts as Record<string, unknown> | null)?.custom_amount === true,
     };
 }
 

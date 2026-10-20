@@ -180,20 +180,36 @@ export function resolveAssignmentPricingOptions(
     const rejected: RejectedOption[] = [];
 
     // ── The facts have to be there ───────────────────────────────────────────────────────────
-    // An absent program or schedule is not "no rate", it is "we have not been told enough", and
-    // saying so is the difference between a configuration gap and an operator's missing step.
-    if (!facts.programKey || !facts.attendanceType) {
+    // An absent program is not "no rate", it is "we have not been told enough", and saying so is
+    // the difference between a configuration gap and an operator's missing step.
+    if (!facts.programKey) {
         return { kind: "no_match", reason: "missing_required_input", rejected, ...base };
     }
 
     // ── The offerings this assignment could be priced under ──────────────────────────────────
-    const offerings = exp.offerings.filter(
-        (o) =>
-            o.isActive &&
-            o.programKey === facts.programKey &&
-            o.attendanceType === facts.attendanceType &&
-            isEffective(o.effective, facts.asOf),
+    const programOfferings = exp.offerings.filter(
+        (o) => o.isActive && o.programKey === facts.programKey && isEffective(o.effective, facts.asOf),
     );
+    /*
+     * ATTENDANCE NARROWS ONLY IN ITS OWN VOCABULARY.
+     *
+     * Offerings are authored by attendance type — Programs' fixed vocabulary (`full_time`,
+     * `part_time`, `before_school`…). The assignment carries a SCHEDULE type, the organisation's
+     * own keys (`full_day`, `weekly`…). Nothing configures a relation between the two, so requiring
+     * them to be equal priced an assignment only when the two vocabularies happened to share a
+     * spelling — measured on staging, never: every schedule type is `full_day`/`weekly`, every
+     * offering `full_time`/`part_time`/…, and every assignment read "No rate matches".
+     *
+     * So a schedule type that IS one of this program's attendance types narrows exactly as before;
+     * one that is not says nothing about attendance, and the program's offerings all stay in play.
+     * Days a week and the site still narrow, and whatever remains equal is returned as a TIE for the
+     * operator to settle — never an arbitrary pick.
+     */
+    const attendanceVocabulary = new Set(programOfferings.map((o) => o.attendanceType));
+    const narrowsByAttendance = Boolean(facts.attendanceType) && attendanceVocabulary.has(facts.attendanceType!);
+    const offerings = narrowsByAttendance
+        ? programOfferings.filter((o) => o.attendanceType === facts.attendanceType)
+        : programOfferings;
     if (offerings.length === 0) {
         return { kind: "no_match", reason: "not_offered_at_scope", rejected, ...base };
     }
@@ -288,7 +304,9 @@ export function resolveAssignmentPricingOptions(
             scope: isLocation ? "location" : "org_default",
             matched: [
                 `Program · ${offering.label}`,
-                `Attendance · ${offering.attendanceType}`,
+                narrowsByAttendance
+                    ? `Attendance · ${offering.attendanceType}`
+                    : `Attendance · ${offering.attendanceType} (the schedule does not name one)`,
                 days != null ? `Schedule · ${days} days a week` : `Schedule · any`,
                 `Billed · ${rate.cadenceKey}`,
                 isLocation ? "Site rate" : "Organisation default",
@@ -319,14 +337,18 @@ export function resolveAssignmentPricingOptions(
         }
     }
 
-    // ── Narrow: within a cadence, a later effective start supersedes an earlier one ──────────
+    // ── Narrow: within an offering and cadence, a later effective start supersedes an earlier one
     // Done per cadence, because two cadences are two different offers rather than two versions of
     // one — collapsing them by date would silently answer a question the operator has not been asked.
+    // And per OFFERING for the same reason: when attendance does not narrow, full-time and part-time
+    // are two offers, and a later-dated part-time rate must not silently supersede full-time. With a
+    // single offering in play (attendance narrowed, or only one offered) this is exactly per cadence.
     const byCadence = new Map<string, ApplicableOption[]>();
     for (const o of field) {
-        const list = byCadence.get(o.cadenceKey) ?? [];
+        const key = `${o.offeringId}|${o.cadenceKey}`;
+        const list = byCadence.get(key) ?? [];
         list.push(o);
-        byCadence.set(o.cadenceKey, list);
+        byCadence.set(key, list);
     }
     const survivors: ApplicableOption[] = [];
     for (const [, list] of byCadence) {

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { buildOpportunityTuitionViews } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import {
+    buildOpportunityTuitionViews,
+    type AssignmentDraftFacts,
+} from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -49,23 +52,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     /*
-     * A DRAFT ROOM CHOICE. The Assignments card asks "what would tuition be in the room I just
-     * picked?" before saving. The room's Program arrives as a category id and resolves to its key
-     * here; the one named child's view is resolved in that program and marked `draft`. Nothing is
-     * written, and a commit still re-reads the saved assignment.
+     * THE EDITOR'S UNSAVED CHOICES. The Assignments card asks "what would tuition be for the room,
+     * days, schedule and start I have chosen?" before saving. The room's Program arrives as a
+     * category id and resolves to its key here; the named child's view is resolved against these
+     * facts by the canonical resolver and marked `draft`. Nothing is written; Save writes the same
+     * facts and the commit re-reads and re-resolves them.
      */
-    const draftMemberId = request.nextUrl.searchParams.get("draft_customer_member_id")?.trim() || null;
-    const draftProgramCategoryId = request.nextUrl.searchParams.get("draft_program_category_id")?.trim() || null;
-    let draft: { customerMemberId: string; programKey: string } | null = null;
-    if (draftMemberId && draftProgramCategoryId) {
-        const { data: category } = await supabase
-            .from("location_program_categories")
-            .select("key")
-            .eq("id", draftProgramCategoryId)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-        const key = typeof category?.key === "string" ? category.key.trim() : "";
-        if (key) draft = { customerMemberId: draftMemberId, programKey: key };
+    const q = request.nextUrl.searchParams;
+    const draftMemberId = q.get("draft_customer_member_id")?.trim() || null;
+    const draftProgramCategoryId = q.get("draft_program_category_id")?.trim() || null;
+    const draftDaysRaw = q.get("draft_days_per_week")?.trim() || "";
+    const draftDays = draftDaysRaw ? Number(draftDaysRaw) : null;
+    let draft: { customerMemberId: string; facts: AssignmentDraftFacts } | null = null;
+    if (draftMemberId) {
+        let programKey: string | null = null;
+        if (draftProgramCategoryId) {
+            const { data: category } = await supabase
+                .from("location_program_categories")
+                .select("key")
+                .eq("id", draftProgramCategoryId)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            programKey = typeof category?.key === "string" ? category.key.trim() || null : null;
+        }
+        draft = {
+            customerMemberId: draftMemberId,
+            facts: {
+                programKey,
+                attendanceType: q.get("draft_schedule_type")?.trim() || null,
+                daysPerWeek: draftDays != null && Number.isInteger(draftDays) && draftDays > 0 && draftDays <= 7 ? draftDays : null,
+                asOf: q.get("draft_start_date")?.trim() || null,
+                locationId: q.get("draft_location_id")?.trim() || null,
+            },
+        };
     }
 
     const views = await buildOpportunityTuitionViews(supabase, {

@@ -39,6 +39,7 @@ function term(over: Partial<AcceptedPricingTerm> = {}): AcceptedPricingTerm {
         resolutionKey: "res-1",
         acceptedBy: "user-1",
         acceptedAt: "2026-01-01T00:00:00.000Z",
+        customAmount: false,
         ...over,
     };
 }

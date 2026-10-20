@@ -1,0 +1,391 @@
+{
+ "source": "staging (alloy_deployed_primary) census gar_05cd2b220ea83d, 2026-10-20 \u2014 toddler + preschool offerings, variants, rates",
+ "offerings": [
+  {
+   "id": "85103d9c-0d94-4616-ace0-a817f83799f4",
+   "program_key": "toddler",
+   "attendance_type": "full_time",
+   "status": "active",
+   "is_active": true,
+   "effective_start": null,
+   "effective_end": null,
+   "variants": [
+    {
+     "id": "492ee88e-9fc3-4eb3-a01a-3aa6012b3d7c",
+     "label": "1 day/week",
+     "quantity_type": "days",
+     "quantity_value": 1,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "94a45def-9550-49ce-8982-715d4e05859b",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 47500,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "7c0efd27-9f40-4e59-88ba-394e313a1475",
+     "label": "2 days/week",
+     "quantity_type": "days",
+     "quantity_value": 2,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "386bef8a-cce8-4eee-8c95-b0287efc3ea8",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 87500,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "a025201c-4ece-4350-ab37-4e27bfeeee6b",
+     "label": "3 days/week",
+     "quantity_type": "days",
+     "quantity_value": 3,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "8ecdd655-40d9-4879-b5d6-b1c9a7983dea",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 120000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "3db29534-a4bf-49c3-9e8a-91a71045918d",
+     "label": "4 days/week",
+     "quantity_type": "days",
+     "quantity_value": 4,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "77eac724-9d18-49f3-9e29-2a740d29f891",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 150000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "dc6cd283-e61c-47da-93aa-8d1a2385d580",
+     "label": "5 days/week",
+     "quantity_type": "days",
+     "quantity_value": 5,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "44cd16df-da2c-4409-bdcb-e7a6a5942192",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 170000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "f7cf7d6c-2dee-4f2a-a745-1844424050e1",
+   "program_key": "preschool",
+   "attendance_type": "full_time",
+   "status": "active",
+   "is_active": true,
+   "effective_start": null,
+   "effective_end": null,
+   "variants": [
+    {
+     "id": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+     "label": null,
+     "quantity_type": null,
+     "quantity_value": null,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 145000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-01",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "179cb544-e708-4ec1-9a46-c58ab8985e6f",
+     "label": "1 day/week",
+     "quantity_type": "days",
+     "quantity_value": 1,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 42500,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "8a72585c-3791-4ea6-b2fe-88678542b1f4",
+     "label": "2 days/week",
+     "quantity_type": "days",
+     "quantity_value": 2,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "1dccf3cc-4a48-4b9e-b0d8-4c510a3cda19",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 77500,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "b57c8814-9b06-41d7-8142-0f7f6770dca3",
+     "label": "3 days/week",
+     "quantity_type": "days",
+     "quantity_value": 3,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "caa94f66-d045-4ff3-985e-e467af914544",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 107500,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "249e1117-e804-4240-abb6-59df29dfc911",
+     "label": "4 days/week",
+     "quantity_type": "days",
+     "quantity_value": 4,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "541f17f7-5c96-4de9-bd7f-1b641aeab99f",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 135000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "edaf474e-2646-4e6a-8cb4-389e964cafb3",
+     "label": "5 days/week",
+     "quantity_type": "days",
+     "quantity_value": 5,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "507e1346-6053-4c10-933e-a442e2fd97ba",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 155000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-07-28",
+       "effective_end": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d3292522-6ba4-4648-bccc-2580c559172d",
+   "program_key": "toddler",
+   "attendance_type": "part_time",
+   "status": "active",
+   "is_active": true,
+   "effective_start": null,
+   "effective_end": null,
+   "variants": [
+    {
+     "id": "47d1558b-e032-44bc-a1fe-54a881c4b45d",
+     "label": null,
+     "quantity_type": null,
+     "quantity_value": null,
+     "status": "active",
+     "is_active": true,
+     "rates": null
+    },
+    {
+     "id": "736492dc-74cd-42f9-a6a6-abdc7095fce1",
+     "label": "1 day/week",
+     "quantity_type": "days",
+     "quantity_value": 1,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "ee462833-907c-453b-9f3d-fcd95646ba18",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 75000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-10-20",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "06fd8106-32e8-44fa-ab21-9ded28baab38",
+     "label": "2 days/week",
+     "quantity_type": "days",
+     "quantity_value": 2,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "347d6e79-94eb-45fb-9119-b2f31d5811cd",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 85000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-10-20",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "a6fed17f-ff28-4e2c-be31-cf6554567cd4",
+     "label": "3 days/week",
+     "quantity_type": "days",
+     "quantity_value": 3,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "88e0fab9-2081-44cb-8db2-cdac61c24838",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 95000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-10-20",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "61c2281c-d0ff-419c-9a72-f354a9f3f1d6",
+     "label": "4 days/week",
+     "quantity_type": "days",
+     "quantity_value": 4,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "87213cd9-09fe-4f68-b737-e0bdf3d8b751",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 105000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-10-20",
+       "effective_end": null
+      }
+     ]
+    },
+    {
+     "id": "4bddc651-5b65-4ae5-a279-ac996bb59826",
+     "label": "5 days/week",
+     "quantity_type": "days",
+     "quantity_value": 5,
+     "status": "active",
+     "is_active": true,
+     "rates": [
+      {
+       "id": "b44b7687-fa11-45b2-ab15-007351d44f07",
+       "cadence_key": "monthly",
+       "payer_type": "private_pay",
+       "location_id": null,
+       "rate_cents": 120000,
+       "not_offered": false,
+       "is_active": true,
+       "effective_start": "2026-10-20",
+       "effective_end": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "schedule_pattern_types": [
+  "{\"schedule_type_key\" : \"full_day\", \"days\" : 5}",
+  "{\"schedule_type_key\" : \"weekly\", \"days\" : 1}",
+  "{\"schedule_type_key\" : \"weekly\", \"days\" : 2}",
+  "{\"schedule_type_key\" : \"weekly\", \"days\" : 3}",
+  "{\"schedule_type_key\" : \"weekly\", \"days\" : 5}"
+ ],
+ "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+}
