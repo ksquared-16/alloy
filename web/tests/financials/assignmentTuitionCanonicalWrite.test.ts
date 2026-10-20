@@ -180,13 +180,10 @@ describe("every applicable rate is listed, the recommendation first and preselec
         expect(card).toContain("tuitionChoicesFor(displayView, showAdditionalRates)");
     });
 
-    it("an ambiguous resolution names the tie instead of a recommendation", () => {
-        /*
-         * `kind: "ambiguous"` is the configuration declining to say which applies; with no
-         * recommended id, no option is labelled Recommended.
-         */
-        expect(card).toContain('data-assignment-tuition-ambiguous="true"');
-        expect(card).toContain("configured options apply equally");
+    it("a tie is an ordinary choice — listed, nothing preselected, no warning", () => {
+        // Equally eligible rates are valid choices, not an error state: no red tie banner.
+        expect(card).not.toContain('data-assignment-tuition-ambiguous="true"');
+        expect(card).not.toContain("configured options apply equally");
     });
 
     it("accepting the recommendation needs no expansion", () => {
