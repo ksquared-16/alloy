@@ -20,6 +20,7 @@
  * reason; nothing here narrows it.
  */
 
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
@@ -139,16 +140,39 @@ export default function FinancialsAccountDetail({
      * workspace says it means.
      */
     useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
+        /*
+         * AN OPEN MENU OWNS THIS ESCAPE. Measured on deployed 3416e395: Escape on the open "What
+         * needs to change" list inside Adjust closed the whole command — this capture listener ran
+         * first, dismissed a level and stopped the key before the list ever saw it. Now the key is
+         * left for the menu (recorded here, in capture, while the menu still exists), and stopped
+         * in the bubble phase so it cannot travel on to the workspace shell, which would close the
+         * Financials drawer — the same two-phase guard the Charges dialogs use (W7-F021).
+         */
+        let menuWasOpen = false;
+        const onCapture = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
+            menuWasOpen = false;
             const open = hostRef.current?.querySelector("[data-financials-overlay]");
             if (!open) return;
+            if (hasInnerDismissibleLayer(document)) {
+                menuWasOpen = true;
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             dismiss();
         };
-        document.addEventListener("keydown", onKey, { capture: true });
-        return () => document.removeEventListener("keydown", onKey, { capture: true });
+        const onBubble = (e: KeyboardEvent) => {
+            if (e.key !== "Escape" || !menuWasOpen) return;
+            menuWasOpen = false;
+            e.stopPropagation();
+        };
+        document.addEventListener("keydown", onCapture, { capture: true });
+        document.addEventListener("keydown", onBubble);
+        return () => {
+            document.removeEventListener("keydown", onCapture, { capture: true });
+            document.removeEventListener("keydown", onBubble);
+        };
     }, [dismiss]);
 
     return (

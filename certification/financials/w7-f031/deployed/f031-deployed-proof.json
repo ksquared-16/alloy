@@ -1,0 +1,309 @@
+{
+ "build": "3416e395228738d9f67b525eb38b57a04449248e",
+ "accounts_alvarez": {
+  "summary": {
+   "stats": [
+    {
+     "label": "Due now",
+     "value": "$40.00",
+     "note": "$40.00 past due"
+    },
+    {
+     "label": "Balance · October 2026",
+     "value": "$98.00",
+     "note": "$248.00 charged · $150.00 paid"
+    },
+    {
+     "label": "Scheduled",
+     "value": "$40.00",
+     "note": "activates with its period"
+    }
+   ],
+   "context": [
+    "$118.00 not yet due · next Oct 22, 2026"
+   ],
+   "pastDueMentions": 1,
+   "head": "ActionsDateTypeChildGL accountAmountStatusPartyDescription"
+  },
+  "payments": [
+   {
+    "cells": [
+     "Sep 25, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$10.00",
+     "Received",
+     "Corinne Vasquez",
+     "Cash"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 25, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$10.00",
+     "Received",
+     "Dana Alvarez",
+     "Cash"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 25, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$37.50",
+     "Received",
+     "Rosa Alvarez",
+     "Cash"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 25, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$37.50",
+     "Received",
+     "Dana Alvarez",
+     "Cash"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   }
+  ]
+ },
+ "accounts_certhouse": {
+  "summary": {
+   "stats": [
+    {
+     "label": "Due now",
+     "value": "$2,005.00",
+     "note": "$2,005.00 past due"
+    },
+    {
+     "label": "Balance · October 2026",
+     "value": "$2,081.00",
+     "note": "$2,121.00 charged · $40.00 paid"
+    },
+    {
+     "label": "Scheduled",
+     "value": "$2,440.00",
+     "note": "activates with its period"
+    }
+   ],
+   "context": [
+    "$225.00 not yet due · next Oct 31, 2026",
+    "$125.00 prepaid available"
+   ],
+   "pastDueMentions": 1,
+   "head": "ActionsDateTypeChildGL accountAmountStatusPartyDescription"
+  },
+  "payments": [
+   {
+    "cells": [
+     "Oct 6, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$75.00",
+     "Received",
+     "Certt Certhouse",
+     "Visa •••• 4242"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Oct 5, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$18.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 30, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$1,305.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 29, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$18.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   }
+  ]
+ },
+ "accounts_reallocation": {
+  "paymentDetail": "PAYMENT DETAILS | RECEIVED | Oct 6, 2026 | PAYER | Certhouse Family | $75.00 | Received · Card | $75.00 applied | Refund | APPLIED TO | Fee | $75.00 | Applied Oct 6, 2026 | Reallocate | Close",
+  "layer": {
+   "text": "REALLOCATE PAYMENT | PAYMENT | $75.00 · Certt Certhouse · Visa •••• 4242 | CURRENTLY APPLIED TO | Fee · $75.00 | The payment and its payer stay the same. Its application to the current charge is reversed, then applied to the charge you choose. If the second step is refused, the money stays on the account as unapplied and nothing is lost. | Reallocate to | Choose a charge… | ▾ | Reason | Preview | Confirm | Cancel",
+   "modal": "dialog",
+   "inlineFloorPanel": false
+  },
+  "preview": "Unapply $75.00 from this charge\n$75.00 stops being applied, and the charge owes it again.\n$75.00 becomes unapplied on the payment, ready to apply elsewhere.\nThe payment itself is unchanged — same payer, same method, same date, no refund.",
+  "afterEscape": {
+   "layer": false,
+   "paymentDetail": true,
+   "details": true
+  },
+  "afterOutsideClick": {
+   "layer": false,
+   "details": true
+  }
+ },
+ "focus": {
+  "summary": {
+   "stats": [
+    {
+     "label": "Due now",
+     "value": "$2,005.00",
+     "note": "$2,005.00 past due"
+    },
+    {
+     "label": "Balance · October 2026",
+     "value": "$2,081.00",
+     "note": "$2,121.00 charged · $40.00 paid"
+    },
+    {
+     "label": "Scheduled",
+     "value": "$2,440.00",
+     "note": "activates with its period"
+    }
+   ],
+   "context": [
+    "$225.00 not yet due · next Oct 31, 2026",
+    "$125.00 prepaid available"
+   ],
+   "pastDueMentions": 1,
+   "head": "ActionsDateTypeChildGL accountAmountStatusPartyDescription"
+  },
+  "payments": [
+   {
+    "cells": [
+     "Oct 6, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$75.00",
+     "Received",
+     "Certt Certhouse",
+     "Visa •••• 4242"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Oct 5, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$18.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 30, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$1,305.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   },
+   {
+    "cells": [
+     "Sep 29, 2026",
+     "Payment",
+     "—",
+     "Unmapped",
+     "−$18.00",
+     "Received",
+     "—",
+     "Card"
+    ],
+    "subLine": false,
+    "rowIcons": 0,
+    "partyState": "party"
+   }
+  ]
+ },
+ "focus_reallocation": {
+  "paymentDetail": "PAYMENT DETAILS | RECEIVED | Oct 6, 2026 | PAYER | Certhouse Family | $75.00 | Received · Card | $75.00 applied | Refund | APPLIED TO | Fee | $75.00 | Applied Oct 6, 2026 | Reallocate | Close",
+  "layer": {
+   "text": "REALLOCATE PAYMENT | PAYMENT | $75.00 · Certt Certhouse · Visa •••• 4242 | CURRENTLY APPLIED TO | Fee · $75.00 | The payment and its payer stay the same. Its application to the current charge is reversed, then applied to the charge you choose. If the second step is refused, the money stays on the account as unapplied and nothing is lost. | Reallocate to | Choose a charge… | ▾ | Reason | Preview | Confirm | Cancel",
+   "modal": "dialog",
+   "inlineFloorPanel": false
+  },
+  "preview": "Unapply $75.00 from this charge\n$75.00 stops being applied, and the charge owes it again.\n$75.00 becomes unapplied on the payment, ready to apply elsewhere.\nThe payment itself is unchanged — same payer, same method, same date, no refund.",
+  "afterEscape": {
+   "layer": false,
+   "paymentDetail": true,
+   "details": false
+  },
+  "afterOutsideClick": {
+   "layer": false,
+   "details": false
+  }
+ },
+ "writes": [
+  "payment.reverse_application:preview",
+  "payment.reverse_application:preview"
+ ]
+}

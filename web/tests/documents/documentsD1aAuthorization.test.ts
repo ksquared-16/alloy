@@ -549,6 +549,80 @@ describe("POST /api/admin/documents/upload — documents.write, Processing autho
     });
 });
 
+// ── 5b. Upload size — the APPLICATION boundary ─────────────────────────────────────────────────
+//
+// Hosted, the Vercel request-body limit (~4.5 MB) answers 413 long before this route runs, so a
+// hosted 413 proves nothing about the application check. This exercises the route's own validation
+// at the exact boundary, and proves a rejection persists nothing: no stored object, no document row,
+// no workflow event. Recorded as APP_BOUNDARY_CERTIFIED / HOSTED_TRANSPORT_LIMITED.
+
+describe("upload size — application boundary (10 MB), rejection before persistence", () => {
+    const at = (n: number) => new Blob([new Uint8Array(n)], { type: "text/plain" });
+    const target = { entity_type: "customer", entity_id: CUSTOMER };
+    const persisted = () => ({
+        uploads: db.uploadCalls.length,
+        documents: db.rows("documents").length,
+        events: db.rows("workflow_events").length,
+    });
+
+    it("the limit is exactly 10 MiB", () => {
+        expect(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES).toBe(10 * 1024 * 1024);
+    });
+
+    it("accepts one byte under the limit and stores it", async () => {
+        as(P.admin);
+        const before = persisted();
+        const res = await upload(target, at(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES - 1));
+        expect(res.status).toBe(200);
+        expect(db.uploadCalls.at(-1)?.bytes).toBe(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES - 1);
+        expect(persisted().documents).toBe(before.documents + 1);
+    });
+
+    it("accepts exactly the limit", async () => {
+        as(P.admin);
+        const res = await upload(target, at(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES));
+        expect(res.status).toBe(200);
+        expect(db.uploadCalls.at(-1)?.bytes).toBe(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES);
+    });
+
+    it("refuses one byte over the limit with 413 and persists nothing", async () => {
+        as(P.admin);
+        const before = persisted();
+        const res = await upload(target, at(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 1));
+        expect(res.status).toBe(413);
+        expect(res.body).toMatchObject({ code: "FILE_TOO_LARGE", max_bytes: ADMIN_DOCUMENT_UPLOAD_MAX_BYTES });
+        expect(persisted()).toEqual(before);
+    });
+
+    it("refuses a body whose declared length cannot fit, before parsing it", async () => {
+        as(P.admin);
+        const before = persisted();
+        const form = new FormData();
+        form.set("file", new File([at(16)], "small.txt", { type: "text/plain" }));
+        form.set("entity_type", "customer");
+        form.set("entity_id", CUSTOMER);
+        const req = new NextRequest("http://localhost:3012/api/admin/documents/upload", { method: "POST", body: form });
+        const formDataSpy = vi.spyOn(req, "formData");
+        const declared = new NextRequest(req, {
+            headers: { ...Object.fromEntries(req.headers), "content-length": String(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 128 * 1024) },
+        });
+        const parseSpy = vi.spyOn(declared, "formData");
+        const res = await invokeRoute(uploadPOST, declared);
+        expect(res.status).toBe(413);
+        expect(parseSpy).not.toHaveBeenCalled();
+        expect(formDataSpy).not.toHaveBeenCalled();
+        expect(persisted()).toEqual(before);
+    });
+
+    it("an unauthorized oversize upload is refused for authority first, still persisting nothing", async () => {
+        as(P.readOnly);
+        const before = persisted();
+        const res = await upload(target, at(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 1));
+        expect(res.status).toBe(403);
+        expect(persisted()).toEqual(before);
+    });
+});
+
 // ── 6. Status PATCH ───────────────────────────────────────────────────────────────────────────
 
 describe("PATCH /api/admin/documents/[id] — documents.write and scope", () => {

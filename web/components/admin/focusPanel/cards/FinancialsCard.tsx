@@ -5239,7 +5239,8 @@ export default function FinancialsCard({
                                 <span className="mb-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3" data-financials-payment-detail-facts="true">
                                     {[
                                         { label: receipt.direction === "outbound" ? "Sent" : "Received", value: receipt.receivedAt ? formatDisplayDate(receipt.receivedAt) || "—" : "—", testId: "received" },
-                                        { label: "Payer", value: receipt.payerLabel ?? "Not named", testId: "payer" },
+                                        /* W7-F032: the payment's own payer — the same rule as the row's Party — the household only when none is named. */
+                                        { label: "Payer", value: receipt.payerName ?? receipt.payerLabel ?? "Not named", testId: "payer" },
                                         ...(receipt.reference ? [{ label: "Reference", value: receipt.reference, testId: "reference" }] : []),
                                     ].map((f) => (
                                         <span key={f.testId} className="flex min-w-0 flex-col" data-financials-payment-detail-line={f.testId}>
