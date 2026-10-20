@@ -14,6 +14,7 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { exitUnlessLocalCertificationTarget } from "./lib/localCertificationTarget";
 import { resolve } from "path";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -28,6 +29,9 @@ import {
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
+
+// Local-only fixture: refuse any database not on this machine before a client exists (Q1.0).
+exitUnlessLocalCertificationTarget("enrollment_certification");
 
 type Supabase = ReturnType<typeof createAdminClient>;
 
