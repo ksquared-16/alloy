@@ -30,7 +30,7 @@ sa as (
 ),
 orgs as (select distinct org_id from ocm),
 pi as (
-    select p.id, p.process_key, p.context_id, p.status, p.metadata
+    select p.id, p.process_key, p.context_id, p.state, p.metadata
     from public.process_instances p
     join m on m.id = p.subject_id and m.org_id = p.org_id
 )
@@ -40,7 +40,7 @@ select
     json_build_object(
         'members', (select count(*) from m),
         'process_instances', (select json_agg(json_build_object(
-            'id', pi.id, 'process_key', pi.process_key, 'status', pi.status,
+            'id', pi.id, 'process_key', pi.process_key, 'state', pi.state,
             'program_category_id', pi.metadata -> 'program_category_id',
             'program_key', (select l.key from public.location_program_categories l where l.id::text = pi.metadata ->> 'program_category_id'),
             'room', pi.metadata -> 'program_room_cohort_key', 'room_location_id', pi.metadata -> 'room_location_id',
