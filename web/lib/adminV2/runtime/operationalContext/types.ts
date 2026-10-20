@@ -45,6 +45,12 @@ export type OperationalBusinessProcess = {
     /** Current builder stage key, when known. */
     stageKey: string | null;
     /**
+     * Stage keys this record's journey ACTUALLY entered (`process_instances.metadata.stage_path_v1`).
+     * Present only for a child journey whose path was recorded; absent means "unknown", never
+     * "traversed". The stepper marks a child-track stage complete only when it is in this set.
+     */
+    traversedStageKeys?: string[];
+    /**
      * THE CONFIGURED STAGE SET, in configured order — the department lifecycle's own answer to
      * "what are the stages of this process", carried so a card can render the rail without
      * re-deriving an order from somewhere else.
@@ -97,6 +103,8 @@ export type OperationalParticipantScope = {
     stageKey: string | null;
     /** Presentation label for that stage. */
     stageLabel: string | null;
+    /** Stage keys the participant's journey actually entered, when recorded. */
+    traversedStageKeys?: string[];
 };
 
 export type OperationalContextPerspective = {

@@ -151,8 +151,9 @@ export default function ProcessCard({
                     steps={evidence.stages.map((s) => ({
                         state: s.state,
                         value: s.label,
-                        // Two configured slots. The platform caps it here — never a third line.
-                        detail: s.primarySupport,
+                        // Two configured slots. The platform caps it here — never a third line. A folded
+                        // sub-stage ("Offer pending" inside Decision) leads, since it IS where the record is.
+                        detail: s.detail ?? s.primarySupport,
                         note: s.secondarySupport,
                     }))}
                     dataName="process"

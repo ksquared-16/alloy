@@ -333,6 +333,23 @@ function buildRelatedSubjectsSummary(
 }
 
 /**
+ * A family whose children have DIVERGED reads as counts by configured stage label — "1 Offer pending
+ * · 1 undecided" — rather than stage names alone. Children still at the case's own stage have not
+ * been given a path of their own yet, so they read "undecided". Null when the children agree.
+ */
+function countedStageLabel(row: Record<string, unknown>, queue: PartialQueueRowContextQueueMeta): string | null {
+    const raw = row._effective_stage_counts as { contextStageKey?: string | null; counts?: Array<{ stageKey?: string; count?: number }> } | undefined;
+    const counts = Array.isArray(raw?.counts) ? raw!.counts!.filter((c) => typeof c.stageKey === "string" && (c.count ?? 0) > 0) : [];
+    if (counts.length < 2) return null;
+    const labels = queue.stage_labels_by_key ?? null;
+    const label = (key: string) => labels?.[key]?.trim() || humanizeSnakeCaseToken(key);
+    const ordered = [...counts].sort((a, b) => (a.stageKey === raw?.contextStageKey ? 1 : 0) - (b.stageKey === raw?.contextStageKey ? 1 : 0));
+    return ordered
+        .map((c) => `${c.count} ${c.stageKey === raw?.contextStageKey ? "undecided" : label(c.stageKey!)}`)
+        .join(" · ");
+}
+
+/**
  * Process / lifecycle stage label for the queue row Stage field.
  * Prefer Effective Process Position rollup (participant stages) when attached —
  * family inventory must not show raw opportunity stage as the sole current position.
@@ -344,8 +361,11 @@ function resolveProcessStageLabel(
     queue: PartialQueueRowContextQueueMeta,
 ): string {
     const eppRollup = trimOrNull(row._effective_stage_rollup_label);
+    const counted = countedStageLabel(row, queue);
     let base: string;
-    if (eppRollup) {
+    if (counted) {
+        base = counted;
+    } else if (eppRollup) {
         // Title-case snake tokens inside "waitlist · lead" / keep "N active stages".
         if (/\d+\s+active stages/i.test(eppRollup)) {
             base = eppRollup;

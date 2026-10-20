@@ -8,7 +8,8 @@
  */
 
 /** `collapsed` is a projection artefact — N events the card is not showing, not an event. */
-export type StepState = "done" | "current" | "future" | "collapsed";
+/** `skipped`: an earlier step the record never entered — drawn blank, never checked. */
+export type StepState = "done" | "current" | "future" | "collapsed" | "skipped";
 
 /** One column of a progression band — shared by Journey (stages) and Attendance (day events). */
 export type ProgressionStep = {
@@ -771,7 +772,9 @@ export type AddChargeSpecimen = {
  */
 export type ProcessStage = {
     label: string;
-    state: "done" | "current" | "future";
+    state: "done" | "current" | "future" | "skipped";
+    /** The folded sub-stage the record is in, e.g. "Offer pending" inside Decision. */
+    detail?: string | null;
     /** Configured slot 1 — date/time, rank, amount. */
     primarySupport: string | null;
     /** Configured slot 2 — location, program, outcome, count. Never a third line. */

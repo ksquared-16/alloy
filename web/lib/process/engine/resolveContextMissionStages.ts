@@ -136,11 +136,22 @@ export function resolveContextMissionStages(args: {
         // that admitted this row via other predicates must not invent an empty Mission.
     }
 
+    /*
+     * Rule 7: a lens that names the CASE's own stage keeps that stage leading. Decision's view spans
+     * `decision` and the internal `offered` sub-stage; once every child has a path none sits at
+     * `decision`, yet the family IS still in Decision — awaiting the family's answer is Decision work.
+     * Without this the family card became the child-grain `offered` stage, whose work names no child.
+     */
+    if (contextStageKey && lensKeys.includes(contextStageKey) && !missionStageKeys.includes(contextStageKey)) {
+        missionStageKeys = uniqueInOrder([contextStageKey, ...missionStageKeys]);
+    }
     const rollup = composeStageRollup(missionStageKeys);
     // Rule 6: the case's own position leads when it is one of the Mission stages. A stage-scoped
-    // lens (rule 2) already chose its emphasis and is left alone.
+    // lens (rule 2) already chose its emphasis and is left alone — unless it names the case's own
+    // stage (rule 7).
+    const lensNamesCaseStage = Boolean(contextStageKey && lensKeys.includes(contextStageKey));
     const primaryMissionStageKey =
-        source !== "work_view_lens" && contextStageKey && missionStageKeys.includes(contextStageKey)
+        (source !== "work_view_lens" || lensNamesCaseStage) && contextStageKey && missionStageKeys.includes(contextStageKey)
             ? contextStageKey
             : missionStageKeys[0] ?? null;
     return {

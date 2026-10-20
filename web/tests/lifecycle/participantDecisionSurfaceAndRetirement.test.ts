@@ -74,7 +74,9 @@ const PLAN = parseStageOperatingPlanV1({
     attention_rules: [],
 })!;
 
-function makeSupabase(instances: Array<{ id: string; subject_id: string; state: string | null }>) {
+type OpenTask = { id: string; title: string; metadata: Record<string, unknown>; created_at: string };
+
+function makeSupabase(instances: Array<{ id: string; subject_id: string; state: string | null }>, tasks: OpenTask[] = []) {
     return {
         from(table: string) {
             const builder: Record<string, unknown> = {};
@@ -105,6 +107,10 @@ function makeSupabase(instances: Array<{ id: string; subject_id: string; state: 
                     });
                     return;
                 }
+                if (table === "operational_tasks") {
+                    resolve({ data: tasks, error: null });
+                    return;
+                }
                 resolve({ data: [], error: null });
             };
             return builder;
@@ -112,9 +118,9 @@ function makeSupabase(instances: Array<{ id: string; subject_id: string; state: 
     } as never;
 }
 
-const project = (instances: Array<{ id: string; subject_id: string; state: string | null }>) =>
+const project = (instances: Array<{ id: string; subject_id: string; state: string | null }>, tasks: OpenTask[] = []) =>
     projectParticipantDecisionRows({
-        supabase: makeSupabase(instances),
+        supabase: makeSupabase(instances, tasks),
         orgId: ORG,
         opportunityId: LEAD,
         plan: PLAN,
@@ -123,6 +129,22 @@ const project = (instances: Array<{ id: string; subject_id: string; state: strin
     });
 
 describe("participant decision surface", () => {
+    it("carries each child's own open work so the Decision card can record its outcome", async () => {
+        const surface = await project(
+            [
+                { id: "pi-emma", subject_id: EMMA, state: "offered" },
+                { id: "pi-liam", subject_id: LIAM, state: null },
+            ],
+            [
+                { id: "task-family", title: "Decide each child's path", metadata: {}, created_at: "2026-10-01T00:00:00Z" },
+                { id: "task-emma", title: "Get the family's answer", metadata: { bp_subject_customer_member_id: EMMA }, created_at: "2026-10-02T00:00:00Z" },
+            ],
+        );
+        expect(surface!.rows[0]!.open_work).toEqual({ task_id: "task-emma", label: "Get the family's answer" });
+        // Family work never surfaces as a child's work; a child without its own work has none.
+        expect(surface!.rows[1]!.open_work).toBeNull();
+    });
+
     it("presents one row per child with their own decisions", async () => {
         const surface = await project([
             { id: "pi-emma", subject_id: EMMA, state: null },

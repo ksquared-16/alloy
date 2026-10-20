@@ -326,7 +326,7 @@ export async function executeParticipantDecisionForChild(
 
     // The decision's one state target defines where the track lands; the parser guarantees it exists.
     const stateTarget = bound.targets.find((t) => t.kind === "update_child_enrollment_status")!;
-    const targetState = stateTarget.disposition_key?.trim() ?? "";
+    const targetState = (stateTarget.disposition_key ?? stateTarget.status_key)?.trim() ?? "";
 
     const currentState = await readEnrollmentInstanceState(input.supabase, {
         orgId: input.orgId,
