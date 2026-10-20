@@ -104,7 +104,7 @@ function assignment(over: Row): Row {
     };
 }
 
-const ALL = { siteScope: "all" as const, allowedSiteLocationIds: [] as string[] };
+const ALL: import("@/lib/businessProcesses/projections/domainProjectionTypes").DomainProjectionScope = { siteScope: "all", allowedSiteLocationIds: [] };
 const ctx = (scope = ALL) => ({ orgId: ORG, userId: "u1", scope });
 
 describe("Assignments · current_assignments — canonical lifecycle, per-subject rows", () => {
@@ -303,7 +303,7 @@ describe("configuration and publication", () => {
             { id: "b", label: "B" },
             { id: "c", label: "C", projection_key: "current_assignments", filters_v1: [{ field_key: "site", operator: "equals", value: "x" }], compat_queue_key: "new_leads", row_grain_v1: "child", sort_v1: { field: "updated_at", direction: "desc" } },
         ]));
-        const paths = r.errors.filter((e) => e.code === PUBLISH_PROJECTION_WORK_VIEW_INVALID).map((e) => e.path.split(".").slice(-2).join("."));
+        const paths = r.errors.filter((e) => e.code === PUBLISH_PROJECTION_WORK_VIEW_INVALID).map((e) => (e.path ?? "").split(".").slice(-2).join("."));
         expect(paths.sort()).toEqual(["work_views_v1[a].projection_key", "work_views_v1[b].projection_key", "work_views_v1[c].compat_queue_key", "work_views_v1[c].filters_v1", "work_views_v1[c].row_grain_v1", "work_views_v1[c].sort_v1"].sort());
     });
 

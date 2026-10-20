@@ -38,7 +38,6 @@
  * action the answer does not claim `operational`.
  */
 import { resolveDepartmentDomainProjection } from "@/lib/businessProcesses/projections/domainProjectionDepartment";
-import { loadDomainProjectionCohort } from "@/lib/businessProcesses/projections/domainProjectionRegistry";
 import { domainProjectionProvisioningRow } from "@/lib/businessProcesses/projections/domainProjectionQueueRow";
 import { isDomainProjectionHostWorkUnit } from "@/lib/businessProcesses/projections/domainProjectionHost";
 import type { DomainProjectionScope } from "@/lib/businessProcesses/projections/domainProjectionTypes";
@@ -696,6 +695,12 @@ export type ProvisioningRequest = {
      * such a view refuses (`projection_unavailable`); it never reads unscoped. Lifecycle views ignore it.
      */
     projectionScope?: DomainProjectionScope | null;
+    /**
+     * BP V2 S2 — the projection cohort reader, INJECTED by the server route. This module is reachable
+     * from the browser contract graph, and the registry binds server-only Financials/Scheduling
+     * readers, so it is never imported here as a value. Absent → a projection view refuses.
+     */
+    loadProjectionCohort?: typeof import("@/lib/businessProcesses/projections/domainProjectionRegistry")["loadDomainProjectionCohort"] | null;
     /**
      * Actor for DOCUMENT authorization. Profile photos are documents whose URLs are minted per
      * actor per request (~300s) and never persisted. Optional: an answer composed without one is
@@ -1407,11 +1412,11 @@ export async function composeWorkUnitProvisioningAnswer(
     //    cohort the totals evaluator counts (`loadDomainProjectionCohort`), so rows and counts agree.
     const departmentProjection = resolveDepartmentDomainProjection(deptRow?.metadata);
     if (departmentProjection) {
-        if (!req.projectionScope) {
+        if (!req.projectionScope || !req.loadProjectionCohort) {
             return fail("projection_unavailable", "no access scope reached this projection", workUnit, navFrame);
         }
         const tProjection = now();
-        const cohort = await loadDomainProjectionCohort(req.supabase, {
+        const cohort = await req.loadProjectionCohort(req.supabase, {
             domain: departmentProjection.domain,
             projectionKey: activeView.projection_key ?? null,
             orgId: req.orgId,

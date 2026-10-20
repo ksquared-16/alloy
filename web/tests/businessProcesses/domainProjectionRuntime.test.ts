@@ -140,7 +140,7 @@ describe("counts — the projection cohort, and nothing else", () => {
 describe("rows — the provisioning answer serves the SAME cohort, one bounded page", () => {
     const req = (over: Record<string, unknown> = {}) => ({
         supabase: stub(), orgId: ORG, workUnitSlug: HOST_KEY.replace(/_/g, "-"), requestedWorkViewId: "all",
-        currentUserId: "u1", projectionScope: SCOPE, ...over,
+        currentUserId: "u1", projectionScope: SCOPE, loadProjectionCohort: cohortSpy, ...over,
     }) as Parameters<typeof composeWorkUnitProvisioningAnswer>[0];
 
     it("a projection terminal: page of the cohort, cohort total, durable-subject row ids, no opportunity read", async () => {

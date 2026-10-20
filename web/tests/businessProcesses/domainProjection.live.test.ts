@@ -22,7 +22,7 @@ const live = Boolean(URL_ && KEY);
 describe.skipIf(!live)("live — registered projections over real certification data", () => {
     const supabase = live ? createClient(URL_!, KEY!, { auth: { persistSession: false } }) : (null as never);
     const evidence: Record<string, unknown> = { org: ORG, at: new Date().toISOString() };
-    const ALL = { siteScope: "all" as const, allowedSiteLocationIds: [] as string[] };
+    const ALL: import("@/lib/businessProcesses/projections/domainProjectionTypes").DomainProjectionScope = { siteScope: "all", allowedSiteLocationIds: [] };
 
     it("Assignments: child and staff-person rows, one per subject, total === rows; restricted scope narrows", async () => {
         const c = await loadDomainProjectionCohort(supabase, { domain: "assignments", projectionKey: "current_assignments", orgId: ORG, userId: ADMIN, scope: ALL });
