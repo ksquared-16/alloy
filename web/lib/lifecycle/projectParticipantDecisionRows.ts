@@ -30,10 +30,11 @@ import type {
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 import {
-    inputUsesProgramCategories,
-    programCategoryOptionsForLocation,
+    locationSourcesOf,
     resolveChildOfferLocationId,
+    sourcedOptionsForLocation,
     withSourcedInputOptions,
+    type SourcedOptions,
 } from "@/lib/lifecycle/participantDecisionInputOptions";
 import { childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
 /** One decision as offered to ONE participant. */
@@ -119,13 +120,17 @@ function decisionForState(
      * child `waitlisted`), so the stage the path moved them to is what tells them apart.
      */
     stageKey: string | null = null,
+    /** Decisions the child's journey recorded answers for — the path actually taken, when two agree. */
+    recordedDecisionKeys: ReadonlySet<string> | null = null,
 ): StageWorkParticipantDecisionV1 | null {
     if (!state) return null;
-    const byState = decisions.filter((d) =>
+    const byStateAll = decisions.filter((d) =>
         d.targets.some(
             (t) => t.kind === "update_child_enrollment_status" && (t.disposition_key ?? t.status_key)?.trim() === state,
         ),
     );
+    const recorded = recordedDecisionKeys ? byStateAll.filter((d) => recordedDecisionKeys.has(d.decision_key)) : [];
+    const byState = recorded.length ? recorded : byStateAll;
     if (stageKey) {
         const byStage = byState.find((d) =>
             d.targets.some((t) => t.kind === "move_to_stage" && t.stage_key?.trim() === stageKey),
@@ -167,7 +172,7 @@ export function deriveParticipantDecisionProgress(input: {
         resolved,
         total,
         summary,
-        completion_hint: allDecided ? "You can now complete this step." : "",
+        completion_hint: allDecided ? "Every child has a path — this step is complete." : "",
         all_resolved: allDecided,
     };
 }
@@ -209,6 +214,12 @@ export async function projectParticipantDecisionRows(params: {
     templateKey: string;
     /** Resolves a decision's operator label, falling back to its registered capability label. */
     resolveDecisionLabel?: (decision: StageWorkParticipantDecisionV1) => string;
+    /**
+     * Stages presented INSIDE this one (`parent_stage_key`). A child's own open work is offered here
+     * only when it belongs to one of them; work at a stage of its own (Registration's packet) is that
+     * stage's, not Decision's. Absent: no child work is offered.
+     */
+    foldedStageKeys?: ReadonlySet<string>;
 }): Promise<ParticipantDecisionSurface | null> {
     const template = params.plan.work_templates.find(
         (t) => t.template_key === params.templateKey.trim(),
@@ -258,6 +269,9 @@ export async function projectParticipantDecisionRows(params: {
             .slice()
             .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
         for (const t of tasks) {
+            const md = (t.metadata ?? {}) as Record<string, unknown>;
+            const taskStage = typeof md.lifecycle_stage_key === "string" ? md.lifecycle_stage_key.trim() : "";
+            if (!taskStage || !params.foldedStageKeys?.has(taskStage)) continue;
             const child = childOfStageWork(t.metadata);
             if (child && !openWorkByMember.has(child)) openWorkByMember.set(child, { task_id: t.id, label: (t.title ?? "").trim() || "Open work" });
         }
@@ -265,9 +279,10 @@ export async function projectParticipantDecisionRows(params: {
         openWorkByMember.clear();
     }
 
-    // Placement options sourced from each child's location's programs, resolved per child.
-    const sourcesPrograms = configured.some((d) => (d.required_inputs ?? []).some(inputUsesProgramCategories));
-    const programOptionsByMember = new Map<string, Array<{ value: string; label: string }>>();
+    // Placement options (the location's programs or rooms) sourced per child, from the child's location.
+    const sources = locationSourcesOf(configured);
+    const sourcesPrograms = sources.size > 0;
+    const programOptionsByMember = new Map<string, SourcedOptions>();
     if (sourcesPrograms) {
         for (const p of participants) {
             const locationId = await resolveChildOfferLocationId(params.supabase, {
@@ -275,7 +290,10 @@ export async function projectParticipantDecisionRows(params: {
                 opportunityId: params.opportunityId,
                 customerMemberId: p.customer_member_id,
             });
-            programOptionsByMember.set(p.customer_member_id, await programCategoryOptionsForLocation(params.supabase, { orgId: params.orgId, locationId }));
+            programOptionsByMember.set(
+                p.customer_member_id,
+                (await sourcedOptionsForLocation(params.supabase, { orgId: params.orgId, locationId, sources })).options,
+            );
         }
     }
 
@@ -303,7 +321,8 @@ export async function projectParticipantDecisionRows(params: {
             const customerMemberId = row.customer_member_id;
             const label = participantLabelFrom(memberNames, customerMemberId);
             const state = row.state;
-            const chosen = decisionForState(configured, state, row.stage_key);
+            const recordedKeys = row.process_instance_id ? new Set(Object.keys(answersByInstance.get(row.process_instance_id) ?? {})) : null;
+            const chosen = decisionForState(configured, state, row.stage_key, recordedKeys);
 
             const decisions: ParticipantDecisionOptionVM[] = visible.map((decision) => {
                 const stateTarget = decision.targets.find(
@@ -315,7 +334,7 @@ export async function projectParticipantDecisionRows(params: {
                     targetState,
                     participantLabel: label,
                 });
-                const sourced = sourcesPrograms ? withSourcedInputOptions(decision, programOptionsByMember.get(customerMemberId) ?? []) : decision;
+                const sourced = sourcesPrograms ? withSourcedInputOptions(decision, programOptionsByMember.get(customerMemberId) ?? {}) : decision;
                 return {
                     decision_key: decision.decision_key,
                     label: labelFor(decision),

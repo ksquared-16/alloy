@@ -140,6 +140,31 @@ export const STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS: Record<
 };
 
 /**
+ * The child's PLACEMENT facts a per-child path may record — the same draft facts the child's journey
+ * carries before enrollment (`applyChildParticipationEdit`), which pricing, the Children card and
+ * enrollment materialization all read. Closed set, declared explicitly, like target bindings.
+ *
+ *   program_room_cohort_key  the room (a `locations` id); its site and program follow from the room
+ *   program_category_id      the program (a `location_program_categories` id); its location follows
+ *   start_date               the expected start (YYYY-MM-DD)
+ */
+export type StageParticipantDecisionParticipationField = "program_room_cohort_key" | "program_category_id" | "start_date";
+
+export const STAGE_PARTICIPANT_DECISION_PARTICIPATION_FIELDS: readonly StageParticipantDecisionParticipationField[] = [
+    "program_room_cohort_key",
+    "program_category_id",
+    "start_date",
+];
+
+/** Options a decision input may resolve from data rather than list. */
+export type StageParticipantDecisionOptionsSource = "location_program_categories" | "location_rooms";
+
+export const STAGE_PARTICIPANT_DECISION_OPTIONS_SOURCES: readonly StageParticipantDecisionOptionsSource[] = [
+    "location_program_categories",
+    "location_rooms",
+];
+
+/**
  * Target kinds a participant decision may carry.
  *
  * `update_family_case_status` is ABSENT and that is the point: a decision about one child must not
@@ -175,10 +200,13 @@ export type StageParticipantDecisionInputV1 = {
     /** EXPLICIT binding onto a target field. Never inferred from `key`. */
     binds_to_target_field?: StageParticipantDecisionBindableTargetField;
     /**
-     * Options resolved from data instead of listed here. `location_program_categories`: the child's
-     * location's active program categories, valued by category id (participantDecisionInputOptions.ts).
+     * Options resolved from data instead of listed here (participantDecisionInputOptions.ts):
+     * `location_program_categories` — the child's location's active programs, valued by category id;
+     * `location_rooms` — the child's location's active rooms, valued by room (location) id.
      */
-    options_source?: "location_program_categories";
+    options_source?: StageParticipantDecisionOptionsSource;
+    /** EXPLICIT binding onto the child's placement draft (see `StageParticipantDecisionParticipationField`). */
+    binds_to_participation_field?: StageParticipantDecisionParticipationField;
 };
 
 /**
@@ -588,7 +616,14 @@ function parseParticipantDecisionInput(raw: unknown): StageParticipantDecisionIn
     ) {
         input.binds_to_target_field = binds as StageParticipantDecisionBindableTargetField;
     }
-    if (trimNonEmpty(o.options_source) === "location_program_categories") input.options_source = "location_program_categories";
+    const source = trimNonEmpty(o.options_source);
+    if (source && (STAGE_PARTICIPANT_DECISION_OPTIONS_SOURCES as readonly string[]).includes(source)) {
+        input.options_source = source as StageParticipantDecisionOptionsSource;
+    }
+    const participation = trimNonEmpty(o.binds_to_participation_field);
+    if (participation && (STAGE_PARTICIPANT_DECISION_PARTICIPATION_FIELDS as readonly string[]).includes(participation)) {
+        input.binds_to_participation_field = participation as StageParticipantDecisionParticipationField;
+    }
     return input;
 }
 

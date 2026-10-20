@@ -36,12 +36,16 @@ import {
 } from "@/lib/lifecycle/applyParticipantDecisionInputs";
 import {
     inputUsesProgramCategories,
-    programCategoryOptionsForLocation,
+    locationSourcesOf,
+    participationPatchFromAnswers,
     resolveChildOfferLocationId,
+    sourcedOptionsForLocation,
     withSourcedInputOptions,
+    type SourcedRoom,
 } from "@/lib/lifecycle/participantDecisionInputOptions";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
 import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
+import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
 import { recordParticipantDecisionActivity } from "@/lib/lifecycle/recordBusinessActivity";
 import {
     childParticipationIdentityFromWire,
@@ -231,15 +235,19 @@ export async function executeParticipantDecisionForChild(
     }
     const customerMemberId = child.customerMemberId;
 
-    // A placement chosen from the child's location's programs is validated against THOSE programs,
+    // A placement chosen from the child's location's programs or rooms is validated against THOSE,
     // re-read now — never against whatever the surface was drawn with.
-    const sourcesPrograms = (decision.required_inputs ?? []).some(inputUsesProgramCategories);
-    const offerLocationId = sourcesPrograms
+    const sources = locationSourcesOf([decision]);
+    const offerLocationId = sources.size
         ? await resolveChildOfferLocationId(input.supabase, { orgId: input.orgId, opportunityId, customerMemberId })
         : null;
-    const decisionWithOptions = sourcesPrograms
-        ? withSourcedInputOptions(decision, await programCategoryOptionsForLocation(input.supabase, { orgId: input.orgId, locationId: offerLocationId }))
-        : decision;
+    let sourcedRooms: SourcedRoom[] = [];
+    let decisionWithOptions = decision;
+    if (sources.size) {
+        const sourced = await sourcedOptionsForLocation(input.supabase, { orgId: input.orgId, locationId: offerLocationId, sources });
+        sourcedRooms = sourced.rooms;
+        decisionWithOptions = withSourcedInputOptions(decision, sourced.options);
+    }
 
     // Inputs are validated and bound BEFORE the transaction opens. A missing close reason is a
     // configuration-and-operator matter, not a rollback.
@@ -399,6 +407,13 @@ export async function executeParticipantDecisionForChild(
 
     const degraded: string[] = [];
     let writeError: ParticipantWriteCountFailure | undefined;
+    const placementPatch = participationPatchFromAnswers({
+        inputs: decision.required_inputs ?? [],
+        answers: bound.answers,
+        rooms: sourcedRooms,
+        offerLocationId,
+    });
+    let placementPriorMetadata: Record<string, unknown> | null = null;
     const applied: Array<{ run: () => Promise<void> }> = [];
     let priorJourneyMetadata: Record<string, unknown> | null = null;
 
@@ -418,6 +433,47 @@ export async function executeParticipantDecisionForChild(
         idempotencyKey: `${input.orgId}:${processInstanceId}:${decisionKey}`,
         onTrace: input.onTrace,
         steps: (): PlatformTransactionStep[] => [
+            /*
+             * THE SPOT IS THE CHILD'S PLACEMENT. A path that names a room, a program or a start
+             * records them on the child's placement draft through its one canonical writer — the facts
+             * pricing, the Children card and enrollment materialization read — before the child moves.
+             * Undone with the rest by restoring the journey as it was.
+             */
+            ...(Object.keys(placementPatch).length ?
+                [
+                    {
+                        name: "record_placement",
+                        stage: "business_process" as const,
+                        run: async () => {
+                            const { data } = await input.supabase
+                                .from("process_instances")
+                                .select("metadata")
+                                .eq("org_id", input.orgId)
+                                .eq("id", processInstanceId)
+                                .maybeSingle();
+                            placementPriorMetadata = ((data as { metadata?: unknown } | null)?.metadata ?? {}) as Record<string, unknown>;
+                            const edit = await applyChildParticipationEdit(input.supabase, {
+                                orgId: input.orgId,
+                                customerMemberId,
+                                opportunityId,
+                                patch: placementPatch,
+                                actorUserId: input.userId,
+                            });
+                            if (!edit.ok) throw new Error(`record placement: ${edit.error ?? "refused"}`);
+                            return true;
+                        },
+                        compensate: async () => {
+                            if (!placementPriorMetadata) return;
+                            const { error } = await input.supabase
+                                .from("process_instances")
+                                .update({ metadata: placementPriorMetadata, updated_at: new Date().toISOString() })
+                                .eq("org_id", input.orgId)
+                                .eq("id", processInstanceId);
+                            if (error) throw new Error(`restore placement: ${error.message}`);
+                        },
+                    },
+                ]
+            :   []),
             {
                 name: "apply_participant_targets",
                 stage: "business_process",
@@ -494,8 +550,12 @@ export async function executeParticipantDecisionForChild(
                                         // A program placement is stored as canonical ids beside its label.
                                         answers: bound.answers.map((a) => {
                                             const spec = (decision.required_inputs ?? []).find((i) => i.key === a.key);
-                                            return spec && inputUsesProgramCategories(spec)
-                                                ? { ...a, program_category_id: a.value, location_id: offerLocationId }
+                                            if (spec && inputUsesProgramCategories(spec)) {
+                                                return { ...a, program_category_id: a.value, location_id: offerLocationId };
+                                            }
+                                            const room = spec?.options_source === "location_rooms" ? sourcedRooms.find((r) => r.id === a.value) : undefined;
+                                            return room
+                                                ? { ...a, room_location_id: room.id, location_id: room.siteLocationId, program_category_id: room.programCategoryId }
                                                 : a;
                                         }),
                                         decided_at: new Date().toISOString(),

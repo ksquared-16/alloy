@@ -27,6 +27,7 @@
  */
 
 import { childJourneyOfStageWork, childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
+import { runtimeCompletionOutcomeKey, templateDecidesParticipants } from "@/lib/lifecycle/participantDecisionCompletion";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
@@ -64,7 +65,7 @@ import type {
 
 export { primaryWorkIntentProjectionFromStageWork };
 
-type TaskDbRow = {
+export type TaskDbRow = {
     id: string;
     title: string;
     due_at: string;
@@ -336,7 +337,10 @@ function buildWorkItemProjection(args: {
 }): StageWorkItemProjection {
     const { template, role, stageKey, plan, openRow, completedRow } = args;
     const policy = completionPolicyForTemplate(template);
-    const outcomes = outcomesForTemplate(plan, template);
+    // Per-child work: the plain completion is recorded by the runtime once every child has a path.
+    const decidesParticipants = templateDecidesParticipants(template);
+    const runtimeCompletion = runtimeCompletionOutcomeKey(plan, template);
+    const outcomes = outcomesForTemplate(plan, template).filter((o) => o.outcome_key !== runtimeCompletion);
     const automation = buildStageWorkOutcomeAutomationPreview({
         plan,
         templateKey: template.template_key,
@@ -360,7 +364,8 @@ function buildWorkItemProjection(args: {
             description: trimOrNull(template.description),
             role,
             state: "open",
-            requires_outcome_picker: outcomes.length > 0,
+            requires_outcome_picker: outcomes.length > 0 || decidesParticipants,
+            ...(decidesParticipants ? { decides_participants: true } : {}),
             work_id: String(openRow.id),
             due_at: dueAt,
             due_urgency: mapDueUrgency(dueAt, status),
