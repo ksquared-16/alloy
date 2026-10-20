@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { deriveStageStates } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import { buildBusinessProcessCardEvidence, deriveStageStates } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import { traversedStageKeysFromMetadata } from "@/lib/process/processInstances";
 
 const stages = [
@@ -49,5 +49,39 @@ describe("stepper path truth", () => {
     it("the recorded path is read from metadata.stage_path_v1", () => {
         expect(traversedStageKeysFromMetadata({ stage_path_v1: [{ stage_key: "offered", entered_at: "t" }, { stage_key: "enrolling" }, { bad: 1 }] })).toEqual(["offered", "enrolling"]);
         expect(traversedStageKeysFromMetadata(null)).toEqual([]);
+    });
+
+    describe("an optional branch (allow_skipping) is drawn only on the path", () => {
+        const railStages = [
+            { key: "lead", label: "Lead", grain: "family" },
+            { key: "tour", label: "Tour", grain: "family" },
+            { key: "decision", label: "Decision", grain: "family" },
+            { key: "waitlist", label: "Waitlist", grain: "child", allow_skipping: true },
+            { key: "offered", label: "Offer pending", grain: "child", parent_stage_key: "decision" },
+            { key: "enrolling", label: "Enrolling", grain: "child" },
+            { key: "enrolled", label: "Enrolled", grain: "child" },
+        ];
+        const drawn = (stageKey: string, traversed: string[] = []) =>
+            buildBusinessProcessCardEvidence({
+                grain: "case",
+                subject: { type: "opportunity", id: "o", label: "F" },
+                businessProcess: { key: "enrollment", label: "Enrollment", stageKey, stages: railStages, traversedStageKeys: traversed },
+            } as never).stages.map((st) => `${st.label}:${st.state}${st.detail ? `(${st.detail})` : ""}`);
+
+        it("Offer pending: Lead ✓ → Tour ✓ → Decision ● (Offer pending) → Enrolling ○ → Enrolled ○", () => {
+            expect(drawn("offered", ["offered"])).toEqual(["Lead:done", "Tour:done", "Decision:current(Offer pending)", "Enrolling:future", "Enrolled:future"]);
+        });
+
+        it("Accepted without waiting: no Waitlist step at all", () => {
+            expect(drawn("enrolling", ["offered", "enrolling"])).toEqual(["Lead:done", "Tour:done", "Decision:done", "Enrolling:current", "Enrolled:future"]);
+        });
+
+        it("a waitlisted child shows Waitlist as its current step", () => {
+            expect(drawn("waitlist", ["waitlist"])).toContain("Waitlist:current");
+        });
+
+        it("a child who waited and then enrolled keeps Waitlist checked", () => {
+            expect(drawn("enrolling", ["waitlist", "offered", "enrolling"])).toContain("Waitlist:done");
+        });
     });
 });

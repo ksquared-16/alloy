@@ -1129,7 +1129,7 @@ export default function StageEditorV2({
                                 className="h-4 w-4 rounded-md accent-alloy-juniper"
                                 data-testid="stage-editor-v2-allow-skipping"
                             />
-                            <span className="text-[0.75rem] text-alloy-midnight">Operators can skip this stage</span>
+                            <span className="text-[0.75rem] text-alloy-midnight">Optional — a path may skip this stage; the stepper shows it only when the path goes through it</span>
                         </label>
                     </Field>
                 </Section>
