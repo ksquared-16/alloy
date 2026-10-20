@@ -114,14 +114,26 @@ export function useWorkUnitSettlement(
      * or refresh shows the same counts as one reached by pill navigation. KPIs and the queue total
      * stay lens-only, and with no active lens there are none to settle.
      */
+    // A subject-level refusal (a stale link to a record that moved on) keeps its cohort — and its
+    // counts: the refusal is about one record, never about how many are in each view.
+    const refusalLocators =
+        snapshot?.terminal === "error"
+            ? ((snapshot as { queueFrame?: { settlement?: SettlementLocators } | null }).queueFrame?.settlement ?? null)
+            : null;
     const contextualLocators =
         snapshot?.terminal === "contextual"
             ? ((snapshot as { settlement?: SettlementLocators }).settlement ?? null)
-            : null;
+            : refusalLocators;
     const nothingToSettle = snapshot?.terminal === "contextual" && contextualLocators?.status !== "resolved";
-    const workUnitId = settleable?.workUnit.id ?? (snapshot?.terminal === "contextual" ? snapshot.workUnit.id : null);
+    const workUnitId =
+        settleable?.workUnit.id
+        ?? (snapshot?.terminal === "contextual" ? snapshot.workUnit.id : null)
+        ?? (refusalLocators && snapshot?.terminal === "error" ? snapshot.workUnit?.id ?? null : null);
     const locators = settleable?.settlement ?? contextualLocators ?? null;
-    const answerOrgId = settleable?.orgId ?? (snapshot?.terminal === "contextual" ? snapshot.orgId : null);
+    const answerOrgId =
+        settleable?.orgId
+        ?? (snapshot?.terminal === "contextual" ? snapshot.orgId : null)
+        ?? (refusalLocators && snapshot?.terminal === "error" ? snapshot.orgId : null);
 
     const siteFilter = useWorkspaceSiteFilter();
     const siteId = siteFilter?.selectedSiteId ?? null;

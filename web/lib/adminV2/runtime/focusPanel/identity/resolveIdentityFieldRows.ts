@@ -28,11 +28,30 @@ export type IdentityFieldRowInput = {
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
+/**
+ * Legacy consent checkboxes stored in `field_values`. NO send path reads them — consent lives in
+ * `communication_preferences` and is shown and edited as the person's "Communication preferences" —
+ * so a row reading "Sms Opt In —" told the operator about a setting that changes nothing.
+ */
+export const UNENFORCED_LEGACY_CONSENT_FIELD_KEYS: ReadonlySet<string> = new Set([
+    "sms_opt_in",
+    "email_opt_in",
+    "communication_opt_out",
+    "sms_consent",
+    "email_consent",
+]);
+
+function isUnenforcedLegacyConsentField(fieldRef: string): boolean {
+    const last = fieldRef.split(/[:.]/).pop() ?? fieldRef;
+    return UNENFORCED_LEGACY_CONSENT_FIELD_KEYS.has(last.trim());
+}
+
 export function resolveIdentityFieldRows(
     inputs: readonly IdentityFieldRowInput[],
 ): IdentityFieldRowVM[] {
     const visible = inputs.filter((input) => {
         if (input.policy === "hidden") return false;
+        if (isUnenforcedLegacyConsentField(input.placement.fieldRef)) return false;
         const empty = !input.value?.trim();
         // Explicit hideWhenEmpty drops the cell. Hidden label/icon alone must keep
         // placement — runtime renders "—" so the next field does not shift up.

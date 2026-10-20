@@ -803,18 +803,24 @@ export default function HouseholdCard({
     } else if (selectedIdentityRecord && (disclosure.depth === "details" || disclosure.depth === "evidence")) {
         perspective = disclosure.depth === "evidence" ? "focused" : "focused";
         body = (
-            <IdentityDisclosureSurface
-                record={selectedIdentityRecord}
-                depth={disclosure.depth}
-                onEditContact={onEditContact}
-                onSaveField={onSaveIdentityField}
-                onSaveFields={onSaveIdentityFields}
-                onEnterEvidence={
-                    disclosure.depth === "details"
-                        ? () => enterEvidence(selectedIdentityRecord.id, disclosure.selectedSectionKey)
-                        : undefined
-                }
-            />
+            <>
+                <IdentityDisclosureSurface
+                    record={selectedIdentityRecord}
+                    depth={disclosure.depth}
+                    onEditContact={onEditContact}
+                    onSaveField={onSaveIdentityField}
+                    onSaveFields={onSaveIdentityFields}
+                    onEnterEvidence={
+                        disclosure.depth === "details"
+                            ? () => enterEvidence(selectedIdentityRecord.id, disclosure.selectedSectionKey)
+                            : undefined
+                    }
+                />
+                {/* The contact's consent and preferred channel — where the operator is looking at them. */}
+                {disclosure.depth === "details" && isEditableHouseholdPersonId(selectedIdentityRecord.id) ? (
+                    <PersonCommunicationPreferencesPanel key={`prefs-details-${selectedIdentityRecord.id}`} personId={selectedIdentityRecord.id} />
+                ) : null}
+            </>
         );
     } else if (disclosure.depth === "context") {
         perspective = "focused";

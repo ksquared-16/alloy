@@ -545,6 +545,12 @@ export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
               actionsProjection: WorkUnitActionsProjection;
               /** The subject the caller named, so the queue can keep it selected while it refuses. */
               requestedSubjectId: string | null;
+              /**
+               * The pill-count locations the cohort already resolved. A refusal about ONE subject (a stale
+               * link to a record that has moved on) says nothing about the counts, so the pills settle
+               * exactly as on any other entry.
+               */
+              settlement?: SettlementLocators;
           } | null;
           timings: ProvisioningTimings;
       }
@@ -1854,6 +1860,7 @@ export async function composeWorkUnitProvisioningAnswer(
                 businessProcess: { key: process.key, name: process.name },
                 actionsProjection,
                 requestedSubjectId: req.requestedSubjectId ?? null,
+                settlement,
             },
         };
     };
