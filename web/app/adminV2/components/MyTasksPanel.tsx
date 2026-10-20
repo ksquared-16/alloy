@@ -13,6 +13,8 @@ import {
 } from "@/lib/runtime/workspaceResume";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo } from "lucide-react";
+import { useAlloyConfirm } from "@/components/ui/AlloyConfirmDialog";
+import { scheduledTourCloseConfirmRequest } from "@/lib/lifecycle/scheduledTourCloseConfirmation";
 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import MyTasksTaskCard from "@/app/adminV2/components/MyTasksTaskCard";
@@ -241,6 +243,7 @@ export default function MyTasksPanel({
     const [createBusy, setCreateBusy] = useState(false);
     const [outcomeTaskId, setOutcomeTaskId] = useState<string | null>(null);
     const [outcomeContext, setOutcomeContext] = useState<StageWorkOutcomeResolution | null>(null);
+    const [confirmDialog, askConfirm] = useAlloyConfirm();
     const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
     const [catalogProcessLabels, setCatalogProcessLabels] = useState<Record<string, string>>({});
     const [processingWarmNonce, setProcessingWarmNonce] = useState(0);
@@ -623,7 +626,13 @@ export default function MyTasksPanel({
                 let result = await submit(false);
                 // A terminal Tour outcome while the Tour is still ahead: nothing was written yet.
                 if (result.confirmation_required) {
-                    if (!window.confirm(result.confirmation_required.message)) return;
+                    const confirmed = await askConfirm(
+                        scheduledTourCloseConfirmRequest({
+                            confirmation: result.confirmation_required,
+                            outcomeLabel: outcomeContext.outcomes?.find((o) => o.outcome_key === outcomeKey)?.label ?? null,
+                        }),
+                    );
+                    if (!confirmed) return;
                     result = await submit(true);
                 }
                 if (!result.ok) throw new Error(result.error ?? "Failed to complete work item");
@@ -636,7 +645,7 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [clearForms, dispatchRefresh, load, outcomeContext],
+        [askConfirm, clearForms, dispatchRefresh, load, outcomeContext],
     );
 
     const startEdit = useCallback((task: MyTasksTaskRow) => {
@@ -878,6 +887,7 @@ export default function MyTasksPanel({
 
     return (
         <div className="relative flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
+            {confirmDialog}
             <WorkItemCreateModal
                 open={createOpen}
                 busy={createBusy}

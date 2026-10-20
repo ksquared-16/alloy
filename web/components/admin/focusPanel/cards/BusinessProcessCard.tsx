@@ -40,6 +40,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { runCurrentWorkPlanInline } from "@/lib/adminV2/runtime/focusPanel/currentWork/runCurrentWorkPlanInline";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import { useAlloyConfirm } from "@/components/ui/AlloyConfirmDialog";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -124,6 +125,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
      * the operator is currently concerned with. The server projects with none, and marking one is
      * presentation over an already-projected list, not a decision about what is true.
      */
+    const [confirmDialog, askConfirm] = useAlloyConfirm();
     const projected = context.operationalProjection ?? null;
     const selectedParticipantId = context.participantScope?.participationId ?? null;
     const evidence = useMemo(() => {
@@ -205,7 +207,23 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
             // A plan that is one canonical mutation on something this card names (cancelling the
             // scheduled tour) runs here, behind its confirmation; it used to open a workspace that
             // never ran it.
-            if (runCurrentWorkPlanInline(plan, { mutation })) return;
+            if (
+                runCurrentWorkPlanInline(plan, {
+                    mutation,
+                    confirm: (message) =>
+                        askConfirm({
+                            title: "Cancel this tour?",
+                            body: message,
+                            confirmLabel: "Cancel tour",
+                            cancelLabel: "Keep tour",
+                            tone: "danger",
+                            testId: "cancel-tour-confirm",
+                        }),
+                    report: (message) =>
+                        void askConfirm({ title: "The tour was not cancelled", body: message, confirmLabel: "OK", cancelLabel: null }),
+                })
+            )
+                return;
             switch (plan.kind) {
                 case "blocked":
                 case "unsupported":
@@ -336,7 +354,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
                     coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
             }
         },
-        [coordination, mutation, context],
+        [coordination, mutation, context, askConfirm],
     );
 
     /*
@@ -533,11 +551,14 @@ function BusinessProcessSummary({ model, context, receded = false, coordination,
      * there to be nothing here to drift.
      */
     return (
-        <ProcessCard
-            evidence={processEvidence}
-            receded={receded}
-            fallbackTitle={model.title}
-            onViewAllActivity={() => coordination?.openFocusPanelMode?.("activity")}
-        />
+        <>
+            {confirmDialog}
+            <ProcessCard
+                evidence={processEvidence}
+                receded={receded}
+                fallbackTitle={model.title}
+                onViewAllActivity={() => coordination?.openFocusPanelMode?.("activity")}
+            />
+        </>
     );
 }

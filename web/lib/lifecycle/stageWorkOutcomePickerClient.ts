@@ -1,6 +1,7 @@
 "use client";
 
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import type { ScheduledTourConfirmation } from "@/lib/lifecycle/scheduledTourCloseConfirmation";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
@@ -41,7 +42,7 @@ export type StageWorkOutcomeCompletion = {
     /** The outcome moved the record to another stage — this work's surface no longer applies. */
     moved_stage?: boolean;
     /** The outcome would close a Tour that is still ahead; nothing was written. Ask, then resubmit. */
-    confirmation_required?: { kind: string; message: string } | null;
+    confirmation_required?: ScheduledTourConfirmation | null;
     scheduled_tour_closed?: { booking_id: string; closed_as: "completed" | "canceled" } | null;
 };
 
@@ -70,7 +71,7 @@ export async function completeStageWorkWithSelectedOutcome(params: {
         ok?: boolean;
         error?: string;
         queue_refresh_opportunity_id?: string;
-        confirmation_required?: { kind: string; message: string };
+        confirmation_required?: ScheduledTourConfirmation;
         scheduled_tour_closed?: { booking_id: string; closed_as: "completed" | "canceled" } | null;
         outcome_execution?: { applied_targets?: Array<{ kind?: string; executed?: boolean }> };
     };
