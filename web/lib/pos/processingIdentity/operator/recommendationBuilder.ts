@@ -425,7 +425,7 @@ function decisionForAction(action: string | null): SubjectDecision | null {
     }
 }
 
-function roleFromSubjectRole(role: string): SubjectRole {
+export function roleFromSubjectRole(role: string): SubjectRole {
     switch (role) {
         case "household":
         case "family":

@@ -1,3 +1,4 @@
+import { formatPhoneDisplay } from "@/lib/phone/phonePresentation";
 import { UTC_FALLBACK_IANA, isValidIanaTimeZone } from "@/lib/admin/timezoneContract";
 import {
     formatDisplayDate,
@@ -201,15 +202,13 @@ export function formatFrequencyLabel(cadence: string | null | undefined, interva
     return n === 1 ? "Every 1 month" : `Every ${n} months`;
 }
 
-/** Format US phone for display: (541) 654-3217. Uses last 10 digits when country code 1 is present. */
+/**
+ * Phone for display — the platform's one formatter (`lib/phone/phonePresentation`): US numbers read
+ * "(541) 654-3217"; other international numbers keep their "+" (they used to be cut to their last 10
+ * digits and shown as a US number); partial or invalid text is shown as typed.
+ */
 export function formatPhoneUS(value: string | null | undefined): string {
-    if (value == null || value === "") return "—";
-    const digits = String(value).replace(/\D/g, "");
-    if (digits.length < 10) return String(value).trim() || "—";
-    const area = digits.slice(-10, -7);
-    const mid = digits.slice(-7, -4);
-    const last = digits.slice(-4);
-    return `(${area}) ${mid}-${last}`;
+    return formatPhoneDisplay(value);
 }
 
 /** Format US phone for editable inputs; empty string when no value. */

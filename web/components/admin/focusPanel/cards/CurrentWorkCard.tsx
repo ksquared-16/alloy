@@ -58,6 +58,8 @@ import {
     type ContactFamilySendCompleteDetail,
 } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
+import { useAlloyConfirm } from "@/components/ui/AlloyConfirmDialog";
+import { scheduledTourCloseConfirmRequest } from "@/lib/lifecycle/scheduledTourCloseConfirmation";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import {
@@ -258,6 +260,7 @@ export default function CurrentWorkCard({
 
     const pendingOutcome =
         activeOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
+    const [confirmDialog, askConfirm] = useAlloyConfirm();
 
     const resetCompletion = useCallback(() => {
         setCompletionPhase("working");
@@ -639,7 +642,12 @@ export default function CurrentWorkCard({
              * is asked in the platform's words; declining leaves everything exactly as it was.
              */
             if (result?.confirmation_required) {
-                const confirmed = window.confirm(result.confirmation_required.message);
+                const confirmed = await askConfirm(
+                    scheduledTourCloseConfirmRequest({
+                        confirmation: result.confirmation_required,
+                        outcomeLabel: pendingOutcome?.label ?? null,
+                    }),
+                );
                 if (!confirmed) {
                     setCompletionPhase("confirm");
                     return;
@@ -672,7 +680,7 @@ export default function CurrentWorkCard({
             setCompletionPhase("complete");
             setPendingOutcomeKey(null);
         })();
-    }, [completeOutcome, pendingOutcomeKey, activeProjection, activeWorkItem, closeWorkspace]);
+    }, [completeOutcome, pendingOutcomeKey, pendingOutcome, askConfirm, activeProjection, activeWorkItem, closeWorkspace]);
 
     useEffect(() => {
         if (!recordedNotice) return;
@@ -853,6 +861,7 @@ export default function CurrentWorkCard({
             data-current-work-surface="true"
             data-focused-work-id={focusedWorkItemId ?? undefined}
         >
+            {confirmDialog}
             <UniversalCard
                 /*
                  * IN COMMAND MODE THE CARD STOPS INTRODUCING ITSELF. "What's Next" and the stage sat

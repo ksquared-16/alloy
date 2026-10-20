@@ -24,7 +24,8 @@ export function runCurrentWorkPlanInline(
     plan: CurrentWorkActionExecutionPlan,
     deps: {
         mutation?: FocusPanelMutation;
-        confirm?: (message: string) => boolean;
+        /** Ask the operator; may be Alloy's async dialog. Defaults to the browser only outside a host. */
+        confirm?: (message: string) => boolean | Promise<boolean>;
         report?: (message: string) => void;
     },
 ): boolean {
@@ -36,8 +37,10 @@ export function runCurrentWorkPlanInline(
         return true;
     }
     const ask = deps.confirm ?? ((m: string) => window.confirm(m));
-    if (!ask(CONFIRMATION[plan.kind] ?? "Continue?")) return true;
-    void cancel(plan.bookingId).then((result) => {
+    // Handled here either way; the mutation runs only once the operator has said yes.
+    void Promise.resolve(ask(CONFIRMATION[plan.kind] ?? "Continue?")).then(async (confirmed) => {
+        if (!confirmed) return;
+        const result = await cancel(plan.bookingId);
         if (!result.ok) report(result.error ?? "The tour could not be cancelled.");
     });
     return true;

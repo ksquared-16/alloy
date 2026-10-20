@@ -1064,6 +1064,20 @@ export async function composeWorkUnitProvisioningAnswer(
             recordOfTruth: { entityType, id: subjectId },
             subject: { id: subjectId, grain: grain.grain, subjectType: grain.subjectType },
             aspect: req.requestedAspect ?? null,
+            // Pill counts for the lens set, from the same canonical locations the operational answer
+            // uses — no active lens, so no queue total. Never fails the answer (`unavailable` instead).
+            settlement: wuRow.department_id
+                ? await loadSettlementLocators({
+                      supabase: req.supabase,
+                      orgId: req.orgId,
+                      departmentId: String(wuRow.department_id),
+                      workViews,
+                      activeWorkViewId: null,
+                      // Counts only: a contextual answer settles no right rail.
+                      surfaceWorkUnitId: "",
+                      deptWorkUnits,
+                  })
+                : SETTLEMENT_LOCATORS_UNAVAILABLE,
             startedAt: t0,
             now,
         });

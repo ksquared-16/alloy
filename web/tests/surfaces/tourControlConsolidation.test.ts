@@ -28,9 +28,21 @@ describe("a configured Cancel Tour cancels the booking", () => {
         const plan = { kind: "cancel_tour" as const, bookingId: "booking-1" };
 
         expect(runCurrentWorkPlanInline(plan, { mutation, confirm: () => false })).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
         expect(cancelTour).not.toHaveBeenCalled();
 
         expect(runCurrentWorkPlanInline(plan, { mutation, confirm: () => true })).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(cancelTour).toHaveBeenCalledWith("booking-1");
+
+        // Alloy's dialog answers asynchronously; the mutation still waits for the answer.
+        cancelTour.mockClear();
+        let answer!: (v: boolean) => void;
+        expect(runCurrentWorkPlanInline(plan, { mutation, confirm: () => new Promise<boolean>((r) => { answer = r; }) })).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(cancelTour).not.toHaveBeenCalled();
+        answer(true);
+        await new Promise((r) => setTimeout(r, 0));
         expect(cancelTour).toHaveBeenCalledWith("booking-1");
     });
 

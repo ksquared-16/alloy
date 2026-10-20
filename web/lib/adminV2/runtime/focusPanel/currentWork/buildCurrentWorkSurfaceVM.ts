@@ -580,6 +580,8 @@ function otherTransitionsFromProcess(context: OperationalContext): CurrentWorkAc
 
     const byTarget = new Map<string, (typeof outgoing)[number]>();
     for (const row of outgoing) {
+        // A transition the admin marked unavailable is authored but not offered.
+        if (row.available === false) continue;
         if (!byTarget.has(row.target_stage_key)) {
             byTarget.set(row.target_stage_key, row);
         }
@@ -587,7 +589,9 @@ function otherTransitionsFromProcess(context: OperationalContext): CurrentWorkAc
 
     return [...byTarget.values()].map((row) => ({
         key: row.transition_ref,
-        label: `Move to ${row.target_stage_label}`,
+        // An explicitly configured transition carries the admin's own words ("Back to Waitlist");
+        // only an edge derived from outcome rules falls back to the destination's name.
+        label: row.source === "process_transition" && row.label?.trim() ? row.label.trim() : `Move to ${row.target_stage_label}`,
         description: `Transition to ${row.target_stage_label}`,
         category: "alternate_path" as const,
         placement: "current_work_alternate_paths" as const,

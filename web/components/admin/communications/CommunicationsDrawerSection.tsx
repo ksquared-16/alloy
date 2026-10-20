@@ -37,6 +37,7 @@ import type {
     FamilyComposeIntent,
 } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 type ThreadRow = {
     id: string;
     channel: string;
@@ -263,16 +264,8 @@ function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
 
 /** Display-only US-style phone; does not change stored values. */
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    const t = String(raw ?? "").trim();
-    return t || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 function counterpartyLabel(

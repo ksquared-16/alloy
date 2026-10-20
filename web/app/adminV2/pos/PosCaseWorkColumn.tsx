@@ -20,6 +20,7 @@ import WhatAlloyFound from "./WhatAlloyFound";
 import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat";
+import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
 
 function statusLabel(s: string): string {
     return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -32,9 +33,11 @@ function formatWhen(iso: string | null): string {
 
 /** A raw ISO calendar date (e.g. a submitted DOB "2022-05-10") must never show as ISO on an operator surface. */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?!\d)/;
-function displaySubmittedValue(value: string | null): string {
+function displaySubmittedValue(value: string | null, field?: { fieldKey?: string | null; label?: string | null }): string {
     if (value == null || value === "") return "—";
     const v = String(value).trim();
+    // A phone reads as a phone; the submission itself is untouched (it is evidence).
+    if (field && isPhoneField(field)) return formatPhoneDisplay(v);
     return ISO_DATE_RE.test(v) ? formatDisplayDate(v) : v;
 }
 
@@ -112,7 +115,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                             {submitted.map((v, i) => (
                                 <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
                                     <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
-                                    <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">{displaySubmittedValue(v.value)}</dd>
+                                    <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">{displaySubmittedValue(v.value, { fieldKey: v.fieldKey ?? null, label: v.label })}</dd>
                                 </div>
                             ))}
                         </dl>

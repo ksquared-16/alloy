@@ -121,7 +121,7 @@ export function resolveSettlementLocators(input: {
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;
     deptWorkUnits: ReadonlyArray<WorkViewCanonicalLocationWorkUnitRow>;
     departmentId: string;
-    activeWorkViewId: string;
+    activeWorkViewId: string | null;
     surfaceWorkUnitId: string;
 }): SettlementLocators {
     const departmentId = input.departmentId.trim();
@@ -156,7 +156,7 @@ export async function loadSettlementLocators(input: {
     orgId: string;
     departmentId: string;
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;
-    activeWorkViewId: string;
+    activeWorkViewId: string | null;
     surfaceWorkUnitId: string;
     /** Optional: units already in hand (parallelized with the answer's own fetches). */
     deptWorkUnits?: ReadonlyArray<WorkViewCanonicalLocationWorkUnitRow> | null;

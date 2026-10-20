@@ -45,6 +45,21 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     // out of Decision. The event id is the family; those rows are process instances, so without
     // membership classification nothing on a child lane ever matched and the list stayed stale.
     "participant_decision",
+    // Every lifecycle mutation moves a record between Work Views (Lead → Tour → Decision, child
+    // Offered → Enrolling / Waitlist) or changes what a view counts. Listed so a mutation made from
+    // a drawer, header, right rail or Process card refetches rows AND sibling counts like a Focus
+    // Panel outcome does — a family that moved to Decision must not stay in New until a reload.
+    "record_tour_outcome",
+    "reschedule_tour",
+    "confirm_tour",
+    "cancel_tour",
+    "update_enrollment_status",
+    "move_to_stage",
+    "offer_spot",
+    "offer_response",
+    "stage_work.start",
+    "complete_stage_work",
+    "review_enrollment_packet",
     // Records/Operations child mutations. Neither has an Opportunity subject, so both broadcast —
     // but both change what derived surfaces COUNT: `child.add` adds a durable child, and
     // `enrollment.start` creates a journey and its participant packet. Listed here so listeners

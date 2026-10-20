@@ -20,6 +20,7 @@ import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focus
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -492,7 +493,7 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                                     >
                                         {c.name ?? "Contact"}
                                         {c.relationship ? ` · ${c.relationship}` : ""}
-                                        {c.phone ? ` · ${c.phone}` : ""}
+                                        {c.phone ? ` · ${formatCanonicalPhone(c.phone)}` : ""}
                                     </span>
                                 ))}
                             </p>

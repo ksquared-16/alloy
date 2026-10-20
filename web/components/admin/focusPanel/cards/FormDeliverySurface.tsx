@@ -22,6 +22,7 @@ import {
     peekWarmFormDelivery,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/formDeliveryWarmCache";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 type Props = {
     opportunityId: string;
     onClose: () => void;
@@ -243,7 +244,7 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
                                                 onChange={() => toggle(selectedRecipients, r.person_id, setSelectedRecipients)}
                                             />
                                             <span>{r.display_name}</span>
-                                            <span className="alloy-os-formdelivery__hint">{channel === "sms" ? r.phone ?? "no phone" : r.email ?? "no email"}</span>
+                                            <span className="alloy-os-formdelivery__hint">{channel === "sms" ? (r.phone ? formatCanonicalPhone(r.phone) : "no phone") : r.email ?? "no email"}</span>
                                         </label>
                                     );
                                 })}

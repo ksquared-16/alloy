@@ -23,6 +23,7 @@ import {
 import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
 import { COMMS_COMPACT_LABEL_CLASS, COMMS_INPUT_CLASS, CommsInlineListReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
+import { formatPhoneDisplay as formatCanonicalPhone } from "@/lib/phone/phonePresentation";
 const TEMPLATES_API = "/api/admin/communications/templates";
 
 type TemplateOption = { id: string; name: string; channel: TemplateChannel };
@@ -56,16 +57,8 @@ type ThreadMessagePreviewRow = {
 };
 
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        const d = digits.slice(1);
-        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-    }
-    if (digits.length === 10) {
-        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    }
-    const t = String(raw ?? "").trim();
-    return t || "—";
+    // The platform's one phone formatter (lib/phone/phonePresentation).
+    return formatCanonicalPhone(raw);
 }
 
 function previewSnippet(body: string | null | undefined, max = 72): string {

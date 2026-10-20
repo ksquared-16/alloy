@@ -104,7 +104,9 @@ describe("a production consumer exists", () => {
 
     it("rows converge by re-preparing the committed answer, not by a second row store", () => {
         const src = read(runtimePath);
-        expect(src).toContain("provisioning.invalidateDestination(current)");
+        // Every work view of the unit is invalidated — the record moved BETWEEN views, so the sibling
+        // it moved to must re-prepare too (Human QA: family stayed in New / Decision answered stale).
+        expect(src).toContain("provisioning.invalidateWorkUnit(current)");
         // Subject scope first: a LENS re-commit clears the subject and would deselect the record.
         expect(src).toContain("ATTENTION_SCOPE.SUBJECT");
     });

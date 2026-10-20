@@ -682,7 +682,8 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
          */
         clearProvisioningPrefetchCache();
         bustOperatorRuntimeReadCaches();
-        kernel.provisioning.invalidateDestination(current);
+        // Every work view of the unit, not only this one: the record moved BETWEEN them.
+        kernel.provisioning.invalidateWorkUnit(current);
         if (current.subject) {
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.SUBJECT,

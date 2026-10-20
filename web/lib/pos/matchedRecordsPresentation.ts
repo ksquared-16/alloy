@@ -12,6 +12,7 @@ import type { IntakeRecommendation } from "@/lib/forms/intake/resolveIntakeIdent
 import type { OperationalIntentKey } from "@/lib/forms/operationalIntentTemplates";
 import { decisionNounForIntent } from "@/lib/pos/decisionPresentation";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { formatPhoneDisplay } from "@/lib/phone/phonePresentation";
 
 export type MatchedRecordTone = "match" | "new" | "review";
 
@@ -85,7 +86,7 @@ export function buildMatchedRecords(input: {
             role: "parent",
             title: "Parent",
             name: parentName,
-            details: [p.email, p.phone].filter(Boolean) as string[],
+            details: [p.email, p.phone ? formatPhoneDisplay(p.phone) : null].filter(Boolean) as string[],
             basis,
             basisTone: tone,
         });

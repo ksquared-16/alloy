@@ -376,7 +376,9 @@ export default function ProcessingQueueList({
                   ? "Ready to generate"
                   : lane === "ready_publish"
                     ? "Ready to publish"
-                    : "Completed";
+                    : row.rejected
+                      ? "Rejected"
+                      : "Completed";
         const laneTone =
             lane === "needs_review"
                 ? "text-alloy-midnight/50"

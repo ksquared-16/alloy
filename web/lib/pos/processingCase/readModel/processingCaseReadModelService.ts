@@ -83,6 +83,7 @@ export async function listProcessingCaseQueue(
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
             subjectRemoved: c.processing_case_subject_removed === true,
+            rejected: ((c.metadata as Record<string, unknown> | null)?.disposition as { outcome?: unknown } | undefined)?.outcome === "rejected",
             sourceDisplay,
             caseTitle: (() => {
                 const raw = (c.metadata as Record<string, unknown> | null)?.case_title;
@@ -147,6 +148,12 @@ export async function getProcessingCaseDetail(
         updatedAt: c.updated_at,
         archivedAt: c.archived_at,
         subjectRemoved: c.processing_case_subject_removed === true,
+        disposition: (() => {
+            const d = (c.metadata as Record<string, unknown> | null)?.disposition as Record<string, unknown> | undefined;
+            if (!d || typeof d.outcome !== "string") return null;
+            const s = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+            return { outcome: d.outcome, reasonLabel: s(d.reason_label), note: s(d.note), at: s(d.at) };
+        })(),
         sources,
         caseTitle: (() => {
             const raw = (c.metadata as Record<string, unknown> | null)?.case_title;

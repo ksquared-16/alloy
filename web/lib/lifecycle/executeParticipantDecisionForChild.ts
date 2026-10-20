@@ -34,6 +34,12 @@ import {
     applyParticipantDecisionInputs,
     type ParticipantDecisionInputIssue,
 } from "@/lib/lifecycle/applyParticipantDecisionInputs";
+import {
+    inputUsesProgramCategories,
+    programCategoryOptionsForLocation,
+    resolveChildOfferLocationId,
+    withSourcedInputOptions,
+} from "@/lib/lifecycle/participantDecisionInputOptions";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
 import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
 import { recordParticipantDecisionActivity } from "@/lib/lifecycle/recordBusinessActivity";
@@ -225,10 +231,20 @@ export async function executeParticipantDecisionForChild(
     }
     const customerMemberId = child.customerMemberId;
 
+    // A placement chosen from the child's location's programs is validated against THOSE programs,
+    // re-read now — never against whatever the surface was drawn with.
+    const sourcesPrograms = (decision.required_inputs ?? []).some(inputUsesProgramCategories);
+    const offerLocationId = sourcesPrograms
+        ? await resolveChildOfferLocationId(input.supabase, { orgId: input.orgId, opportunityId, customerMemberId })
+        : null;
+    const decisionWithOptions = sourcesPrograms
+        ? withSourcedInputOptions(decision, await programCategoryOptionsForLocation(input.supabase, { orgId: input.orgId, locationId: offerLocationId }))
+        : decision;
+
     // Inputs are validated and bound BEFORE the transaction opens. A missing close reason is a
     // configuration-and-operator matter, not a rollback.
     const bound = applyParticipantDecisionInputs({
-        decision,
+        decision: decisionWithOptions,
         values: input.inputValues,
     });
     if (!bound.ok) {
@@ -475,7 +491,13 @@ export async function executeParticipantDecisionForChild(
                                 decision_answers_v1: {
                                     ...answers,
                                     [decisionKey]: {
-                                        answers: bound.answers,
+                                        // A program placement is stored as canonical ids beside its label.
+                                        answers: bound.answers.map((a) => {
+                                            const spec = (decision.required_inputs ?? []).find((i) => i.key === a.key);
+                                            return spec && inputUsesProgramCategories(spec)
+                                                ? { ...a, program_category_id: a.value, location_id: offerLocationId }
+                                                : a;
+                                        }),
                                         decided_at: new Date().toISOString(),
                                         decided_by: input.userId,
                                         stage_key: input.stageKey,

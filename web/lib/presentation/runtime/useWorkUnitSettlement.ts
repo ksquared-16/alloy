@@ -36,6 +36,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { SettlementLocators } from "@/lib/runtime/provisioning/settlementLocators";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import {
     useWorkViewTotalsState,
@@ -107,9 +108,20 @@ export function useWorkUnitSettlement(
     // A contextual surface HAS a host work unit; that is hosting truth and stays true. What it has no
     // claim to is a settled value. `nothingToSettle` keeps the regions from reporting `pending` — a
     // promise that something is still coming, when nothing ever will be.
-    const nothingToSettle = snapshot?.terminal === "contextual";
+    /*
+     * A contextual answer settles PILL COUNTS ONLY (when it carries count locations): the lens set's
+     * counts are a property of the work unit, not of a chosen cohort, so a record opened by deep link
+     * or refresh shows the same counts as one reached by pill navigation. KPIs and the queue total
+     * stay lens-only, and with no active lens there are none to settle.
+     */
+    const contextualLocators =
+        snapshot?.terminal === "contextual"
+            ? ((snapshot as { settlement?: SettlementLocators }).settlement ?? null)
+            : null;
+    const nothingToSettle = snapshot?.terminal === "contextual" && contextualLocators?.status !== "resolved";
     const workUnitId = settleable?.workUnit.id ?? (snapshot?.terminal === "contextual" ? snapshot.workUnit.id : null);
-    const locators = settleable?.settlement ?? null;
+    const locators = settleable?.settlement ?? contextualLocators ?? null;
+    const answerOrgId = settleable?.orgId ?? (snapshot?.terminal === "contextual" ? snapshot.orgId : null);
 
     const siteFilter = useWorkspaceSiteFilter();
     const siteId = siteFilter?.selectedSiteId ?? null;
@@ -203,11 +215,11 @@ export function useWorkUnitSettlement(
         enabled: targets.length > 0,
         refreshToken: options?.refreshToken,
         documentSeed: workViewTotalsSeed,
-        seedOrgId: settleable?.orgId ?? null,
+        seedOrgId: answerOrgId,
         seedHostWorkUnitId: workUnitId,
     });
 
-    const settlementOrgId = settleable?.orgId ?? null;
+    const settlementOrgId = answerOrgId;
     /*
      * PUBLISH WHAT THIS OWNER RESOLVED — from whichever path produced it.
      *
@@ -250,14 +262,26 @@ export function useWorkUnitSettlement(
     useEffect(() => clearWorkViewTotalsPublication, []);
 
     // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.
+    /*
+     * A RE-COMMIT NEVER BLANKS THE PILLS. While a mutation's re-preparation is pending (no locators yet)
+     * the last counts this work unit settled stay on screen until the new ones land — a converging
+     * count corrects the pill, it does not empty it first.
+     */
+    const lastSettledCounts = useRef<{ workUnitId: string; counts: Map<string, number | null> } | null>(null);
     const viewCounts = useMemo<Map<string, number | null>>(() => {
-        if (!locators || locators.status !== "resolved" || targets.length === 0) return EMPTY_COUNTS;
+        if (!locators || locators.status !== "resolved" || targets.length === 0) {
+            const last = lastSettledCounts.current;
+            return last && workUnitId && last.workUnitId === workUnitId && !locators ? last.counts : EMPTY_COUNTS;
+        }
         const out = new Map<string, number | null>();
         for (const t of locators.workViewCountTargets) {
             out.set(t.workViewId, totalsState.totals.get(workViewTotalKey(t.hostWorkUnitId, t.workViewId)) ?? null);
         }
         return out;
-    }, [locators, targets.length, totalsState.totals]);
+    }, [locators, targets.length, totalsState.totals, workUnitId]);
+    useEffect(() => {
+        if (workUnitId && totalsState.settled && viewCounts.size > 0) lastSettledCounts.current = { workUnitId, counts: viewCounts };
+    }, [workUnitId, totalsState.settled, viewCounts]);
 
     const queueTotal = useMemo<number | null>(() => {
         if (!locators || locators.status !== "resolved" || !locators.queueTotalTarget) return null;
