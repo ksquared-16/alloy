@@ -45,6 +45,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
+import { resolveReceiptAccount } from "@/lib/financials/payments/paymentLedgerFacts";
 
 import {
     OperationalEnrollmentServiceError,
@@ -372,6 +373,14 @@ export async function recordChildcarePayment(
     const status: ChildcarePaymentStatus = input.status === "pending" ? "pending" : "posted";
     const now = nowIso();
     const receivedAt = trimOrNull(input.receivedAt) ?? now;
+    /*
+     * W7-F042: WHERE THIS MONEY LANDS, recorded as it arrives. The method's configured destination
+     * (an asset account) is resolved once and stamped on the receipt, so the ledger reports the
+     * accounting that applied at the time — a later mapping change never re-labels it. No
+     * destination configured is stamped as such; a failed read stamps nothing. Neither blocks the
+     * receipt.
+     */
+    const receiptAccount = await resolveReceiptAccount(supabase, orgId, input.paymentMethod);
 
     const { data, error } = await supabase
         .from("payments")
@@ -402,7 +411,9 @@ export async function recordChildcarePayment(
             // refuses the pair being inconsistent, so the two can never drift.
             posted_at: status === "posted" ? now : null,
             notes: trimOrNull(input.notes),
-            metadata: input.metadata ?? {},
+            metadata: receiptAccount
+                ? { ...(input.metadata ?? {}), receipt_account: receiptAccount }
+                : (input.metadata ?? {}),
             updated_at: now,
             created_by: input.actorUserId ?? null,
             updated_by: input.actorUserId ?? null,
@@ -441,6 +452,11 @@ export async function recordChildcarePayment(
  * A receipt's `obligation_delta_cents` is ZERO. Money on the account is not money applied to an
  * obligation, and the journal is the one place where conflating them would be invisible.
  */
+function receiptAccountOf(payment: PaymentRow): unknown {
+    const m = (payment as unknown as { metadata?: unknown }).metadata;
+    return m && typeof m === "object" ? ((m as Record<string, unknown>).receipt_account ?? null) : null;
+}
+
 async function recordPaymentReceivedEntry(
     supabase: SupabaseClient,
     payment: PaymentRow,
@@ -462,7 +478,10 @@ async function recordPaymentReceivedEntry(
             // Money reports in the period it ARRIVED in, not the one it was keyed in.
             effectiveOn: payment.received_at,
             actorUserId,
-            metadata: { payment_method: payment.payment_method },
+            metadata: {
+                payment_method: payment.payment_method,
+                ...(receiptAccountOf(payment) ? { receipt_account: receiptAccountOf(payment) } : {}),
+            },
         }),
     );
 }

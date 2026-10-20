@@ -13,58 +13,57 @@ const MODEL = "lib/financials/payments/paymentSubjectModel.ts";
 const ATTEMPT = "lib/financials/payments/collectionAttempt.ts";
 
 describe("an operator never re-enters a card the family already gave us", () => {
-    it("offers the stored methods as a choice on a provider rail", () => {
+    /*
+     * W7-F045: the family's methods on file are OPTIONS OF THE METHOD CHOOSER itself — not a second
+     * chooser that appears only after the operator has first picked the rail.
+     */
+    it("offers every usable stored method in the Method chooser", () => {
         const src = code(CARD);
-        expect(src).toMatch(/testId="financials-payment-stored-method"/);
-        expect(src).toMatch(/eligibleStoredMethods/);
+        expect(src).toMatch(/testId="financials-payment-method"/);
+        expect(src).toMatch(/storedMethodsOnFile\.map\(\(m\) =>/);
+        expect(src).toMatch(/value: `stored:\$\{m\.id\}`/);
+        expect(src, "the old second chooser is gone").not.toMatch(/financials-payment-stored-method/);
     });
 
-    it("offers 'Use another card' as an explicit alternate, not the only path", () => {
+    it("offers a new card or bank account as an explicit alternate, not the only path", () => {
         const src = read(CARD);
-        expect(src).toMatch(/Use another card/);
-        expect(src).toMatch(/Use another bank account/);
+        expect(src).toMatch(/"New card"/);
+        expect(src).toMatch(/"New bank account"/);
     });
 
-    it("only offers a chooser where a provider rail can actually collect", () => {
-        /* Cash and cheque record money that already arrived; there is no method to choose. */
+    it("lists only methods that can actually collect", () => {
         const src = code(CARD);
-        expect(src).toMatch(/payMethod !== "card" && payMethod !== "ach"/);
+        expect(src).toMatch(/m\.usabilityState === "usable" && \(m\.rail === "card" \|\| \(m\.rail === "ach" && vm\?\.achAvailable\)\)/);
     });
 
-    it("selects the single usable method, else the account default for that rail", () => {
+    it("choosing a stored method sets its rail and names its owner as the payer", () => {
         const src = code(CARD);
-        expect(src).toMatch(/eligibleStoredMethods\.find\(\(m\) => m\.isDefault\)/);
-        expect(src).toMatch(/eligibleStoredMethods\[0\]/);
-    });
-
-    it("re-derives the selection when the rail or payer changes", () => {
-        /*
-         * A stale id here is precisely the mismatch the server refuses: a method that was eligible
-         * a moment ago may not belong to the payer now named.
-         */
-        const src = code(CARD);
-        const at = src.indexOf("eligibleStoredMethods.length");
+        const at = src.indexOf('next.startsWith("stored:")');
         expect(at).toBeGreaterThan(-1);
-        expect(src.slice(at - 400, at)).toMatch(/useEffect/);
+        const block = src.slice(at, at + 700);
+        expect(block).toMatch(/setPayMethod\(m\.rail\)/);
+        expect(block).toMatch(/setPayPayerPersonId\(m\.payerEntityId/);
+        expect(block).toMatch(/setPayStoredMethodId\(m\.id\)/);
+    });
+
+    it("drops a stored method that no longer belongs to the payer now named", () => {
+        /* A stale id here is precisely the mismatch the server refuses. */
+        const src = code(CARD);
+        expect(src).toMatch(/m\.payerEntityId && namedPayerId && m\.payerEntityId !== namedPayerId\) setPayStoredMethodId\(""\)/);
     });
 });
 
 describe("the payer owns the method — enforced, not merely displayed", () => {
-    it("scopes the offered methods to the named payer", () => {
-        const src = code(CARD);
-        expect(src).toMatch(/m\.payerEntityId === payPayerPersonId/);
-    });
-
     it("does not attach an un-owned legacy method to a named payer", () => {
-        /* `!m.payerEntityId` is allowed ONLY because the row names no owner at all. */
+        /* An un-owned method pays for the household; with a person named it is dropped. */
         const src = code(CARD);
-        expect(src).toMatch(/!m\.payerEntityId \|\| m\.payerEntityId === payPayerPersonId/);
+        expect(src).toMatch(/!m\.payerEntityId && namedPayerId\) setPayStoredMethodId\(""\)/);
     });
 
     it("carries the payer with the method so the server can refuse a mismatch", () => {
         const src = code(CARD);
         expect(src).toMatch(/payment_method_id: payStoredMethodId/);
-        expect(src).toMatch(/payer_person_id: payPayerPersonId/);
+        expect(src).toMatch(/payer_person_id: namedPayerId/);
     });
 
     it("the SERVER is the authority that refuses delegated use", () => {

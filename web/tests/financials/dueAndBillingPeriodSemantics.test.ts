@@ -104,7 +104,7 @@ describe("the preview reports the due date it already resolved", () => {
     ).replace(/\/\*[\s\S]*?\*\//g, "");
 
     it("reports intent.dueDate rather than recomputing one", () => {
-        expect(/intent\.dueDate \? `Due \$\{intent\.dueDate\}` : null/.test(action)).toBe(true);
+        expect(/intent\.dueDate \? `Due \$\{humanDay\(intent\.dueDate\)\}` : null/.test(action)).toBe(true);
     });
 
     it("and the card reads it rather than hardcoding a phrase", () => {

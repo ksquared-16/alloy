@@ -146,11 +146,11 @@ describe("Nov 5 — created late, on Nov 5", () => {
 
     it("says so in the preview, with the rule and the date it would have been", () => {
         const lines = chargeDateChainPreviewLines(c, false);
-        expect(lines).toContain("Billing period November 2026 · 2026-11-01 → 2026-11-30");
-        expect(lines).toContain("Invoice date 2026-11-05");
-        expect(lines.find((l) => l.startsWith("Invoice timing"))).toMatch(/would be 2026-10-25; this charge is added later/);
-        expect(lines).toContain("Due 2026-11-05");
-        expect(lines.find((l) => l.startsWith("Payment terms"))).toMatch(/would be 2026-11-01, before this charge is invoiced/);
+        expect(lines).toContain("Billing period November 2026 · Nov 1, 2026 → Nov 30, 2026");
+        expect(lines).toContain("Invoice date Nov 5, 2026");
+        expect(lines.find((l) => l.startsWith("Invoice timing"))).toMatch(/would be Oct 25, 2026; this charge is added later/);
+        expect(lines).toContain("Due Nov 5, 2026");
+        expect(lines.find((l) => l.startsWith("Payment terms"))).toMatch(/would be Nov 1, 2026, before this charge is invoiced/);
         /* W7-F027: a current-period charge is active on confirm — the operator never posts it. */
         expect(lines.find((l) => l.startsWith("Posting"))).toMatch(/Active on confirm/);
     });
@@ -234,7 +234,7 @@ describe("posting review stays independent of the calendar gate", () => {
 
     it("a future-period charge under review waits for its period, then for review", () => {
         const c = chain({ createdOn: "2026-10-08" });
-        expect(chargeDateChainPreviewLines(c, true).find((l) => l.startsWith("Posting"))).toMatch(/Scheduled until 2026-11-01.*then needs review/);
+        expect(chargeDateChainPreviewLines(c, true).find((l) => l.startsWith("Posting"))).toMatch(/Scheduled until Nov 1, 2026.*then needs review/);
     });
 
     it("no resolved period promises nothing about posting", () => {

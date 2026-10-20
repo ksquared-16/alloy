@@ -150,7 +150,8 @@ describe("THE GATE — focused Details carries no payment band at all (W7-F026)"
 
     /* The legitimate payment paths are untouched — this was never about removing payment. */
     it("keeps the payment overlay's own band, Payment Details' scoped band, and the Details payment control", () => {
-        expect(host, "the payment surface still renders its band").toContain("paymentBandFor(false)");
+        /* W7-F045: tabbed — Payment takes money, Refunds is its secondary tab. */
+        expect(host, "the payment surface still renders its band").toContain("paymentBandFor(false, undefined, true)");
         expect(host, "Payment Details renders the same band scoped to one receipt").toContain("paymentBandFor(false, surface.paymentId)");
         expect(host, "Details still offers Payment").toContain("onPayment={openSettle}");
     });
