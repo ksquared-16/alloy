@@ -118,9 +118,10 @@ function makeSupabase(instances: Array<{ id: string; subject_id: string; state: 
     } as never;
 }
 
-const project = (instances: Array<{ id: string; subject_id: string; state: string | null }>, tasks: OpenTask[] = []) =>
+const project = (instances: Array<{ id: string; subject_id: string; state: string | null }>, tasks: OpenTask[] = [], foldedStageKeys?: ReadonlySet<string>) =>
     projectParticipantDecisionRows({
         supabase: makeSupabase(instances, tasks),
+        ...(foldedStageKeys ? { foldedStageKeys } : {}),
         orgId: ORG,
         opportunityId: LEAD,
         plan: PLAN,
@@ -136,12 +137,15 @@ describe("participant decision surface", () => {
                 { id: "pi-liam", subject_id: LIAM, state: null },
             ],
             [
-                { id: "task-family", title: "Decide each child's path", metadata: {}, created_at: "2026-10-01T00:00:00Z" },
-                { id: "task-emma", title: "Get the family's answer", metadata: { bp_subject_customer_member_id: EMMA }, created_at: "2026-10-02T00:00:00Z" },
+                { id: "task-family", title: "Decide each child's path", metadata: { lifecycle_stage_key: "decision" }, created_at: "2026-10-01T00:00:00Z" },
+                { id: "task-emma", title: "Get the family's answer", metadata: { lifecycle_stage_key: "offered", bp_subject_customer_member_id: EMMA }, created_at: "2026-10-02T00:00:00Z" },
+                // Registration's packet is the enrolling stage's work, never offered on Decision.
+                { id: "task-liam", title: "Send enrollment packet", metadata: { lifecycle_stage_key: "enrolling", bp_subject_customer_member_id: LIAM }, created_at: "2026-10-03T00:00:00Z" },
             ],
+            new Set(["offered"]),
         );
         expect(surface!.rows[0]!.open_work).toEqual({ task_id: "task-emma", label: "Get the family's answer" });
-        // Family work never surfaces as a child's work; a child without its own work has none.
+        // Family work never surfaces as a child's work; work at a stage of its own (Registration) is not Decision's.
         expect(surface!.rows[1]!.open_work).toBeNull();
     });
 

@@ -37,6 +37,8 @@ export type ParticipantDecisionContext = {
     /** The RESOLVED template key — callers must use this, not what they asked for. */
     templateKey: string;
     departmentMetadata: Record<string, unknown>;
+    /** Stages configured as sub-stages of this one (`parent_stage_key`) — presented inside it. */
+    foldedStageKeys: ReadonlySet<string>;
     /** Operator label for a decision — its override, else the capability's registered label. */
     resolveDecisionLabel: (decision: StageWorkParticipantDecisionV1) => string;
     /**
@@ -136,6 +138,7 @@ export async function resolveParticipantDecisionContext(params: {
             template,
             templateKey,
             departmentMetadata,
+            foldedStageKeys: foldedStageKeysOf(departmentMetadata, stageKey),
             resolveDecisionLabel: (decision) => {
                 const authored = decision.label?.trim();
                 if (authored) return authored;
@@ -157,4 +160,11 @@ export async function resolveParticipantDecisionContext(params: {
             },
         },
     };
+}
+
+/** The active process's stages whose `parent_stage_key` is `stageKey`. */
+function foldedStageKeysOf(departmentMetadata: Record<string, unknown>, stageKey: string): ReadonlySet<string> {
+    const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
+    const process = builder ? activeLifecycleProcess(builder) : null;
+    return new Set((process?.stages ?? []).filter((s) => s.parent_stage_key?.trim() === stageKey).map((s) => s.key));
 }

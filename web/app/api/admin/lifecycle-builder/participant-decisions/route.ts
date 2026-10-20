@@ -17,6 +17,7 @@ import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlati
 import { resolveParticipantDecisionContext } from "@/lib/lifecycle/resolveParticipantDecisionContext";
 import { projectParticipantDecisionRows } from "@/lib/lifecycle/projectParticipantDecisionRows";
 import { executeParticipantDecisionForChild } from "@/lib/lifecycle/executeParticipantDecisionForChild";
+import { completeFamilyDecisionWorkWhenResolved } from "@/lib/lifecycle/completeFamilyDecisionWorkWhenResolved";
 import { WORK_OPERATE, requireWorkCapability } from "@/lib/access/workAuthority";
 
 /** GET — render the participant decision surface for one family's work item. */
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
         plan: resolved.context.plan,
         templateKey: resolved.context.templateKey,
         resolveDecisionLabel: resolved.context.resolveDecisionLabel,
+        foldedStageKeys: resolved.context.foldedStageKeys,
     });
 
     // No configured participant decisions is not an error — it is a work item that does not have
@@ -214,6 +216,21 @@ export async function POST(request: NextRequest) {
         plan: resolved.context.plan,
         templateKey: resolved.context.templateKey,
         resolveDecisionLabel: resolved.context.resolveDecisionLabel,
+        foldedStageKeys: resolved.context.foldedStageKeys,
+    });
+
+    // The last child's path completes the family's Decision work — no second "what happened?".
+    const familyWork = await completeFamilyDecisionWorkWhenResolved({
+        supabase,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        departmentId: resolved.context.departmentId,
+        opportunityId,
+        stageKey: resolved.context.stageKey,
+        plan: resolved.context.plan,
+        template: resolved.context.template,
+        allResolved: surface?.progress.all_resolved === true,
+        correlationId,
     });
 
     return NextResponse.json(
@@ -222,7 +239,11 @@ export async function POST(request: NextRequest) {
             changed: result.changed,
             decision_key: result.decision_key,
             affected: result.affected,
-            degraded: result.degraded,
+            degraded: [
+                ...(result.degraded ?? []),
+                ...(!familyWork.completed && familyWork.reason === "failed" ? [`family_work_completion: ${familyWork.message ?? "failed"}`] : []),
+            ],
+            family_work_completed: familyWork.completed,
             progress: surface?.progress,
             rows: surface?.rows,
             correlation_id: result.correlation_id || correlationId,

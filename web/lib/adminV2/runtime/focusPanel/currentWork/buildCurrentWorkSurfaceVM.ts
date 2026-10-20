@@ -692,9 +692,12 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         templateConfig?.outcome_refs,
         templateConfig?.outcome_refs_explicit === true,
     );
+    // Per-child work is resolved by choosing each child's path, not by "recording an outcome": its
+    // action reads as the work itself ("Decide each child's path") and opens the children's paths.
+    const decidesParticipants = actionableWorkItem?.decides_participants === true;
     const primaryActionLabel =
-        showOutcomeCompletion && actionableWorkItem?.state === "open" && pickerOutcomes.length > 0
-            ? CURRENT_WORK_RECORD_OUTCOME_CTA
+        showOutcomeCompletion && actionableWorkItem?.state === "open" && (pickerOutcomes.length > 0 || decidesParticipants)
+            ? decidesParticipants ? actionableWorkItem!.label : CURRENT_WORK_RECORD_OUTCOME_CTA
             : null;
 
     const allowlist = contextAllowedActionKeys({

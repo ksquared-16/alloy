@@ -11,7 +11,7 @@
  *   the work           "Review each child's path"
  *   progress           "1 of 3 children decided"
  *   each child         one current path, and the choices available to them
- *   completion cue     "All children have a path. You can now complete this step."
+ *   completion cue     "Every child has a path — this step is complete." (the runtime completes it)
  *   closing the lead   secondary, destructive, beneath the work — but INSIDE it
  *
  * Nothing about execution changed: the same two endpoints, the same explicit child identity, the

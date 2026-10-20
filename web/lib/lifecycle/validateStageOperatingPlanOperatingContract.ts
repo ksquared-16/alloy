@@ -59,6 +59,7 @@ export type StageOperatingContractIssueCode =
     | "participant_decision_binding_unsupported"
     /** A required select input offers no options to choose from. */
     | "participant_decision_input_options_missing"
+    | "participant_decision_participation_binding_mismatch"
     /** Work completion is gated on participants being resolved, but nothing resolves them. */
     | "participant_resolution_gate_without_decisions"
     /** Family close sends children to a stage that belongs to the family case. */
@@ -169,6 +170,27 @@ function validateParticipantDecisions(
                     code: "participant_decision_input_options_missing",
                     severity: "error",
                     message: `"${input.label}" asks the operator to choose, but no options are configured.`,
+                    controlId: `${controlId}-input-${input.key}`,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+            // A placement fact is recorded from an answer of its own kind: a room from the location's
+            // rooms, a program from its programs, a start from a date.
+            const participation = input.binds_to_participation_field;
+            const participationMismatch =
+                participation === "program_room_cohort_key" ? input.options_source !== "location_rooms"
+                : participation === "program_category_id" ? input.options_source !== "location_program_categories"
+                : participation === "start_date" ? input.type !== "date"
+                : false;
+            if (participationMismatch) {
+                issues.push({
+                    code: "participant_decision_participation_binding_mismatch",
+                    severity: "error",
+                    message:
+                        participation === "start_date"
+                            ? `"${input.label}" records the start date, so it must be a date.`
+                            : `"${input.label}" records the child's ${participation === "program_room_cohort_key" ? "room" : "program"}, so its choices must come from the location's ${participation === "program_room_cohort_key" ? "rooms" : "programs"}.`,
                     controlId: `${controlId}-input-${input.key}`,
                     template_key: work.template_key,
                     decision_key: decision.decision_key,
