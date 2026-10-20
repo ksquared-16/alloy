@@ -17,6 +17,15 @@ export type OpportunityWorkspaceLifecycleRail = {
          * when its projections have nothing to say about this particular record.
          */
         support?: string[];
+        /** `family` / `child` — whose position this stage is. Present when configured. */
+        grain?: string;
+        /** The track the stage belongs to (family track vs child track). Present when configured. */
+        track_key?: string;
+        /**
+         * A SUB-STAGE: this stage is presented inside its parent (e.g. internal `offered` inside
+         * Decision). The stepper folds it into the parent step instead of drawing its own milestone.
+         */
+        parent_stage_key?: string;
     }>;
     current_stage_key: string | null;
     /**
@@ -74,6 +83,9 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
             key: s.key.trim(),
             label: (s.label ?? s.key).trim() || s.key.trim(),
             ...(support.length ? { support } : {}),
+            ...(s.grain ? { grain: String(s.grain) } : {}),
+            ...(s.track_key?.trim() ? { track_key: s.track_key.trim() } : {}),
+            ...(s.parent_stage_key?.trim() ? { parent_stage_key: s.parent_stage_key.trim() } : {}),
         };
     });
     if (stages.length < 2) return null;

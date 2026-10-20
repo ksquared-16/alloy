@@ -63,6 +63,8 @@ export type ChildProvisioningRow = ChildRowIdentity & {
     /** Operator-facing child name. */
     title: string | null;
     updatedAt: string | null;
+    /** Stage keys the journey actually entered (recorded path). Empty when unrecorded. */
+    traversedStageKeys?: string[];
 };
 
 type RawChildRow = {
@@ -72,6 +74,7 @@ type RawChildRow = {
     outcome_status_key?: unknown;
     updated_at?: unknown;
     _process_instance_id?: unknown;
+    _traversed_stage_keys?: unknown;
     _effective_stage_key?: unknown;
     customer_members?: unknown;
     opportunities?: unknown;
@@ -165,6 +168,7 @@ export function normalizeChildRow(raw: RawChildRow): ChildProvisioningRow | null
         statusKey: str(raw.outcome_status_key),
         title: childName(raw),
         updatedAt: str(raw.updated_at),
+        traversedStageKeys: Array.isArray(raw._traversed_stage_keys) ? (raw._traversed_stage_keys as unknown[]).filter((k): k is string => typeof k === "string") : [],
     };
 }
 

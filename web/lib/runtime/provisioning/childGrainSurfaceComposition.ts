@@ -95,6 +95,8 @@ export type ChildSurfaceComposition = {
     /** The canonical four-part identity, carried whole. Never collapsed to a scalar. */
     identity: ChildParticipationIdentity;
     family: ChildFamilyContext | null;
+    /** Stage keys the child's journey actually entered (recorded path), when known. */
+    traversedStageKeys?: string[];
 };
 
 export type ChildSurfaceCompositionResult =
@@ -197,6 +199,7 @@ export function composeChildGrainSurface(params: {
             primaryAction,
             primaryActionAbsence,
             childOwnsStageWork,
+            traversedStageKeys: row.traversedStageKeys ?? [],
             identity: {
                 subjectId: row.subjectId,
                 participationId: row.participationId,
@@ -442,5 +445,9 @@ export function childSubjectIdentityTruthBindings(
      */
     const stageKey = composition.stage?.key?.trim() || null;
     if (stageKey) bindings["child.stage_key"] = stageKey;
+    // The stages this child's journey actually entered — so the stepper never ticks a stage the
+    // child skipped (an offered child was never waitlisted).
+    const traversed = composition.traversedStageKeys ?? [];
+    if (traversed.length) bindings["child.traversed_stage_keys"] = traversed.join(",");
     return Object.keys(bindings).length ? bindings : null;
 }

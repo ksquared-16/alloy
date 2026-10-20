@@ -71,7 +71,13 @@ export type UnresolvedParticipant = {
 export type BusinessProcessStage = {
     key: string;
     label: string;
-    state: "done" | "current" | "future";
+    /**
+     * `skipped`: an earlier stage the journey never entered (e.g. Waitlist for a child offered a spot
+     * straight from Decision). Drawn blank like `future` — never a check.
+     */
+    state: "done" | "current" | "future" | "skipped";
+    /** When the current position is a folded sub-stage (internal `offered` inside Decision), its label. */
+    detail?: string | null;
     /** Configured annotation slot 1 — canonical fact, chosen by configuration. */
     primarySupport: string | null;
     /** Configured annotation slot 2. The platform caps it here; there is never a third. */
@@ -110,22 +116,48 @@ function firstNameOf(name: string): string {
     return first && first.length > 0 ? first : trimmed;
 }
 
+type StepperStage = { key: string; grain: string | null; parentKey: string | null };
+
 /**
- * Stage presentation state, decided by position relative to the case's stage — the one place the
- * case marker is expressed, and the only thing that decides `current`.
+ * STAGE STATE FROM THE ACTUAL PATH, NOT FROM CONFIGURED ORDER.
+ *
+ * The rail is one flat list of family stages (Lead, Tour, Decision) followed by child stages (Waitlist,
+ * Offered, Enrolling, Enrolled) — but the child track BRANCHES from Decision. Position alone marked
+ * Waitlist complete for a child offered a spot who was never waitlisted. Now:
+ *   - `current` is the record's stage — or, for a sub-stage (`parent_stage_key`), its parent;
+ *   - a FAMILY stage before a child-track position is done: the child track is entered only from the
+ *     family track's end;
+ *   - a CHILD-track stage before the current one is done only when the journey's recorded path
+ *     (`traversedStageKeys`) entered it; otherwise it is `skipped` (drawn blank). Unknown is never
+ *     inferred as traversed;
+ *   - on the family track (linear), earlier stages are done; everything after `current` is future.
+ * `displayKeys` are the stages drawn (sub-stages folded away); `stages` carries grain and parent.
  */
-function stageStates(
-    stageKeys: readonly string[],
-    caseStageKey: string | null,
-): Map<string, "done" | "current" | "future"> {
-    const out = new Map<string, "done" | "current" | "future">();
-    const currentIndex = caseStageKey ? stageKeys.indexOf(caseStageKey) : -1;
-    stageKeys.forEach((key, i) => {
-        if (currentIndex < 0) {
-            out.set(key, "future");
-            return;
-        }
-        out.set(key, i < currentIndex ? "done" : i === currentIndex ? "current" : "future");
+export function deriveStageStates(input: {
+    stages: readonly StepperStage[];
+    displayKeys: readonly string[];
+    currentKey: string | null;
+    traversedStageKeys?: readonly string[] | null;
+}): Map<string, "done" | "current" | "future" | "skipped"> {
+    const out = new Map<string, "done" | "current" | "future" | "skipped">();
+    const byKey = new Map(input.stages.map((s) => [s.key, s]));
+    const isChild = (key: string) => (byKey.get(key)?.grain ?? "").toLowerCase() === "child";
+    const current = input.currentKey;
+    const displayCurrent = current && byKey.get(current)?.parentKey && input.displayKeys.includes(byKey.get(current)!.parentKey!)
+        ? byKey.get(current)!.parentKey!
+        : current;
+    const currentIndex = displayCurrent ? input.displayKeys.indexOf(displayCurrent) : -1;
+    const traversed = new Set(input.traversedStageKeys ?? []);
+    // A drawn stage counts as entered when it, or a sub-stage folded into it, was entered.
+    const enteredDisplay = (key: string) => traversed.has(key) || input.stages.some((s) => s.parentKey === key && traversed.has(s.key));
+    input.displayKeys.forEach((key, i) => {
+        if (currentIndex < 0) return out.set(key, "future");
+        if (i === currentIndex) return out.set(key, "current");
+        if (i > currentIndex) return out.set(key, "future");
+        if (isChild(key)) return out.set(key, enteredDisplay(key) ? "done" : "skipped");
+        // A family stage before the current position: the family track is linear, and the child
+        // track is entered only from its end.
+        out.set(key, "done");
     });
     return out;
 }
@@ -139,15 +171,29 @@ export function buildBusinessProcessCardEvidence(
     // The case's stage comes from the operational context, which resolves it from the lifecycle
     // rail. Nothing below may write to it.
     const caseStageKey = context.businessProcess.stageKey ?? null;
+    // A folded sub-stage reads as its parent (internal `offered` is operator "Decision").
+    const caseStage = configuredStages.find((s) => s.key === caseStageKey) ?? null;
+    const caseParent = caseStage?.parentKey ? configuredStages.find((s) => s.key === caseStage.parentKey) ?? null : null;
     const caseStageLabel =
-        configuredStages.find((s) => s.key === caseStageKey)?.label
+        caseParent?.label
+        ?? caseStage?.label
         ?? context.businessProcess.label
         ?? null;
 
-    const states = stageStates(
-        configuredStages.map((s) => s.key),
-        caseStageKey,
-    );
+    // Sub-stages (`parent_stage_key`) are presented inside their parent and draw no milestone.
+    const configuredKeys = new Set(configuredStages.map((s) => s.key));
+    const displayStages = configuredStages.filter((s) => !(s.parentKey && configuredKeys.has(s.parentKey)));
+    const states = deriveStageStates({
+        stages: configuredStages.map((s) => ({ key: s.key, grain: s.grain, parentKey: s.parentKey })),
+        displayKeys: displayStages.map((s) => s.key),
+        currentKey: caseStageKey,
+        traversedStageKeys: context.businessProcess.traversedStageKeys ?? null,
+    });
+    const foldedCurrent = configuredStages.find((s) => s.key === caseStageKey && s.parentKey && configuredKeys.has(s.parentKey)) ?? null;
+    const displayKeyOf = (key: string) => {
+        const s = configuredStages.find((x) => x.key === key);
+        return s?.parentKey && configuredKeys.has(s.parentKey) ? s.parentKey : key;
+    };
     const stageKeySet = new Set(configuredStages.map((s) => s.key));
 
     // ── PARTICIPANTS ──────────────────────────────────────────────────────────────────────────
@@ -188,13 +234,15 @@ export function buildBusinessProcessCardEvidence(
         });
     }
 
-    const stages: BusinessProcessStage[] = configuredStages.map((s) => ({
+    const stages: BusinessProcessStage[] = displayStages.map((s) => ({
         key: s.key,
         label: s.label,
         state: states.get(s.key) ?? "future",
+        ...(foldedCurrent && foldedCurrent.parentKey === s.key ? { detail: foldedCurrent.label } : {}),
         primarySupport: s.primarySupport,
         secondarySupport: s.secondarySupport,
-        participants: placed.filter((p) => p.stageKey === s.key),
+        // A participant at a folded sub-stage sits on its parent's step.
+        participants: placed.filter((p) => displayKeyOf(p.stageKey) === s.key),
     }));
 
     // ── CURRENT WORK ──────────────────────────────────────────────────────────────────────────
@@ -224,9 +272,16 @@ export function buildBusinessProcessCardEvidence(
  * null and the rail simply shows the stage — an unannotated stage is a normal, honest state, not a
  * placeholder to fill.
  */
-function readConfiguredStages(
-    context: OperationalContext,
-): Array<{ key: string; label: string; primarySupport: string | null; secondarySupport: string | null }> {
+type ConfiguredStage = {
+    key: string;
+    label: string;
+    primarySupport: string | null;
+    secondarySupport: string | null;
+    grain: string | null;
+    parentKey: string | null;
+};
+
+function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
     const stages = (context.businessProcess.stages ?? []) as Array<Record<string, unknown>>;
     return stages
         .map((s) => {
@@ -244,9 +299,11 @@ function readConfiguredStages(
                 // TWO SLOTS. The platform caps it here so configuration cannot grow a third.
                 primarySupport: slot(0),
                 secondarySupport: slot(1),
+                grain: typeof s.grain === "string" && s.grain.trim() ? s.grain.trim() : null,
+                parentKey: typeof s.parent_stage_key === "string" && s.parent_stage_key.trim() ? s.parent_stage_key.trim() : null,
             };
         })
-        .filter((s): s is { key: string; label: string; primarySupport: string | null; secondarySupport: string | null } => s !== null);
+        .filter((s): s is ConfiguredStage => s !== null);
 }
 
 function safeChildren(context: OperationalContext) {

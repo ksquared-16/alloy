@@ -96,7 +96,7 @@ export function resolvedStatesForTemplate(
     for (const decision of decisions) {
         for (const target of decision.targets) {
             if (target.kind !== "update_child_enrollment_status") continue;
-            const key = target.disposition_key?.trim();
+            const key = (target.disposition_key ?? target.status_key)?.trim();
             if (key) states.add(key);
         }
     }
@@ -116,7 +116,7 @@ function decisionForState(
     if (!state) return null;
     const byState = decisions.filter((d) =>
         d.targets.some(
-            (t) => t.kind === "update_child_enrollment_status" && t.disposition_key?.trim() === state,
+            (t) => t.kind === "update_child_enrollment_status" && (t.disposition_key ?? t.status_key)?.trim() === state,
         ),
     );
     if (stageKey) {
@@ -280,7 +280,7 @@ export async function projectParticipantDecisionRows(params: {
                 const stateTarget = decision.targets.find(
                     (t) => t.kind === "update_child_enrollment_status",
                 );
-                const targetState = stateTarget?.disposition_key?.trim() ?? "";
+                const targetState = (stateTarget?.disposition_key ?? stateTarget?.status_key)?.trim() ?? "";
                 const verdict = resolveChildTrackTransition({
                     currentState: state,
                     targetState,

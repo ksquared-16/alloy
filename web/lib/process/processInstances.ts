@@ -467,7 +467,49 @@ async function applyParticipationLifecycle(
     const result = (data ?? {}) as { ok?: boolean; error?: string };
     // Not-found and stale are ONE outcome, as they have always been on this path: the predicate
     // cannot tell them apart and no caller depended on the difference.
+    if (result.ok === true && setStage && args.stageKey) {
+        await recordStagePathEntry(supabase, { orgId: args.orgId, instanceId: args.instanceId, stageKey: args.stageKey });
+    }
     return result.ok === true ? { applied: true } : { applied: false };
+}
+
+/**
+ * THE STAGES A JOURNEY ACTUALLY ENTERED — `metadata.stage_path_v1`, appended by the one stage writer.
+ *
+ * A branching process (Decision → Offered → Enrolling, or Decision → Waitlist) cannot be read off
+ * configured stage ORDER: a child offered a spot was never waitlisted, yet Waitlist sits earlier on the
+ * rail. The stepper marks a child-track stage complete only when it is on this path. Additive and
+ * best-effort: a journey with no entry (older journeys, or a failed append) shows the stage blank —
+ * never inferred as traversed. The move itself has already been written by the canonical RPC.
+ */
+export const STAGE_PATH_METADATA_KEY = "stage_path_v1";
+
+async function recordStagePathEntry(
+    supabase: SupabaseClient,
+    args: { orgId: string; instanceId: string; stageKey: string },
+): Promise<void> {
+    try {
+        const { data } = await supabase
+            .from("process_instances")
+            .select("metadata")
+            .eq("org_id", args.orgId)
+            .eq("id", args.instanceId)
+            .maybeSingle();
+        const metadata = ((data as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? {}) as Record<string, unknown>;
+        const path = Array.isArray(metadata[STAGE_PATH_METADATA_KEY]) ? (metadata[STAGE_PATH_METADATA_KEY] as Array<{ stage_key?: string }>) : [];
+        if (path.length && path[path.length - 1]?.stage_key === args.stageKey) return;
+        const next = { ...metadata, [STAGE_PATH_METADATA_KEY]: [...path, { stage_key: args.stageKey, entered_at: new Date().toISOString() }].slice(-50) };
+        await supabase.from("process_instances").update({ metadata: next }).eq("org_id", args.orgId).eq("id", args.instanceId);
+    } catch {
+        // The path is evidence for presentation; a lost entry shows a blank step, never a wrong one.
+    }
+}
+
+/** Stage keys a journey actually entered, from `metadata.stage_path_v1`. Empty when unrecorded. */
+export function traversedStageKeysFromMetadata(metadata: unknown): string[] {
+    const raw = (metadata as Record<string, unknown> | null)?.[STAGE_PATH_METADATA_KEY];
+    if (!Array.isArray(raw)) return [];
+    return [...new Set(raw.map((e) => (e as { stage_key?: unknown })?.stage_key).filter((k): k is string => typeof k === "string" && k.trim() !== ""))];
 }
 
 /** Move a process instance's stage (outcome execution is the only caller). */
