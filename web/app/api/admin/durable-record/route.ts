@@ -62,6 +62,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const subjectType = (searchParams.get("subject_type") ?? "").trim().toLowerCase();
     const subjectId = (searchParams.get("subject_id") ?? "").trim();
+    // BP V2 S4 — the site the caller is viewing this subject's Assignment through (a Work View row's
+    // commitment or agreement site). A request only: `loadSubjectContexts` honours it inside scope.
+    const scheduleSiteId = (searchParams.get("context_site_id") ?? "").trim() || null;
 
     if (
         !subjectId
@@ -116,6 +119,7 @@ export async function GET(request: NextRequest) {
                 operationalHost,
             });
             const enumerated = await contextOptionsFor({
+            scheduleSiteId,
                 supabase,
                 orgId: ctx.orgId,
                 dimensions,
@@ -218,6 +222,7 @@ export async function GET(request: NextRequest) {
             operationalHost,
         });
         const enumerated = await contextOptionsFor({
+            scheduleSiteId,
             supabase,
             orgId: ctx.orgId,
             dimensions,
@@ -313,6 +318,7 @@ async function contextOptionsFor(input: {
     personId: string | null;
     /** Resolved from the caller's capabilities, never assumed. */
     canReadCompensation: boolean;
+    scheduleSiteId?: string | null;
 }) {
     try {
         const contexts = await loadSubjectContexts({
@@ -321,6 +327,7 @@ async function contextOptionsFor(input: {
             dimensions: input.dimensions,
             subject: { grain: input.grain, id: input.id, personId: input.personId },
             canReadCompensation: input.canReadCompensation,
+            scheduleSiteId: input.scheduleSiteId ?? null,
         });
         // Two projections of ONE enumeration: what may be SELECTED on the record, and where related
         // work may NAVIGATE. Both read the same `SubjectContext[]`, so they cannot disagree about

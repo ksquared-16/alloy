@@ -70,6 +70,7 @@ import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/dra
 import type { DurableRecordContextOption } from "@/lib/context/durableRecordContextOptions";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import type { DurableRecordFocusSource } from "@/lib/runtime/focus/durableRecordFocusSource";
 
 type Resolved = {
     doc: LayoutDoc | null;
@@ -133,6 +134,7 @@ export default function DurableRecordContextualCard({
     subject,
     schedulingProjection,
     onSaved,
+    focusSource,
 }: {
     option: DurableRecordContextOption;
     subject: DurableContextualSubject;
@@ -143,6 +145,8 @@ export default function DurableRecordContextualCard({
     schedulingProjection?: SchedulingProjectionFirstPaint | null;
     /** Fired after a successful write so the list underneath can refresh this row. */
     onSaved?: () => void;
+    /** BP V2 S4 — the entry's source, handed to the operational card as a focus request. */
+    focusSource?: DurableRecordFocusSource | null;
 }) {
     const [resolved, setResolved] = useState<Resolved | null>(null);
 
@@ -541,6 +545,7 @@ export default function DurableRecordContextualCard({
                     // one way of hearing that — so the surface underneath reloads on close either way,
                     // with no scheduling-specific channel.
                     onMutated={onSaved}
+                    focusSource={focusSource ?? null}
                 />
             </div>
         );

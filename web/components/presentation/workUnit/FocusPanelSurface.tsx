@@ -10,7 +10,8 @@
 
 import DurableRecordSurface from "@/components/presentation/durableRecord/DurableRecordSurface";
 import { parseDomainProjectionRowId } from "@/lib/businessProcesses/projections/domainProjectionIdentity";
-import { preferredDurableContextKey, useDomainProjectionFocusFrame } from "./DomainProjectionFocusContext";
+import { durableRecordEntryFor, useDomainProjectionFocusFrame } from "./DomainProjectionFocusContext";
+import { dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import {
     createContext,
     useCallback,
@@ -112,6 +113,18 @@ export function FocusPanelSurface({
     // the existing durable record panel. The opportunity panel is never mounted for it.
     const projectionFrame = useDomainProjectionFocusFrame();
     const durableSubject = projectionFrame ? parseDomainProjectionRowId(subjectId) : null;
+    /*
+     * BP V2 S4 — THE ENTRY IS PINNED FOR THE LIFE OF THE OPEN RECORD. A confirmed write re-prepares the
+     * Work View, and the row underneath can change its source or leave the view; the record the operator
+     * is holding keeps the source and site it was opened with (the card re-resolves that source against
+     * its own fresh read) instead of reloading under them. A different record is a new entry.
+     */
+    const hasProjectionFrame = projectionFrame != null;
+    const durableEntry = useMemo(
+        () => (projectionFrame && subjectId ? durableRecordEntryFor(projectionFrame) : null),
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the open record by design (see above)
+        [subjectId, hasProjectionFrame],
+    );
     const isOpen = subjectId != null;
     const inlineRecordSelected = subjectId != null;
 
@@ -213,8 +226,18 @@ export function FocusPanelSurface({
                                     key={`${durableSubject.type}:${durableSubject.id}`}
                                     subjectType={durableSubject.type}
                                     subjectId={durableSubject.id}
-                                    presentation="full"
-                                    contextKey={preferredDurableContextKey(projectionFrame.domain)}
+                                    presentation={durableEntry!.presentation}
+                                    contextKey={durableEntry!.contextKey}
+                                    contextSiteId={durableEntry!.contextSiteId}
+                                    focusSource={durableEntry!.focusSource}
+                                    origin={durableEntry!.origin}
+                                    /*
+                                     * BP V2 S4 — A CONFIRMED WRITE MOVES THE VIEW. The card fires this only
+                                     * after the canonical writer succeeded and it re-read its own truth;
+                                     * the Work Unit's existing convergence listener then refetches the
+                                     * rows and re-reads the counts (no opportunity id = every listener).
+                                     */
+                                    onRecordChanged={() => dispatchOpportunityQueueUpdatedBroadcast("domain_projection_record_changed")}
                                 />
                             ) : subjectRefusal ? (
                                 <FocusPanelSubjectRefusal kind={subjectRefusal.kind} message={subjectRefusal.message} />

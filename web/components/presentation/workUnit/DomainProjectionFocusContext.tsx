@@ -20,7 +20,10 @@ export type DomainProjectionFocusFrame = {
      * BP V2 S3 — the selected row's authoritative source (the assignment / agreement / charge that put the
      * record in this view). Context only: the record that opens is the subject, never this.
      */
-    selectedSource?: { kind: string; id: string; reason: string | null } | null;
+    selectedSource?: { kind: string; id: string; reason: string | null; siteLocationId?: string | null } | null;
+    /** BP V2 S4 — operator-facing names, for the record's "why is this open" line. */
+    processLabel?: string | null;
+    workViewLabel?: string | null;
 };
 
 /**
@@ -30,6 +33,34 @@ export type DomainProjectionFocusFrame = {
  */
 export function preferredDurableContextKey(domain: DomainProjectionFocusFrame["domain"]): string | null {
     return domain === "assignments" ? "schedule" : null;
+}
+
+/**
+ * BP V2 S4 — HOW a projection's record opens in the existing durable record surface.
+ *
+ * A domain with an operational context opens in the surface's existing `contextual` presentation —
+ * "choose one thing, see that thing": the operational card (Scheduling, for Assignments) is the primary
+ * object, the record's own views stay one click away, and the full card grid is not rendered underneath.
+ * That is the presentation Operations and Create Assignment already land on; nothing new is composed.
+ * A domain without one keeps the full record (`full`), exactly as Slice 2 opened it.
+ */
+export function durableRecordEntryFor(frame: DomainProjectionFocusFrame): {
+    presentation: "full" | "contextual";
+    contextKey: string | null;
+    contextSiteId: string | null;
+    focusSource: { kind: string; id: string; reason: string | null } | null;
+    origin: { label: string; reason: string | null } | null;
+} {
+    const contextKey = preferredDurableContextKey(frame.domain);
+    const source = frame.selectedSource ?? null;
+    const label = [frame.processLabel, frame.workViewLabel].map((v) => (v ?? "").trim()).filter(Boolean).join(" · ");
+    return {
+        presentation: contextKey ? "contextual" : "full",
+        contextKey,
+        contextSiteId: contextKey ? source?.siteLocationId ?? null : null,
+        focusSource: source ? { kind: source.kind, id: source.id, reason: source.reason } : null,
+        origin: label ? { label, reason: source?.reason ?? null } : null,
+    };
 }
 
 const Ctx = createContext<DomainProjectionFocusFrame | null>(null);

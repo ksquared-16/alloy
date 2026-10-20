@@ -44,6 +44,7 @@ import {
 } from "@/lib/context/buildSubjectContexts";
 import type { SubjectContext } from "@/lib/context/subjectContextTypes";
 import { buildPersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
+import { CHILD_ENROLLMENT_AGREEMENT_OPERATIONAL_STATUSES } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
 import { loadSearchProcessConfiguration } from "@/lib/search/searchProcessConfiguration";
 import {
@@ -72,6 +73,16 @@ export type LoadSubjectContextsInput = {
         /** A child's linked person, when it has one. `customer_members.person_id` is NULLABLE. */
         personId?: string | null;
     };
+    /**
+     * BP V2 S4 — the site a caller is looking at this subject's ASSIGNMENT through (a Work View row
+     * names the site its commitment or agreement is at). Without it the Assignment context is the
+     * newest live row's site, which for a subject committed at two sites is not the one the row meant.
+     *
+     * A REQUEST, NOT A GRANT. It is honoured only for a site inside the caller's scope where the subject
+     * actually holds a live assignment — or, for a child, an operational agreement still to be placed.
+     * Otherwise it is ignored and the context is decided exactly as without it. It never invents one.
+     */
+    scheduleSiteId?: string | null;
 };
 
 export async function loadSubjectContexts(
@@ -92,7 +103,13 @@ export async function loadSubjectContexts(
         // The SAME table for both grains. `schedule_assignments` was deliberately extended in place
         // rather than forked so children and staff would not acquire competing scheduling engines;
         // reading it per grain here honours that rather than working around it.
-        fetchLiveSchedule(supabase, orgId, subject.grain, subjectId),
+        fetchScheduleForContext(
+            supabase,
+            orgId,
+            subject.grain,
+            subjectId,
+            scheduleSiteInScope(input.scheduleSiteId, input.dimensions),
+        ),
     ]);
 
 
@@ -332,6 +349,67 @@ async function fetchLiveSchedule(
             ? String(row.schedule_patterns.site_location_id)
             : null,
     };
+}
+
+/** A requested schedule site, kept only when the caller's scope reaches it. */
+function scheduleSiteInScope(
+    siteId: string | null | undefined,
+    dimensions: AdminAccessScopeDimensions,
+): string | null {
+    const site = (siteId ?? "").trim();
+    if (!site) return null;
+    if (dimensions.siteScope === "all") return site;
+    return (dimensions.allowedSiteLocationIds ?? []).includes(site) ? site : null;
+}
+
+/**
+ * The Assignment context's row, at a REQUESTED site when the subject has a commitment there.
+ *
+ * With no requested site this is `fetchLiveSchedule` unchanged. With one, the subject's live row AT
+ * that site answers (newest first, the same order); a live row with no pattern label still answers,
+ * because the caller is pointing at that commitment and the chip only needs words. A child with no live
+ * row there but an operational agreement there is a child to be PLACED at that site — the Assignment
+ * context is where that happens, so it exists, saying so. Anything else falls back to the default.
+ */
+async function fetchScheduleForContext(
+    supabase: SupabaseClient,
+    orgId: string,
+    grain: "child" | "person",
+    subjectId: string,
+    siteId: string | null,
+): Promise<SubjectScheduleRow | null> {
+    if (!siteId) return fetchLiveSchedule(supabase, orgId, grain, subjectId);
+    const base = supabase
+        .from("schedule_assignments")
+        .select("start_date, schedule_patterns(label)")
+        .eq("org_id", orgId)
+        .eq("site_location_id", siteId);
+    const scoped =
+        grain === "child"
+            ? base.eq("customer_member_id", subjectId)
+            : base.eq("subject_type", "staff").eq("subject_person_id", subjectId);
+    const { data, error } = await scoped
+        .in("status", LIVE_SCHEDULE_STATUSES)
+        .order("start_date", { ascending: false })
+        .limit(1);
+    if (error) throw new Error(error.message);
+    const row = ((data ?? []) as Array<{ schedule_patterns?: { label?: string | null } | null }>)[0];
+    if (row) {
+        return { pattern_label: (row.schedule_patterns?.label ?? "").trim() || "Assigned", site_location_id: siteId };
+    }
+    if (grain === "child") {
+        const { data: agreements, error: agreementError } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("customer_member_id", subjectId)
+            .eq("site_location_id", siteId)
+            .in("status", [...CHILD_ENROLLMENT_AGREEMENT_OPERATIONAL_STATUSES])
+            .limit(1);
+        if (agreementError) throw new Error(agreementError.message);
+        if ((agreements ?? []).length > 0) return { pattern_label: "Not yet assigned", site_location_id: siteId };
+    }
+    return fetchLiveSchedule(supabase, orgId, grain, subjectId);
 }
 
 /**

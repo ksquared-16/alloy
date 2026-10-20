@@ -62,6 +62,12 @@ import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime
 import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import {
+    resolveSchedulingFocus,
+    schedulingFocusNotice,
+    type DurableRecordFocusSource,
+    type SchedulingFocusProjection,
+} from "@/lib/runtime/focus/durableRecordFocusSource";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -80,6 +86,12 @@ type Props = {
      * record changed so the surface underneath reloads on close.
      */
     onMutated?: () => void;
+    /**
+     * BP V2 S4 — the source a Work View row stood on (an assignment, or an agreement with no schedule),
+     * as a FOCUS REQUEST. Resolved against this card's own fresh projection by id only: a match opens
+     * that assignment's detail; a source that has moved on is SAID, never swapped for another row.
+     */
+    focusSource?: DurableRecordFocusSource | null;
 };
 
 // ── Alloy design tokens (Midnight / Slate / Pine / Gold / Ember) ─────────────
@@ -430,7 +442,7 @@ function listAssignments(p: SubjectProj | null, kind: "child" | "staff"): ProjAs
  * (ScheduleRegions): Detail renders values, Edit transforms the same regions into
  * controls in place. The card never edits inline.
  */
-export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview, onMutated }: Props) {
+export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview, onMutated, focusSource }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
     /*
      * THE SUBJECTS THIS CARD IS ABOUT — a family's children, or one staff member.
@@ -663,6 +675,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                             coordination?.back?.();
                         }}
                         onMutated={onMutated}
+                        focusSource={focusSource ?? null}
                     />
                 ) : subjects.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>
@@ -787,6 +800,7 @@ function ScheduleWorkSurface({
     coordination,
     onBack,
     onMutated,
+    focusSource,
 }: {
     child: SchedSubject;
     opportunityId: string | null;
@@ -798,6 +812,8 @@ function ScheduleWorkSurface({
     onBack: () => void;
     /** See {@link Props.onMutated}. */
     onMutated?: () => void;
+    /** See {@link Props.focusSource}. */
+    focusSource?: DurableRecordFocusSource | null;
 }) {
     const [proj, setProj] = useState<SubjectProj | null>(projection);
     const existing = existingView(proj);
@@ -828,8 +844,47 @@ function ScheduleWorkSurface({
     const binding = useMemo(() => assignmentActionBinding(subject), [subject]);
     const applicability = useMemo(() => assignmentSubjectApplicability(subject), [subject]);
 
+    /*
+     * BP V2 S4 — THE ROW'S SOURCE, RESOLVED AGAINST THIS CARD'S OWN READ.
+     *
+     * By id only. A committed future-dated assignment is not one of the listed rows (the list is what
+     * is true now, plus proposals), so it is looked up in the projection's `upcoming` views — only when
+     * a source names it — rather than widening the list every host shows.
+     */
+    const focusResolution = useMemo(
+        () => resolveSchedulingFocus(proj as SchedulingFocusProjection | null, child.kind, focusSource),
+        [proj, child.kind, focusSource],
+    );
+    const focusNoticeText = schedulingFocusNotice(focusResolution);
+    const upcomingAssignments: ProjAssignment[] = useMemo(() => {
+        const views = ((proj as { upcoming?: ProjView[] } | null)?.upcoming ?? []) as ProjView[];
+        return views.flatMap((v) => v.assignments).filter((a) => (a.subjectType ?? "child") === child.kind);
+    }, [proj, child.kind]);
+    // Applied ONCE per source: after that the operator drives, and a refreshed projection that no
+    // longer holds the row must not yank them back.
+    const appliedFocusRef = useRef<string | null>(null);
+    useEffect(() => {
+        const key = focusSource ? `${focusSource.kind}:${focusSource.id}` : null;
+        if (!key || appliedFocusRef.current === key) return;
+        appliedFocusRef.current = key;
+        if (focusResolution.status === "assignment") {
+            setActiveAssignmentId(focusResolution.assignmentId);
+            setMode("assignment");
+        }
+    }, [focusSource, focusResolution]);
+
     const activeAssignment =
-        currentAssignments.find((a) => a.id === activeAssignmentId) ?? null;
+        currentAssignments.find((a) => a.id === activeAssignmentId)
+        ?? upcomingAssignments.find((a) => a.id === activeAssignmentId)
+        ?? null;
+    const focusNotice = focusNoticeText ? (
+        <p
+            style={{ fontSize: 12, color: T.slate, margin: "0 0 8px" }}
+            data-scheduling-focus-notice={focusResolution.status}
+        >
+            {focusNoticeText}
+        </p>
+    ) : null;
 
     const previousFocus = coordination?.previousFocus ?? null;
 
@@ -962,8 +1017,15 @@ function ScheduleWorkSurface({
 
     if (mode === "assignment" && activeAssignment) {
         return (
-            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-surface="detail">
+            <div
+                data-schedule-surface="true"
+                data-schedule-ready="true"
+                data-assignment-surface="detail"
+                data-assignment-detail-id={activeAssignment.id}
+                data-scheduling-focus={focusResolution.status}
+            >
                 {header}
+                {focusNotice}
                 {actionError ? (
                     <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
                 ) : null}
@@ -1119,8 +1181,14 @@ function ScheduleWorkSurface({
 
     if (mode === "detail" || mode === "assignment") {
         return (
-            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-list-surface="true">
+            <div
+                data-schedule-surface="true"
+                data-schedule-ready="true"
+                data-assignment-list-surface="true"
+                data-scheduling-focus={focusResolution.status}
+            >
                 {header}
+                {focusNotice}
                 <AssignmentListSurface
                     child={child}
                     proj={proj}
@@ -1258,8 +1326,9 @@ function ScheduleWorkSurface({
             : null);
 
     return (
-        <div data-schedule-surface="true" data-schedule-ready="true">
+        <div data-schedule-surface="true" data-schedule-ready="true" data-scheduling-focus={focusResolution.status}>
             {header}
+            {focusNotice}
             {actionError ? (
                 <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
             ) : null}

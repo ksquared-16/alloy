@@ -51,6 +51,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableRecordModelWire";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { DurableSubjectType } from "@/lib/runtime/focus/durableRecordRoute";
+import type { DurableRecordFocusSource } from "@/lib/runtime/focus/durableRecordFocusSource";
 
 type LoadState =
     | { status: "loading" }
@@ -103,6 +104,9 @@ export default function DurableRecordSurface({
      * for related work is a dismissal, and the host owns what a dismissal tells the list beneath.
      */
     onRequestClose,
+    contextSiteId,
+    focusSource,
+    origin,
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
@@ -112,6 +116,20 @@ export default function DurableRecordSurface({
     contextKey?: string | null;
     onRecordChanged?: () => void;
     onRequestClose?: () => void;
+    /**
+     * BP V2 S4 — the site the entry is looking at this record's Assignment through (a Work View row's
+     * commitment or agreement site). Forwarded as a REQUEST; the record route honours it only inside
+     * the operator's scope and only where the subject holds a commitment or agreement there.
+     */
+    contextSiteId?: string | null;
+    /**
+     * BP V2 S4 — the authoritative source that brought the operator here (the assignment or agreement
+     * a Work View row stands on). Handed to the operational card as a FOCUS REQUEST: the card resolves
+     * it against its own fresh read and says so when it no longer exists. Never the record's identity.
+     */
+    focusSource?: DurableRecordFocusSource | null;
+    /** BP V2 S4 — why the entry opened this record ("Assignments · Ending soon — Ends Oct 29"). Read-only. */
+    origin?: { label: string; reason: string | null } | null;
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
     const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
@@ -128,7 +146,8 @@ export default function DurableRecordSurface({
     const load = useCallback(async (quiet = false) => {
         if (!quiet) setState({ status: "loading" });
         try {
-            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`;
+            const site = (contextSiteId ?? "").trim();
+            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}${site ? `&context_site_id=${encodeURIComponent(site)}` : ""}`;
             /*
              * WARM ON OPEN, FRESH AFTER A WRITE.
              *
@@ -262,7 +281,7 @@ export default function DurableRecordSurface({
                 message: e instanceof Error ? e.message : "Could not open this record.",
             });
         }
-    }, [subjectType, subjectId, contextKey, presentation]);
+    }, [subjectType, subjectId, contextKey, presentation, contextSiteId]);
 
     useEffect(() => {
         // A different subject is a different record, and its initial context must be chosen afresh.
@@ -394,6 +413,19 @@ export default function DurableRecordSurface({
                     />
                 </div>
             ) : null}
+            {origin ? (
+                /*
+                 * WHY THIS RECORD IS OPEN — the entry's own words, read-only. A Work View says which
+                 * condition put the record in front of the operator; the cards below say what is true.
+                 */
+                <p
+                    className="px-1 pb-2 text-[12px] text-alloy-midnight/60"
+                    data-durable-record-origin={origin.label}
+                >
+                    <span className="font-semibold text-alloy-midnight/75">{origin.label}</span>
+                    {origin.reason ? <span> — {origin.reason}</span> : null}
+                </p>
+            ) : null}
             {presentation === "full" ? (
                 <DurableRecordContextStrip
                     options={state.contexts}
@@ -503,6 +535,7 @@ export default function DurableRecordSurface({
                                     : { kind: "staff", person: state.personSubject! }
                             }
                             schedulingProjection={state.schedulingProjection}
+                            focusSource={focusSource ?? null}
                             /*
                              * A SAVE REFRESHES THIS RECORD, not only the list underneath it.
                              *
