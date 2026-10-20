@@ -1,0 +1,77 @@
+{
+ "build": "f7e8c98198324245070576c424d93d41c7cb2267",
+ "escape": {
+  "menuOpen": {
+   "overlays": [
+    "detail",
+    "adjust_charge"
+   ],
+   "listbox": true,
+   "drawer": true
+  },
+  "afterFirstEscape": {
+   "overlays": [
+    "detail",
+    "adjust_charge"
+   ],
+   "listbox": false,
+   "drawer": true
+  },
+  "afterSecondEscape": {
+   "overlays": [
+    "detail"
+   ],
+   "listbox": false,
+   "drawer": true
+  }
+ },
+ "payer": {
+  "rowParty": "Certt Certhouse",
+  "detailsPayer": "PAYER Certt Certhouse"
+ },
+ "add": {
+  "afterAdd": {
+   "blocker": [
+    "Allocate a percentage to Gale Split by reducing one or more existing shares."
+   ],
+   "save": false,
+   "values": [
+    "75",
+    "25",
+    ""
+   ]
+  },
+  "over": {
+   "blocker": [
+    "10% over 100%"
+   ],
+   "save": false,
+   "values": [
+    "75",
+    "25",
+    "10"
+   ]
+  },
+  "under": {
+   "blocker": [
+    "15% remaining to allocate"
+   ],
+   "save": false,
+   "values": [
+    "50",
+    "25",
+    "10"
+   ]
+  },
+  "exact": {
+   "blocker": [],
+   "save": true,
+   "values": [
+    "65",
+    "25",
+    "10"
+   ]
+  }
+ },
+ "writes": []
+}
