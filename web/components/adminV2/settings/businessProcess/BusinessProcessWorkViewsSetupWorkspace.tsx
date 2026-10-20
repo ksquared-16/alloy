@@ -39,7 +39,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     const grainsForSelected = stageGrainByKey
         ? resolveWorkViewStageGrains(selected?.filters_v1, stageGrainByKey)
         : stageGrains;
-    const isMixedGrain = !validateWorkViewGrainConsistency(grainsForSelected).valid;
+    const isMixedGrain = !validateWorkViewGrainConsistency(grainsForSelected, selected?.row_grain_v1).valid;
 
     if (loading) {
         return (

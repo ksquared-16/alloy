@@ -19,6 +19,15 @@ describe("validateWorkViewGrainConsistency", () => {
         expect(validateWorkViewGrainConsistency(["child", "child", "child"])).toEqual({ valid: true });
     });
 
+    it("lets a view declared Family span family and child stages (Decision with an offer pending)", () => {
+        expect(validateWorkViewGrainConsistency(["family", "child"], "family")).toEqual({ valid: true });
+    });
+
+    it("still refuses a mixed view declared Child, or one that spans work items", () => {
+        expect(validateWorkViewGrainConsistency(["family", "child"], "child").valid).toBe(false);
+        expect(validateWorkViewGrainConsistency(["family", "work_item"], "family").valid).toBe(false);
+    });
+
     it("rejects mixed grains — family + child", () => {
         const result = validateWorkViewGrainConsistency(["family", "child"]);
         expect(result.valid).toBe(false);

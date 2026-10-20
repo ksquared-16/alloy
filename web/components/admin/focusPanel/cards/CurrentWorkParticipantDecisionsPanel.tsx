@@ -57,6 +57,8 @@ import type {
     FamilyCloseBlock,
 } from "@/lib/lifecycle/planGovernedFamilyClose";
 import type { StageParticipantDecisionInputV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import AlloyDialog from "@/components/ui/AlloyDialog";
+import ChildWorkOutcomeDialog from "@/components/admin/focusPanel/cards/ChildWorkOutcomeDialog";
 
 type Props = {
     scope: ParticipantDecisionScope;
@@ -171,6 +173,8 @@ export default function CurrentWorkParticipantDecisionsPanel({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [rowError, setRowError] = useState<{ rowKey: string; message: string } | null>(null);
     const [busyKey, setBusyKey] = useState<string | null>(null);
+    // A child's own pending work (e.g. a pending offer) being recorded from the Decision card.
+    const [outcomeFor, setOutcomeFor] = useState<{ taskId: string; childLabel: string; workLabel: string; customerMemberId: string } | null>(null);
 
     // ── close family ────────────────────────────────────────────────────────
     const [closeConfigured, setCloseConfigured] = useState(false);
@@ -399,6 +403,29 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                     </span>
                                 </div>
 
+                                {/* The child's own pending work (a pending offer) is recorded HERE, for this child. */}
+                                {canMutate && row.open_work ?
+                                    <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md bg-alloy-bend-pine/[0.05] px-2 py-1.5" data-decision-child-open-work={row.open_work.task_id}>
+                                        <span className="text-[11.5px] text-alloy-midnight/75">{row.open_work.label}</span>
+                                        <button
+                                            type="button"
+                                            className="rounded-lg bg-alloy-bend-pine px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
+                                            disabled={busyKey != null}
+                                            data-decision-record-outcome={row.customer_member_id}
+                                            onClick={() =>
+                                                setOutcomeFor({
+                                                    taskId: row.open_work!.task_id,
+                                                    childLabel: row.label,
+                                                    workLabel: row.open_work!.label,
+                                                    customerMemberId: row.customer_member_id,
+                                                })
+                                            }
+                                        >
+                                            Record outcome
+                                        </button>
+                                    </div>
+                                :   null}
+
                                 {canMutate ?
                                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                                         {row.decisions.map((decision) => {
@@ -463,8 +490,45 @@ export default function CurrentWorkParticipantDecisionsPanel({
 
                                 {/* Everything this child's choice needs stays in this child's row. */}
                                 {isPending && pending ?
+                                    <AlloyDialog
+                                        open
+                                        onClose={clearPending}
+                                        title={`${pending.decisionLabel} · ${pending.participantLabel}`}
+                                        subtitle={pending.inputs.length ? "Complete the details, then confirm." : "Confirm this child's path."}
+                                        testId="decision-path-dialog"
+                                        footer={
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className="rounded-lg border border-alloy-stone/20 bg-white px-4 py-2 text-[12px] font-semibold text-alloy-midnight/70"
+                                                    disabled={busyKey != null}
+                                                    onClick={clearPending}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="rounded-lg bg-alloy-bend-pine px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                                                    disabled={busyKey != null}
+                                                    data-decision-confirm="true"
+                                                    onClick={() =>
+                                                        void runDecision({
+                                                            rowKey: pending.rowKey,
+                                                            decisionKey: pending.decisionKey,
+                                                            customerMemberId: pending.customerMemberId,
+                                                            processInstanceId: pending.processInstanceId,
+                                                            participantLabel: pending.participantLabel,
+                                                            values: inputValues,
+                                                        })
+                                                    }
+                                                >
+                                                    {busyKey != null ? "Saving…" : `Confirm ${pending.decisionLabel}`}
+                                                </button>
+                                            </>
+                                        }
+                                    >
                                     <div
-                                        className="mt-2 space-y-2 border-t border-alloy-stone/12 pt-2"
+                                        className="space-y-2"
                                         data-decision-row-pending={pending.decisionKey}
                                     >
                                         {pending.changingFrom ?
@@ -510,35 +574,13 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                             </label>
                                         ))}
 
-                                        <div className="flex flex-wrap gap-2">
-                                            <button
-                                                type="button"
-                                                className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
-                                                disabled={busyKey != null}
-                                                data-decision-confirm="true"
-                                                onClick={() =>
-                                                    void runDecision({
-                                                        rowKey: pending.rowKey,
-                                                        decisionKey: pending.decisionKey,
-                                                        customerMemberId: pending.customerMemberId,
-                                                        processInstanceId: pending.processInstanceId,
-                                                        participantLabel: pending.participantLabel,
-                                                        values: inputValues,
-                                                    })
-                                                }
-                                            >
-                                                {busyKey != null ? "Saving…" : `Confirm ${pending.decisionLabel}`}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="rounded-lg border border-alloy-stone/20 px-3 py-1.5 text-[12px] text-alloy-midnight/70"
-                                                disabled={busyKey != null}
-                                                onClick={clearPending}
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
+                                        {rowError?.rowKey === rowKey ?
+                                            <p className="text-[11px] font-medium text-red-700" role="alert">
+                                                {rowError.message}
+                                            </p>
+                                        :   null}
                                     </div>
+                                    </AlloyDialog>
                                 :   null}
 
                                 {rowError?.rowKey === rowKey ?
@@ -708,6 +750,21 @@ export default function CurrentWorkParticipantDecisionsPanel({
                         </button>
                     }
                 </div>
+            :   null}
+            {outcomeFor ?
+                <ChildWorkOutcomeDialog
+                    taskId={outcomeFor.taskId}
+                    childLabel={outcomeFor.childLabel}
+                    workLabel={outcomeFor.workLabel}
+                    departmentId={departmentId || null}
+                    onClose={() => setOutcomeFor(null)}
+                    onRecorded={() => {
+                        const childId = outcomeFor.customerMemberId;
+                        void loadDecisions();
+                        void loadClose();
+                        onChanged({ opportunityId, customerMemberId: childId });
+                    }}
+                />
             :   null}
         </div>
     );
