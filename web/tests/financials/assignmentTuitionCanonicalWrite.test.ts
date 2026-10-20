@@ -95,9 +95,17 @@ describe("the snapshot is kept, and is not the price", () => {
         expect(finBody).toMatch(/persistAssignmentQuote\(\)/);
         expect(finBody, "the canonical act is CALLED, not merely defined").toContain("settleTuitionAfterSave()");
         expect(finBody.indexOf("await onSaved("), "close only after all answered").toBeGreaterThan(finBody.indexOf("await Promise.all(["));
-        const after = card.slice(card.indexOf("async function settleTuitionAfterSave"));
-        expect(after.slice(0, 500)).toContain("const fresh = await refreshPricingView();");
-        expect(after.slice(0, 500)).toContain("await settleTuition(fresh, { rereadAfter: false });");
+        // The preview's resolution is tried first; the SERVER re-resolves the saved assignment and
+        // refuses `stale_resolution` if it moved — only then is the view re-read and the commit retried.
+        const fn = card.slice(card.indexOf("async function settleTuitionAfterSave"));
+        const after = fn.slice(0, fn.indexOf("async function save()"));
+        expect(after).toContain("const preview = draftView ?? pricingView;");
+        expect(after).toContain("await settleTuition(preview, { rereadAfter: false });");
+        expect(after).toContain('refused?.code === "stale_resolution"');
+        expect(after).toContain("const fresh = await refreshPricingView();");
+        expect(after).toContain("await settleTuition(fresh, { rereadAfter: false });");
+        // A successful accept on Save marks the shared view stale (no request) rather than leaving it.
+        expect(card).toContain("else if (opportunityId) invalidateFinancialConfig(opportunityId);");
     });
 
     it("the snapshot route still writes no term", () => {
