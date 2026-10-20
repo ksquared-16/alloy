@@ -39,4 +39,11 @@ describe("contextual answer counts", () => {
         const answer = fs.readFileSync(path.join(process.cwd(), "lib/runtime/provisioning/workUnitProvisioningAnswer.ts"), "utf8");
         expect(answer).toMatch(/activeWorkViewId: null,[\s\S]{0,200}surfaceWorkUnitId: ""/);
     });
+
+    it("a subject refusal (stale link to a record that moved on) keeps its pill counts", () => {
+        const answer = fs.readFileSync(path.join(process.cwd(), "lib/runtime/provisioning/workUnitProvisioningAnswer.ts"), "utf8");
+        expect(answer).toMatch(/requestedSubjectId: req\.requestedSubjectId \?\? null,\s*settlement,/);
+        const hook = fs.readFileSync(path.join(process.cwd(), "lib/presentation/runtime/useWorkUnitSettlement.ts"), "utf8");
+        expect(hook).toContain("queueFrame?.settlement");
+    });
 });
