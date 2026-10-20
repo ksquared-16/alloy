@@ -356,3 +356,72 @@ export function resolveAssignmentPricingOptions(
     // operator settles it, not this function.
     return { kind: "ambiguous", tied: survivors, applicable, rejected, ...base };
 }
+
+/**
+ * EVERY RATE THIS SITE OFFERS — the operator's "additional rates", beyond what applies.
+ *
+ * `resolveAssignmentPricingOptions` answers "which authored options fit this assignment" and
+ * recommends among them. An operator sometimes needs a rate the facts do not select — a different
+ * program's rate, or another schedule's — and the honest place for that is an OVERRIDE of a real
+ * authored rate, with a reason, not an invented price. This lists the candidates for that choice.
+ *
+ * Program, attendance type and days are deliberately NOT filtered. Everything that makes a rate
+ * unusable at all still is: the payer type, the effective window, an explicit "not offered", and a
+ * rate priced for a different site. Where a site rate exists for a variant and cadence, the org
+ * default for the same pair is superseded, as in the resolver.
+ *
+ * Pure: same export + facts ⇒ same list, in catalog order.
+ */
+export function listLocationTuitionOptions(
+    exp: CommercialExport,
+    facts: Pick<AssignmentPricingFacts, "locationId" | "payerType" | "asOf">,
+): ApplicableOption[] {
+    const offeringById = new Map(
+        exp.offerings.filter((o) => o.isActive && isEffective(o.effective, facts.asOf)).map((o) => [o.id, o]),
+    );
+    const variantById = new Map(
+        exp.variants.filter((v) => v.isActive && offeringById.has(v.offeringId)).map((v) => [v.id, v]),
+    );
+
+    const options: ApplicableOption[] = [];
+    for (const rate of exp.tuitionRates) {
+        const variant = variantById.get(rate.variantId);
+        if (!variant) continue;
+        if (rate.payerType !== facts.payerType) continue;
+        if (!isEffective(rate.effective, facts.asOf)) continue;
+        if (rate.notOffered) continue;
+        if (rate.locationId !== null && rate.locationId !== facts.locationId) continue;
+        const offering = offeringById.get(variant.offeringId)!;
+        const isLocation = rate.locationId !== null;
+        const days = variantDays(variant.quantityType, variant.quantityValue);
+        options.push({
+            source: ref(rate.id),
+            offeringId: offering.id,
+            variantId: variant.id,
+            programKey: offering.programKey,
+            attendanceType: offering.attendanceType,
+            variantLabel: variant.label,
+            quantityType: variant.quantityType,
+            quantityValue: variant.quantityValue,
+            cadenceKey: rate.cadenceKey,
+            payerType: rate.payerType,
+            locationId: rate.locationId,
+            amount: { amountCents: rate.rateCents, currency: "USD" },
+            effective: rate.effective,
+            scope: isLocation ? "location" : "org_default",
+            matched: [
+                `Program · ${offering.label}`,
+                `Attendance · ${offering.attendanceType}`,
+                days != null ? `Schedule · ${days} days a week` : `Schedule · any`,
+                `Billed · ${rate.cadenceKey}`,
+                isLocation ? "Site rate" : "Organisation default",
+                "Chosen beyond the assignment's own rates",
+            ],
+        });
+    }
+
+    const siteKeys = new Set(
+        options.filter((o) => o.scope === "location").map((o) => `${o.variantId}|${o.cadenceKey}`),
+    );
+    return options.filter((o) => o.scope === "location" || !siteKeys.has(`${o.variantId}|${o.cadenceKey}`));
+}

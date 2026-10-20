@@ -38,18 +38,22 @@ const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const CARD = "components/admin/focusPanel/cards/SchedulingCard.tsx";
 
 /** The effect that builds the tuition options, comments stripped. */
+/** The tuition option list — built by `tuitionChoicesFor` from the canonical view. */
 function optionEffect(): string {
     const code = src(CARD).replace(/\/\*[\s\S]*?\*\//g, "");
-    const at = code.indexOf("loadFinancialConfig(opportunityId)");
-    expect(at, "the tuition options are still loaded here").toBeGreaterThan(-1);
-    return code.slice(at, code.indexOf("}, [opportunityId, child.id]);", at));
+    const at = code.indexOf("export function tuitionChoicesFor(");
+    expect(at, "the tuition options are still built here").toBeGreaterThan(-1);
+    return code.slice(at, code.indexOf("export function isTuitionOverride(", at));
 }
 
 describe("the Assignment tuition control offers this assignment's options", () => {
     it("reads the per-assignment canonical view, matched by member id", () => {
-        const effect = optionEffect();
-        expect(effect, "the canonical per-assignment view").toContain("payload?.assignments");
-        expect(effect, "matched exactly, not by name").toContain("v.customerMemberId === child.id");
+        // The LOAD is the effect that reads the endpoint; the list is built from what it found.
+        const code = src(CARD).replace(/\/\*[\s\S]*?\*\//g, "");
+        const at = code.indexOf("loadFinancialConfig(opportunityId)");
+        const load = code.slice(at, code.indexOf("}, [opportunityId, child.id]);", at));
+        expect(load, "the canonical per-assignment view").toContain("payload?.assignments");
+        expect(load, "matched exactly, not by name").toContain("v.customerMemberId === child.id");
     });
 
     it("no longer ranks the household's rows by a display-name substring", () => {

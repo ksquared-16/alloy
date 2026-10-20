@@ -31,6 +31,7 @@ import { isPeriodBillableCadence } from "@/lib/financials/billingPeriod";
 
 import { composeCommercialExport } from "@/lib/commercial/execution/export/composeCommercialExport";
 import {
+    listLocationTuitionOptions,
     resolveAssignmentPricingOptions,
     type ApplicableOption,
     type AssignmentPricingResolution,
@@ -81,6 +82,7 @@ export type PricingCommitRefusalCode =
     | "override_matches_recommendation"
     | "term_already_accepted"
     | "cadence_not_billable"
+    | "custom_amount_invalid"
     | "db_error";
 
 export type PricingCommitResult =
@@ -104,7 +106,17 @@ export type PricingCommitArgs = {
     overrideReason?: string | null;
     /** Explicit intent to replace a live term on the same date. Absent, a clash is refused. */
     supersede?: boolean;
+    /**
+     * A custom tuition amount (cents), OVERRIDE ONLY. The selected option is still a real authored
+     * rate — it supplies the cadence, offering and variant the term is billed under — and the
+     * catalog amount it replaced is recorded beside the custom one. Requires the override
+     * permission and a reason, like every override.
+     */
+    customAmountCents?: number | null;
 };
+
+/** The largest custom tuition accepted, in cents ($100,000 per period) — a typo guard, not policy. */
+export const CUSTOM_TUITION_MAX_CENTS = 10_000_000;
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -129,7 +141,12 @@ export async function resolveForCommit(
     supabase: SupabaseClient,
     args: PricingCommitArgs,
 ): Promise<
-    | { ok: true; read: Awaited<ReturnType<typeof readAssignmentPricingFacts>> & { ok: true }; resolution: AssignmentPricingResolution }
+    | {
+          ok: true;
+          read: Awaited<ReturnType<typeof readAssignmentPricingFacts>> & { ok: true };
+          resolution: AssignmentPricingResolution;
+          exported: Awaited<ReturnType<typeof composeCommercialExport>>["export"];
+      }
     | { ok: false; code: PricingCommitRefusalCode; message: string }
 > {
     const read = await readAssignmentPricingFacts(supabase, {
@@ -156,7 +173,7 @@ export async function resolveForCommit(
                 + "accepting, so the price matches the assignment as it now stands.",
         };
     }
-    return { ok: true, read, resolution };
+    return { ok: true, read, resolution, exported: exported.export };
 }
 
 async function insertTerm(
@@ -166,9 +183,13 @@ async function insertTerm(
         resolution: AssignmentPricingResolution;
         option: ApplicableOption;
         state: "accepted" | "overridden";
+        /** Set when the operator replaced the option's catalog amount with their own. */
+        customAmountCents?: number | null;
     },
 ): Promise<PricingCommitResult> {
     const { read, resolution, option } = args;
+    const custom = args.state === "overridden" && args.customAmountCents != null;
+    const amountCents = custom ? args.customAmountCents! : option.amount.amountCents;
     const effectiveStart = read.facts.asOf;
 
     /*
@@ -220,7 +241,7 @@ async function insertTerm(
         const equivalent =
             live.resolution_key === resolution.resolutionKey
             && live.source_id === option.source.id
-            && live.amount_cents === option.amount.amountCents
+            && live.amount_cents === amountCents
             && live.state === args.state
             && t(live.override_reason) === t(args.overrideReason);
         if (equivalent) {
@@ -287,7 +308,7 @@ async function insertTerm(
         location_id: option.locationId,
         cadence_key: option.cadenceKey,
         payer_type: option.payerType,
-        amount_cents: option.amount.amountCents,
+        amount_cents: amountCents,
         currency_code: option.amount.currency,
         state: args.state,
         override_reason: args.state === "overridden" ? t(args.overrideReason) : null,
@@ -302,6 +323,10 @@ async function insertTerm(
             resolution_kind: resolution.kind,
             recommended_source_id: recommendedIdOf(resolution),
             rejected: resolution.kind === "no_match" ? resolution.rejected : resolution.rejected,
+            // A custom amount says so, and keeps the catalog figure it replaced.
+            ...(custom
+                ? { custom_amount: true, custom_amount_cents: amountCents, catalog_amount_cents: option.amount.amountCents }
+                : {}),
         },
         config_version: resolution.configVersion.version,
         effective_start: effectiveStart,
@@ -397,13 +422,30 @@ export async function overrideEnrollmentPricingTerm(
         };
     }
 
+    const custom = args.customAmountCents;
+    if (custom != null && (!Number.isInteger(custom) || custom <= 0 || custom > CUSTOM_TUITION_MAX_CENTS)) {
+        return {
+            ok: false,
+            code: "custom_amount_invalid",
+            message: "A custom tuition amount must be a whole number of cents above zero and at most $100,000.",
+        };
+    }
+
     const re = await resolveForCommit(supabase, args);
     if (!re.ok) return re;
-    const { read, resolution } = re;
+    const { read, resolution, exported } = re;
 
-    // The chosen option must still be one the CATALOG offers this assignment. This is what stops an
-    // override becoming an arbitrary amount: there is no path here that accepts a number.
-    const option = optionById(resolution, t(args.selectedSourceId));
+    /*
+     * The chosen option must be a REAL authored rate: one that applies to this assignment, or —
+     * the operator's "additional rates" — any rate this site offers (another program's, another
+     * schedule's). It is never a free-floating price: a custom amount still names the authored rate
+     * it is billed under, and records the catalog amount it replaced.
+     */
+    const selected = t(args.selectedSourceId);
+    const option =
+        optionById(resolution, selected)
+        ?? listLocationTuitionOptions(exported, read.facts).find((o) => o.source.id === selected)
+        ?? null;
     if (!option) {
         return {
             ok: false,
@@ -413,14 +455,14 @@ export async function overrideEnrollmentPricingTerm(
                 + "choose from what the catalog now offers.",
         };
     }
-    if (option.source.id === recommendedIdOf(resolution)) {
+    if (custom == null && option.source.id === recommendedIdOf(resolution)) {
         return {
             ok: false,
             code: "override_matches_recommendation",
             message: "That is the recommended tuition. Accept it rather than overriding to it.",
         };
     }
-    return insertTerm(supabase, { ...args, read, resolution, option, state: "overridden" });
+    return insertTerm(supabase, { ...args, read, resolution, option, state: "overridden", customAmountCents: custom ?? null });
 }
 
 /**
@@ -547,23 +589,33 @@ export async function previewEnrollmentPricingCommit(
 ): Promise<{ summary: string; changes: string[] }> {
     const re = await resolveForCommit(supabase, args);
     if (!re.ok) return { summary: re.message, changes: [] };
-    const { read, resolution } = re;
-    if (resolution.kind === "no_match") {
-        return { summary: "No configured tuition applies to this assignment.", changes: [] };
-    }
-    const option = optionById(resolution, t(args.selectedSourceId))
+    const { read, resolution, exported } = re;
+    const selected = t(args.selectedSourceId);
+    // The same option lookup the commit performs: an applicable rate, or (override) any site rate.
+    const option =
+        optionById(resolution, selected)
+        ?? (intent === "override"
+            ? listLocationTuitionOptions(exported, read.facts).find((o) => o.source.id === selected) ?? null
+            : null)
         ?? (resolution.kind === "recommended" ? resolution.recommended : null);
     if (!option) {
-        return { summary: "That tuition option no longer applies to this assignment.", changes: [] };
+        return {
+            summary:
+                resolution.kind === "no_match"
+                    ? "No configured tuition applies to this assignment."
+                    : "That tuition option no longer applies to this assignment.",
+            changes: [],
+        };
     }
-    const money = (option.amount.amountCents / 100).toLocaleString(undefined, {
-        style: "currency",
-        currency: option.amount.currency || "USD",
-    });
+    const custom = intent === "override" && args.customAmountCents != null ? args.customAmountCents : null;
+    const fmt = (cents: number) =>
+        (cents / 100).toLocaleString(undefined, { style: "currency", currency: option.amount.currency || "USD" });
+    const money = fmt(custom ?? option.amount.amountCents);
     return {
         summary: `${money} ${option.cadenceKey}, effective ${read.facts.asOf}`,
         changes: [
             ...option.matched,
+            ...(custom != null ? [`Custom amount · catalog rate was ${fmt(option.amount.amountCents)}`] : []),
             intent === "override"
                 ? `Override · recommended was ${recommendedIdOf(resolution) ?? "ambiguous"}`
                 : "Accepts the recommendation",

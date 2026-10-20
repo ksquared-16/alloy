@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { ADMINV2_PHOTO_LIGHTBOX_Z } from "@/components/admin/Drawer";
 import type { IdentityAvatarSemanticRole } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 
 type Props = {
@@ -35,11 +37,16 @@ export default function IdentityAvatar({
 
     useEffect(() => {
         if (!zoomed) return;
+        // Capture phase + stopPropagation: Escape closes the photo and nothing else. The depth grid
+        // (also window-capture, registered earlier) yields via `hasInnerDismissibleLayer`, and the
+        // drawer's bubble-phase Escape never sees it.
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setZoomed(false);
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            setZoomed(false);
         };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
     }, [zoomed]);
 
     if (!visible) return null;
@@ -74,9 +81,17 @@ export default function IdentityAvatar({
             ) : (
                 avatar
             )}
-            {zoomed && url ? (
+            {/*
+              * Portaled to `document.body`. Rendered inline it lived inside the card's stacking
+              * context (`.alloy-os-ucard { isolation: isolate }`) and the Focus Panel's container
+              * (which re-roots `position: fixed`), so later cards painted over the "full-screen"
+              * dim and the host row stayed in its hover/selected state. At body level only the
+              * photo reads as active; everything else dims evenly.
+              */}
+            {zoomed && url && typeof document !== "undefined" ? createPortal(
                 <div
                     className="identity-avatar-zoom"
+                    style={{ zIndex: ADMINV2_PHOTO_LIGHTBOX_Z }}
                     data-identity-avatar-zoom="true"
                     role="dialog"
                     aria-modal="true"
@@ -113,7 +128,8 @@ export default function IdentityAvatar({
                             Close
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body,
             ) : null}
         </>
     );

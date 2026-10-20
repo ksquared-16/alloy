@@ -13,6 +13,8 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     "[data-adminv2-workspace-command-rail]",
     "[data-adminv2-command-rail-bos-host]",
     "[data-adminv2-bos-rail-overlay]",
+    // Photo lightbox is portaled to body; closing it must not close the record drawer behind it.
+    '[data-identity-avatar-zoom="true"]',
 ] as const;
 
 /** Queue scrollport — row clicks swap the Focus Panel subject in State 2 instead of closing. */

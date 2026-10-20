@@ -54,11 +54,23 @@ export function ageInMonthsAsOf(dob: string | null | undefined, asOf: string): n
     return months < 0 ? 0 : months;
 }
 
-/** Normalize a configured age bound to whole months. `years` → ×12; default months. */
-export function ageBoundToMonths(value: number | null | undefined, unit: string | null | undefined): number | null {
+/**
+ * Normalize a configured age bound to whole months. `years` → ×12; default months.
+ *
+ * An UPPER bound in years covers that whole year: a room for "1 to 2 years" takes a child who is
+ * still two — 2y11m — so its max is 35 months, not 24. Read as 24, every child past their second
+ * birthday was "too old" for a 1–2 room. Month bounds are already exact.
+ */
+export function ageBoundToMonths(
+    value: number | null | undefined,
+    unit: string | null | undefined,
+    bound: "min" | "max" = "min",
+): number | null {
     if (value == null || Number.isNaN(value)) return null;
     const u = (unit ?? "").trim().toLowerCase();
-    if (u === "year" || u === "years" || u === "yr" || u === "yrs") return Math.round(value * 12);
+    if (u === "year" || u === "years" || u === "yr" || u === "yrs") {
+        return bound === "max" ? Math.round(value * 12) + 11 : Math.round(value * 12);
+    }
     return Math.round(value); // months (or unspecified — treated as months)
 }
 
