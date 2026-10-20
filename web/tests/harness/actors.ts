@@ -13,6 +13,7 @@
  * `ctx.ok` while still being unauthorized for a given document.
  */
 import type { AdminContextResult } from "@/lib/admin/getAdminContext";
+import type { AdminAccessContextResult } from "@/lib/admin/getAdminAccessContext";
 
 export const TEST_ORG_A = "aaaaaaaa-0000-4000-8000-000000000001";
 export const TEST_ORG_B = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -67,6 +68,29 @@ export function adminContextFor(actor: Actor): AdminContextResult {
         role: actor.role,
         userId: actor.userId,
         permissionKeys: actor.permissionKeys,
+    };
+}
+
+/**
+ * Build the `getAdminAccessContextCached` return value for an actor — real role keys, the declared
+ * capabilities, and unrestricted department/site scope.
+ *
+ * Since Documents V1 / D1a the document decision reads THIS context, not the compatibility `role`
+ * on `adminContextFor`: that role names every portal member `ops`, so admitting on it made every
+ * capability decorative. A route test that supplies only the admin context now meets an unresolved
+ * access context and is refused, exactly as production refuses it.
+ */
+export function accessContextFor(actor: Actor): AdminAccessContextResult {
+    return {
+        ok: true,
+        userId: actor.userId,
+        orgId: actor.orgId,
+        roleKeys: [actor.role],
+        permissionKeys: actor.permissionKeys,
+        departmentScope: "all",
+        allowedDepartmentIds: null,
+        siteScope: "all",
+        allowedSiteLocationIds: null,
     };
 }
 

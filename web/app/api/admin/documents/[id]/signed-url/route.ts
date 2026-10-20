@@ -6,8 +6,10 @@ import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors"
 import {
     assertDocumentAccess,
     documentAccessHttp,
+    documentActorForRequest,
     signedUrlExpirySeconds,
 } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 
 /**
  * GET: signed URL for a document the actor is authorized to read.
@@ -19,7 +21,10 @@ import {
  * for ANY org member, a viewer could mint a URL for any document in the org,
  * including another child's records.
  *
- * The storage client is now reached only after a decision of `allowed`.
+ * D1a: the decision now carries the actor's department/site scope and the org-prefix check, and the
+ * issuance is recorded (`document_link_issued`) BEFORE the link is minted — no record, no link.
+ *
+ * The storage client is reached only after a decision of `allowed`.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -30,28 +35,36 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const decision = await assertDocumentAccess({
         supabase,
-        actor: {
-            ok: ctx.ok,
-            failureStatus: ctx.ok ? undefined : ctx.status,
-            userId: ctx.ok ? ctx.userId : undefined,
-            orgId: ctx.ok ? ctx.orgId : undefined,
-            role: ctx.ok ? ctx.role : undefined,
-            roleKeys: access.ok ? access.roleKeys : [],
-            permissionKeys: access.ok ? access.permissionKeys : [],
-        },
+        actor: documentActorForRequest(ctx, access),
         documentId: id,
         operation: "download",
     });
 
-    if (decision.outcome !== "allowed") {
+    if (decision.outcome !== "allowed" || !ctx.ok) {
         const http = documentAccessHttp(decision);
         return NextResponse.json(http.body, { status: http.status });
     }
 
+    const expiresIn = signedUrlExpirySeconds("download");
+    const audit = await recordDocumentAudit({
+        orgId: decision.document.orgId,
+        actorUserId: ctx.userId,
+        event: "document_link_issued",
+        subject: { type: "documents", id: decision.document.id },
+        route: "admin/documents/signed-url",
+        detail: {
+            operation: "download",
+            expires_in_seconds: expiresIn,
+            document_entity_type: decision.document.entityType,
+            document_entity_id: decision.document.entityId,
+        },
+    });
+    if (!audit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+    }
+
     const { bucket, storagePath } = decision.document;
-    const { data, error: signErr } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(storagePath, signedUrlExpirySeconds("download"));
+    const { data, error: signErr } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresIn);
 
     if (signErr || !data?.signedUrl) {
         // Never log the signed URL or the storage path.

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/access/processingAuthority";
+import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
 import {
     buildPosDocumentsList,
     type PosDocumentCaseInfo,
@@ -19,10 +23,25 @@ const MAX_LIMIT = 200;
  * Returns recent org documents joined to their Processing Case (classification +
  * lifecycle status) so the operator can see uploads and jump into Processing.
  * Read-only; org-scoped. No matching, no commit.
+ *
+ * ── AUTHORITY (Documents V1 / D1a) ──
+ *
+ * Before D1a this asked only for a session: any portal member could list every document in the
+ * organization with its title, file name and type. It now requires `processing.documents.manage` —
+ * the Processing source-document authority this tab's own rename/delete already require — AND the
+ * documents read admission every document route shares, and it narrows rows to the actor's
+ * department/site scope with the same predicate as the general list. Nothing in the product calls
+ * this list today; Processing reads its queue through `/api/admin/processing/queue`.
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const deniedProcessing = requireProcessingCapability(ctx, PROCESSING_DOCUMENTS_MANAGE);
+    if (deniedProcessing) return deniedProcessing;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const deniedRead = requireDocumentRead(access);
+    if (deniedRead) return deniedRead;
 
     const { searchParams } = new URL(request.url);
     let limit = Number(searchParams.get("limit") ?? DEFAULT_LIMIT);
@@ -34,12 +53,24 @@ export async function GET(request: NextRequest) {
     try {
         const { data: docRows, error: docErr } = await supabase
             .from("documents")
-            .select("id, title, original_filename, doc_type, created_at")
+            .select("id, title, original_filename, doc_type, created_at, entity_type, entity_id")
             .eq("org_id", ctx.orgId)
             .order("created_at", { ascending: false })
             .limit(limit);
         if (docErr) throw new Error(docErr.message);
-        const docs = (docRows ?? []) as PosDocumentRow[];
+        const scoped = await filterDocumentRowsInActorScope(
+            supabase,
+            ctx.orgId,
+            scopeDimensionsFromAccess(access),
+            (docRows ?? []) as Array<PosDocumentRow & { entity_type: string | null; entity_id: string | null }>,
+        );
+        const docs: PosDocumentRow[] = scoped.map((d) => ({
+            id: d.id,
+            title: d.title,
+            original_filename: d.original_filename,
+            doc_type: d.doc_type,
+            created_at: d.created_at,
+        }));
 
         const links: PosDocumentCaseLink[] = [];
         const cases: PosDocumentCaseInfo[] = [];

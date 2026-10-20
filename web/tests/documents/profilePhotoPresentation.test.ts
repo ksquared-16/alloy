@@ -14,7 +14,7 @@ import {
     resolveProfilePhotosForActor,
     PROFILE_PHOTO_DOCUMENT_ID_KEY,
 } from "@/lib/documents/profilePhotoPresentation";
-import { signedUrlExpirySeconds } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER, signedUrlExpirySeconds } from "@/lib/documents/assertDocumentAccess";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const DOC = "dddddddd-0000-4000-8000-000000000001";
@@ -34,7 +34,7 @@ function supa(opts: { row?: Record<string, unknown> | null; signAs?: string } = 
                         maybeSingle: async () => ({
                             data:
                                 opts.row === undefined
-                                    ? { id: DOC, org_id: ORG, bucket: "org_documents", storage_path: "p/x.png", entity_type: "persons", entity_id: PERSON_A, status: null }
+                                    ? { id: DOC, org_id: ORG, bucket: "org_documents", storage_path: `${ORG}/person/x.png`, entity_type: "persons", entity_id: PERSON_A, status: null }
                                     : opts.row,
                             error: null,
                         }),
@@ -54,8 +54,8 @@ function supa(opts: { row?: Record<string, unknown> | null; signAs?: string } = 
     return { client, signCalls };
 }
 
-const privileged = { ok: true, orgId: ORG, role: "admin", roleKeys: ["admin"] };
-const viewer = { ok: true, orgId: ORG, role: "viewer", roleKeys: ["viewer"] };
+const privileged = { ok: true, orgId: ORG, role: "admin", roleKeys: ["admin"], scope: DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER };
+const viewer = { ok: true, orgId: ORG, role: "viewer", roleKeys: ["viewer"], scope: DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER };
 
 describe("no signed URL is persisted to person metadata", () => {
     it("rejects a signed URL in a metadata payload", () => {

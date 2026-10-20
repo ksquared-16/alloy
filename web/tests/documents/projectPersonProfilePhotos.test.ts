@@ -66,7 +66,7 @@ function mockSupabaseForPhoto() {
                                     id: DOC,
                                     org_id: ORG,
                                     bucket: "org_documents",
-                                    storage_path: "a/b.png",
+                                    storage_path: `${ORG}/person/${PERSON_A}/b.png`,
                                     entity_type: "persons",
                                     entity_id: PERSON_A,
                                     status: null,

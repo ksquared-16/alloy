@@ -55,7 +55,7 @@ function seed() {
     const doc = (id: string, file: string, mime: string, title: string, url: string | null): DocRow => ({
         id, org_id: ORG, title, original_filename: file, mime_type: mime, public_url: url,
         checksum_sha256: crypto.createHash("sha256").update(bytesOf(file)).digest("hex"),
-        bucket: "documents", storage_path: file, created_at: "2026-08-24T00:00:00.000Z",
+        bucket: "documents", storage_path: `${ORG}/pos_intake/${file}`, created_at: "2026-08-24T00:00:00.000Z",
     });
     const documents: DocRow[] = [
         doc("doc-handbook", CERTIFICATION_FIXTURES.handbook, "application/pdf", "Family Handbook 2026–2027", null),
@@ -132,7 +132,9 @@ function fakeSupabase(db: ReturnType<typeof seed>) {
                 return {
                     async download(p: string) {
                         try {
-                            const buf = fs.readFileSync(path.join(DIR, p));
+                            // Stored paths are org-prefixed (`<org>/pos_intake/<file>`), as every real upload writes them
+                            // and as the server-side byte reader now requires; the fixture file is the last segment.
+                            const buf = fs.readFileSync(path.join(DIR, path.basename(p)));
                             return { data: { arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) }, error: null };
                         } catch (e) {
                             return { data: null, error: e };
