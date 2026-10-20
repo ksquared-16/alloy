@@ -22,6 +22,11 @@ export type StageWorkItemProjection = {
     state: WorkIntentRuntimeState;
     /** True when open work has selectable outcomes in Current Work. */
     requires_outcome_picker: boolean;
+    /**
+     * The work is resolved child by child (per-child paths). Its plain completion is the runtime's,
+     * recorded when every child has a path; `outcomes` lists only what remains the operator's.
+     */
+    decides_participants?: boolean;
     work_id: string | null;
     due_at: string | null;
     due_urgency: WorkIntentDueUrgency;

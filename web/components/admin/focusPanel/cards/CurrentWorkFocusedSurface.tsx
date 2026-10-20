@@ -259,9 +259,18 @@ export default function CurrentWorkFocusedSurface({
                     >
                         ← Back to actions
                     </button>
-                    <p className="alloy-os-currentwork__focused-section-title" data-work-outcome-subject={outcomeWorkLabel ?? undefined}>
-                        {outcomeWorkLabel ? `What happened with ${outcomeWorkLabel}?` : "What happened?"}
-                    </p>
+                    {/* Per-child work is decided by each child's path, above; what is left here are the
+                        work's OTHER configured outcomes (e.g. Needs follow-up), not "what happened". */}
+                    {surface.primaryWorkItem?.decides_participants === true && !selectedWorkKey ?
+                        outcomes.length > 0 ?
+                            <p className="alloy-os-currentwork__focused-section-title" data-work-outcome-subject="not-deciding-yet">
+                                Not ready to decide?
+                            </p>
+                        :   null
+                    :   <p className="alloy-os-currentwork__focused-section-title" data-work-outcome-subject={outcomeWorkLabel ?? undefined}>
+                            {outcomeWorkLabel ? `What happened with ${outcomeWorkLabel}?` : "What happened?"}
+                        </p>
+                    }
                     {outcomeBlockReason ?
                         <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
                             {outcomeBlockReason}

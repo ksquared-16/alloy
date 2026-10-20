@@ -1,0 +1,174 @@
+{
+ "tag": "after",
+ "build": "747ad20dff47b9744bf77f7c70b66b774127e232",
+ "header": {
+  "rollup": {
+   "top": 287,
+   "bottom": 438,
+   "left": 530,
+   "right": 1494,
+   "h": 151
+  },
+  "lens": {
+   "top": 443,
+   "bottom": 500,
+   "left": 530,
+   "right": 1494,
+   "h": 57
+  },
+  "headerToLedgerTop": 156,
+  "contextRow": false,
+  "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
+  "sideItems": [
+   "BUTTON:$125.00 prepaid available →"
+  ],
+  "dueNote": "$2,005.00 past due",
+  "stats": [
+   "Due now$2,005.00$2,005.00 past due$225.00 not yet due · next Oct 31, 2026",
+   "Balance · October 2026$2,076.00$2,116.00 charged · $40.00 paid",
+   "Scheduled$2,440.00activates with its period"
+  ],
+  "responsibilityLink": 0,
+  "gear": {
+   "aria": "Manage responsibility",
+   "title": "Manage responsibility"
+  },
+  "managePayments": {
+   "top": 415,
+   "bottom": 432,
+   "left": 1371,
+   "right": 1494,
+   "h": 17
+  },
+  "actions": {
+   "top": 287,
+   "bottom": 317,
+   "left": 1150,
+   "right": 1494,
+   "h": 30
+  }
+ },
+ "gearOpens": 1,
+ "responsibilityClosesOnEscape": false,
+ "prepaid": {
+  "text": "PREPAID AVAILABLE | $125.00 | Money a payment brought in that is not yet applied to any charge. It stays on the household's account — usable for any child — until it is applied to a charge or refunded. It does not expire. Held deposits and payments still clearing are not included. | PAYER | Not named | RECEIVED | Sep 18, 2026 | METHOD | Cash | ORIGINAL AMOUNT | $240.00 | APPLIED TO CHARGES | $115.00 | PREPAID REMAINING | $125.00 | Open payment — apply, reallocate or refund →",
+  "sources": 1,
+  "paymentDetail": "PAYMENT DETAILS | RECEIVED | Sep 18, 2026 | PAYER | Not named | REFERENCE | QA-PREPAID-FIXTURE | $240.00 | Received · Cash | $115.00 applied · $125.00 unapplied | Hold | Refund | APPLIED TO | Fee | $75.00 | Applied Sep 19, 2026 | Reallocate | One-time charge | $40.00 | Applied Sep 18, 2026 | Reallocate | Apply to a charge | Close"
+ },
+ "payment": {
+  "tabs": [
+   "Payment",
+   "Refunds"
+  ],
+  "historyListedOnPaymentTab": 0,
+  "formShown": 1,
+  "payerValue": "Certt Certhouse · primary contact · also responsible\n▾",
+  "payerRequired": 0,
+  "commitEnabled": true,
+  "methodOptions": [
+   "visa •••• 4242 · Expires 12/31 · Default · Certt Certhouse",
+   "New card",
+   "Bank account",
+   "Cash",
+   "Check",
+   "Money order",
+   "External payment (taken outside Alloy)",
+   "Other"
+  ],
+  "payerOptions": [
+   "Certt Certhouse · primary contact · also responsible",
+   "Not known — record to the household"
+  ],
+  "checkField": "Check number"
+ },
+ "refunds": {
+  "listedBeforeChoice": 0,
+  "options": [
+   "Choose a payment…",
+   "Oct 6, 2026 · $75.00 · Visa •••• 4242 · Certt Certhouse",
+   "Oct 5, 2026 · $18.00 · Card",
+   "Sep 30, 2026 · $1,305.00 · Card",
+   "Sep 29, 2026 · $18.00 · Card",
+   "Sep 29, 2026 · $75.00 · Card",
+   "Sep 18, 2026 · $240.00 · Cash",
+   "Sep 13, 2026 · $25.00 · Check"
+  ],
+  "listedAfterChoice": 0,
+  "refundButton": 0
+ },
+ "paymentRows": [
+  {
+   "cells": "Oct 6, 2026 | Payment | — | Unmapped | −$75.00 | Received | Certt Certhouse | Visa •••• 4242",
+   "gl": "Unmapped",
+   "glState": "unmapped",
+   "glTitle": "Recorded before payment destinations were tracked — not back-filled"
+  },
+  {
+   "cells": "Oct 5, 2026 | Payment | — | Unmapped | −$18.00 | Received | — | Card",
+   "gl": "Unmapped",
+   "glState": "unmapped",
+   "glTitle": "Recorded before payment destinations were tracked — not back-filled"
+  }
+ ],
+ "gearOnPaymentsLens": null,
+ "adjustOptions": [
+  "The account as a whole — not one charge",
+  "Materials · Oct 20, 2026 · $18.00 outstanding",
+  "Materials · Oct 16, 2026 · $18.00 outstanding"
+ ],
+ "adjustOverlayText": "",
+ "isoInAdjust": false,
+ "accounting": {
+  "toolPresent": 1,
+  "panel": "Where each payment method's money lands | Choose the asset account — cash on hand, a bank account, undeposited funds or a clearing account — each method settles into. This is never the revenue account of the charge being paid. Each payment records the destination in force when it arrives. | 8 unmapped | No asset accounts exist yet. In GL Codes, add accounts of type Asset — for example Cash on hand, Undeposited funds, Stripe clearing — then choose where each method lands."
+ },
+ "focus": {
+  "rollup": {
+   "top": 373,
+   "bottom": 524,
+   "left": 550,
+   "right": 1506,
+   "h": 151
+  },
+  "lens": {
+   "top": 529,
+   "bottom": 586,
+   "left": 550,
+   "right": 1506,
+   "h": 57
+  },
+  "headerToLedgerTop": 156,
+  "contextRow": false,
+  "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
+  "sideItems": [
+   "BUTTON:$125.00 prepaid available →"
+  ],
+  "dueNote": "$2,005.00 past due",
+  "stats": [
+   "Due now$2,005.00$2,005.00 past due$225.00 not yet due · next Oct 31, 2026",
+   "Balance · October 2026$2,076.00$2,116.00 charged · $40.00 paid",
+   "Scheduled$2,440.00activates with its period"
+  ],
+  "responsibilityLink": 0,
+  "gear": {
+   "aria": "Manage responsibility",
+   "title": "Manage responsibility"
+  },
+  "managePayments": {
+   "top": 501,
+   "bottom": 518,
+   "left": 1382,
+   "right": 1506,
+   "h": 17
+  },
+  "actions": {
+   "top": 373,
+   "bottom": 403,
+   "left": 1162,
+   "right": 1506,
+   "h": 30
+  },
+  "prepaidDoor": 1
+ },
+ "writes": []
+}

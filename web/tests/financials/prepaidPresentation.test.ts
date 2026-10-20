@@ -95,8 +95,9 @@ describe("THE GATE — zero is silence", () => {
         expect(src("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts"))
             .toMatch(/\(vm\.prepaid\?\.availableCents \?\? 0\) > 0\s*\?\s*\[\{ key: "prepaid"/);
         /* W7-F043: prepaid and held stack beside the figures, and only when the adapter states them. */
-        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/const held = hydrating \? \[\] : summary\.context\.filter\(\(c\) => c\.key === "prepaid" \|\| c\.key === "held"\);/);
-        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/\{held\.length \? \(/);
+        const detail = src("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(detail).toMatch(/const held = context\.filter\(\(c\) => c\.key === "prepaid" \|\| c\.key === "held"\);\s*if \(!held\.length\) return null;/);
+        expect(detail).toMatch(/\{held\.length \? <FinancialsAccountHoldings/);
         expect(src("components/operationalCards/FinancialsCard.tsx"))
             .toMatch(/\{period\.availablePrepaid \? \(/);
     });

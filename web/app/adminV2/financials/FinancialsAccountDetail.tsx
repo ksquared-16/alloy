@@ -20,7 +20,7 @@
  * reason; nothing here narrows it.
  */
 
-import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
+import { FINANCIALS_DEPTH_CARD_SELECTOR, hasInnerDismissibleLayer, hasOpenTransientPopup } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
@@ -154,7 +154,17 @@ export default function FinancialsAccountDetail({
             menuWasOpen = false;
             const open = hostRef.current?.querySelector("[data-financials-overlay]");
             if (!open) return;
-            if (hasInnerDismissibleLayer(document)) {
+            /*
+             * Deployed proof on 747ad20d: Manage responsibility never closed on Escape here. Its
+             * panel takes focus on open, and focus inside a Financials depth card reads as "an inner
+             * layer that closes itself" — true in the Focus Panel, false in this host, where the
+             * depth card IS the command this listener closes. So focus in a depth card is not an
+             * inner layer; an open menu inside it still is.
+             */
+            const focusOnlyInDepthCard =
+                !hasOpenTransientPopup(document)
+                && Boolean((document.activeElement as Element | null)?.closest?.(FINANCIALS_DEPTH_CARD_SELECTOR));
+            if (hasInnerDismissibleLayer(document) && !focusOnlyInDepthCard) {
                 menuWasOpen = true;
                 return;
             }

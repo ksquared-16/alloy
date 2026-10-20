@@ -90,7 +90,7 @@ describe("F041 · one door to responsibility", () => {
 });
 
 describe("F043 · secondary facts never claim a row", () => {
-    it("not yet due rides Due now's note line; prepaid and held stack beside the figures", () => {
+    it("not yet due stacks under Due now's past-due note; standalone, prepaid and held sit beside the figures", () => {
         act(() => root.render(<FinancialsAccountSummary evidence={evidence} />));
         const strip = host.querySelector("[data-financials-account-summary-strip]")!;
         expect(host.querySelector(".alloy-os-fdetail__summarycontext"), "no full-width context row").toBeNull();
@@ -103,6 +103,18 @@ describe("F043 · secondary facts never claim a row", () => {
             "$125.00 prepaid available",
             "$50.00 held deposit",
         ]);
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css).toMatch(/\.alloy-os-fdetail__statnotes \{\s*display: flex;\s*flex-direction: column;\s*\}/);
+    });
+
+    it("in Details, holdings sit under Payment / Add so the three figures keep one row (747ad20d proof)", () => {
+        act(() => root.render(<FinancialsDetailCard evidence={evidence} periods={[]} onOpenPrepaid={() => {}} />));
+        const strip = host.querySelector("[data-financials-account-summary-strip]")!;
+        expect(strip.querySelector("[data-financials-summary-context]"), "not in the strip").toBeNull();
+        const holdings = host.querySelector(".alloy-os-fdetail__actions > [data-financials-summary-context]");
+        expect(holdings, "under the commands").not.toBeNull();
+        expect(holdings!.textContent).toContain("$125.00 prepaid available");
+        expect(holdings!.textContent).toContain("$50.00 held deposit");
     });
 
     it("every figure is still the adapter's — no calculation moved", () => {
@@ -110,6 +122,13 @@ describe("F043 · secondary facts never claim a row", () => {
         expect(host.querySelector('[data-testid="summary-balance-note"]')!.textContent).toBe("$2,121.00 charged · $40.00 paid");
         expect(host.textContent).toContain("$2,081.00");
         expect(host.textContent).toContain("$2,440.00");
+    });
+});
+
+describe("found during deployed proof (747ad20d)", () => {
+    it("Escape closes Manage responsibility in Accounts: focus in a depth card is not an inner layer there", () => {
+        const accounts = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(accounts).toMatch(/const focusOnlyInDepthCard =\s*!hasOpenTransientPopup\(document\)\s*&& Boolean\(\(document\.activeElement as Element \| null\)\?\.closest\?\.\(FINANCIALS_DEPTH_CARD_SELECTOR\)\);/);
     });
 });
 

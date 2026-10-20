@@ -105,7 +105,7 @@ describe("participant progress derivation", () => {
 
         const complete = at(["waitlisted", "enrolling", "not_enrolling"]);
         expect(complete.summary).toBe("All children have a path");
-        expect(complete.completion_hint).toBe("You can now complete this step.");
+        expect(complete.completion_hint).toBe("Every child has a path — this step is complete.");
         expect(complete.all_resolved).toBe(true);
         expect(complete.resolved).toBe(3);
     });

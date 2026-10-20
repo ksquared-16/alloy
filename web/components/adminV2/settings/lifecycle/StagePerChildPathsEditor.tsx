@@ -101,7 +101,11 @@ function InputEditor({
     onChange: (next: StageParticipantDecisionInputV1) => void;
     onRemove: () => void;
 }) {
-    const source = input.options_source ? "programs" : input.binds_to_target_field === "close_reason_key" ? "close_reason" : "listed";
+    const source =
+        input.options_source === "location_rooms" ? "rooms"
+        : input.options_source ? "programs"
+        : input.binds_to_target_field === "close_reason_key" ? "close_reason"
+        : "listed";
     return (
         <div className="space-y-1.5 rounded-lg border border-alloy-forge/10 bg-alloy-forge/[0.02] p-2" data-testid="stage-per-child-paths-input">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -134,18 +138,27 @@ function InputEditor({
                         value={source}
                         aria-label="Choices come from"
                         onChange={(e) => {
-                            const { options_source: _s, binds_to_target_field: _b, ...rest } = input;
-                            if (e.target.value === "programs") onChange({ ...rest, options: undefined, options_source: "location_program_categories" });
+                            const { options_source: _s, binds_to_target_field: _b, binds_to_participation_field: _p, ...rest } = input;
+                            // A room or program chosen here IS the child's placement: it is recorded on it.
+                            if (e.target.value === "programs") onChange({ ...rest, options: undefined, options_source: "location_program_categories", binds_to_participation_field: "program_category_id" });
+                            else if (e.target.value === "rooms") onChange({ ...rest, options: undefined, options_source: "location_rooms", binds_to_participation_field: "program_room_cohort_key" });
                             else if (e.target.value === "close_reason") onChange({ ...rest, options: input.options ?? [], binds_to_target_field: "close_reason_key" });
                             else onChange({ ...rest, options: input.options ?? [] });
                         }}
                     >
                         <option value="listed">Choices listed here</option>
-                        <option value="programs">The child&apos;s location&apos;s programs</option>
+                        <option value="rooms">The child&apos;s location&apos;s rooms (records the placement)</option>
+                        <option value="programs">The child&apos;s location&apos;s programs (records the program)</option>
                         <option value="close_reason">Close reasons (recorded on the child)</option>
                     </select>
-                    {source === "programs" ? (
-                        <p className="text-[0.6875rem] text-alloy-midnight/50">Offered from each child&apos;s location; the program is recorded.</p>
+                    {source === "rooms" ? (
+                        <p className="text-[0.6875rem] text-alloy-midnight/50" data-testid="stage-per-child-paths-source-hint">
+                            Offered from each child&apos;s location&apos;s rooms; the room, its program and location are recorded as the child&apos;s placement.
+                        </p>
+                    ) : source === "programs" ? (
+                        <p className="text-[0.6875rem] text-alloy-midnight/50" data-testid="stage-per-child-paths-source-hint">
+                            Offered from each child&apos;s location; the program is recorded as the child&apos;s placement.
+                        </p>
                     ) : (
                         <textarea
                             className={`${field} block w-full`}
@@ -157,6 +170,20 @@ function InputEditor({
                         />
                     )}
                 </div>
+            ) : null}
+            {input.type === "date" ? (
+                <label className="flex items-center gap-1.5 text-[0.6875rem] text-alloy-midnight/60">
+                    <input
+                        type="checkbox"
+                        checked={input.binds_to_participation_field === "start_date"}
+                        data-testid="stage-per-child-paths-binds-start"
+                        onChange={(e) => {
+                            const { binds_to_participation_field: _p, ...rest } = input;
+                            onChange(e.target.checked ? { ...rest, binds_to_participation_field: "start_date" } : rest);
+                        }}
+                    />
+                    Records the child&apos;s expected start date
+                </label>
             ) : null}
         </div>
     );

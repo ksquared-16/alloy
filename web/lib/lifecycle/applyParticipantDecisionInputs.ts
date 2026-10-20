@@ -112,6 +112,20 @@ export function applyParticipantDecisionInputs(input: {
             continue;
         }
 
+        // Choices resolved from data (the location's rooms or programs) that resolved to NOTHING
+        // cannot validate an answer — refused, never accepted unchecked.
+        if (spec.options_source && !spec.options?.length) {
+            issues.push({
+                input_key: spec.key,
+                code: "not_a_configured_option",
+                message: `No ${spec.label.toLowerCase()} is available for this child's location.`,
+            });
+            continue;
+        }
+        if (spec.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            issues.push({ input_key: spec.key, code: "not_a_configured_option", message: `${spec.label} must be a date.` });
+            continue;
+        }
         // An empty options array means "no options configured", which cannot validate anything —
         // it is checked only when the author actually listed choices.
         if (spec.type === "select" && spec.options?.length) {
