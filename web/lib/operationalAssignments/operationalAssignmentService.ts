@@ -14,7 +14,8 @@ import type { ScheduleAssignmentRow } from "@/lib/childcareOperational/enrollmen
 import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { assertValidIsoDate, computePriorRowCloseDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
-import { validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
+import { validateRoomLocationUnderSite, validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
+import { canonicalUnitRoleFromStorage, isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export type OperationalAssignmentSubject =
@@ -205,6 +206,45 @@ export async function createOperationalAssignment(
         });
     }
 
+    /*
+     * THE ROOM IS UNDER THE ASSIGNMENT'S SITE — the same ratified rule placements and staff coverage
+     * already enforce (placement-system: "classroom under site"; staff-coverage-authority: a room must
+     * resolve under the selected site). The database trigger checks only the org, so this writer let a
+     * secondary or staff assignment name a room at another site — and a staff row's room is what
+     * attendance capture scope resolves through. A STAFF room must also be an operational group
+     * (attendance-system: staff assignment belongs to the operational_group unit). Whether a child's
+     * secondary may sit in a shared space is not ratified, so it is not decided here.
+     */
+    const roomLocationId = trimOrNull(input.roomLocationId);
+    if (roomLocationId) {
+        const roomCheck = await validateRoomLocationUnderSite(supabase, input.orgId, subject.siteLocationId, roomLocationId);
+        if (!roomCheck.ok) {
+            throw new OperationalEnrollmentServiceError("validation_failed", roomCheck.error.message, {
+                field: "room_location_id",
+            });
+        }
+        if (input.subject.type === "staff") {
+            const { data: unit, error: unitError } = await supabase
+                .from("locations")
+                .select("location_type, unit_role")
+                .eq("org_id", input.orgId)
+                .eq("id", roomLocationId)
+                .maybeSingle();
+            if (unitError) throw new OperationalEnrollmentServiceError("db_error", unitError.message);
+            const role = canonicalUnitRoleFromStorage(
+                (unit as { location_type?: unknown } | null)?.location_type,
+                (unit as { unit_role?: unknown } | null)?.unit_role
+            );
+            if (!isOperationalGroupRole(role)) {
+                throw new OperationalEnrollmentServiceError(
+                    "validation_failed",
+                    "A staff assignment's room must be a classroom (operational group)",
+                    { field: "room_location_id" }
+                );
+            }
+        }
+    }
+
     const isPrimary = input.isPrimary === true;
     const supersedesAssignmentId = trimOrNull(input.supersedesAssignmentId);
     if (isPrimary && input.subject.type !== "child") {
@@ -232,7 +272,26 @@ export async function createOperationalAssignment(
         }
     }
 
+    /*
+     * REPLACING A SECONDARY: ITS OWN SUBJECT'S ROW ONLY, AND NEVER A CLOSE WITHOUT A SUCCESSOR.
+     *
+     * This closed the prior row and THEN inserted its successor, in two calls with nothing between
+     * them: any insert refusal (the consistency trigger — pattern or site mismatch, a room or program
+     * outside the org, a category that does not support the subject, staff employment) left the
+     * commitment closed and nothing in its place. And the prior row was found by id alone, so a
+     * crafted id could close ANOTHER subject's assignment while the successor was written for this one.
+     *
+     * Now the prior row must belong to the subject being written, the successor is inserted FIRST,
+     * and the prior row is closed only if it is still live (a concurrent edit that got there first
+     * is a conflict, not a second successor). Should the close not land, the successor is removed —
+     * the same compensation the primary path uses. Secondaries carry no uniqueness or overlap
+     * constraint, so the instant both rows are live is invisible to every rule; it is NOT a
+     * transaction, and a crash between the two calls leaves both rows live (visible and
+     * recoverable) rather than the commitment lost. A truly atomic replacement needs a database
+     * function — a decision, not something to slip in here.
+     */
     let priorIsPrimary = isPrimary;
+    let prior: ScheduleAssignmentRow | null = null;
     if (supersedesAssignmentId) {
         const { data: priorRaw, error: priorErr } = await supabase
             .from("schedule_assignments")
@@ -241,8 +300,8 @@ export async function createOperationalAssignment(
             .eq("id", supersedesAssignmentId)
             .maybeSingle();
         if (priorErr) throw new OperationalEnrollmentServiceError("db_error", priorErr.message);
-        const prior = priorRaw as ScheduleAssignmentRow | null;
-        if (!prior || !["planned", "active", "ending"].includes(prior.status)) {
+        prior = priorRaw as ScheduleAssignmentRow | null;
+        if (!prior || !LIVE_STATUSES.includes(prior.status) || !priorBelongsToSubject(prior, input.subject.type, subject)) {
             throw new OperationalEnrollmentServiceError("not_found", "Assignment to supersede was not found");
         }
         if (prior.is_primary === true) {
@@ -252,17 +311,6 @@ export async function createOperationalAssignment(
             );
         }
         priorIsPrimary = false;
-        const closeDate = computePriorRowCloseDate(startDate);
-        const { error: closeError } = await supabase
-            .from("schedule_assignments")
-            .update({
-                status: "superseded",
-                end_date: closeDate,
-                updated_by: trimOrNull(input.actorUserId),
-            })
-            .eq("org_id", input.orgId)
-            .eq("id", prior.id);
-        if (closeError) throw new OperationalEnrollmentServiceError("db_error", closeError.message);
     }
 
     const row = {
@@ -272,7 +320,7 @@ export async function createOperationalAssignment(
         customer_member_id: subject.customerMemberId,
         subject_person_id: subject.personId,
         site_location_id: subject.siteLocationId,
-        room_location_id: trimOrNull(input.roomLocationId),
+        room_location_id: roomLocationId,
         program_category_id: trimOrNull(input.programCategoryId),
         operational_assignment_type_id: trimOrNull(input.assignmentTypeId),
         is_primary: supersedesAssignmentId ? priorIsPrimary : isPrimary,
@@ -300,7 +348,50 @@ export async function createOperationalAssignment(
     if (error || !data) {
         throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "Could not create assignment");
     }
-    return data as ScheduleAssignmentRow;
+    const created = data as ScheduleAssignmentRow;
+    if (prior) {
+        const { data: closed, error: closeError } = await supabase
+            .from("schedule_assignments")
+            .update({
+                status: "superseded",
+                end_date: computePriorRowCloseDate(startDate),
+                updated_by: trimOrNull(input.actorUserId),
+            })
+            .eq("org_id", input.orgId)
+            .eq("id", prior.id)
+            .in("status", LIVE_STATUSES)
+            .select("id")
+            .maybeSingle();
+        if (closeError || !closed) {
+            await supabase.from("schedule_assignments").delete().eq("org_id", input.orgId).eq("id", created.id);
+            if (closeError) throw new OperationalEnrollmentServiceError("db_error", closeError.message);
+            throw new OperationalEnrollmentServiceError(
+                "conflict",
+                "This assignment was changed by someone else — reopen it and try again",
+                { assignment_id: prior.id }
+            );
+        }
+    }
+    return created;
+}
+
+const LIVE_STATUSES = ["planned", "active", "ending"];
+
+/**
+ * The prior row is this subject's: same subject type and the same child (by member, or by agreement
+ * for rows written before members were carried) or the same staff person.
+ */
+function priorBelongsToSubject(
+    prior: ScheduleAssignmentRow,
+    subjectType: string,
+    subject: { customerMemberId: string | null; personId: string | null; enrollmentAgreementId: string | null }
+): boolean {
+    if (prior.subject_type !== subjectType) return false;
+    if (subjectType !== "child") return Boolean(subject.personId) && prior.subject_person_id === subject.personId;
+    return (
+        (Boolean(subject.customerMemberId) && prior.customer_member_id === subject.customerMemberId) ||
+        (Boolean(subject.enrollmentAgreementId) && prior.enrollment_agreement_id === subject.enrollmentAgreementId)
+    );
 }
 
 export async function listOperationalAssignments(
