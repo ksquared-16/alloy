@@ -8,7 +8,8 @@
  */
 
 import clsx from "clsx";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 import {
     ALLOY_TIME_SUGGESTIONS,
@@ -37,7 +38,9 @@ export function AlloyTimeInput({
 }) {
     const listId = useId();
     const rootRef = useRef<HTMLDivElement>(null);
+    const listRef = useRef<HTMLUListElement>(null);
     const [open, setOpen] = useState(false);
+    const [listStyle, setListStyle] = useState<CSSProperties | null>(null);
     const [draft, setDraft] = useState(() => formatAlloyTimeDisplay(value));
     const [invalid, setInvalid] = useState(false);
 
@@ -49,7 +52,9 @@ export function AlloyTimeInput({
     useEffect(() => {
         if (!open) return;
         const onPointerDown = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+            const target = event.target as Node;
+            // The list is portaled, so "inside" is the field OR the list.
+            if (!rootRef.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false);
         };
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") setOpen(false);
@@ -59,6 +64,39 @@ export function AlloyTimeInput({
         return () => {
             document.removeEventListener("mousedown", onPointerDown);
             document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [open]);
+
+    /*
+     * THE SUGGESTIONS FLOAT AT PAGE LEVEL.
+     *
+     * Rendered inside the field, the list was clipped by any scrolling ancestor — in the Assignment
+     * editor, the scrolling form area cut it off below the last row. It is portaled to the body and
+     * placed (fixed) under the field, following it on scroll and resize. It opens downward only;
+     * near the bottom of the viewport it shortens rather than flipping.
+     */
+    useLayoutEffect(() => {
+        if (!open) return;
+        const place = () => {
+            const field = rootRef.current?.getBoundingClientRect();
+            if (!field) return;
+            const below = window.innerHeight - field.bottom - 12;
+            setListStyle({
+                position: "fixed",
+                left: field.left,
+                top: field.bottom + 4,
+                width: field.width,
+                right: "auto",
+                maxHeight: Math.max(120, Math.min(220, below)),
+                zIndex: 85,
+            });
+        };
+        place();
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        return () => {
+            window.removeEventListener("scroll", place, true);
+            window.removeEventListener("resize", place);
         };
     }, [open]);
 
@@ -136,8 +174,16 @@ export function AlloyTimeInput({
                     <span aria-hidden>🕒</span>
                 </button>
             </div>
-            {open && !disabled ? (
-                <ul id={listId} role="listbox" className="alloy-time-input__list" aria-label={ariaLabel ?? "Suggested times"}>
+            {open && !disabled && listStyle && typeof document !== "undefined" ? createPortal(
+                <ul
+                    ref={listRef}
+                    id={listId}
+                    role="listbox"
+                    className="alloy-time-input__list"
+                    data-alloy-time-input-list="true"
+                    style={listStyle}
+                    aria-label={ariaLabel ?? "Suggested times"}
+                >
                     {suggestions.map((stored) => {
                         const selected = stored === value;
                         return (
@@ -158,7 +204,8 @@ export function AlloyTimeInput({
                             </li>
                         );
                     })}
-                </ul>
+                </ul>,
+                document.body,
             ) : null}
         </div>
     );

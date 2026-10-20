@@ -15,6 +15,8 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     "[data-adminv2-bos-rail-overlay]",
     // Photo lightbox is portaled to body; closing it must not close the record drawer behind it.
     '[data-identity-avatar-zoom="true"]',
+    // Time suggestions are portaled to body; picking one must not close the record drawer.
+    '[data-alloy-time-input-list="true"]',
 ] as const;
 
 /** Queue scrollport — row clicks swap the Focus Panel subject in State 2 instead of closing. */

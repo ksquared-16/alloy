@@ -3679,8 +3679,13 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__body {
-  /* Flex column so the schedule footer stays inside the card; form scrolls above. */
-  max-height: min(560px, 58vh) !important;
+  /* Flex column so the schedule footer stays inside the card; form scrolls above.
+   * The CARD's viewport-bounded max-height is the one cap: the body fills it and shrinks with it.
+   * (A second fixed cap here — min(560px, 58vh) — clipped the form below the line with no way to
+   * reach it, Save/Cancel included.) */
+  max-height: none !important;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -3697,6 +3702,27 @@ html[data-alloy-os-runtime-split="true"]
   padding-inline: 16px;
   padding-bottom: 10px;
   box-sizing: border-box;
+}
+/* THE HEIGHT CHAIN. Body → scheduling card → schedule surface → editor surface → scroll area.
+ * The two wrappers between the body and the editor were plain blocks, so the editor's height was
+ * its content height, the scroll area never had a bounded height to overflow, and nothing scrolled
+ * — content past the body's cap was cut off and the wheel moved the Focus Panel behind. Every link
+ * is a shrinking flex column now. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard__body > [data-scheduling-card="true"],
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  [data-scheduling-card="true"] > [data-schedule-surface="true"],
+.alloy-os-ucard--expanded .alloy-os-ucard__body > [data-scheduling-card="true"],
+.alloy-os-ucard--expanded [data-scheduling-card="true"] > [data-schedule-surface="true"],
+.alloy-os-focus-panel-linked-host__card .alloy-os-ucard__body > [data-scheduling-card="true"],
+.alloy-os-focus-panel-linked-host__card [data-scheduling-card="true"] > [data-schedule-surface="true"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -3719,6 +3745,8 @@ html[data-alloy-os-runtime-split="true"]
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* The form owns the wheel/touch gesture while it can scroll; it never chains to the panel. */
+  overscroll-behavior: contain;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -3732,6 +3760,26 @@ html[data-alloy-os-runtime-split="true"]
   padding-top: 10px;
   padding-bottom: 4px;
   box-shadow: 0 -8px 14px -12px rgba(15, 23, 42, 0.22);
+}
+
+/* The Assignment editor's paired rows (room | days, dates | daily hours): side by side when the
+ * card is wide enough for both, stacked when it is not — never clipped. */
+.alloy-os-sched-row {
+  display: grid;
+  gap: 10px 18px;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: start;
+}
+.alloy-os-sched-row > * {
+  min-width: 0;
+}
+@container (min-width: 520px) {
+  .alloy-os-sched-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 /* Days above Daily hours — two columns only when the elevated card is wide enough

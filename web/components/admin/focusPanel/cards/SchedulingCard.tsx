@@ -1562,20 +1562,41 @@ function ScheduleRegions({
             <div
                 data-schedule-scroll="true"
                 className="alloy-os-sched-scroll"
-                style={{ display: "grid", gap: 13, minWidth: 0, minHeight: 0, flex: "1 1 auto", paddingBottom: 8 }}
+                style={{ display: "grid", gap: surface === "editor" ? 10 : 13, minWidth: 0, minHeight: 0, flex: "1 1 auto", paddingBottom: 8 }}
             >
                 <IdentityHeader child={child} state={state} />
                 {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
-                <div
-                    data-schedule-days-hours-band="true"
-                    className="alloy-os-sched-days-hours-band"
-                >
-                    <Region icon={CalendarDays} label="Days">{days}</Region>
-                    <Region icon={Clock} label="Daily hours">{hours}</Region>
-                </div>
-                <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
-                <Region icon={CalendarRange} label="Effective">{effective}</Region>
-                <BillingConsequence billing={billing} tuitionSelect={tuitionSelect} />
+                {surface === "editor" ? (
+                    /*
+                     * THE EDITOR IS THREE ROWS: room | days, dates | daily hours, tuition. Each pair
+                     * sits side by side when the card is wide enough and stacks when it is not
+                     * (`.alloy-os-sched-row`, container query) — never clipped to fit.
+                     */
+                    <>
+                        <div data-schedule-row="room-days" className="alloy-os-sched-row">
+                            <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
+                            <Region icon={CalendarDays} label="Days">{days}</Region>
+                        </div>
+                        <div data-schedule-row="dates-hours" className="alloy-os-sched-row">
+                            <Region icon={CalendarRange} label="Dates">{effective}</Region>
+                            <Region icon={Clock} label="Daily hours">{hours}</Region>
+                        </div>
+                        <BillingConsequence billing={billing} tuitionSelect={tuitionSelect} />
+                    </>
+                ) : (
+                    <>
+                        <div
+                            data-schedule-days-hours-band="true"
+                            className="alloy-os-sched-days-hours-band"
+                        >
+                            <Region icon={CalendarDays} label="Days">{days}</Region>
+                            <Region icon={Clock} label="Daily hours">{hours}</Region>
+                        </div>
+                        <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
+                        <Region icon={CalendarRange} label="Effective">{effective}</Region>
+                        <BillingConsequence billing={billing} tuitionSelect={tuitionSelect} />
+                    </>
+                )}
             </div>
             <div
                 data-schedule-footer="true"
@@ -1753,7 +1774,6 @@ function ScheduleEditor({
      * against that.
      */
     const [draftView, setDraftView] = useState<AssignmentTuitionView | null>(null);
-    const savedRoomIdRef = useRef<string | null>(roomId);
     /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
     /*
      * ── WHAT DISCOUNTS ARE EXPECTED ON THIS RELATIONSHIP ──────────────────────────────────────
@@ -1865,45 +1885,80 @@ function ScheduleEditor({
      * existing accepted selection is never overwritten by a resolver answer.
      */
     const displayView = draftView ?? pricingView;
+    /** True once the operator (or an accepted term) has made the choice — never auto-replaced. */
+    const operatorChoseRef = useRef(false);
+    /** The rate a change made ineligible, named so the operator knows to choose again. */
+    const [invalidatedRate, setInvalidatedRate] = useState<string | null>(null);
+    const acceptedSeededRef = useRef(false);
+
+    // An accepted term reopens AS ITSELF: its rate, its override reason, its custom amount. Saving
+    // must reproduce it, never silently turn an authorised override into an automatic match.
     useEffect(() => {
-        if (!displayView) return;
-        const current = offeringId.trim();
-        const known =
-            current
-            && (displayView.applicable.some((o) => o.sourceId === current)
-                || displayView.additional.some((o) => o.sourceId === current));
-        if (known) return;
-        // Nothing chosen, or a choice the room change made meaningless: start from the recommendation.
-        setOfferingId(displayView.recommended?.sourceId ?? "");
-    }, [displayView, offeringId]);
+        const accepted = pricingView?.accepted;
+        if (!accepted || acceptedSeededRef.current) return;
+        acceptedSeededRef.current = true;
+        operatorChoseRef.current = true;
+        setOfferingId(accepted.source.id);
+        if (accepted.state === "overridden") setOverrideReason(accepted.overrideReason ?? "");
+        if (accepted.customAmount) {
+            setCustomRateOn(true);
+            setCustomRate((accepted.amountCents / 100).toFixed(2));
+        }
+        if (!pricingView?.applicable.some((o) => o.sourceId === accepted.source.id)) setShowAdditionalRates(true);
+    }, [pricingView]);
 
     useEffect(() => {
-        if (!opportunityId || child.kind !== "child") return;
-        const roomChanged = roomId !== savedRoomIdRef.current;
-        if (!roomChanged || !programFromRoom || !programCategoryId) {
-            setDraftView(null);
-            return;
+        if (!displayView) return;
+        const decision = reconcileTuitionSelection({
+            view: displayView,
+            current: offeringId.trim(),
+            operatorChose: operatorChoseRef.current,
+        });
+        if (decision.next === offeringId.trim()) return;
+        if (decision.invalidated) {
+            operatorChoseRef.current = false;
+            setInvalidatedRate(decision.invalidated);
         }
+        setOfferingId(decision.next);
+    }, [displayView, offeringId]);
+
+    /*
+     * THE EDITOR'S CHOICES PRICE THE ASSIGNMENT, BEFORE SAVING.
+     *
+     * Room (its program), days, schedule type, start and site are the pricing facts the editor's Save
+     * writes. They are sent to the canonical tuition view as a draft, resolved by the same resolver,
+     * so changing any of them re-prices immediately — and saving prices identically.
+     */
+    const draftDaysKey = [...days].sort((x, y) => x - y).join(",");
+    useEffect(() => {
+        if (!opportunityId || child.kind !== "child") return;
         let cancelled = false;
-        void fetch(
-            `/api/admin/financial-config/opportunity/${encodeURIComponent(opportunityId)}`
-                + `?draft_customer_member_id=${encodeURIComponent(child.id)}`
-                + `&draft_program_category_id=${encodeURIComponent(programCategoryId)}`,
-            { credentials: "include" },
-        )
-            .then((r) => (r.ok ? r.json() : null))
-            .then((body: { assignments?: AssignmentTuitionView[] } | null) => {
-                if (cancelled) return;
-                const v = (body?.assignments ?? []).find((x) => x.customerMemberId === child.id) ?? null;
-                setDraftView(v?.draft ? v : null);
-            })
-            .catch(() => {
-                /* the saved assignment's rates keep showing */
-            });
+        const params = new URLSearchParams({ draft_customer_member_id: child.id });
+        if (programCategoryId) params.set("draft_program_category_id", programCategoryId);
+        if (draftDaysKey) params.set("draft_days_per_week", String(new Set(draftDaysKey.split(",")).size));
+        if (scheduleType) params.set("draft_schedule_type", scheduleType);
+        if (start) params.set("draft_start_date", start);
+        if (siteId) params.set("draft_location_id", siteId);
+        const timer = window.setTimeout(() => {
+            void fetch(
+                `/api/admin/financial-config/opportunity/${encodeURIComponent(opportunityId)}?${params.toString()}`,
+                { credentials: "include" },
+            )
+                .then((r) => (r.ok ? r.json() : null))
+                .then((body: { assignments?: AssignmentTuitionView[] } | null) => {
+                    if (cancelled) return;
+                    const v = (body?.assignments ?? []).find((x) => x.customerMemberId === child.id) ?? null;
+                    setDraftView(v?.draft ? v : null);
+                })
+                .catch(() => {
+                    /* the saved assignment's rates keep showing */
+                });
+        }, 200);
         return () => {
             cancelled = true;
+            window.clearTimeout(timer);
         };
-    }, [opportunityId, child.id, child.kind, roomId, programFromRoom, programCategoryId]);
+    }, [opportunityId, child.id, child.kind, programCategoryId, draftDaysKey, scheduleType, start, siteId]);
 
     const tuitionChoices = useMemo(
         () => tuitionChoicesFor(displayView, showAdditionalRates),
@@ -2332,7 +2387,6 @@ function ScheduleEditor({
      * stale. So the canonical view is re-read first and the commit is made against it.
      */
     async function settleTuitionAfterSave(): Promise<void> {
-        savedRoomIdRef.current = roomId;
         const fresh = await refreshPricingView();
         setDraftView(null);
         await settleTuition(fresh);
@@ -2418,6 +2472,9 @@ function ScheduleEditor({
                     opportunity_id: opportunityId,
                     schedule_pattern_id: pid,
                     room_location_id: roomId,
+                    // The program the editor shows (the room's, when it implies one) — saved so the
+                    // assignment prices exactly as the editor's draft tuition did.
+                    program_category_id: programCategoryId || null,
                     start_date: start || null,
                     end_date: openEnded ? null : end || null,
                     weekdays: days,
@@ -2527,7 +2584,11 @@ function ScheduleEditor({
                                 data-assignment-tuition-plan={child.id}
                                 data-assignment-tuition-embed="true"
                                 data-assignment-tuition-draft={draftView ? "true" : undefined}
-                                onChange={(e) => setOfferingId(e.target.value)}
+                                onChange={(e) => {
+                                    operatorChoseRef.current = Boolean(e.target.value);
+                                    setInvalidatedRate(null);
+                                    setOfferingId(e.target.value);
+                                }}
                                 style={{
                                     padding: "6px 8px",
                                     fontSize: 13,
@@ -2581,6 +2642,11 @@ function ScheduleEditor({
                                     </button>
                                 ) : null}
                             </div>
+                            {invalidatedRate && !offeringId.trim() ? (
+                                <div data-assignment-tuition-invalidated={invalidatedRate} style={{ fontSize: 11, color: T.ember }}>
+                                    The chosen rate no longer applies to this assignment — choose a rate.
+                                </div>
+                            ) : null}
                             {customRateOn && offeringId.trim() ? (
                                 <label style={{ fontSize: 10.5, color: T.slate, display: "block" }}>
                                     Custom amount
@@ -2940,10 +3006,10 @@ function ScheduleEditor({
                     ) : undefined
                 }
                 days={
-                    <div style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "grid", gap: 6 }}>
                         <DayPills days={days} interactive allowed={allowedDays} onToggle={toggleDay} />
                         <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
-                            Use a schedule pattern
+                            {patternPicking ? "Hide patterns" : "Use a pattern"}
                         </button>
                         {patternPicking &&
                             (patterns == null ? (
@@ -3064,19 +3130,12 @@ function ScheduleEditor({
                             </div>
                             <div data-schedule-site-context="true" style={{ fontSize: 11.5, fontWeight: 500, color: T.muted }}>
                                 Site · {siteName}
+                                {programUsed && programFromRoom ? (
+                                    <span data-program-from-room="true" style={{ color: T.pine, fontWeight: 600 }}>
+                                        {" · Program from this room"}
+                                    </span>
+                                ) : null}
                             </div>
-                            {programUsed && programFromRoom ? (
-                                <div
-                                    data-program-from-room="true"
-                                    style={{ fontSize: 11, fontWeight: 600, color: T.pine }}
-                                >
-                                    Program set by this room — read-only here (change the room to change it).
-                                </div>
-                            ) : programUsed && programCategoryId ? (
-                                <div style={{ fontSize: 11, color: T.muted }}>
-                                    Program resolved from the child&rsquo;s enrollment.
-                                </div>
-                            ) : null}
                         </div>
                     )
                 }
@@ -3096,7 +3155,6 @@ function ScheduleEditor({
                                 Open-ended
                             </label>
                         </div>
-                        <div style={{ fontSize: 10.5, color: T.mid40 }}>{openEnded ? "Ongoing — no end date; ends later via a change." : "Bounded — ends on the date above."}</div>
                     </div>
                 }
                 footer={
@@ -3167,6 +3225,29 @@ export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditi
         additional: true,
     }));
     return [...own, ...extra];
+}
+
+/**
+ * How the tuition selection follows an assignment change.
+ *
+ *  - A selection still offered (an eligible rate, or an additional rate chosen as an override)
+ *    stays.
+ *  - An automatic selection follows the new resolution: the recommendation when there is exactly
+ *    one, nothing when rates tie (the operator chooses — never an arbitrary pick).
+ *  - An OPERATOR's selection the change made ineligible is cleared and named, never silently
+ *    replaced, so a new choice or a governed override is required.
+ */
+export function reconcileTuitionSelection(args: {
+    view: AssignmentTuitionView;
+    current: string;
+    operatorChose: boolean;
+}): { next: string; invalidated: string | null } {
+    const { view, current } = args;
+    const eligible = view.applicable.some((o) => o.sourceId === current);
+    const additional = view.additional.some((o) => o.sourceId === current);
+    if (current && (eligible || (additional && args.operatorChose))) return { next: current, invalidated: null };
+    if (current && args.operatorChose) return { next: "", invalidated: current };
+    return { next: view.recommended?.sourceId ?? "", invalidated: null };
 }
 
 /** Anything but the recommendation as authored is an override, and needs a reason. */
