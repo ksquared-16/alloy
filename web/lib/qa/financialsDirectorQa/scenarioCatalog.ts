@@ -150,7 +150,18 @@
  *   REWRITTEN 26, 27, 29, 30, 61 — where a receipt is read or acted on changed; earlier results do
  *             not count. KEPT 7, 8, 9, 15 — the strip's words only (Due now, Balance).
  */
-export const CATALOG_VERSION = "2026-10-20.2";
+/*
+ * 2026-10-20.3 — W7-F034..F040: Financials dates read "Oct 20, 2026"; Preview is OPTIONAL for one
+ * charge's adjustment, one account's responsibility and one share's expected funding (Save/Confirm
+ * is live once the form is valid, and the command re-validates); Adjust names its intent — "Correct
+ * the amount" is an Adjustment accounted under the charge's own account, a goodwill credit stays a
+ * Credit, and a discount is a policy (Manage discounts); Manage responsibility is a labelled action
+ * beside Manage payments, the two-party split balances to 100%, an all-percentage split saves only
+ * at exactly 100%, and expected funding is managed beside each share in Manage responsibility.
+ * W7 QA · Split Family now carries one posted obligation (Registration fee $75.00, Sasha Split).
+ *   REWRITTEN 18, 19, 20, 21, 22, 24 — the workflow changed; earlier results do not count.
+ */
+export const CATALOG_VERSION = "2026-10-20.3";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -762,14 +773,16 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "On W7 QA · Split Family, read the standing 50/50 between Dana Split and Rosa Split, add Gale Split as a responsible member, and confirm nothing financial moved.",
         whyItMatters:
             "Who owes and how much is owed are separate questions. Deciding a parent carries a bill must never quietly change the bill.",
-        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to divide" }],
-        navigate: ["Open the charge detail.", "Find Responsibility arrangement.", "Use Manage responsibility."],
+        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "W7 QA · Split Family" }],
+        navigate: [
+            "Financials → Accounts → W7 QA · Split Family → Manage responsibility → (a labelled action beside Manage payments, under the summary).",
+        ],
         doThis: [
-            "Before touching anything, read the rows the editor opened with. They must be the arrangement that stands TODAY \u2014 the people who actually carry this obligation, with their current amounts in the fields. Anyone else merely eligible appears as an explicit '+ Add', not as a row implying they are already responsible.",
-            "Type a two-digit amount into one field without stopping. Both characters must land; you must not have to click back in after the first.",
-            "Read the primary control. It says 'Review this change' and it is LIVE \u2014 not a disabled Confirm with nothing on screen explaining why.",
-            "Press it, read what it says will happen, then press Confirm.",
-            "Then reopen the editor, press Review again, and change an amount afterwards. The control must fall back to Review and the stale preview must disappear.",
+            "Read the editor: Applies to, Effective from (a date like Oct 20, 2026), and the responsible parties — today's arrangement is what the rows show; other eligible people appear as “+ Add”.",
+            "Type a two-digit percentage for Dana Split: focus stays in the field. With two percentage parties, Rosa Split's share changes to make exactly 100% (50/50 → type 75 → Rosa reads 25; type Rosa 40 → Dana reads 60).",
+            "Read the summary beneath the parties: “2 responsible parties for the account from <date>” and one line per share. That is the result — there is no second confirmation screen.",
+            "Press “+ Add” for Gale Split. The editor says to allocate Gale a percentage by reducing one or more existing shares, and Save is disabled — no share was taken from anyone for you. Set the three shares to total exactly 100% (it shows “x% remaining to allocate” or “x% over 100%” until you do).",
+            "Press Save responsibility. (Preview is there if you want the command's own read-out first; it is optional.)",
         ],
         expectChanges: [
             "The people who carry the obligation are named, with their amounts.",
@@ -785,7 +798,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Everyone eligible is shown as an editable row, so the editor implies a split that does not exist \u2014 W7-F003A.",
             "The amount field loses focus after one character \u2014 W7-F003C.",
             "A disabled primary action with nothing on screen saying what is unmet \u2014 W7-F003D.",
-            "Confirming commits a split different from the one that was shown, because the preview was not invalidated by the edit.",
+            "Saving commits a split different from the summary shown above Save.",
+            "With two percentage parties, editing one does not move the other to keep 100%.",
+            "Save enabled while an all-percentage split is anything other than exactly 100%, or a share silently taken from someone when a third party is added.",
+            "A date shown as 2026-10-20 anywhere in the editor.",
         ],
     }),
     S({
@@ -797,8 +813,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Arrangements change — a parent takes over, a split is renegotiated. The new one has to replace the old one, because two live arrangements would double what the family appears to owe.",
         requires: [{ kind: "scenario_passed", scenarioKey: "manage_responsibility" }],
-        navigate: ["Manage responsibility again, from a later effective date."],
-        doThis: ["Configure the same party from a later date.", "Confirm.", "Re-read the arrangement."],
+        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility → set Effective from to a LATER date."],
+        doThis: ["Configure the same parties from the later date (the summary reads “… from <later date>”).", "Save responsibility.", "Reopen Manage responsibility and re-read Current."],
         expectChanges: ["The arrangement in force is the later one."],
         expectUnchanged: ["The total assigned — it must not double.", "What is owed."],
         invariant: MONEY_INVARIANTS.RESPONSIBILITY_MOVES_NO_CASH,
@@ -807,18 +823,43 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "expected_funding",
         order: 20,
-        title: "Expected Funding is an expectation, not a payment",
+        title: "Expected funding is an expectation, not a payment",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Record that an employer is expected to cover part of Dana Split's share.",
+        purpose: "Record that an employer is expected to cover part of Dana Split's share of W7 QA · Split Family, and confirm nothing owed or collectible moves.",
         whyItMatters:
             "Money somebody has promised is not money that has arrived. Until it does, the family is still responsible for it, and the product must not quietly treat a promise as a payment.",
-        requires: [{ kind: "scenario_passed", scenarioKey: "manage_responsibility" }],
-        navigate: ["Under Dana Split's share, click Manage expected funding →."],
-        doThis: ["Choose an employer sponsorship type, not a government subsidy.", "Name the funding source.", "Enter Expected to cover.", "Preview, then Confirm."],
-        expectChanges: ["The share reads Expected from <source> · <amount>, with the remainder shown as still their responsibility."],
-        expectUnchanged: ["What is owed.", "Collectible now.", "Payments received — no payment is created."],
+        /*
+         * W7-F040: DETERMINISTIC. The fixture carries one posted obligation, written by the canonical
+         * charge.add (certification/financials/w7-f040/split-family-obligation.mjs) — the Director
+         * does not manufacture prerequisite data.
+         */
+        requires: [
+            { kind: "scenario_passed", scenarioKey: "manage_responsibility" },
+            { kind: "account_state", check: "has_posted_obligation", describe: "W7 QA · Split Family: Registration fee $75.00 for Sasha Split, posted Oct 20, 2026" },
+        ],
+        navigate: [
+            "Financials → Accounts → W7 QA · Split Family. Starting state: one posted charge — Registration fee · Sasha Split · $75.00 (Oct 20, 2026); responsibility as Scenarios 18–19 left it (read it in the payer row — e.g. Dana Split $56.25 · Rosa Split $18.75 for 75/25); no expected funding.",
+            "Manage responsibility → under Dana Split's share: “Expected funding · None” → Manage funding. (The same control is under each share in the Registration fee's Charge details → Responsibility & funding.)",
+        ],
+        doThis: [
+            "Source type → choose an employer sponsorship type, not a government subsidy.",
+            "Name the funding source, e.g. “Acme Employer”.",
+            "Expected to cover → $20.00.",
+            "Confirm. (Preview is available and optional.)",
+        ],
+        expectChanges: ["Dana Split's share reads “Expected funding · Acme Employer $20.00”."],
+        expectUnchanged: [
+            "What is owed: Balance stays $75.00 and Due now is unchanged.",
+            "Collectible now.",
+            "Payments received — no payment is created, and no ledger row appears.",
+        ],
         invariant: MONEY_INVARIANTS.EXPECTATION_IS_NOT_PAYMENT,
-        failSymptoms: ["Outstanding falling by the expected amount.", "A payment appearing.", "Being asked for a subsidy authorization."],
+        failSymptoms: [
+            "Balance or Due now falling by the expected amount.",
+            "A payment appearing in the ledger.",
+            "Being asked for a subsidy authorization.",
+            "Manage funding missing because the account has no charge — the fixture now has one; report it if it does not.",
+        ],
     }),
     S({
         key: "expected_funding_correction",
@@ -829,46 +870,46 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Employers revise what they will cover. If a correction added instead of replacing, every corrected figure in the product would be wrong in the same direction and nobody would see it.",
         requires: [{ kind: "scenario_passed", scenarioKey: "expected_funding" }],
-        navigate: ["Manage expected funding → on the same share."],
-        doThis: ["Record a different expected amount.", "Preview, Confirm.", "Read the share again."],
+        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility → Manage funding on Dana Split's share again."],
+        doThis: ["Keep the SAME source type and name (an employer, “Acme Employer”) — a different source is a second expectation, not a correction.", "Expected to cover → $15.00.", "Confirm.", "Read the share again."],
         expectChanges: ["The share shows the corrected amount only."],
         expectUnchanged: ["What is owed.", "Collectible now."],
         invariant: MONEY_INVARIANTS.CORRECTION_REPLACES,
         failSymptoms: ["Both figures shown as live.", "The sum of the two appearing anywhere."],
     }),
     S({
-        /* Key kept for continuity; rewritten 2026-10-20.1 — a credit takes effect by itself, so earlier results do not count. */
+        /* Key kept; rewritten 2026-10-20.3 (W7-F036) — the choice names the economic intent. */
         key: "adjustment_draft",
         order: 22,
-        title: "Lowering what a family owes, and saying why",
+        title: "Correcting a charge's amount reduces that charge — not a discount",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Record a credit that reduces what a family owes, and confirm it takes effect by itself — and that the account and collections agree afterwards.",
+        purpose: "Lower a posted Materials charge by $5 as a correction, and confirm the reduction is an Adjustment accounted under Materials' own account — while a goodwill credit stays a Credit.",
         whyItMatters:
-            "This is somebody deciding, by hand, that a family owes less. It has to say why and be explainable a year later. Like any charge, it takes effect through the posting authority on its own — in its billing period, or after review where the organization reviews postings — and nobody posts it by hand. You are never asked whether this is a 'credit' or an 'adjustment', and never asked for a positive or negative number — you say which way the balance moves and by how much.",
-        requires: [{ kind: "account_state", check: "has_obligation_with_room_to_reduce", describe: "an obligation that still has something left to reduce" }],
-        navigate: ["From the account pane, click Add.", "Switch the mode to Adjustment."],
+            "Correcting what a charge should have been and giving the family money back are different decisions with different accounting. A $5 correction to an $18 Materials charge leaves $13 of Materials revenue (4030 · Supply Fees); a goodwill credit is a credit, and a discount is a policy. The form asks which one you mean, and the accounting follows it. Nobody posts it by hand.",
+        requires: [{ kind: "account_state", check: "has_obligation_with_room_to_reduce", describe: "W7 QA · Monthly Family: the posted Materials $18.00 for Milo Monthly (Oct 20, 2026)" }],
+        navigate: [
+            "Financials → Accounts → W7 QA · Monthly Family → the Materials $18.00 row (Oct 20, 2026) → Charge details → Correct this charge. (Or Add → Adjustment and choose that charge in What this is about.)",
+        ],
         doThis: [
-            "What needs to change → Reduce what the family owes.",
-            "Reduce by → the amount, as a plain positive figure.",
-            "What this is about → choose the obligation this corrects. Leaving it on 'The account as a whole — not one charge' is a legitimate answer, not an unfinished form.",
-            "Effective date → read what it already says before changing anything. It should be TODAY for this organization, not the date of the charge you are correcting.",
+            "What needs to change → “Correct the amount — lower this charge”. The other choices are “Correct the amount — raise this charge” and “Give a goodwill credit”; the note says discounts are set from Manage discounts.",
+            "Reduce by → 5.00.",
+            "Effective date → read it first: today for this organization, shown as a date like Oct 20, 2026.",
             "Reason → say why. It is required.",
-            "Preview, read it, then Confirm.",
-            "Read the account totals and Collectible now; then the ledger's Credits & adjustments filter.",
+            "Confirm. (Preview is optional — if you press it, it also says “Accounted under 4030 · Supply Fees — the corrected charge's own account”.)",
+            "Read the ledger's Credits & adjustments filter and open the new row.",
         ],
         expectChanges: [
-            "The credit is a ledger row under Credits & adjustments, reading Posted (Review required where your organization reviews postings).",
-            "What is owed falls by exactly the amount you entered — nobody posts it.",
+            "A new ledger row: Adjustment · Milo Monthly · 4030 · Supply Fees · −$5.00 · Posted — not “Credit” and not “Discount”.",
+            "Its Charge details shows a Correction block: reduced what the family owes by $5.00, correcting Materials.",
+            "What is owed falls by exactly $5.00 — nobody posts it.",
         ],
-        expectUnchanged: ["Payments received.", "The named responsible adult."],
+        expectUnchanged: ["The original Materials charge ($18.00) is unchanged on the record.", "Payments received.", "The named responsible adult."],
         invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
         failSymptoms: [
-            "The credit waits for someone to post it (on an organization with no review configured).",
-            "The account and Collectible now disagree, or the reduction lands twice.",
-            "The adjustment attaches to the wrong obligation.",
-            "Being asked for a 'Type', or for a credit-versus-adjustment choice.",
-            "Choosing Reduce and seeing the preview describe an increase, or the reverse.",
-            "The effective date defaulting to the corrected charge's date, or to a date that is not today here.",
+            "The row reads Credit or Discount, or its GL account is a credit/discount account rather than 4030 · Supply Fees.",
+            "Confirm stays disabled until Preview is pressed.",
+            "The original charge is edited instead of a correction being appended.",
+            "The effective date shows as 2026-10-20, or defaults to the corrected charge's date.",
         ],
     }),
     S({
@@ -882,10 +923,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         requires: [{ kind: "account_state", check: "has_posted_reduction", describe: "an obligation already reduced to nothing" }],
         navigate: ["Add → Adjustment."],
         doThis: [
-            "What needs to change → Reduce what the family owes.",
+            "What needs to change → “Correct the amount — lower this charge”.",
             "What this is about → the obligation you just reduced to zero.",
             "Reduce by → 0.01.",
-            "Give a reason, then Preview.",
+            "Give a reason, then Confirm (or Preview first).",
             "Read the refusal, and re-read the account.",
         ],
         expectChanges: [],
