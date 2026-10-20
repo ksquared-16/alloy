@@ -264,7 +264,13 @@ describe("scenario readiness", () => {
          * preview/commit parity, generated-billing parity, accounting independence. None replaces
          * anything.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(71);
+        /*
+         * 69 after W7-F027 (catalog 2026-10-20.1): TWO REMOVED, deliberately. `draft_moves_nothing`
+         * required an ordinary unposted draft, which the product no longer creates (12 and 15 assert
+         * that a held or Scheduled charge moves nothing); `adjustment_post` asked the Director to post
+         * a credit by hand, and a credit now takes effect by itself (22 checks it). No capability lost.
+         */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(69);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

@@ -72,9 +72,10 @@ describe("the Director QA scenario catalog", () => {
     /** The capabilities the mission requires an explicit disposition for. None may be missing. */
     it("dispositions every capability the acceptance program names", () => {
         const required = [
-            "financial_subject", "add_charge_honours_review_boundary", "draft_moves_nothing", "post_charge",
+            /* W7-F027 (2026-10-20.1): draft_moves_nothing and adjustment_post were REMOVED — their workflow is gone. */
+            "financial_subject", "add_charge_honours_review_boundary", "post_charge",
             "charge_detail_attribution", "manage_responsibility", "responsibility_supersession",
-            "expected_funding", "expected_funding_correction", "adjustment_draft", "adjustment_post",
+            "expected_funding", "expected_funding_correction", "adjustment_draft",
             "reduction_zero_bound", "reverse_adjustment", "payment_receipt", "apply_payment",
             "partial_unapplied", "move_payment", "failed_reapply_recovery", "refund", "reverse_charge",
             "cross_surface_consistency", "reload_switch_viewport", "overview_smoke", "subsidy_exclusion",

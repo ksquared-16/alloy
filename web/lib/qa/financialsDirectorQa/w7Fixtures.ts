@@ -177,12 +177,10 @@ export const SCENARIO_FIXTURE: Readonly<Record<string, ScenarioFixtureKey>> = Ob
     add_charge_preview_commit_parity: "w7_monthly",
 
     add_charge_honours_review_boundary: "w7_monthly",
-    draft_moves_nothing: "w7_monthly",
     post_charge: "w7_monthly",
     awaiting_posting_says_why: "w7_monthly",
     charge_detail_attribution: "w7_monthly",
     adjustment_draft: "w7_monthly",
-    adjustment_post: "w7_monthly",
     reduction_zero_bound: "w7_monthly",
     reverse_adjustment: "w7_monthly",
     payment_receipt: "w7_monthly",
