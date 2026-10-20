@@ -41,12 +41,15 @@ export function isLoopbackDatabaseUrl(raw: string | null | undefined): boolean {
     return LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
 }
 
+/** The only environment this check reads. Narrower than `NodeJS.ProcessEnv` so callers can pass exactly these. */
+export type CertificationTargetEnv = Readonly<Record<string, string | undefined>>;
+
 export type CertificationTargetVerdict =
     | { ok: true; host: string }
     | { ok: false; reason: "certification_target_unknown" | "certification_target_not_local"; host: string | null };
 
 /** The verdict for the environment a fixture is about to run with. Never returns a key or a full URL. */
-export function certificationTargetVerdict(env: NodeJS.ProcessEnv = process.env): CertificationTargetVerdict {
+export function certificationTargetVerdict(env: CertificationTargetEnv = process.env): CertificationTargetVerdict {
     const candidates = [env.SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_URL]
         .map((v) => (typeof v === "string" ? v.trim() : ""))
         .filter((v) => v.length > 0);
@@ -71,7 +74,7 @@ function hostOf(raw: string): string | null {
  * Call at the top of a local-only fixture entry point, after env files load and before any client
  * exists. Refuses by exiting the process: nothing after it runs, so nothing is written.
  */
-export function exitUnlessLocalCertificationTarget(fixture: string, env: NodeJS.ProcessEnv = process.env): void {
+export function exitUnlessLocalCertificationTarget(fixture: string, env: CertificationTargetEnv = process.env): void {
     const verdict = certificationTargetVerdict(env);
     if (verdict.ok) return;
     console.error(
