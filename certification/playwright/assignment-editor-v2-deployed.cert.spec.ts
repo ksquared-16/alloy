@@ -402,6 +402,7 @@ test.describe("Assignment editor V2 — deployed", () => {
             await expect(ed).toBeVisible();
             await page.waitForTimeout(3000); // let draft tuition settle
             const reqs: Array<{ m: string; u: string; start: number; end?: number; status?: number }> = [];
+            const refusals: Array<{ asked: string; said: string }> = [];
             const onReq = (r: import("@playwright/test").Request) => {
                 const u = r.url();
                 if (!u.includes("/api/")) return;
@@ -463,6 +464,7 @@ test.describe("Assignment editor V2 — deployed", () => {
         };
         const timedSave = async (kind: string, ed: import("@playwright/test").Locator, opts?: { dbl?: boolean }) => {
             const reqs: Array<{ m: string; u: string; start: number; end?: number; status?: number }> = [];
+            const refusals: Array<{ asked: string; said: string }> = [];
             const onReq = (r: import("@playwright/test").Request) => {
                 if (!r.url().includes("/api/")) return;
                 reqs.push({ m: r.method(), u: r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!.slice(0, 70), start: Date.now() });
@@ -470,7 +472,15 @@ test.describe("Assignment editor V2 — deployed", () => {
             const onDone = async (r: import("@playwright/test").Request) => {
                 const u = r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!.slice(0, 70);
                 const row = [...reqs].reverse().find((x) => x.u === u && x.m === r.method() && x.end == null);
-                if (row) { row.end = Date.now(); row.status = (await r.response())?.status(); }
+                if (row) {
+                    row.end = Date.now();
+                    const res = await r.response();
+                    row.status = res?.status();
+                    // A refused tuition commit: keep what was asked and what the server said.
+                    if (res && res.status() >= 400 && u === "/api/admin/actions/execute") {
+                        refusals.push({ asked: (r.postData() ?? "").slice(0, 600), said: (await res.text().catch(() => "")).slice(0, 600) });
+                    }
+                }
             };
             page.on("request", onReq);
             page.on("requestfinished", onDone);
@@ -498,6 +508,7 @@ test.describe("Assignment editor V2 — deployed", () => {
             fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.json`), JSON.stringify(results, null, 1));
             note(`${label} ${kind}: write ${row.clickToWriteResponse}ms (${row.writeStatus}) closed ${row.clickToEditorClosed}ms posts=${row.schedulingPosts} execs=${JSON.stringify(row.executes)} configReads=${row.financialConfigReads}`);
             for (const l of row.seq) note(`     ${l}`);
+            for (const x of refusals) note(`     REFUSED asked=${x.asked} said=${x.said}`);
             fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
             return row;
         };
