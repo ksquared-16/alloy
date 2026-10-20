@@ -43,8 +43,15 @@ import type {
     FinancialsEvidence,
     FinancialsLedgerPeriod,
     FinancialsPayer,
+    LedgerEntry,
 } from "@/lib/cardLab/cardLabTypes";
-import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
+import {
+    billingPeriodForDate,
+    billingPeriodLabel,
+    sortBillingPeriodKeysDescending,
+} from "@/lib/financials/billingPeriod";
+import { collectionLifecycle, lifecycleLabel, type CollectionRail } from "@/lib/financials/payments/collectionLifecycle";
+import { presentPayments } from "@/lib/adminV2/runtime/focusPanel/financials/paymentPresentation";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
@@ -369,7 +376,6 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             autopayHealthy: vm.autopayHealthy === true,
             nextChargeLabel: null,
         },
-        upcoming: [],
         /*
          * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
          *
@@ -592,11 +598,172 @@ export function adaptFinancialsVmToFinancialsCard(input: {
 export function adaptFinancialsVmToLedgerPeriods(input: {
     vm: FinancialsCardVM;
     currency: string;
-    /** Only the current period opens; prior periods are closed until asked for. */
+    /**
+     * The current period. It opens, and so does the NEAREST FUTURE period with activity — the
+     * scheduled drafts an operator is about to bill; older periods stay closed until asked for.
+     */
     openPeriodKey: string | null;
 }): FinancialsLedgerPeriod[] {
     const { vm, currency } = input;
+    const chargePeriods = adaptChargePeriods(vm, currency);
+    return placePaymentActivity(chargePeriods, paymentTimelineEntries(vm, currency), input.openPeriodKey);
+}
+
+/*
+ * ── W7-F026: ONE TIMELINE, NOT A LEDGER AND A PAYMENT REPORT ──────────────────────────────────
+ *
+ * Measured on Director QA: the account read as a charge ledger, then a separate PAYMENT band at
+ * the bottom ("No payment method on file / Take or record payment →"), then an "Upcoming" heading
+ * over nothing. Payments were separated because `vm.ledgerPeriods` is built from charge rows alone
+ * and receipts were a second evidence list, drawn as a second table under the Payments lens; the
+ * band was the Payment command's own body, re-hosted under the ledger.
+ *
+ * The account's activity is ONE chronology. A receipt, money going back out and a collection still
+ * in flight are rows in the billing period their date falls in, beside the charges of that period.
+ * Nothing here decides money: every figure and every state is `presentPayments`' (the same
+ * presenter the Payment surface reads) or the collection lifecycle's. This places and formats.
+ */
+
+/** A `YYYY-MM-DD` reading of a timestamp, or null — never a guess. */
+function ymd(value: string | null | undefined): string | null {
+    return /^(\d{4}-\d{2}-\d{2})/.exec((value ?? "").trim())?.[1] ?? null;
+}
+
+function paymentTimelineEntries(vm: FinancialsCardVM, currency: string): LedgerEntry[] {
+    const byId = new Map(vm.payments.map((p) => [p.paymentId, p]));
+    const presented = presentPayments(
+        vm.payments,
+        Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0])),
+    );
+    const entries: LedgerEntry[] = presented.map((p) => {
+        const row = byId.get(p.paymentId);
+        const date = ymd(row?.receivedAt) ?? ymd(row?.postedAt);
+        const cur = p.currencyCode || currency;
+        /*
+         * COMPACT ALLOCATION STATE, never the allocations. A receipt says whether it is answering
+         * obligations; WHICH ones is Payment Details' to show.
+         */
+        const allocationLabel =
+            p.kind !== "receipt" || !p.isMoney ? null
+            : p.unappliedCents > 0 ?
+                p.appliedCents > 0 ? `Part applied · ${money(p.unappliedCents, cur)} unapplied` : `${money(p.unappliedCents, cur)} unapplied`
+            : "Applied";
+        return {
+            when: displayDate(date) ?? "—",
+            dateIso: date,
+            subject: "—",
+            subjectMemberId: null,
+            type: "payment",
+            glCode: null,
+            responsibleParty: null,
+            responsibilityUnassigned: false,
+            label: p.kind === "receipt" ? "Payment" : p.kind === "refund" ? "Refund" : "Returned",
+            /* Account-balance direction: money in reduces what is owed, money back out restores it. */
+            amount: `${p.kind === "receipt" ? "−" : ""}${money(p.receivedCents, cur)}`,
+            kind: p.kind === "receipt" ? "credit" : "charge",
+            status: p.statusLabel,
+            lens: "payments",
+            payment: {
+                paymentId: p.paymentId,
+                kind: p.kind,
+                statusLabel: p.statusLabel,
+                methodLabel: p.methodLabel || null,
+                payerLabel: row?.payerLabel ?? null,
+                allocationLabel,
+                unapplied: p.kind === "receipt" && p.isMoney && p.unappliedCents > 0,
+                openable: true,
+            },
+        };
+    });
+    /* Money on its way, in the collection lifecycle's own words — a row until it is recognised. */
+    for (const c of vm.openCollections ?? []) {
+        const rail = (c.rail === "ach" ? "ach" : "card") as CollectionRail;
+        const state = collectionLifecycle({
+            rail,
+            processorState: c.processorState,
+            providerActionType: c.providerActionType,
+            canonicallyRecognized: false,
+        });
+        const date = ymd(c.updatedAt);
+        entries.push({
+            when: displayDate(date) ?? "—",
+            dateIso: date,
+            subject: "—",
+            subjectMemberId: null,
+            type: "payment",
+            glCode: null,
+            responsibleParty: null,
+            responsibilityUnassigned: false,
+            label: "Payment",
+            amount: `−${money(c.amountCents, c.currencyCode || currency)}`,
+            kind: "credit",
+            status: lifecycleLabel(state, rail),
+            lens: "payments",
+            payment: {
+                paymentId: c.attemptId,
+                kind: "collection",
+                statusLabel: lifecycleLabel(state, rail),
+                methodLabel: rail === "ach" ? "Bank transfer" : "Card",
+                payerLabel: null,
+                allocationLabel: null,
+                unapplied: false,
+                openable: false,
+            },
+        });
+    }
+    return entries;
+}
+
+/**
+ * Put each payment event in the billing period its date falls in, order every period's activity
+ * newest first, and decide which periods open.
+ *
+ * A date no charge period covers gets the month that contains it — a month in which money arrived
+ * and nothing was billed is still a month with activity. Its summary says exactly that rather than
+ * "Balance $0.00", which would be a claim about charges the period does not have.
+ */
+function placePaymentActivity(
+    periods: FinancialsLedgerPeriod[],
+    payments: LedgerEntry[],
+    openPeriodKey: string | null,
+): FinancialsLedgerPeriod[] {
+    const out = periods.map((p) => ({ ...p, entries: [...p.entries] }));
+    for (const entry of payments) {
+        const d = entry.dateIso ?? null;
+        let home = d ? out.find((p) => p.start && p.end && p.start <= d && d <= p.end) : undefined;
+        if (!home) {
+            /* An undated event is not given a date; it is shown with the current period's activity. */
+            const period = billingPeriodForDate(d ?? `${(openPeriodKey ?? "").slice(0, 7) || "1970-01"}-01`);
+            home = out.find((p) => p.key === period.key);
+            if (!home) {
+                home = { key: period.key, start: period.start, end: period.end, label: period.label, summary: "No charges", open: false, entries: [] };
+                out.push(home);
+            }
+        }
+        home.entries.push(entry);
+    }
+    for (const p of out) {
+        /* Stable: same-day rows keep the read model's order, charges before the money that met them. */
+        p.entries.sort((a, b) => (b.dateIso ?? "").localeCompare(a.dateIso ?? ""));
+    }
+    const order = sortBillingPeriodKeysDescending(out.map((p) => p.key ?? ""));
+    out.sort((a, b) => order.indexOf(a.key ?? "") - order.indexOf(b.key ?? ""));
+    const current = openPeriodKey ? out.find((p) => p.key === openPeriodKey) ?? null : null;
+    const currentEnd = current?.end ?? (openPeriodKey ? billingPeriodForDate(`${openPeriodKey.slice(0, 7)}-01`).end : null);
+    /* The nearest future period with activity: smallest start after the current period ends. */
+    const nextFuture = currentEnd
+        ? out
+              .filter((p) => p.start && p.start > currentEnd && p.entries.length > 0)
+              .sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))[0] ?? null
+        : null;
+    return out.map((p) => ({ ...p, open: p.key === openPeriodKey || p === nextFuture }));
+}
+
+function adaptChargePeriods(vm: FinancialsCardVM, currency: string): FinancialsLedgerPeriod[] {
     return vm.ledgerPeriods.map((group) => ({
+        key: group.period.key,
+        start: group.period.start,
+        end: group.period.end,
         label: group.period.label,
         /*
          * "CLOSED" WAS A WORD THIS LINE HAD NO RIGHT TO. It was printed whenever the period's total
@@ -607,9 +774,10 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
          * to believe a month is final when it is open and still moving.
          */
         summary: `Balance ${money(group.totalCents, currency)}`,
-        open: group.period.key === input.openPeriodKey,
+        open: false,
         entries: group.rows.map((row) => ({
             when: displayDate(row.date) ?? "—",
+            dateIso: ymd(row.date),
             // The account, not a child, when a household charge has no participant subject.
             subject: row.subjectName ?? "Household",
             /* The same fact the account scopes by. The label is for reading; this is for filtering. */
@@ -990,7 +1158,6 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         ledger: [],
         payers: [],
         payment: { autopayLabel: null, autopayHealthy: false, nextChargeLabel: null },
-        upcoming: [],
         payments: [],
         adjustments: [],
         /* The degraded payload claims no holds rather than inventing an empty position. */

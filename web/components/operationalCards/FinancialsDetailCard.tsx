@@ -4,7 +4,7 @@ import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionP
 import { Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -36,9 +36,11 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
  *   A  Current period   the full reconciliation, arithmetic visible
  *   B  Past due         obligations, aging, failed attempts, recovery
  *   C  Payment setup    payers, split, methods, autopay, funding
- *   D  Ledger           the real ledger, with filters — this is where it belongs
- *   E  Upcoming         only where authoritative; unowned facts are marked, not invented
- *   F  Actions          the operational command row
+ *   D  Ledger           ONE timeline — charges, credits and payments, in their billing periods
+ *   E  Actions          the operational command row
+ *
+ * W7-F026: there is no Upcoming section (scheduled drafts live in their future periods) and no
+ * payment band under the ledger (Payment is the top command; a receipt opens Payment Details).
  *
  * No running balance column: `ledger_transactions` has no authoritative running balance, and
  * computing one in the card would invent an ordering the backend does not guarantee.
@@ -69,6 +71,7 @@ export default function FinancialsDetailCard({
     paymentUnavailableReason,
     onAddCharge,
     onOpenCharge,
+    onOpenPayment,
     onManagePayment,
     onMovePayment,
     onAddAdjustment,
@@ -85,7 +88,6 @@ export default function FinancialsDetailCard({
     hydrating = false,
     ledgerPending = false,
     unavailable = false,
-    paymentBand,
     paymentMethodsAccount,
     administration,
     discountAdmin,
@@ -127,22 +129,12 @@ export default function FinancialsDetailCard({
     onPayment?: () => void;
     /** Why Payment cannot be taken, when it cannot. Rendered on the disabled control. */
     paymentUnavailableReason?: string | null;
-    /**
-     * THE PAYMENT BAND, RENDERED INSIDE THIS CARD.
-     *
-     * It used to be a SIBLING of this component — the host rendered `<FinancialsDetailCard/>` and
-     * then the band next to it, inside the surface wrapper. So the band sat outside the card's own
-     * box, at the wrapper's left edge, and once Details was focused an operator saw a stray
-     * `Record payment →` floating beside the focused surface with no card around it. Measured
-     * mounted: a visible leaf at 509,522 whose nearest `data-universal-card-key` ancestor was null,
-     * while the Details card itself began at x≈528.
-     *
-     * The content was always legitimate — a ledger that cannot show what was received is half a
-     * ledger. What was wrong was OWNERSHIP: a focused surface owns everything it presents. Passing
-     * it in as a slot puts it inside the card that owns the interaction, and costs no depth
-     * mechanism, no z-index exception and no second scrim.
+    /*
+     * W7-F026: THE PAYMENT BAND IS NO LONGER RENDERED HERE. It sat under the ledger as a second
+     * payment presentation — "No payment method on file / Take or record payment →" — beside the
+     * Payment command at the top that opens the same operation. Receipts are ledger rows now and
+     * open Payment Details; the band remains the body of the Payment command itself.
      */
-    paymentBand?: ReactNode;
     /**
      * THE ACCOUNT WHOSE STORED METHODS THIS CARD ADMINISTERS (Payments W2).
      *
@@ -228,6 +220,8 @@ export default function FinancialsDetailCard({
      * row does everywhere else in the product.
      */
     onOpenCharge?: (args: { chargeId: string; label: string }) => void;
+    /** Opening a receipt's record — Payment Details. A read, like opening a charge. */
+    onOpenPayment?: (args: { paymentId: string }) => void;
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
@@ -399,19 +393,35 @@ export default function FinancialsDetailCard({
      * ledger it labels promises rows the operator will not find — the exact defect the subject
      * convergence repaired once already.
      */
+    /*
+     * W7-F026: A PAYMENT ROW ANSWERS NONE OF THE CHARGE QUESTIONS. It has no charge type, no charge
+     * lifecycle and no responsible party, so any of those filters — or a child scope, since money
+     * arrives against the account — narrows it out rather than filing it under a wrong answer
+     * ("Unassigned", "Posted"). The payer is the payment's own question, asked under its lens.
+     */
     const inResponsibleScope = useCallback(
-        (e: { responsibleParty?: string | null; type?: string; status?: string | null }) =>
-            (!responsibleParty
-                || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty)
-            && (!chargeType || e.type === chargeType)
-            && (!statusGroup || ledgerStatusGroup(e.status) === statusGroup),
-        [responsibleParty, chargeType, statusGroup],
+        (e: { responsibleParty?: string | null; type?: string; status?: string | null; payment?: { payerLabel: string | null } | null }) =>
+            e.payment
+                ? !responsibleParty && !chargeType && !statusGroup
+                  && (lens !== "payments" || !payer || (e.payment.payerLabel ?? "") === payer)
+                : (!responsibleParty
+                    || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty)
+                  && (!chargeType || e.type === chargeType)
+                  && (!statusGroup || ledgerStatusGroup(e.status) === statusGroup),
+        [responsibleParty, chargeType, statusGroup, lens, payer],
     );
+    const inSubjectScope = useCallback(
+        (e: { subjectMemberId: string | null; payment?: unknown }) =>
+            !subject || (!e.payment && (e.subjectMemberId ?? HOUSEHOLD_SUBJECT) === subject),
+        [subject],
+    );
+    /* The charge-side rows — the only ones the charge filters offer choices from. */
+    const chargeEntries = useMemo(() => allEntries.filter((e) => !e.payment), [allEntries]);
 
     const counts = useMemo(() => {
         const scoped = allEntries.filter(
             (e) =>
-                (!subject || (e.subjectMemberId ?? HOUSEHOLD_SUBJECT) === subject)
+                inSubjectScope(e)
                 && inResponsibleScope(e)
                 && (!periodLabel || periods.some((p) => p.label === periodLabel && p.entries.includes(e))),
         );
@@ -420,11 +430,11 @@ export default function FinancialsDetailCard({
             charges: 0,
             credits: 0,
             funding: 0,
-            payments: evidence.payments.length,
+            payments: 0,
         };
         for (const e of scoped) out[e.lens] += 1;
         return out;
-    }, [allEntries, periods, subject, periodLabel, evidence.payments.length]);
+    }, [allEntries, periods, periodLabel, inSubjectScope, inResponsibleScope]);
 
     /*
      * A FILTER IS OFFERED ONLY WHEN IT DIVIDES SOMETHING. One subject, one period or one payer is a
@@ -434,12 +444,12 @@ export default function FinancialsDetailCard({
         () => {
             /* One option per distinct subject, keyed by the id the account scopes by. */
             const byId = new Map<string, string>();
-            for (const e of allEntries) byId.set(e.subjectMemberId ?? HOUSEHOLD_SUBJECT, e.subject);
+            for (const e of chargeEntries) byId.set(e.subjectMemberId ?? HOUSEHOLD_SUBJECT, e.subject);
             return [...byId.entries()]
                 .map(([value, label]) => ({ value, label }))
                 .sort((a, b) => a.label.localeCompare(b.label));
         },
-        [allEntries],
+        [chargeEntries],
     );
     const periodChoices = useMemo(() => periods.map((p) => p.label), [periods]);
     /*
@@ -469,33 +479,37 @@ export default function FinancialsDetailCard({
 
     const chargeTypeChoices = useMemo(() => {
         const byType = new Map<string, string>();
-        for (const e of allEntries) if (e.type) byType.set(e.type, chargeCategoryLabel(e.type) || e.type);
+        for (const e of chargeEntries) if (e.type) byType.set(e.type, chargeCategoryLabel(e.type) || e.type);
         return [...byType.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [allEntries]);
+    }, [chargeEntries]);
     const statusChoices = useMemo(
-        () => LEDGER_STATUS_GROUPS.filter((g) => allEntries.some((e) => ledgerStatusGroup(e.status) === g)),
-        [allEntries],
+        () => LEDGER_STATUS_GROUPS.filter((g) => chargeEntries.some((e) => ledgerStatusGroup(e.status) === g)),
+        [chargeEntries],
     );
 
     const responsiblePartyChoices = useMemo(
         () =>
-            [...new Set(allEntries.map((e) => (e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL))].sort(
+            [...new Set(chargeEntries.map((e) => (e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL))].sort(
                 (a, b) =>
                     a === UNASSIGNED_LABEL ? 1 : b === UNASSIGNED_LABEL ? -1 : a.localeCompare(b),
             ),
-        [allEntries],
+        [chargeEntries],
     );
     const payerChoices = useMemo(
         () =>
-            [...new Set(evidence.payments.map((p) => p.payerLabel ?? "").filter(Boolean))].sort((a, b) =>
+            [...new Set(allEntries.map((e) => e.payment?.payerLabel ?? "").filter(Boolean))].sort((a, b) =>
                 a.localeCompare(b),
             ),
-        [evidence.payments],
+        [allEntries],
     );
 
-    /* The periods the ledger actually renders. A period the filter empties is not drawn at all. */
+    /*
+     * The periods the ledger actually renders. A period the filter empties is not drawn at all.
+     *
+     * W7-F026: the Payments lens is a FILTER over this same timeline, not a second table — it keeps
+     * the periods and shows only their payment rows, across every period.
+     */
     const visiblePeriods = useMemo(() => {
-        if (lens === "payments") return [];
         return periods
             .filter((p) => !periodLabel || p.label === periodLabel)
             .map((p) => ({
@@ -503,17 +517,15 @@ export default function FinancialsDetailCard({
                 entries: p.entries.filter(
                     (e) =>
                         (lens === "all" || e.lens === lens)
-                        && (!subject || (e.subjectMemberId ?? HOUSEHOLD_SUBJECT) === subject)
+                        && inSubjectScope(e)
                         && inResponsibleScope(e),
                 ),
             }))
             .filter((p) => p.entries.length > 0);
-    }, [periods, lens, subject, periodLabel, inResponsibleScope]);
+    }, [periods, lens, periodLabel, inSubjectScope, inResponsibleScope]);
 
-    const visiblePayments = useMemo(
-        () => (payer ? evidence.payments.filter((p) => (p.payerLabel ?? "") === payer) : evidence.payments),
-        [evidence.payments, payer],
-    );
+    /* The receipt facts a payment row's Apply and Move act on — the evidence's, never re-derived. */
+    const receiptsById = useMemo(() => new Map(evidence.payments.map((p) => [p.paymentId, p])), [evidence.payments]);
 
     /* Adjustments ARE "credits & adjustments" — they belong to that lens, and to the whole view. */
     const showAdjustments = lens === "all" || lens === "credits";
@@ -827,7 +839,7 @@ export default function FinancialsDetailCard({
                                 options={subjectChoices}
                             />
                         ) : null}
-                        {lens !== "payments" && periodChoices.length > 1 ? (
+                        {periodChoices.length > 1 ? (
                             <LensFilter
                                 testId="period"
                                 value={periodLabel ?? ""}
@@ -919,7 +931,6 @@ export default function FinancialsDetailCard({
                 <div className="alloy-os-fdetail__scroll" data-financials-detail-scroll="true">
 
                 {/* The ledger owns the detail. */}
-                {lens !== "payments" ? (
                 <div className="alloy-os-billingdetail__ledgerband">
                     <SectionHead ruled={false}>Ledger</SectionHead>
                     {/*
@@ -967,11 +978,17 @@ export default function FinancialsDetailCard({
                             )}
                         </div>
                     ) : visiblePeriods.length === 0 ? (
+                        lens === "payments" ? (
+                            <p className="alloy-os-fdetail__collapsed" data-financials-payments-empty="true">
+                                No money has been received.
+                            </p>
+                        ) : (
                         <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">
                             {lens === "all"
                                 ? "Nothing charged yet"
                                 : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
                         </p>
+                        )
                     ) : null}
                     {/*
                       * ONE RENDERER. The lens has already decided the cohort; every period below it
@@ -987,16 +1004,19 @@ export default function FinancialsDetailCard({
                             expandedOverride={expandedPeriods?.[per.label]}
                             onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
-                                ledgerRowFromEntry(e, i, {
-                                    onPostCharge, onReverseCharge, onAdjustCharge,
-                                    onResolveResponsibility, onReallocateResponsibility,
-                                    onOpenCharge,
-                                }),
+                                e.payment
+                                    ? ledgerRowFromPayment(e, e.payment, receiptsById.get(e.payment.paymentId) ?? null, {
+                                          onOpenPayment, onApplyPayment, onMovePayment,
+                                      })
+                                    : ledgerRowFromEntry(e, i, {
+                                          onPostCharge, onReverseCharge, onAdjustCharge,
+                                          onResolveResponsibility, onReallocateResponsibility,
+                                          onOpenCharge,
+                                      }),
                             )}
                         />
                     ))}
                 </div>
-                ) : null}
 
                 {/*
                   * ── PAYMENTS AND ADJUSTMENTS ARE LEDGER ACTIVITY ──────────────────────────────
@@ -1019,75 +1039,6 @@ export default function FinancialsDetailCard({
                   * the same bounded projection — so while the ledger waits for its own authority,
                   * they wait with it. Showing them would be the same partial truth in a second place.
                   */}
-                {ledgerPending ? null : lens === "payments" ? (
-                    <div className="alloy-os-billingdetail__ledger" role="table" data-financials-payments-ledger="true">
-                        <FinancialsLedgerHead />
-                        {visiblePayments.map((p) => (
-                            <FinancialsLedgerRow
-                                key={p.paymentId}
-                                row={{
-                                    ...ledgerRowFromPayment(p),
-                                    /*
-                                     * The receipt's own operations, on the receipt. Move and Apply
-                                     * were a list of links beneath the rows; an operator reading
-                                     * them could not tell which payment each belonged to.
-                                     */
-                                    actions: (
-                                        <>
-                                            {/*
-                                              * THE OFFER AND THE FIGURE ARE BOTH THE UNRESTRICTED
-                                              * MONEY. `unappliedCents` counts the whole receipt
-                                              * including its held lots, so quoting it here told the
-                                              * operator a deposit was theirs to spend — and until
-                                              * `applyPaymentToCharge` was bounded, it was.
-                                              */}
-                                            {p.holdableCents > 0 && onApplyPayment ? (
-                                                <RowAction
-                                                    kind="apply"
-                                                    command="payment.apply_to_charge"
-                                                    title={`Apply ${p.applicableLabel} to an obligation`}
-                                                    onClick={() => onApplyPayment({ paymentId: p.paymentId })}
-                                                />
-                                            ) : null}
-                                            {onMovePayment
-                                                ? p.applications
-                                                      .filter((a) => a.status === "active")
-                                                      .slice(0, 1)
-                                                      .map((a) => (
-                                                          <RowAction
-                                                              key={a.allocationId}
-                                                              kind="move"
-                                                              /*
-                                                               * `payment.move` was never registered. Moving a payment is
-                                                               * two canonical acts — reverse the application, then apply
-                                                               * to the chosen charge — and the first is what this control
-                                                               * raises. The command table already spells it that way; only
-                                                               * this label had invented a name.
-                                                               */
-                                                              command="payment.reverse_application"
-                                                              title={`Move ${a.amountLabel} from ${a.chargeLabel}`}
-                                                              onClick={() =>
-                                                                  onMovePayment({
-                                                                      paymentId: p.paymentId,
-                                                                      allocationId: a.allocationId,
-                                                                  })
-                                                              }
-                                                          />
-                                                      ))
-                                                : null}
-                                        </>
-                                    ),
-                                }}
-                            />
-                        ))}
-                        {visiblePayments.length === 0 ? (
-                            <p className="alloy-os-fdetail__collapsed" data-financials-payments-empty="true">
-                                No money has been received.
-                            </p>
-                        ) : null}
-                    </div>
-                ) : null}
-
                 {!ledgerPending && showAdjustments && evidence.adjustments.length ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
                         {/*
@@ -1308,22 +1259,6 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
-                {lens === "all" ? (
-                <div className="alloy-os-fdetail__upcoming">
-                    <SectionHead>Upcoming</SectionHead>
-                    <div className="alloy-os-fdetail__upcominglist">
-                        {evidence.upcoming.map((u) => (
-                            <span key={u.label} className="alloy-os-fdetail__up">
-                                <span className="alloy-os-billing__line-label">{u.label}</span>
-                                <span className="alloy-os-billing__line-value">{u.value}</span>
-                                {u.unowned ? (
-                                    <span className="alloy-os-billingdetail__unowned">no owner yet</span>
-                                ) : null}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                ) : null}
                 {/* A quiet utility link at the foot of the card — management, not a peer command,
                     and deliberately the last thing on the surface rather than a button above the
                     ledger competing with the work. */}
@@ -1351,12 +1286,6 @@ export default function FinancialsDetailCard({
                   * they are presented here directly rather than behind a button that goes nowhere.
                   */}
 
-                {/* Inside the card, because the focused surface owns what it presents. */}
-                {paymentBand ? (
-                    <div className="alloy-os-fdetail__paymentband" data-financials-payment-band="detail">
-                        {paymentBand}
-                    </div>
-                ) : null}
 
                 </div>
 
@@ -1617,42 +1546,82 @@ function ledgerRowFromAdjustment(a: FinancialsEvidence["adjustments"][number]): 
 }
 
 /**
- * A receipt as a LEDGER ROW.
+ * A PAYMENT EVENT AS A LEDGER ROW — W7-F026.
  *
- * Received, from whom, by what method, and what is still unapplied — the same four facts the stat
- * strip carried, in the columns every other row uses. Unapplied money is `attention` because it is
- * money sitting on the account answering nothing, which is a business state; the negative sign on a
- * receipt is not.
+ * Date, Payment, amount, status, payer and method, and a compact allocation state: whether the money
+ * is answering obligations, never which ones (that is Payment Details'). Unapplied money is
+ * `attention` because it is money on the account answering nothing — a business state, not a sign.
+ *
+ * The receipt's own operations travel with it: Apply what is unrestricted, Move what is applied.
+ * The row's name opens Payment Details, the receipt's record, the way a charge's name opens Charge
+ * Details. A collection still in flight has no record to open yet.
  */
-function ledgerRowFromPayment(p: FinancialsEvidence["payments"][number]): FinancialsLedgerRowView {
+function ledgerRowFromPayment(
+    e: FinancialsEvidence["ledger"][number],
+    pay: NonNullable<FinancialsEvidence["ledger"][number]["payment"]>,
+    receipt: FinancialsEvidence["payments"][number] | null,
+    actions: {
+        onOpenPayment?: (args: { paymentId: string }) => void;
+        onApplyPayment?: (args: { paymentId: string }) => void;
+        onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
+    },
+): FinancialsLedgerRowView {
+    const via = [pay.methodLabel, pay.payerLabel].filter(Boolean).join(" · ");
+    const move = receipt?.applications.find((a) => a.status === "active") ?? null;
     return {
-        key: p.paymentId,
-        when: p.receivedOn ?? "—",
-        type: "Payment",
+        key: `payment:${pay.paymentId}`,
+        when: e.when,
+        type: e.label,
         /*
-         * A RECEIPT IS NOT FOR A CHILD. This column is headed "Child", and it read "Household" on
-         * every payment row — writing an account-level word into a child-grain column, which is the
-         * kind of near-miss an operator stops trusting. A payment arrives against the account; the
-         * obligations it answers may belong to several children, and naming one would be a guess.
+         * A RECEIPT IS NOT FOR A CHILD. This column is headed "Child"; a payment arrives against the
+         * account, and the obligations it answers may belong to several children.
          */
         child: "—",
-        description: p.method ? `${p.method}${p.payerLabel ? ` · ${p.payerLabel}` : ""}` : (p.payerLabel ?? "Payment"),
+        description: via || e.label,
         /* Core has no payment-GL authority: a receipt has no charge category to map. */
         glLabel: null,
         glApplies: false,
-        amount: p.receivedLabel,
-        amountNote: p.unappliedCents > 0 ? `${p.unappliedLabel} unapplied` : `${p.appliedLabel} applied`,
-        /* Received, and how much of it has answered an obligation — the authority's own figures. */
-        status: p.unappliedCents > 0 ? "Part applied" : "Applied",
+        amount: e.amount,
+        amountNote: pay.allocationLabel,
+        status: pay.statusLabel,
         /*
-         * THE PAYER IS NOT THE RESPONSIBLE PARTY. This column used to carry `payerLabel`, which
-         * asserted that whoever paid is whoever owed — they are frequently different people, and on
-         * a split household they are routinely different. The payer is stated in the description,
-         * beside the method, where it is a fact about the receipt rather than a claim about the debt.
+         * THE PAYER IS NOT THE RESPONSIBLE PARTY — the payer is in the description, beside the
+         * method, where it is a fact about the receipt rather than a claim about the debt.
          */
         responsibleParty: null,
         responsibilityApplies: false,
-        tone: p.unappliedCents > 0 ? "attention" : undefined,
+        tone: pay.unapplied ? "attention" : pay.kind === "collection" ? "upcoming" : undefined,
+        onOpen: pay.openable && actions.onOpenPayment ? () => actions.onOpenPayment!({ paymentId: pay.paymentId }) : undefined,
+        title: [e.label, pay.statusLabel, via, pay.allocationLabel].filter(Boolean).join(" · "),
+        actions:
+            receipt ? (
+                <>
+                    {/*
+                      * THE OFFER AND THE FIGURE ARE BOTH THE UNRESTRICTED MONEY — `holdableCents`,
+                      * never `unappliedCents`, which counts held deposits too.
+                      */}
+                    {receipt.holdableCents > 0 && actions.onApplyPayment ? (
+                        <RowAction
+                            kind="apply"
+                            command="payment.apply_to_charge"
+                            title={`Apply ${receipt.applicableLabel} to an obligation`}
+                            onClick={() => actions.onApplyPayment!({ paymentId: receipt.paymentId })}
+                        />
+                    ) : null}
+                    {/*
+                      * Moving a payment is two canonical acts — reverse the application, then apply
+                      * to the chosen charge — and the first is what this control raises.
+                      */}
+                    {move && actions.onMovePayment ? (
+                        <RowAction
+                            kind="move"
+                            command="payment.reverse_application"
+                            title={`Move ${move.amountLabel} from ${move.chargeLabel}`}
+                            onClick={() => actions.onMovePayment!({ paymentId: receipt.paymentId, allocationId: move.allocationId })}
+                        />
+                    ) : null}
+                </>
+            ) : undefined,
     };
 }
 

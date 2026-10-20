@@ -122,38 +122,21 @@ describe("THE GATE — span=row renders the approved anatomy, span=1 does not", 
     });
 });
 
-describe("THE GATE — focused Details owns its payment band", () => {
+describe("THE GATE — focused Details carries no payment band at all (W7-F026)", () => {
     const host = src("components/admin/focusPanel/cards/FinancialsCard.tsx");
     const detail = src("components/operationalCards/FinancialsDetailCard.tsx");
 
     /*
-     * The band rendered as a SIBLING of the focused card, so it sat outside the card's box and an
-     * operator saw a stray `Record payment →` beside focused Details. Measured at 509,522 with no
-     * `data-universal-card-key` ancestor.
+     * History: the band once rendered as a SIBLING of the focused card (a stray `Record payment →`
+     * outside the card's box, measured at 509,522), and was moved INTO the card as a slot. W7-F026
+     * then found the slot itself was the defect: a second payment presentation under the ledger
+     * ("No payment method on file / Take or record payment →") beside the Payment command at the top.
+     * Receipts are ledger rows now; the band is only the Payment command's body and Payment Details'.
      */
-    it("passes the band into the card instead of rendering it beside the card", () => {
-        expect(host, "the detail branch hands the band to the card").toContain("paymentBand={paymentBandFor(true)}");
-
-        /*
-         * SCOPED TO THE DETAIL BRANCH, deliberately. The RESTING card legitimately renders a band
-         * as a child of its own body, and a repo-wide ban on the bare invocation would forbid the
-         * correct call along with the defective one — the first draft of this assertion did exactly
-         * that, and failed on working code.
-         *
-         * What must not exist is a bare `{paymentBandFor(...)}` sitting as a SIBLING of the Details
-         * card, which is the shape the orphan had.
-         */
-        /*
-         * The guard spelling moved when commands learned to render ABOVE the account floor rather
-         * than instead of it: being the floor is enough, so the branches are keyed off
-         * `detailFloorWanted` rather than off Details also being the top layer. `indexOf` on the
-         * old spelling returned -1, which this gate correctly refused to accept as "no sibling
-         * band found".
-         *
-         * BOTH floor branches are checked now, not just the first one `indexOf` happened to reach.
-         * The pending floor and the settled one each render the card, so each could grow the
-         * orphan, and scoping to one of them left the other unguarded.
-         */
+    it("neither hands the band to Details nor renders it beside Details", () => {
+        expect(host).not.toContain("paymentBand={paymentBandFor(true)}");
+        expect(detail).not.toContain('data-financials-payment-band="detail"');
+        expect(detail).not.toContain("paymentBand?: ReactNode");
         const starts: number[] = [];
         for (let i = host.indexOf("if (detailFloorWanted"); i >= 0; i = host.indexOf("if (detailFloorWanted", i + 1)) {
             starts.push(i);
@@ -161,28 +144,14 @@ describe("THE GATE — focused Details owns its payment band", () => {
         expect(starts.length, "both floor branches are findable").toBe(2);
         for (const start of starts) {
             const branch = host.slice(start, host.indexOf("\n    if (", start + 10));
-            expect(branch, "no floor branch renders a sibling band").not.toMatch(
-                /<\/FinancialsDetailCard>|\/>\s*\n[\s\S]{0,800}\{paymentBandFor\(true\)\}/,
-            );
+            expect(branch, "no floor branch renders a band").not.toMatch(/paymentBandFor\(/);
         }
     });
 
-    it("renders the band inside the card, under an owned marker", () => {
-        expect(detail).toContain('data-financials-payment-band="detail"');
-        expect(detail).toContain("paymentBand?: ReactNode");
-    });
-
     /* The legitimate payment paths are untouched — this was never about removing payment. */
-    it("keeps the payment overlay's own band and the Details payment control", () => {
+    it("keeps the payment overlay's own band, Payment Details' scoped band, and the Details payment control", () => {
         expect(host, "the payment surface still renders its band").toContain("paymentBandFor(false)");
+        expect(host, "Payment Details renders the same band scoped to one receipt").toContain("paymentBandFor(false, surface.paymentId)");
         expect(host, "Details still offers Payment").toContain("onPayment={openSettle}");
-    });
-
-    /* No visual exception was used to solve a composition problem. */
-    it("solves ownership without a z-index, scrim or opacity exception", () => {
-        const css = src("app/adminV2/components/operationalCardsShared.css");
-        const band = css.slice(css.indexOf(".alloy-os-fdetail__paymentband"));
-        const rule = band.slice(0, band.indexOf("}") + 1);
-        expect(rule).not.toMatch(/z-index|position\s*:\s*(absolute|fixed)|opacity/);
     });
 });

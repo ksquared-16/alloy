@@ -1,0 +1,56 @@
+{
+ "chargesHeader": "CHARGE FOR | CHARGE TYPE | AMOUNT | BILLING PERIOD | STATE",
+ "chargesRows": [
+  "child: Certb Certhouse / Certhouse Family",
+  "child: Tilly Tuition / W7 QA · Tuition Family",
+  "child: Milo Monthly / W7 QA · Monthly Family",
+  "household: Alvarez Household (demo) / Household charge",
+  "household: Mygrant Family / Household charge"
+ ],
+ "chargesRows_posted": {
+  "child": [
+   "Certa Certhouse / Certhouse Family",
+   "Pbthree Automation / Automation Family"
+  ],
+  "household": [
+   "Alvarez Household (demo) / Household charge",
+   "Alvarez Household (demo) / Household charge"
+  ]
+ },
+ "summaryLine": "0 to bill · 2 already generated · 6 skipped · 0 already posted · 0 refused · 0 errored",
+ "alreadyGenerated": [
+  {
+   "child": "Certb Certhouse",
+   "childWeight": "500",
+   "household": "Certhouse Family",
+   "amount": "$1,450.00"
+  },
+  {
+   "child": "Tilly Tuition",
+   "childWeight": "500",
+   "household": "W7 QA · Tuition Family",
+   "amount": "$1,200.00"
+  }
+ ],
+ "skippedSummary": "Skipped · 6 — Different billing frequency",
+ "skippedOpenByDefault": false,
+ "skippedRowsVisibleCollapsed": 6,
+ "refusedOrErrored": 0,
+ "skippedExpanded": [
+  "Pbchild Automation / Automation Family / Different billing frequency",
+  "Pbfive Automation / Automation Family / Different billing frequency",
+  "Pbfour Automation / Automation Family / Different billing frequency",
+  "Pbthree Automation / Automation Family / Different billing frequency",
+  "Pbtwo Automation / Automation Family / Different billing frequency",
+  "Certa Certhouse / Certhouse Family / Different billing frequency"
+ ],
+ "willBillDecember": [
+  "Certb Certhouse / Certhouse Family / Responsibility · Certt Certhouse · 100% / $1,450.00",
+  "Tilly Tuition / W7 QA · Tuition Family / Responsibility · Tess Tuition · 100% / $1,200.00"
+ ],
+ "accountStrip": "CURRENT BALANCE $0.00 DUE $0.00 SCHEDULED $1,200.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00",
+ "actionModes": [
+  "billing.generate_tuition:preview",
+  "billing.generate_tuition:preview"
+ ]
+}
