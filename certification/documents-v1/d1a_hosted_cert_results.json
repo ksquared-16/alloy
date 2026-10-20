@@ -1,0 +1,129 @@
+[
+  {
+    "case": "deployed build is the merge",
+    "pass": true,
+    "detail": {
+      "gitSha": "7a4de136446180c38c3c54bddb25fd59ff69f7d2"
+    }
+  },
+  {
+    "case": "documents list admits the QA operator",
+    "pass": true,
+    "detail": {
+      "status": 200,
+      "count": 200
+    }
+  },
+  {
+    "case": "list carries the deployed entity types",
+    "pass": true,
+    "detail": {
+      "<none>": 42,
+      "customer_member": 157,
+      "person": 1
+    }
+  },
+  {
+    "case": "signed-url issues a link for an authorized operator",
+    "pass": true,
+    "detail": {
+      "status": 200,
+      "has_url": true
+    }
+  },
+  {
+    "case": "link is a signed (token-bearing) URL",
+    "pass": true,
+    "detail": {
+      "token_bearing": true
+    }
+  },
+  {
+    "case": "unknown id -> 404 NOT_FOUND",
+    "pass": true,
+    "detail": {
+      "status": 404,
+      "code": "NOT_FOUND"
+    }
+  },
+  {
+    "case": "malformed id -> 404",
+    "pass": true,
+    "detail": {
+      "status": 404
+    }
+  },
+  {
+    "case": "unauthenticated -> refused /api/admin/documents/{id}/signed-url",
+    "pass": true,
+    "detail": {
+      "status": 401
+    }
+  },
+  {
+    "case": "unauthenticated -> refused /api/admin/documents",
+    "pass": true,
+    "detail": {
+      "status": 401
+    }
+  },
+  {
+    "case": "unauthenticated -> refused /api/admin/pos/documents/{id}/extracted-text",
+    "pass": true,
+    "detail": {
+      "status": 401
+    }
+  },
+  {
+    "case": "unauthenticated -> refused /api/admin/pos/documents",
+    "pass": true,
+    "detail": {
+      "status": 401
+    }
+  },
+  {
+    "case": "unauthenticated -> refused /api/admin/documents/entity-options",
+    "pass": true,
+    "detail": {
+      "status": 401
+    }
+  },
+  {
+    "case": "extracted-text serves an authorized operator",
+    "pass": true,
+    "detail": {
+      "status": 200,
+      "length": 6520
+    }
+  },
+  {
+    "case": "extracted-text unknown id -> 404 (decision runs before the read)",
+    "pass": true,
+    "detail": {
+      "status": 404,
+      "code": "NOT_FOUND"
+    }
+  },
+  {
+    "case": "processing document list admits a manage holder",
+    "pass": true,
+    "detail": {
+      "status": 200
+    }
+  },
+  {
+    "case": "entity-options admits a document writer",
+    "pass": true,
+    "detail": {
+      "status": 200
+    }
+  },
+  {
+    "case": "vendor signed-url refuses a document that is not the vendor's",
+    "pass": false,
+    "detail": {
+      "reason": "no vendor or child document available",
+      "vendors_status": 200
+    }
+  }
+]
