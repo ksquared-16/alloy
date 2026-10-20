@@ -198,7 +198,14 @@ export function buildRoomEngineFacts(args: BuildRoomEngineFactsArgs): RoomEngine
 // Thin I/O: load config + facts, invoke the calculation, map to option rows
 // ---------------------------------------------------------------------------
 
-type CandidateRoomConfig = { id: string; name: string | null; active: boolean; ageBand: RoomAgeBandMonths | null };
+type CandidateRoomConfig = {
+    id: string;
+    name: string | null;
+    active: boolean;
+    ageBand: RoomAgeBandMonths | null;
+    /** The room's configured Program (`metadata.program_category_id`) — the same one the card shows. */
+    programCategoryId: string | null;
+};
 
 /** Load candidate rooms with the config the fit calculation needs: age band + active. */
 async function loadCandidateRoomConfigs(
@@ -234,12 +241,16 @@ async function loadCandidateRoomConfigs(
             const meta = r.metadata ?? {};
             const unit = typeof meta.age_range_unit === "string" ? meta.age_range_unit : null;
             const from = ageBoundToMonths(numOrNull(meta.age_range_from), unit);
-            const to = ageBoundToMonths(numOrNull(meta.age_range_to), unit);
+            const to = ageBoundToMonths(numOrNull(meta.age_range_to), unit, "max");
             const ageBand: RoomAgeBandMonths | null = from == null && to == null ? null : { minMonths: from, maxMonths: to };
             // Fail-open: a room is active unless an explicit non-active status says otherwise.
             const status = (r.statusKey ?? "").trim().toLowerCase();
             const active = status === "" || status === "active" || status === "open";
-            return { id: r.id, name: r.name != null ? String(r.name).trim() || null : null, active, ageBand };
+            const programCategoryId =
+                typeof meta.program_category_id === "string" && meta.program_category_id.trim()
+                    ? meta.program_category_id.trim()
+                    : null;
+            return { id: r.id, name: r.name != null ? String(r.name).trim() || null : null, active, ageBand, programCategoryId };
         },
     );
 }
@@ -273,6 +284,34 @@ export type PlacementFitContext = {
     /** Provenance for operators diagnosing surprising ineligibility. */
     dobSource: "persons.date_of_birth" | "customer_members.dob" | "unknown";
 };
+
+/**
+ * Does this room run the child's program?
+ *
+ * 1. The room's configured Program (`metadata.program_category_id`) is the authority — the same
+ *    Program the Assignments card shows for the room.
+ * 2. Only when the room has no Program, compare age groups — case-insensitively, since the program
+ *    side is a category key and the room side a free field value ("toddler" vs "Toddler").
+ * 3. Neither knowable → no verdict (fail open), never "different program".
+ *
+ * The engine's `age_group_ineligible` warning is no longer folded in: it was matched by agreement
+ * as well as room, so one warning on the child marked EVERY room "different program".
+ */
+export function roomProgramFit(args: {
+    childProgramCategoryId: string | null;
+    roomProgramCategoryId: string | null;
+    childAgeGroup: string | null;
+    roomAgeGroup: string | null;
+}): { programKnown: boolean; programMatch: boolean } {
+    const child = args.childProgramCategoryId?.trim() || null;
+    if (!child) return { programKnown: false, programMatch: false };
+    const roomProgram = args.roomProgramCategoryId?.trim() || null;
+    if (roomProgram) return { programKnown: true, programMatch: roomProgram === child };
+    const a = args.childAgeGroup?.trim().toLowerCase() || null;
+    const b = args.roomAgeGroup?.trim().toLowerCase() || null;
+    if (a && b) return { programKnown: true, programMatch: a === b };
+    return { programKnown: false, programMatch: false };
+}
 
 /** Map one calculation entry to an option row; the surface labels rank-0-eligible Recommended. */
 function entryToOption(e: RoomFitEntry, facts: RoomEngineFacts | undefined): PlacementOption {
@@ -383,9 +422,14 @@ export async function generatePlacementOptions(
             roomName: f.roomName,
             active: cfg?.active ?? true,
             ageBand: cfg?.ageBand ?? null,
-            // An engine age-group-ineligible signal also fails program compatibility.
-            programMatch: f.programMatch && !f.ageGroupIneligible,
-            programKnown,
+            ...roomProgramFit({
+                childProgramCategoryId: input.programCategoryId,
+                roomProgramCategoryId: cfg?.programCategoryId ?? null,
+                childAgeGroup: programKnown
+                    ? inputsWithAgeGroups.ageGroupByProgramCategoryId?.[input.programCategoryId!] ?? null
+                    : null,
+                roomAgeGroup: inputsWithAgeGroups.ageGroupByRoomLocationId?.[f.roomId] ?? null,
+            }),
             continuity: f.continuity,
             scheduleEligible: f.scheduleEligible,
             withinOperatingWindow: f.withinOperatingWindow,

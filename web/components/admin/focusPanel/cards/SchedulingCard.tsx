@@ -1,6 +1,8 @@
 "use client";
 
 import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { formatAgeFromDateOfBirthIso } from "@/lib/fields/derived/ageFromDateOfBirth";
 import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financials/reductions/reductionReasonLabels";
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
@@ -214,6 +216,40 @@ async function schedApi(path: string, init?: RequestInit): Promise<any> {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body;
+}
+
+/** The scored room-options query for one child + pattern + start (+ the CHILD's own program). */
+function roomOptionsPath(args: {
+    siteId: string;
+    patternId: string;
+    childId: string;
+    start: string;
+    childProgramCategoryId: string | null;
+}): string {
+    return (
+        `?view=options&site_location_id=${encodeURIComponent(args.siteId)}`
+        + `&pattern_id=${encodeURIComponent(args.patternId)}`
+        + `&child_agreement_id=${encodeURIComponent(args.childId)}`
+        + (args.start ? `&start_date=${args.start}` : "")
+        + (args.childProgramCategoryId ? `&program_category_id=${encodeURIComponent(args.childProgramCategoryId)}` : "")
+    );
+}
+
+/*
+ * Room options are fetched when the assignment editor opens, not when "Select a room" is pressed,
+ * so the list is scored by the time the operator asks for it. One in-flight/settled request per
+ * query; a failed request is evicted so the picker can retry.
+ */
+const ROOM_OPTIONS_CACHE = new Map<string, ReturnType<typeof schedApi>>();
+function loadRoomOptions(path: string): ReturnType<typeof schedApi> {
+    const cached = ROOM_OPTIONS_CACHE.get(path);
+    if (cached) return cached;
+    const request = schedApi(path).catch((error) => {
+        ROOM_OPTIONS_CACHE.delete(path);
+        throw error;
+    });
+    ROOM_OPTIONS_CACHE.set(path, request);
+    return request;
 }
 
 /*
@@ -1708,7 +1744,6 @@ function ScheduleEditor({
     /** Required by the override authority, and never defaulted to something plausible. */
     const [overrideReason, setOverrideReason] = useState("");
     /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
-    const [optionsExpanded, setOptionsExpanded] = useState(false);
     /*
      * ── WHAT DISCOUNTS ARE EXPECTED ON THIS RELATIONSHIP ──────────────────────────────────────
      *
@@ -1823,12 +1858,6 @@ function ScheduleEditor({
         setOfferingId(pricingView.recommended.sourceId);
     }, [pricingView, offeringId]);
 
-    /** Everything applicable that is not the recommendation — the disclosure's whole content. */
-    const otherOptions = useMemo(() => {
-        if (!pricingView) return [];
-        const recId = pricingView.recommended?.sourceId ?? null;
-        return pricingView.applicable.filter((o) => o.sourceId !== recId);
-    }, [pricingView]);
 
     /*
      * Tuition can be settled on its own when there is something to settle: a selection that is
@@ -2023,6 +2052,25 @@ function ScheduleEditor({
         return patterns.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? patterns[0]?.id ?? null;
     }
     const patternId = resolvePatternId();
+    /*
+     * Fit is judged against the CHILD's program. Once a room is picked the editor's program becomes
+     * that room's program, and re-scoring against it would call every other room "different
+     * program" — so a room-implied program is not sent; the server resolves the child's own.
+     */
+    const childProgramForFit = programFromRoom ? null : programCategoryId;
+
+    // Warm the room list as soon as the editor is open, so "Select a room" opens scored.
+    useEffect(() => {
+        void ensurePatterns();
+    }, [ensurePatterns]);
+    useEffect(() => {
+        if (!siteId || !patternId) return;
+        void loadRoomOptions(
+            roomOptionsPath({ siteId, patternId, childId: child.id, start, childProgramCategoryId: childProgramForFit }),
+        ).catch(() => {
+            /* the picker retries and shows the error */
+        });
+    }, [siteId, patternId, child.id, start, childProgramForFit]);
     const state = deriveScheduleState(proj) ;
     const editState: ScheduleState =
         mode === "create" && createAsSecondary
@@ -2341,8 +2389,10 @@ function ScheduleEditor({
                 selectedRoomId={roomId}
                 seedRooms={config.operationalRooms}
                 purposeBehavior={assignmentTypeBehavior}
-                programCategoryId={programCategoryId}
+                programCategoryId={childProgramForFit}
                 onProgramResolved={(resolvedProgramCategoryId) => {
+                    // Adopt the server-resolved child program only when none is known at all.
+                    if (programCategoryId) return;
                     setProgramCategoryId(resolvedProgramCategoryId);
                     setProgramFromRoom(false);
                 }}
@@ -2393,12 +2443,7 @@ function ScheduleEditor({
                               *
                               * The disclosure is absent when there is nothing behind it.
                               */}
-                            {pricingView?.recommended && !optionsExpanded ? (
-                                <div data-assignment-tuition-recommended={pricingView.recommended.sourceId}
-                                     style={{ fontSize: 12, color: T.forge, fontWeight: 600 }}>
-                                    Recommended · {pricingView.recommended.amountLabel}
-                                </div>
-                            ) : null}
+
                             {pricingView && pricingView.state === "ambiguous" ? (
                                 <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
                                     {pricingView.tied.length} configured options apply equally — choose one.
@@ -2451,18 +2496,11 @@ function ScheduleEditor({
                                     </ul>
                                 </details>
                             ) : null}
-                            {pricingView?.recommended && !optionsExpanded && otherOptions.length > 0 ? (
-                                <button
-                                    type="button"
-                                    onClick={() => setOptionsExpanded(true)}
-                                    data-assignment-tuition-expand="true"
-                                    style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}
-                                >
-                                    Expand options ({otherOptions.length} other)
-                                </button>
-                            ) : null}
+                            {/*
+                              * Every rate that applies is in the list, the recommendation first and
+                              * preselected — options are never hidden behind a disclosure.
+                              */}
                             <select
-                                hidden={Boolean(pricingView?.recommended) && !optionsExpanded}
                                 id={`assignment-tuition-embed-${child.id}`}
                                 value={offeringId}
                                 data-assignment-tuition-plan={child.id}
@@ -2479,7 +2517,9 @@ function ScheduleEditor({
                                     maxWidth: "100%",
                                 }}
                             >
-                                <option value="">Select a plan to lock in…</option>
+                                <option value="">
+                                    {rateOptions.length ? "Choose a tuition rate" : "No tuition rates apply yet"}
+                                </option>
                                 {/*
                                  * The label already says which option is the recommendation, because
                                  * only the resolver knows — an index prefix asserted it from list
@@ -2491,11 +2531,6 @@ function ScheduleEditor({
                                     </option>
                                 ))}
                             </select>
-                            <div style={{ fontSize: 10.5, color: T.mid40 }}>
-                                The recommendation uses room, program, and schedule. Every option
-                                here applies to this assignment; selecting one locks it onto the
-                                enrollment opportunity.
-                            </div>
 
                             {/*
                               * ── WHAT IS ACTUALLY AGREED, FROM THE PERSISTED TERM ────────────
@@ -2521,7 +2556,7 @@ function ScheduleEditor({
                                     {" / "}
                                     {pricingView.accepted.cadenceKey}
                                     {" · from "}
-                                    {pricingView.accepted.effectiveStart}
+                                    {formatFocusPanelDate(pricingView.accepted.effectiveStart) ?? pricingView.accepted.effectiveStart}
                                     {pricingView.accepted.overrideReason ? ` · ${pricingView.accepted.overrideReason}` : ""}
                                 </div>
                             ) : null}
@@ -3063,9 +3098,9 @@ function RoomPicker({
         return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
-            // Pending — never flash "Eligible" before scored fit returns.
+            // Clickable at once; the fit reason fills in when scoring lands.
             classification: "eligible" as const,
-            reason: "Checking eligibility…",
+            reason: "",
             programCategoryId: r.programCategoryId,
         }));
     }, [seedRooms, purposeBehavior]);
@@ -3078,7 +3113,6 @@ function RoomPicker({
         dobSource: string;
     } | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [overridePending, setOverridePending] = useState<PlacementOption | null>(null);
     const eligibilityReady = scored != null;
 
     useEffect(() => {
@@ -3089,8 +3123,8 @@ function RoomPicker({
         setFitContext(null);
         (async () => {
             try {
-                const o = await schedApi(
-                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}${programCategoryId ? `&program_category_id=${encodeURIComponent(programCategoryId)}` : ""}`
+                const o = await loadRoomOptions(
+                    roomOptionsPath({ siteId, patternId, childId, start, childProgramCategoryId: programCategoryId ?? null }),
                 );
                 if (cancelled) return;
                 const raw = (o.options ?? []) as PlacementOption[];
@@ -3134,22 +3168,28 @@ function RoomPicker({
         return [...list].sort((a, b) => rank(a.classification) - rank(b.classification));
     }, [scored, seedOptions]);
 
+    /*
+     * Every room is selectable. A fit reason ("Too old for this room by Oct 20") is information for
+     * the operator, not a gate — there is no "ineligible" state and no confirm step.
+     */
     function choose(option: PlacementOption) {
-        if (!eligibilityReady) return;
-        if (option.classification === "blocked") {
-            setOverridePending(option);
-            return;
-        }
-        setOverridePending(null);
-        onPick(option.roomId, option.roomName, option.classification === "recommended");
+        onPick(option.roomId, option.roomName, eligibilityReady && option.classification === "recommended");
     }
 
     const ageHint = (() => {
         if (!fitContext) return null;
+        const asOf = formatFocusPanelDate(fitContext.asOf) ?? fitContext.asOf;
         if (fitContext.childAgeMonths == null || !fitContext.dateOfBirth) {
-            return `Age as of ${fitContext.asOf}: unknown (no DOB on person/member)`;
+            return `Age as of ${asOf}: unknown — no date of birth on file`;
         }
-        return `Age as of ${fitContext.asOf}: ${fitContext.childAgeMonths} mo (DOB ${fitContext.dateOfBirth})`;
+        const dob = formatFocusPanelDate(fitContext.dateOfBirth) ?? fitContext.dateOfBirth;
+        const asOfDate = /^\d{4}-\d{2}-\d{2}/.test(fitContext.asOf)
+            ? new Date(`${fitContext.asOf.slice(0, 10)}T12:00:00Z`)
+            : new Date();
+        const age =
+            formatAgeFromDateOfBirthIso(fitContext.dateOfBirth.slice(0, 10), "years_months", asOfDate)
+            ?? `${fitContext.childAgeMonths} mo`;
+        return `Age ${age} as of ${asOf} · born ${dob}`;
     })();
 
     return (
@@ -3172,16 +3212,10 @@ function RoomPicker({
                 </button>
             </div>
             {label("Choose a room")}
-            <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
-                Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay
-                listed — you can override when needed.
-            </p>
             {ageHint ? (
                 <p style={{ margin: 0, fontSize: 11, color: T.muted }} data-room-fit-age-hint="true">
                     {ageHint}
                 </p>
-            ) : !eligibilityReady && patternId ? (
-                <p style={{ margin: 0, fontSize: 11, color: T.muted }}>Checking eligibility…</p>
             ) : null}
             {error && <ErrorNote message={error} />}
             {options.length === 0 ? (
@@ -3195,16 +3229,8 @@ function RoomPicker({
                     data-room-options-ready={scored ? "scored" : "pending"}
                 >
                     {options.map((o) => {
-                        const blocked = eligibilityReady && o.classification === "blocked";
                         const selected = o.roomId === selectedRoomId;
-                        const pending = overridePending?.roomId === o.roomId;
-                        const badge = !eligibilityReady
-                            ? "Checking"
-                            : o.classification === "recommended"
-                              ? "Recommended"
-                              : o.classification === "blocked"
-                                ? "Ineligible"
-                                : "Eligible";
+                        const recommended = eligibilityReady && o.classification === "recommended";
                         return (
                             <button
                                 key={o.roomId}
@@ -3212,109 +3238,48 @@ function RoomPicker({
                                 onClick={() => choose(o)}
                                 data-room-option={o.roomId}
                                 data-room-classification={eligibilityReady ? o.classification : "pending"}
-                                data-room-override-pending={pending ? "true" : undefined}
-                                disabled={!eligibilityReady}
                                 style={{
                                     all: "unset",
-                                    cursor: eligibilityReady ? "pointer" : "wait",
+                                    cursor: "pointer",
                                     display: "flex",
                                     justifyContent: "space-between",
                                     alignItems: "center",
-                                    border: pending
-                                        ? `1px solid ${T.ember}`
-                                        : selected
-                                          ? `1px solid ${T.pine}`
-                                          : `1px solid ${T.border}`,
-                                    background: blocked
-                                        ? pending
-                                            ? "rgba(180,83,42,.06)"
-                                            : "#f9fafb"
-                                        : selected
-                                          ? "rgba(0,162,131,.06)"
-                                          : "#fff",
+                                    border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`,
+                                    background: selected ? "rgba(0,162,131,.06)" : "#fff",
                                     borderRadius: 8,
                                     padding: "8px 12px",
-                                    opacity: eligibilityReady ? 1 : 0.85,
                                 }}
                             >
-                                <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
+                                <span style={{ color: T.forge, minWidth: 0 }}>
                                     <span style={{ fontWeight: 600 }}>{o.roomName ?? "Room"}</span>
-                                    <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>
-                                        {eligibilityReady ? o.reason : "Checking eligibility…"}
+                                    {eligibilityReady && o.reason ? (
+                                        <span
+                                            style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}
+                                            data-room-fit-reason="true"
+                                        >
+                                            {o.reason}
+                                        </span>
+                                    ) : null}
+                                </span>
+                                {recommended ? (
+                                    <span
+                                        style={{
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            textTransform: "uppercase",
+                                            letterSpacing: ".04em",
+                                            color: T.pine,
+                                            flex: "0 0 auto",
+                                        }}
+                                    >
+                                        Recommended
                                     </span>
-                                </span>
-                                <span
-                                    style={{
-                                        fontSize: 9,
-                                        fontWeight: 700,
-                                        textTransform: "uppercase",
-                                        letterSpacing: ".04em",
-                                        color:
-                                            !eligibilityReady
-                                                ? T.muted
-                                                : o.classification === "recommended"
-                                                  ? T.pine
-                                                  : blocked
-                                                    ? T.ember
-                                                    : T.muted,
-                                        flex: "0 0 auto",
-                                    }}
-                                >
-                                    {badge}
-                                </span>
+                                ) : null}
                             </button>
                         );
                     })}
                 </div>
             )}
-            {overridePending ? (
-                <div
-                    data-room-override-confirm="true"
-                    style={{
-                        display: "grid",
-                        gap: 8,
-                        border: `1px solid ${T.ember}`,
-                        background: "#fffaf7",
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                    }}
-                >
-                    <div style={{ fontSize: 12, color: T.forge, lineHeight: 1.4 }}>
-                        <strong>{overridePending.roomName ?? "This room"}</strong> is ineligible
-                        {overridePending.reason ? ` — ${overridePending.reason}` : ""}. Use it anyway?
-                    </div>
-                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                        <button
-                            type="button"
-                            onClick={() => setOverridePending(null)}
-                            style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}
-                        >
-                            Keep browsing
-                        </button>
-                        <button
-                            type="button"
-                            data-room-override-confirm-use="true"
-                            onClick={() => {
-                                const next = overridePending;
-                                setOverridePending(null);
-                                onPick(next.roomId, next.roomName, false);
-                            }}
-                            style={{
-                                all: "unset",
-                                cursor: "pointer",
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: "#fff",
-                                background: "var(--alloy-os-bend-pine, #00A283)",
-                                borderRadius: 7,
-                                padding: "7px 12px",
-                            }}
-                        >
-                            Use anyway
-                        </button>
-                    </div>
-                </div>
-            ) : null}
             <div style={{ display: "flex", borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
                 <button type="button" onClick={onCancel} style={{ all: "unset", marginLeft: "auto", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                     Cancel

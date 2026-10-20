@@ -415,9 +415,9 @@ test.skip("14+15 — Create assignment writes a canonical assignment, and the le
     /*
      * ── THE ROOM, THROUGH THE PICKER THE OPERATOR USES ──
      *
-     * Options stay `disabled` until eligibility has scored them, and a `blocked` one opens an
-     * override confirmation rather than committing. So: wait for the scored state, then take the
-     * first option the card itself considers selectable, and remember its ID for the proof.
+     * Every room is selectable — a fit reason is shown, never a gate or a confirmation. Wait for
+     * the scored state so the choice is an informed one, take the first option, and remember its
+     * ID for the proof.
      */
     await page.locator("[data-room-change='true']").first().click();
     await expect(page.locator("[data-room-picker='true']")).toBeVisible({ timeout: SETTLE });
