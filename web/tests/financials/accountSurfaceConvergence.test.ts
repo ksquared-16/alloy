@@ -1004,7 +1004,7 @@ describe("F20 · the two Financials headers do not drift by accident", () => {
         const accounts = code("components/operationalCards/FinancialsCard.tsx");
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
         expect(accounts).toContain("<FinancialsAccountSummary evidence={evidence} />");
-        expect(detail).toContain("<FinancialsAccountSummary evidence={evidence} hydrating={hydrating} onOpenPrepaid={onOpenPrepaid} />");
+        expect(detail).toContain('<FinancialsAccountSummary evidence={evidence} hydrating={hydrating} onOpenPrepaid={onOpenPrepaid} holdings="none" />');
         expect(detail).toMatch(/label=\{`Balance · \$\{summary\.balanceScope\}`\}/);
         expect(accounts, "no second balance label survives").not.toMatch(/label="Current balance"/);
     });

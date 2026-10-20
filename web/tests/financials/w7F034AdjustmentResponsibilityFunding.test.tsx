@@ -128,7 +128,7 @@ describe("F037 / F040 · where responsibility and funding are managed", () => {
 describe("found during deployed proof (3416e395)", () => {
     it("Escape on an open menu inside an Accounts command closes the menu — not the command, not the drawer", () => {
         const host = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
-        expect(host).toMatch(/if \(hasInnerDismissibleLayer\(document\)\) \{\s*menuWasOpen = true;\s*return;\s*\}/);
+        expect(host).toMatch(/if \(hasInnerDismissibleLayer\(document\) && !focusOnlyInDepthCard\) \{\s*menuWasOpen = true;\s*return;\s*\}/);
         expect(host).toMatch(/const onBubble = \(e: KeyboardEvent\) => \{\s*if \(e\.key !== "Escape" \|\| !menuWasOpen\) return;\s*menuWasOpen = false;\s*e\.stopPropagation\(\);/);
     });
 

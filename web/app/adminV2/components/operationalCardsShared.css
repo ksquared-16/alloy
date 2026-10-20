@@ -3928,12 +3928,7 @@
 }
 .alloy-os-fdetail__statnotes {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 8px;
-}
-.alloy-os-fdetail__statnotes > .alloy-os-fdetail__statnote + .alloy-os-fdetail__statnote::before {
-  content: "· ";
-  color: var(--alloy-os-text-tertiary, #9ca3af);
+  flex-direction: column;
 }
 .alloy-os-fdetail__statside {
   display: flex;
@@ -3983,4 +3978,11 @@
 .alloy-os-financials__tab:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
   outline-offset: 1px;
+}
+
+/* W7-F043 (747ad20d proof) — holdings sit under Payment / Add, so the figures keep one row. */
+.alloy-os-fdetail__actions > .alloy-os-fdetail__statside {
+  flex: 1 0 100%;
+  align-items: flex-end;
+  align-self: auto;
 }

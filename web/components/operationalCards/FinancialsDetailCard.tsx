@@ -568,7 +568,7 @@ export default function FinancialsDetailCard({
                       * W7-F031: the account summary, shared with the Accounts header so one figure
                       * has one name everywhere — three answers, each with its own context.
                       */}
-                    <FinancialsAccountSummary evidence={evidence} hydrating={hydrating} onOpenPrepaid={onOpenPrepaid} />
+                    <FinancialsAccountSummary evidence={evidence} hydrating={hydrating} onOpenPrepaid={onOpenPrepaid} holdings="none" />
 
 
                 {/*
@@ -597,6 +597,12 @@ export default function FinancialsDetailCard({
                         </Action>
                         {/* One entry for charge and adjustment alike — the command carries the mode. */}
                         <Action onClick={onAddCharge}>Add</Action>
+                        {/*
+                          * W7-F043: what the account HOLDS sits under the commands that spend or
+                          * return it, so the three figures keep one row (deployed proof on 747ad20d:
+                          * beside the figures it wrapped Scheduled to a second line).
+                          */}
+                        {hydrating ? null : <FinancialsAccountHoldings evidence={evidence} onOpenPrepaid={onOpenPrepaid} />}
                     </div>
                 {/*
                   * W7-F041/F043: THE RELATIONSHIP ROW SPANS THE ROLLUP. It used to sit inside the
@@ -1513,11 +1519,18 @@ export function FinancialsAccountSummary({
     evidence,
     hydrating = false,
     onOpenPrepaid,
+    holdings = "inline",
 }: {
     evidence: FinancialsEvidence;
     hydrating?: boolean;
     /** W7-F044: the prepaid figure is a door to where it came from, never a bare number. */
     onOpenPrepaid?: () => void;
+    /**
+     * W7-F043: where prepaid / held render. "inline" stacks them beside the figures (a host with
+     * no command column); "none" leaves them to the host, which places `FinancialsAccountHoldings`
+     * under its Payment / Add commands so the three figures keep one row.
+     */
+    holdings?: "inline" | "none";
 }) {
     const { period, pastDue } = evidence;
     /* The adapter states the summary; a lab specimen without one reads the same figures plainly. */
@@ -1540,12 +1553,12 @@ export function FinancialsAccountSummary({
      *
      * Not yet due, prepaid and held used to sit on their own full-width line under the three
      * figures, which pushed the ledger down by a row for facts that are context, not answers.
-     * Not yet due is about collection timing, so it rides Due now's note line; prepaid and held
-     * are money the account holds, so they stack quietly beside the figures. Every value is the
-     * adapter's, unchanged.
+     * Not yet due is about collection timing, so it sits under Due now's past-due note; prepaid and
+     * held are money the account holds, so they sit beside the figures — or, in Details, under
+     * Payment / Add. Every value is the adapter's, unchanged.
      */
     const notYetDue = hydrating ? null : (summary.context.find((c) => c.key === "not-yet-due")?.text ?? null);
-    const held = hydrating ? [] : summary.context.filter((c) => c.key === "prepaid" || c.key === "held");
+    const held = hydrating || holdings === "none" ? [] : summary.context.filter((c) => c.key === "prepaid" || c.key === "held");
     return (
         <div className="alloy-os-fdetail__strip" data-financials-account-summary-strip="true">
             {/*
@@ -1580,28 +1593,44 @@ export function FinancialsAccountSummary({
                     testId="summary-scheduled"
                 />
             ) : null}
-            {held.length ? (
-                <span className="alloy-os-fdetail__statside" data-financials-summary-context="true">
-                    {held.map((c) =>
-                        c.key === "prepaid" && onOpenPrepaid ? (
-                            <button
-                                key={c.key}
-                                type="button"
-                                className="alloy-os-fdetail__statsidelink"
-                                data-financials-summary-context-item={c.key}
-                                data-financials-prepaid-open="true"
-                                onClick={onOpenPrepaid}
-                                title="Where this prepaid came from"
-                            >
-                                {c.text} <span aria-hidden>&rarr;</span>
-                            </button>
-                        ) : (
-                            <span key={c.key} data-financials-summary-context-item={c.key}>{c.text}</span>
-                        ),
-                    )}
-                </span>
-            ) : null}
+            {held.length ? <FinancialsAccountHoldings evidence={evidence} onOpenPrepaid={onOpenPrepaid} /> : null}
         </div>
+    );
+}
+
+/**
+ * W7-F043/F044 — MONEY THE ACCOUNT HOLDS: prepaid available (a door to the receipts behind it) and
+ * held deposit. Context, not answers — so it never claims a row: beside the figures, or under the
+ * host's Payment / Add commands.
+ */
+export function FinancialsAccountHoldings({ evidence, onOpenPrepaid }: { evidence: FinancialsEvidence; onOpenPrepaid?: () => void }) {
+    const { period } = evidence;
+    const context = period.summary?.context ?? [
+        ...(period.availablePrepaid ? [{ key: "prepaid", text: `${period.availablePrepaid} prepaid available` }] : []),
+        ...(period.heldFunds ? [{ key: "held", text: `${period.heldFunds} held deposit` }] : []),
+    ];
+    const held = context.filter((c) => c.key === "prepaid" || c.key === "held");
+    if (!held.length) return null;
+    return (
+        <span className="alloy-os-fdetail__statside" data-financials-summary-context="true">
+            {held.map((c) =>
+                c.key === "prepaid" && onOpenPrepaid ? (
+                    <button
+                        key={c.key}
+                        type="button"
+                        className="alloy-os-fdetail__statsidelink"
+                        data-financials-summary-context-item={c.key}
+                        data-financials-prepaid-open="true"
+                        onClick={onOpenPrepaid}
+                        title="Where this prepaid came from"
+                    >
+                        {c.text} <span aria-hidden>&rarr;</span>
+                    </button>
+                ) : (
+                    <span key={c.key} data-financials-summary-context-item={c.key}>{c.text}</span>
+                ),
+            )}
+        </span>
     );
 }
 
@@ -1632,8 +1661,8 @@ export function Stat({
     note?: string | null;
     noteTone?: "due";
     /**
-     * W7-F043: a second, quieter fact on the SAME line as the note ("$225 not yet due · next
-     * Oct 31, 2026"), so secondary context never claims a row of its own.
+     * W7-F043: a second, quieter fact stacked under the note ("$225 not yet due · next Oct 31,
+     * 2026") — inside the figure's own column, so secondary context never claims a row.
      */
     aside?: string | null;
     asideTestId?: string;
