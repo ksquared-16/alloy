@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-09
+last_reviewed: 2026-10-20
 supersedes: []
 ---
 
@@ -13,9 +13,29 @@ is a mutation pointed at the wrong database.
 
 ## `alloy_deployed_primary`
 
-**A production-class deployed database target.**
+**Identity: Alloy's hosted STAGING database. Authority: production-class (operator-only).**
 
-It is the database the application serves from. It is listed in
+> **Corrected 2026-10-20.** This page used to call the target "the database the
+> application serves from". That was an identity claim, and it was wrong. The
+> environment identity registry, `environment-identity.mjs` in the installed toolkit,
+> measured on 2026-10-18, records the following:
+>
+> | Field | `alloy_deployed_primary` | Production |
+> |---|---|---|
+> | Kind | a compatibility alias for `ALLOY_STAGING` | `ALLOY_PRODUCTION` |
+> | Supabase project | `ikaxilmwmrmbagoidedu` | `vslwnntzzgpnmrpjipat` |
+> | Host | `staging.workwithalloy.com` | `www.workwithalloy.com` |
+> | Mutation authority | `OPERATOR_ONLY` | `UNREACHABLE` (no route or credential on this host) |
+>
+> Staging's own `/api/build-info` reports `supabaseProjectRef: ikaxilmwmrmbagoidedu`.
+>
+> **Only the identity changed.** Its *authority* stays exactly as described below. The
+> registry keeps identity and authority as separate fields on purpose, because
+> renaming the target "staging" would have silently widened who may mutate it. The
+> rules in this section still hold for any production-class target name. They do
+> not license reading `alloy_deployed_primary` as the customer production database.
+
+It is listed in
 `BLOCKED_ENVIRONMENTS` (`trusted-host-migrate.mjs`) and in
 `OPERATOR_ONLY_ENVIRONMENTS` (`director-authority.mjs`), and both listings are
 deliberate and current.

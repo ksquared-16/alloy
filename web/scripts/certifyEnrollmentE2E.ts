@@ -10,6 +10,7 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { exitUnlessLocalCertificationTarget } from "./lib/localCertificationTarget";
 import { resolve } from "path";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -18,6 +19,9 @@ import { REAL_ENROLLMENT_V1_PHASES } from "@/lib/certification/enrollmentE2ePhas
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
+
+// Local-only fixture: refuse any database not on this machine before a client exists (Q1.0).
+exitUnlessLocalCertificationTarget("enrollment_e2e_certification");
 
 async function main(): Promise<void> {
     const supabase = createAdminClient();
