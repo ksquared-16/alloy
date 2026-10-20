@@ -161,7 +161,18 @@
  * W7 QA · Split Family now carries one posted obligation (Registration fee $75.00, Sasha Split).
  *   REWRITTEN 18, 19, 20, 21, 22, 24 — the workflow changed; earlier results do not count.
  */
-export const CATALOG_VERSION = "2026-10-20.3";
+/*
+ * 2026-10-20.4 — W7-F041..F046: Manage responsibility is the gear beside “Anyone responsible” (the
+ * labelled link is gone); Manage payments sits at the right under Payment / Add; not yet due rides
+ * Due now's note and prepaid/held stack beside the figures; “$X prepaid available” opens the receipts
+ * behind it; the Payment command opens on a Payment tab (methods on file inside Method, a check
+ * number, one payer defaulted / several required) with Refunds as a second tab; a payment method's
+ * accounting destination is configured in Accounting → Payment Methods (asset accounts only) and
+ * recorded on each receipt as it arrives.
+ *   REWRITTEN 26, 27, 61 — what is entered or read changed; earlier results do not count.
+ *   KEPT      18, 19, 20, 21, 32, 41, 85 — navigation words only; the checks are unchanged.
+ */
+export const CATALOG_VERSION = "2026-10-20.4";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -775,7 +786,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Who owes and how much is owed are separate questions. Deciding a parent carries a bill must never quietly change the bill.",
         requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "W7 QA · Split Family" }],
         navigate: [
-            "Financials → Accounts → W7 QA · Split Family → Manage responsibility → (a labelled action beside Manage payments, under the summary).",
+            "Financials → Accounts → W7 QA · Split Family → Manage responsibility: the gear beside the ledger's “Anyone responsible” filter (its tooltip reads Manage responsibility).",
         ],
         doThis: [
             "Read the editor: Applies to, Effective from (a date like Oct 20, 2026), and the responsible parties — today's arrangement is what the rows show; other eligible people appear as “+ Add”.",
@@ -813,7 +824,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Arrangements change — a parent takes over, a split is renegotiated. The new one has to replace the old one, because two live arrangements would double what the family appears to owe.",
         requires: [{ kind: "scenario_passed", scenarioKey: "manage_responsibility" }],
-        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility → set Effective from to a LATER date."],
+        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility (the gear beside “Anyone responsible”) → set Effective from to a LATER date."],
         doThis: ["Configure the same parties from the later date (the summary reads “… from <later date>”).", "Save responsibility.", "Reopen Manage responsibility and re-read Current."],
         expectChanges: ["The arrangement in force is the later one."],
         expectUnchanged: ["The total assigned — it must not double.", "What is owed."],
@@ -839,7 +850,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         ],
         navigate: [
             "Financials → Accounts → W7 QA · Split Family. Starting state: one posted charge — Registration fee · Sasha Split · $75.00 (Oct 20, 2026); responsibility as Scenarios 18–19 left it (read it in the payer row — e.g. Dana Split $56.25 · Rosa Split $18.75 for 75/25); no expected funding.",
-            "Manage responsibility → under Dana Split's share: “Expected funding · None” → Manage funding. (The same control is under each share in the Registration fee's Charge details → Responsibility & funding.)",
+            "Manage responsibility (the gear beside “Anyone responsible”) → under Dana Split's share: “Expected funding · None” → Manage funding. (The same control is under each share in the Registration fee's Charge details → Responsibility & funding.)",
         ],
         doThis: [
             "Source type → choose an employer sponsorship type, not a government subsidy.",
@@ -870,7 +881,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Employers revise what they will cover. If a correction added instead of replacing, every corrected figure in the product would be wrong in the same direction and nobody would see it.",
         requires: [{ kind: "scenario_passed", scenarioKey: "expected_funding" }],
-        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility → Manage funding on Dana Split's share again."],
+        navigate: ["Financials → Accounts → W7 QA · Split Family → Manage responsibility (the gear beside “Anyone responsible”) → Manage funding on Dana Split's share again."],
         doThis: ["Keep the SAME source type and name (an employer, “Acme Employer”) — a different source is a second expectation, not a correction.", "Expected to cover → $15.00.", "Confirm.", "Read the share again."],
         expectChanges: ["The share shows the corrected amount only."],
         expectUnchanged: ["What is owed.", "Collectible now."],
@@ -983,10 +994,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "The receipt is the historical fact: this much money arrived, this way, from this person. Everything downstream is a decision about where to put it, and none of those decisions may change the receipt.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" }],
         navigate: ["From the account pane, record a payment against a posted obligation."],
-        doThis: ["Use Check.", "Enter more than is owed — the outstanding plus a margin.", "Give it a reference you will recognise.", "Confirm."],
+        doThis: ["Method → Check, and enter a Check number you will recognise.", "Enter more than is owed — the outstanding plus a margin.", "Who paid: already filled when the household has one adult; otherwise choose who paid.", "Confirm."],
         expectChanges: [
-            "A Payment row appears in the ledger's current period: the amount, Status Received (Part applied / Unapplied while money still answers nothing), the PAYER in the Party column, and Check in Description.",
-            "Its GL account is the account Check payments settle into (Organization → Financials → Accounting → GL mappings → Payments received · Check), or Unmapped when none is configured — never the revenue account of the charge it paid.",
+            "A Payment row appears in the ledger's current period: the amount, Status Received (Part applied / Unapplied while money still answers nothing), the PAYER in the Party column, and “Check #<your number>” in Description.",
+            "Its GL account is the destination Check payments settled into WHEN IT WAS RECEIVED (Organization → Financials → Accounting → Payment Methods → Check), or Unmapped when none was configured then — never the revenue account of the charge it paid. Receipts recorded before destinations were tracked stay Unmapped; changing the mapping later does not relabel them.",
             "Opening the row (Payment details) shows the date, payer, amount, method and which charges it was applied to.",
         ],
         expectUnchanged: ["Gross charges posted."],
@@ -1007,7 +1018,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         ],
         navigate: ["From the account pane, record a payment against a posted obligation.", "Open the Who paid? chooser."],
         doThis: [
-            "Read the chooser: every current household adult appears, not only the responsible one.",
+            "Read the chooser: every current household adult appears, not only the responsible one, plus “Not known — record to the household”. With several adults nothing is pre-selected and the record button stays disabled until you choose; with exactly one adult it is already filled.",
             "Choose an adult who is NOT marked also responsible.",
             "Use Cash, enter part of what is owed, and confirm.",
             "Open the Payments lens on the account and read the receipt's Party column, then open it (Payment details) and read Payer.",
@@ -1101,7 +1112,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Refunding does not un-receive money. Both facts are true and both must stay on the record: this much arrived, and this much went back.",
         requires: [{ kind: "account_state", check: "has_unapplied_money", describe: "a receipt with money available to refund" }],
-        navigate: ["From the receipt, issue a partial refund.", "Then attempt the same refund again."],
+        navigate: ["Payment → the Refunds tab → choose the receipt (“<date> · <amount> · <method> · <payer>”) → Refund — or open the receipt (Payment details) → Refund.", "Then attempt the same refund again."],
         doThis: ["Refund part of the receipt.", "Read the original receipt.", "Read the refund entry.", "Attempt the identical refund a second time."],
         expectChanges: ["A separate outbound refund entry exists, linked to the receipt it refunds."],
         expectUnchanged: ["The original receipt, still inbound and still the amount originally received.", "Refunded money is NOT shown as unapplied.", "No duplicate refund is created."],
@@ -1303,7 +1314,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Use the Payment control on an obligation the family actually owes.",
         ],
         doThis: [
-            "Choose card, and enter a Stripe TEST card in the provider's own fields.",
+            "Method: choose the family's card on file (“Visa •••• 4242 · <payer>”) to charge it, or New card and enter a Stripe TEST card in the provider's own fields.",
             "Complete the collection.",
             "Read the receipt, and read what the obligation now says.",
             "Attempt the same collection a second time on the same obligation.",
@@ -1916,9 +1927,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         requires: [{ kind: "account_state", check: "has_unapplied_money", describe: "an account holding unapplied money" }],
         navigate: ["Workspace → Financials → Accounts → an account with unapplied money, then its Details."],
         doThis: [
-            "Read “$X prepaid available” in the summary's context line and Balance as two separate figures. Confirm the balance is not reduced by the available money.",
+            "Read “$X prepaid available” beside the summary figures and Balance as two separate figures. Confirm the balance is not reduced by the available money.",
+            "Click “$X prepaid available”. The Prepaid available layer lists each receipt behind it — Payer, Received, Method, Original amount, Applied to charges, Prepaid remaining — and says it stays on the household's account until applied or refunded, and does not expire. The remainders add up to $X.",
             "Open an account with NO unapplied money and confirm no “prepaid available” item is rendered at all — zero is silence, not a displayed zero.",
-            "Back on the funded account, open the receipt holding the money (Payment details) → Apply to a charge, and confirm.",
+            "Back on the funded account, from the Prepaid available layer choose Open payment → Apply to a charge, and confirm.",
             "Read prepaid available, the “… paid” figure under Balance, and the obligation's outstanding amount afterwards.",
         ],
         expectChanges: [
@@ -1934,6 +1946,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         failSymptoms: [
             "A balance that already includes the available money.",
             "An 'Available $0.00' line on an account with none.",
+            "A prepaid figure that opens nothing, or whose receipts do not add up to it.",
             "Pending or failed money offered for application.",
             "The responsible party changing because a payment was applied.",
         ],
@@ -2564,7 +2577,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         navigate: ["Focus Panel -> Financials -> Details -> a refundable held deposit row."],
         doThis: [
             "Write down Balance, Paid, Available prepaid and every application on the account.",
-            "Refund the deposit.",
+            "Refund the deposit — the row's Refund opens that receipt's Payment details with the refund composer.",
             "Read all of them again.",
         ],
         expectChanges: ["Held deposit falls, and an outbound refund is recorded against its receipt."],
