@@ -877,8 +877,9 @@ function ScheduleWorkSurface({
         </div>
     ) : null;
 
-    const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
-        const fresh = await reloadChild();
+    const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean; fresh?: SubjectProj | null }) => {
+        // The editor may already have re-read the projection alongside its tuition step.
+        const fresh = opts && "fresh" in opts ? (opts.fresh ?? null) : await reloadChild();
         setProj(fresh);
         /*
          * Republish into the CASE's Focus Panel truth — child only, and not by exclusion.
@@ -1288,6 +1289,7 @@ function ScheduleWorkSurface({
                 )}
                 onCancel={cancelToDetail}
                 onSaved={onSaved}
+                reloadSaved={reloadChild}
                 onNotice={setActionError}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
@@ -1716,6 +1718,7 @@ function ScheduleEditor({
     onCancel,
     onSaved,
     onNotice,
+    reloadSaved,
     onCreateSecondary,
 }: {
     child: SchedSubject;
@@ -1732,7 +1735,9 @@ function ScheduleEditor({
     /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
     programCategoryId?: string | null;
     onCancel: () => void;
-    onSaved: () => Promise<void>;
+    onSaved: (opts?: { fresh?: SubjectProj | null }) => Promise<void>;
+    /** Re-read the card's projection — run alongside the post-save tuition step, not after it. */
+    reloadSaved?: () => Promise<SubjectProj | null>;
     /** A message for the card to show after the editor closes (e.g. tuition not recorded). */
     onNotice?: (message: string) => void;
     onCreateSecondary?: (payload: {
@@ -2367,7 +2372,10 @@ function ScheduleEditor({
      * idempotency authority is invented here.
      */
     /** Settle tuition; answers the refusal detail when it did not settle (null when it did, or had nothing to settle). */
-    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<string | null> {
+    async function settleTuition(
+        viewOverride?: AssignmentTuitionView | null,
+        opts?: { rereadAfter?: boolean },
+    ): Promise<string | null> {
         if (!offeringId.trim() || child.kind !== "child") return null;
         try {
             const outcome = await acceptAssignmentTuition(viewOverride);
@@ -2376,8 +2384,9 @@ function ScheduleEditor({
                     kind: outcome.state === "overridden" ? "overridden" : "accepted",
                     label: outcome.label,
                 });
-                /* Persisted truth is re-read; the dropdown's value is not the answer. */
-                await refreshPricingView();
+                /* Persisted truth is re-read; the dropdown's value is not the answer. Skipped when the
+                   editor is about to close (Save): nothing would ever read it. */
+                if (opts?.rereadAfter !== false) await refreshPricingView();
                 return null;
             }
             setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
@@ -2426,7 +2435,7 @@ function ScheduleEditor({
     async function settleTuitionAfterSave(): Promise<void> {
         const fresh = await refreshPricingView();
         setDraftView(null);
-        const refused = await settleTuition(fresh);
+        const refused = await settleTuition(fresh, { rereadAfter: false });
         // The editor closes after Save; a tuition step that did not settle must not close with it.
         if (refused) onNotice?.(`Assignment saved — tuition was not recorded: ${refused}`);
     }
@@ -2455,6 +2464,28 @@ function ScheduleEditor({
         }
     }
 
+    /*
+     * AFTER THE SCHEDULE WRITE CONFIRMS: three independent follow-ups, together.
+     *
+     * Measured on staging (5 saves): the follow-ups ran one after another — quote snapshot (~1.3s),
+     * tuition view (~1.2s), tuition accept (~1.2s), a tuition re-read nobody saw (~1.2s), then the
+     * card re-read (~0.9s) — so the editor closed ~7.0s after Save. None depends on another: the
+     * quote is an estimate snapshot, the tuition chain needs only the written schedule, and the card
+     * projection does not read tuition. They now run concurrently and the editor closes only when
+     * all of them have answered — nothing is shown as saved before it is, and a tuition refusal is
+     * still reported.
+     */
+    async function finishAfterWrite(): Promise<void> {
+        const [, , fresh] = await Promise.all([
+            persistAssignmentQuote().catch(() => {
+                /* schedule write succeeded — quote is opportunistic on opportunity */
+            }),
+            settleTuitionAfterSave(),
+            reloadSaved ? reloadSaved() : Promise.resolve(undefined),
+        ]);
+        await onSaved(reloadSaved ? { fresh: fresh ?? null } : undefined);
+    }
+
     async function save() {
         setBusy(true);
         setError(null);
@@ -2477,11 +2508,7 @@ function ScheduleEditor({
                     room_location_id: roomId || null,
                     assignment_type_label: assignmentTypeLabel || "Assignment",
                 });
-                await persistAssignmentQuote().catch(() => {
-                    /* schedule write succeeded — quote is opportunistic on opportunity */
-                });
-                await settleTuitionAfterSave();
-                await onSaved();
+                await finishAfterWrite();
                 return;
             }
             /*
@@ -2523,11 +2550,7 @@ function ScheduleEditor({
                     change_kind: mode === "create" && existing ? "successor" : "current",
                 }),
             });
-            await persistAssignmentQuote().catch(() => {
-                /* schedule write succeeded — quote is opportunistic on opportunity */
-            });
-            await settleTuitionAfterSave();
-            await onSaved();
+            await finishAfterWrite();
         } catch (e) {
             setError((e as Error).message);
         } finally {
