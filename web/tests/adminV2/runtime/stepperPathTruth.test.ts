@@ -76,6 +76,25 @@ describe("stepper path truth", () => {
             expect(drawn("enrolling", ["offered", "enrolling"])).toEqual(["Lead:done", "Tour:done", "Decision:done", "Enrolling:current", "Enrolled:future"]);
         });
 
+        it("a family at Decision with one child's offer pending draws no Waitlist step", () => {
+            const ev = buildBusinessProcessCardEvidence({
+                grain: "case",
+                subject: { type: "opportunity", id: "o", label: "F" },
+                businessProcess: { key: "enrollment", label: "Enrollment", stageKey: "decision", stages: railStages, traversedStageKeys: [] },
+                truth: {
+                    stage_key: "decision",
+                    _inquiry_children: [
+                        { id: "c1", customer_member_id: "c1", display_name: "Ava Q", stage_key: "offered", outcome_status_key: "waitlisted" },
+                        { id: "c2", customer_member_id: "c2", display_name: "Ben Q", stage_key: "decision" },
+                    ],
+                },
+            } as never);
+            // Both children are placed (the fixture binds), and Ava sits on Decision, not Waitlist.
+            expect(ev.participants.map((x) => x.stageKey).sort()).toEqual(["decision", "offered"]);
+            expect(ev.stages.find((st) => st.label === "Decision")?.participants.length).toBe(2);
+            expect(ev.stages.map((st) => st.label)).toEqual(["Lead", "Tour", "Decision", "Enrolling", "Enrolled"]);
+        });
+
         it("a waitlisted child shows Waitlist as its current step", () => {
             expect(drawn("waitlist", ["waitlist"])).toContain("Waitlist:current");
         });

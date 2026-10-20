@@ -71,9 +71,15 @@ export function resolveChildProcessStageKey(args: {
     stageKey?: string | null;
     dispositionKey?: string | null;
     familyStageKey?: string | null;
+    /**
+     * The process's CONFIGURED stage keys. A tenant stage the template never named (e.g. `offered`)
+     * is still a real, placeable stage when the process configures it; without this an offered child
+     * fell through to its disposition (`waitlisted`) and was placed on the Waitlist step.
+     */
+    configuredStageKeys?: ReadonlySet<string> | null;
 }): string | null {
     const own = args.stageKey?.trim();
-    if (own && STAGE_LABEL_BY_KEY.has(own)) return own;
+    if (own && (STAGE_LABEL_BY_KEY.has(own) || args.configuredStageKeys?.has(own))) return own;
 
     const disposition = args.dispositionKey?.trim().toLowerCase();
     if (disposition) {

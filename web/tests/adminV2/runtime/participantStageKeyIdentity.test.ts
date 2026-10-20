@@ -65,6 +65,14 @@ describe("child process stage key", () => {
         expect(resolveChildProcessStageKey({ dispositionKey: "invented_disposition" })).toBeNull();
     });
 
+    it("honours a stage the PROCESS configures even when the template never named it", () => {
+        // An offered child's disposition is `waitlisted`; its own stage is `offered`.
+        const configuredStageKeys = new Set(["decision", "waitlist", "offered", "enrolling"]);
+        expect(resolveChildProcessStageKey({ stageKey: "offered", dispositionKey: "waitlisted", configuredStageKeys })).toBe("offered");
+        // Without the process's stages it keeps its narrower answer.
+        expect(resolveChildProcessStageKey({ stageKey: "offered", dispositionKey: "waitlisted" })).toBe("waitlist");
+    });
+
     it("an unmapped disposition falls through to the family stage, not to silence", () => {
         expect(
             resolveChildProcessStageKey({ dispositionKey: "invented", familyStageKey: "lead" }),

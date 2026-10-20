@@ -232,6 +232,8 @@ function participationMetaForMember(
  */
 export type BuildChildrenCardEvidenceOptions = {
     childDetailFieldKeys?: readonly string[];
+    /** The process's configured stage keys, so a tenant-configured child stage places the child. */
+    configuredStageKeys?: ReadonlySet<string> | null;
 };
 
 export function buildChildrenCardEvidence(
@@ -239,6 +241,7 @@ export function buildChildrenCardEvidence(
     options: BuildChildrenCardEvidenceOptions = {},
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
+    const configuredStageKeys = options.configuredStageKeys ?? null;
     const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
     // Lead/opportunity site — Create Lead writes here even when child participation
     // location_id is still empty; Program options and Location display inherit it.
@@ -350,7 +353,7 @@ export function buildChildrenCardEvidence(
         const processStageLabel = resolveChildProcessStageLabel(stageResolutionInput);
         // The identity behind that label, from the same inputs and the same chain — so a child can
         // never be labelled with one stage and placed at another.
-        const processStageKey = resolveChildProcessStageKey(stageResolutionInput);
+        const processStageKey = resolveChildProcessStageKey({ ...stageResolutionInput, configuredStageKeys });
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.
         const needsAttention = !declined && (!program || !schedule || !startDateIso);
