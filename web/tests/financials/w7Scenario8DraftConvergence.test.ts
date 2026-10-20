@@ -183,7 +183,7 @@ describe("W7-F018 — drafts are upcoming, never balance, Due or Past due", () =
     });
 
     it("the summary states Scheduled beside the balance, and the ledger sets draft rows apart", () => {
-        expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toContain('<Stat label="Scheduled" value={period.upcoming} />');
+        expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/label="Scheduled"\s*value=\{summary\.scheduled\}/);
         expect(read("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/tone: "upcoming" as const/);
         expect(read("app/adminV2/components/operationalCardsShared.css")).toContain(".alloy-os-billingdetail__row--upcoming");
     });

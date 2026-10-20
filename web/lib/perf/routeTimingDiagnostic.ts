@@ -234,6 +234,7 @@ export type RouteTimingMarks = {
             merchant_ms: number | null;
             payer_candidates_ms: number | null;
             payment_holds_ms: number | null;
+            payment_ledger_facts_ms: number | null;
             payment_setup_ms: number | null;
             payment_views_ms: number | null;
             payments_ms: number | null;
@@ -427,6 +428,7 @@ export type FinancialsSpanName =
     | "merchant_ms"
     | "payer_candidates_ms"
     | "payment_holds_ms"
+    | "payment_ledger_facts_ms"
     | "payment_setup_ms"
     | "payment_views_ms"
     | "payments_ms"
@@ -491,6 +493,7 @@ export function recordFinancialsSpans(
             merchant_ms: spans.merchant_ms ?? null,
             payer_candidates_ms: spans.payer_candidates_ms ?? null,
             payment_holds_ms: spans.payment_holds_ms ?? null,
+            payment_ledger_facts_ms: spans.payment_ledger_facts_ms ?? null,
             payment_setup_ms: spans.payment_setup_ms ?? null,
             payment_views_ms: spans.payment_views_ms ?? null,
             payments_ms: spans.payments_ms ?? null,

@@ -140,7 +140,7 @@ describe("5 — exactly one Charge Details modal", () => {
 describe("6 — the account KPI says Scheduled", () => {
     it("same figure, short word", () => {
         const src = read("components/operationalCards/FinancialsDetailCard.tsx");
-        expect(src).toContain('<Stat label="Scheduled" value={period.upcoming} />');
+        expect(src).toMatch(/label="Scheduled"\s*value=\{summary\.scheduled\}/);
         expect(src).not.toContain("Upcoming · not yet posted");
     });
 });

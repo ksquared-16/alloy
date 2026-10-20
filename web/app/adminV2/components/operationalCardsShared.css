@@ -3893,3 +3893,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* W7-F031 — a summary figure's own context, and the quiet line of account context beneath. */
+.alloy-os-fdetail__statnote {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__statnote[data-tone="due"] {
+  color: var(--color-alloy-ember, #bc4300);
+  font-weight: 600;
+}
+.alloy-os-fdetail__summarycontext {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 4px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}

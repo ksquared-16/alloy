@@ -82,7 +82,6 @@ export default function FinancialsDetailCard({
     onOpenCharge,
     onOpenPayment,
     onManagePayment,
-    onMovePayment,
     onAddAdjustment,
     onApplyHeldFunds,
     onReleaseHeldFunds,
@@ -92,7 +91,6 @@ export default function FinancialsDetailCard({
     onAdjustCharge,
     onResolveResponsibility,
     onReallocateResponsibility,
-    onApplyPayment,
     hydrating = false,
     ledgerPending = false,
     unavailable = false,
@@ -231,8 +229,6 @@ export default function FinancialsDetailCard({
     /** Opening a receipt's record — Payment Details. A read, like opening a charge. */
     onOpenPayment?: (args: { paymentId: string }) => void;
     onManagePayment?: () => void;
-    /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
-    onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
     onAddAdjustment?: () => void;
     /*
      * THE THREE THINGS THAT MAY BECOME OF HELD MONEY.
@@ -283,8 +279,6 @@ export default function FinancialsDetailCard({
      */
     onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
     onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
-    /** Put already-received money against an obligation. */
-    onApplyPayment?: (args: { paymentId: string }) => void;
     /**
      * ── THE ANATOMY IS KNOWN BEFORE THE FIGURES ARE ────────────────────────────────────────────
      *
@@ -531,8 +525,6 @@ export default function FinancialsDetailCard({
             .filter((p) => p.entries.length > 0);
     }, [periods, lens, periodLabel, inSubjectScope, inResponsibleScope]);
 
-    /* The receipt facts a payment row's Apply and Move act on — the evidence's, never re-derived. */
-    const receiptsById = useMemo(() => new Map(evidence.payments.map((p) => [p.paymentId, p])), [evidence.payments]);
 
 
     return (
@@ -547,11 +539,12 @@ export default function FinancialsDetailCard({
                  * carry the money.
                  */
                 insight=""
-                supportingInsight={period.label}
+                supportingInsight="Account"
                 iconName="Receipt"
                 tier="context"
                 archetype="status"
-                statusChip={pastDue ? `${pastDue.amount} past due` : undefined}
+                /* W7-F031: past due is said once — under Due now — not again as a header chip. */
+                statusChip={undefined}
                 statusTone="due"
                 modalClass="workstation"
                 density="expanded"
@@ -568,104 +561,11 @@ export default function FinancialsDetailCard({
                 */}
                 <div className="alloy-os-fdetail__rollup">
                     <div className="alloy-os-fdetail__rollup-facts">
-                    <div className="alloy-os-fdetail__strip">
                     {/*
-                      * "Current balance", the same words the Accounts header uses for the same
-                      * figure. It read "Balance" here and "Current balance" there — one number,
-                      * one authority, two names — which is exactly the accidental drift the
-                      * parity audit exists to catch. Different information between the two
-                      * surfaces is allowed because their purposes differ; a different WORD for
-                      * identical information is not.
+                      * W7-F031: the account summary, shared with the Accounts header so one figure
+                      * has one name everywhere — three answers, each with its own context.
                       */}
-                    {/*
-                      * ── THE SHARED CORE, IN THE SAME WORDS AS THE WORKSPACE ──────────────────
-                      *
-                      * Current balance, Due and Past due are the three the two surfaces share, and
-                      * they use the same labels, the same formatter and the same type scale.
-                      * Responsibility and Paid are the Focus Panel's own: this card is financial
-                      * context beside another process and has no lenses to reach them through,
-                      * where the workspace does. Not every contextual metric is forced onto the
-                      * workspace for visual equality.
-                      */}
-                    <Stat label="Current balance" value={period.currentBalance} strong />
-                    <Stat label="Due" value={period.dueNow} />
-                    {period.notYetDue ? <Stat label="Not yet due" value={period.notYetDue} /> : null}
-                    {/*
-                      * W7 Scenario 8 final: "Scheduled" — draft, not-yet-posted obligation. The
-                      * Focus Panel already says Scheduled for the same money; the ledger row keeps
-                      * the lifecycle detail ("Draft · Posts Nov 1"). Same figure, shorter word.
-                      */}
-                    {period.upcoming ? <Stat label="Scheduled" value={period.upcoming} /> : null}
-                    <Stat
-                        label="Past due"
-                        value={hydrating ? "—" : pastDue ? pastDue.amount : "None"}
-                        tone={hydrating ? undefined : pastDue ? "due" : "ok"}
-                    />
-                    <Stat label="Responsibility" value={period.familyResponsibility} />
-                    <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
-                    {/*
-                      * AVAILABLE PREPAID — money this family has already given that is not yet spent.
-                      *
-                      * SILENT WHEN THERE IS NONE. The adapter sends null rather than "$0.00", so an
-                      * ordinary account does not carry a permanent zero in a slot meant for a fact —
-                      * the same density rule that removed Autopay from this strip rather than
-                      * rendering it as a standing "not available".
-                      *
-                      * It sits BESIDE Current balance and never inside it. Held money pays nothing
-                      * down until it is applied, so `owes $0 with $200 available` stays two figures
-                      * and never collapses into `-$200`, which would say the organisation owes the
-                      * family money it does not owe.
-                      *
-                      * Toned `ok`: funds on the account are good news, not an exception to resolve.
-                      */}
-                    {period.availablePrepaid ? (
-                        <Stat
-                            label="Available prepaid"
-                            value={period.availablePrepaid}
-                            tone="ok"
-                            testId="available-prepaid"
-                        />
-                    ) : null}
-                    {/*
-                      * HELD DEPOSIT — money received and restricted (W4).
-                      *
-                      * Toned neutral rather than `ok` or as a problem: held money is neither good
-                      * news nor an exception to resolve, it is a position. And it is beside
-                      * Available prepaid rather than inside it, because an operator may spend one
-                      * and not the other.
-                      */}
-                    {period.heldFunds ? (
-                        <Stat
-                            label="Held deposit"
-                            value={period.heldFunds}
-                            testId="held-funds"
-                        />
-                    ) : null}
-                    {/*
-                     * "None" claimed an absence nothing could support. Payment setup has no producer
-                     * yet, so the honest value is that it has not been recorded — and it is not
-                     * toned as a problem, because an unknown is not a fault.
-                     */}
-                    {/*
-                      * AUTOPAY IS NOT SUPPORTED YET — no table, no column, no writer anywhere in the
-                      * platform. "Not recorded" implied somebody could have recorded it and had not,
-                      * which is a statement about this family; the truth is about Alloy.
-                      */}
-                    {/*
-                      * AUTOPAY IS DROPPED FROM THE METRIC ROW. The platform has no autopay model —
-                      * no table, no column, no writer — so the metric could only ever read "Not
-                      * available yet", which is a statement about Alloy occupying a slot meant for
-                      * a statement about this family. A metric that can never carry a value is not
-                      * a metric. The capability is still reported where it is actionable, in the
-                      * payment command's own capability lines.
-                      *
-                      * NEXT stays: a scheduled charge is a real, truthful operational fact and it
-                      * is the one thing on this row the workspace has no lens for.
-                      */}
-                    {evidence.payment.nextChargeLabel ? (
-                        <Stat label="Next" value={evidence.payment.nextChargeLabel} />
-                    ) : null}
-                </div>
+                    <FinancialsAccountSummary evidence={evidence} hydrating={hydrating} />
 
                 {/*
                   * ── ONE COMPACT RELATIONSHIP ROW, IN THREE GROUPS ──────────────────────────
@@ -1010,9 +910,7 @@ export default function FinancialsDetailCard({
                             onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
                                 e.payment
-                                    ? ledgerRowFromPayment(e, e.payment, receiptsById.get(e.payment.paymentId) ?? null, {
-                                          onOpenPayment, onApplyPayment, onMovePayment,
-                                      })
+                                    ? ledgerRowFromPayment(e, e.payment, { onOpenPayment })
                                     : ledgerRowFromEntry(e, i, {
                                           onPostCharge, onReverseCharge, onAdjustCharge,
                                           onResolveResponsibility, onReallocateResponsibility,
@@ -1499,82 +1397,46 @@ function ledgerRowFromEntry(
 
 
 /**
- * A PAYMENT EVENT AS A LEDGER ROW — W7-F026.
+ * A PAYMENT EVENT AS A LEDGER ROW — W7-F026, completed by W7-F032.
  *
- * Date, Payment, amount, status, payer and method, and a compact allocation state: whether the money
- * is answering obligations, never which ones (that is Payment Details'). Unapplied money is
- * `attention` because it is money on the account answering nothing — a business state, not a sign.
+ * Date | Payment | — | settlement account | amount | Received | payer | method — the same columns
+ * as every other row, each saying what it means for a payment:
  *
- * The receipt's own operations travel with it: Apply what is unrestricted, Move what is applied.
- * The row's name opens Payment Details, the receipt's record, the way a charge's name opens Charge
- * Details. A collection still in flight has no record to open yet.
+ *   Child        —  a payment is account-level; one receipt may answer several children's charges,
+ *                   so naming one would be a guess (allocations live in Payment Details).
+ *   GL account   the account this TENDER settles into (`receipts_<method>` → gl_account_mappings),
+ *                never the revenue account of the charge it paid. Unmapped is a real, fixable state.
+ *   Status       Received, or Unapplied / Part applied when the money still answers nothing — one
+ *                word, no second line under the amount.
+ *   Party        who PAID — the payment's own payer (the household only when none is named). Never
+ *                presented as the responsible party.
+ *   Description  the card or method: "Visa •••• 4242", "Cash".
+ *
+ * No money-moving icon sits on the row: Reallocate and Apply are named actions in Payment Details,
+ * which the row's name opens, the way a charge's name opens Charge Details.
  */
 function ledgerRowFromPayment(
     e: FinancialsEvidence["ledger"][number],
     pay: NonNullable<FinancialsEvidence["ledger"][number]["payment"]>,
-    receipt: FinancialsEvidence["payments"][number] | null,
-    actions: {
-        onOpenPayment?: (args: { paymentId: string }) => void;
-        onApplyPayment?: (args: { paymentId: string }) => void;
-        onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
-    },
+    actions: { onOpenPayment?: (args: { paymentId: string }) => void },
 ): FinancialsLedgerRowView {
-    const via = [pay.methodLabel, pay.payerLabel].filter(Boolean).join(" · ");
-    const move = receipt?.applications.find((a) => a.status === "active") ?? null;
     return {
         key: `payment:${pay.paymentId}`,
         when: e.when,
         type: e.label,
-        /*
-         * A RECEIPT IS NOT FOR A CHILD. This column is headed "Child"; a payment arrives against the
-         * account, and the obligations it answers may belong to several children.
-         */
         child: "—",
-        description: via || e.label,
-        /* Core has no payment-GL authority: a receipt has no charge category to map. */
-        glLabel: null,
-        glApplies: false,
+        description: pay.methodLabel ?? e.label,
+        glLabel: e.glCode,
+        /* A collection still in flight has no receipt yet, so no tender account to claim. */
+        glApplies: pay.kind !== "collection",
         amount: e.amount,
-        amountNote: pay.allocationLabel,
         status: pay.statusLabel,
-        /*
-         * THE PAYER IS NOT THE RESPONSIBLE PARTY — the payer is in the description, beside the
-         * method, where it is a fact about the receipt rather than a claim about the debt.
-         */
         responsibleParty: null,
         responsibilityApplies: false,
+        party: pay.payerLabel,
         tone: pay.unapplied ? "attention" : pay.kind === "collection" ? "upcoming" : undefined,
         onOpen: pay.openable && actions.onOpenPayment ? () => actions.onOpenPayment!({ paymentId: pay.paymentId }) : undefined,
-        title: [e.label, pay.statusLabel, via, pay.allocationLabel].filter(Boolean).join(" · "),
-        actions:
-            receipt ? (
-                <>
-                    {/*
-                      * THE OFFER AND THE FIGURE ARE BOTH THE UNRESTRICTED MONEY — `holdableCents`,
-                      * never `unappliedCents`, which counts held deposits too.
-                      */}
-                    {receipt.holdableCents > 0 && actions.onApplyPayment ? (
-                        <RowAction
-                            kind="apply"
-                            command="payment.apply_to_charge"
-                            title={`Apply ${receipt.applicableLabel} to an obligation`}
-                            onClick={() => actions.onApplyPayment!({ paymentId: receipt.paymentId })}
-                        />
-                    ) : null}
-                    {/*
-                      * Moving a payment is two canonical acts — reverse the application, then apply
-                      * to the chosen charge — and the first is what this control raises.
-                      */}
-                    {move && actions.onMovePayment ? (
-                        <RowAction
-                            kind="move"
-                            command="payment.reverse_application"
-                            title={`Move ${move.amountLabel} from ${move.chargeLabel}`}
-                            onClick={() => actions.onMovePayment!({ paymentId: receipt.paymentId, allocationId: move.allocationId })}
-                        />
-                    ) : null}
-                </>
-            ) : undefined,
+        title: [e.label, pay.statusLabel, pay.methodLabel, pay.payerLabel ? `Paid by ${pay.payerLabel}` : null].filter(Boolean).join(" · "),
     };
 }
 
@@ -1619,19 +1481,111 @@ function LensFilter({
 }
 
 /**
+ * ── W7-F031: THE ACCOUNT SUMMARY, ONE COMPONENT FOR EVERY HOST ───────────────────────────────
+ *
+ * Details (Focus Panel and Accounts) and the Accounts header render THIS, so a figure cannot have
+ * two names on two surfaces. The figures and their relationships are the adapter's
+ * (`period.summary`); this lays out three primary answers and a quiet context line.
+ */
+export function FinancialsAccountSummary({ evidence, hydrating = false }: { evidence: FinancialsEvidence; hydrating?: boolean }) {
+    const { period, pastDue } = evidence;
+    /* The adapter states the summary; a lab specimen without one reads the same figures plainly. */
+    const summary = period.summary ?? {
+        dueNow: period.dueNow,
+        pastDueNote: pastDue ? `${pastDue.amount} past due` : null,
+        pastDueBeyondDue: false,
+        balance: period.currentBalance,
+        balanceScope: period.label,
+        balanceNote: `${period.familyResponsibility} charged · ${period.paymentsReceived} paid`,
+        scheduled: period.upcoming ?? null,
+        context: [
+            ...(period.notYetDue ? [{ key: "not-yet-due", text: `${period.notYetDue} not yet due` }] : []),
+            ...(period.availablePrepaid ? [{ key: "prepaid", text: `${period.availablePrepaid} prepaid available` }] : []),
+            ...(period.heldFunds ? [{ key: "held", text: `${period.heldFunds} held deposit` }] : []),
+        ],
+    };
+    return (
+        <>
+            <div className="alloy-os-fdetail__strip" data-financials-account-summary-strip="true">
+                        {/*
+                          * ── W7-F031: THREE QUESTIONS, NOT EIGHT PEERS ─────────────────────────────
+                          *
+                          * What needs paying now, what this period owes, what is coming. Past due is
+                          * Due now's note (said once — the header chip that repeated it is gone); Current
+                          * balance carries its period and the two figures it is the difference of
+                          * (Responsibility charged − Paid); Not yet due, prepaid and held are context.
+                          * Every figure is the adapter's, unchanged.
+                          */}
+                        <Stat
+                            label="Due now"
+                            value={summary.dueNow}
+                            strong
+                            note={hydrating ? null : summary.pastDueNote}
+                            noteTone="due"
+                            testId="summary-due-now"
+                        />
+                        <Stat
+                            label={`Balance · ${summary.balanceScope}`}
+                            value={summary.balance}
+                            note={hydrating ? null : summary.balanceNote}
+                            testId="summary-balance"
+                        />
+                        {summary.scheduled ? (
+                            <Stat
+                                label="Scheduled"
+                                value={summary.scheduled}
+                                note="activates with its period"
+                                testId="summary-scheduled"
+                            />
+                        ) : null}
+            </div>
+        {!hydrating && summary.context.length ? (
+            <p className="alloy-os-fdetail__summarycontext" data-financials-summary-context="true">
+                {summary.context.map((c) => (
+                    <span key={c.key} data-financials-summary-context-item={c.key}>{c.text}</span>
+                ))}
+            </p>
+        ) : null}
+        </>
+    );
+}
+
+/**
  * THE FINANCIALS STAT — exported because the account summary must BE this, not resemble it.
  *
  * Focus Panel → Financials → Details is the canonical Financials detail presentation, so the
  * account summary in the Financials workspace borrows this component rather than growing a second
  * label-over-value idiom with its own type scale. One anatomy, two placements.
  */
-export function Stat({ label, value, strong, tone, testId }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due"; testId?: string }) {
+export function Stat({
+    label,
+    value,
+    strong,
+    tone,
+    testId,
+    note,
+    noteTone,
+}: {
+    label: string;
+    value: string;
+    strong?: boolean;
+    tone?: "ok" | "due";
+    testId?: string;
+    /** W7-F031: the figure's own context, beneath it — "$Y past due", "$R charged · $P paid". */
+    note?: string | null;
+    noteTone?: "due";
+}) {
     return (
         <span className="alloy-os-fdetail__stat" data-tone={tone} data-testid={testId}>
             <span className="alloy-os-fdetail__statlabel">{label}</span>
             <span className={clsx("alloy-os-fdetail__statvalue", strong && "alloy-os-fdetail__statvalue--strong")}>
                 {value}
             </span>
+            {note ? (
+                <span className="alloy-os-fdetail__statnote" data-tone={noteTone} data-testid={testId ? `${testId}-note` : undefined}>
+                    {note}
+                </span>
+            ) : null}
         </span>
     );
 }
