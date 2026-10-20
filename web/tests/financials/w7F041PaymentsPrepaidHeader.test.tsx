@@ -125,6 +125,15 @@ describe("F043 · secondary facts never claim a row", () => {
     });
 });
 
+describe("found during deployed proof (5cb6b2ed)", () => {
+    it("the command column is a grid, so holdings under Payment / Add never widen it", () => {
+        /* A wrapping flex box's max-content is every item on one line: 491px, Scheduled wrapped. */
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css).toMatch(/\.alloy-os-fdetail__rollup \.alloy-os-fdetail__actions \{[^}]*display: grid;\s*grid-template-columns: repeat\(2, auto\);/);
+        expect(css).toMatch(/\.alloy-os-fdetail__actions > \.alloy-os-fdetail__statside \{\s*grid-column: 1 \/ -1;/);
+    });
+});
+
 describe("found during deployed proof (747ad20d)", () => {
     it("Escape closes Manage responsibility in Accounts: focus in a depth card is not an inner layer there", () => {
         const accounts = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
