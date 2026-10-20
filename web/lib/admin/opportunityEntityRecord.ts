@@ -349,6 +349,11 @@ type InquiryHydrateChild = {
   stage_key?: string | null;
   /** Provenance of the participation state/stage: "process_instances" (authoritative) or "ocm" (bridge). */
   _participation_source?: "process_instances" | "ocm";
+  /**
+   * Answers recorded with each chosen per-child path (`process_instances.metadata.decision_answers_v1`),
+   * keyed by decision — e.g. the program offered. Raw journey data; configuration decides how it reads.
+   */
+  _decision_answers_v1?: Record<string, unknown> | null;
   /** Provenance of operational facts: "durable" (materialized) > "process_instance" (pre-mat draft) > "ocm" (legacy). */
   _operational_facts_source?: "durable" | "process_instance" | "ocm";
   custom_fields: Record<string, unknown>;
@@ -537,6 +542,10 @@ export function applyProcessInstanceParticipation(
       outcome_status_label: stateLabel,
       stage_key: stageKey,
       _participation_source: "process_instances" as const,
+      _decision_answers_v1:
+        pi.metadata && typeof pi.metadata.decision_answers_v1 === "object" && !Array.isArray(pi.metadata.decision_answers_v1)
+          ? (pi.metadata.decision_answers_v1 as Record<string, unknown>)
+          : null,
     };
   });
 }

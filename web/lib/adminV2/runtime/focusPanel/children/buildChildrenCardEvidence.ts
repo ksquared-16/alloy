@@ -117,6 +117,11 @@ export type ChildrenEvidenceChild = {
      * child at a stage they are not at.
      */
     stageKey?: string | null;
+    /**
+     * Answer labels recorded with each per-child path this child took, keyed by decision (from the
+     * journey's `decision_answers_v1`) — e.g. `{ child_offer_spot: ["Infant"] }`.
+     */
+    pathAnswerLabels?: Record<string, string[]> | null;
     statusTone: ChildStatusTone;
     /** Missing operational essentials (program / schedule / start) for this child. */
     needsAttention: boolean;
@@ -235,6 +240,22 @@ export type BuildChildrenCardEvidenceOptions = {
     /** The process's configured stage keys, so a tenant-configured child stage places the child. */
     configuredStageKeys?: ReadonlySet<string> | null;
 };
+
+/** `decision_answers_v1` → answer labels per decision. Unreadable entries are skipped, never guessed. */
+function pathAnswerLabelsFrom(raw: unknown): Record<string, string[]> | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const out: Record<string, string[]> = {};
+    for (const [key, entry] of Object.entries(raw as Record<string, unknown>)) {
+        const answers = (entry as { answers?: unknown } | null)?.answers;
+        if (!Array.isArray(answers)) continue;
+        const labels = answers
+            .map((a) => (a && typeof a === "object" ? (a as { value_label?: unknown }).value_label : null))
+            .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+            .map((v) => v.trim());
+        out[key] = labels;
+    }
+    return Object.keys(out).length ? out : null;
+}
 
 export function buildChildrenCardEvidence(
     context: Pick<OperationalContext, "truth">,
@@ -467,6 +488,7 @@ export function buildChildrenCardEvidence(
             // the canonical New Lead label, then humanize; null key → null → badge suppressed.
             status: processStageLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),
             stageKey: processStageKey,
+            pathAnswerLabels: pathAnswerLabelsFrom((raw as { _decision_answers_v1?: unknown })._decision_answers_v1),
             statusTone: statusTone(statusKey),
             needsAttention,
             detailLine,

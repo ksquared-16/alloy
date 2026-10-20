@@ -26,7 +26,7 @@
  * configuration, exactly as before.
  */
 
-import { childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
+import { childJourneyOfStageWork, childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
@@ -507,7 +507,7 @@ export function projectStageWorkRuntimeSync(
 
     const openList = params.openRows ?? [];
     const completedList = params.completedRows ?? [];
-    const childIdentity =
+    const explicitChildIdentity =
         journeySegment === "child"
             ? explicitChildIdentityForProjection({
                   customer_member_id: params.customerMemberId,
@@ -533,8 +533,10 @@ export function projectStageWorkRuntimeSync(
             ?? null
         );
     };
+    const pickedOpenRows: TaskDbRow[] = [];
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
         const openRow = pick(openList, template);
+        if (openRow) pickedOpenRows.push(openRow);
         const completedRow = !openRow ? pick(completedList, template) : null;
         return buildWorkItemProjection({
             template,
@@ -548,6 +550,20 @@ export function projectStageWorkRuntimeSync(
 
     const primary = items[0] ?? null;
     const additional = items.slice(1);
+
+    /*
+     * A FAMILY surface acting on a CHILD's work. With no child named by the caller (the family card
+     * after every child has a path, one offer still pending), the open work it projects is still
+     * stamped with its owner — and that owner is the subject the outcome must run for. Never a guess:
+     * only the work item's own child, and only when the caller named none.
+     */
+    const workOwner = !explicitChildIdentity && journeySegment === "child"
+        ? pickedOpenRows.map((row) => ({ child: childOfStageWork(row.metadata), journey: childJourneyOfStageWork(row.metadata) })).find((o) => o.child) ?? null
+        : null;
+    const childIdentity = explicitChildIdentity
+        ?? (workOwner
+            ? explicitChildIdentityForProjection({ customer_member_id: workOwner.child, process_instance_id: workOwner.journey })
+            : null);
 
     const requiresOutcomePicker =
         items.some((item) => item.state === "open" && item.requires_outcome_picker);

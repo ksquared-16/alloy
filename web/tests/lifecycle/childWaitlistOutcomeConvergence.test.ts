@@ -181,4 +181,89 @@ describe("projectStageWorkRuntimeSync child subject", () => {
         expect(projection?.execution.subject.customer_member_id).toBeUndefined();
         expect(projection?.execution.subject.opportunity_id).toBe("opp-1");
     });
+
+describe("a family surface acting on a child's own work", () => {
+    // Every child has a path and one offer is still pending: the family card's current work IS that
+    // child's work item. The outcome must run for the child the item names.
+    const departmentMetadata = {
+        [LIFECYCLE_BUILDER_METADATA_KEY]: {
+            version: 1,
+            active_process_id: "proc-1",
+            processes: [
+                {
+                    id: "proc-1",
+                    key: "enrollment",
+                    name: "Enrollment",
+                    primary_entity: "opportunity",
+                    sort_order: 0,
+                    is_active: true,
+                    stages: [
+                        {
+                            id: "s-offered",
+                            key: "offered",
+                            label: "Offer pending",
+                            sort_order: 0,
+                            is_active: true,
+                            stage_operating_plan_v1: {
+                                version: 1,
+                                lifecycle_key: "enrollment",
+                                stage_key: "offered",
+                                journey_segment: "child",
+                                work_templates: [
+                                    {
+                                        template_key: "offer_response",
+                                        label: "Get the family's answer",
+                                        required: true,
+                                        primary: true,
+                                        due_policy: { kind: "same_day" },
+                                        owner_strategy: "record_owner",
+                                        work_definition_key: "contact_family",
+                                    },
+                                ],
+                                outcomes: [{ outcome_key: "offer_accepted", label: "Family accepted", completes_work: true }],
+                                outcome_rules: [],
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+    const task = (metadata: Record<string, unknown>) => ({
+        id: "task-ava",
+        title: "Get the family's answer",
+        due_at: "2026-10-21T00:00:00Z",
+        status: "open",
+        source: "business_process",
+        updated_at: "2026-10-20T00:00:00Z",
+        metadata: { lifecycle_stage_key: "offered", operating_plan_template_key: "offer_response", ...metadata },
+    });
+    const project = (openRows: ReturnType<typeof task>[], customerMemberId?: string) =>
+        projectStageWorkRuntimeSync({
+            orgId: "org-1",
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            departmentMetadata,
+            builderStageKey: "offered",
+            openRows,
+            ...(customerMemberId ? { customerMemberId } : {}),
+        });
+
+    it("runs for the child the open work item names, with that child's journey", () => {
+        const p = project([task({ bp_subject_customer_member_id: "ava", bp_subject_process_instance_id: "pi-ava" })]);
+        expect(p?.execution.subject).toMatchObject({ journey_segment: "child", opportunity_id: "opp-1", customer_member_id: "ava", process_instance_id: "pi-ava" });
+        expect(p?.execution.subject_unresolved).toBeUndefined();
+    });
+
+    it("never overrides a child the caller named", () => {
+        const p = project([task({ bp_subject_customer_member_id: "ava" })], "ben");
+        expect(p?.execution.subject.customer_member_id).toBe("ben");
+    });
+
+    it("work naming no child still leaves the subject unresolved — never a guess", () => {
+        const p = project([task({})]);
+        expect(p?.execution.subject.customer_member_id).toBeUndefined();
+        expect(p?.execution.subject_unresolved).toBe("child_identity_required");
+    });
+});
 });
