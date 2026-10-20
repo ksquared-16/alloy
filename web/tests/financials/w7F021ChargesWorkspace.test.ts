@@ -61,6 +61,8 @@ describe("the cross-account index", () => {
         expect(chargeIndexViewOf(row({ awaiting: awaiting("post_failed", false) }))).toBe("attention");
         for (const status of ["posted", "partially_paid", "paid"]) expect(chargeIndexViewOf(row({ status }))).toBe("posted");
         expect(chargeIndexViewOf(row({ status: "void" }))).toBe("cancelled");
+        /* W7-F027: a draft from before automatic posting is listed apart, never as today's work. */
+        expect(chargeIndexViewOf(row({ awaiting: awaiting("unclassified", false) }))).toBe("legacy");
     });
 
     const rows = [
@@ -79,7 +81,7 @@ describe("the cross-account index", () => {
 
     it("counts every view from the same narrowed rows, and offers only types and periods that exist", () => {
         const r = applyChargeIndex(rows, { view: "scheduled", query: "tuition family" });
-        expect(r.counts).toEqual({ attention: 0, scheduled: 1, posted: 0, cancelled: 1 });
+        expect(r.counts).toEqual({ attention: 0, scheduled: 1, posted: 0, cancelled: 1, legacy: 0 });
         const all = applyChargeIndex(rows, { view: "scheduled" });
         expect(all.typeOptions.map((o) => o.label)).toEqual(["Materials", "Tuition"]);
         expect(all.periodOptions.map((o) => o.label)).toEqual(["November 2026", "October 2026"]);
@@ -189,16 +191,28 @@ describe("the Charges page", () => {
     });
 
     it("opens a charge in the account's canonical Charge Details, with no second detail pane", () => {
-        expect(page).toMatch(/<FinancialsAccountDetail[\s\S]*?openCharge=\{\{ chargeId: open\.chargeId, label: open\.label \}\}[\s\S]*?onSurfacesClosed=/);
+        expect(page).toMatch(/<FinancialsAccountDetail[\s\S]*?openCharge=\{\{ chargeId: open\.chargeId, label: open\.label, seed: open\.seed \}\}[\s\S]*?onSurfacesClosed=/);
         expect(page).not.toContain("FinancialsChargeDetail");
         expect(page).not.toContain("Select financial work");
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card).toMatch(/: openCharge\s*\?\s*\[\{ kind: "charge_detail", chargeId: openCharge\.chargeId, label: openCharge\.label \}\]/);
+        expect(card).toMatch(/: openCharge\s*\?\s*\[\{ kind: "charge_detail", chargeId: openCharge\.chargeId, label: openCharge\.label, seed: openCharge\.seed \?\? null \}\]/);
         expect(card).toMatch(/if \(openedOnCharge\.current && stack\.length === 0\) onSurfacesClosed\?\.\(\);/);
     });
 
-    it("posts exceptions only through charge.post", () => {
-        expect(page).toContain('action_key: "charge.post"');
+    /*
+     * W7-F027: NO ROW IS A BUTTON FARM, AND NO SCHEDULED CHARGE OFFERS POST. The exceptional post —
+     * review, a failed activation, a legacy draft — is made from the charge's own record, labelled by
+     * its reason, through the shared command authority (`charge.post` via `runRowAction`).
+     */
+    it("posts exceptions only from Charge Details, through charge.post, named by their reason", () => {
+        expect(page).not.toContain('action_key: "charge.post"');
+        expect(page).not.toMatch(/data-financials-post-charge/);
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card).toMatch(/facts\.awaiting\.key === "review_required" \? "Approve and post"/);
+        expect(card).toMatch(/facts\.awaiting\.key === "post_failed" \? "Retry posting"/);
+        expect(card).toMatch(/facts\.awaiting\.key === "unclassified" \? "Post legacy draft"/);
+        expect(card).toMatch(/runRowAction\("post", rowForCharge\(surface\.chargeId\)\)/);
+        expect(card).not.toMatch(/data-financials-row-command="charge\.post"/);
     });
 });
 
@@ -228,7 +242,7 @@ describe("Accounts locates a household's tuition without hunting", () => {
     it("filters the ledger by charge type and status, from its own rows, through the one predicate", () => {
         expect(card).toContain('testId="charge-type"');
         expect(card).toContain('testId="status"');
-        expect(card).toMatch(/&& \(!chargeType \|\| e\.type === chargeType\)\s*&& \(!statusGroup \|\| ledgerStatusGroup\(e\.status\) === statusGroup\)/);
+        expect(card).toMatch(/&& \(!chargeType \|\| e\.type === chargeType\)\s*&& \(!statusGroup \|\| ledgerStatusGroup\(e\) === statusGroup\)/);
         expect(card).toMatch(/chargeTypeChoices\.length > 1 \?/);
     });
 });

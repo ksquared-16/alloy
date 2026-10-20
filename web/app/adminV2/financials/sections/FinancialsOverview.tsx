@@ -92,7 +92,7 @@ const EXCEPTIONS: Array<{ key: string; section: FinancialsWorkSection; cta: stri
         key: "financials.charges_awaiting_post_count",
         section: "charges",
         cta: "Review charges",
-        why: "Drafts do not owe anything until they are posted.",
+        why: "A configured review or a failed activation. Scheduled charges activate by themselves.",
     },
     {
         key: "financials.unapplied_payments_amount",

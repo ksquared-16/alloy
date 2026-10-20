@@ -204,7 +204,9 @@ describe("the operator is offered refund only where it can be honoured", () => {
          * supplies is the defect this sprint hit three times, and a component test cannot see it.
          */
         const host = code(HOST);
-        const at = host.indexOf("onReverseAdjustment={openReverseAdjustment}");
+        /* W7-F030: anchored on the held acts — the Details mount no longer carries the reversal. */
+        const at = host.indexOf("onApplyHeldFunds={");
+        expect(at).toBeGreaterThan(-1);
         const block = host.slice(at, at + 500);
         expect(block).toMatch(/onRefundHeldFunds=\{/);
         expect(block).not.toMatch(/onRefundHeldFunds=\{\s*null\s*\}/);

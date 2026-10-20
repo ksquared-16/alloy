@@ -180,9 +180,11 @@ describe("the posting language follows what the writer actually does", () => {
         expect(cmd, "the branch is the template's own review flag").toMatch(/t\.reviewRequired/);
         // W7-F015: one compact state line carries all three states.
         expect(cmd).toMatch(/data-addcharge-posting=\{t\.reviewRequired \? "draft" : specimen\.awaitsPeriodUntil \? "awaits_period" : "posts"\}/);
-        expect(cmd).toContain("Saved for review before posting");
-        expect(cmd).toContain("Saved as a draft · Posts automatically");
-        expect(cmd).toContain("Posts when saved");
+        /* W7-F027: the operator lifecycle — Review required, Scheduled, Active — never "draft". */
+        expect(cmd).toContain("Review required before it becomes owed");
+        expect(cmd).toContain("Scheduled · activates automatically");
+        expect(cmd).toContain("Active when saved");
+        expect(cmd).not.toMatch(/Saved as a draft|Saved for review before posting/);
         expect(cmd, "the posted figure is the projection, never previewBefore again").toMatch(
             /data-addcharge-posted-balance="true"[\s\S]{0,200}specimen\.previewPostedBalance/,
         );

@@ -394,24 +394,36 @@ export async function resolveChargeDetail(
     ]);
 
     /*
+     * ── W7-F029: EVERY READ BELOW DEPENDS ONLY ON THE CHARGE AND ITS SUBJECT ────────────────────
+     *
+     * Measured on deployed 2d7f1747: Charge Details took ~1.6 s to show anything, and this resolver
+     * was ~30 database round trips awaited ONE AFTER ANOTHER. After the names above, the collectible
+     * position, responsibility, the arrangement, the bound period, the template label, the journal
+     * entry and its accounting period, the GL mapping and account, the applied payments, each actor
+     * and the adjustment record need no answer from one another — only `charge`, `customerId` and
+     * `customerMemberId`, all known here. So they are STARTED here and awaited together below: the
+     * critical path is the longest single chain, not the sum of them all.
+     *
+     * Nothing about what each read asks, or how its failure is treated, changed: a read that threw
+     * still rejects the detail, and a tolerated one is still tolerated inside its own block.
+     */
+    /*
      * THE MONEY. A resolver refusal is not an error here: a draft owes nothing yet and a reduction
      * row is not an obligation, and both legitimately have no collectible position. The caller is
      * told so by a null rather than by zeros that would read as a settled balance.
      */
-    let position: CollectiblePosition | null = null;
-    try {
-        position = await resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId } as never);
-    } catch {
-        position = null;
-    }
+    const positionP: Promise<CollectiblePosition | null> = resolveFamilyCollectible(
+        supabase,
+        { orgId: args.orgId, chargeId } as never,
+    ).catch(() => null);
 
-    const responsibilityRead = await readResponsibility(supabase, args.orgId, [chargeId]);
+    const responsibilityP = readResponsibility(supabase, args.orgId, [chargeId]);
     /*
      * THE ARRANGEMENT IN FORCE FOR THIS CHARGE, not "whatever this account most recently arranged".
      * The charge is for a child, and a child-scoped arrangement beats the household one — so the
      * charge's own subject is what decides which arrangement governs it.
      */
-    const accountArrangement = await readAccountArrangement(supabase, {
+    const arrangementP = readAccountArrangement(supabase, {
         orgId: args.orgId,
         customerId,
         customerMemberId,
@@ -438,6 +450,7 @@ export async function resolveChargeDetail(
      * November obligation everywhere that matters. The bound row is read; only a legacy charge with
      * no binding is placed by the historical derivation.
      */
+    const billingP = (async (): Promise<{ key: string | null }> => {
     let billing: { key: string | null } = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
     if (t(charge.billing_period_id)) {
         const { data: bound } = await supabase
@@ -449,8 +462,11 @@ export async function resolveChargeDetail(
         const key = t((bound as { period_key?: unknown } | null)?.period_key);
         if (key) billing = { key };
     }
+    return billing;
+    })();
 
     /* Configuration owns the word an operator reads. See the note on `label` below. */
+    const templateLabelP = (async (): Promise<string> => {
     let templateLabel = "";
     if (t(charge.charge_template_id)) {
         const { data: template } = await supabase
@@ -461,7 +477,10 @@ export async function resolveChargeDetail(
             .maybeSingle();
         templateLabel = t((template as { label?: unknown } | null)?.label);
     }
+    return templateLabel;
+    })();
 
+    const accountingP = (async () => {
     let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
     /** The effective date whose own period was closed, when attribution was deferred. */
     let accountingDeferredFrom: string | null = null;
@@ -548,7 +567,10 @@ export async function resolveChargeDetail(
         accountingDeferredFrom = null;
         accountingReadError = e instanceof Error ? e.message : "accounting attribution could not be read";
     }
+    return { accountingPeriod, accountingDeferredFrom, accountingReadError };
+    })();
 
+    const glAccountP = (async () => {
     let glAccount: ChargeDetail["glAccount"] = null;
     try {
         const categoryKey = t(charge.charge_category) || t(charge.charge_type) || "one_time";
@@ -580,7 +602,10 @@ export async function resolveChargeDetail(
     } catch {
         glAccount = null;
     }
+    return glAccount;
+    })();
 
+    const appliedP = (async () => {
     const { data: allocationRows, error: allocationError } = await supabase
         .from("payment_allocations")
         .select("payment_id, allocated_amount_cents, status")
@@ -614,6 +639,8 @@ export async function resolveChargeDetail(
             });
         }
     }
+    return { allocations, paymentById };
+    })();
 
     /*
      * ── THE ACTORS, THROUGH THE CANONICAL IDENTITY AUTHORITY ────────────────────────────────
@@ -637,7 +664,8 @@ export async function resolveChargeDetail(
      * produced F002 in the first place.
      */
     const actorIdentities = new Map<string, FinancialActorIdentity>();
-    for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
+    /* W7-F029: the (at most two) actors resolve side by side, and beside every other read. */
+    const actorsP = Promise.all([...new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))].map(async (actorId) => {
         /*
          * ── THE PERSON THIS OPERATOR IS, BEFORE THE ACCOUNT THEY SIGN IN WITH ─────────────────
          *
@@ -675,7 +703,7 @@ export async function resolveChargeDetail(
         }
 
         if (name) actorNames.set(actorId, name);
-    }
+    }));
 
     /*
      * ── IS THIS CHARGE SOMEBODY'S CORRECTION? ────────────────────────────────────────────────
@@ -693,6 +721,7 @@ export async function resolveChargeDetail(
      * like a plain charge — stripping the operator of the source fact, the reason and the reversal
      * lineage with no sign that anything was missing — so it propagates like every other read here.
      */
+    const adjustmentP = (async (): Promise<ChargeDetailAdjustment | null> => {
     let adjustment: ChargeDetailAdjustment | null = null;
     {
         const { data: appRow, error: appError } = await supabase
@@ -791,6 +820,33 @@ export async function resolveChargeDetail(
             };
         }
     }
+
+    return adjustment;
+    })();
+
+    const [
+        position,
+        responsibilityRead,
+        accountArrangement,
+        billing,
+        templateLabel,
+        { accountingPeriod, accountingDeferredFrom, accountingReadError },
+        glAccount,
+        { allocations, paymentById },
+        ,
+        adjustment,
+    ] = await Promise.all([
+        positionP,
+        responsibilityP,
+        arrangementP,
+        billingP,
+        templateLabelP,
+        accountingP,
+        glAccountP,
+        appliedP,
+        actorsP,
+        adjustmentP,
+    ]);
 
     const origin = classifyChargeOrigin({
         createdBy: charge.created_by ?? null,

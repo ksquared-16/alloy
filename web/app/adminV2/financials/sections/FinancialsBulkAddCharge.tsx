@@ -253,14 +253,15 @@ export default function FinancialsBulkAddCharge({
                 next[t.customerId] = {
                     state: "created",
                     chargeIds: [String(r.data?.affected_id ?? "")].filter(Boolean),
+                    /* W7-F027: the operator's lifecycle, never "Draft". */
                     note: detail.posted
                         ? "Posted"
                         : detail.posts_on
-                          ? `Draft · posts ${formatDisplayDate(detail.posts_on) ?? detail.posts_on}`
+                          ? `Scheduled · activates ${formatDisplayDate(detail.posts_on) ?? detail.posts_on}`
                           : detail.post_failed
-                            ? "Draft · posting needs attention"
+                            ? "Posting failed · needs attention"
                             : detail.review_required
-                              ? "Draft · needs review"
+                              ? "Review required"
                               : "Created",
                 };
             }

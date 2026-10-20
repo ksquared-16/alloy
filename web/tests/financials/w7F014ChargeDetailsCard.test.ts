@@ -32,11 +32,13 @@ describe("the card's composition", () => {
         expect(src).toMatch(/sm:grid-cols-4" data-financials-charge-dates="row"/);
     });
 
-    it("states posting as one compact line from the canonical awaiting vocabulary", () => {
-        for (const text of ["`Posted ${day(detail.postedAt)}`", "`Draft · Posts ${day(detail.awaiting.postsOn)}`", '"Waiting for review"', '"Posting failed · Needs attention"']) {
+    /* W7-F027: the operator lifecycle — never "Draft · Posts …", "Waiting for review" or "Will retry". */
+    it("states the lifecycle as one compact line in the operator's vocabulary", () => {
+        for (const text of ["`Posted ${day(detail.postedAt)}`", "`Scheduled · activates ${day(detail.awaiting.postsOn)}`", '"Review required"', '"Posting failed"', '"Legacy draft"']) {
             expect(src).toContain(text);
         }
-        expect(src, "a sentence only where someone must act").toMatch(/tone: "attention",\s*explain: detail\.awaiting\.explanation/);
+        expect(src, "a sentence only where someone must act").toMatch(/tone: "attention", explain: detail\.awaiting\.explanation/);
+        expect(src).not.toMatch(/Draft · Posts|Waiting for review|Will retry/);
     });
 
     it("shows Accounting only where it applies — a draft has no accounting block", () => {

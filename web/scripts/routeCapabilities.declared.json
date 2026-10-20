@@ -2356,7 +2356,7 @@
       "GET": {
         "status": "declared",
         "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
+        "helper": "requireFinancialsCapability"
       }
     },
     "app/api/admin/financials/collection-state/route.ts": {

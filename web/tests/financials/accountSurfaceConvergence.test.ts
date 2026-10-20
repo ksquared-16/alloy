@@ -1043,7 +1043,9 @@ describe("F21 · the lens changes the cohort, never the renderer", () => {
         /* The retired presentations are gone, not merely unreferenced. */
         expect(code(DETAIL), "no prose adjustment row survives").not.toContain("alloy-os-fdetail__adjustment\"");
         expect(code(DETAIL), "no stat-strip payment block survives").not.toContain("alloy-os-fdetail__payment\"");
-        expect(code(DETAIL), "adjustments render as ledger rows").toContain("ledgerRowFromAdjustment");
+        /* W7-F030: adjustments ARE ledger rows (a reduction is a charge row); no second table maps them. */
+        expect(code(DETAIL), "no separate adjustments table survives").not.toContain("ledgerRowFromAdjustment");
+        expect(code(DETAIL)).not.toContain("data-financials-adjustments-ledger");
         expect(code(DETAIL), "payments render as ledger rows").toContain("ledgerRowFromPayment");
     });
 
@@ -1763,7 +1765,7 @@ describe("F38 · the entry command previews the act it will perform", () => {
         const cmd = code("components/operationalCards/AddChargeCommand.tsx");
         expect(cmd, "the posting line is a decision, not a constant").toMatch(
             /* W7-F015: the compact state names the review hold rather than narrating it. */
-            /t\.reviewRequired[\s\S]{0,400}Saved for review before posting/,
+            /t\.reviewRequired[\s\S]{0,400}Review required before it becomes owed/,
         );
         /*
          * THE RULE IS "NO UNCONDITIONAL DRAFT CLAIM", NOT A PARTICULAR SENTENCE.
@@ -1783,8 +1785,9 @@ describe("F38 · the entry command previews the act it will perform", () => {
          * the fork that decides it, and the balance projection appears only on the branch that
          * actually posts now.
          */
-        const draftClaims = [...cmd.matchAll(/Saved for review before posting|Saved as a draft/g)].map((m) => m.index ?? -1);
-        expect(draftClaims.length, "the draft states exist").toBe(2);
+        /* W7-F027: the not-yet-owed states are "Review required …" and "Scheduled · activates …". */
+        const draftClaims = [...cmd.matchAll(/Review required before it becomes owed|Scheduled · activates automatically/g)].map((m) => m.index ?? -1);
+        expect(draftClaims.length, "the not-yet-owed states exist").toBe(2);
         for (const at of draftClaims) {
             const enclosing = cmd.lastIndexOf("t.reviewRequired", at);
             expect(enclosing, "every draft claim is inside the boundary fork").toBeGreaterThan(-1);

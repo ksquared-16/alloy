@@ -629,10 +629,10 @@ export default function AddChargeCommand({
             >
                 <span className="alloy-os-addcharge__sublabel">Posting</span>{" "}
                 {t.reviewRequired
-                    ? "Saved for review before posting"
+                    ? "Review required before it becomes owed"
                     : specimen.awaitsPeriodUntil
-                      ? `Saved as a draft · Posts automatically ${specimen.awaitsPeriodUntil}`
-                      : "Posts when saved"}
+                      ? `Scheduled · activates automatically ${specimen.awaitsPeriodUntil}`
+                      : "Active when saved"}
             </p>
 
             {/*

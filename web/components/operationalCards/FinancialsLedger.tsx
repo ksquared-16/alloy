@@ -52,6 +52,64 @@ import type { ReactNode } from "react";
 
 export type FinancialsLedgerTone = "attention" | "muted" | "upcoming";
 
+/*
+ * ── W7-F027 / W7-F028: ONE OPERATOR STATE, ONE TREATMENT, BOTH SURFACES ───────────────────────
+ *
+ * The database keeps its lifecycle (draft, posted, void) and the posting authority records WHY a
+ * draft is unposted. The operator reads five states, never "Draft" and never "Awaiting posting":
+ *
+ *   Scheduled        its period has not begun; it activates by itself        no action
+ *   Needs attention  a configured review, or a post that failed               a person decides
+ *   Posted           an active obligation (paid / partly paid is payment state)
+ *   Reversed         posted money a correction undid — history, no longer owed
+ *   Cancelled        a scheduled charge withdrawn before it activated
+ *   Legacy draft     created before automatic posting; never activates alone   cleanup, not work
+ *
+ * Decided once here so the account ledger and the Charges workspace cannot name one charge twice.
+ */
+export type FinancialsChargeStateKey = "scheduled" | "attention" | "posted" | "reversed" | "cancelled" | "legacy";
+
+export function financialsChargeState(args: {
+    /** Stored status, or the ledger's derived lifecycle. */
+    status: string | null | undefined;
+    /** The canonical awaiting-posting reason key, for a draft. */
+    awaitingKey?: string | null;
+    awaitingLabel?: string | null;
+    postsOn?: string | null;
+}): { key: FinancialsChargeStateKey; label: string } {
+    const s = (args.status ?? "").toLowerCase();
+    if (s === "void" || s === "cancelled") return { key: "cancelled", label: "Cancelled" };
+    if (s === "reversed") return { key: "reversed", label: "Reversed" };
+    if (s === "draft" || s === "scheduled") {
+        if (args.awaitingKey === "review_required") return { key: "attention", label: "Review required" };
+        if (args.awaitingKey === "post_failed") return { key: "attention", label: "Posting failed" };
+        if (args.awaitingKey === "unclassified") return { key: "legacy", label: "Legacy draft" };
+        return { key: "scheduled", label: "Scheduled" };
+    }
+    return { key: "posted", label: "Posted" };
+}
+
+/**
+ * The state, as a quiet mark beside a word — not a pill. Scannable down a column without turning a
+ * ledger into a dashboard: colour is carried by the dot and a restrained text tone (tokens in
+ * operationalCardsShared.css, `.alloy-os-chargestate`).
+ */
+export function FinancialsChargeState({
+    state,
+    label,
+    title,
+}: {
+    state: FinancialsChargeStateKey;
+    label: string;
+    title?: string | null;
+}) {
+    return (
+        <span className="alloy-os-chargestate" data-charge-state={state} title={title ?? undefined}>
+            {label}
+        </span>
+    );
+}
+
 export type FinancialsLedgerRowView = {
     /** Stable across re-renders. The charge, payment or application id — never an array index. */
     key: string;
@@ -83,6 +141,10 @@ export type FinancialsLedgerRowView = {
     /** A second line beneath the amount — what a row still owes, what is unapplied. */
     amountNote?: string | null;
     status: string;
+    /** W7-F028: when set, the status cell renders the shared state mark rather than plain text. */
+    state?: FinancialsChargeStateKey;
+    /** Why the row is in that state, for the status cell's title. */
+    stateTitle?: string | null;
     /** Who owes it. Null with `responsibilityUnassigned` false means no allocation exists at all. */
     responsibleParty: string | null;
     responsibilityUnassigned?: boolean;
@@ -302,7 +364,9 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
                     <span className="alloy-os-billingdetail__outstanding">{row.amountNote}</span>
                 ) : null}
             </span>
-            <span className="alloy-os-billingdetail__status">{row.status}</span>
+            <span className="alloy-os-billingdetail__status">
+                {row.state ? <FinancialsChargeState state={row.state} label={row.status} title={row.stateTitle} /> : row.status}
+            </span>
             {/*
              * The affordance is the word "Details", not a sixth icon. An operator should not have
              * to hover a glyph to discover that a row has a record behind it, and the actions

@@ -183,13 +183,13 @@ export function chargeDateChainPreviewLines(chain: ChargeDateChain, reviewRequir
     if (chain.posting.gate === "awaits_period") {
         lines.push(
             reviewRequired
-                ? `Posting · Draft until ${chain.posting.notBefore}, when the billing period begins — then waits for posting review`
-                : `Posting · Draft until ${chain.posting.notBefore} — posts automatically when the billing period begins`,
+                ? `Posting · Scheduled until ${chain.posting.notBefore}, when the billing period begins — then needs review`
+                : `Posting · Scheduled until ${chain.posting.notBefore} — activates automatically when the billing period begins`,
         );
     } else if (reviewRequired) {
-        lines.push("Posting · Waits for posting review before it is owed");
+        lines.push("Posting · Review required before it is owed");
     } else if (chain.posting.gate === "posts_on_creation") {
-        lines.push("Posting · Posts on confirm — the billing period has begun");
+        lines.push("Posting · Active on confirm — the billing period has begun");
     }
     return lines;
 }

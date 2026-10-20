@@ -74,13 +74,13 @@ describe("Billing period — the server's interval, containing the SERVICE date"
             "Invoice timing · 7 days before the billing period begins (organization default)",
             "Due 2026-11-01",
             "Payment terms · On the first day of the billing period (organization default)",
-            "Posting · Draft until 2026-11-01 — posts automatically when the billing period begins",
+            "Posting · Scheduled until 2026-11-01 — activates automatically when the billing period begins",
         ]);
         expect(s.invoiceDate).toMatch(/Oct 25, 2026/);
         expect(s.dateRules.invoice).toBe("7 days before the billing period begins (organization default)");
         expect(s.due).toMatch(/Nov 1, 2026/);
         expect(s.dateRules.due).toBe("On the first day of the billing period (organization default)");
-        expect(s.posting).toMatch(/^Draft until Nov 1, 2026/);
+        expect(s.posting).toMatch(/^Scheduled until Nov 1, 2026/);
         expect(s.awaitsPeriodUntil).toBe("Nov 1, 2026");
     });
 

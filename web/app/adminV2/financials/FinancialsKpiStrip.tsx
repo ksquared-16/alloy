@@ -41,16 +41,16 @@ export default function FinancialsKpiStrip({
         const counts = queue?.counts;
         return [
             {
-                /* Work. A failure that will not retry, a review boundary, or an unrecorded reason. */
+                /* W7-F027: work — a configured review or a failed activation. Legacy drafts are not today's work. */
                 key: "needs_a_person",
-                label: "Needs a person",
+                label: "Needs attention",
                 value: String(counts?.needsAPerson ?? 0),
                 tone: "pine",
             },
             {
-                /* Not work. The clock posts these, and saying so is the point. */
+                /* Not work. They activate by themselves when their period begins. */
                 key: "waiting_on_a_date",
-                label: "Posts on a date",
+                label: "Scheduled",
                 value: String(counts?.waitingOnADate ?? 0),
                 tone: "midnight",
             },

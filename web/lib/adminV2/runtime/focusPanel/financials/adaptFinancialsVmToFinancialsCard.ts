@@ -827,7 +827,15 @@ function adaptChargePeriods(vm: FinancialsCardVM, currency: string): FinancialsL
              * offers a transition; it never works out the answer from a status string.
              */
             chargeId: row.chargeId,
-            offersPost: row.status === "draft",
+            awaiting: row.awaiting
+                ? { key: row.awaiting.key, label: row.awaiting.label, explanation: row.awaiting.explanation, postsOn: row.awaiting.postsOn }
+                : null,
+            /*
+             * W7-F027: no ledger row offers Post. A Scheduled charge activates by itself; the drafts
+             * that genuinely need a person (review, a failed post, a legacy draft) are posted from
+             * Charge Details, where the reason is stated beside the act.
+             */
+            offersPost: false,
             offersReverse: row.offersReverse,
         })),
     }));
@@ -1041,7 +1049,7 @@ export function adaptAddChargeSpecimen(input: {
         posting: sentence("posting"),
         /* The day a future-period charge posts itself, when the chain says it waits for its period. */
         awaitsPeriodUntil: (() => {
-            const iso = rawLine("posting")?.match(/Draft until (\d{4}-\d{2}-\d{2})/)?.[1];
+            const iso = rawLine("posting")?.match(/Scheduled until (\d{4}-\d{2}-\d{2})/)?.[1];
             return iso ? (displayDate(iso) ?? iso) : null;
         })(),
         /*

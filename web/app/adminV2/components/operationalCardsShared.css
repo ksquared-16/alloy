@@ -3793,3 +3793,103 @@
     color: var(--alloy-os-text-secondary, #4b5563);
     font-style: italic;
 }
+
+/*
+ * W7-F027 / W7-F028 — THE OPERATOR STATE MARK. One treatment for the account ledger and the Charges
+ * workspace. A dot and a restrained text tone, never a filled pill: a column of states must stay
+ * scannable without becoming a dashboard. Bend Pine for what the clock will do, amber for a person's
+ * decision, quiet midnight for standing money, muted for history.
+ */
+.alloy-os-chargestate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.alloy-os-chargestate::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.alloy-os-chargestate[data-charge-state="scheduled"] {
+  color: color-mix(in srgb, var(--color-alloy-bend-pine, #00a283) 82%, var(--color-alloy-midnight, #18273a));
+}
+.alloy-os-chargestate[data-charge-state="scheduled"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.alloy-os-chargestate[data-charge-state="attention"] {
+  color: var(--color-alloy-ember, #bc4300);
+  font-weight: 650;
+}
+.alloy-os-chargestate[data-charge-state="posted"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="posted"]::before {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="reversed"],
+.alloy-os-chargestate[data-charge-state="cancelled"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+  font-weight: 500;
+}
+.alloy-os-chargestate[data-charge-state="cancelled"]::before {
+  background: color-mix(in srgb, var(--color-alloy-ember, #bc4300) 45%, transparent);
+}
+.alloy-os-chargestate[data-charge-state="legacy"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+  font-weight: 500;
+}
+.alloy-os-chargestate[data-charge-state="legacy"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  border-radius: 1px;
+}
+
+/*
+ * W7-F028 — THE CHARGES WORKSPACE ROW: the account ledger's row, compact. Same classes, type scale
+ * and state mark; its own tracks, because a cross-account list leads with WHO the charge is for.
+ */
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row {
+  grid-template-columns: minmax(150px, 1.5fr) minmax(96px, 1fr) 88px 104px minmax(150px, 1.2fr) minmax(110px, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 4px 16px;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row > :nth-child(6) {
+  text-align: left;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row > :nth-child(3) {
+  text-align: right;
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row:not(.alloy-os-billingdetail__row--head):hover {
+  background: color-mix(in srgb, var(--color-alloy-midnight, #18273a) 3%, transparent);
+}
+.alloy-os-billingdetail__row.alloy-os-chargeindex__row:not(.alloy-os-billingdetail__row--head):focus-visible {
+  outline: 2px solid var(--color-alloy-bend-pine, #00a283);
+  outline-offset: -2px;
+}
+.alloy-os-chargeindex__for {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.alloy-os-chargeindex__for .alloy-os-billingdetail__subject {
+  font-size: 0.76rem;
+}
+.alloy-os-chargeindex__account {
+  font-size: 0.64rem;
+  color: var(--alloy-os-text-tertiary, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

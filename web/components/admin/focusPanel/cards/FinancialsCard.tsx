@@ -38,6 +38,7 @@ import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsS
 import AutopaySection from "@/components/operationalCards/AutopaySection";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import CardCollectionField from "./CardCollectionField";
 import {
     useDismissSignal,
@@ -77,7 +78,7 @@ import {
     rowInFinancialsSubjectScope,
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
-import FinancialsChargeDetail, { type ChargeDetailFacts } from "@/app/adminV2/financials/FinancialsChargeDetail";
+import FinancialsChargeDetail, { type ChargeDetailFacts, type ChargeDetailSeed } from "@/app/adminV2/financials/FinancialsChargeDetail";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -120,7 +121,7 @@ type Props = {
      * rather than a second detail design of its own. The card starts with that surface already on
      * its stack, so nothing compact renders first.
      */
-    openCharge?: { chargeId: string; label: string } | null;
+    openCharge?: { chargeId: string; label: string; seed?: ChargeDetailSeed | null } | null;
     /** Called once the operator has closed every surface the card was opened with. */
     onSurfacesClosed?: () => void;
 };
@@ -482,7 +483,7 @@ export default function FinancialsCard({
         detailsAreTheSurface
             ? [{ kind: "detail" }]
             : openCharge
-              ? [{ kind: "charge_detail", chargeId: openCharge.chargeId, label: openCharge.label }]
+              ? [{ kind: "charge_detail", chargeId: openCharge.chargeId, label: openCharge.label, seed: openCharge.seed ?? null }]
               : [],
     );
     /*
@@ -1818,13 +1819,15 @@ export default function FinancialsCard({
                 );
             } else {
                 /*
-                 * The action writes a DRAFT charge. What the family owes has not moved yet, and
-                 * saying it had would be the one thing this panel must never do.
+                 * W7-F027: A CREDIT IS NOT A DRAFT THE OPERATOR POSTS. `applyManualReduction` makes
+                 * the contra charge real through the same automatic posting as any charge — in its
+                 * billing period, or held where a review policy is configured. The notice states that
+                 * rule and claims no outcome; the ledger row beneath shows the state it actually has.
                  */
                 setAdjustNotice(
                     adjustDirection === "reduce"
-                        ? "Recorded as a draft credit. It lowers what the family owes once it is posted."
-                        : "Recorded as a draft adjustment. It raises what the family owes once it is posted.",
+                        ? "Credit recorded. It lowers what the family owes from its billing period, by itself — after review where your organization requires one."
+                        : "Adjustment recorded. It raises what the family owes from its billing period, by itself — after review where your organization requires one.",
                 );
             }
             closeAdjustPanels();
@@ -4901,6 +4904,55 @@ export default function FinancialsCard({
          * was reading does not disappear behind its own detail.
          */
         if (overlay === "charge_detail" && surface?.kind === "charge_detail") {
+            /*
+             * W7-F029: THE FIRST PAINT COMES FROM WHAT THIS CARD ALREADY READ. A ledger row is a
+             * `vm.rows` entry — label, amount, state, period, due date, who owes it — so Charge
+             * Details opens with them; the authoritative projection then replaces them. A host that
+             * read the charge elsewhere (the Charges workspace) hands its own seed in.
+             */
+            const vmRow = vm?.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+            const detailSeed: ChargeDetailSeed | null =
+                surface.seed
+                ?? (vmRow
+                    ? {
+                          label: surface.label,
+                          status: vmRow.lifecycleStatus,
+                          awaiting: vmRow.awaiting
+                              ? { key: vmRow.awaiting.key, label: vmRow.awaiting.label, explanation: vmRow.awaiting.explanation, postsOn: vmRow.awaiting.postsOn }
+                              : null,
+                          childName: vmRow.subjectName,
+                          amountLabel: money(vmRow.amountCents, vmRow.currencyCode || currency),
+                          serviceDate: vmRow.date,
+                          billingPeriodLabel: vmRow.periodKey ? billingPeriodLabel(vmRow.periodKey) || null : null,
+                          dueDate: vmRow.dueDate,
+                          responsibleParty: vmRow.responsiblePartyName,
+                      }
+                    : null);
+            /*
+             * W7-F027: POST ONLY WHERE A PERSON IS NEEDED, AND SAY WHY. A Scheduled charge offers no
+             * Post — it activates when its period begins. Review, a failed post and a legacy draft
+             * are the three exceptions, each named on its own control. `charge.post` is unchanged.
+             */
+            const facts = chargeDetailFacts?.chargeId === surface.chargeId ? chargeDetailFacts : null;
+            const exceptionalPost =
+                facts?.status === "draft" && facts.awaiting
+                    ? facts.awaiting.key === "review_required" ? "Approve and post"
+                    : facts.awaiting.key === "post_failed" ? "Retry posting"
+                    : facts.awaiting.key === "unclassified" ? "Post legacy draft"
+                    : null
+                    : null;
+            /*
+             * W7-F030: REVERSE ADJUSTMENT LIVES ON THE ADJUSTMENT'S OWN RECORD. The separate
+             * adjustments table under the ledger existed to host this act; the record is reached
+             * from its ledger row like every other. Offered exactly where the table offered it: a
+             * manual reduction, not itself a reversal, not already reversed.
+             */
+            /* The reversal composer lives on the account's Details, so it is offered where Details is beneath. */
+            const detailsBeneath = detailsAreTheSurface || stack.some((x) => x.kind === "detail");
+            const reversibleReduction = !detailsBeneath ? null :
+                vm?.reductions.find(
+                    (r) => r.chargeId === surface.chargeId && r.kind === "manual" && !r.reversedByApplicationId && !r.reversesApplicationId,
+                ) ?? null;
             return (
                 <div
                     className="alloy-os-financials"
@@ -4926,6 +4978,7 @@ export default function FinancialsCard({
                         <FinancialsChargeDetail
                             chargeId={surface.chargeId}
                             refreshKey={chargeDetailRefresh}
+                            seed={detailSeed}
                             onLoaded={setChargeDetailFacts}
                             bare
                         />
@@ -5010,6 +5063,38 @@ export default function FinancialsCard({
                                 <p className="alloy-os-addcharge__error" role="alert" data-financials-charge-detail-action-error="true">
                                     {draftActionError}
                                 </p>
+                            ) : null}
+                            {exceptionalPost && facts ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--primary"
+                                    data-financials-charge-detail-post={facts.awaiting?.key}
+                                    data-charge-command="charge.post"
+                                    title={facts.awaiting?.explanation}
+                                    disabled={running}
+                                    onClick={() =>
+                                        void runRowAction("post", rowForCharge(surface.chargeId)).then(() =>
+                                            setChargeDetailRefresh((n) => n + 1),
+                                        )
+                                    }
+                                >
+                                    {exceptionalPost}
+                                </button>
+                            ) : null}
+                            {reversibleReduction ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                                    data-financials-charge-detail-reverse-adjustment={reversibleReduction.applicationId}
+                                    data-charge-command="billing.reverse_adjustment"
+                                    title="Reverse this adjustment — the original stays on the record, and its opposite is appended"
+                                    onClick={() => {
+                                        pop();
+                                        openReverseAdjustment({ applicationId: reversibleReduction.applicationId });
+                                    }}
+                                >
+                                    Reverse adjustment
+                                </button>
                             ) : null}
                             {chargeDetailFacts?.status !== "draft" && adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
                                 <button
@@ -6499,7 +6584,6 @@ export default function FinancialsCard({
                     onApplyPayment={openApplyPayment}
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
-                    onReverseAdjustment={openReverseAdjustment}
                     /* The held-money acts. Unsupplied, the section renders the position with no controls. */
                     onApplyHeldFunds={openApplyHeldFunds}
                     onReleaseHeldFunds={openReleaseHeldFunds}
@@ -7191,18 +7275,9 @@ export default function FinancialsCard({
                                                             assert the very value that renders it.
                                                         */}
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--row-action">
-                                                            {row.lifecycleStatus === "draft" ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="alloy-os-financials__action"
-                                                                    data-financials-row-command="charge.post"
-                                                                    data-financials-row-charge={row.chargeId}
-                                                                    disabled={running}
-                                                                    onClick={() => void runRowAction("post", row)}
-                                                                >
-                                                                    Post
-                                                                </button>
-                                                            ) : row.offersReverse ? (
+                                                            {/* W7-F027: no Post on a row — a Scheduled charge activates by itself, and an
+                                                                exceptional draft is posted from its Charge Details, beside its reason. */}
+                                                            {row.offersReverse ? (
                                                                 <button
                                                                     type="button"
                                                                     className="alloy-os-financials__action"
@@ -7315,7 +7390,8 @@ export type FinancialsSurface =
      * here rather than on the command channel precisely so that reading a record cannot be
      * mistaken for, or widened into, authority to change one.
      */
-    | { kind: "charge_detail"; chargeId: string; label: string }
+    /* W7-F029: `seed` is the clicked row's own facts, for an instant first paint. */
+    | { kind: "charge_detail"; chargeId: string; label: string; seed?: ChargeDetailSeed | null }
     /* W7-F026: a receipt's record — the same kind of read as a charge's. */
     | { kind: "payment_detail"; paymentId: string }
     | { kind: "adjust_charge"; chargeId: string }

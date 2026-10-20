@@ -126,13 +126,16 @@ describe("W7-F014 — title, header and one stable shell", () => {
         expect(detail).toMatch(/const label = \(e\.label && !\/\^\[a-z0-9\]\+\(\?:_\[a-z0-9\]\+\)\+\$\/\.test\(e\.label\)/);
         const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const block = card.slice(card.indexOf('if (overlay === "charge_detail" && surface?.kind === "charge_detail")'));
-        expect(block.slice(0, 1500)).toMatch(/title="Charge details"/);
+        /* The overlay's own card is the titled one — read up to where that card closes. */
+        expect(block.slice(0, block.indexOf("</UniversalCard>"))).toMatch(/title="Charge details"/);
     });
 
-    it("states the draft as a draft in the header", () => {
+    /* W7-F027: the header states the operator state through the one shared rule, not "Draft charge". */
+    it("states the charge's operator state in the header", () => {
         const src = read("app/adminV2/financials/FinancialsChargeDetail.tsx");
-        expect(src).toContain('"Draft charge"');
-        expect(src).toContain('"Posted charge"');
+        expect(src).toMatch(/const headerState = financialsChargeState\(\{ status: detail\.status, awaitingKey: detail\.awaiting\?\.key \?\? null \}\);/);
+        expect(src).toMatch(/<FinancialsChargeState state=\{headerState\.key\} label=\{headerState\.label\} \/>/);
+        expect(src).not.toContain('"Draft charge"');
     });
 
     it("loads inside the same shell, and a refresh never remounts or swaps the card", () => {
@@ -146,7 +149,7 @@ describe("W7-F014 — title, header and one stable shell", () => {
          */
         const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
         expect(charges).not.toContain("<FinancialsChargeDetail");
-        expect(charges).toMatch(/<FinancialsAccountDetail[\s\S]*?openCharge=\{\{ chargeId: open\.chargeId, label: open\.label \}\}/);
+        expect(charges).toMatch(/<FinancialsAccountDetail[\s\S]*?openCharge=\{\{ chargeId: open\.chargeId, label: open\.label, seed: open\.seed \}\}/);
     });
 });
 
