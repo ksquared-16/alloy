@@ -48,8 +48,10 @@ describe("the expected funding panel", () => {
         expect(panel).toContain("execution_result?.preview");
     });
 
-    it("cannot confirm before the action has said what will change", () => {
-        expect(panel).toMatch(/disabled=\{busy !== null \|\| !preview\}/);
+    /* W7-F035: Preview is optional for one share's expectation; Confirm needs an amount, and the command re-validates. */
+    it("confirms once there is an amount — Preview is optional", () => {
+        expect(panel).toMatch(/disabled=\{busy !== null \|\| !\(Number\(amount\) >= 0\) \|\| amount\.trim\(\) === ""\}/);
+        expect(panel).toContain('data-financials-funding-preview-btn="true"');
     });
 
     /*

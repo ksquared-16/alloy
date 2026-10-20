@@ -19,6 +19,7 @@
  * billed them.
  */
 
+import { humanDay } from "@/lib/financials/dates/humanDates";
 import { randomUUID } from "crypto";
 
 import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
@@ -175,11 +176,12 @@ const configureResponsibility: RegisteredAction = {
     async buildPreview({ payload }) {
         const shares = (Array.isArray(payload?.shares) ? payload!.shares : []) as Array<Record<string, unknown>>;
         /* A charge-scoped arrangement reads identically to a standing one unless the scope is said. */
-        const scope = t(payload?.charge_id) ? "for this charge" : "for the account";
+        /* W7-F034/F038: the scope the arrangement is authored at, and a date a person reads. */
+        const scope = t(payload?.charge_id) ? "for this charge" : t(payload?.customer_member_id) ? "for this child" : "for the account";
         return {
             summary:
-                `${shares.length} responsible ${shares.length === 1 ? "party" : "parties"} ${scope}, `
-                + `from ${t(payload?.effective_start)}.`,
+                `${shares.length} responsible ${shares.length === 1 ? "party" : "parties"} ${scope} `
+                + `from ${humanDay(t(payload?.effective_start))}`,
             changes: shares.map((s) =>
                 s.method === "percentage"
                     ? `${Number(s.percent_basis_points ?? 0) / 100}% · ${t(s.responsible_party_id)}`

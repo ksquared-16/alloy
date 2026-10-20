@@ -662,6 +662,19 @@ export default function FinancialsDetailCard({
                                         ) : null}
                                     </span>
                                 ) : null}
+                                {/*
+                                  * W7-F037: WHO OWES IS MANAGED BESIDE WHO PAYS, IN WORDS. The only door
+                                  * used to be an unlabeled gear in the ledger filters; a money decision
+                                  * must not hide behind an icon an operator has to guess at.
+                                  */}
+                                <button
+                                    type="button"
+                                    onClick={() => administration.onManageResponsibility()}
+                                    data-financials-manage-responsibility="open"
+                                    className="alloy-os-fdetail__payeraction"
+                                >
+                                    Manage responsibility <span aria-hidden>&rarr;</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={administration.onManagePayments}

@@ -6,8 +6,6 @@ import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financial
 import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import {
-    ADJUSTMENT_DIRECTIONS,
-    adjustmentDirectionLabel,
     parseAdjustmentMagnitudeCents,
     type AdjustmentDirection,
 } from "@/lib/financials/corrections/correctionIntent";
@@ -1144,6 +1142,12 @@ export default function FinancialsCard({
      * taxonomy before they could give money back.
      */
     const [adjustDirection, setAdjustDirection] = useState<AdjustmentDirection>("reduce");
+    /*
+     * W7-F036: WHAT THE OPERATOR IS DOING, not only which way the balance moves. "correction" lowers
+     * or raises the chosen charge's own amount (accounted under that charge's account); "credit" is a
+     * goodwill credit. Empty is an account-level increase, which is neither.
+     */
+    const [adjustPurpose, setAdjustPurpose] = useState<"correction" | "credit" | "">("credit");
     const [adjustAmount, setAdjustAmount] = useState("");
     const [adjustReason, setAdjustReason] = useState("");
     /*
@@ -1454,6 +1458,7 @@ export default function FinancialsCard({
         setAdjustAmount("");
         setAdjustReason("");
         setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
         setReverseReason("");
     }, []);
 
@@ -1548,6 +1553,7 @@ export default function FinancialsCard({
         const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
         setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
         setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
         /*
          * THE ORGANISATION'S BUSINESS DATE, shown and editable — never the source charge's date and
          * never the UTC day. Set on open rather than seeded in state, because the VM that carries it
@@ -1583,6 +1589,8 @@ export default function FinancialsCard({
             ?? "";
         setAdjustAgreementId(agreementId);
         setAdjustSourceChargeId(args.chargeId);
+        /* Correcting a named charge is the ordinary meaning of "adjust this charge". */
+        setAdjustPurpose("correction");
         /*
          * STILL TODAY, even though a source charge is bound. §7 of the Adjustment doctrine: a
          * correction must not silently inherit the source's historical date — that is how a
@@ -1752,6 +1760,7 @@ export default function FinancialsCard({
                          * deliberately not sent — sending it would restore the conflict.
                          */
                         direction: adjustDirection,
+                        ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
                         magnitude_cents: magnitudeCents,
                         /* The grain responsibility is asked at, so a child's arrangement governs. */
                         customer_member_id: adjustMemberId || null,
@@ -1777,11 +1786,16 @@ export default function FinancialsCard({
         } finally {
             setRunning(false);
         }
-    }, [actionEntity, adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
+    }, [actionEntity, adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
 
     const confirmAdjustment = useCallback(async () => {
         const magnitudeCents = adjustMagnitudeCents();
-        if (!adjustOpen || running || !adjustPreview || magnitudeCents === null) return;
+        /*
+         * W7-F035: PREVIEW IS OPTIONAL. Confirm is available once the form is valid; execute runs the
+         * same normalizer, obligation bound and period resolution the preview does, so nothing is
+         * committed that preview would have refused — and a refusal is surfaced here, as itself.
+         */
+        if (!adjustOpen || running || magnitudeCents === null || !adjustReason.trim() || !adjustAgreementId) return;
         setRunning(true);
         setAdjustError(null);
         try {
@@ -1789,6 +1803,7 @@ export default function FinancialsCard({
                 enrollment_agreement_id: adjustAgreementId,
                 source_charge_id: adjustSourceChargeId || null,
                 direction: adjustDirection,
+                ...(adjustPurpose && (adjustPurpose === "credit" || adjustSourceChargeId) ? { purpose: adjustPurpose } : {}),
                 magnitude_cents: magnitudeCents,
                 customer_member_id: adjustMemberId || null,
                 reason: adjustReason,
@@ -1842,7 +1857,7 @@ export default function FinancialsCard({
             setRunning(false);
             await load();
         }
-    }, [adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustPreview, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
+    }, [adjustAgreementId, adjustDirection, adjustPurpose, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
 
     const previewReversal = useCallback(async () => {
         if (!reversePending || running) return;
@@ -3719,6 +3734,7 @@ export default function FinancialsCard({
                                     setAdjustAgreementId(next);
                                     // The charges on offer belong to the enrolment; changing it changes them.
                                     setAdjustSourceChargeId("");
+        setAdjustPurpose("credit");
                                     setAdjustPreview(null);
                                 }}
                             />
@@ -3759,6 +3775,8 @@ export default function FinancialsCard({
                                 }))}
                                 onChange={(next) => {
                                     setAdjustSourceChargeId(next);
+                                    setAdjustPurpose(next ? "correction" : "credit");
+                                    if (!next && adjustDirection === "increase") setAdjustPurpose("");
                                     setAdjustPreview(null);
                                 }}
                             />
@@ -3778,20 +3796,39 @@ export default function FinancialsCard({
                           */}
                         <label className="alloy-os-fdetail__movefield">
                             <span>What needs to change</span>
+                            {/*
+                              * W7-F036: THE CHOICE NAMES THE ECONOMIC INTENT, and the accounting follows
+                              * it. Correcting a charge's amount is accounted under that charge's own
+                              * account; a goodwill credit is a credit. A discount is a policy, not a
+                              * manual write — it is managed from Discounts.
+                              */}
                             <AlloySelect
                                 testId="adjustment-direction"
                                 aria-label="What needs to change"
                                 allowEmpty={false}
-                                value={adjustDirection}
-                                options={ADJUSTMENT_DIRECTIONS.map((direction) => ({
-                                    value: direction,
-                                    label: adjustmentDirectionLabel(direction),
-                                }))}
+                                value={`${adjustPurpose}:${adjustDirection}`}
+                                options={
+                                    adjustSourceChargeId
+                                        ? [
+                                              { value: "correction:reduce", label: "Correct the amount — lower this charge" },
+                                              { value: "correction:increase", label: "Correct the amount — raise this charge" },
+                                              { value: "credit:reduce", label: "Give a goodwill credit" },
+                                          ]
+                                        : [
+                                              { value: "credit:reduce", label: "Give a credit — lowers what the family owes" },
+                                              { value: ":increase", label: "Increase what the family owes" },
+                                          ]
+                                }
                                 onChange={(next) => {
-                                    setAdjustDirection(next as AdjustmentDirection);
+                                    const [purpose, direction] = next.split(":");
+                                    setAdjustPurpose((purpose || "") as "correction" | "credit" | "");
+                                    setAdjustDirection(((direction || "reduce") as AdjustmentDirection));
                                     setAdjustPreview(null);
                                 }}
                             />
+                            <span className="alloy-os-fdetail__heldnote" data-testid="adjustment-discount-note">
+                                A discount is a policy, not a one-off adjustment — set it from Manage discounts.
+                            </span>
                         </label>
                         <label className="alloy-os-fdetail__movefield">
                             {/* The label carries the direction, so the figure cannot be read the wrong way. */}
@@ -3850,7 +3887,7 @@ export default function FinancialsCard({
                                   * discovered when the balance does not move.
                                   */}
                                 <span data-testid="adjustment-preview-timing">
-                                    Recorded as a draft — it changes what the family owes once posted.
+                                    Takes effect by itself in its billing period — after review where your organization requires one.
                                 </span>
                             </div>
                         ) : null}
@@ -3873,10 +3910,11 @@ export default function FinancialsCard({
                             >
                                 Preview
                             </button>
+                            {/* W7-F035: Preview is optional; Confirm needs only a valid form, and execute re-validates. */}
                             <button
                                 type="button"
                                 data-testid="adjustment-confirm"
-                                disabled={running || !adjustPreview}
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || adjustMagnitudeCents() === null}
                                 onClick={() => void confirmAdjustment()}
                             >
                                 Confirm

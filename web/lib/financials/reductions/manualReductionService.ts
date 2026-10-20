@@ -23,6 +23,7 @@
  * reversed.
  */
 
+import { CHARGE_CATEGORY_GL_MAPPING_KEY } from "@/lib/financials/chargeCategories";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { applyReductionCore, ReductionCoreError } from "@/lib/financials/reductions/reductionCore";
@@ -61,6 +62,15 @@ export type ManualReductionInput = {
     actorUserId: string | null;
     /** Caller-supplied identity, so a double-submit is one credit. */
     idempotencyKey: string;
+    /**
+     * W7-F036: THIS CORRECTS THE NAMED CHARGE'S AMOUNT, so it is accounted where that charge is —
+     * its own GL mapping key, stamped on the contra row. Both GL readers honour
+     * `metadata.gl_mapping_key` before the category's default, and nothing that nets, buckets or
+     * labels money reads it, so the category (and every figure) is unchanged.
+     */
+    classifyUnderSourceCharge?: boolean;
+    /** An explicit key — a reversal carries the key of the correction it undoes. */
+    glMappingKey?: string | null;
 };
 
 export type ManualReductionResult = {
@@ -152,6 +162,29 @@ export async function applyManualReduction(
     }
     await assertWithinObligation(supabase, input);
 
+    /* W7-F036: the account this decision is classified under, when it corrects a named charge. */
+    let glMappingKey: string | null = (input.glMappingKey ?? "").trim() || null;
+    if (!glMappingKey && input.classifyUnderSourceCharge) {
+        const sourceChargeId = (input.sourceChargeId ?? "").trim();
+        if (!sourceChargeId) {
+            throw new ManualReductionError("correction_needs_charge", "Choose the charge whose amount you are correcting.");
+        }
+        const { data: source, error: sourceError } = await supabase
+            .from("charges")
+            .select("charge_category, charge_type, metadata")
+            .eq("org_id", input.orgId)
+            .eq("id", sourceChargeId)
+            .maybeSingle();
+        if (sourceError) throw new ManualReductionError("db_error", sourceError.message);
+        if (!source) throw new ManualReductionError("not_found", "No such charge on this account to correct.");
+        const row = source as { charge_category: string | null; charge_type: string | null; metadata: Record<string, unknown> | null };
+        const category = (row.charge_category ?? row.charge_type ?? "").trim();
+        glMappingKey =
+            String(row.metadata?.gl_mapping_key ?? "").trim()
+            || CHARGE_CATEGORY_GL_MAPPING_KEY[category as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY]
+            || null;
+    }
+
     /*
      * THE PERIOD KEY IS THE ACCOUNT'S, NOT A MONTH CUT OFF A DATE.
      *
@@ -213,6 +246,8 @@ export async function applyManualReduction(
                     reason,
                     note: input.note ?? null,
                     reduces_charge_id: input.sourceChargeId ?? null,
+                    ...(glMappingKey ? { gl_mapping_key: glMappingKey } : {}),
+                    ...(input.classifyUnderSourceCharge ? { adjustment_intent: "correction" } : {}),
                 },
             },
             applications: [{
@@ -293,6 +328,14 @@ export async function reverseManualReduction(
      * still refuses a closed destination. This only makes the date the binder is given the true one.
      */
     const today = await fetchOrgBusinessDate(supabase, input.orgId);
+    /* W7-F036: a reversal is accounted where the decision it undoes was — the same GL key. */
+    const { data: originalCharge } = await supabase
+        .from("charges")
+        .select("metadata")
+        .eq("org_id", input.orgId)
+        .eq("id", original.charge_id)
+        .maybeSingle();
+    const inheritedGlKey = String(((originalCharge as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? {}).gl_mapping_key ?? "").trim() || null;
     const reversal = await applyManualReduction(supabase, {
         orgId: input.orgId,
         enrollmentAgreementId: original.enrollment_agreement_id,
@@ -335,6 +378,7 @@ export async function reverseManualReduction(
         sourceChargeId: original.source_charge_id,
         actorUserId: input.actorUserId,
         idempotencyKey: `fred:reverse:${original.id}`,
+        glMappingKey: inheritedGlKey,
     });
 
     await supabase

@@ -51,6 +51,31 @@ export function chargeCategoryForDirection(direction: AdjustmentDirection): "cre
     return direction === "reduce" ? "credit" : "adjustment";
 }
 
+/**
+ * ── W7-F036: WHAT KIND OF DECISION THIS IS ─────────────────────────────────────────────────────
+ *
+ * Direction says which way the balance moves; PURPOSE says what the operator is doing, and the
+ * accounting follows it. They used to be one question, so lowering a Materials charge by $5 wrote a
+ * CREDIT (credit_liability) — the original revenue account (4030 Supply Fees) never moved, and the
+ * correction read as money owed back rather than a smaller charge.
+ *
+ *   correction  the charge's amount was wrong. Lower or raise it; the row is an Adjustment and is
+ *               classified under the ORIGINAL charge's own account. Requires the charge it corrects.
+ *   credit      goodwill — the family is given money back. Lowers only; stays a Credit on the
+ *               credit account.
+ *
+ * A DISCOUNT is neither: it is an authored policy (Manage discounts), never a manual write here.
+ */
+export type AdjustmentPurpose = "correction" | "credit";
+
+export const ADJUSTMENT_PURPOSES: readonly AdjustmentPurpose[] = ["correction", "credit"];
+
+/** The canonical category for a purpose and direction. A correction is an adjustment either way. */
+export function chargeCategoryForIntent(direction: AdjustmentDirection, purpose: AdjustmentPurpose | null): "credit" | "adjustment" {
+    if (purpose === "correction") return "adjustment";
+    return chargeCategoryForDirection(direction);
+}
+
 /** The direction a signed amount already represents — for reading history back. */
 export function directionFromSignedCents(amountCents: number): AdjustmentDirection {
     return amountCents < 0 ? "reduce" : "increase";

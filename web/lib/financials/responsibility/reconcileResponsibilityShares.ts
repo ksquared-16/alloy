@@ -72,20 +72,60 @@ export function reconcileResponsibilityShares(shares: readonly ShareDraft[]): { 
     const remainders = used.filter((s) => s.method === "remainder");
     if (remainders.length > 1) return { ok: false, message: "Only one party can take the remainder." };
 
-    const percentTotal = used
-        .filter((s) => s.method === "percentage")
-        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    if (percentTotal > 100) {
-        return { ok: false, message: `The percentages total ${percentTotal}%.` };
-    }
+    /*
+     * W7-F039: PERCENTAGES IN BASIS POINTS — the unit the service stores — so 33.33 + 66.67 is
+     * exactly 10,000 and never a float that is 0.0000001 short.
+     */
+    const bp = (s: ShareDraft) => Math.round((Number(s.amount) || 0) * 100);
+    const percentTotalBp = used.filter((s) => s.method === "percentage").reduce((sum, s) => sum + bp(s), 0);
+    const pct = (b: number) => `${Number((b / 100).toFixed(2))}%`;
     if (used.some((s) => s.method !== "remainder" && !(Number(s.amount) >= 0))) {
         return { ok: false, message: "Every share needs a number." };
     }
+    if (percentTotalBp > 10_000) {
+        return { ok: false, message: `${pct(percentTotalBp - 10_000)} over 100%` };
+    }
+
+    /*
+     * ── W7-F039: AN ALL-PERCENTAGE SPLIT IS EXACTLY 100% ───────────────────────────────────────
+     *
+     * When every party is a percentage, the split is the whole charge or it is not finished: a
+     * blank or short split saves an arrangement that quietly leaves part of every charge owed by
+     * nobody. Fixed amounts and a remainder keep their own rules (a fixed share can legitimately
+     * cover part of an obligation — Scenario 62), so this binds only the all-percentage case.
+     */
+    const allPercentage = shares.length > 0 && shares.every((s) => s.method === "percentage");
+    if (allPercentage) {
+        const blank = shares.filter((s) => s.amount.trim() === "");
+        if (blank.length && percentTotalBp === 10_000) {
+            return { ok: false, message: `Allocate a percentage to ${blank.map((b) => b.name).join(" and ")} by reducing one or more existing shares.` };
+        }
+        if (percentTotalBp < 10_000) {
+            return { ok: false, message: `${pct(10_000 - percentTotalBp)} remaining to allocate` };
+        }
+        return { ok: true, message: null };
+    }
 
     const hasPercent = used.some((s) => s.method === "percentage");
-    if (hasPercent && percentTotal < 100 && remainders.length === 0) {
-        return { ok: true, message: `${100 - percentTotal}% is not assigned to anyone.` };
+    if (hasPercent && percentTotalBp < 10_000 && remainders.length === 0) {
+        return { ok: true, message: `${pct(10_000 - percentTotalBp)} is not assigned to anyone.` };
     }
     return { ok: true, message: null };
 }
 
+
+/**
+ * W7-F039 — TWO PARTIES, ONE NUMBER. With exactly two percentage shares, typing one sets the other
+ * to what makes 100%, in basis points so nothing drifts. With three or more nothing is moved for the
+ * operator — silently taking percentage from someone is a decision only they can make.
+ */
+export function balanceTwoPartySplit(shares: readonly ShareDraft[], editedIndex: number, typed: string): ShareDraft[] {
+    const next = shares.map((s, j) => (j === editedIndex ? { ...s, amount: typed } : s));
+    if (next.length !== 2 || !next.every((s) => s.method === "percentage")) return next;
+    const value = Number(typed);
+    if (typed.trim() === "" || !Number.isFinite(value) || value < 0 || value > 100) return next;
+    const otherBp = 10_000 - Math.round(value * 100);
+    const other = editedIndex === 0 ? 1 : 0;
+    next[other] = { ...next[other]!, amount: String(Number((otherBp / 100).toFixed(2))) };
+    return next;
+}

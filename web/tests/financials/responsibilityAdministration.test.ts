@@ -137,7 +137,7 @@ describe("read-back distinguishes inherited from authored", () => {
     it("re-reads when the scope changes", () => {
         const effect = panel.slice(panel.indexOf("CHANGING THE SCOPE IS CHANGING THE SUBJECT"));
         expect(effect).toContain("readScopeArrangement(customerId, effectiveMemberId)");
-        expect(effect.slice(0, 1400), "the effect is keyed on the scope").toContain("effectiveMemberId]");
+        expect(effect.slice(0, 1400), "the effect is keyed on the scope").toMatch(/effectiveMemberId, scopeNonce\]/);
     });
 
     it("never presents the household's arrangement as child-authored", () => {

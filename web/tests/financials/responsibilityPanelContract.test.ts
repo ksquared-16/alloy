@@ -90,12 +90,14 @@ describe("the Manage Responsibility panel", () => {
          * `execute` is reachable only from the commit stage. An unpreviewed commit is not guarded
          * against — it is unreachable.
          */
-        expect(panel, "the stage is derived from whether a preview exists").toMatch(
-            /const stage:\s*"review"\s*\|\s*"commit"\s*=\s*preview\s*\?\s*"commit"\s*:\s*"review"/,
-        );
-        expect(panel, "and execute is reachable only from the commit stage").toMatch(
-            /run\(stage === "commit" \? "execute" : "preview"\)/,
-        );
+        /*
+         * V4 (W7-F038): what the operator must SEE before committing is the RESULT, and it is on
+         * screen as a live summary of the split; Save is the primary and the command re-validates
+         * on execute. Preview remains, optional.
+         */
+        expect(panel, "the result is summarised before saving").toContain("data-financials-responsibility-summary");
+        expect(panel, "Save executes").toMatch(/onClick=\{\(\) => void run\("execute"\)\}/);
+        expect(panel, "Preview is optional").toMatch(/onClick=\{\(\) => void run\("preview"\)\}/);
 
         /*
          * A STALE PREVIEW IS NOT A PREVIEW. Found while making the control staged, and it was a
@@ -114,8 +116,8 @@ describe("the Manage Responsibility panel", () => {
          * reason, so a blocking condition cannot be added without a sentence for it.
          */
         const primary = panel.slice(
-            panel.indexOf("data-financials-responsibility-stage=") - 900,
-            panel.indexOf("data-financials-responsibility-stage="),
+            panel.indexOf('data-financials-responsibility-confirm="true"') - 400,
+            panel.indexOf('data-financials-responsibility-confirm="true"'),
         );
         expect(primary, "the primary is guarded at all").toMatch(/disabled=\{/);
         expect(primary, "and derives from the stated reason").toContain("confirmBlocker !== null");
@@ -123,9 +125,6 @@ describe("the Manage Responsibility panel", () => {
         expect(panel, "the unmet requirement is shown to the operator").toContain(
             "data-financials-responsibility-confirm-blocker",
         );
-        /* And when nothing is unmet, the control still says which half of the sequence it performs. */
-        expect(panel, "the stage is stated even when nothing blocks").toContain(
-            "data-financials-responsibility-stage-hint",
-        );
+
     });
 });
