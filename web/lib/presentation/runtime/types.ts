@@ -12,6 +12,7 @@
  * (the frozen `QueueRowContext` contract, wrapped thin).
  */
 
+import type { ProcessModelV1 } from "@/lib/lifecycle/processModelV1";
 import type {
     OperatorLifecycleLandingCard,
     OperatorLifecycleWorkQueuePreview,
@@ -105,10 +106,17 @@ export type ProcessTileModel = {
     id: string;
     /** The process's business-process key — resolves its configured Primary Signal + signal options. */
     processKey: string;
+    /** How the process executes (BP V2 S1); absent → staged lifecycle. Declared identity for signals. */
+    processModel?: ProcessModelV1;
     label: string;
     description: string;
-    /** Canonical slug entry (`/workspace/work-unit/<slug>`). */
-    entryHref: string;
+    /**
+     * Canonical slug entry (`/workspace/work-unit/<slug>`). Null when the process has nothing to open
+     * yet; the card then shows `unavailableReason` in place of its CTA and links nowhere.
+     */
+    entryHref: string | null;
+    /** Why the process cannot be opened yet (null/absent when it can). */
+    unavailableReason?: string | null;
     /** Canonical destination the tile's primary CTA enters — the process's default Work View. */
     destination?: DestinationId | null;
     activeRecordCount: number | null;
@@ -518,9 +526,11 @@ export function processTileModelFromLandingCard(
     return {
         id: card.id,
         processKey: card.processKey,
+        ...(card.processModel ? { processModel: card.processModel } : {}),
         label: card.label,
         description: card.description,
         entryHref: card.entryHref,
+        unavailableReason: card.entryHref ? null : (card.unavailableReason ?? null),
         // The tile CTA enters the process's DEFAULT Work View — the first configured view, the same
         // one the bare entry slug resolves to server-side. Carry its canonical destination so the CTA
         // and its default-view row can never key differently.

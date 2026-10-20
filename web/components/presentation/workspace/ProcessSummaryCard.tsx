@@ -33,7 +33,7 @@ import {
     sameMetricPhrase,
     type FormattedProcessSummaryMetric,
 } from "@/lib/presentation/runtime/processSummaryMetricPresentation";
-import { businessProcessForProcessKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
+import { processCardConfigKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
 import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
     parseOperatorWorkUnitEntryHref,
@@ -170,13 +170,16 @@ export function ProcessSummaryCard({
     // so the pills/filter/queue chrome render regardless of arrival path. We deliberately do NOT
     // route "Open process" through the primary signal's metric drill href, which resolved to a
     // bare queue-key slug with no configured Work Views (no pills).
+    // Null when the process has nothing to open yet (BP V2 S1) — the CTA slot then states why, and
+    // nothing on the card navigates or warms. It never falls back to another process's entry.
     const drillHref = process.entryHref;
+    const unavailableReason = drillHref ? null : (process.unavailableReason ?? null);
 
     // Operator-owned card identity (title / subtitle / accent / icon / CTA label). Keyed by the
     // process's business process — the SAME key the Primary Signal picker uses.
     const identity = useMemo(
-        () => resolveProcessCardConfig(config, businessProcessForProcessKey(process.processKey)),
-        [config, process.processKey],
+        () => resolveProcessCardConfig(config, processCardConfigKey(process)),
+        [config, process],
     );
     // Render-boundary guard: a dirty legacy-suffixed process name never prints on the workspace card.
     const title = stripLegacyArtifactMarker(identity.title ?? process.label) ?? "";
@@ -199,10 +202,11 @@ export function ProcessSummaryCard({
     const ctaClasses = accentStyle ? `${accentStyle.metricText} hover:opacity-80` : DEFAULT_CTA;
 
     const slug = useMemo(
-        () => parseOperatorWorkUnitEntryHref(drillHref).workUnitSlug,
+        () => (drillHref ? parseOperatorWorkUnitEntryHref(drillHref).workUnitSlug : null),
         [drillHref],
     );
     const warm = () => {
+        if (!drillHref) return;
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
         // Blank-time removal: warm the exact provisioning answer K2 will commit, so the click is instant.
         prefetchWorkUnitProvisioningFromHref(drillHref);
@@ -377,6 +381,13 @@ export function ProcessSummaryCard({
                                 <span aria-hidden className="text-alloy-midnight/35">→</span>
                             </span>
                         </BuilderHit>
+                    ) : !drillHref ? (
+                        <span
+                            className="text-[12px] font-medium text-alloy-midnight/40"
+                            data-process-unavailable
+                        >
+                            {unavailableReason ?? "Not available yet"}
+                        </span>
                     ) : (
                         <Link
                             href={drillHref}

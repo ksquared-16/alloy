@@ -10,7 +10,7 @@ import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogType
 import {
     isLegacyArtifactProcessName,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
-import { businessProcessForProcessKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
+import { processCardConfigKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
 import type { WorkspaceProcessSurfaceConfig } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type { SurfaceConfigObject } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
 
@@ -35,9 +35,11 @@ export function catalogIdFromWorkspaceProcessSurfaceId(surfaceId: string): strin
     return `${tail.slice(0, UUID_LEN)}:${tail.slice(UUID_LEN + 1)}`;
 }
 
-/** Config map key — matches runtime `businessProcessForProcessKey(processKey)`. */
-export function workspaceProcessConfigKey(entry: Pick<LifecycleCatalogEntry, "process_key">): string | null {
-    return businessProcessForProcessKey(entry.process_key) ?? (entry.process_key?.trim() || null);
+/** Config map key — the SAME `processCardConfigKey` the runtime tile reads. */
+export function workspaceProcessConfigKey(
+    entry: Pick<LifecycleCatalogEntry, "process_key"> & Partial<Pick<LifecycleCatalogEntry, "process_model">>,
+): string | null {
+    return processCardConfigKey({ processKey: entry.process_key, processModel: entry.process_model });
 }
 
 function catalogEntryHasPersistedSummary(

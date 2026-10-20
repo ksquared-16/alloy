@@ -38,6 +38,12 @@ import {
     type ProcessEntryIntentV1,
 } from "@/lib/lifecycle/processEntryPointsV1";
 import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
+import {
+    isDomainProjectionModel,
+    PROCESS_PROJECTION_DOMAIN_LABELS,
+    processModelV1Problem,
+    resolveProcessModel,
+} from "@/lib/lifecycle/processModelV1";
 import { ENROLLED_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type {
     LifecycleBuilderProcessRecord,
@@ -95,6 +101,37 @@ export const PUBLISH_ENTRY_STAGE_GRAIN_MISMATCH = "process_entry_stage_grain_mis
  * the operator as a success that changed nothing.
  */
 export const PUBLISH_CHILD_COMPLETION_UNREACHABLE = "child_completion_unreachable" as const;
+/** BP V2 S1 — an authored `process_model_v1` the platform cannot read (unknown kind or domain). */
+export const PUBLISH_PROCESS_MODEL_UNKNOWN = "process_model_unknown" as const;
+/**
+ * BP V2 S1 — a domain projection carrying lifecycle execution configuration. A projection reads
+ * another domain's records; stages, tracks, entry points and stage-population Work Views would
+ * either be synthetic lifecycle state or would silently query Enrollment's population.
+ */
+export const PUBLISH_DOMAIN_PROJECTION_LIFECYCLE_CONFIG = "domain_projection_lifecycle_config" as const;
+
+/**
+ * Lifecycle-only sections a domain projection may not publish, with why each is refused. Work Views
+ * are here for Slice 1 only: today every Work View evaluates over the Enrollment lead population, so
+ * a Billing Work View would show Enrollment records. Domain-backed Work Views are Slice 2.
+ */
+const DOMAIN_PROJECTION_REFUSED_SECTIONS: readonly { key: string; why: string }[] = [
+    { key: "stages", why: "it reads another domain’s records and has no lifecycle stages of its own" },
+    { key: "tracks_v1", why: "tracks split a staged lifecycle, and it has none" },
+    { key: "entry_points_v1", why: "no journey starts in it" },
+    { key: "participation_v1", why: "participation belongs to a staged lifecycle" },
+    {
+        key: "work_views_v1",
+        why: "domain-backed Work Views are not available yet, and a stage-population Work View would show Enrollment records",
+    },
+];
+
+function isPopulatedSection(value: unknown): boolean {
+    if (value == null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value as object).length > 0;
+    return true;
+}
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -267,6 +304,45 @@ export function validateParsedBusinessProcessForPublish(
             rawProcesses?.find(
                 (p) => isRecord(p) && String(p.id ?? "") === process.id,
             ) ?? process;
+
+        // PROCESS MODEL — read RAW, like entry intents: the parser has already dropped a model it
+        // could not type, and publishing that would quietly publish a staged lifecycle instead.
+        const modelProblem = processModelV1Problem(
+            isRecord(rawProcess) ? rawProcess.process_model_v1 : undefined,
+        );
+        if (modelProblem) {
+            errors.push({
+                code: PUBLISH_PROCESS_MODEL_UNKNOWN,
+                path: `processes[${process.key}].process_model_v1`,
+                message: `Process “${process.name}” declares a process model this platform cannot run. ${modelProblem}`,
+            });
+            continue;
+        }
+        const model = resolveProcessModel(process);
+        if (isDomainProjectionModel(model)) {
+            // A domain projection publishes as a shell over its domain. Everything below this branch
+            // validates stage execution, which it must not have — so it is refused, not skipped.
+            const rawRecord = isRecord(rawProcess) ? rawProcess : {};
+            for (const section of DOMAIN_PROJECTION_REFUSED_SECTIONS) {
+                const value =
+                    section.key === "stages"
+                        ? (Array.isArray(rawRecord.stages) ? rawRecord.stages : []).filter(
+                              (s) => isRecord(s) && s.is_active !== false,
+                          )
+                        : rawRecord[section.key];
+                if (!isPopulatedSection(value)) continue;
+                errors.push({
+                    code: PUBLISH_DOMAIN_PROJECTION_LIFECYCLE_CONFIG,
+                    path: `processes[${process.key}].${section.key}`,
+                    message:
+                        `Process “${process.name}” is a ${PROCESS_PROJECTION_DOMAIN_LABELS[model.domain]} `
+                        + `process, so it cannot publish ${section.key === "stages" ? "active stages" : section.key}: `
+                        + `${section.why}.`,
+                    detail: { process_model: model.kind, domain: model.domain, section: section.key },
+                });
+            }
+            continue;
+        }
 
         // THE EXECUTION GRAPH owns everything about transitions and movements: identity,
         // source/destination existence, outgoing membership, and whether an outcome may actually

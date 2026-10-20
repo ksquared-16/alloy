@@ -15,6 +15,12 @@ import {
 } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import {
+    DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
+    isDomainProjectionModel,
+    resolveProcessModel,
+    type ProcessModelV1,
+} from "@/lib/lifecycle/processModelV1";
+import {
     operatorWorkUnitHrefFromKey,
     operatorWorkUnitHrefFromWorkViewSlug,
 } from "@/lib/admin/canonicalOperatorRoutes";
@@ -50,6 +56,9 @@ import {
 
 /** Default operator queue when configured on the enrollment pipeline. */
 export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
+
+/** Shown on a staged lifecycle that has nothing to enter yet — instead of another process's queue. */
+export const PROCESS_HAS_NO_ENTRY_QUEUE = "No Work Views are configured for this process yet." as const;
 
 export type OperatorLifecycleWorkQueuePreview = {
     label: string;
@@ -87,9 +96,18 @@ export type OperatorLifecycleLandingCard = {
     id: string;
     departmentId: string;
     processKey: string;
+    /** How the process executes (BP V2 S1). Absent on cached pre-S1 cards → staged lifecycle. */
+    processModel?: ProcessModelV1;
     label: string;
     description: string;
-    entryHref: string;
+    /**
+     * Where opening the process lands. Null when the process has nothing it can open — a domain
+     * projection before its Work Views exist, or a lifecycle with no queues. Null is rendered as an
+     * explicit unavailable state; it is never replaced by another process's entry queue.
+     */
+    entryHref: string | null;
+    /** Operator-facing reason `entryHref` is null; null whenever the process can be opened. */
+    unavailableReason?: string | null;
     workQueues: OperatorLifecycleWorkQueuePreview[];
     stageCount: number;
     /** Populated when department queue summaries are available; otherwise null (UI shows —). */
@@ -218,6 +236,7 @@ function workViewNavEntriesForDepartment(args: {
     departmentId: string;
     departmentMetadata: unknown;
     workUnits: OperatorLifecycleWorkUnitRow[];
+    processId?: string | null;
 }): OperatorLifecycleWorkQueuePreview[] {
     // Shared host precedence (pipeline WU, else lifecycle-stage WU) — same helper the
     // work-view slug resolver uses, so nav hrefs and slug resolution agree on the host.
@@ -232,7 +251,9 @@ function workViewNavEntriesForDepartment(args: {
     // no lane-slug branch, no `?work_view=` query routing). The by-slug resolver maps the view slug
     // back to its host work unit and selects the configured view. A view without a configured label
     // is a config bug — it is omitted rather than surfaced as a raw internal id.
-    const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata).filter(
+    // THIS process's views — not the department's active process's, which a second process in the
+    // same department would otherwise inherit (BP V2 S1).
+    const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata, args.processId).filter(
         (view) => view.visible_in_runtime !== false && !!view.label?.trim(),
     );
     if (savedWorkViews.length) {
@@ -381,6 +402,28 @@ export function buildOperatorLifecycleLandingCards(args: {
     return args.catalogEntries
         .filter(isOperatorVisibleLifecycle)
         .map((entry) => {
+            const processModel = resolveProcessModel({ process_model_v1: entry.process_model });
+            if (isDomainProjectionModel(processModel)) {
+                // A domain projection publishes as its own process with its own identity, and has no
+                // runnable Work Views yet. It gets NONE of the lifecycle fallbacks below: no
+                // department pipeline lanes, no builder stages, no work-unit list, no `new_leads`
+                // entry, no Enrollment surface fields. Any of those would route the operator into
+                // another process's queue.
+                return {
+                    id: entry.id,
+                    departmentId: entry.department_id,
+                    processKey: entry.process_key,
+                    processModel,
+                    label: entry.lifecycle_name.trim() || entry.process_key,
+                    description: processDescriptionForEntry(entry, departmentsById),
+                    entryHref: null,
+                    unavailableReason: DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
+                    workQueues: [],
+                    stageCount: 0,
+                    activeRecordCount: null,
+                    needsAttentionCount: null,
+                } satisfies OperatorLifecycleLandingCard;
+            }
             const workQueues = workQueuesForDepartment(
                 entry,
                 entry.department_id,
@@ -388,16 +431,29 @@ export function buildOperatorLifecycleLandingCards(args: {
                 departmentsById,
             );
             const defaultQueue = resolveDefaultEntryQueue(workQueues);
-            const entryHref = defaultQueue?.href ?? operatorWorkUnitHrefFromKey(OPERATOR_DEFAULT_ENTRY_QUEUE_KEY);
+            // `new_leads` is Enrollment's entry queue. It stays Enrollment's last resort (unchanged
+            // behaviour, same Enrollment detection the surface fields below use); any other lifecycle
+            // with nothing to enter says so instead of opening Enrollment's queue.
+            const isEnrollment = isEnrollmentLifecycleCard({
+                processKey: entry.process_key,
+                label: entry.lifecycle_name.trim() || entry.process_key,
+                entryHref: defaultQueue?.href ?? null,
+                processModel,
+            });
+            const entryHref =
+                defaultQueue?.href ??
+                (isEnrollment ? operatorWorkUnitHrefFromKey(OPERATOR_DEFAULT_ENTRY_QUEUE_KEY) : null);
             const dept = departmentsById.get(entry.department_id);
 
             const baseCard: OperatorLifecycleLandingCard = {
                 id: entry.id,
                 departmentId: entry.department_id,
                 processKey: entry.process_key,
+                processModel,
                 label: entry.lifecycle_name.trim() || entry.process_key,
                 description: processDescriptionForEntry(entry, departmentsById),
                 entryHref,
+                unavailableReason: entryHref ? null : PROCESS_HAS_NO_ENTRY_QUEUE,
                 workQueues,
                 stageCount: entry.stage_count,
                 activeRecordCount: null,

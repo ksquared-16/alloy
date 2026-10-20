@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "41159da9ed99cfc5e1a28bc1810f882eae4bd0aa",
+      "blob_sha": "036e67ef2332cb5a416026680208e19c1bdf4b2c",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "3b3601235007207545a3ade423f5e6c26a627e01",
+      "blob_sha": "c584b017e24dfdfd9fcdadbb4cf4939ecefad391",
       "exists": true
     },
     {

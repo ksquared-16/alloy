@@ -51,6 +51,11 @@ import {
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
 import { journeySegmentForStageGrain } from "@/lib/lifecycle/grainVocabulary";
+import {
+    isDomainProjectionModel,
+    parseProcessModelV1,
+    type ProcessModelV1,
+} from "@/lib/lifecycle/processModelV1";
 
 import {
     captureUnknownFields,
@@ -80,6 +85,7 @@ const PROCESS_OWNED_KEYS = [
     "work_views_v1",
     "participation_v1",
     "entry_points_v1",
+    "process_model_v1",
     "stages",
 ] as const;
 
@@ -165,7 +171,14 @@ export type LifecycleBuilderProcessRecord = {
     name: string;
     /** Shown on /workspace department tile when synced to departments.description. */
     description?: string;
-    primary_entity: LifecyclePrimaryEntityKey;
+    /**
+     * The record a STAGED lifecycle moves through its stages. Absent on a domain projection
+     * (`process_model_v1.kind === "domain_projection"`): that process reads another domain's records
+     * and has no lifecycle record of its own, so claiming "Opportunity / Lead" would be false.
+     */
+    primary_entity?: LifecyclePrimaryEntityKey;
+    /** How this process executes (BP V2 Slice 1). Absent → staged lifecycle. @see processModelV1.ts */
+    process_model_v1?: ProcessModelV1;
     sort_order: number;
     is_active: boolean;
     /**
@@ -325,6 +338,15 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         // not a parse one: silently dropping an unresolvable mapping here would turn a configuration
         // error into "no entry point authored", a different and much quieter failure.
         const entry_points_v1 = parseProcessEntryPointsV1(row.entry_points_v1) ?? undefined;
+        const process_model_v1 = parseProcessModelV1(row.process_model_v1) ?? undefined;
+        // An authored model this branch cannot type is NOT defaulted and NOT dropped: it rides the
+        // residue so the next save writes it back verbatim, and publication refuses it by name.
+        // Dropping it would silently turn a mistyped domain projection into a staged lifecycle.
+        const processResidue = captureUnknownFields(row, PROCESS_OWNED_KEYS);
+        const unreadableModel =
+            row.process_model_v1 != null && !process_model_v1
+                ? { process_model_v1: row.process_model_v1 }
+                : undefined;
         processes.push(withUnknownFields({
             id,
             key,
@@ -337,7 +359,10 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(typeof row.description === "string" && row.description.trim()
                 ? { description: row.description.trim() }
                 : {}),
-            primary_entity: row.primary_entity === "opportunity" ? "opportunity" : "opportunity",
+            ...(isDomainProjectionModel(process_model_v1)
+                ? {}
+                : { primary_entity: "opportunity" as const }),
+            ...(process_model_v1 ? { process_model_v1 } : {}),
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
             ...(command_set_v1 ? { command_set_v1 } : {}),
@@ -347,7 +372,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(participation ? { participation_v1: participation } : {}),
             ...(entry_points_v1 ? { entry_points_v1 } : {}),
             stages,
-        }, captureUnknownFields(row, PROCESS_OWNED_KEYS)));
+        }, unreadableModel ? { ...processResidue, ...unreadableModel } : processResidue));
     }
 
     const builderResidue = captureUnknownFields(o, BUILDER_OWNED_KEYS);
@@ -459,7 +484,12 @@ export function asOperatorStageKey(key: string): LifecycleOperatorStage | null {
 export function createLifecycleProcess(
     name: string,
     config: LifecycleBuilderV1,
-    opts?: { primary_entity?: LifecyclePrimaryEntityKey; description?: string }
+    opts?: {
+        primary_entity?: LifecyclePrimaryEntityKey;
+        description?: string;
+        /** Absent → staged lifecycle. A domain projection carries no primary entity and no stages. */
+        process_model?: ProcessModelV1;
+    }
 ): LifecycleBuilderV1 {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Lifecycle name is required");
@@ -478,7 +508,12 @@ export function createLifecycleProcess(
         key: uniqueKey,
         name: trimmed,
         description,
-        primary_entity: opts?.primary_entity ?? "opportunity",
+        ...(isDomainProjectionModel(opts?.process_model)
+            ? { process_model_v1: opts.process_model }
+            : {
+                  primary_entity: opts?.primary_entity ?? "opportunity",
+                  ...(opts?.process_model ? { process_model_v1: opts.process_model } : {}),
+              }),
         sort_order: config.processes.length,
         is_active: true,
         stages: [],

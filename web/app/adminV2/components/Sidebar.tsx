@@ -387,8 +387,9 @@ function SidebarNav({
             <div className="space-y-1">
                 {lifecycleCards.map((lifecycle) => {
                     const isExpanded = expandedLifecycleIds.has(lifecycle.id);
+                    const lifecycleEntryHref = lifecycle.entryHref;
                     const lifecycleEntryActive =
-                        !modalOpen && path === lifecycle.entryHref && !workUnitSlug;
+                        !modalOpen && path === lifecycleEntryHref && !workUnitSlug;
                     return (
                         <div key={lifecycle.id} className="space-y-0.5">
                             <div className="flex items-stretch gap-0.5">
@@ -409,31 +410,50 @@ function SidebarNav({
                                         <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
                                     )}
                                 </button>
+                                {lifecycle.entryHref == null ? (
+                                    // Nothing to open yet (BP V2 S1): the process is listed under its
+                                    // own name and does not borrow another process's queue.
+                                    <span
+                                        className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK} adminv2-sidebar-muted`}
+                                        title={lifecycle.unavailableReason ?? lifecycle.label}
+                                        data-sidebar-process-unavailable
+                                    >
+                                        <span className="inline-flex min-w-0 items-center gap-2">
+                                            <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
+                                            <span className="truncate">{lifecycle.label}</span>
+                                        </span>
+                                    </span>
+                                ) : (
                                 <AdminV2NavLink
                                     href={workspaceHref(lifecycle.entryHref)}
                                     active={lifecycleEntryActive}
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
                                     title={lifecycle.label}
-                                    onMouseEnter={() =>
-                                        warmOperatorWorkUnitNavEntry(
-                                            lifecycle.entryHref,
-                                            null,
-                                            "sidebar_lifecycle_hover",
-                                        )
-                                    }
-                                    onFocus={() =>
-                                        warmOperatorWorkUnitNavEntry(
-                                            lifecycle.entryHref,
-                                            null,
-                                            "sidebar_lifecycle_focus",
-                                        )
-                                    }
+                                    onMouseEnter={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_hover",
+                                            );
+                                        }
+                                    }}
+                                    onFocus={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_focus",
+                                            );
+                                        }
+                                    }}
                                 >
                                     <span className="inline-flex min-w-0 items-center gap-2">
                                         <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
                                         <span className="truncate">{lifecycle.label}</span>
                                     </span>
                                 </AdminV2NavLink>
+                                )}
                             </div>
                             {isExpanded && lifecycle.workQueues.length ? (
                                 <div className="ml-8 border-l border-white/10 pl-2.5">

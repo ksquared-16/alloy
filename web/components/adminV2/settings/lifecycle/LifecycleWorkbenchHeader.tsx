@@ -1,6 +1,11 @@
 "use client";
 
 import { LIFECYCLE_PRIMARY_ENTITIES } from "@/lib/lifecycle/lifecycleConfiguration";
+import {
+    isDomainProjectionModel,
+    PROCESS_PROJECTION_DOMAIN_LABELS,
+    resolveProcessModel,
+} from "@/lib/lifecycle/processModelV1";
 import type {
     LifecycleBuilderProcessRecord,
     LifecycleBuilderStageRecord,
@@ -27,6 +32,7 @@ export default function LifecycleWorkbenchHeader({
     onStartNew: () => void;
     onBackToLanding: () => void;
 }) {
+    const model = resolveProcessModel(activeProcess);
     const primaryLabel =
         LIFECYCLE_PRIMARY_ENTITIES.find((e) => e.key === activeProcess.primary_entity)?.label ??
         activeProcess.primary_entity;
@@ -38,9 +44,16 @@ export default function LifecycleWorkbenchHeader({
                     <h2 className="text-base font-semibold text-alloy-midnight" data-testid="lifecycle-workbench-name">
                         {activeProcess.name}
                     </h2>
-                    <p className="mt-0.5 text-xs text-alloy-midnight/55">
-                        Primary record: <span className="font-medium">{primaryLabel}</span>
-                    </p>
+                    {isDomainProjectionModel(model) ? (
+                        <p className="mt-0.5 text-xs text-alloy-midnight/55" data-testid="lifecycle-workbench-domain">
+                            {PROCESS_PROJECTION_DOMAIN_LABELS[model.domain]} process — reads its domain’s
+                            records; it has no stages.
+                        </p>
+                    ) : (
+                        <p className="mt-0.5 text-xs text-alloy-midnight/55">
+                            Primary record: <span className="font-medium">{primaryLabel}</span>
+                        </p>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button

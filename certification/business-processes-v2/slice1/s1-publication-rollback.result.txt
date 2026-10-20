@@ -1,0 +1,12 @@
+NOTICE:  PASS assignments first publish -> revision 1
+NOTICE:  PASS assignments runtime projection carries process_model_v1
+NOTICE:  PASS assignments projection claims no Opportunity / Lead primary entity
+NOTICE:  PASS assignments no synthetic stages persisted
+NOTICE:  PASS assignments publication recorded on the generic table
+NOTICE:  PASS billing first publish -> revision 1
+NOTICE:  PASS billing runtime projection carries process_model_v1
+NOTICE:  PASS billing projection claims no Opportunity / Lead primary entity
+NOTICE:  PASS billing no synthetic stages persisted
+NOTICE:  PASS billing publication recorded on the generic table
+NOTICE:  PASS two distinct department subjects, one revision each
+NOTICE:  PASS fixture rolled back — no rows survive
