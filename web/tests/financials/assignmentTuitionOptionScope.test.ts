@@ -84,9 +84,10 @@ describe("the Assignment tuition control offers this assignment's options", () =
 
     it("does not render a dangling separator when the option has no variant name", () => {
         /* Measured: the sole applicable option had an empty variantLabel — "Recommended — : $185.00/weekly". */
-        const effect = optionEffect();
-        expect(effect).toContain("variant ?");
-        expect(effect, "the money always stands alone").toContain("o.amountLabel");
+        const code = src(CARD);
+        const label = code.slice(code.indexOf("export function tuitionRateLabel("), code.indexOf("/** One row of the tuition list."));
+        expect(label, "empty name parts are dropped").toContain(".filter(Boolean)");
+        expect(label, "the money always stands alone").toContain("o.amountLabel");
     });
 
     it("states which child is being priced", () => {
