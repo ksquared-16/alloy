@@ -70,3 +70,25 @@ describe("dollarsToCents", () => {
         for (const bad of ["", "0", "abc", "1.234", "-5"]) expect(dollarsToCents(bad)).toBeNull();
     });
 });
+
+import { reconcileTuitionSelection } from "@/components/admin/focusPanel/cards/SchedulingCard";
+
+describe("reconcileTuitionSelection — an assignment change never silently keeps or swaps a rate", () => {
+    const tie = { ...view, recommended: null } as unknown as AssignmentTuitionView;
+
+    it("an automatic selection follows a single recommendation", () => {
+        expect(reconcileTuitionSelection({ view, current: "", operatorChose: false })).toEqual({ next: "r-rec", invalidated: null });
+    });
+    it("a tie preselects nothing — the operator chooses", () => {
+        expect(reconcileTuitionSelection({ view: tie, current: "", operatorChose: false })).toEqual({ next: "", invalidated: null });
+    });
+    it("a still-eligible choice stays", () => {
+        expect(reconcileTuitionSelection({ view, current: "r-other", operatorChose: true })).toEqual({ next: "r-other", invalidated: null });
+    });
+    it("an operator's additional-rate override stays an override", () => {
+        expect(reconcileTuitionSelection({ view, current: "r-pre", operatorChose: true })).toEqual({ next: "r-pre", invalidated: null });
+    });
+    it("an operator's choice the change made ineligible is cleared and named — not replaced", () => {
+        expect(reconcileTuitionSelection({ view, current: "r-gone", operatorChose: true })).toEqual({ next: "", invalidated: "r-gone" });
+    });
+});

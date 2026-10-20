@@ -191,10 +191,11 @@ describe("every applicable rate is listed, the recommendation first and preselec
 
     it("accepting the recommendation needs no expansion", () => {
         /* The default CHOICE is the resolver's answer; the action still decides. */
-        const eff = card.slice(card.indexOf("const displayView = draftView ?? pricingView;"));
-        const body = eff.slice(0, 700);
-        expect(body, "a known choice is never overwritten").toContain("if (known) return;");
-        expect(body).toContain('setOfferingId(displayView.recommended?.sourceId ?? "")');
+        // The rule itself is pinned in assignmentTuitionChoices.test.ts (reconcileTuitionSelection):
+        // a still-offered choice stays; an automatic one follows the recommendation; an operator's
+        // invalidated choice is cleared and named. Here: the card applies that rule.
+        expect(card).toContain("reconcileTuitionSelection({");
+        expect(card).toContain("operatorChose: operatorChoseRef.current,");
     });
 });
 
