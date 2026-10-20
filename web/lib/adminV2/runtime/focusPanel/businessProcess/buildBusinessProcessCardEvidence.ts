@@ -197,7 +197,7 @@ export function buildBusinessProcessCardEvidence(
     const stageKeySet = new Set(configuredStages.map((s) => s.key));
 
     // ── PARTICIPANTS ──────────────────────────────────────────────────────────────────────────
-    const childrenEvidence = safeChildren(context);
+    const childrenEvidence = safeChildren(context, stageKeySet);
     const placed: BusinessProcessParticipant[] = [];
     const unresolved: UnresolvedParticipant[] = [];
 
@@ -317,9 +317,9 @@ function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
         .filter((s): s is ConfiguredStage => s !== null);
 }
 
-function safeChildren(context: OperationalContext) {
+function safeChildren(context: OperationalContext, configuredStageKeys: ReadonlySet<string>) {
     try {
-        return buildChildrenCardEvidence(context).children;
+        return buildChildrenCardEvidence(context, { configuredStageKeys }).children;
     } catch {
         // A children projection that cannot compose is an absence of participants, never a reason
         // for the whole process card to fail — the stage rail is useful on its own.
