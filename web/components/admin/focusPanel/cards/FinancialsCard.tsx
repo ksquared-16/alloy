@@ -36,6 +36,8 @@ import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsS
 import AutopaySection from "@/components/operationalCards/AutopaySection";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { humanDay } from "@/lib/financials/dates/humanDates";
+import { PAYMENT_METHOD_LABELS } from "@/lib/financials/payments/paymentLedgerFacts";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import CardCollectionField from "./CardCollectionField";
 import {
@@ -837,43 +839,54 @@ export default function FinancialsCard({
     const [payStoredMethodId, setPayStoredMethodId] = useState<string>("");
 
     /*
-     * THE METHODS THIS PAYMENT MAY ACTUALLY USE.
-     *
-     * Rail first: only card and bank collect through a provider. Then the payer, because a stored
-     * method belongs to one and the server refuses a mismatch. A method whose owner is unknown is
-     * included only when no payer has been named, so an un-owned legacy row never silently attaches
-     * itself to a named payer.
+     * W7-F045: "NOT KNOWN" IS AN ANSWER, NEVER A DEFAULT. With several possible payers the operator
+     * must say who paid — or say explicitly that it is not known, which records the money to the
+     * household. This sentinel is that explicit answer; "" is "not yet answered".
      */
-    const eligibleStoredMethods = useMemo(() => {
-        if (payMethod !== "card" && payMethod !== "ach") return [];
-        const all = vm?.paymentCapabilities?.methodsOnFile ?? [];
-        return all.filter((m) => {
-            if (m.usabilityState !== "usable") return false;
-            if (m.rail !== payMethod) return false;
-            if (!payPayerPersonId) return true;
-            if (m.payerEntityType && m.payerEntityType !== "person") return false;
-            return !m.payerEntityId || m.payerEntityId === payPayerPersonId;
-        });
-    }, [vm?.paymentCapabilities?.methodsOnFile, payMethod, payPayerPersonId]);
+    const HOUSEHOLD_PAYER = "__household";
+    const namedPayerId = payPayerPersonId && payPayerPersonId !== HOUSEHOLD_PAYER ? payPayerPersonId : "";
+    /* W7-F045: the check number or reference the tender carries — `payments.reference_number`. */
+    const [payReference, setPayReference] = useState<string>("");
+    /* W7-F045: the Payment command takes money; refunds are its secondary tab, chosen one at a time. */
+    const [paymentTab, setPaymentTab] = useState<"payment" | "refunds">("payment");
+    const [refundPickId, setRefundPickId] = useState<string>("");
 
     /*
-     * ONE USABLE METHOD IS THE ANSWER, so select it. With several, the account's default for that
-     * rail is the canonical choice. The selection is re-derived when the rail or the payer changes,
-     * because a method that was eligible a moment ago may not belong to the payer now named — and a
-     * stale id here is exactly the mismatch the server would refuse.
+     * ── W7-F045: EVERY USABLE METHOD ON FILE, IN THE METHOD CHOOSER ITSELF ──────────────────────
+     *
+     * Stored cards and bank accounts used to appear only after the operator first chose the rail,
+     * which hid the family's own methods behind a second step. They are now options of the Method
+     * chooser, beside the tenders that need no instrument. Every usable method is listed regardless
+     * of the payer named; choosing one NAMES its owner as the payer, because a stored method belongs
+     * to one payer and `collectionAttempt` refuses a mismatch.
      */
+    const storedMethodsOnFile = useMemo(
+        () =>
+            (vm?.paymentCapabilities?.methodsOnFile ?? []).filter(
+                (m) => m.usabilityState === "usable" && (m.rail === "card" || (m.rail === "ach" && vm?.achAvailable)),
+            ),
+        [vm?.paymentCapabilities?.methodsOnFile, vm?.achAvailable],
+    );
+    /* A stored method that no longer belongs to the payer now named is dropped, never sent. */
     useEffect(() => {
-        if (!eligibleStoredMethods.length) {
+        if (!payStoredMethodId) return;
+        const m = storedMethodsOnFile.find((x) => x.id === payStoredMethodId);
+        if (!m) {
             setPayStoredMethodId("");
             return;
         }
-        setPayStoredMethodId((current) => {
-            if (current && eligibleStoredMethods.some((m) => m.id === current)) return current;
-            const preferred =
-                eligibleStoredMethods.find((m) => m.isDefault) ?? eligibleStoredMethods[0];
-            return preferred?.id ?? "";
-        });
-    }, [eligibleStoredMethods]);
+        if (m.payerEntityId && namedPayerId && m.payerEntityId !== namedPayerId) setPayStoredMethodId("");
+        if (!m.payerEntityId && namedPayerId) setPayStoredMethodId("");
+    }, [payStoredMethodId, storedMethodsOnFile, namedPayerId]);
+    /*
+     * W7-F045: ONE ELIGIBLE PAYER IS THE ANSWER — default it, so the operator is not asked a
+     * question with one possible reply. Several stay unanswered until chosen.
+     */
+    const payerCandidateCount = vm?.payerCandidates?.length ?? 0;
+    const onlyPayerId = payerCandidateCount === 1 ? vm!.payerCandidates[0]!.personId : "";
+    useEffect(() => {
+        if (onlyPayerId && !payPayerPersonId) setPayPayerPersonId(onlyPayerId);
+    }, [onlyPayerId, payPayerPersonId]);
     /**
      * THE REFUND THE OPERATOR IS COMPOSING.
      *
@@ -1713,7 +1726,13 @@ export default function FinancialsCard({
             hold: { holdId: args.holdId, remainingCents: args.remainingCents },
         });
         setRefundAmount((ceiling / 100).toFixed(2));
-    }, [closeAdjustPanels, closeMovePanels, vm?.payments]);
+        /*
+         * W7-F045: and SHOW it. This set the composer's state and opened nothing, and on the Details
+         * floor no payment band is mounted — so the click changed no pixel. The receipt's own
+         * Payment Details is where its refund composer renders.
+         */
+        push({ kind: "payment_detail", paymentId: receipt.paymentId });
+    }, [closeAdjustPanels, closeMovePanels, vm?.payments, push]);
 
     const confirmRelease = useCallback(async () => {
         if (!releasePending || running) return;
@@ -2392,6 +2411,9 @@ export default function FinancialsCard({
                     subjectMemberId: row.subjectMemberId,
                 });
                 setPayAmount((row.outstandingCents / 100).toFixed(2));
+                setPaymentTab("payment");
+                setRefundPickId("");
+                setPayReference("");
                 push({ kind: "payment" });
             };
         },
@@ -3196,6 +3218,7 @@ export default function FinancialsCard({
                     setPayTarget(null);
                     /* The next payment is a fresh question about who paid, not a carried answer. */
                     setPayPayerPersonId("");
+                    setPayReference("");
                 }
                 /*
                  * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
@@ -3624,7 +3647,7 @@ export default function FinancialsCard({
      */
     useEffect(() => {
         if (
-            overlay !== "charge_detail" && overlay !== "payment_detail"
+            overlay !== "charge_detail" && overlay !== "payment_detail" && overlay !== "prepaid_detail"
             /* W7-F033: the money-moving layers close on an outside click like every other layer. */
             && overlay !== "payment_application" && overlay !== "release_held" && overlay !== "reverse_adjustment"
         ) return;
@@ -3767,7 +3790,7 @@ export default function FinancialsCard({
                                     value: r.chargeId,
                                     label:
                                         `${r.description ?? r.categoryLabel}`
-                                        + (r.date ? ` · ${r.date}` : "")
+                                        + (r.date ? ` · ${humanDay(r.date)}` : "")
                                         + ` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
                                             style: "currency",
                                             currency,
@@ -3952,10 +3975,72 @@ export default function FinancialsCard({
      * "received and not yet applied" total and no Take or record payment entry. That scoped form is
      * the body of Payment Details, so there is one receipt presentation, not a second one.
      */
-    const paymentBandFor = (labelled: boolean, scopedTo?: string) => vm ? (
-            <section className="alloy-os-financials__band" data-financials-band={scopedTo ? "payment-detail" : "payment"}>
+    const paymentBandFor = (labelled: boolean, scopedTo?: string, tabbed = false) => vm ? (
+            <section className="alloy-os-financials__band" data-financials-band={scopedTo ? "payment-detail" : "payment"} data-financials-payment-tab={tabbed ? paymentTab : undefined}>
                 {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
-                {scopedTo ? null : (<>
+                {/*
+                  * ── W7-F045: TWO JOBS, TWO TABS ─────────────────────────────────────────────────
+                  *
+                  * The Payment command opened on every prior receipt with a Refund beside each, and
+                  * the form to take money sat beneath them. Taking a payment is the command's job;
+                  * refunding one is a different act on a different object. Payment is the default
+                  * tab and shows only the collection form. Refunds lists nothing until the operator
+                  * picks ONE eligible payment, then shows that payment's refund — the same composer
+                  * and the same `payment.refund` authority as before.
+                  */}
+                {tabbed ? (
+                    <div className="alloy-os-financials__tabs" role="tablist" aria-label="Payment" data-financials-payment-tabs="true">
+                        {(["payment", "refunds"] as const).map((t) => (
+                            <button
+                                key={t}
+                                type="button"
+                                role="tab"
+                                aria-selected={paymentTab === t}
+                                data-financials-payment-tab-option={t}
+                                className={`alloy-os-financials__tab${paymentTab === t ? " alloy-os-financials__tab--on" : ""}`}
+                                onClick={() => setPaymentTab(t)}
+                            >
+                                {t === "payment" ? "Payment" : "Refunds"}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+                {tabbed && paymentTab === "refunds" ? (() => {
+                    const eligible = presentPayments(vm.payments, Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0]))).filter((p) => p.kind === "receipt" && p.offersRefund);
+                    const byId = new Map(vm.payments.map((r) => [r.paymentId, r]));
+                    return eligible.length ? (
+                        <>
+                            <p className="alloy-os-financials__fieldlabel">Payment to refund</p>
+                            <AlloySelect
+                                value={refundPickId}
+                                aria-label="Payment to refund"
+                                testId="financials-refund-payment"
+                                placeholder="Choose a payment…"
+                                options={eligible.map((p) => {
+                                    const r = byId.get(p.paymentId);
+                                    return {
+                                        value: p.paymentId,
+                                        label: [
+                                            r?.receivedAt ? formatDisplayDate(r.receivedAt) : null,
+                                            money(p.receivedCents, p.currencyCode),
+                                            r?.methodDisplay ?? p.methodLabel,
+                                            r?.payerName ?? r?.payerLabel ?? null,
+                                        ].filter(Boolean).join(" · "),
+                                    };
+                                })}
+                                onChange={(next) => {
+                                    setRefundPickId(next);
+                                    setRefundTarget(null);
+                                }}
+                            />
+                        </>
+                    ) : (
+                        <p className="alloy-os-financials__note" data-financials-refund-none="true">
+                            No payment on this account can be refunded.
+                        </p>
+                    );
+                })() : null}
+                {scopedTo || (tabbed && paymentTab !== "payment") ? null : (<>
                 {/*
                     ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
                     This region used to print the platform's own limitations at
@@ -4020,7 +4105,7 @@ export default function FinancialsCard({
                     on the account, and it is called UNAPPLIED — never account
                     credit, which in this platform is a charge-side ledger row.
                 */}
-                {vm.payments.length ? (
+                {vm.payments.length && (!tabbed || (paymentTab === "refunds" && refundPickId)) ? (
                     <ul
                         className="alloy-os-financials__payments"
                         data-financials-payments="true"
@@ -4032,7 +4117,8 @@ export default function FinancialsCard({
                         {presentPayments(
                             vm.payments,
                             Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0])),
-                        ).filter((p) => !scopedTo || p.paymentId === scopedTo || p.refundsPaymentId === scopedTo).map((p) => {
+                        ).filter((p) => !scopedTo || p.paymentId === scopedTo || p.refundsPaymentId === scopedTo)
+                            .filter((p) => !tabbed || p.paymentId === refundPickId || p.refundsPaymentId === refundPickId).map((p) => {
                             const composing = refundTarget?.paymentId === p.paymentId;
                             return (
                                 <li
@@ -4413,7 +4499,7 @@ export default function FinancialsCard({
                     </ul>
                 ) : null}
 
-                {scopedTo ? null : (<>
+                {scopedTo || (tabbed && paymentTab !== "payment") ? null : (<>
                 {/* Cash on the account, stated as cash. Never subtracted from
                     what is owed here — applying money is its own act with its
                     own record, and the balance above stays the read model's. */}
@@ -4538,113 +4624,127 @@ export default function FinancialsCard({
                         />
                         <p className="alloy-os-financials__fieldlabel">Method</p>
                         {/*
-                            Bank transfer is a real rail with no executor yet. Offering it as though
-                            it worked recorded money nobody had collected, which is the same defect
-                            Card had; it stays VISIBLE AND DISABLED so the model reads truthfully —
-                            and the canonical control carries disabled options natively, arrowing
-                            past them rather than parking the operator on a dead row.
-
-                            Availability is the SERVER's answer, carried on the view model from the
-                            merchant's own recorded capability. A chooser deciding this for itself
-                            would offer a collection the provider then refuses, after the operator
-                            was told it was under way.
+                            W7-F045: ONE CHOOSER — the family's methods on file first, then the tenders
+                            that need no instrument. Bank transfer without the merchant capability stays
+                            VISIBLE AND DISABLED: availability is the server's answer, carried on the view
+                            model, and offering a collection the provider refuses is the lie this avoids.
                         */}
                         <AlloySelect
-                            value={payMethod}
+                            value={payStoredMethodId ? `stored:${payStoredMethodId}` : payMethod}
                             aria-label="Payment method"
                             testId="financials-payment-method"
                             allowEmpty={false}
                             options={[
-                                { value: "card", label: "Card" },
+                                ...storedMethodsOnFile.map((m) => {
+                                    const owner = m.payerEntityId
+                                        ? vm.payerCandidates.find((c) => c.personId === m.payerEntityId)?.name ?? null
+                                        : null;
+                                    return {
+                                        value: `stored:${m.id}`,
+                                        /* Brand, last four and expiry — and whose it is. Never a provider id. */
+                                        label: `${storedMethodLabel(m)}${owner ? ` · ${owner}` : ""}`,
+                                    };
+                                }),
+                                { value: "card", label: storedMethodsOnFile.some((m) => m.rail === "card") ? "New card" : "Card" },
+                                {
+                                    value: "ach",
+                                    disabled: !vm.achAvailable,
+                                    label: vm.achAvailable
+                                        ? (storedMethodsOnFile.some((m) => m.rail === "ach") ? "New bank account" : "Bank account")
+                                        : "Bank account — not enabled for this organization",
+                                },
                                 { value: "cash", label: "Cash" },
                                 { value: "check", label: "Check" },
                                 { value: "money_order", label: "Money order" },
-                                {
-                                    value: "ach",
-                                    label: vm.achAvailable
-                                        ? "Bank account"
-                                        : "Bank account — not enabled for this organization",
-                                    disabled: !vm.achAvailable,
-                                },
+                                { value: "manual", label: "External payment (taken outside Alloy)" },
                                 { value: "other", label: "Other" },
                             ]}
-                            onChange={(next) => setPayMethod(next)}
+                            onChange={(next) => {
+                                if (next.startsWith("stored:")) {
+                                    const m = storedMethodsOnFile.find((x) => x.id === next.slice("stored:".length));
+                                    if (!m) return;
+                                    setPayMethod(m.rail);
+                                    /* The method's owner IS the payer; an un-owned legacy method pays for the household. */
+                                    setPayPayerPersonId(m.payerEntityId && m.payerEntityType !== "agency" ? m.payerEntityId : HOUSEHOLD_PAYER);
+                                    setPayStoredMethodId(m.id);
+                                    return;
+                                }
+                                setPayStoredMethodId("");
+                                setPayMethod(next);
+                            }}
                         />
                         {/*
-                          * ── PAY WITH A CARD THIS FAMILY ALREADY GAVE US ────────────────────────
-                          *
-                          * Offered only for a provider rail, because only a provider rail can
-                          * collect from a stored instrument; cash and cheque record money that has
-                          * already arrived and have no method to choose.
-                          *
-                          * SCOPED TO THE NAMED PAYER, not merely to the account. A stored method
-                          * belongs to a payer, and `collectionAttempt` refuses `method_payer_mismatch`
-                          * when the two disagree — so offering Person B's card for Person A's
-                          * payment would offer a choice the server is going to reject. Changing the
-                          * payer therefore changes what is on this list, and an empty list sends the
-                          * operator to the secure Add path rather than to a refusal.
-                          *
-                          * Delegated use is a real thing the approved domain does not model yet.
-                          * It stays refused rather than silently permitted.
+                          * W7-F045: THE TENDER'S OWN REFERENCE. A check is identified by its number,
+                          * and the ledger describes it that way ("Check #1234"); other recorded tenders
+                          * may carry a reference. Stored in `payments.reference_number`, which the
+                          * record action always accepted and this form never sent.
                           */}
-                        {eligibleStoredMethods.length ? (
+                        {payMethod === "check" || payMethod === "money_order" || payMethod === "manual" || payMethod === "other" ? (
                             <>
-                            <p className="alloy-os-financials__fieldlabel">Payment method</p>
-                            <AlloySelect
-                                value={payStoredMethodId}
-                                aria-label="Stored payment method"
-                                testId="financials-payment-stored-method"
-                                allowEmpty={false}
-                                options={[
-                                    ...eligibleStoredMethods.map((m) => ({
-                                        value: m.id,
-                                        /* Brand, last four and expiry. Never a provider id. */
-                                        label: storedMethodLabel(m),
-                                    })),
-                                    { value: "", label: payMethod === "ach" ? "Use another bank account" : "Use another card" },
-                                ]}
-                                onChange={(next) => setPayStoredMethodId(next)}
-                            />
+                                <p className="alloy-os-financials__fieldlabel">
+                                    {payMethod === "check" ? "Check number (optional)" : "Reference (optional)"}
+                                </p>
+                                <input
+                                    type="text"
+                                    value={payReference}
+                                    maxLength={64}
+                                    aria-label={payMethod === "check" ? "Check number" : "Reference"}
+                                    data-financials-payment-reference="true"
+                                    onChange={(e) => setPayReference(e.target.value)}
+                                />
                             </>
                         ) : null}
 
                         {/*
                          * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
                          *
-                         * Candidates are household membership, not responsibility, and the list is
-                         * ordered by primary contact rather than by who carries the obligation:
-                         * ordering it by responsibility is how an operator records the responsible
-                         * party as the payer without noticing. A grandparent settling a bill is a
-                         * payer and is responsible for nothing.
+                         * Candidates are household membership, not responsibility, ordered by primary
+                         * contact: ordering by responsibility is how an operator records the
+                         * responsible party as the payer without noticing.
                          *
-                         * Naming a payer confers no responsibility, and attributing the money to
-                         * somebody's SHARE remains a separate, explicit act.
+                         * W7-F045: one candidate is defaulted; several must be answered — a person, or
+                         * explicitly "not known", which records to the household. Separate people
+                         * paying separately are separate payments, each with its own payer. Naming a
+                         * payer confers no responsibility.
                          */}
-                        {vm.payerCandidates.length ? (
+                        {payerCandidateCount ? (
                             <>
                             <p className="alloy-os-financials__fieldlabel">Who paid</p>
                             <AlloySelect
                                 value={payPayerPersonId}
                                 aria-label="Who paid"
                                 testId="financials-payment-payer"
-                                placeholder="Who paid? (optional)"
-                                options={vm.payerCandidates.map((c) => ({
-                                    value: c.personId,
-                                    label:
-                                        `${c.name}`
-                                        + (c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : "")
-                                        + (c.alsoResponsible ? " · also responsible" : ""),
-                                }))}
+                                placeholder="Choose who paid"
+                                allowEmpty={false}
+                                options={[
+                                    ...vm.payerCandidates.map((c) => ({
+                                        value: c.personId,
+                                        label:
+                                            `${c.name}`
+                                            + (c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : "")
+                                            + (c.alsoResponsible ? " · also responsible" : ""),
+                                    })),
+                                    { value: HOUSEHOLD_PAYER, label: "Not known — record to the household" },
+                                ]}
                                 onChange={(next) => setPayPayerPersonId(next)}
                             />
+                            {!payPayerPersonId ? (
+                                <p className="alloy-os-financials__note" data-financials-payment-payer-required="true">
+                                    Choose who paid. If several people are paying, record each person&apos;s payment separately.
+                                </p>
+                            ) : null}
                             </>
-                        ) : null}
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-payment-payer-household="true">
+                                No payer is on file for this household — the payment is recorded to the household.
+                            </p>
+                        )}
                         <span className="alloy-os-financials__preview-actions">
                             <button
                                 type="button"
                                 className="alloy-os-financials__action"
                                 data-financials-payment-commit="true"
-                                disabled={running}
+                                disabled={running || (payerCandidateCount > 0 && !payPayerPersonId)}
                                 onClick={() => {
                                     // Cents, as an integer, because money is not
                                     // a float. The action refuses anything that
@@ -4673,15 +4773,16 @@ export default function FinancialsCard({
                                                 amount_cents: cents,
                                                 payment_method: payMethod,
                                                 charge_label: payTarget.label,
-                                                /* Identity of the payer. Omitted entirely when
-                                                   nobody was named — never defaulted to whoever
-                                                   happens to be responsible. */
-                                                ...(payPayerPersonId
+                                                /* Identity of the payer. Omitted entirely when the
+                                                   operator said it is not known — never defaulted to
+                                                   whoever happens to be responsible. */
+                                                ...(namedPayerId
                                                     ? {
                                                           payer_entity_type: "person",
-                                                          payer_entity_id: payPayerPersonId,
+                                                          payer_entity_id: namedPayerId,
                                                       }
                                                     : {}),
+                                                ...(payReference.trim() ? { reference_number: payReference.trim() } : {}),
                                             },
                                             subject,
                                         );
@@ -4714,7 +4815,7 @@ export default function FinancialsCard({
                                                  * named payer and refuses a mismatch.
                                                  */
                                                 ...(payStoredMethodId ? { payment_method_id: payStoredMethodId } : {}),
-                                                ...(payPayerPersonId ? { payer_person_id: payPayerPersonId } : {}),
+                                                ...(namedPayerId ? { payer_person_id: namedPayerId } : {}),
                                             },
                                             subject,
                                         );
@@ -5206,6 +5307,109 @@ export default function FinancialsCard({
          * hold: when it arrived, who paid, and WHICH obligations it is answering. Each application
          * opens its charge's record.
          */
+        /*
+         * ── W7-F044: WHERE THE PREPAID FIGURE CAME FROM ────────────────────────────────────────
+         *
+         * "Prepaid available" is not a wallet. It is posted receipts whose money has not been
+         * applied to any charge (amount − applied − refunded − held), summed by the resolver. This
+         * layer lists exactly those receipts — the resolver's own positions, joined to the receipt
+         * rows for who, when and by what — so the number is never unexplained. Each opens its
+         * Payment Details, which is where applying, reallocating and refunding already live.
+         */
+        if (overlay === "prepaid_detail" && vm) {
+            const cur = currency;
+            const byId = new Map(vm.payments.map((p) => [p.paymentId, p]));
+            const sources = (vm.prepaid.positions ?? [])
+                .filter((pos) => pos.availability === "available" && pos.unappliedCents - pos.heldCents > 0)
+                .map((pos) => ({ pos, receipt: byId.get(pos.paymentId) ?? null }));
+            const pending = (vm.prepaid.positions ?? []).filter((pos) => pos.availability === "pending");
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="prepaid_detail"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Prepaid available"
+                >
+                    <UniversalCard
+                        title="Prepaid available"
+                        insight={money(vm.prepaid.availableCents, cur)}
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="prepaid_detail"
+                        footerAction={null}
+                    >
+                        <p className="alloy-os-financials__note" data-financials-prepaid-explainer="true">
+                            Money a payment brought in that is not yet applied to any charge. It stays on the
+                            household&apos;s account — usable for any child — until it is applied to a charge or
+                            refunded. It does not expire. Held deposits and payments still clearing are not
+                            included.
+                        </p>
+                        {sources.length ? (
+                            <ul className="alloy-os-financials__payments" data-financials-prepaid-sources="true">
+                                {sources.map(({ pos, receipt }) => {
+                                    const original = receipt?.amountCents ?? null;
+                                    const applied = receipt?.appliedCents ?? null;
+                                    const refunded = receipt ? Math.max(0, receipt.amountCents - receipt.appliedCents - receipt.unappliedCents) : 0;
+                                    const remaining = pos.unappliedCents - pos.heldCents;
+                                    const methodText = receipt
+                                        ? (receipt.methodDisplay ?? PAYMENT_METHOD_LABELS[receipt.method as keyof typeof PAYMENT_METHOD_LABELS] ?? receipt.method)
+                                        : null;
+                                    return (
+                                        <li
+                                            key={pos.paymentId}
+                                            className="alloy-os-financials__payment"
+                                            data-financials-prepaid-source={pos.paymentId}
+                                        >
+                                            <span className="grid w-full grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+                                                {[
+                                                    { k: "payer", label: "Payer", value: receipt ? (receipt.payerName ?? receipt.payerLabel ?? "Not named") : "—" },
+                                                    { k: "received", label: "Received", value: receipt?.receivedAt ? formatDisplayDate(receipt.receivedAt) || "—" : "—" },
+                                                    { k: "method", label: "Method", value: methodText ?? "—" },
+                                                    { k: "original", label: "Original amount", value: original != null ? money(original, cur) : "—" },
+                                                    { k: "applied", label: "Applied to charges", value: applied != null ? money(applied, cur) : "—" },
+                                                    ...(refunded > 0 ? [{ k: "refunded", label: "Refunded", value: money(refunded, cur) }] : []),
+                                                    ...(pos.heldCents > 0 ? [{ k: "held", label: "Held deposit", value: money(pos.heldCents, cur) }] : []),
+                                                    { k: "remaining", label: "Prepaid remaining", value: money(remaining, cur) },
+                                                ].map((f) => (
+                                                    <span key={f.k} className="flex min-w-0 flex-col" data-financials-prepaid-line={f.k}>
+                                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{f.label}</span>
+                                                        <span className="truncate text-sm text-alloy-midnight/85">{f.value}</span>
+                                                    </span>
+                                                ))}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="alloy-os-financials__action"
+                                                data-financials-prepaid-open-payment={pos.paymentId}
+                                                onClick={() => push({ kind: "payment_detail", paymentId: pos.paymentId })}
+                                            >
+                                                Open payment — apply, reallocate or refund →
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-prepaid-empty="true">
+                                No payment on this account has unapplied money available.
+                            </p>
+                        )}
+                        {pending.length ? (
+                            <p className="alloy-os-financials__note" data-financials-prepaid-pending="true">
+                                {money(vm.prepaid.pendingCents, cur)} more is on payments still clearing — not available
+                                until they post.
+                            </p>
+                        ) : null}
+                    </UniversalCard>
+                </div>
+            );
+        }
         if (overlay === "payment_detail" && surface?.kind === "payment_detail" && vm) {
             const receipt = vm.payments.find((p) => p.paymentId === surface.paymentId) ?? null;
             /* The reallocation layer needs the account's own receipts and targets beneath it. */
@@ -6234,7 +6438,7 @@ export default function FinancialsCard({
                         ) : null
                     }
                 >
-                    {paymentBandFor(false)}
+                    {paymentBandFor(false, undefined, true)}
                 </UniversalCard>
             </div>
         );
@@ -6879,6 +7083,8 @@ export default function FinancialsCard({
                      * acts (Hold, Refund) live on its record.
                      */
                     onOpenPayment={({ paymentId }) => push({ kind: "payment_detail", paymentId })}
+                    /* W7-F044: the prepaid figure opens the receipts it is made of. */
+                    onOpenPrepaid={() => push({ kind: "prepaid_detail" })}
                 />
                 {/*
                     WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
@@ -7261,7 +7467,7 @@ export default function FinancialsCard({
                                                 testId="past-due"
                                             />
                                             <p className="alloy-os-financials__note">
-                                                Oldest unpaid {pastDue.oldestDueDate}
+                                                Oldest unpaid {humanDay(pastDue.oldestDueDate)}
                                             </p>
                                         </>
                                     ) : (
@@ -7604,6 +7810,8 @@ export type FinancialsSurface =
     | { kind: "charge_detail"; chargeId: string; label: string; seed?: ChargeDetailSeed | null }
     /* W7-F026: a receipt's record — the same kind of read as a charge's. */
     | { kind: "payment_detail"; paymentId: string }
+    /* W7-F044: the receipts the account's prepaid figure is made of — a read, like the two above. */
+    | { kind: "prepaid_detail" }
     | { kind: "adjust_charge"; chargeId: string }
     /* W7-F033: the money-moving acts, as command layers. Their facts live in the card's pending state. */
     | { kind: "payment_application" }

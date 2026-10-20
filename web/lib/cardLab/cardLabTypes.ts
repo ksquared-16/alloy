@@ -233,6 +233,8 @@ export type LedgerEntry = {
     type: string;
     /** Resolved via `resolveGlMapping` from the charge category. Null = genuinely unmapped. */
     glCode: string | null;
+    /** W7-F042: why a payment's account reads Unmapped (tooltip); null when it is mapped. */
+    glNote?: string | null;
     /**
      * WHO OWES THIS ROW — charge-grain, exactly as `financial_responsibility_allocations` holds it.
      * "Split" where one charge's allocations name two people; null where no allocation exists at

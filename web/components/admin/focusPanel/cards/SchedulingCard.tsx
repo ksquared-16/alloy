@@ -7,6 +7,7 @@ import { ATTENDANCE_TYPE_LABELS } from "@/lib/programs/programOfferings";
 import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financials/reductions/reductionReasonLabels";
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import { pricingRefusalCode } from "@/lib/enrollment/pricing/pricingRefusal";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -2252,7 +2253,7 @@ function ScheduleEditor({
      * caller sends a fresh one.
      */
     async function acceptAssignmentTuition(viewOverride?: AssignmentTuitionView | null): Promise<
-        { ok: true; state: string; label: string } | { ok: false; detail: string }
+        { ok: true; state: string; label: string } | { ok: false; detail: string; code?: string }
     > {
         const view = viewOverride ?? pricingView;
         const selected = offeringId.trim();
@@ -2319,7 +2320,7 @@ function ScheduleEditor({
         const json = (await res.json().catch(() => ({}))) as {
             error?: unknown;
             message?: unknown;
-            blockers?: Array<{ message?: string }>;
+            blockers?: Array<{ message?: string; code?: string }>;
             result?: { term?: { state?: string; amount_cents?: number; cadence_key?: string } };
         };
         if (!res.ok) {
@@ -2346,7 +2347,8 @@ function ScheduleEditor({
                 ?? say(json.message)
                 ?? json.blockers?.map((b) => b.message).filter(Boolean).join("; ")
                 ?? `Refused (${res.status}).`;
-            return { ok: false, detail: detail || `Refused (${res.status}).` };
+            const code = pricingRefusalCode(json);
+            return { ok: false, detail: detail || `Refused (${res.status}).`, ...(code ? { code } : {}) };
         }
         const term = json.result?.term;
         return {
@@ -2371,11 +2373,11 @@ function ScheduleEditor({
      * the same effective date is recognised rather than duplicated — so no workflow-level
      * idempotency authority is invented here.
      */
-    /** Settle tuition; answers the refusal detail when it did not settle (null when it did, or had nothing to settle). */
+    /** Settle tuition; answers the refusal (detail + code) when it did not settle, else null. */
     async function settleTuition(
         viewOverride?: AssignmentTuitionView | null,
         opts?: { rereadAfter?: boolean },
-    ): Promise<string | null> {
+    ): Promise<{ detail: string; code?: string } | null> {
         if (!offeringId.trim() || child.kind !== "child") return null;
         try {
             const outcome = await acceptAssignmentTuition(viewOverride);
@@ -2384,17 +2386,19 @@ function ScheduleEditor({
                     kind: outcome.state === "overridden" ? "overridden" : "accepted",
                     label: outcome.label,
                 });
-                /* Persisted truth is re-read; the dropdown's value is not the answer. Skipped when the
-                   editor is about to close (Save): nothing would ever read it. */
+                /* Persisted truth is re-read; the dropdown's value is not the answer. On Save the
+                   editor is about to close, so the shared view is only marked stale (no request) —
+                   the next reader re-reads it. */
                 if (opts?.rereadAfter !== false) await refreshPricingView();
+                else if (opportunityId) invalidateFinancialConfig(opportunityId);
                 return null;
             }
             setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
-            return outcome.detail;
+            return { detail: outcome.detail, ...(outcome.code ? { code: outcome.code } : {}) };
         } catch (e) {
             const detail = e instanceof Error ? e.message : "Tuition could not be accepted.";
             setTuitionOutcome({ kind: "needs_attention", detail });
-            return detail;
+            return { detail };
         }
     }
 
@@ -2433,11 +2437,25 @@ function ScheduleEditor({
      * stale. So the canonical view is re-read first and the commit is made against it.
      */
     async function settleTuitionAfterSave(): Promise<void> {
-        const fresh = await refreshPricingView();
-        setDraftView(null);
-        const refused = await settleTuition(fresh, { rereadAfter: false });
+        /*
+         * THE PREVIEW IS TRIED FIRST; THE SERVER DECIDES.
+         *
+         * The tuition the operator chose was resolved (as a draft) from exactly the facts this Save
+         * just wrote — room's program, days, schedule type, start, site — by the same resolver. Its
+         * resolution key is therefore the key the saved assignment resolves to, and re-reading the
+         * view before committing (~1.2–1.7s on staging) told the commit nothing new. The accept
+         * re-reads the saved assignment and refuses `stale_resolution` if the facts or configuration
+         * moved; only then is the view re-read and the commit retried once. Nothing can be accepted
+         * against a preview the server does not reproduce.
+         */
+        const preview = draftView ?? pricingView;
+        let refused = await settleTuition(preview, { rereadAfter: false });
+        if (refused?.code === "stale_resolution") {
+            const fresh = await refreshPricingView();
+            refused = await settleTuition(fresh, { rereadAfter: false });
+        }
         // The editor closes after Save; a tuition step that did not settle must not close with it.
-        if (refused) onNotice?.(`Assignment saved — tuition was not recorded: ${refused}`);
+        if (refused) onNotice?.(`Assignment saved — tuition was not recorded: ${refused.detail}`);
     }
 
     async function persistAssignmentQuote(): Promise<void> {

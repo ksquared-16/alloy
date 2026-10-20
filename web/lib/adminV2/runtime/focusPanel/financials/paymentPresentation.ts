@@ -119,7 +119,9 @@ const METHOD_LABELS: Record<string, string> = {
     check: "Check",
     ach: "Bank transfer",
     card: "Card",
-    manual: "Manual",
+    money_order: "Money order",
+    manual: "External payment",
+    subsidy: "Subsidy",
     other: "Other",
 };
 

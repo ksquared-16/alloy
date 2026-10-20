@@ -37,6 +37,7 @@ import {
     upsertSubsidyProgram,
 } from "@/lib/financials/subsidy/subsidyService";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 export const SUBSIDY_PERMISSION = "fin.subsidy" as const;
 export const SUBSIDY_ACTION_KEYS = {
@@ -229,7 +230,7 @@ export const financialSubsidyActions: RegisteredAction[] = [
                     : [{ code: "invalid_coverage_start", message: "Name the date coverage starts.", field: "coverage_start" }],
             ),
         preview: (p) => ({
-            summary: `Authorized from ${t(p?.coverage_start)}${t(p?.coverage_end) ? ` to ${t(p?.coverage_end)}` : ""}.`,
+            summary: `Authorized from ${humanDay(t(p?.coverage_start))}${t(p?.coverage_end) ? ` to ${humanDay(t(p?.coverage_end))}` : ""}.`,
             changes: [
                 t(p?.authorized_amount_cents) ? `Authorized $${(Number(p?.authorized_amount_cents) / 100).toFixed(2)}` : "",
                 t(p?.family_copay_cents) ? `Agency states a family copay of $${(Number(p?.family_copay_cents) / 100).toFixed(2)} — recorded, not applied` : "",

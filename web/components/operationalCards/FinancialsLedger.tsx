@@ -136,6 +136,8 @@ export type FinancialsLedgerRowView = {
      * Default true. `false` means the row may not make a claim about configuration either way.
      */
     glApplies?: boolean;
+    /** W7-F042: the tooltip that says why an account reads as it does. */
+    glNote?: string | null;
     /** Already formatted and signed by the authority that owns the figure. */
     amount: string;
     /** A second line beneath the amount — what a row still owes, what is unapplied. */
@@ -359,6 +361,7 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
                 data-financials-gl-state={
                     row.glLabel ? "mapped" : row.glApplies === false ? "not-applicable" : "unmapped"
                 }
+                title={row.glNote ?? undefined}
             >
                 {row.glLabel ?? (row.glApplies === false ? "—" : "Unmapped")}
             </span>

@@ -44,7 +44,22 @@ import { humanRange } from "@/lib/financials/dates/humanDates";
  */
 
 type GlAccount = { id: string; code: string; name: string; type: string; is_active: boolean };
-type MappingRow = { categoryKey: string; categoryLabel: string; mappingKey: string; glAccountId: string | null };
+type MappingRow = { categoryKey: string; categoryLabel: string; mappingKey: string; glAccountId: string | null; group?: "charge" | "payment" };
+
+/*
+ * W7-F042: what each payment method IS, in the operator's words, so choosing its destination does
+ * not require knowing the platform's tender vocabulary.
+ */
+const PAYMENT_METHOD_HINTS: Record<string, string> = {
+    receipts_card: "Card payments collected through Stripe, or recorded by hand",
+    receipts_ach: "Bank-account (ACH) debits collected through Stripe",
+    receipts_cash: "Cash received at the front desk",
+    receipts_check: "Paper checks received",
+    receipts_money_order: "Money orders received",
+    receipts_manual: "Payments taken outside Alloy and recorded here",
+    receipts_subsidy: "Agency and subsidy remittances",
+    receipts_other: "Anything else recorded as Other",
+};
 type Calendar = { id: string; calendar_key: string; name: string; period_style: string; is_active: boolean };
 type Period = {
     id: string;
@@ -74,7 +89,12 @@ export default function AccountingPostingPanels() {
 
 // ── WHERE A CATEGORY POSTS ──────────────────────────────────────────────────────────────────────
 
-function GlMappingPanel() {
+/**
+ * ONE MAPPING PANEL, TWO SUBJECTS. `group="charge"` is where each charge category posts (revenue,
+ * contra, liability); `group="payment"` is where each payment method's money LANDS (W7-F042) —
+ * offered only asset accounts, because the route refuses anything else.
+ */
+export function GlMappingPanel({ group = "charge" }: { group?: "charge" | "payment" } = {}) {
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [mappings, setMappings] = useState<MappingRow[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -88,22 +108,26 @@ function GlMappingPanel() {
             const json = (await res.json()) as { accounts?: GlAccount[]; mappings?: MappingRow[]; error?: string };
             if (!res.ok) throw new Error(json.error || "Could not read GL mappings.");
             setAccounts((json.accounts ?? []).filter((a) => a.is_active));
-            setMappings(json.mappings ?? []);
+            setMappings((json.mappings ?? []).filter((m) => (m.group ?? "charge") === group));
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Could not read GL mappings.");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [group]);
 
     useEffect(() => {
         void load();
     }, [load]);
 
+    const destinations = useMemo(
+        () => (group === "payment" ? accounts.filter((a) => a.type === "asset") : accounts),
+        [accounts, group],
+    );
     const options = useMemo(
-        () => accounts.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` })),
-        [accounts],
+        () => destinations.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` })),
+        [destinations],
     );
 
     const setMapping = async (mappingKey: string, glAccountId: string) => {
@@ -133,14 +157,27 @@ function GlMappingPanel() {
     return (
         <section
             className="rounded-xl border border-alloy-stone/25 bg-white p-4"
-            data-testid="gl-mapping-panel"
+            data-testid={group === "payment" ? "payment-destination-panel" : "gl-mapping-panel"}
         >
             <header className="flex flex-wrap items-baseline justify-between gap-2">
                 <div>
-                    <h3 className="text-[15px] font-semibold text-alloy-midnight">Where each charge category posts</h3>
-                    <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
-                        Charge categories are fixed by the platform. Choose the GL account each one posts to.
-                    </p>
+                    {group === "payment" ? (
+                        <>
+                            <h3 className="text-[15px] font-semibold text-alloy-midnight">Where each payment method&apos;s money lands</h3>
+                            <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
+                                Choose the asset account — cash on hand, a bank account, undeposited funds or a
+                                clearing account — each method settles into. This is never the revenue account of
+                                the charge being paid. Each payment records the destination in force when it arrives.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <h3 className="text-[15px] font-semibold text-alloy-midnight">Where each charge category posts</h3>
+                            <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
+                                Charge categories are fixed by the platform. Choose the GL account each one posts to.
+                            </p>
+                        </>
+                    )}
                 </div>
                 {/*
                  * The count is the point of the header. An operator who has never opened this screen
@@ -153,7 +190,7 @@ function GlMappingPanel() {
                         }`}
                         data-testid="gl-mapping-unmapped-count"
                     >
-                        {unmapped > 0 ? `${unmapped} unmapped` : "All categories mapped"}
+                        {unmapped > 0 ? `${unmapped} unmapped` : group === "payment" ? "All methods mapped" : "All categories mapped"}
                     </span>
                 ) : null}
             </header>
@@ -166,9 +203,11 @@ function GlMappingPanel() {
 
             {loading ? (
                 <p className="mt-3 text-[12px] text-alloy-midnight/50">Reading mappings…</p>
-            ) : accounts.length === 0 ? (
+            ) : destinations.length === 0 ? (
                 <p className="mt-3 text-[12px] text-alloy-midnight/60" data-testid="gl-mapping-no-accounts">
-                    No active GL codes exist yet. Add one above, then choose where each category posts.
+                    {group === "payment"
+                        ? "No asset accounts exist yet. In GL Codes, add accounts of type Asset — for example Cash on hand, Undeposited funds, Stripe clearing — then choose where each method lands."
+                        : "No active GL codes exist yet. Add one above, then choose where each category posts."}
                 </p>
             ) : (
                 <ul className="mt-3 divide-y divide-alloy-stone/12" data-testid="gl-mapping-list">
@@ -183,6 +222,11 @@ function GlMappingPanel() {
                                 <span className="block text-[13px] font-medium text-alloy-midnight">
                                     {row.categoryLabel}
                                 </span>
+                                {group === "payment" && PAYMENT_METHOD_HINTS[row.mappingKey] ? (
+                                    <span className="block text-[11.5px] text-alloy-midnight/55">
+                                        {PAYMENT_METHOD_HINTS[row.mappingKey]}
+                                    </span>
+                                ) : null}
                                 {/* The key is provenance, not a control: it is what the ledger resolves through. */}
                                 <span className="block font-mono text-[10.5px] text-alloy-midnight/45">
                                     {row.mappingKey}
@@ -195,7 +239,7 @@ function GlMappingPanel() {
                                     options={options}
                                     placeholder="Not mapped"
                                     density="compact"
-                                    aria-label={`GL account for ${row.categoryLabel}`}
+                                    aria-label={group === "payment" ? `Destination for ${row.categoryLabel}` : `GL account for ${row.categoryLabel}`}
                                     testId={`gl-mapping-select-${row.mappingKey}`}
                                     disabled={savingKey === row.mappingKey}
                                 />

@@ -94,7 +94,9 @@ describe("THE GATE — zero is silence", () => {
         /* W7-F031: the shared account summary states prepaid as context, only when the adapter has it. */
         expect(src("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts"))
             .toMatch(/\(vm\.prepaid\?\.availableCents \?\? 0\) > 0\s*\?\s*\[\{ key: "prepaid"/);
-        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/!hydrating && summary\.context\.length \?/);
+        /* W7-F043: prepaid and held stack beside the figures, and only when the adapter states them. */
+        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/const held = hydrating \? \[\] : summary\.context\.filter\(\(c\) => c\.key === "prepaid" \|\| c\.key === "held"\);/);
+        expect(src("components/operationalCards/FinancialsDetailCard.tsx")).toMatch(/\{held\.length \? \(/);
         expect(src("components/operationalCards/FinancialsCard.tsx"))
             .toMatch(/\{period\.availablePrepaid \? \(/);
     });

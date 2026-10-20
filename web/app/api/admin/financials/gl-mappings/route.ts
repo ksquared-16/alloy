@@ -51,20 +51,30 @@ type MappingRow = { key: string; gl_account_id: string | null; is_active: boolea
  * earning it are different accounting facts, so a card receipt never borrows the revenue account of
  * the charge it pays.
  */
-function canonicalKeys(): Array<{ categoryKey: string; categoryLabel: string; mappingKey: string }> {
+function canonicalKeys(): Array<{ categoryKey: string; categoryLabel: string; mappingKey: string; group: "charge" | "payment" }> {
     return [
         ...Object.entries(CHARGE_CATEGORY_GL_MAPPING_KEY).map(([categoryKey, mappingKey]) => ({
             categoryKey,
             categoryLabel: chargeCategoryLabel(categoryKey),
             mappingKey,
+            group: "charge" as const,
         })),
         ...Object.entries(PAYMENT_METHOD_GL_MAPPING_KEY).map(([method, mappingKey]) => ({
             categoryKey: `payment:${method}`,
-            categoryLabel: `Payments received · ${PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS]}`,
+            categoryLabel: PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS],
             mappingKey,
+            group: "payment" as const,
         })),
     ];
 }
+
+/*
+ * W7-F042: A PAYMENT METHOD'S DESTINATION IS AN ASSET — cash on hand, a bank account, undeposited
+ * funds, a processor or ACH clearing account. Receiving money and earning it are different facts,
+ * so a payment method is refused a revenue (or any non-asset) account here rather than trusted to
+ * the chooser.
+ */
+const PAYMENT_MAPPING_KEYS = new Set<string>(Object.values(PAYMENT_METHOD_GL_MAPPING_KEY));
 
 const MAPPING_KEYS = new Set<string>([
     ...Object.values(CHARGE_CATEGORY_GL_MAPPING_KEY),
@@ -164,7 +174,7 @@ export async function PUT(request: NextRequest) {
        mapping that will render as a dead name in the ledger. */
     const { data: account, error: accountError } = await supabase
         .from("gl_accounts")
-        .select("id, is_active")
+        .select("id, is_active, type")
         .eq("org_id", ctx.orgId)
         .eq("id", glAccountId)
         .maybeSingle();
@@ -172,6 +182,12 @@ export async function PUT(request: NextRequest) {
     if (!account) return NextResponse.json({ error: "That GL account does not exist." }, { status: 400 });
     if ((account as { is_active?: boolean }).is_active === false) {
         return NextResponse.json({ error: "That GL account is inactive." }, { status: 400 });
+    }
+    if (PAYMENT_MAPPING_KEYS.has(mappingKey) && (account as { type?: string }).type !== "asset") {
+        return NextResponse.json(
+            { error: "A payment method settles into an asset account (cash, bank, undeposited funds or clearing) — never revenue." },
+            { status: 400 },
+        );
     }
 
     const { data: existing, error: existingError } = await supabase

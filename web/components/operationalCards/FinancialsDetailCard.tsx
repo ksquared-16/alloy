@@ -81,6 +81,7 @@ export default function FinancialsDetailCard({
     onAddCharge,
     onOpenCharge,
     onOpenPayment,
+    onOpenPrepaid,
     onManagePayment,
     onAddAdjustment,
     onApplyHeldFunds,
@@ -228,6 +229,8 @@ export default function FinancialsDetailCard({
     onOpenCharge?: (args: { chargeId: string; label: string }) => void;
     /** Opening a receipt's record — Payment Details. A read, like opening a charge. */
     onOpenPayment?: (args: { paymentId: string }) => void;
+    /** W7-F044: the prepaid figure opens where it came from. */
+    onOpenPrepaid?: () => void;
     onManagePayment?: () => void;
     onAddAdjustment?: () => void;
     /*
@@ -565,8 +568,42 @@ export default function FinancialsDetailCard({
                       * W7-F031: the account summary, shared with the Accounts header so one figure
                       * has one name everywhere — three answers, each with its own context.
                       */}
-                    <FinancialsAccountSummary evidence={evidence} hydrating={hydrating} />
+                    <FinancialsAccountSummary evidence={evidence} hydrating={hydrating} onOpenPrepaid={onOpenPrepaid} />
 
+
+                {/*
+                    TWO PEER ACTIONS, NOT THREE COMPETING BUTTONS.
+                    Pay now and Record payment are both ways INTO the same operation — settling what
+                    is owed — and giving each permanent equal real estate above the ledger spent a
+                    third of the header on a choice the operator has not made yet. `Payment` enters
+                    that operation and offers whichever variants are actually supported.
+                    `Add charge` stays a peer because it changes what is OWED rather than settling
+                    it, which is a different verb with a different consequence.
+                */}
+                    </div>
+                    <div className="alloy-os-fdetail__actions">
+                        {/*
+                          * DISABLED AND EXPLAINED, never live-but-dead. Without an opener this
+                          * rendered as a primary button with no handler: clicking it did nothing
+                          * and said nothing, which is the one thing a mounted command may not do.
+                          */}
+                        <Action
+                            primary
+                            onClick={onPayment}
+                            disabled={!onPayment}
+                            title={onPayment ? undefined : (paymentUnavailableReason ?? undefined)}
+                        >
+                            Payment
+                        </Action>
+                        {/* One entry for charge and adjustment alike — the command carries the mode. */}
+                        <Action onClick={onAddCharge}>Add</Action>
+                    </div>
+                {/*
+                  * W7-F041/F043: THE RELATIONSHIP ROW SPANS THE ROLLUP. It used to sit inside the
+                  * facts column, so its right-hand group (method + Manage payments) ended in the
+                  * middle of the card. As a full-width row its end group sits directly beneath
+                  * Payment / Add.
+                  */}
                 {/*
                   * ── ONE COMPACT RELATIONSHIP ROW, IN THREE GROUPS ──────────────────────────
                   *
@@ -663,18 +700,11 @@ export default function FinancialsDetailCard({
                                     </span>
                                 ) : null}
                                 {/*
-                                  * W7-F037: WHO OWES IS MANAGED BESIDE WHO PAYS, IN WORDS. The only door
-                                  * used to be an unlabeled gear in the ledger filters; a money decision
-                                  * must not hide behind an icon an operator has to guess at.
+                                  * W7-F041: ONE DOOR TO RESPONSIBILITY. The labelled link that stood here
+                                  * (W7-F037) duplicated the gear beside "Anyone responsible"; the Director
+                                  * chose the gear, named by its tooltip and accessible name. This row
+                                  * keeps one door — the one about how they pay.
                                   */}
-                                <button
-                                    type="button"
-                                    onClick={() => administration.onManageResponsibility()}
-                                    data-financials-manage-responsibility="open"
-                                    className="alloy-os-fdetail__payeraction"
-                                >
-                                    Manage responsibility <span aria-hidden>&rarr;</span>
-                                </button>
                                 <button
                                     type="button"
                                     onClick={administration.onManagePayments}
@@ -687,34 +717,6 @@ export default function FinancialsDetailCard({
                         ) : null}
                     </div>
                 ) : null}
-
-                {/*
-                    TWO PEER ACTIONS, NOT THREE COMPETING BUTTONS.
-                    Pay now and Record payment are both ways INTO the same operation — settling what
-                    is owed — and giving each permanent equal real estate above the ledger spent a
-                    third of the header on a choice the operator has not made yet. `Payment` enters
-                    that operation and offers whichever variants are actually supported.
-                    `Add charge` stays a peer because it changes what is OWED rather than settling
-                    it, which is a different verb with a different consequence.
-                */}
-                    </div>
-                    <div className="alloy-os-fdetail__actions">
-                        {/*
-                          * DISABLED AND EXPLAINED, never live-but-dead. Without an opener this
-                          * rendered as a primary button with no handler: clicking it did nothing
-                          * and said nothing, which is the one thing a mounted command may not do.
-                          */}
-                        <Action
-                            primary
-                            onClick={onPayment}
-                            disabled={!onPayment}
-                            title={onPayment ? undefined : (paymentUnavailableReason ?? undefined)}
-                        >
-                            Payment
-                        </Action>
-                        {/* One entry for charge and adjustment alike — the command carries the mode. */}
-                        <Action onClick={onAddCharge}>Add</Action>
-                    </div>
                 </div>
 
                 {/*
@@ -808,7 +810,13 @@ export default function FinancialsDetailCard({
                           * border, so the filter row does not become a command footer. Its
                           * accessible name says what it does — an icon shape is not a sentence.
                           */}
-                        {lens !== "payments" && administration ? (
+                        {/*
+                          * W7-F041: THE canonical door to responsibility — the only one. It is
+                          * therefore present under every lens (the Payments lens included), so the
+                          * entry point never disappears with a filter. Tooltip and accessible name
+                          * are the same words.
+                          */}
+                        {administration ? (
                             <button
                                 type="button"
                                 /*
@@ -819,7 +827,7 @@ export default function FinancialsDetailCard({
                                  */
                                 onClick={() => administration.onManageResponsibility()}
                                 aria-label="Manage responsibility"
-                                title="Manage responsibility — who contractually owes, from a date"
+                                title="Manage responsibility"
                                 data-financials-manage-responsibility="gear"
                                 className="inline-flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded text-alloy-midnight/45 transition hover:bg-alloy-stone/15 hover:text-alloy-bend-pine focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40"
                             >
@@ -1442,6 +1450,7 @@ function ledgerRowFromPayment(
         glLabel: e.glCode,
         /* A collection still in flight has no receipt yet, so no tender account to claim. */
         glApplies: pay.kind !== "collection",
+        glNote: e.glNote ?? null,
         amount: e.amount,
         status: pay.statusLabel,
         responsibleParty: null,
@@ -1500,7 +1509,16 @@ function LensFilter({
  * two names on two surfaces. The figures and their relationships are the adapter's
  * (`period.summary`); this lays out three primary answers and a quiet context line.
  */
-export function FinancialsAccountSummary({ evidence, hydrating = false }: { evidence: FinancialsEvidence; hydrating?: boolean }) {
+export function FinancialsAccountSummary({
+    evidence,
+    hydrating = false,
+    onOpenPrepaid,
+}: {
+    evidence: FinancialsEvidence;
+    hydrating?: boolean;
+    /** W7-F044: the prepaid figure is a door to where it came from, never a bare number. */
+    onOpenPrepaid?: () => void;
+}) {
     const { period, pastDue } = evidence;
     /* The adapter states the summary; a lab specimen without one reads the same figures plainly. */
     const summary = period.summary ?? {
@@ -1517,49 +1535,73 @@ export function FinancialsAccountSummary({ evidence, hydrating = false }: { evid
             ...(period.heldFunds ? [{ key: "held", text: `${period.heldFunds} held deposit` }] : []),
         ],
     };
+    /*
+     * ── W7-F043: SECONDARY FACTS NEVER CLAIM A ROW ───────────────────────────────────────────
+     *
+     * Not yet due, prepaid and held used to sit on their own full-width line under the three
+     * figures, which pushed the ledger down by a row for facts that are context, not answers.
+     * Not yet due is about collection timing, so it rides Due now's note line; prepaid and held
+     * are money the account holds, so they stack quietly beside the figures. Every value is the
+     * adapter's, unchanged.
+     */
+    const notYetDue = hydrating ? null : (summary.context.find((c) => c.key === "not-yet-due")?.text ?? null);
+    const held = hydrating ? [] : summary.context.filter((c) => c.key === "prepaid" || c.key === "held");
     return (
-        <>
-            <div className="alloy-os-fdetail__strip" data-financials-account-summary-strip="true">
-                        {/*
-                          * ── W7-F031: THREE QUESTIONS, NOT EIGHT PEERS ─────────────────────────────
-                          *
-                          * What needs paying now, what this period owes, what is coming. Past due is
-                          * Due now's note (said once — the header chip that repeated it is gone); Current
-                          * balance carries its period and the two figures it is the difference of
-                          * (Responsibility charged − Paid); Not yet due, prepaid and held are context.
-                          * Every figure is the adapter's, unchanged.
-                          */}
-                        <Stat
-                            label="Due now"
-                            value={summary.dueNow}
-                            strong
-                            note={hydrating ? null : summary.pastDueNote}
-                            noteTone="due"
-                            testId="summary-due-now"
-                        />
-                        <Stat
-                            label={`Balance · ${summary.balanceScope}`}
-                            value={summary.balance}
-                            note={hydrating ? null : summary.balanceNote}
-                            testId="summary-balance"
-                        />
-                        {summary.scheduled ? (
-                            <Stat
-                                label="Scheduled"
-                                value={summary.scheduled}
-                                note="activates with its period"
-                                testId="summary-scheduled"
-                            />
-                        ) : null}
-            </div>
-        {!hydrating && summary.context.length ? (
-            <p className="alloy-os-fdetail__summarycontext" data-financials-summary-context="true">
-                {summary.context.map((c) => (
-                    <span key={c.key} data-financials-summary-context-item={c.key}>{c.text}</span>
-                ))}
-            </p>
-        ) : null}
-        </>
+        <div className="alloy-os-fdetail__strip" data-financials-account-summary-strip="true">
+            {/*
+              * ── W7-F031: THREE QUESTIONS, NOT EIGHT PEERS ─────────────────────────────
+              *
+              * What needs paying now, what this period owes, what is coming. Past due is
+              * Due now's note (said once — the header chip that repeated it is gone); Current
+              * balance carries its period and the two figures it is the difference of
+              * (Responsibility charged − Paid). Every figure is the adapter's, unchanged.
+              */}
+            <Stat
+                label="Due now"
+                value={summary.dueNow}
+                strong
+                note={hydrating ? null : summary.pastDueNote}
+                noteTone="due"
+                aside={notYetDue}
+                asideTestId="summary-not-yet-due"
+                testId="summary-due-now"
+            />
+            <Stat
+                label={`Balance · ${summary.balanceScope}`}
+                value={summary.balance}
+                note={hydrating ? null : summary.balanceNote}
+                testId="summary-balance"
+            />
+            {summary.scheduled ? (
+                <Stat
+                    label="Scheduled"
+                    value={summary.scheduled}
+                    note="activates with its period"
+                    testId="summary-scheduled"
+                />
+            ) : null}
+            {held.length ? (
+                <span className="alloy-os-fdetail__statside" data-financials-summary-context="true">
+                    {held.map((c) =>
+                        c.key === "prepaid" && onOpenPrepaid ? (
+                            <button
+                                key={c.key}
+                                type="button"
+                                className="alloy-os-fdetail__statsidelink"
+                                data-financials-summary-context-item={c.key}
+                                data-financials-prepaid-open="true"
+                                onClick={onOpenPrepaid}
+                                title="Where this prepaid came from"
+                            >
+                                {c.text} <span aria-hidden>&rarr;</span>
+                            </button>
+                        ) : (
+                            <span key={c.key} data-financials-summary-context-item={c.key}>{c.text}</span>
+                        ),
+                    )}
+                </span>
+            ) : null}
+        </div>
     );
 }
 
@@ -1578,6 +1620,8 @@ export function Stat({
     testId,
     note,
     noteTone,
+    aside,
+    asideTestId,
 }: {
     label: string;
     value: string;
@@ -1587,6 +1631,12 @@ export function Stat({
     /** W7-F031: the figure's own context, beneath it — "$Y past due", "$R charged · $P paid". */
     note?: string | null;
     noteTone?: "due";
+    /**
+     * W7-F043: a second, quieter fact on the SAME line as the note ("$225 not yet due · next
+     * Oct 31, 2026"), so secondary context never claims a row of its own.
+     */
+    aside?: string | null;
+    asideTestId?: string;
 }) {
     return (
         <span className="alloy-os-fdetail__stat" data-tone={tone} data-testid={testId}>
@@ -1594,9 +1644,18 @@ export function Stat({
             <span className={clsx("alloy-os-fdetail__statvalue", strong && "alloy-os-fdetail__statvalue--strong")}>
                 {value}
             </span>
-            {note ? (
-                <span className="alloy-os-fdetail__statnote" data-tone={noteTone} data-testid={testId ? `${testId}-note` : undefined}>
-                    {note}
+            {note || aside ? (
+                <span className="alloy-os-fdetail__statnotes">
+                    {note ? (
+                        <span className="alloy-os-fdetail__statnote" data-tone={noteTone} data-testid={testId ? `${testId}-note` : undefined}>
+                            {note}
+                        </span>
+                    ) : null}
+                    {aside ? (
+                        <span className="alloy-os-fdetail__statnote" data-testid={asideTestId}>
+                            {aside}
+                        </span>
+                    ) : null}
                 </span>
             ) : null}
         </span>

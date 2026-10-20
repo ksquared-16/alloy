@@ -182,6 +182,8 @@ export type FinancialsPaymentRow = {
     glCode?: string | null;
     glAccountName?: string | null;
     glMappingKey?: string | null;
+    /** W7-F042: why the account reads as it does — recorded, none configured then, or pre-stamping history. */
+    glState?: FinancialsPaymentGlState;
     /**
      * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
      * is doing something; this says WHICH obligations, and which were undone — the difference between
@@ -191,6 +193,8 @@ export type FinancialsPaymentRow = {
     reference: string | null;
     notes: string | null;
 };
+
+export type FinancialsPaymentGlState = "recorded" | "unconfigured_at_receipt" | "before_stamping";
 
 export type FinancialsPaymentApplication = {
     allocationId: string;
@@ -588,6 +592,16 @@ export type FinancialsCardVM = {
         pendingCents: number;
         heldCents: number;
         heldSupported: boolean;
+        /**
+         * W7-F044: the receipts the figures are made of — the resolver's own classification, so a
+         * prepaid amount can always be traced to the payments behind it. Absent before the read.
+         */
+        positions?: Array<{
+            paymentId: string;
+            availability: "available" | "pending" | "refunding" | "held";
+            unappliedCents: number;
+            heldCents: number;
+        }>;
     };
     /**
      * The held deposits behind `prepaid.heldCents` (Payments V1 · W4).
@@ -2110,15 +2124,25 @@ async function buildFinancialsCardVMInner(
             vm.payments = vm.payments.map((row) => {
                 const view = byPaymentId.get(row.paymentId);
                 const facts = ledgerFacts.get(row.paymentId);
-                const glMappingKey = paymentGlMappingKey(row.method);
-                const account = glMappingKey ? accountByMappingKey.get(glMappingKey) ?? null : null;
+                /*
+                 * W7-F042: THE DESTINATION RECORDED WITH THE RECEIPT — never today's mapping. A
+                 * receipt from before destinations were stamped stays Unmapped rather than being
+                 * re-labelled by configuration that did not exist when the money arrived.
+                 */
+                const stamp = facts?.receiptAccount;
+                const glMappingKey = stamp?.mapping_key ?? paymentGlMappingKey(row.method);
                 const enriched = {
                     payerName: facts?.payerName ?? null,
                     payerKind: facts?.payerKind ?? null,
                     methodDisplay: facts?.methodDisplay ?? null,
                     glMappingKey,
-                    glCode: account?.code ?? null,
-                    glAccountName: account?.name ?? null,
+                    glCode: stamp?.gl_account_id ? stamp.code : null,
+                    glAccountName: stamp?.gl_account_id ? stamp.name : null,
+                    glState: (stamp?.gl_account_id
+                        ? "recorded"
+                        : stamp
+                            ? "unconfigured_at_receipt"
+                            : "before_stamping") as FinancialsPaymentGlState,
                 };
                 if (!view) return { ...row, ...enriched };
                 return {
