@@ -1303,6 +1303,13 @@ export default function ChildrenCard({
      */
     const effectiveConfigurationFingerprint = contextualCardConfigurationFingerprint(focusRows);
 
+    const singleChildView =
+        Boolean(focused)
+        && (lifecycle === "edit"
+            || lifecycle === "related"
+            || lifecycle === "expanded"
+            || (lifecycle === "focus" && disclosure.depth === "details"));
+
     return (
         <div
             className="alloy-os-household alloy-os-children"
@@ -1319,13 +1326,15 @@ export default function ChildrenCard({
         >
             <UniversalCard
                 title={model.title}
-                insight={evidence.answerLine}
+                // A single child's view is about that child: no household roll-up ("2 children ·
+                // 1 enrolled, 1 waitlisted"), and the chip speaks only for the selected child.
+                insight={singleChildView ? "" : evidence.answerLine}
                 supportingInsight={lifecycle === "summary" && disclosure.depth === "summary" ? evidence.supportingLine : null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="collection"
-                statusChip={statusChip}
-                statusTone={statusTone}
+                statusChip={singleChildView ? (focused?.needsAttention ? "Needs info" : null) : statusChip}
+                statusTone={singleChildView ? (focused?.needsAttention ? "at-risk" : "neutral") : statusTone}
                 modalClass="record"
                 density={density}
                 gridSpan={model.span}

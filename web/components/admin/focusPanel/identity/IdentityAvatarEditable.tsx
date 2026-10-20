@@ -285,7 +285,9 @@ export default function IdentityAvatarEditable({
                 visible={visible}
                 role={role}
                 recordId={recordId}
-                allowZoom={!showUploadControls}
+                // Zoom is available wherever a photo is shown — including beside Change/Remove.
+                // The trigger stops propagation, so it never collides with those controls.
+                allowZoom
             />
             {showUploadControls ? (
                 <div className="identity-avatar-editable__actions">
