@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-20
 supersedes: []
 ---
 
@@ -62,6 +62,35 @@ A business process defines:
 - **Outcome Definitions** — stage-owned completion choices; Work Templates select Available Outcomes and outcomes compose movement, follow-up work, and attention
 - **Required information & actions** — per-stage configuration
 - **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
+
+### Process model — staged lifecycle vs domain projection (BP V2, October 2026)
+
+The list above describes a **staged lifecycle**, which is what every process published before
+October 2026 is (Enrollment). A process may instead declare `process_model_v1` (`web/lib/lifecycle/processModelV1.ts`):
+
+| `process_model_v1` | Meaning | Publishes with |
+|---|---|---|
+| absent, or `{ kind: "staged_lifecycle" }` | Records move through authored stages. | everything above; `primary_entity: "opportunity"` |
+| `{ kind: "domain_projection", domain: "assignments" \| "billing" }` | The process **reads** another domain's authority (Assignments → Scheduling, Billing → Financials). It has no stages and never persists a synthetic stage. | name, description, `process_model_v1` only — **no** `primary_entity` |
+
+- **Absence is the one default.** An authored model the platform cannot read is refused at publish
+  (`process_model_unknown`, read from the raw payload) and survives draft saves verbatim — it never
+  silently becomes a staged lifecycle.
+- **Publication refuses lifecycle configuration on a projection** (`domain_projection_lifecycle_config`):
+  active stages, `tracks_v1`, `entry_points_v1`, `participation_v1` and `work_views_v1`. Work Views are
+  refused **for now** because every Work View today evaluates the Enrollment lead population; domain-backed
+  Work Views are BP V2 Slice 2.
+- **Same publication chain.** One department per process; draft → validate → publish → department
+  projection, unchanged. The publish RPC is content-agnostic; the gate is `validateBusinessProcessForPublish`.
+- **Workspace.** A projection is its own catalog entry and tile. Until it has Work Views its card has
+  `entryHref: null` and states why in the existing CTA slot (Sidebar: a non-link row). It receives none
+  of the lifecycle fallbacks — department lanes, builder stages, work-unit list, the `new_leads` entry,
+  Enrollment surface fields — and no rollup counts. `new_leads` is Enrollment's last-resort entry only.
+- **Identity is declared.** Tile signal family and card identity come from the model (Billing →
+  `financial`; Assignments → none, so no signal), not from the process key's text. Settings and the
+  tile share one key (`processCardConfigKey`).
+- **Work Views are per process.** Tile navigation reads the named process's `work_views_v1`, not the
+  department's active process.
 
 **Operations hierarchy (Commands mission):** Commands define capabilities → Automations may invoke/react to Commands → Business Processes select Commands → Stages recommend/evaluate selected Commands → Surfaces expose effective Commands. There is **no** standalone Organization Commands configuration product. `/organization/commands` is internal capability diagnostics only. `command_set_v1` remains process selection authority.
 
