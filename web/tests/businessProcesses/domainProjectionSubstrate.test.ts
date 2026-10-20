@@ -62,7 +62,9 @@ function tableStub(tables: Record<string, Row[]>) {
             const b: Record<string, unknown> = {
                 select: () => b,
                 eq: (c: string, v: unknown) => (preds.push((r) => r[c] === v), b),
-                lte: (c: string, v: string) => (preds.push((r) => String(r[c] ?? "") <= v), b),
+                lte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) <= v), b),
+                gte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) >= v), b),
+                gt: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) > v), b),
                 in: (c: string, vs: unknown[]) => (preds.push((r) => vs.includes(r[c])), b),
                 not: (c: string, _op: string, list: string) => {
                     const vals = list.replace(/[()]/g, "").split(",");
@@ -256,8 +258,8 @@ describe("the cohort — one membership for counts and rows", () => {
     });
 
     it("scope comes from the access dimensions only", () => {
-        expect(domainProjectionScopeFromAccess({ departmentScope: "all", allowedDepartmentIds: [], siteScope: "restricted", allowedSiteLocationIds: [SITE_A] } as never)).toEqual({ siteScope: "restricted", allowedSiteLocationIds: [SITE_A] });
-        expect(domainProjectionScopeFromAccess({ departmentScope: "all", allowedDepartmentIds: [], siteScope: "all", allowedSiteLocationIds: [SITE_A] } as never)).toEqual(ALL);
+        expect(domainProjectionScopeFromAccess({ departmentScope: "all", allowedDepartmentIds: [], siteScope: "restricted", allowedSiteLocationIds: [SITE_A] } as never)).toEqual({ siteScope: "restricted", allowedSiteLocationIds: [SITE_A], selectedSiteId: null });
+        expect(domainProjectionScopeFromAccess({ departmentScope: "all", allowedDepartmentIds: [], siteScope: "all", allowedSiteLocationIds: [SITE_A] } as never)).toEqual({ ...ALL, selectedSiteId: null });
     });
 });
 

@@ -12,6 +12,7 @@
  * served from a warm cache when intent preceded it. Errors are never cached — a failed prefetch simply lets
  * K2 fetch normally.
  */
+import { readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { retainedDepartmentConfigIds } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
 import { heldFocusPanelSummaryIdentities } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
@@ -77,6 +78,14 @@ export function provisioningAnswerUrl(
      * RESPONSES. Leaving it out of the key would let a settled warm answer serve a phased entry.
      */
     q.set(PHASED_QUERY_KEY, "1");
+    /*
+     * BP V2 S3 — THE WORKSPACE SITE SELECTION IS PART OF THE IDENTITY. A domain-projection Work View's
+     * rows are read under it (its counts already are), so two selections are two answers. Read through
+     * the canonical navigation reader so the seed, the warm and the fetch key identically. Lifecycle
+     * answers ignore it server-side; it only separates their cache entries per site.
+     */
+    const workspaceSiteId = readStickyWorkspaceSiteIdForNavigation();
+    if (workspaceSiteId) q.set("workspace_site_id", workspaceSiteId);
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }

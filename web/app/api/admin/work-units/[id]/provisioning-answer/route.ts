@@ -70,6 +70,9 @@ export async function GET(
             .filter((v) => /^[0-9a-f-]{36}$/i.test(v))
             .slice(0, 8),
         deferSettlement: phased,
+        // BP V2 S3 — the client's `/workspace` site selection (part of the answer's key); projection
+        // Work Views only. The composer intersects it with the actor's authorized sites.
+        workspaceSiteId: url.get("workspace_site_id"),
     });
     if (!result.ok) return adminRouteGateFailureResponse(result.gate);
 

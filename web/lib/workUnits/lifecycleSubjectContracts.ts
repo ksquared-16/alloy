@@ -260,8 +260,25 @@ export type QueueRowContext = {
         domain: "assignments" | "billing";
         projection_key: string;
         subject: { type: "child" | "person" | "household"; id: string };
-        source: { kind: "schedule_assignment" | "charge"; id: string; count: number; status_label: string };
+        source: {
+            kind: "schedule_assignment" | "charge" | "enrollment_agreement";
+            id: string;
+            count: number;
+            status_label: string;
+        };
         site_location_id: string | null;
+        /** BP V2 S3 — the source-backed facts behind the row's reason (read, never stored). */
+        detail?: {
+            reason: string;
+            start_date?: string | null;
+            end_date?: string | null;
+            site_label?: string | null;
+            room_location_id?: string | null;
+            room_label?: string | null;
+            assignment_type_label?: string | null;
+            is_primary?: boolean | null;
+            days_until?: number | null;
+        } | null;
     } | null;
 
     /**

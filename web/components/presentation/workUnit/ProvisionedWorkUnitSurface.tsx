@@ -454,6 +454,13 @@ export function ProvisionedWorkUnitSurface() {
                                       workViewId: projectionSnap.activeWorkView.id,
                                       domain: projectionSnap.projection.domain,
                                       projectionKey: projectionSnap.projection.projectionKey,
+                                      selectedSource: (() => {
+                                          const row = effectiveModel.queue.rows.find((r) => r.entityId === selectedSubjectId);
+                                          const src = row?.context?.domain_projection?.source;
+                                          return src
+                                              ? { kind: src.kind, id: src.id, reason: row?.context?.domain_projection?.detail?.reason ?? src.status_label }
+                                              : null;
+                                      })(),
                                   }
                                 : null
                         }

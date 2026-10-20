@@ -14,7 +14,13 @@ export type DomainProjectionCatalogEntry = {
 };
 
 export const DOMAIN_PROJECTION_CATALOG: Readonly<Record<ProcessProjectionDomain, readonly DomainProjectionCatalogEntry[]>> = {
-    assignments: [{ key: "current_assignments", label: "Current assignments", subjectTypes: ["child", "person"] }],
+    assignments: [
+        { key: "current_assignments", label: "Current assignments", subjectTypes: ["child", "person"] },
+        { key: "assignments_ending_soon", label: "Ending soon", subjectTypes: ["child", "person"] },
+        { key: "assignments_upcoming_changes", label: "Upcoming changes", subjectTypes: ["child", "person"] },
+        { key: "schedule_gaps", label: "Schedule gaps", subjectTypes: ["child"] },
+        { key: "assignments_proposed_incomplete", label: "Proposed / incomplete", subjectTypes: ["child", "person"] },
+    ],
     billing: [{ key: "charges_needing_review", label: "Charges needing review", subjectTypes: ["household"] }],
 };
 

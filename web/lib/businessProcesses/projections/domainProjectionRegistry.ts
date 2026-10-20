@@ -12,7 +12,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import type { ProcessProjectionDomain } from "@/lib/lifecycle/processModelV1";
 import { domainProjectionRowId } from "@/lib/businessProcesses/projections/domainProjectionIdentity";
-import { CURRENT_ASSIGNMENTS_PROJECTION } from "@/lib/businessProcesses/projections/currentAssignmentsProjection";
+import {
+    ASSIGNMENT_UPCOMING_CHANGES_PROJECTION,
+    ASSIGNMENTS_ENDING_SOON_PROJECTION,
+    ASSIGNMENTS_PROPOSED_INCOMPLETE_PROJECTION,
+    CURRENT_ASSIGNMENTS_PROJECTION,
+    SCHEDULE_GAPS_PROJECTION,
+} from "@/lib/businessProcesses/projections/assignmentsProjections";
 import { CHARGES_NEEDING_REVIEW_PROJECTION } from "@/lib/businessProcesses/projections/chargesNeedingReviewProjection";
 import type {
     DomainProjectionCohort,
@@ -22,7 +28,13 @@ import type {
 } from "@/lib/businessProcesses/projections/domainProjectionTypes";
 
 export const DOMAIN_PROJECTIONS: Readonly<Record<ProcessProjectionDomain, readonly DomainProjectionDefinition[]>> = {
-    assignments: [CURRENT_ASSIGNMENTS_PROJECTION],
+    assignments: [
+        CURRENT_ASSIGNMENTS_PROJECTION,
+        ASSIGNMENTS_ENDING_SOON_PROJECTION,
+        ASSIGNMENT_UPCOMING_CHANGES_PROJECTION,
+        SCHEDULE_GAPS_PROJECTION,
+        ASSIGNMENTS_PROPOSED_INCOMPLETE_PROJECTION,
+    ],
     billing: [CHARGES_NEEDING_REVIEW_PROJECTION],
 };
 
@@ -37,16 +49,25 @@ export function resolveDomainProjection(
 
 
 /** Request-time access scope → the projection scope. Server-resolved; never from a client. */
-export function domainProjectionScopeFromAccess(dim: AdminAccessScopeDimensions): DomainProjectionScope {
+export function domainProjectionScopeFromAccess(
+    dim: AdminAccessScopeDimensions,
+    /** BP V2 S3 — the `/workspace` site selection; narrows only (see `effectiveProjectionSiteIds`). */
+    selectedSiteId?: string | null,
+): DomainProjectionScope {
+    const selected = selectedSiteId?.trim() || null;
     return dim.siteScope === "restricted"
-        ? { siteScope: "restricted", allowedSiteLocationIds: [...(dim.allowedSiteLocationIds ?? [])] }
-        : { siteScope: "all", allowedSiteLocationIds: [] };
+        ? { siteScope: "restricted", allowedSiteLocationIds: [...(dim.allowedSiteLocationIds ?? [])], selectedSiteId: selected }
+        : { siteScope: "all", allowedSiteLocationIds: [], selectedSiteId: selected };
 }
 
-/** Canonical order: label, then grain, then id — total and stable, so every page slices the same list. */
+/**
+ * Canonical order: the projection's own leading key (e.g. end date), then label, grain and id — total and
+ * stable, so every page slices the same list.
+ */
 export function compareDomainProjectionRows(a: DomainProjectionRow, b: DomainProjectionRow): number {
     return (
-        a.label.localeCompare(b.label, "en", { sensitivity: "base" })
+        (a.sortKey ?? "").localeCompare(b.sortKey ?? "")
+        || a.label.localeCompare(b.label, "en", { sensitivity: "base" })
         || a.subject.type.localeCompare(b.subject.type)
         || a.subject.id.localeCompare(b.subject.id)
     );
@@ -114,6 +135,7 @@ export async function loadDomainProjectionCohort(
         projectionKey: def.key,
         rows,
         total: loaded.truncated ? null : rows.length,
+        factTotal: loaded.truncated ? null : rows.reduce((n, r) => n + r.source.count, 0),
         truncated: loaded.truncated,
     };
 }
