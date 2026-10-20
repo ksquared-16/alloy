@@ -76,6 +76,8 @@ export type AssignmentPricingFacts = {
 export type ApplicableOption = {
     source: CommercialSourceRef;
     offeringId: string;
+    /** The offering's configured name (`program_offerings.label`) — a rate's own identity. */
+    offeringLabel: string;
     variantId: string;
     programKey: string;
     attendanceType: string;
@@ -290,6 +292,7 @@ export function resolveAssignmentPricingOptions(
         applicable.push({
             source: ref(rate.id),
             offeringId: offering.id,
+            offeringLabel: offering.label,
             variantId: variant.id,
             programKey: offering.programKey,
             attendanceType: offering.attendanceType,
@@ -419,6 +422,7 @@ export function listLocationTuitionOptions(
         options.push({
             source: ref(rate.id),
             offeringId: offering.id,
+            offeringLabel: offering.label,
             variantId: variant.id,
             programKey: offering.programKey,
             attendanceType: offering.attendanceType,

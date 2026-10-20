@@ -3,6 +3,7 @@
 import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import { formatAgeFromDateOfBirthIso } from "@/lib/fields/derived/ageFromDateOfBirth";
+import { ATTENDANCE_TYPE_LABELS } from "@/lib/programs/programOfferings";
 import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financials/reductions/reductionReasonLabels";
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
@@ -1287,6 +1288,7 @@ function ScheduleWorkSurface({
                 )}
                 onCancel={cancelToDetail}
                 onSaved={onSaved}
+                onNotice={setActionError}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
                         throw new Error("Choose an Assignment Category before creating.");
@@ -1564,7 +1566,10 @@ function ScheduleRegions({
      * max-height honours; the form then scrolls inside it with Save/Cancel pinned.
      */
     useLayoutEffect(() => {
-        const card = surfaceRef.current?.closest(".alloy-os-ucard") as HTMLElement | null;
+        // The element whose max-height governs: the linked host's card when the editor is opened from
+        // another card (Children), else the elevated Universal Card itself.
+        const card = (surfaceRef.current?.closest(".alloy-os-focus-panel-linked-host__card")
+            ?? surfaceRef.current?.closest(".alloy-os-ucard")) as HTMLElement | null;
         if (!card) return;
         const place = () => {
             const top = card.getBoundingClientRect().top;
@@ -1710,6 +1715,7 @@ function ScheduleEditor({
     programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
+    onNotice,
     onCreateSecondary,
 }: {
     child: SchedSubject;
@@ -1727,6 +1733,8 @@ function ScheduleEditor({
     programCategoryId?: string | null;
     onCancel: () => void;
     onSaved: () => Promise<void>;
+    /** A message for the card to show after the editor closes (e.g. tuition not recorded). */
+    onNotice?: (message: string) => void;
     onCreateSecondary?: (payload: {
         schedule_pattern_id: string | null;
         start_date: string;
@@ -2358,8 +2366,9 @@ function ScheduleEditor({
      * the same effective date is recognised rather than duplicated — so no workflow-level
      * idempotency authority is invented here.
      */
-    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<void> {
-        if (!offeringId.trim() || child.kind !== "child") return;
+    /** Settle tuition; answers the refusal detail when it did not settle (null when it did, or had nothing to settle). */
+    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<string | null> {
+        if (!offeringId.trim() || child.kind !== "child") return null;
         try {
             const outcome = await acceptAssignmentTuition(viewOverride);
             if (outcome.ok) {
@@ -2369,14 +2378,14 @@ function ScheduleEditor({
                 });
                 /* Persisted truth is re-read; the dropdown's value is not the answer. */
                 await refreshPricingView();
-            } else {
-                setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+                return null;
             }
+            setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+            return outcome.detail;
         } catch (e) {
-            setTuitionOutcome({
-                kind: "needs_attention",
-                detail: e instanceof Error ? e.message : "Tuition could not be accepted.",
-            });
+            const detail = e instanceof Error ? e.message : "Tuition could not be accepted.";
+            setTuitionOutcome({ kind: "needs_attention", detail });
+            return detail;
         }
     }
 
@@ -2417,7 +2426,9 @@ function ScheduleEditor({
     async function settleTuitionAfterSave(): Promise<void> {
         const fresh = await refreshPricingView();
         setDraftView(null);
-        await settleTuition(fresh);
+        const refused = await settleTuition(fresh);
+        // The editor closes after Save; a tuition step that did not settle must not close with it.
+        if (refused) onNotice?.(`Assignment saved — tuition was not recorded: ${refused}`);
     }
 
     async function persistAssignmentQuote(): Promise<void> {
@@ -2589,11 +2600,8 @@ function ScheduleEditor({
                               * The disclosure is absent when there is nothing behind it.
                               */}
 
-                            {displayView && displayView.state === "ambiguous" ? (
-                                <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
-                                    {displayView.tied.length} configured options apply equally — choose one.
-                                </div>
-                            ) : null}
+                            {/* Equally eligible rates are ordinary choices: they are listed in the
+                                selector, nothing is preselected, and no warning is shown. */}
                             {displayView && displayView.state === "no_match" ? (
                                 <div data-assignment-tuition-no-match={displayView.noMatchReason ?? "unknown"}
                                      style={{ fontSize: 11, color: T.ember }}>
@@ -3056,18 +3064,14 @@ function ScheduleEditor({
                 }
                 hours={
                     <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                        {/* Laid out like the Dates to its left: a labelled Start and End, side by
+                            side, same gap — wrapping only when the column is too narrow. */}
                         <div
                             className="alloy-os-sched-hours-row"
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "minmax(0, 128px) auto minmax(0, 128px)",
-                                gap: 8,
-                                alignItems: "center",
-                                justifyContent: "start",
-                                minWidth: 0,
-                            }}
+                            style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", minWidth: 0 }}
                         >
-                            <div data-arrive="true" style={{ minWidth: 0 }}>
+                            <label data-arrive="true" style={{ display: "grid", gap: 3, width: "min(128px, 100%)", minWidth: 0 }}>
+                                <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
                                 <AlloyTimeInput
                                     value={arrive}
                                     onChange={setArrive}
@@ -3075,9 +3079,9 @@ function ScheduleEditor({
                                     testId="schedule-arrive"
                                     className="alloy-time-input--sched"
                                 />
-                            </div>
-                            <span style={{ color: T.mid40 }}>–</span>
-                            <div data-depart="true" style={{ minWidth: 0 }}>
+                            </label>
+                            <label data-depart="true" style={{ display: "grid", gap: 3, width: "min(128px, 100%)", minWidth: 0 }}>
+                                <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
                                 <AlloyTimeInput
                                     value={depart}
                                     onChange={setDepart}
@@ -3085,7 +3089,7 @@ function ScheduleEditor({
                                     testId="schedule-depart"
                                     className="alloy-time-input--sched"
                                 />
-                            </div>
+                            </label>
                         </div>
                         {arrive && depart && depart <= arrive && <div style={{ fontSize: 11, color: T.ember }}>Depart must be after arrive.</div>}
                         {days.length > 1 && (
@@ -3227,6 +3231,32 @@ function ScheduleEditor({
 }
 
 // ── Room picker — seed + scored fit; ineligible rooms stay visible for override ──
+/**
+ * A tuition rate's name, from configuration only. Rates carry no name of their own, so the
+ * identity is the offering's configured label, its configured attendance type where the label does
+ * not already say it, and the variant's label (absent = the offering's transparent default) — then
+ * the amount and cadence. Two rates for the same days are told apart by what they ARE (full-time /
+ * part-time), not by price alone.
+ */
+export function tuitionRateLabel(o: {
+    offeringLabel?: string | null;
+    attendanceType: string;
+    variantLabel: string | null;
+    amountLabel: string;
+}): string {
+    const offering = (o.offeringLabel ?? "").trim();
+    const attendance =
+        ATTENDANCE_TYPE_LABELS[o.attendanceType as keyof typeof ATTENDANCE_TYPE_LABELS]
+        ?? o.attendanceType.replace(/_/g, " ");
+    const words = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const parts = [
+        offering,
+        offering && words(offering).includes(words(attendance)) ? "" : attendance,
+        (o.variantLabel ?? "").trim(),
+    ].filter(Boolean);
+    return `${parts.join(" · ")} — ${o.amountLabel}`;
+}
+
 /** One row of the tuition list. `additional` rows are other programs' / schedules' site rates. */
 type TuitionChoice = { id: string; label: string; cadenceKey: string; additional: boolean };
 
@@ -3237,12 +3267,7 @@ type TuitionChoice = { id: string; label: string; cadenceKey: string; additional
 export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditional: boolean): TuitionChoice[] {
     if (!view) return [];
     const recommendedId = view.recommended?.sourceId ?? null;
-    const describe = (o: AssignmentTuitionView["applicable"][number]) => {
-        // The variant names the commitment ("Full time"); an option can have none, and the money is
-        // the part that is always there.
-        const variant = (o.variantLabel ?? "").trim();
-        return variant ? `${variant}: ${o.amountLabel}` : o.amountLabel;
-    };
+    const describe = (o: AssignmentTuitionView["applicable"][number]) => tuitionRateLabel(o);
     const own = [...view.applicable]
         .sort((a, b) => (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1))
         .map((o) => ({
@@ -3254,7 +3279,7 @@ export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditi
     if (!showAdditional) return own;
     const extra = view.additional.map((o) => ({
         id: o.sourceId,
-        label: `${o.programKey.replace(/_/g, " ")} · ${describe(o)}`,
+        label: describe(o),
         cadenceKey: o.cadenceKey,
         additional: true,
     }));
@@ -3295,10 +3320,11 @@ export function tuitionNoMatchMessage(view: Pick<AssignmentTuitionView, "noMatch
     const why =
         view.noMatchReason === "missing_required_input"
             ? "Choose a room or program to see matching rates"
-            : view.noMatchReason === "unsupported_schedule_basis"
-              ? days == null
-                  ? "Choose days to see matching rates"
-                  : `No rate is offered for ${days} day${days === 1 ? "" : "s"} a week in this program`
+            : days == null
+              ? // Rates are priced by days a week; until days are chosen, that is the step to take.
+                "Choose days to see matching rates"
+              : view.noMatchReason === "unsupported_schedule_basis"
+                ? `No rate is offered for ${days} day${days === 1 ? "" : "s"} a week in this program`
               : view.noMatchReason === "not_offered_at_scope"
                 ? "This program has no rate offering for this schedule"
                 : view.noMatchReason === "no_rate_for_scope"

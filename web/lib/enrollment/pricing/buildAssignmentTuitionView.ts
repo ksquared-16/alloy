@@ -39,6 +39,8 @@ import {
 export type TuitionOptionView = {
     sourceId: string;
     offeringId: string;
+    /** The offering's configured name — with the variant, the rate's identity (rates carry no name). */
+    offeringLabel: string;
     variantId: string;
     variantLabel: string;
     programKey: string;
@@ -102,6 +104,7 @@ function toOptionView(o: ApplicableOption): TuitionOptionView {
     return {
         sourceId: o.source.id,
         offeringId: o.offeringId,
+        offeringLabel: o.offeringLabel,
         variantId: o.variantId,
         variantLabel: o.variantLabel,
         programKey: o.programKey,
