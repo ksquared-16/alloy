@@ -7,7 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER, type DocumentActor } from "@/lib/documents/assertDocumentAccess";
 import {
     profilePhotoDocumentId,
     resolveProfilePhotosForActor,
@@ -32,6 +32,9 @@ export function documentActorFromAdminParts(parts: {
         role: parts.role,
         roleKeys: parts.roleKeys ? [...parts.roleKeys] : [],
         permissionKeys: parts.permissionKeys ? [...parts.permissionKeys] : [],
+        // Avatars only: every caller of this builder projects photos onto person rows it has
+        // already read through its own scoped query. See `DocumentActor.scope`.
+        scope: DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER,
     };
 }
 

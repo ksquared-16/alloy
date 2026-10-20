@@ -5,12 +5,14 @@ import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors"
 import { findCanonicalProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertNoCredentialInMetadata, classifyLegacyPhotoUrl } from "@/lib/documents/profilePhotoPresentation";
-import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import {
     assertDocumentAccess,
     documentAccessHttp,
+    documentActorForRequest,
+    requireDocumentWrite,
     signedUrlExpirySeconds,
 } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 
 /**
  * Phase 0 commit 6A.
@@ -80,15 +82,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         const access = await getAdminAccessContextCached();
         const decision = await assertDocumentAccess({
             supabase,
-            actor: {
-                ok: ctx.ok,
-                failureStatus: undefined,
-                userId: ctx.userId,
-                orgId: ctx.orgId,
-                role: ctx.role,
-                roleKeys: access.ok ? access.roleKeys : [],
-                permissionKeys: access.ok ? access.permissionKeys : [],
-            },
+            actor: documentActorForRequest(ctx, access),
             documentId: doc.id,
             operation: "preview",
         });
@@ -97,9 +91,22 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             return NextResponse.json(http.body, { status: http.status });
         }
 
+        const audit = await recordDocumentAudit({
+            orgId: ctx.orgId,
+            actorUserId: ctx.userId,
+            event: "document_link_issued",
+            subject: { type: "documents", id: decision.document.id },
+            route: "admin/persons/profile-photo/get",
+            detail: { operation: "preview", expires_in_seconds: SIGNED_URL_EXPIRES_IN_SECONDS, person_id: id },
+        });
+        if (!audit.ok) {
+            return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+        }
+
+        // Sign exactly what the decision authorized — not the resolver's copy of the row.
         const { data: signed, error } = await supabase.storage
-            .from(doc.bucket as string)
-            .createSignedUrl(doc.storage_path as string, SIGNED_URL_EXPIRES_IN_SECONDS);
+            .from(decision.document.bucket)
+            .createSignedUrl(decision.document.storagePath, SIGNED_URL_EXPIRES_IN_SECONDS);
         if (error || !signed?.signedUrl) {
             return NextResponse.json({ photoUrl: null, documentId: doc.id });
         }
@@ -160,9 +167,44 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: "Document has no stored file" }, { status: 400 });
     }
 
+    // D1a: this route used to sign the photo it was handed without asking whether the caller may READ
+    // it. Write authority is not read authority; the link goes through the same decision as every
+    // other document link, with the caller's scope.
+    const access = await getAdminAccessContextCached();
+    const decision = await assertDocumentAccess({
+        supabase,
+        actor: documentActorForRequest(ctx, access),
+        documentId,
+        operation: "preview",
+    });
+    if (decision.outcome !== "allowed") {
+        const http = documentAccessHttp(decision);
+        return NextResponse.json(http.body, { status: http.status });
+    }
+
+    // Recorded before the pointer moves. No record, no change.
+    const audit = await recordDocumentAudit({
+        orgId: ctx.orgId,
+        actorUserId: ctx.userId,
+        event: "person_profile_photo_set",
+        subject: { type: "persons", id },
+        route: "admin/persons/profile-photo/set",
+        detail: {
+            document_id: documentId,
+            previous_document_id:
+                typeof metadataOf(person).profile_photo_document_id === "string"
+                    ? metadataOf(person).profile_photo_document_id
+                    : null,
+            link_issued_expires_in_seconds: SIGNED_URL_EXPIRES_IN_SECONDS,
+        },
+    });
+    if (!audit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+    }
+
     const { data: signed, error: signErr } = await supabase.storage
-        .from(row.bucket)
-        .createSignedUrl(row.storage_path, SIGNED_URL_EXPIRES_IN_SECONDS);
+        .from(decision.document.bucket)
+        .createSignedUrl(decision.document.storagePath, SIGNED_URL_EXPIRES_IN_SECONDS);
     if (signErr || !signed?.signedUrl) {
         const classified = classifySupabaseStorageError(signErr);
         return NextResponse.json({ error: classified.message, code: classified.code }, { status: classified.httpStatus });
@@ -211,6 +253,23 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
     const meta = metadataOf(person);
+
+    // Recorded before the pointer is cleared. No record, no change.
+    const audit = await recordDocumentAudit({
+        orgId: ctx.orgId,
+        actorUserId: ctx.userId,
+        event: "person_profile_photo_cleared",
+        subject: { type: "persons", id },
+        route: "admin/persons/profile-photo/clear",
+        detail: {
+            previous_document_id:
+                typeof meta.profile_photo_document_id === "string" ? meta.profile_photo_document_id : null,
+        },
+    });
+    if (!audit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+    }
+
     const nextMetadata = { ...meta };
     delete nextMetadata.profile_photo_document_id;
     delete nextMetadata.photo_url;

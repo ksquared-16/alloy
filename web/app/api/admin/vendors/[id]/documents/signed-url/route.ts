@@ -3,12 +3,13 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 import {
     assertDocumentAccess,
     documentAccessHttp,
+    documentActorForRequest,
     signedUrlExpirySeconds,
 } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 
 /**
  * GET: signed URL for a vendor document.
@@ -19,9 +20,16 @@ import {
  * authority and the row decorative, and it is why the six nonconforming
  * `vendors/...` objects exist at all.
  *
- * Authorization is now row-driven: the path (or document_id) must resolve to a
+ * Authorization is row-driven: the path (or document_id) must resolve to a
  * real `documents` row owned by this org, and only that row's stored
  * bucket/path is ever signed. An arbitrary path with no row is a 404.
+ *
+ * D1a — THE DOCUMENT MUST BELONG TO THIS VENDOR. Phase 0 proved the vendor and the document were each
+ * in the caller's org, and never that they were related: `/vendors/<any vendor>/documents/signed-url
+ * ?document_id=<any document>` signed a child's record under a vendor's name. The row must now be
+ * attached to vendor `[id]`, or be one of that vendor's referenced document files; anything else is a
+ * 404, indistinguishable from a document that does not exist. The issuance is recorded before the
+ * link is minted.
  */
 export async function GET(
     request: NextRequest,
@@ -67,19 +75,7 @@ export async function GET(
 
         const decision = await assertDocumentAccess({
             supabase: adminSb,
-            actor: {
-                // `ctx` is already narrowed to the authenticated variant by the
-                // `!ctx.ok` guard above, so the failure branches here are
-                // unreachable. Writing them as ternaries anyway made the false
-                // branch `never` and broke the production typecheck.
-                ok: true,
-                failureStatus: undefined,
-                userId: ctx.userId,
-                orgId: ctx.orgId,
-                role: ctx.role,
-                roleKeys: access.ok ? access.roleKeys : [],
-                permissionKeys: access.ok ? access.permissionKeys : [],
-            },
+            actor: documentActorForRequest(ctx, access),
             documentId: resolvedDocumentId,
             operation: "download",
             // If the caller stated a path, it may only AGREE with the row.
@@ -91,9 +87,26 @@ export async function GET(
             return NextResponse.json(http.body, { status: http.status });
         }
 
+        if (!(await documentBelongsToVendor(adminSb, ctx.orgId, id, decision.document))) {
+            return NextResponse.json({ ok: false, error: "Document not found", code: "NOT_FOUND" }, { status: 404 });
+        }
+
+        const expiresIn = signedUrlExpirySeconds("download");
+        const audit = await recordDocumentAudit({
+            orgId: decision.document.orgId,
+            actorUserId: ctx.userId,
+            event: "document_link_issued",
+            subject: { type: "documents", id: decision.document.id },
+            route: "admin/vendors/documents/signed-url",
+            detail: { operation: "download", expires_in_seconds: expiresIn, vendor_id: id },
+        });
+        if (!audit.ok) {
+            return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+        }
+
         const { data, error } = await adminSb.storage
-            .from(decision.document.bucket || ORG_DOCUMENTS_STORAGE_BUCKET)
-            .createSignedUrl(decision.document.storagePath, signedUrlExpirySeconds("download"));
+            .from(decision.document.bucket)
+            .createSignedUrl(decision.document.storagePath, expiresIn);
 
         if (error || !data?.signedUrl) {
             console.error("[VENDOR_DOC_SIGNED_URL]", { document_id: decision.document.id });
@@ -105,4 +118,28 @@ export async function GET(
         console.error("[VENDOR_DOC_SIGNED_URL_UNEXPECTED]");
         return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 });
     }
+}
+
+/**
+ * Is this document one of vendor `vendorId`'s?
+ *
+ * Either it is attached to the vendor (`entity_type` vendor, `entity_id` = the vendor — how the
+ * public vendor application files them), or the vendor row references it as its insurance or
+ * driver's-licence file. Read from the stored rows only; nothing the caller sent is trusted here.
+ */
+async function documentBelongsToVendor(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    vendorId: string,
+    document: { id: string; entityType: string | null; entityId: string | null },
+): Promise<boolean> {
+    if (document.entityType === "vendor" && document.entityId === vendorId) return true;
+    const { data } = await supabase
+        .from("vendors")
+        .select("insurance_doc_file_id, drivers_license_doc_file_id")
+        .eq("id", vendorId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    const refs = data as { insurance_doc_file_id?: string | null; drivers_license_doc_file_id?: string | null } | null;
+    return Boolean(refs && (refs.insurance_doc_file_id === document.id || refs.drivers_license_doc_file_id === document.id));
 }

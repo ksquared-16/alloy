@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
 
 export async function downloadDocumentBytesSafe(
     supabase: SupabaseClient,
@@ -25,6 +26,11 @@ export async function downloadDocumentBytesSafe(
         const bucket = r.bucket?.trim();
         const path = r.storage_path?.trim();
         if (!bucket || !path) return null;
+        // A row may not aim the service-role client at another tenant's object (Documents V1 / D1a).
+        if (!isStoragePathWithinOrg(path, args.orgId)) {
+            console.warn("[downloadDocumentBytesSafe] storage path outside organization prefix", { document_id: args.documentId });
+            return null;
+        }
 
         const { data, error: dlErr } = await supabase.storage.from(bucket).download(path);
         if (dlErr || !data) return null;

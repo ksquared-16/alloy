@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { isStoragePathWithinOrg } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  * Otherwise it discards the test artifact: the document's primary case-source link, the
  * Processing case it opened, the stored file, and the document row. Never touches forms,
  * records, billing, or anything published.
+ *
+ * D1a: the deletion is recorded (`document_delete_authorized`) BEFORE anything is removed, and is
+ * refused when that record cannot be written; a failure part-way is recorded as
+ * `document_delete_failed`. The stored object is removed only when its path lies inside this
+ * organization's prefix — a row is never allowed to aim the service-role client at another tenant's
+ * file — and a row whose path does not is refused outright rather than half-deleted.
  */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -60,17 +68,28 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (documentId instanceof NextResponse) return documentId;
 
     const supabase = createAdminClient();
+    let auditedDeletion = false;
 
     try {
         const { data: docRow, error: docErr } = await supabase
             .from("documents")
-            .select("id, bucket, storage_path")
+            .select("id, bucket, storage_path, entity_type, entity_id, doc_type")
             .eq("org_id", ctx.orgId)
             .eq("id", documentId)
             .maybeSingle();
         if (docErr) throw new Error(docErr.message);
         if (!docRow) return jsonError("Not found", 404);
-        const doc = docRow as { id: string; bucket: string | null; storage_path: string | null };
+        const doc = docRow as {
+            id: string;
+            bucket: string | null;
+            storage_path: string | null;
+            entity_type: string | null;
+            entity_id: string | null;
+            doc_type: string | null;
+        };
+        if (doc.storage_path && !isStoragePathWithinOrg(doc.storage_path, ctx.orgId)) {
+            return jsonError("This document's stored file is not inside this organization, so it cannot be deleted here.", 409);
+        }
 
         // Processing cases this document is a source of.
         const { data: srcRows, error: srcErr } = await supabase
@@ -100,6 +119,26 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
                 }
             }
         }
+
+        // Recorded before anything is removed. No record, no deletion.
+        const audit = await recordDocumentAudit({
+            orgId: ctx.orgId,
+            actorUserId: ctx.userId,
+            event: "document_delete_authorized",
+            subject: { type: "documents", id: documentId },
+            route: "admin/pos/documents/delete",
+            detail: {
+                document_entity_type: doc.entity_type,
+                document_entity_id: doc.entity_id,
+                doc_type: doc.doc_type,
+                processing_case_ids: caseIds,
+                had_stored_file: Boolean(doc.bucket && doc.storage_path),
+            },
+        });
+        if (!audit.ok) {
+            return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+        }
+        auditedDeletion = true;
 
         // Safe to discard. Remove case-source links, the opened case(s), the file, the row.
         const { error: delSrcErr } = await supabase
@@ -134,6 +173,18 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
         return jsonData({ deleted: true, document_id: documentId, removed_cases: caseIds.length });
     } catch (e) {
-        return NextResponse.json({ error: e instanceof Error ? e.message : "Delete failed" }, { status: 500 });
+        const message = e instanceof Error ? e.message : "Delete failed";
+        if (auditedDeletion) {
+            // Best-effort: the authorizing record already exists; this marks that it did not finish.
+            await recordDocumentAudit({
+                orgId: ctx.orgId,
+                actorUserId: ctx.userId,
+                event: "document_delete_failed",
+                subject: { type: "documents", id: documentId },
+                route: "admin/pos/documents/delete",
+                detail: { error: message },
+            });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
