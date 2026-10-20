@@ -410,7 +410,7 @@ function SidebarNav({
                                         <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
                                     )}
                                 </button>
-                                {lifecycleEntryHref == null ? (
+                                {lifecycle.entryHref == null ? (
                                     // Nothing to open yet (BP V2 S1): the process is listed under its
                                     // own name and does not borrow another process's queue.
                                     <span
@@ -425,24 +425,28 @@ function SidebarNav({
                                     </span>
                                 ) : (
                                 <AdminV2NavLink
-                                    href={workspaceHref(lifecycleEntryHref)}
+                                    href={workspaceHref(lifecycle.entryHref)}
                                     active={lifecycleEntryActive}
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
                                     title={lifecycle.label}
-                                    onMouseEnter={() =>
-                                        warmOperatorWorkUnitNavEntry(
-                                            lifecycleEntryHref,
-                                            null,
-                                            "sidebar_lifecycle_hover",
-                                        )
-                                    }
-                                    onFocus={() =>
-                                        warmOperatorWorkUnitNavEntry(
-                                            lifecycleEntryHref,
-                                            null,
-                                            "sidebar_lifecycle_focus",
-                                        )
-                                    }
+                                    onMouseEnter={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_hover",
+                                            );
+                                        }
+                                    }}
+                                    onFocus={() => {
+                                        if (lifecycleEntryHref) {
+                                            warmOperatorWorkUnitNavEntry(
+                                                lifecycleEntryHref,
+                                                null,
+                                                "sidebar_lifecycle_focus",
+                                            );
+                                        }
+                                    }}
                                 >
                                     <span className="inline-flex min-w-0 items-center gap-2">
                                         <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
