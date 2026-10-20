@@ -242,16 +242,19 @@ export function buildBusinessProcessCardEvidence(
         const state = states.get(s.key);
         return state === "current" || state === "done" || placed.some((p) => displayKeyOf(p.stageKey) === s.key);
     });
-    const stages: BusinessProcessStage[] = drawn.map((s) => ({
+    const stages: BusinessProcessStage[] = drawn.map((s) => {
+        const folded = foldedDetailFor(s.key, configuredStages, placed, childrenEvidence);
+        return {
         key: s.key,
         label: s.label,
         state: states.get(s.key) ?? "future",
-        ...(foldedCurrent && foldedCurrent.parentKey === s.key ? { detail: foldedCurrent.label } : {}),
+        ...(folded ? { detail: folded } : foldedCurrent && foldedCurrent.parentKey === s.key ? { detail: foldedCurrent.label } : {}),
         primarySupport: s.primarySupport,
         secondarySupport: s.secondarySupport,
         // A participant at a folded sub-stage sits on its parent's step.
         participants: placed.filter((p) => displayKeyOf(p.stageKey) === s.key),
-    }));
+        };
+    });
 
     // ── CURRENT WORK ──────────────────────────────────────────────────────────────────────────
     const work = safeCurrentWork(context);
@@ -274,6 +277,41 @@ export function buildBusinessProcessCardEvidence(
 }
 
 /**
+ * WHAT A FOLDED SUB-STAGE SAYS ON ITS PARENT'S STEP — e.g. Decision: "Offer pending · Infant".
+ *
+ * Everything comes from configuration and the child's own journey: the sub-stage (`parent_stage_key`),
+ * the per-child path that lands a child there and how it reads once chosen (`state_label`), and the
+ * answer recorded with that path (the program offered). One child reads as that child's state; several
+ * read as a count in the sub-stage's configured label ("2 Offer pending") so no child's details stand
+ * in for the others. Null when no child is at a sub-stage of this step.
+ */
+function foldedDetailFor(
+    parentKey: string,
+    stages: readonly ConfiguredStage[],
+    placed: readonly BusinessProcessParticipant[],
+    children: ReadonlyArray<{ id: string; pathAnswerLabels?: Record<string, string[]> | null }>,
+): string | null {
+    const subStages = stages.filter((s) => s.parentKey === parentKey);
+    if (!subStages.length) return null;
+    const atSub = placed.filter((p) => subStages.some((s) => s.key === p.stageKey));
+    if (!atSub.length) return null;
+    if (atSub.length > 1) {
+        const keys = new Set(atSub.map((p) => p.stageKey));
+        const label = keys.size === 1 ? subStages.find((s) => keys.has(s.key))!.label : null;
+        return label ? `${atSub.length} ${label}` : `${atSub.length} children`;
+    }
+    const one = atSub[0]!;
+    const stage = subStages.find((s) => s.key === one.stageKey)!;
+    const answers = children.find((c) => c.id === one.id)?.pathAnswerLabels ?? null;
+    // The path this child actually took is the one whose answers its journey recorded.
+    const taken = stage.foldedPaths.find((f) => answers && f.decisionKey in answers)
+        ?? (stage.foldedPaths.length === 1 ? stage.foldedPaths[0]! : null);
+    const base = taken?.stateLabel || stage.label;
+    const detail = taken && answers?.[taken.decisionKey]?.length ? answers[taken.decisionKey]!.join(", ") : null;
+    return detail ? `${base} · ${detail}` : base;
+}
+
+/**
  * The configured stage set, with its annotation slots.
  *
  * Slots come from configuration on the stage entry. When configuration declares none, the slots are
@@ -289,6 +327,8 @@ type ConfiguredStage = {
     parentKey: string | null;
     /** `allow_skipping` — a branch the path may never enter. */
     optional: boolean;
+    /** For a sub-stage: the configured per-child paths that land a child here, as they read once chosen. */
+    foldedPaths: Array<{ decisionKey: string; stateLabel: string }>;
 };
 
 function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
@@ -312,6 +352,11 @@ function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
                 grain: typeof s.grain === "string" && s.grain.trim() ? s.grain.trim() : null,
                 parentKey: typeof s.parent_stage_key === "string" && s.parent_stage_key.trim() ? s.parent_stage_key.trim() : null,
                 optional: s.allow_skipping === true,
+                foldedPaths: Array.isArray(s.folded_paths)
+                    ? (s.folded_paths as Array<Record<string, unknown>>)
+                          .map((f) => ({ decisionKey: String(f.decision_key ?? ""), stateLabel: String(f.state_label ?? "").trim() }))
+                          .filter((f) => f.decisionKey && f.stateLabel)
+                    : [],
             };
         })
         .filter((s): s is ConfiguredStage => s !== null);

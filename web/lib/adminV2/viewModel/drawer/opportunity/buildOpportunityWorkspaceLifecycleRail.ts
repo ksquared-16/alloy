@@ -28,6 +28,12 @@ export type OpportunityWorkspaceLifecycleRail = {
         parent_stage_key?: string;
         /** An OPTIONAL stage (a branch such as Waitlist): drawn only when the path goes through it. */
         allow_skipping?: boolean;
+        /**
+         * For a SUB-STAGE: the configured per-child paths that land a child here, with how each reads
+         * once chosen (`state_label`, e.g. "Offer pending"). The parent step presents a child at this
+         * sub-stage in these words — configuration's, never the platform's.
+         */
+        folded_paths?: Array<{ decision_key: string; state_label: string }>;
     }>;
     current_stage_key: string | null;
     /**
@@ -50,6 +56,28 @@ function trimOrNull(v: unknown): string | null {
 /**
  * Builder-owned dept lifecycle order for drawer rail (matches /settings/lifecycle + pill deck order).
  */
+/** The configured per-child paths (any stage's work) whose movement lands a child on `stageKey`. */
+function foldedPathsFor(
+    process: { stages: ReadonlyArray<{ stage_operating_plan_v1?: unknown }> },
+    stageKey: string,
+): { folded_paths?: Array<{ decision_key: string; state_label: string }> } {
+    const out: Array<{ decision_key: string; state_label: string }> = [];
+    for (const stage of process.stages) {
+        const plan = stage.stage_operating_plan_v1 as
+            | { work_templates?: Array<{ participant_decisions?: Array<{ decision_key?: string; label?: string; state_label?: string; available?: boolean; targets?: Array<{ kind?: string; stage_key?: string }> }> }> }
+            | undefined;
+        for (const t of plan?.work_templates ?? []) {
+            for (const d of t.participant_decisions ?? []) {
+                if (d.available === false || !d.decision_key) continue;
+                if (!(d.targets ?? []).some((x) => x.kind === "move_to_stage" && x.stage_key === stageKey)) continue;
+                const label = (d.state_label ?? d.label ?? "").trim();
+                if (label) out.push({ decision_key: d.decision_key, state_label: label });
+            }
+        }
+    }
+    return out.length ? { folded_paths: out } : {};
+}
+
 export function buildOpportunityWorkspaceLifecycleRail(params: {
     departmentMetadata: unknown;
     statusKey: string | null;
@@ -89,6 +117,7 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
             ...(s.track_key?.trim() ? { track_key: s.track_key.trim() } : {}),
             ...(s.parent_stage_key?.trim() ? { parent_stage_key: s.parent_stage_key.trim() } : {}),
             ...(s.allow_skipping === true ? { allow_skipping: true } : {}),
+            ...(s.parent_stage_key?.trim() ? foldedPathsFor(process, s.key.trim()) : {}),
         };
     });
     if (stages.length < 2) return null;

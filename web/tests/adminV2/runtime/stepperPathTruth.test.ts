@@ -103,4 +103,65 @@ describe("stepper path truth", () => {
             expect(drawn("enrolling", ["waitlist", "offered", "enrolling"])).toContain("Waitlist:done");
         });
     });
+
+    describe("a folded sub-stage reads inside its parent step, in configuration's words", () => {
+        // `offered` folds into Decision; the per-child path that lands a child there reads "Offer pending".
+        const rail = [
+            { key: "lead", label: "Lead", grain: "family" },
+            { key: "tour", label: "Tour", grain: "family" },
+            { key: "decision", label: "Decision", grain: "family" },
+            { key: "waitlist", label: "Waitlist", grain: "child", allow_skipping: true },
+            {
+                key: "offered",
+                label: "Offer pending",
+                grain: "child",
+                parent_stage_key: "decision",
+                folded_paths: [{ decision_key: "child_offer_spot", state_label: "Offer pending" }],
+            },
+            { key: "enrolling", label: "Enrolling", grain: "child" },
+            { key: "enrolled", label: "Enrolled", grain: "child" },
+        ];
+        const child = (id: string, name: string, stage: string, answers?: Record<string, string[]>) => ({
+            id,
+            customer_member_id: id,
+            display_name: name,
+            stage_key: stage,
+            ...(answers
+                ? { _decision_answers_v1: Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { answers: v.map((l) => ({ key: "placement", value: "x", value_label: l })) }])) }
+                : {}),
+        });
+        const decisionStep = (children: unknown[], stages: ReadonlyArray<Record<string, unknown>> = rail) =>
+            buildBusinessProcessCardEvidence({
+                grain: "case",
+                subject: { type: "opportunity", id: "o", label: "F" },
+                businessProcess: { key: "enrollment", label: "Enrollment", stageKey: "decision", stages, traversedStageKeys: [] },
+                truth: { stage_key: "decision", _inquiry_children: children },
+            } as never).stages.find((st) => st.label === "Decision");
+
+        it("one child: the path's state label and the answer it recorded", () => {
+            const step = decisionStep([child("a", "Ava Q", "offered", { child_offer_spot: ["Infant"] }), child("b", "Ben Q", "waitlist")]);
+            expect(step?.detail).toBe("Offer pending · Infant");
+            // Only the offered child sits on Decision; the waitlisted sibling does not lend it a state.
+            expect(step?.participants.map((x) => x.name)).toEqual(["Ava Q"]);
+        });
+
+        it("several children: a count in the sub-stage's configured label, never one child's details", () => {
+            const step = decisionStep([
+                child("a", "Ava Q", "offered", { child_offer_spot: ["Infant"] }),
+                child("b", "Ben Q", "offered", { child_offer_spot: ["Toddler"] }),
+            ]);
+            expect(step?.detail).toBe("2 Offer pending");
+        });
+
+        it("the words are configuration's: a relabelled path reads in its new words", () => {
+            const relabelled = rail.map((st) =>
+                st.key === "offered" ? { ...st, folded_paths: [{ decision_key: "child_offer_spot", state_label: "Spot offered" }] } : st,
+            );
+            expect(decisionStep([child("a", "Ava Q", "offered", { child_offer_spot: ["Infant"] })], relabelled)?.detail).toBe("Spot offered · Infant");
+        });
+
+        it("no child at a sub-stage: the step carries no folded detail", () => {
+            expect(decisionStep([child("a", "Ava Q", "decision"), child("b", "Ben Q", "waitlist")])?.detail).toBeUndefined();
+        });
+    });
 });
