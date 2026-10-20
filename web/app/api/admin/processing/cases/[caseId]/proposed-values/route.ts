@@ -19,8 +19,6 @@ export const dynamic = "force-dynamic";
 async function target(params: Promise<{ caseId: string }>) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return { response: adminContextFailureResponse(ctx) };
-    const denied = requireProcessingCapability(ctx, PROCESSING_OPERATE);
-    if (denied) return { response: denied };
     const caseId = parseUuidParam((await params).caseId, "caseId");
     if (caseId instanceof NextResponse) return { response: caseId };
     return { ctx, caseId };
@@ -29,6 +27,8 @@ async function target(params: Promise<{ caseId: string }>) {
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const t = await target(params);
     if ("response" in t) return t.response;
+    const denied = requireProcessingCapability(t.ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
     try {
         const values = await loadProposedValues(createAdminClient(), { orgId: t.ctx.orgId, caseId: t.caseId });
         if (!values) return jsonError("Not found", 404);
@@ -42,6 +42,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const t = await target(params);
     if ("response" in t) return t.response;
+    const denied = requireProcessingCapability(t.ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
     let body: { edits?: Array<{ subject_ref?: unknown; field?: unknown; value?: unknown }> };
     try {
         body = (await request.json()) as typeof body;

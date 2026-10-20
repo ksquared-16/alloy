@@ -3797,6 +3797,20 @@
         "reason": "A person's profile photo is documents-backed \u2014 it writes the `documents` table and object storage, and the GET beside it is already declared `documents.read`. It takes the Documents authority rather than a CRM key because whoever may edit a household should not thereby write documents. First enforcement site for documents.write, which was also catalogued, granted and inert."
       }
     },
+    "app/api/admin/persons/[id]/communication-preferences/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "communications.read",
+        "helper": "requireCommunicationsAuthority",
+        "reason": "One person's consent and preferred channel, as the Communications preferences route reads them."
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "requireCommunicationsAuthority",
+        "reason": "An operator action on one person's communication state, as the Communications preferences route; refuses to reverse a STOP/unsubscribe or record a marketing opt-in."
+      }
+    },
     "app/api/admin/persons/[id]/route.ts": {
       "PATCH": {
         "status": "declared",
@@ -4066,6 +4080,28 @@
         "capability": "processing.operate",
         "helper": "requireProcessingCapability",
         "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate \u2014 assertAuthorized is called by only two of the seven operator functions \u2014 so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/proposed-values/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Processing Edit: the proposal an operator reviews before approval. Same authority as approve."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Processing Edit: stores operator corrections to the proposal (never the submission); approve commits them through the one lead writer."
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/reject/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Processing Reject / Do not create: a terminal disposition other than approve; creates nothing canonical. Same authority as approve."
       }
     },
     "app/api/admin/processing/cases/[caseId]/archive/route.ts": {

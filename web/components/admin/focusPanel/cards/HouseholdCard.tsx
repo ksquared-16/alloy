@@ -86,6 +86,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/household/copyPrimaryContactDetails";
 import { householdShowsPrimaryContactControl } from "@/lib/admin/person/personDrawerHouseholdPrimaryContactDisplay";
 
+import PersonCommunicationPreferencesPanel from "@/components/admin/communications/PersonCommunicationPreferencesPanel";
 type HouseholdComposerPreview = {
     perspective: "expanded" | "focused";
     focusedGroup?: HouseholdEvidenceGroupKey | null;
@@ -686,16 +687,19 @@ export default function HouseholdCard({
     } else if (editing && editingSeed) {
         perspective = "edit";
         body = (
-            <HouseholdContactEdit
-                key={editingSeed.personId}
-                personId={editingSeed.personId}
-                personName={editingSeed.name}
-                initial={editingSeed.values}
-                save={mutation!.savePersonContact}
-                onClose={() => setEditingPersonId(null)}
-                onSaved={handleContactSaved}
-                nestedConfig={nestedConfig}
-            />
+            <>
+                <HouseholdContactEdit
+                    key={editingSeed.personId}
+                    personId={editingSeed.personId}
+                    personName={editingSeed.name}
+                    initial={editingSeed.values}
+                    save={mutation!.savePersonContact}
+                    onClose={() => setEditingPersonId(null)}
+                    onSaved={handleContactSaved}
+                    nestedConfig={nestedConfig}
+                />
+                <PersonCommunicationPreferencesPanel key={`prefs-${editingSeed.personId}`} personId={editingSeed.personId} />
+            </>
         );
     } else if (composingHouseholdSurface && composer && process.env.NEXT_PUBLIC_VERCEL_ENV === "preview" && !showComposeCanvas) {
         perspective = "collapsed";

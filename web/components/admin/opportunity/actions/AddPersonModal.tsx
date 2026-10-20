@@ -13,6 +13,21 @@ import {
 import ConfiguredCreateFormFields from "@/components/admin/opportunity/actions/ConfiguredCreateFormFields";
 import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 
+
+/**
+ * Not asked when adding a person. Employment is set elsewhere; and the legacy consent checkboxes
+ * (`field_values`) are read by NO send path — consent lives in `communication_preferences`, edited on
+ * the person's Communication preferences — so offering them here promised enforcement that did not exist.
+ */
+export const ADD_PERSON_EXCLUDED_FIELD_KEYS: ReadonlySet<string> = new Set([
+    "is_employee",
+    "employee_id",
+    "sms_opt_in",
+    "email_opt_in",
+    "communication_opt_out",
+    "sms_consent",
+    "email_consent",
+]);
 const ROLE_OPTIONS = [
     { value: "parent", label: "Parent" },
     { value: "guardian", label: "Guardian" },
@@ -59,7 +74,7 @@ export function AddPersonModal(props: AddPersonModalProps) {
                 if (cancelled) return;
                 const fields =
                     apiFields.length > 0
-                        ? apiFields.filter((f) => f.field_key !== "is_employee" && f.field_key !== "employee_id")
+                        ? apiFields.filter((f) => !ADD_PERSON_EXCLUDED_FIELD_KEYS.has(f.field_key))
                         : PERSON_CREATE_FORM_FALLBACK;
                 setFormFields(fields);
                 setValues(buildInitialValues(fields));
