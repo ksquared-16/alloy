@@ -378,14 +378,33 @@ export async function acceptEnrollmentPricingTerm(
     if (!re.ok) return re;
     const { read, resolution } = re;
 
+    /*
+     * A TIE IS SETTLED BY CHOOSING ONE OF THE TIED, AND THAT IS AN ACCEPTANCE.
+     *
+     * When the configuration offers several options equally, the resolver declines to pick and says
+     * the operator settles it. Choosing one of THOSE options is choosing a rate that applies — not a
+     * departure from what applies — so it is accepted, with `recommended_source_id` null recording
+     * that there was no recommendation. A rate outside the tie, or a custom amount, is still an
+     * override with its reason and permission. (This used to refuse every tie choice as an override,
+     * so the common case — full-time and part-time both offered for five days — needed override
+     * authority to record a rate that applied.)
+     */
+    if (resolution.kind === "ambiguous") {
+        const tiedChoice = resolution.tied.find((o) => o.source.id === t(args.selectedSourceId));
+        if (!tiedChoice) {
+            return {
+                ok: false,
+                code: "no_recommendation",
+                message: "More than one tuition option applies equally. Choose one of them, or override with a reason.",
+            };
+        }
+        return insertTerm(supabase, { ...args, read, resolution, option: tiedChoice, state: "accepted" });
+    }
     if (resolution.kind !== "recommended") {
         return {
             ok: false,
             code: "no_recommendation",
-            message:
-                resolution.kind === "ambiguous"
-                    ? "More than one tuition option applies equally. Choose one — that choice is an override."
-                    : "No configured tuition applies to this assignment.",
+            message: "No configured tuition applies to this assignment.",
         };
     }
     // Accepting means accepting the RECOMMENDATION. A different option is an override, and goes

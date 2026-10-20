@@ -207,3 +207,25 @@ describe("overrideEnrollmentPricingTerm — additional rates and custom amounts"
         expect(inserted).toHaveLength(0);
     });
 });
+
+describe("acceptEnrollmentPricingTerm — a tie is settled by choosing one of the tied", () => {
+    it("accepts a tied option (no recommendation recorded) and refuses one outside the tie", async () => {
+        const { acceptEnrollmentPricingTerm } = await import("@/lib/enrollment/pricing/enrollmentPricingTermsService");
+        // Two equally-dated org rates for the same toddler variant and cadence → ambiguous.
+        tuitionRates.push(rate({ id: "rate-toddler-org-twin", rateCents: 155_000, locationId: "loc-north" }));
+        try {
+            const resolution = resolveAssignmentPricingOptions(exportFixture, facts);
+            expect(resolution.kind).toBe("ambiguous");
+            const key = resolution.resolutionKey;
+            const ok = await acceptEnrollmentPricingTerm(fakeSupabase(), { ...base, resolutionKey: key, overrideReason: null, selectedSourceId: "rate-toddler-org-twin" });
+            expect(ok.ok).toBe(true);
+            expect(inserted[0]).toMatchObject({ state: "accepted", source_id: "rate-toddler-org-twin", recommended_source_id: null });
+            inserted.length = 0;
+            const outside = await acceptEnrollmentPricingTerm(fakeSupabase(), { ...base, resolutionKey: key, overrideReason: null, selectedSourceId: "rate-preschool-org" });
+            expect(outside).toMatchObject({ ok: false, code: "no_recommendation" });
+            expect(inserted).toHaveLength(0);
+        } finally {
+            tuitionRates.pop();
+        }
+    });
+});

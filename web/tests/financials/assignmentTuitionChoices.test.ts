@@ -110,6 +110,9 @@ describe("tuitionNoMatchMessage — the step to take, from the resolution's own 
             tuitionNoMatchMessage({ additional: [], facts: { daysPerWeek: 4 } as never, noMatchReason: "unsupported_schedule_basis" }),
         ).toBe("No rate is offered for 4 days a week in this program.");
     });
+    it("no days yet, whatever reason code the resolver landed on", () => {
+        expect(tuitionNoMatchMessage({ ...base, noMatchReason: "no_rate_for_scope" })).toMatch(/^Choose days to see matching rates/);
+    });
     it("no program", () => {
         expect(tuitionNoMatchMessage({ ...base, noMatchReason: "missing_required_input" })).toMatch(/^Choose a room or program/);
     });
