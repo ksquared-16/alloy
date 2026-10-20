@@ -1022,7 +1022,19 @@ export default function FinancialsResponsibilityPanel({
                             type="button"
                             className="mr-1.5 mt-1 rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] text-alloy-midnight/75"
                             data-financials-responsibility-add={c.responsiblePartyId}
-                            onClick={() => setShares((prev) => [...prev, c])}
+                            /*
+                             * W7-F039: a person added to an all-percentage split joins it AS a
+                             * percentage, blank — so the split reads "allocate a percentage to them
+                             * by reducing an existing share" instead of quietly becoming a mixed
+                             * split no longer held to 100%. Nothing is taken from anyone.
+                             */
+                            onClick={() =>
+                                setShares((prev) =>
+                                    prev.length > 0 && prev.every((s) => s.method === "percentage")
+                                        ? [...prev, { ...c, method: "percentage", amount: "" }]
+                                        : [...prev, c],
+                                )
+                            }
                         >
                             + Add {c.name}
                         </button>

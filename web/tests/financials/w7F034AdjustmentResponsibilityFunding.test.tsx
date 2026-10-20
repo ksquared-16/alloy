@@ -123,3 +123,19 @@ describe("F037 / F040 · where responsibility and funding are managed", () => {
         expect(read("../certification/financials/w7-f040/split-family-obligation.mjs")).toMatch(/action_key: "charge\.add"[\s\S]*action_key: "billing\.resolve_responsibility"/);
     });
 });
+
+describe("found during deployed proof (3416e395)", () => {
+    it("Escape on an open menu inside an Accounts command closes the menu — not the command, not the drawer", () => {
+        const host = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(host).toMatch(/if \(hasInnerDismissibleLayer\(document\)\) \{\s*menuWasOpen = true;\s*return;\s*\}/);
+        expect(host).toMatch(/const onBubble = \(e: KeyboardEvent\) => \{\s*if \(e\.key !== "Escape" \|\| !menuWasOpen\) return;\s*menuWasOpen = false;\s*e\.stopPropagation\(\);/);
+    });
+
+    it("a person added to an all-percentage split joins as a blank percentage — held to exactly 100%", () => {
+        expect(code("app/adminV2/financials/FinancialsResponsibilityPanel.tsx")).toMatch(/prev\.every\(\(s\) => s\.method === "percentage"\)\s*\?\s*\[\.\.\.prev, \{ \.\.\.c, method: "percentage", amount: "" \}\]/);
+    });
+
+    it("Payment Details names the same payer as the ledger row's Party", () => {
+        expect(code("components/admin/focusPanel/cards/FinancialsCard.tsx")).toMatch(/label: "Payer", value: receipt\.payerName \?\? receipt\.payerLabel \?\? "Not named"/);
+    });
+});
