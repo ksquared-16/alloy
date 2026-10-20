@@ -24,7 +24,7 @@ vi.mock("@/components/presentation/workUnit/InlineOpportunityFocusPanel", () => 
 
 import { FocusPanelSurface } from "@/components/presentation/workUnit/FocusPanelSurface";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
-import { DomainProjectionFocusProvider } from "@/components/presentation/workUnit/DomainProjectionFocusContext";
+import { DomainProjectionFocusProvider, type DomainProjectionFocusFrame } from "@/components/presentation/workUnit/DomainProjectionFocusContext";
 
 const PERSON = "00000000-0000-4000-8000-000000000123";
 let container: HTMLElement | null = null;
@@ -40,8 +40,8 @@ afterEach(() => {
     container = null;
 });
 
-const frame = { businessProcessKey: "assignments", workViewId: "all", domain: "assignments" as const, projectionKey: "current_assignments" };
-const surface = (subjectId: string | null, projection: typeof frame | null) => (
+const frame: DomainProjectionFocusFrame = { businessProcessKey: "assignments", workViewId: "all", domain: "assignments", projectionKey: "current_assignments" };
+const surface = (subjectId: string | null, projection: DomainProjectionFocusFrame | null) => (
     <OperationalSubjectProvider subjectId={subjectId}>
         <DomainProjectionFocusProvider frame={projection}>
             <FocusPanelSurface openRecord={() => {}} prefetchRecord={() => {}}>
