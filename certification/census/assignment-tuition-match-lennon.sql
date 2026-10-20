@@ -28,12 +28,26 @@ sa as (
     join agr on agr.id = s.enrollment_agreement_id
     left join public.schedule_patterns sp on sp.id = s.schedule_pattern_id
 ),
-orgs as (select distinct org_id from ocm)
+orgs as (select distinct org_id from ocm),
+pi as (
+    select p.id, p.process_key, p.context_id, p.status, p.metadata
+    from public.process_instances p
+    join m on m.id = p.subject_id and m.org_id = p.org_id
+)
 select
     'assignment_tuition_match' as question_id,
     'row' as kind,
     json_build_object(
         'members', (select count(*) from m),
+        'process_instances', (select json_agg(json_build_object(
+            'id', pi.id, 'process_key', pi.process_key, 'status', pi.status,
+            'program_category_id', pi.metadata -> 'program_category_id',
+            'program_key', (select l.key from public.location_program_categories l where l.id::text = pi.metadata ->> 'program_category_id'),
+            'room', pi.metadata -> 'program_room_cohort_key', 'room_location_id', pi.metadata -> 'room_location_id',
+            'schedule_type', pi.metadata -> 'schedule_type', 'weekdays', pi.metadata -> 'weekdays',
+            'requested_days_per_week', pi.metadata -> 'requested_days_per_week',
+            'start_date', pi.metadata -> 'start_date', 'end_date', pi.metadata -> 'end_date',
+            'location_id', pi.metadata -> 'location_id')) from pi),
         'ocm', (select json_agg(json_build_object(
             'id', ocm.id, 'schedule_type', ocm.schedule_type, 'program_category_id', ocm.program_category_id,
             'program_key', (select l.key from public.location_program_categories l where l.id = ocm.program_category_id),
@@ -52,7 +66,7 @@ select
             'id', loc.id, 'program_category_id', loc.metadata ->> 'program_category_id',
             'program_key', (select l.key from public.location_program_categories l where l.id::text = loc.metadata ->> 'program_category_id'),
             'age_from', loc.metadata ->> 'age_range_from', 'age_to', loc.metadata ->> 'age_range_to', 'age_unit', loc.metadata ->> 'age_range_unit'))
-            from public.locations loc where loc.org_id in (select org_id from orgs) and lower(loc.name) = 'toddler 2'),
+            from public.locations loc where loc.org_id in (select org_id from orgs) and lower(loc.label) = 'toddler 2'),
         'program_categories', (select json_agg(json_build_object('id', l.id, 'key', l.key, 'location_id', l.location_id, 'is_active', l.is_active))
             from public.location_program_categories l where l.org_id in (select org_id from orgs)),
         'schedule_pattern_types', (select json_agg(distinct json_build_object('schedule_type_key', sp.schedule_type_key, 'days', coalesce(array_length(sp.weekdays, 1), 0))::text)
