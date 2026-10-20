@@ -364,21 +364,7 @@ export async function resolveChargeDetail(
         customerId = charge.billable_source_id;
     }
 
-    /*
-     * ── W7-F029: EVERY READ BELOW DEPENDS ONLY ON THE CHARGE AND ITS SUBJECT ────────────────────
-     *
-     * Measured on deployed 2d7f1747: Charge Details took ~1.6 s to show anything, and this resolver
-     * was ~30 database round trips awaited ONE AFTER ANOTHER — names, the collectible position,
-     * responsibility, the arrangement, the bound period, the template label, the journal entry and
-     * its accounting period, the GL mapping and account, the applied payments, each actor, and the
-     * adjustment record. None of them needs another's answer; they need only `charge`,
-     * `customerId` and `customerMemberId`, all known here. So they are STARTED here and awaited
-     * together below: the critical path is the longest single chain, not the sum of them all.
-     *
-     * Nothing about what each read asks, or how its failure is treated, changed: a read that threw
-     * still rejects the detail, and a tolerated one is still tolerated inside its own block.
-     */
-    const namesP = Promise.all([
+    const [householdName, childName] = await Promise.all([
         (async () => {
             if (!customerId) return null;
             const { data } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
@@ -395,6 +381,20 @@ export async function resolveChargeDetail(
         })(),
     ]);
 
+    /*
+     * ── W7-F029: EVERY READ BELOW DEPENDS ONLY ON THE CHARGE AND ITS SUBJECT ────────────────────
+     *
+     * Measured on deployed 2d7f1747: Charge Details took ~1.6 s to show anything, and this resolver
+     * was ~30 database round trips awaited ONE AFTER ANOTHER. After the names above, the collectible
+     * position, responsibility, the arrangement, the bound period, the template label, the journal
+     * entry and its accounting period, the GL mapping and account, the applied payments, each actor
+     * and the adjustment record need no answer from one another — only `charge`, `customerId` and
+     * `customerMemberId`, all known here. So they are STARTED here and awaited together below: the
+     * critical path is the longest single chain, not the sum of them all.
+     *
+     * Nothing about what each read asks, or how its failure is treated, changed: a read that threw
+     * still rejects the detail, and a tolerated one is still tolerated inside its own block.
+     */
     /*
      * THE MONEY. A resolver refusal is not an error here: a draft owes nothing yet and a reduction
      * row is not an obligation, and both legitimately have no collectible position. The caller is
@@ -813,7 +813,6 @@ export async function resolveChargeDetail(
     })();
 
     const [
-        [householdName, childName],
         position,
         responsibilityRead,
         accountArrangement,
@@ -825,7 +824,6 @@ export async function resolveChargeDetail(
         ,
         adjustment,
     ] = await Promise.all([
-        namesP,
         positionP,
         responsibilityP,
         arrangementP,
