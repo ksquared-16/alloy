@@ -3663,8 +3663,15 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]),
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) {
   height: max-content;
-  /* Viewport-based only — cell % height is the resting reservation and clips content. */
-  max-height: min(75vh, calc(100dvh - 64px), var(--alloy-os-fp-raised-available, 100dvh));
+  /* Viewport-based only — cell % height is the resting reservation and clips content.
+   * `--alloy-os-sched-viewport-room` is the measured space below the card's top (ScheduleRegions),
+   * so the card never extends past the bottom of the viewport. */
+  max-height: min(
+    75vh,
+    calc(100dvh - 64px),
+    var(--alloy-os-fp-raised-available, 100dvh),
+    var(--alloy-os-sched-viewport-room, 100dvh)
+  );
   overflow: hidden;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
