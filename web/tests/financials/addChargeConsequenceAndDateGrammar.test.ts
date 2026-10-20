@@ -326,6 +326,6 @@ describe("responsibility validation names the input that is actually missing", (
                 party({ method: "percentage", amount: "70" }),
                 party({ responsiblePartyId: "p2", method: "percentage", amount: "40" }),
             ]).message,
-        ).toBe("The percentages total 110%.");
+        ).toBe("10% over 100%");
     });
 });

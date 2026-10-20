@@ -85,14 +85,19 @@ describe("the snapshot is kept, and is not the price", () => {
          */
         const from = card.indexOf("async function save()");
         const body = card.slice(from, card.indexOf("if (roomPicking) {", from));
-        expect(body).toMatch(/await persistAssignmentQuote\(\)/);
-        expect(body, "the canonical act is CALLED, not merely defined").toMatch(/await settleTuitionAfterSave\(\)/);
         /* Both paths: the secondary-assignment branch and the primary one. */
-        expect((body.match(/await settleTuitionAfterSave\(\)/g) ?? []).length, "every save path settles tuition").toBe(2);
-        // …against the view re-read AFTER the schedule write, not the one loaded before it.
+        expect((body.match(/await finishAfterWrite\(\)/g) ?? []).length, "every save path settles tuition").toBe(2);
+        // The follow-ups — quote snapshot, tuition (re-read THEN commit), card re-read — run together,
+        // and the editor closes only after ALL of them answered (no optimistic success).
+        const fin = card.slice(card.indexOf("async function finishAfterWrite"));
+        const finBody = fin.slice(0, fin.indexOf("async function save()"));
+        expect(finBody).toContain("await Promise.all([");
+        expect(finBody).toMatch(/persistAssignmentQuote\(\)/);
+        expect(finBody, "the canonical act is CALLED, not merely defined").toContain("settleTuitionAfterSave()");
+        expect(finBody.indexOf("await onSaved("), "close only after all answered").toBeGreaterThan(finBody.indexOf("await Promise.all(["));
         const after = card.slice(card.indexOf("async function settleTuitionAfterSave"));
-        expect(after.slice(0, 400)).toContain("const fresh = await refreshPricingView();");
-        expect(after.slice(0, 400)).toContain("await settleTuition(fresh);");
+        expect(after.slice(0, 500)).toContain("const fresh = await refreshPricingView();");
+        expect(after.slice(0, 500)).toContain("await settleTuition(fresh, { rereadAfter: false });");
     });
 
     it("the snapshot route still writes no term", () => {

@@ -122,5 +122,6 @@ export function participantScopeFromChildSubjectTruth(
             ?? str(truth["child.image_url"]),
         stageKey: str(truth["child.stage_key"]),
         stageLabel: str(truth["child.outcome_status_label"]),
+        traversedStageKeys: (str(truth["child.traversed_stage_keys"]) ?? "").split(",").map((k) => k.trim()).filter(Boolean),
     };
 }

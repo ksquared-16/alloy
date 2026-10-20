@@ -8,7 +8,8 @@
  */
 
 /** `collapsed` is a projection artefact — N events the card is not showing, not an event. */
-export type StepState = "done" | "current" | "future" | "collapsed";
+/** `skipped`: an earlier step the record never entered — drawn blank, never checked. */
+export type StepState = "done" | "current" | "future" | "collapsed" | "skipped";
 
 /** One column of a progression band — shared by Journey (stages) and Attendance (day events). */
 export type ProgressionStep = {
@@ -330,6 +331,8 @@ export type LedgerPaymentFacts = {
     statusLabel: string;
     methodLabel: string | null;
     payerLabel: string | null;
+    /** True when `payerLabel` is the payment's own named payer, not the household it was taken against. */
+    payerIsPerson?: boolean;
     /** Compact allocation state — "Applied", "$40.00 unapplied" — never the applications themselves. */
     allocationLabel: string | null;
     /** Received money is answering nothing yet: a business state an operator acts on. */
@@ -449,6 +452,29 @@ export type FinancialsPeriod = {
      */
     heldFunds: string | null;
     dueLabel: string;
+    /**
+     * ── W7-F031: THE THREE QUESTIONS, AND WHAT EACH FIGURE IS A PART OF ─────────────────────────
+     *
+     * Eight peer figures answered nothing at a glance. The summary answers three — what needs paying
+     * now, what this period owes, what is coming — and states each other figure as the context of
+     * one of them. Every value is one of the figures above, already formatted; the adapter only
+     * decides which sentence it belongs in, because it is the layer that holds the cents.
+     */
+    summary?: {
+        dueNow: string;
+        /** "$Y past due" under Due now; null when nothing is past due. */
+        pastDueNote: string | null;
+        /** Past due exceeds Due now — arrears from earlier periods the current figure does not hold. */
+        pastDueBeyondDue: boolean;
+        /** Current balance, labelled with the period it is computed for. */
+        balance: string;
+        balanceScope: string;
+        /** "$R charged · $P paid" — exactly the two figures Current balance is the difference of. */
+        balanceNote: string;
+        scheduled: string | null;
+        /** Quiet, conditional context: not yet due, prepaid available, held. */
+        context: { key: string; text: string }[];
+    };
 };
 
 /** The compact card's reduced content — the same read model, fewer questions answered. */
@@ -771,7 +797,9 @@ export type AddChargeSpecimen = {
  */
 export type ProcessStage = {
     label: string;
-    state: "done" | "current" | "future";
+    state: "done" | "current" | "future" | "skipped";
+    /** The folded sub-stage the record is in, e.g. "Offer pending" inside Decision. */
+    detail?: string | null;
     /** Configured slot 1 — date/time, rank, amount. */
     primarySupport: string | null;
     /** Configured slot 2 — location, program, outcome, count. Never a third line. */

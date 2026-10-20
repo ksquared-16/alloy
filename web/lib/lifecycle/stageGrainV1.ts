@@ -130,7 +130,15 @@ export function grainCountUnitLabel(grain: WorkViewGrainBucket, count: number): 
     return n === 1 ? "Child" : "Children";
 }
 
-export function validateWorkViewGrainConsistency(stageGrains: (StageGrain | undefined)[]): {
+export function validateWorkViewGrainConsistency(
+    stageGrains: (StageGrain | undefined)[],
+    /**
+     * The view's declared Row Type. A view declared FAMILY may span family and child stages: each row
+     * is the family, and its children are grouped under it wherever each one stands (Decision with
+     * one child Offer pending). Any other declaration still needs one grain.
+     */
+    declaredRowGrain?: StageGrain,
+): {
     valid: boolean;
     message?: string;
 } {
@@ -138,9 +146,10 @@ export function validateWorkViewGrainConsistency(stageGrains: (StageGrain | unde
     if (defined.length <= 1) return { valid: true };
     const unique = new Set(defined);
     if (unique.size === 1) return { valid: true };
+    if (declaredRowGrain === "family" && [...unique].every((g) => g === "family" || g === "child")) return { valid: true };
     return {
         valid: false,
         message:
-            "This Work View includes stages with different row types. A single flat Work View can only render one queue row shape at a time — split into separate Work Views (one per row type), or configure grouped lanes in Stage Context so family and child records present as one grouped row.",
+            "This Work View includes stages with different row types. A single flat Work View can only render one queue row shape at a time — split into separate Work Views (one per row type), or set the Row Type to Family so each family presents as one row with its children grouped under it.",
     };
 }

@@ -105,7 +105,13 @@ export const W7_FIXTURES: readonly W7Fixture[] = Object.freeze([
             { id: id("b", 7), name: "Rosa Split" },
         ],
         eligibleNotResponsible: [{ id: id("b", 8), name: "Gale Split" }],
-        purpose: "Responsibility: a standing 50/50 arrangement, plus an eligible adult for “+ Add responsible member”.",
+        /*
+         * W7-F040: one posted obligation so Scenario 20 has a share to fund and a figure that must not
+         * move — Registration fee $75.00 for Sasha Split (Oct 20, 2026), written by the canonical
+         * charge.add + billing.resolve_responsibility (certification/financials/w7-f040/
+         * split-family-obligation.mjs), never by the seed, which writes no money.
+         */
+        purpose: "Responsibility: a standing 50/50 arrangement, plus an eligible adult for “+ Add responsible member”; one posted obligation (Registration fee $75.00, Sasha Split) for expected funding.",
     },
     /*
      * W7 Scenario 9: the one household with an enrolment ASSIGNMENT and accepted monthly tuition —

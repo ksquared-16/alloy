@@ -35,30 +35,29 @@ import {
     type ProcessingImportIntent,
 } from "@/lib/pos/processingImportIntent";
 import { proposeImportDisplayName, resolveDisplayNameWithCollision } from "@/lib/pos/documentInstanceNaming";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
+import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
+import { CANONICAL_DOCUMENT_ENTITY_TYPE } from "@/lib/documents/documentEntityTypes";
+import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
-/** Map UI / drawer entity types to canonical documents.entity_type values. */
-const CANONICAL_ENTITY_TYPE: Record<string, string> = {
-    customers: "customer",
-    customer: "customer",
-    contacts: "contact",
-    contact: "contact",
-    opportunities: "opportunity",
-    opportunity: "opportunity",
-    jobs: "job",
-    job: "job",
-    locations: "location",
-    location: "location",
-    customer_members: "customer_member",
-    customer_member: "customer_member",
-    vendors: "vendor",
-    vendor: "vendor",
-    persons: "person",
-    person: "person",
-    schedules: "schedule",
-    schedule: "schedule",
-};
+/**
+ * Map UI / drawer entity types to canonical documents.entity_type values — the one vocabulary the
+ * access decision also reads (lib/documents/documentEntityTypes).
+ */
+const CANONICAL_ENTITY_TYPE: Record<string, string> = { ...CANONICAL_DOCUMENT_ENTITY_TYPE };
+
+function tooLargeResponse(): NextResponse {
+    return NextResponse.json(
+        {
+            error: `Files must be ${Math.round(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB or smaller.`,
+            code: "FILE_TOO_LARGE",
+            max_bytes: ADMIN_DOCUMENT_UPLOAD_MAX_BYTES,
+        },
+        { status: 413 }
+    );
+}
 
 function sanitizeFilename(name: string): string {
     return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 180) || "file";
@@ -95,14 +94,33 @@ async function applyOcrDocumentUpdate(
         .eq("id", args.docId);
 }
 
-/** POST multipart: file + entity_type + entity_id; optional doc_type, title. Admin only (matches canMutate). */
+/**
+ * POST multipart: file + entity_type + entity_id; optional doc_type, title.
+ *
+ * ── AUTHORITY (Documents V1 / D1a) ──
+ *
+ * Creating a document requires `documents.write`. This used to compare `ctx.role !== "admin"` — the
+ * compatibility projection — so `ops`, which holds `documents.write` in every organization, was
+ * refused, and no custom role could be given upload at all. When the upload opens a Processing case
+ * or attaches to one, the caller must ALSO hold `processing.operate`: that is Processing work, and
+ * `documents.write` alone must not open the queue.
+ *
+ * Files over `ADMIN_DOCUMENT_UPLOAD_MAX_BYTES` are refused (413) from the declared size, before the
+ * body is buffered, and again on the bytes actually read.
+ */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden", code: "AUTH" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 });
+    const writeDenied = requireDocumentWrite(ctx);
+    if (writeDenied) return writeDenied;
+
+    // Refuse an oversize body from its declared length before parsing it. Multipart framing adds a
+    // little, so the file itself is checked again below; this only stops a body that cannot fit.
+    const declaredLength = Number(request.headers.get("content-length") ?? "");
+    if (Number.isFinite(declaredLength) && declaredLength > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 64 * 1024) {
+        return tooLargeResponse();
     }
 
     let formData: FormData;
@@ -115,6 +133,9 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file");
     if (!file || !(file instanceof Blob)) {
         return NextResponse.json({ error: "file is required", code: "MISSING_FILE" }, { status: 400 });
+    }
+    if (file.size > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES) {
+        return tooLargeResponse();
     }
 
     const entityTypeRaw = typeof formData.get("entity_type") === "string" ? (formData.get("entity_type") as string).trim() : "";
@@ -141,6 +162,13 @@ export async function POST(request: NextRequest) {
         typeof formData.get("attach_to_case_id") === "string"
             ? (formData.get("attach_to_case_id") as string).trim()
             : "";
+
+    // Opening or joining a Processing case is Processing work. Checked before anything is stored,
+    // so a refused caller leaves no document behind.
+    if (openProcessingCase || attachToCaseId) {
+        const processingDenied = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+        if (processingDenied) return processingDenied;
+    }
 
     // Resolve where this document attaches. Normal uploads still require a valid entity; POS
     // intake may upload without one (entity-less artifact). Attaching to an existing case is the
@@ -183,6 +211,9 @@ export async function POST(request: NextRequest) {
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || DEFAULT_ORG_DOCUMENTS_BUCKET;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES) {
+        return tooLargeResponse();
+    }
     // Content hash of the bytes we are about to store.
     //
     // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every

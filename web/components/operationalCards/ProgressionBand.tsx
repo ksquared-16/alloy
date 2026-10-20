@@ -69,7 +69,8 @@ export default function ProgressionBand({
                     data-progression-state={step.state}
                 >
                     <div className="alloy-os-progression__rail" aria-hidden="true">
-                        <span className="alloy-os-progression__glyph" data-glyph={step.state}>
+                        {/* A skipped step is drawn exactly like one not yet reached: blank, never checked. */}
+                        <span className="alloy-os-progression__glyph" data-glyph={step.state === "skipped" ? "future" : step.state}>
                             {step.state === "done" ? (
                                 <svg viewBox="0 0 12 12" width="9" height="9" fill="none">
                                     <path

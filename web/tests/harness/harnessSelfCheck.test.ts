@@ -12,13 +12,23 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockGetAdminContextCached } = vi.hoisted(() => ({
+const { mockGetAdminContextCached, mockGetAdminAccessContextCached } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
+    mockGetAdminAccessContextCached: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>("@/lib/admin/getAdminContext");
     return { ...actual, getAdminContextCached: mockGetAdminContextCached };
+});
+
+// The document decision reads the ACCESS context (real role keys, capabilities, scope) — see
+// `accessContextFor`. Supplying only the admin context would leave it unresolved and refused.
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return { ...actual, getAdminAccessContextCached: mockGetAdminAccessContextCached };
 });
 
 vi.mock("@/lib/supabaseAdmin", () => ({
@@ -36,7 +46,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 
 import { GET as documentSignedUrlGET } from "@/app/api/admin/documents/[id]/signed-url/route";
 import { buildRequest, invokeRoute, routeParams } from "./routeInvoker";
-import { ACTORS, adminContextFor, UNAUTHENTICATED, NO_ORG_MEMBERSHIP, LOW_PRIVILEGE_ACTORS } from "./actors";
+import { ACTORS, accessContextFor, adminContextFor, UNAUTHENTICATED, NO_ORG_MEMBERSHIP, LOW_PRIVILEGE_ACTORS } from "./actors";
 
 const DOC_ID = "dddddddd-0000-4000-8000-000000000001";
 
@@ -69,6 +79,7 @@ describe("Phase 0 harness — route invocation", () => {
 
     it("returns 404 for a document the caller's org does not own", async () => {
         mockGetAdminContextCached.mockResolvedValue(adminContextFor(ACTORS.orgAAdmin));
+        mockGetAdminAccessContextCached.mockResolvedValue(accessContextFor(ACTORS.orgAAdmin));
 
         const res = await invokeRoute(documentSignedUrlGET, request(), routeParams({ id: DOC_ID }));
 
@@ -134,9 +145,11 @@ describe("Phase 0 harness — actor matrix", () => {
         // Full coverage lives in tests/documents/documentAccessAuthorization.test.ts;
         // this case stays here as the before/after record.
         mockGetAdminContextCached.mockResolvedValue(adminContextFor(ACTORS.orgAViewer));
+        mockGetAdminAccessContextCached.mockResolvedValue(accessContextFor(ACTORS.orgAViewer));
 
         const res = await invokeRoute(documentSignedUrlGET, request(), routeParams({ id: DOC_ID }));
 
         expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ code: "INSUFFICIENT_ROLE" });
     });
 });

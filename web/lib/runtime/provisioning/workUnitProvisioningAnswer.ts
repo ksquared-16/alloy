@@ -1050,11 +1050,11 @@ export async function composeWorkUnitProvisioningAnswer(
     const stages = activeStagesForProcess(process);
     const workViews = savedWorkViewsFromDepartmentMetadata(deptRow?.metadata);
 
-    const lensSet: LensSetEntry[] = workViews.map((v, i) => ({
-        id: v.id,
-        label: v.label,
-        displayOrder: v.display_order ?? i,
-    }));
+    // The pills offer only the views the Director left visible. A hidden view still resolves when
+    // named (a stale link keeps working); it is just never offered as a lens.
+    const lensSet: LensSetEntry[] = workViews.flatMap((v, i) =>
+        v.visible_in_runtime === false ? [] : [{ id: v.id, label: v.label, displayOrder: v.display_order ?? i }],
+    );
 
     // ── CONTEXTUAL FOCUS — resolved HERE, before any lens resolution. ────────────────────────────
     //

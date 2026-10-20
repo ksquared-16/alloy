@@ -138,18 +138,39 @@ function WorkViewGrainBanner({
     }
 
     const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
-    const consistency = validateWorkViewGrainConsistency(stageGrains);
+    const consistency = validateWorkViewGrainConsistency(stageGrains, declaredGrain);
+    const spansGrains = new Set(defined).size > 1;
 
     if (!consistency.valid) {
         return (
-            <div
-                className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
-                data-testid="work-view-grain-mixed-warning"
-                role="alert"
-            >
-                <span className="mt-px text-red-600">⚠</span>
-                <p className="text-[12px] text-red-800">{consistency.message}</p>
-            </div>
+            <>
+                <div
+                    className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+                    data-testid="work-view-grain-mixed-warning"
+                    role="alert"
+                >
+                    <span className="mt-px text-red-600">⚠</span>
+                    <p className="text-[12px] text-red-800">{consistency.message}</p>
+                </div>
+                <WorkViewRowTypeDeclaration
+                    declaredGrain={declaredGrain}
+                    onDeclareGrain={onDeclareGrain}
+                    viewId={viewId}
+                    helper="These stages have different row types. Family shows one row per family, with each child grouped under it."
+                />
+            </>
+        );
+    }
+
+    if (spansGrains) {
+        // Valid only because the view is declared Family — keep the declaration editable here.
+        return (
+            <WorkViewRowTypeDeclaration
+                declaredGrain={declaredGrain}
+                onDeclareGrain={onDeclareGrain}
+                viewId={viewId}
+                helper="One row per family; children at any of these stages are grouped under their family."
+            />
         );
     }
 

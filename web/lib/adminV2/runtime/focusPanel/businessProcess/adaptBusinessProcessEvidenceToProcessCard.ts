@@ -151,6 +151,7 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
     const stages: ProcessStage[] = evidence.stages.map((s) => ({
         label: s.label,
         state: s.state,
+        ...(s.detail ? { detail: s.detail } : {}),
         // The two bounded annotation slots, exactly as configuration filled them. Empty is a real
         // answer: a process that declares no annotations renders none.
         primarySupport: s.primarySupport,

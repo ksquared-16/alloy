@@ -36,6 +36,12 @@ export function childOfStageWork(metadata: unknown): string | null {
     return trim((metadata as Record<string, unknown>)[STAGE_WORK_CHILD_METADATA_KEY]);
 }
 
+/** The child's journey a work item was created for, when recorded. */
+export function childJourneyOfStageWork(metadata: unknown): string | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    return trim((metadata as Record<string, unknown>)[STAGE_WORK_CHILD_JOURNEY_METADATA_KEY]);
+}
+
 /** Metadata that records the child on a work item. Empty for family work. */
 export function stageWorkChildMetadata(child: StageWorkChildSubject | null | undefined): Record<string, string> {
     const id = trim(child?.customerMemberId);

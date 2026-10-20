@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { traversedStageKeysFromMetadata } from "@/lib/process/processInstances";
 import type { OcmEnrollmentTrackQueryRow } from "@/lib/queues/ocmEnrollmentTrackQueueBuilder";
 import {
     piEffectiveStageKey,
@@ -75,6 +76,8 @@ export function mapProcessInstanceToTrackRow(
         customer_members: cm,
         // process-instance provenance for downstream write-cutover + drawer resolution.
         _process_instance_id: pi.id,
+        // The stages this journey actually entered (recorded by the one stage writer).
+        _traversed_stage_keys: traversedStageKeysFromMetadata(pi.metadata),
         // The child's EFFECTIVE stage, carried explicitly. A consumer that reads the opportunity's
         // stage instead is right only while the child rides the family track — a branched child
         // (own `stage_key`) would be reported at its family's stage, which is the wrong answer and
@@ -83,7 +86,7 @@ export function mapProcessInstanceToTrackRow(
             pi.stage_key,
             (opp as { stage_key?: string | null } | null)?.stage_key ?? null,
         ),
-    } as OcmEnrollmentTrackQueryRow & { _process_instance_id: string; _effective_stage_key: string | null };
+    } as OcmEnrollmentTrackQueryRow & { _process_instance_id: string; _effective_stage_key: string | null; _traversed_stage_keys: string[] };
 }
 
 const OPP_SELECT =

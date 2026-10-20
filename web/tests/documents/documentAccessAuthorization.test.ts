@@ -43,6 +43,8 @@ vi.mock("@/lib/supabaseAdmin", () => ({
                     eq: () => ({ maybeSingle: async () => ({ data: documentRow, error: null }) }),
                 }),
             }),
+            // D1a: link issuance is recorded in workflow_events before the link is minted.
+            insert: () => ({ select: () => ({ single: async () => ({ data: { id: "evt-1" }, error: null }) }) }),
         }),
         storage: {
             from: (bucket: string) => ({
@@ -62,6 +64,9 @@ import {
     DOCUMENT_READ_ROLES,
 } from "@/lib/documents/assertDocumentAccess";
 import { buildRequest, invokeRoute, routeParams } from "../harness/routeInvoker";
+
+/** Unrestricted department/site scope — the decision now requires every actor to state one. */
+const UNRESTRICTED = { departmentScope: "all" as const, allowedDepartmentIds: null, siteScope: "all" as const, allowedSiteLocationIds: null };
 
 function row(over: Record<string, unknown> = {}) {
     return {
@@ -136,6 +141,16 @@ describe("signed-url route — authorization", () => {
             expect(res.status, role).toBe(200);
             expect(signCalls, role).toHaveLength(1);
         }
+    });
+
+    it("the compatibility role alone does not admit — every portal member is projected to `ops`", async () => {
+        // D1a: `getAdminContextCached().role` answers admin|ops for EVERY portal member, so a gate
+        // that read it admitted a custom role holding no document authority at all.
+        actor("ops", ["school_director"], ["fin.read"]);
+        const res = await callRoute();
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ code: "INSUFFICIENT_ROLE" });
+        expect(signCalls).toHaveLength(0);
     });
 
     it("allows an explicit documents.read permission without a legacy role", async () => {
@@ -263,7 +278,7 @@ describe("assertDocumentAccess — decision function", () => {
         const d = await assertDocumentAccess({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             supabase: supa(row()) as any,
-            actor: { ok: true, orgId: ORG_A, role: "admin", roleKeys: ["admin"] },
+            actor: { ok: true, orgId: ORG_A, role: "admin", roleKeys: ["admin"], scope: UNRESTRICTED },
             documentId: DOC,
             operation: "download",
             expected: { storagePath: `${ORG_B}/persons/other/secret.pdf` },
@@ -276,7 +291,7 @@ describe("assertDocumentAccess — decision function", () => {
         const d = await assertDocumentAccess({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             supabase: supa(row()) as any,
-            actor: { ok: true, orgId: ORG_A, role: "admin", roleKeys: ["admin"] },
+            actor: { ok: true, orgId: ORG_A, role: "admin", roleKeys: ["admin"], scope: UNRESTRICTED },
             documentId: DOC,
             operation: "download",
             expected: { bucket: "some_other_bucket" },
@@ -290,7 +305,7 @@ describe("assertDocumentAccess — decision function", () => {
             const d = await assertDocumentAccess({
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 supabase: supa(row({ status })) as any,
-                actor: { ok: true, orgId: ORG_A, role: "owner", roleKeys: ["owner"] },
+                actor: { ok: true, orgId: ORG_A, role: "owner", roleKeys: ["owner"], scope: UNRESTRICTED },
                 documentId: DOC,
                 operation: "download",
             });
@@ -303,7 +318,7 @@ describe("assertDocumentAccess — decision function", () => {
         const d = await assertDocumentAccess({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             supabase: supa(row()) as any,
-            actor: { ok: true, role: "admin", roleKeys: ["admin"] },
+            actor: { ok: true, role: "admin", roleKeys: ["admin"], scope: UNRESTRICTED },
             documentId: DOC,
             operation: "download",
         });
@@ -317,7 +332,7 @@ describe("assertDocumentAccess — decision function", () => {
         const d = await assertDocumentAccess({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             supabase: supa(row({ entity_type: "vendors" })) as any,
-            actor: { ok: true, orgId: ORG_A, role: "viewer", roleKeys: ["viewer"] },
+            actor: { ok: true, orgId: ORG_A, role: "viewer", roleKeys: ["viewer"], scope: UNRESTRICTED },
             documentId: DOC,
             operation: "download",
         });

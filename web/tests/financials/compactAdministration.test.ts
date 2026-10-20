@@ -76,7 +76,8 @@ describe("what Details does carry is compact state and doors", () => {
         expect(DETAIL).toContain('data-financials-manage-discounts="gear"');
         expect(DETAIL, "responsibility keeps its door beside the filter")
             .toContain('data-financials-manage-responsibility="gear"');
-        expect(DETAIL, "and its state is the KPI").toMatch(/<Stat label="Responsibility"/);
+        /* W7-F031: the period's obligation reads as "charged" under Balance in the shared summary. */
+        expect(DETAIL, "and the summary states it").toMatch(/<FinancialsAccountSummary evidence=\{evidence\}/);
     });
 
     it("both gears open a surface rather than local state", () => {

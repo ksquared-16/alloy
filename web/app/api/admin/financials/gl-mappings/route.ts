@@ -1,3 +1,4 @@
+import { PAYMENT_METHOD_GL_MAPPING_KEY, PAYMENT_METHOD_LABELS } from "@/lib/financials/payments/paymentLedgerFacts";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -44,16 +45,31 @@ export const dynamic = "force-dynamic";
 
 type MappingRow = { key: string; gl_account_id: string | null; is_active: boolean };
 
-/** The canonical mapping keys, in the order an operator reads their categories. */
+/**
+ * The canonical mapping keys, in the order an operator reads them: charge categories (revenue and
+ * contra), then — W7-F032 — the account each payment METHOD settles into. Receiving money and
+ * earning it are different accounting facts, so a card receipt never borrows the revenue account of
+ * the charge it pays.
+ */
 function canonicalKeys(): Array<{ categoryKey: string; categoryLabel: string; mappingKey: string }> {
-    return Object.entries(CHARGE_CATEGORY_GL_MAPPING_KEY).map(([categoryKey, mappingKey]) => ({
-        categoryKey,
-        categoryLabel: chargeCategoryLabel(categoryKey),
-        mappingKey,
-    }));
+    return [
+        ...Object.entries(CHARGE_CATEGORY_GL_MAPPING_KEY).map(([categoryKey, mappingKey]) => ({
+            categoryKey,
+            categoryLabel: chargeCategoryLabel(categoryKey),
+            mappingKey,
+        })),
+        ...Object.entries(PAYMENT_METHOD_GL_MAPPING_KEY).map(([method, mappingKey]) => ({
+            categoryKey: `payment:${method}`,
+            categoryLabel: `Payments received · ${PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS]}`,
+            mappingKey,
+        })),
+    ];
 }
 
-const MAPPING_KEYS = new Set(Object.values(CHARGE_CATEGORY_GL_MAPPING_KEY));
+const MAPPING_KEYS = new Set<string>([
+    ...Object.values(CHARGE_CATEGORY_GL_MAPPING_KEY),
+    ...Object.values(PAYMENT_METHOD_GL_MAPPING_KEY),
+]);
 
 export async function GET() {
     const ctx = await getAdminContextCached();

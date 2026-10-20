@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { assertDocumentAccess, documentAccessHttp } from "@/lib/documents/assertDocumentAccess";
+import { assertDocumentAccess, documentAccessHttp, documentActorForRequest } from "@/lib/documents/assertDocumentAccess";
 import { sourcePreviewContentType } from "@/lib/pos/sourcePreviewContentType";
 
 /**
@@ -35,18 +35,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const supabase = createAdminClient();
 
     // Same authority as every other read of these bytes. Never a session-only check: a viewer must not
-    // be able to read another child's records through a different route.
+    // be able to read another child's records through a different route. D1a: the actor now carries
+    // department/site scope, so a document hidden from this operator's list cannot be previewed by id.
     const decision = await assertDocumentAccess({
         supabase,
-        actor: {
-            ok: ctx.ok,
-            failureStatus: ctx.ok ? undefined : ctx.status,
-            userId: ctx.ok ? ctx.userId : undefined,
-            orgId: ctx.ok ? ctx.orgId : undefined,
-            role: ctx.ok ? ctx.role : undefined,
-            roleKeys: access.ok ? access.roleKeys : [],
-            permissionKeys: access.ok ? access.permissionKeys : [],
-        },
+        actor: documentActorForRequest(ctx, access),
         documentId: id,
         operation: "download",
     });

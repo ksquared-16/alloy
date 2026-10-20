@@ -25,6 +25,9 @@ import {
 } from "@/lib/process/engine/effectiveProcessPosition";
 
 /** One raw participant exactly as the maintainer persists it. No derived values. */
+/** Row field: `{ contextStageKey, counts: [{stageKey, count}] }`, present only when children diverge. */
+export const EFFECTIVE_STAGE_COUNTS_FIELD = "_effective_stage_counts" as const;
+
 export type MaintainedParticipantFact = {
     id: string;
     subject_type: string | null;
@@ -165,6 +168,9 @@ export function attachEffectiveStagesFromMaintainedFacts<T extends Record<string
             : null;
 
     const stagesByOpportunityId = new Map<string, string[]>();
+    // Per-stage child counts + the case's own stage, so a mixed family row can say
+    // "1 Offer pending · 1 undecided" instead of naming stages without numbers.
+    const countsByOpportunityId = new Map<string, { contextStageKey: string | null; counts: Array<{ stageKey: string; count: number }> }>();
     const rollupLabelsByOpportunityId = new Map<string, { stage: string | null; location: string | null }>();
     /*
      * ── MAINTAINED-EMPTY AND NEVER-MAINTAINED ARE DIFFERENT ANSWERS ──
@@ -200,6 +206,7 @@ export function attachEffectiveStagesFromMaintainedFacts<T extends Record<string
         });
         stagesByOpportunityId.set(id, derived.stageKeys);
         rollupLabelsByOpportunityId.set(id, derived.rollup);
+        countsByOpportunityId.set(id, { contextStageKey: contextStage, counts: [...composeStageRollup(derived.stageKeys).countsByStage] });
     }
 
     if (!maintainedRows.length) return rows as T[];
@@ -209,6 +216,10 @@ export function attachEffectiveStagesFromMaintainedFacts<T extends Record<string
     });
     // Rebuild in the caller's order; canonical sorting happens downstream and must not be perturbed.
     const byIndex = new Map<T, T>();
-    maintainedRows.forEach((row, i) => byIndex.set(row, attached[i]!));
+    maintainedRows.forEach((row, i) => {
+        const id = typeof row.id === "string" ? row.id.trim() : "";
+        const c = countsByOpportunityId.get(id);
+        byIndex.set(row, c && c.counts.length > 1 ? ({ ...attached[i]!, [EFFECTIVE_STAGE_COUNTS_FIELD]: c } as T) : attached[i]!);
+    });
     return rows.map((row) => (unmaintained.has(row) ? row : byIndex.get(row)!));
 }

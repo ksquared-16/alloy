@@ -13,6 +13,7 @@ import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffec
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { childParticipationIdentityFromWire } from "@/lib/lifecycle/childParticipationIdentity";
+import { childJourneyOfStageWork, childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
 import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 
 export type StageWorkOutcomeContext = {
@@ -179,9 +180,13 @@ export async function resolveStageWorkOutcomeContext(params: {
     if (journeySegment === "child") {
         // THIS task's own metadata — not a scrape across the family. The task IS the work being
         // acted on, so the child it names is the child the operator chose.
+        // Stage work created for a child records it under the work's own child keys
+        // (`bp_subject_*`, stageWorkChildSubject.ts); older work carried the wire names.
         const identity = childParticipationIdentityFromWire(task.metadata ?? {});
-        if (identity.subjectId) subject.customer_member_id = identity.subjectId;
-        if (identity.participationId) subject.process_instance_id = identity.participationId;
+        const childId = identity.subjectId ?? childOfStageWork(task.metadata);
+        const journeyId = identity.participationId ?? childJourneyOfStageWork(task.metadata);
+        if (childId) subject.customer_member_id = childId;
+        if (journeyId) subject.process_instance_id = journeyId;
         // Legacy OCM id kept for the executor's temporary fallback when the above are absent.
         if (identity.legacyOcmId) subject.opportunity_customer_member_id = identity.legacyOcmId;
     }

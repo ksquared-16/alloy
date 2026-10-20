@@ -349,8 +349,11 @@ export async function submitPublicVendorApplication(
     return i >= 0 ? filename.slice(i).toLowerCase() : "";
   };
 
-  const insurancePath = `vendors/${vendorId}/insurance/${crypto.randomUUID()}${ext(input.proof_of_insurance.filename) || ".bin"}`;
-  const driversPath = `vendors/${vendorId}/drivers_license/${crypto.randomUUID()}${ext(input.drivers_license.filename) || ".bin"}`;
+  // Org-prefixed, in the canonical layout `vendorObjectPathRemediation` moves the legacy objects to.
+  // The document signer refuses any path outside `<org_id>/` (Documents V1 / D1a), so the old
+  // `vendors/<id>/...` form would store a file nobody could ever open. Existing objects are untouched.
+  const insurancePath = `${orgId}/vendors/${vendorId}/insurance/${crypto.randomUUID()}${ext(input.proof_of_insurance.filename) || ".bin"}`;
+  const driversPath = `${orgId}/vendors/${vendorId}/drivers_license/${crypto.randomUUID()}${ext(input.drivers_license.filename) || ".bin"}`;
 
   const insuranceBuf = input.proof_of_insurance.buffer;
   const driversBuf = input.drivers_license.buffer;

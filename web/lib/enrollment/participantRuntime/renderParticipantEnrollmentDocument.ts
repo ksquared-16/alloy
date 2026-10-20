@@ -147,13 +147,15 @@ export async function resolveActiveArtifact(
      * the document itself must carry where it came from — otherwise the completed record could be
      * mistaken for something Alloy invented rather than something a school asked.
      */
+    // `original_filename`, not `file_name`: `documents` has no `file_name` column, so selecting it made
+    // this query fail every time and the provenance below was always null (Documents V1 / D1a).
     const { data: sourceDoc } = await supabase
         .from("documents")
-        .select("id, title, file_name, checksum_sha256")
+        .select("id, title, original_filename, checksum_sha256")
         .eq("org_id", input.orgId)
         .eq("id", (packetItem as { metadata?: { source_document_id?: string } } | null)?.metadata?.source_document_id ?? "")
         .maybeSingle();
-    const doc = sourceDoc as { id?: string; title?: string; file_name?: string; checksum_sha256?: string } | null;
+    const doc = sourceDoc as { id?: string; title?: string; original_filename?: string; checksum_sha256?: string } | null;
 
     return {
         ok: true,
@@ -163,7 +165,7 @@ export async function resolveActiveArtifact(
         versionId: row.resolved_form_definition_version_id ?? null,
         sourceDocumentId: doc?.id ?? null,
         sourceSha256: doc?.checksum_sha256 ?? null,
-        sourceTitle: doc?.title ?? doc?.file_name ?? null,
+        sourceTitle: doc?.title ?? doc?.original_filename ?? null,
     };
 }
 

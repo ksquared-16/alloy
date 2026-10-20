@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { accessScopeRestrictsData, assertDocumentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
     fetchEffectiveStatusDefinitions,
@@ -130,7 +131,15 @@ async function attachRelatedLabels(
     return out;
 }
 
-/** GET: list documents for current org (admin + ops). */
+/**
+ * GET: list documents for the current org.
+ *
+ * Admission is `documents.read` (or a real role key the documents RLS admits) — the same
+ * `requireDocumentRead` every document byte/link/text route uses. Before D1a this checked only that a
+ * session existed, so any portal member could list every document's title, file name, type and
+ * linked record, including children's. Rows are then narrowed by the actor's scope with the same
+ * predicate the signer applies to a single id.
+ */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
@@ -139,6 +148,8 @@ export async function GET(request: NextRequest) {
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
+    const denied = requireDocumentRead(access);
+    if (denied) return denied;
     const dim = scopeDimensionsFromAccess(access);
 
     const { searchParams } = new URL(request.url);
@@ -171,17 +182,7 @@ export async function GET(request: NextRequest) {
 
     const rows = (rawRows ?? []) as DocRow[];
 
-    let scopedRows = rows;
-    if (accessScopeRestrictsData(dim)) {
-        scopedRows = [];
-        for (const row of rows) {
-            const ok = await assertDocumentDrawerReadable(supabase, ctx.orgId, dim, {
-                entity_type: row.entity_type,
-                entity_id: row.entity_id,
-            });
-            if (ok) scopedRows.push(row);
-        }
-    }
+    const scopedRows = await filterDocumentRowsInActorScope(supabase, ctx.orgId, dim, rows);
 
     const labelMap = await attachRelatedLabels(supabase, ctx.orgId, scopedRows);
     const docDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });

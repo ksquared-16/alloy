@@ -31,11 +31,14 @@ import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import {
+    balanceTwoPartySplit,
     reconcileResponsibilityShares,
     type ResponsibilityShareMethod,
     type ShareDraft,
 } from "@/lib/financials/responsibility/reconcileResponsibilityShares";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import FinancialsExpectedFundingPanel, { type ExpectedFundingRow } from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
+import { alloyDateToday } from "@/lib/workspace/alloyDateValue";
 import { isPostedStatus } from "@/lib/financials/billableSource";
 
 export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
@@ -66,6 +69,8 @@ type ScopeArrangement = {
             amountCents: number | null;
             percentBasisPoints: number | null;
             method: string | null;
+            /* W7-F040: what each share is expected to receive from a third party (the route carries it). */
+            expectedFunding?: ExpectedFundingRow[];
         }[];
     } | null;
     /** False when the household's arrangement is merely REACHING this child. */
@@ -341,7 +346,8 @@ export default function FinancialsResponsibilityPanel({
         },
         [hosted, onHostedClose],
     );
-    const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
+    /* W7-F034: the viewer's calendar day — never a UTC slice that reads as tomorrow after 5pm here. */
+    const [effectiveStart, setEffectiveStart] = useState(() => alloyDateToday());
     const [shares, setShares] = useState<ShareDraft[]>([]);
     /*
      * The people who COULD hold responsibility on this account. Kept separate from `shares`, which
@@ -383,6 +389,8 @@ export default function FinancialsResponsibilityPanel({
     const [scopeMemberId, setScopeMemberId] = useState<string>(defaultScopeMemberId ?? HOUSEHOLD_SCOPE);
     const [scopeArrangement, setScopeArrangement] = useState<ScopeArrangement | null>(null);
     const [scopeLoading, setScopeLoading] = useState(false);
+    /* Bumped after expected funding is saved, so the read-back re-reads committed truth. */
+    const [scopeNonce, setScopeNonce] = useState(0);
     /** The grain actually being written: account administration reads it from the member choice. */
     const effectiveMemberId = administering
         ? (scopeMemberId === HOUSEHOLD_SCOPE ? null : scopeMemberId)
@@ -440,7 +448,6 @@ export default function FinancialsResponsibilityPanel({
         setPreview(null);
     }, [shares, effectiveStart]);
 
-    const stage: "review" | "commit" = preview ? "commit" : "review";
     const confirmBlocker: string | null =
         busy !== null
             ? null
@@ -572,7 +579,7 @@ export default function FinancialsResponsibilityPanel({
         return () => {
             cancelled = true;
         };
-    }, [open, customerId, effectiveMemberId]);
+    }, [open, customerId, effectiveMemberId, scopeNonce]);
 
     const start = useCallback(async () => {
         setPreview(null);
@@ -833,6 +840,34 @@ export default function FinancialsResponsibilityPanel({
                                     Saving replaces this arrangement.
                                 </span>
                             ) : null}
+                            {/*
+                              * ── W7-F040: EXPECTED FUNDING LIVES WITH THE SHARE IT FUNDS ─────────────
+                              *
+                              * An expectation attaches to a SHARE of the arrangement in force — an
+                              * account-level fact — and was reachable only from inside a charge's
+                              * details, so an account with no charge offered no way to record one.
+                              * The same panel, the same command, beside the share it belongs to.
+                              */}
+                            {administering && scopeArrangement.authoredAtRequestedScope ? (
+                                <span className="mt-1 block" data-financials-responsibility-funding="true">
+                                    {scopeArrangement.arrangement.shares.map((sh) => (
+                                        <span key={sh.id} className="block" data-financials-responsibility-funding-share={sh.id}>
+                                            <span className="text-[11px] text-alloy-midnight/70">{sh.name}</span>
+                                            <FinancialsExpectedFundingPanel
+                                                shareId={sh.id}
+                                                arrangementId={scopeArrangement.arrangement!.id}
+                                                customerMemberId={effectiveMemberId}
+                                                partyName={sh.name}
+                                                responsibleCents={sh.amountCents}
+                                                currency="USD"
+                                                funding={sh.expectedFunding ?? []}
+                                                onCommitted={() => setScopeNonce((n) => n + 1)}
+                                                compact
+                                            />
+                                        </span>
+                                    ))}
+                                </span>
+                            ) : null}
                         </span>
                         </>
                     ) : (
@@ -955,11 +990,11 @@ export default function FinancialsResponsibilityPanel({
                                 inputMode="decimal"
                                 placeholder={share.method === "percentage" ? "%" : "Amount"}
                                 value={share.amount}
-                                onChange={(e) =>
-                                    setShares((prev) =>
-                                        prev.map((s, j) => (j === i ? { ...s, amount: e.target.value } : s)),
-                                    )
-                                }
+                                onChange={(e) => {
+                                    const typed = e.target.value;
+                                    /* W7-F039: with two percentage parties, the other follows to 100%. */
+                                    setShares((prev) => balanceTwoPartySplit(prev, i, typed));
+                                }}
                                 data-financials-responsibility-share={share.responsiblePartyId}
                                 data-share-method={share.method}
                                 className="mt-0 block w-full flex-1 rounded border border-alloy-stone/20 px-2 py-1 text-xs tabular-nums"
@@ -1035,35 +1070,66 @@ export default function FinancialsResponsibilityPanel({
               * a ruled row with its actions in it — so an operator learns one place to look for
               * "how do I finish, and how do I get out" and it is the same place on all of them.
               */}
+            {/*
+              * ── W7-F038: THE RESULT, IN ONE GLANCE — NOT A SECOND CONFIRMATION SCREEN ──────────
+              *
+              * What the Director wanted on the confirmation is what this already knows: how many
+              * parties, for what, from when, and each share. It updates as the split is typed, so the
+              * operator reads the result before saving rather than on an extra screen after a click.
+              */}
+            {reconciliation.ok ? (
+                <div className="mt-2 rounded border border-alloy-stone/15 bg-alloy-stone/5 p-2" data-financials-responsibility-summary="true">
+                    <p className="text-[11px] font-medium text-alloy-midnight">
+                        {(() => {
+                            const n = shares.filter((sh) => sh.method === "remainder" || sh.amount.trim() !== "").length;
+                            const scopeWords = administering
+                                ? (effectiveMemberId ? "for this child" : "for the account")
+                                : (scope === "child" ? "for this child" : "for the account");
+                            return `${n} responsible ${n === 1 ? "party" : "parties"} ${scopeWords} from ${formatDisplayDate(effectiveStart) || effectiveStart}`;
+                        })()}
+                    </p>
+                    {shares
+                        .filter((sh) => sh.method === "remainder" || sh.amount.trim() !== "")
+                        .map((sh) => (
+                            <p key={sh.responsiblePartyId} className="text-[11px] text-alloy-midnight/70">
+                                {sh.method === "percentage"
+                                    ? `${Number(Number(sh.amount).toFixed(2))}%`
+                                    : sh.method === "fixed"
+                                      ? `$${Number(sh.amount).toFixed(2)}`
+                                      : "Remainder"}
+                                {" · "}
+                                {sh.name}
+                            </p>
+                        ))}
+                </div>
+            ) : null}
+
+            {/*
+              * THE FAMILY'S ACTION ROW. Every centred card in this family ends the same way —
+              * a ruled row with its actions in it.
+              *
+              * W7-F038: SAVE IS THE PRIMARY, AND IT NEEDS ONLY A VALID SPLIT. Preview is an optional
+              * look at the command's own answer; saving runs the same command, which re-validates
+              * everything (the arrangement rules, effective dating, supersession) before it writes.
+              */}
             <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
-                {/*
-                  * ONE PRIMARY, TWO STAGES — see `stage` above. In `review` it runs the command in
-                  * preview mode and writes nothing; once a preview is on screen it commits exactly
-                  * what is displayed. The selector follows the stage rather than the element, so
-                  * "the preview control" and "the confirm control" each still name the thing that
-                  * does that job.
-                  *
-                  * DISABLED ONLY FOR A STATED REASON — see `confirmBlocker`. A split that cannot
-                  * reconcile cannot be reviewed or committed, and the sentence saying so is
-                  * rendered below while the operator can still see what they typed.
-                  */}
                 <button
                     type="button"
                     className={WS_ACTION_PRIMARY}
-                    onClick={() => void run(stage === "commit" ? "execute" : "preview")}
+                    onClick={() => void run("execute")}
                     disabled={busy !== null || confirmBlocker !== null}
-                    data-financials-responsibility-stage={stage}
-                    {...(stage === "commit"
-                        ? { "data-financials-responsibility-confirm": "true" }
-                        : { "data-financials-responsibility-preview-btn": "true" })}
+                    data-financials-responsibility-confirm="true"
                 >
-                    {busy === "preview"
-                        ? "Checking…"
-                        : busy === "execute"
-                          ? "Saving…"
-                          : stage === "commit"
-                            ? "Confirm — apply this change"
-                            : "Review this change"}
+                    {busy === "execute" ? "Saving…" : "Save responsibility"}
+                </button>
+                <button
+                    type="button"
+                    className="alloy-os-depthcard__close"
+                    data-financials-responsibility-preview-btn="true"
+                    onClick={() => void run("preview")}
+                    disabled={busy !== null || confirmBlocker !== null}
+                >
+                    {busy === "preview" ? "Checking…" : "Preview"}
                 </button>
                 <button
                     type="button"
@@ -1075,12 +1141,7 @@ export default function FinancialsResponsibilityPanel({
                     Cancel
                 </button>
             </div>
-            {/*
-              * The unmet requirement, beside the control it blocks rather than discovered by
-              * guessing — and when nothing is unmet, what the control is about to do. An operator
-              * should never have to press a financial control to find out which half of the
-              * sequence it performs.
-              */}
+            {/* The unmet requirement, beside the control it blocks. */}
             {confirmBlocker ? (
                 <p
                     className="mt-1.5 text-[11px] text-alloy-midnight/65"
@@ -1088,16 +1149,7 @@ export default function FinancialsResponsibilityPanel({
                 >
                     {confirmBlocker}
                 </p>
-            ) : (
-                <p
-                    className="mt-1.5 text-[11px] text-alloy-midnight/50"
-                    data-financials-responsibility-stage-hint={stage}
-                >
-                    {stage === "commit"
-                        ? "This applies the change shown above. Nothing else is altered."
-                        : "Nothing is saved yet. This shows what the change would do, and Confirm then applies it."}
-                </p>
-            )}
+            ) : null}
         </section>
     );
 }

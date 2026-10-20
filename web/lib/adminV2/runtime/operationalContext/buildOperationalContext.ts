@@ -582,6 +582,7 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
                     ?? null,
                 name: lifecycleRail?.process_name ?? null,
                 stageKey: childSubjectScope.stageKey,
+                ...(childSubjectScope.traversedStageKeys?.length ? { traversedStageKeys: childSubjectScope.traversedStageKeys } : {}),
                 stages: railStages,
             }
         :   {

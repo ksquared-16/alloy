@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveProfilePhotosForActor } from "@/lib/documents/profilePhotoPresentation";
+import { DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER } from "@/lib/documents/assertDocumentAccess";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const PEOPLE = 20;
@@ -33,6 +34,8 @@ const actor = {
     role: "admin",
     roleKeys: ["admin"],
     permissionKeys: [],
+    // Avatar resolution: the caller has already authorized the people it projects photos onto.
+    scope: DOCUMENT_SCOPE_AUTHORIZED_BY_CALLER,
 };
 
 /** Yield to the macrotask queue so overlapping work is genuinely observable. */
@@ -69,7 +72,7 @@ function trackingClient() {
                                     id: "dddddddd-0000-4000-8000-000000000001",
                                     org_id: ORG,
                                     bucket: "org_documents",
-                                    storage_path: "p/x.png",
+                                    storage_path: `${ORG}/person/x.png`,
                                     entity_type: "persons",
                                     entity_id: null,
                                     status: null,

@@ -91,7 +91,9 @@ describe("no permanent administration row survives", () => {
          * responsible-party filter, where responsibility is already part of the operator's model.
          */
         const detail = code(DETAIL);
-        expect(detail, "the KPI is what states responsibility").toMatch(/<Stat label="Responsibility"/);
+        /* W7-F031: no Responsibility peer figure — the period's net is "charged" under Balance. */
+        expect(detail, "the summary is what states the period's obligation").toMatch(/<FinancialsAccountSummary evidence=\{evidence\}/);
+        expect(code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts")).toMatch(/balanceNote: `\$\{money\(reconciliation\.responsibilityCents, currency\)\} charged/);
         expect(detail, "and no row restates it")
             .not.toContain('data-financials-admin-item="responsibility"');
         expect(detail, "no responsibility summary marker at all")
@@ -580,7 +582,7 @@ describe("each action sits with the state it acts on", () => {
         const detail = code(DETAIL);
         expect((detail.match(/data-financials-payer-row="true"/g) ?? []).length).toBe(1);
         expect(detail).not.toContain('data-financials-admin-item="responsibility"');
-        expect(detail, "responsibility states itself in a KPI").toMatch(/<Stat label="Responsibility"/);
+        expect(detail, "responsibility is stated by the summary, not a row").toMatch(/<FinancialsAccountSummary evidence=\{evidence\}/);
         expect(detail, "and is managed from the filter, not the row")
             .toContain('data-financials-manage-responsibility="gear"');
     });

@@ -90,8 +90,13 @@ describe("available prepaid is named, and named consistently", () => {
      * searches for is "prepaid", and it appeared nowhere in the product.
      */
     it("names the concept on every surface that shows it", () => {
-        expect([...compact.matchAll(/label="Available prepaid"/g)].length, "both compact renderers").toBe(2);
-        expect(detail).toContain('label="Available prepaid"');
+        /*
+         * W7-F031: the standard summary keeps its labelled line; the account summary (Details and the
+         * Accounts header, one component) states it as context — "$X prepaid available".
+         */
+        expect([...compact.matchAll(/label="Available prepaid"/g)].length, "the standard summary").toBe(1);
+        expect(compact).toContain("<FinancialsAccountSummary evidence={evidence} />");
+        expect(detail).toContain("prepaid available");
         expect(compact, "the bare label is gone").not.toMatch(/label="Available"/);
     });
 

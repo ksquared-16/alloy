@@ -147,6 +147,13 @@ export type FinancialsLedgerRowView = {
     stateTitle?: string | null;
     /** Who owes it. Null with `responsibilityUnassigned` false means no allocation exists at all. */
     responsibleParty: string | null;
+    /**
+     * W7-F032: THE PARTY, WHEN THE ROW IS NOT AN OBLIGATION. The column is "Party" and means the
+     * party THIS EVENT concerns: for a charge, who owes it (the responsibility states below); for a
+     * payment, who PAID it. Set only on rows where that is a different fact from responsibility, so
+     * a payer is never presented as the person who owes.
+     */
+    party?: string | null;
     responsibilityUnassigned?: boolean;
     /** Owed by the named party, and owed by nobody yet. Both can be non-zero on one obligation. */
     responsibilityAssignedCents?: number;
@@ -295,7 +302,8 @@ export function FinancialsLedgerHead() {
             <span>GL account</span>
             <span>Amount</span>
             <span>Status</span>
-            <span>Responsible party</span>
+            {/* W7-F032: who owes a charge, who paid a payment — one column, each row saying which. */}
+            <span>Party</span>
             <span>Description</span>
         </div>
     );
@@ -396,6 +404,18 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
                  * stays a cell: the name, and a short remainder. The amounts are on the title for
                  * anyone who wants both numbers.
                  */
+                if (row.party !== undefined) {
+                    return (
+                        <span
+                            className="alloy-os-billingdetail__source"
+                            data-financials-responsible="true"
+                            data-financials-responsibility="party"
+                            title={row.party ? `Paid by ${row.party}` : undefined}
+                        >
+                            {row.party ?? "—"}
+                        </span>
+                    );
+                }
                 const named = Boolean(row.responsibleParty);
                 const remainder = row.responsibilityUnassignedCents ?? 0;
                 const partial = named && remainder > 0;

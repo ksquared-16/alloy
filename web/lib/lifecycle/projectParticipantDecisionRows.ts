@@ -35,6 +35,7 @@ import {
     resolveChildOfferLocationId,
     withSourcedInputOptions,
 } from "@/lib/lifecycle/participantDecisionInputOptions";
+import { childOfStageWork } from "@/lib/lifecycle/stageWorkChildSubject";
 /** One decision as offered to ONE participant. */
 export type ParticipantDecisionOptionVM = {
     decision_key: string;
@@ -59,6 +60,12 @@ export type ParticipantDecisionRowVM = {
     label: string;
     /** What the operator sees as this child's current position, in plain language. */
     state_label: string;
+    /**
+     * The child's OWN open stage work after its path was chosen — e.g. "Get the family's answer" for a
+     * pending offer. Present so the Decision card can offer "Record outcome" for this child through the
+     * canonical outcome runtime (the task resolves its outcomes and child subject server-side).
+     */
+    open_work?: { task_id: string; label: string } | null;
     /** True once this child's path has been chosen. */
     resolved: boolean;
     /** The chosen decision's label when resolved and identifiable from configuration. */
@@ -96,7 +103,7 @@ export function resolvedStatesForTemplate(
     for (const decision of decisions) {
         for (const target of decision.targets) {
             if (target.kind !== "update_child_enrollment_status") continue;
-            const key = target.disposition_key?.trim();
+            const key = (target.disposition_key ?? target.status_key)?.trim();
             if (key) states.add(key);
         }
     }
@@ -116,7 +123,7 @@ function decisionForState(
     if (!state) return null;
     const byState = decisions.filter((d) =>
         d.targets.some(
-            (t) => t.kind === "update_child_enrollment_status" && t.disposition_key?.trim() === state,
+            (t) => t.kind === "update_child_enrollment_status" && (t.disposition_key ?? t.status_key)?.trim() === state,
         ),
     );
     if (stageKey) {
@@ -236,6 +243,28 @@ export async function projectParticipantDecisionRows(params: {
         }
     }
 
+    // Each child's own open stage work (child-tagged operational tasks on this family case).
+    const openWorkByMember = new Map<string, { task_id: string; label: string }>();
+    // Additive: a failed read leaves rows without "Record outcome", never without their decisions.
+    try {
+        const { data } = await params.supabase
+            .from("operational_tasks")
+            .select("id, title, metadata, created_at")
+            .eq("org_id", params.orgId)
+            .eq("entity_type", "opportunities")
+            .eq("entity_id", params.opportunityId)
+            .eq("status", "open");
+        const tasks = ((data ?? []) as Array<{ id: string; title?: string | null; metadata?: unknown; created_at?: string | null }>)
+            .slice()
+            .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+        for (const t of tasks) {
+            const child = childOfStageWork(t.metadata);
+            if (child && !openWorkByMember.has(child)) openWorkByMember.set(child, { task_id: t.id, label: (t.title ?? "").trim() || "Open work" });
+        }
+    } catch {
+        openWorkByMember.clear();
+    }
+
     // Placement options sourced from each child's location's programs, resolved per child.
     const sourcesPrograms = configured.some((d) => (d.required_inputs ?? []).some(inputUsesProgramCategories));
     const programOptionsByMember = new Map<string, Array<{ value: string; label: string }>>();
@@ -280,7 +309,7 @@ export async function projectParticipantDecisionRows(params: {
                 const stateTarget = decision.targets.find(
                     (t) => t.kind === "update_child_enrollment_status",
                 );
-                const targetState = stateTarget?.disposition_key?.trim() ?? "";
+                const targetState = (stateTarget?.disposition_key ?? stateTarget?.status_key)?.trim() ?? "";
                 const verdict = resolveChildTrackTransition({
                     currentState: state,
                     targetState,
@@ -307,6 +336,7 @@ export async function projectParticipantDecisionRows(params: {
                     chosen && row.process_instance_id ? answersByInstance.get(row.process_instance_id)?.[chosen.decision_key]?.answers ?? null : null,
                 ),
                 resolved: chosen != null,
+                open_work: openWorkByMember.get(customerMemberId) ?? null,
                 ...(chosen ? { resolved_decision_label: labelFor(chosen) } : {}),
                 decisions,
             };
