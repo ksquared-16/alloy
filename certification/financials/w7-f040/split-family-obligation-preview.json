@@ -1,0 +1,47 @@
+{
+ "mode": "preview",
+ "today": "2026-10-20",
+ "before": {
+  "rows": [],
+  "balanceCents": 0,
+  "payers": []
+ },
+ "add": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "data": {
+    "execution_result": {
+     "mode": "preview",
+     "eligibility": {
+      "eligible": true,
+      "blockers": [],
+      "availableTransitions": [],
+      "requiredInputs": []
+     },
+     "preview": {
+      "summary": "registration_fee $75.00",
+      "changes": [
+       "Applies to · Sasha Split",
+       "Occurs 2026-10-20",
+       "Billing period October 2026 · 2026-10-01 → 2026-10-31",
+       "Invoice date 2026-10-20",
+       "Invoice timing · On the service date (charge-type override)",
+       "Due 2026-11-06",
+       "Payment terms · 5 days after the billing period begins (location override) — this period's payment date had passed, so it is due with the next payment",
+       "Posting · Active on confirm — the billing period has begun"
+      ]
+     }
+    },
+    "affected_id": null
+   },
+   "correlation_id": "df8e0977-972b-46d5-8d10-869357f6ddaf"
+  }
+ },
+ "chargeId": null,
+ "after": {
+  "rows": [],
+  "balanceCents": 0,
+  "payers": []
+ }
+}
