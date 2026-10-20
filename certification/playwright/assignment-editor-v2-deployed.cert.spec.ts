@@ -107,6 +107,23 @@ async function openLennon(page: Page) {
     await page.waitForTimeout(6000);
 }
 
+/** Open the assignment editor: the Children entry, then (when one exists) the assignment's Edit. */
+async function openEditor(page: Page) {
+    await page.locator('[data-universal-card-key="children"] [data-identity-linked="true"] .identity-field-value__value--linked').first().click();
+    await page.waitForTimeout(4000);
+    if (await page.locator('[data-schedule-editor="true"]').count()) return;
+    const row = page.locator('[data-assignments-card="true"]').getByText("Toddler", { exact: false }).first();
+    if (await row.count()) {
+        await row.click();
+        await page.waitForTimeout(2500);
+    }
+    const edit = page.locator('[data-assignments-card="true"] button', { hasText: /Edit/ }).first();
+    if (await edit.count()) {
+        await edit.click();
+        await page.waitForTimeout(3500);
+    }
+}
+
 test.describe("Assignment editor V2 — deployed", () => {
     test.skip(!RUN, "opt-in: AEV2_DEPLOYED=1");
 
@@ -296,6 +313,274 @@ test.describe("Assignment editor V2 — deployed", () => {
             note(`accepted term: ${await ed.locator("[data-assignment-accepted-term]").first().textContent().catch(() => null)}`);
         }
         fs.writeFileSync(path.join(OUT, "save-reopen.log"), log.join("\n"));
+        expect(blocked).toEqual([]);
+    });
+
+    test("polish: named rates, no tie warning, hours like dates, save + reopen keeps tuition", async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const blocked = await guard(page);
+        await openLennon(page);
+        await openEditor(page);
+        const ed = page.locator('[data-schedule-editor="true"]');
+        await expect(ed).toBeVisible();
+        await page.waitForTimeout(3000);
+        const before = await tuitionState(page, "P0 opened (schedule untouched)");
+        note(`P1 tie warning present: ${await page.locator('[data-assignment-tuition-ambiguous="true"]').count()}`);
+        const geom = await ed.evaluate((root) => {
+            const r = (sel: string) => root.querySelector(sel)?.getBoundingClientRect();
+            const a = r('[data-arrive="true"]'), d = r('[data-depart="true"]');
+            const dates = Array.from(root.querySelectorAll('input[type="date"]')).map((e) => e.getBoundingClientRect());
+            return { arriveTop: a?.top, departTop: d?.top, arriveLeft: a?.left, departLeft: d?.left, dateTops: dates.map((x) => x.top) };
+        });
+        note(`P2 hours geometry: ${JSON.stringify(geom)}`);
+        await shot(page, "40-polish-editor");
+        const perDay = ed.locator('[data-perday-toggle="true"]');
+        if (await perDay.count()) {
+            await perDay.click();
+            await page.waitForTimeout(400);
+            note(`P3 per-day rows: ${await ed.locator("[data-perday-row]").count()}`);
+            await shot(page, "41-polish-perday");
+            await perDay.click();
+        }
+        await measure(page, "P4 compact 1440x900");
+        // Save + reopen: choose the first listed rate (an eligible, non-override choice) and save.
+        const sel = ed.locator('[data-assignment-tuition-embed="true"]');
+        const firstRate = await sel.locator("option").nth(1).getAttribute("value");
+        const firstLabel = (await sel.locator("option").nth(1).textContent())?.trim();
+        if (firstRate) await sel.selectOption(firstRate);
+        await page.waitForTimeout(500);
+        note(`P5 chosen: ${firstLabel} | selected text: ${(await sel.evaluate((e) => (e as HTMLSelectElement).selectedOptions[0]?.textContent ?? ""))}`);
+        note(`P5 commit disabled: ${await ed.locator('[data-schedule-commit="true"]').isDisabled()} reason field: ${await ed.locator('[data-assignment-override-reason="true"]').count()}`);
+        await ed.locator('[data-schedule-commit="true"]').click();
+        await page.waitForTimeout(8000);
+        await shot(page, "42-after-save");
+        note(`P6 card notice: ${await page.locator('[data-assignments-card="true"] p').first().textContent().catch(() => null)}`);
+        await openLennon(page);
+        await openEditor(page);
+        const ed2 = page.locator('[data-schedule-editor="true"]');
+        await expect(ed2).toBeVisible();
+        await page.waitForTimeout(3000);
+        await shot(page, "43-reopened");
+        const days = await ed2.locator("[data-day]").evaluateAll((els) => els.map((e) => `${e.getAttribute("data-day")}:${e.getAttribute("aria-pressed")}`));
+        note(`P7 reopened days ${days.join(" ")} room ${await ed2.locator("[data-room-value]").first().textContent()} start ${await ed2.locator('input[type="date"]').first().inputValue()}`);
+        await tuitionState(page, "P7 reopened tuition");
+        note(`P7 accepted term: ${await ed2.locator("[data-assignment-accepted-term]").first().textContent().catch(() => null)}`);
+        void before;
+        fs.writeFileSync(path.join(OUT, "polish.log"), log.join("\n"));
+        expect(blocked).toEqual([]);
+    });
+
+    test("polish-reopen: the saved tuition and schedule reopen as saved", async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const blocked = await guard(page);
+        await openLennon(page);
+        await shot(page, "44-panel-after-save");
+        const listText = await page.locator('[data-universal-card-key="children"]').first().innerText().catch(() => "");
+        note(`R0 children card: ${listText.replace(/\s+/g, " ").slice(0, 300)}`);
+        await openEditor(page);
+        const ed = page.locator('[data-schedule-editor="true"]');
+        await expect(ed).toBeVisible();
+        await page.waitForTimeout(3000);
+        await shot(page, "45-reopened-editor");
+        const days = await ed.locator("[data-day]").evaluateAll((els) => els.map((e) => `${e.getAttribute("data-day")}:${e.getAttribute("aria-pressed")}`));
+        note(`R1 days ${days.join(" ")} | room ${await ed.locator("[data-room-value]").first().textContent()} | start ${await ed.locator('input[type="date"]').first().inputValue()}`);
+        await tuitionState(page, "R2 reopened tuition");
+        note(`R3 accepted term: ${await ed.locator("[data-assignment-accepted-term]").first().textContent().catch(() => null)}`);
+        fs.writeFileSync(path.join(OUT, "polish-reopen.log"), log.join("\n"));
+        expect(blocked).toEqual([]);
+    });
+
+    test("timing: save an unchanged assignment, request by request", async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const blocked = await guard(page);
+        const runs: Array<Record<string, unknown>> = [];
+        const RUNS = Number(process.env.AEV2_TIMING_RUNS || 5);
+        for (let run = 0; run < RUNS; run++) {
+            await openLennon(page);
+            await openEditor(page);
+            const ed = page.locator('[data-schedule-editor="true"]');
+            await expect(ed).toBeVisible();
+            await page.waitForTimeout(3000); // let draft tuition settle
+            const reqs: Array<{ m: string; u: string; start: number; end?: number; status?: number }> = [];
+            const onReq = (r: import("@playwright/test").Request) => {
+                const u = r.url();
+                if (!u.includes("/api/")) return;
+                reqs.push({ m: r.method(), u: u.replace(/^https?:\/\/[^/]+/, "").slice(0, 110), start: Date.now() });
+            };
+            const onDone = (r: import("@playwright/test").Request) => {
+                const u = r.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 110);
+                const row = [...reqs].reverse().find((x) => x.u === u && x.m === r.method() && x.end == null);
+                if (row) row.end = Date.now();
+            };
+            page.on("request", onReq);
+            page.on("requestfinished", onDone);
+            page.on("requestfailed", onDone);
+            const t0 = Date.now();
+            await ed.locator('[data-schedule-commit="true"]').click();
+            const savingVisibleAt = await page
+                .waitForFunction(() => /Saving/.test(document.querySelector('[data-schedule-commit="true"]')?.textContent ?? ""), null, { timeout: 5000 })
+                .then(() => Date.now() - t0)
+                .catch(() => null);
+            await page.waitForSelector('[data-schedule-editor="true"]', { state: "detached", timeout: 60000 });
+            const editorClosedAt = Date.now() - t0;
+            await page.waitForSelector('[data-assignments-card="true"] >> text=Toddler 2', { timeout: 30000 });
+            const listVisibleAt = Date.now() - t0;
+            await page.waitForTimeout(4000); // capture trailing host refreshes
+            page.off("request", onReq);
+            page.off("requestfinished", onDone);
+            page.off("requestfailed", onDone);
+            const rows = reqs.map((r) => ({ m: r.m, u: r.u, at: r.start - t0, ms: r.end != null ? r.end - r.start : null }));
+            runs.push({ run, savingVisibleAt, editorClosedAt, listVisibleAt, rows });
+            note(`T${run}: saving@${savingVisibleAt} editorClosed@${editorClosedAt} listVisible@${listVisibleAt}`);
+            for (const r of rows) note(`   +${r.at}ms ${r.m} ${r.u} (${r.ms}ms)`);
+        }
+        fs.writeFileSync(path.join(OUT, `timing-${process.env.AEV2_TIMING_LABEL || "run"}.json`), JSON.stringify(runs, null, 1));
+        expect(blocked).toEqual([]);
+    });
+
+    test("perf-matrix: create / unchanged / tuition / schedule / duplicate / rejected", async ({ page }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const CHILD = process.env.AEV2_PERF_CHILD || "Ava ZZQA1484F31612";
+        // Mutating matrix: QA fixtures only. It records override terms, so it never runs against a real child.
+        expect(CHILD).toMatch(/ZZQA/);
+        const blocked: string[] = [];
+        const label = process.env.AEV2_TIMING_LABEL || "run";
+        const results: Array<Record<string, unknown>> = [];
+        const openChild = async () => {
+            await page.goto(PATHNAME);
+            await page.waitForTimeout(4000);
+            const bosClose = page.getByRole("button", { name: "Close", exact: true }).first();
+            if (await bosClose.isVisible().catch(() => false)) await bosClose.click().catch(() => {});
+            await page.getByText(/^Registration/).first().click();
+            await page.waitForTimeout(3000);
+            await page.getByText(CHILD, { exact: true }).first().click();
+            await page.waitForTimeout(5000);
+            await openEditor(page);
+            const ed = page.locator('[data-schedule-editor="true"]');
+            await expect(ed).toBeVisible();
+            await page.waitForTimeout(3000);
+            return ed;
+        };
+        const timedSave = async (kind: string, ed: import("@playwright/test").Locator, opts?: { dbl?: boolean }) => {
+            const reqs: Array<{ m: string; u: string; start: number; end?: number; status?: number }> = [];
+            const onReq = (r: import("@playwright/test").Request) => {
+                if (!r.url().includes("/api/")) return;
+                reqs.push({ m: r.method(), u: r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!.slice(0, 70), start: Date.now() });
+            };
+            const onDone = async (r: import("@playwright/test").Request) => {
+                const u = r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!.slice(0, 70);
+                const row = [...reqs].reverse().find((x) => x.u === u && x.m === r.method() && x.end == null);
+                if (row) { row.end = Date.now(); row.status = (await r.response())?.status(); }
+            };
+            page.on("request", onReq);
+            page.on("requestfinished", onDone);
+            page.on("requestfailed", onDone);
+            const t0 = Date.now();
+            const commit = ed.locator('[data-schedule-commit="true"]');
+            // A disabled commit is a setup failure, not a slow save: fail in seconds, not at the test timeout.
+            await expect(commit).toBeEnabled({ timeout: 10000 });
+            if (opts?.dbl) await commit.dblclick(); else await commit.click();
+            const closed = await page.waitForSelector('[data-schedule-editor="true"]', { state: "detached", timeout: 30000 }).then(() => Date.now() - t0).catch(() => null);
+            await page.waitForTimeout(2500);
+            page.off("request", onReq); page.off("requestfinished", onDone); page.off("requestfailed", onDone);
+            const write = reqs.find((r) => r.m === "POST" && r.u === "/api/admin/scheduling");
+            const row = {
+                kind,
+                clickToWriteResponse: write?.end != null ? write.end - t0 : null,
+                writeStatus: write?.status ?? null,
+                clickToEditorClosed: closed,
+                schedulingPosts: reqs.filter((r) => r.m === "POST" && r.u === "/api/admin/scheduling").length,
+                executes: reqs.filter((r) => r.m === "POST" && r.u === "/api/admin/actions/execute").map((r) => r.status),
+                financialConfigReads: reqs.filter((r) => r.u.startsWith("/api/admin/financial-config")).length,
+                seq: reqs.map((r) => `+${r.start - t0} ${r.m} ${r.u} ${r.end != null ? r.end - r.start : "?"}ms ${r.status ?? ""}`),
+            };
+            results.push(row);
+            fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.json`), JSON.stringify(results, null, 1));
+            note(`${label} ${kind}: write ${row.clickToWriteResponse}ms (${row.writeStatus}) closed ${row.clickToEditorClosed}ms posts=${row.schedulingPosts} execs=${JSON.stringify(row.executes)} configReads=${row.financialConfigReads}`);
+            for (const l of row.seq) note(`     ${l}`);
+            fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
+            return row;
+        };
+        /*
+         * Every scenario must carry a REAL tuition commit — a save with nothing to accept is a no-op for
+         * this measurement. The QA child's assignment resolves no catalog rate, so the rate comes from the
+         * site's additional rates: a recorded override (with its reason), committed by the same execute.
+         */
+        const optionValues = (sel: import("@playwright/test").Locator) =>
+            sel.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean));
+        const chooseRate = async (ed: import("@playwright/test").Locator, mode: "keep" | "change") => {
+            const sel = ed.locator('[data-assignment-tuition-embed="true"]');
+            let opts = await optionValues(sel);
+            const more = ed.getByRole("button", { name: /Show additional rates/ });
+            if (await more.count()) { await more.first().click(); await page.waitForTimeout(400); opts = await optionValues(sel); }
+            const cur = await sel.inputValue();
+            const next = mode === "keep" && cur ? cur : opts.find((o) => o !== cur) ?? opts[0];
+            if (next && next !== cur) await sel.selectOption(next);
+            await page.waitForTimeout(400);
+            const reason = ed.locator('[data-assignment-override-reason="true"]');
+            if (await reason.count()) await reason.fill("QA timing — fixture rate");
+            return { from: cur, to: await sel.inputValue() };
+        };
+        // Create (only if the child has no assignment yet) — else an unchanged save stands in.
+        let ed = await openChild();
+        const isCreate = /Create Assignment/.test((await ed.locator('[data-schedule-commit="true"]').textContent()) ?? "");
+        if (isCreate) {
+            for (const i of [1, 2, 3, 4, 5]) {
+                const b = ed.locator(`[data-day="${i}"]`);
+                if ((await b.getAttribute("aria-pressed")) !== "true") await b.click();
+            }
+            await ed.locator('input[type="date"]').first().fill("2026-11-02");
+            const depart = ed.getByLabel("Depart", { exact: true });
+            await depart.fill("5:30 PM");
+            await depart.press("Enter");
+            await ed.locator('[data-room-change="true"]').click();
+            await page.waitForTimeout(1500);
+            const toddler = page.locator("[data-room-option]", { hasText: "Toddler 2" });
+            await ((await toddler.count()) ? toddler.first() : page.locator("[data-room-option]").first()).click();
+            await page.waitForTimeout(3000);
+            await page.waitForTimeout(2000);
+            note(`${label} create: tuition ${JSON.stringify(await chooseRate(ed, "change"))}`);
+            await timedSave("create", ed);
+        }
+        if (process.env.AEV2_PERF_CREATE_ONLY) {
+            note(`${label} create-only: isCreate=${isCreate}`);
+            fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
+            expect(isCreate).toBe(true);
+            return;
+        }
+        for (let i = 0; i < 3; i++) {
+            ed = await openChild();
+            const r = await chooseRate(ed, "keep");
+            note(`${label} unchanged: tuition ${JSON.stringify(r)}`);
+            await timedSave("unchanged", ed);
+        }
+        for (let i = 0; i < 3; i++) {
+            ed = await openChild();
+            note(`${label} tuition-change: ${JSON.stringify(await chooseRate(ed, "change"))}`);
+            await timedSave("tuition-change", ed);
+        }
+        for (let i = 0; i < 3; i++) {
+            ed = await openChild();
+            await ed.locator('[data-day="4"]').click();
+            await page.waitForTimeout(2500);
+            note(`${label} schedule-change: ${JSON.stringify(await chooseRate(ed, "keep"))}`);
+            await timedSave("schedule-change", ed);
+        }
+        ed = await openChild();
+        note(`${label} double-click: ${JSON.stringify(await chooseRate(ed, "keep"))}`);
+        await timedSave("double-click", ed, { dbl: true });
+        // Rejected: the browser answers the schedule write with a 403 (server refusal, simulated).
+        ed = await openChild();
+        await page.route("**/api/admin/scheduling", async (route) => {
+            if (route.request().method() === "POST") return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "You do not have permission to change this schedule." }) });
+            return route.continue();
+        });
+        const rej = await timedSave("rejected-403", ed);
+        const errText = await page.locator('[data-schedule-error="true"]').first().textContent().catch(() => null);
+        note(`${label} rejected: editor still open=${rej.clickToEditorClosed == null} error="${errText}" commit enabled=${await ed.locator('[data-schedule-commit="true"]').isEnabled().catch(() => null)}`);
+        await page.unroute("**/api/admin/scheduling");
+        fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.json`), JSON.stringify(results, null, 1));
+        fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
         expect(blocked).toEqual([]);
     });
 });
