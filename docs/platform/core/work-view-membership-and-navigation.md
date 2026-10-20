@@ -2,7 +2,7 @@
 title: Work View membership and navigation
 owner: platform
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-20
 supersedes: []
 ---
 
@@ -280,6 +280,8 @@ membership truth.
 
 ---
 
+---
+
 ## 10. Implementation seams
 
 Named so the doctrine above is checkable, not to make the symbol list the doctrine:
@@ -295,3 +297,37 @@ Named so the doctrine above is checkable, not to make the symbol list the doctri
 | Targeted member beyond the page cap | `web/lib/runtime/provisioning/targetedWorkViewMember.ts` |
 | Participant-position navigation | `web/lib/workUnits/hostWorkUnitResolver.ts` |
 | Catch-all binding normalization | `web/lib/lifecycle/workViewsConfigV1.ts` |
+| Domain-projection cohort (§ 11) | `web/lib/businessProcesses/projections/domainProjectionRegistry.ts` |
+| Projection rows / counts branches (§ 11) | `workUnitProvisioningAnswer.ts` (`terminal: "projection"`), `web/lib/queues/evaluateWorkViewTotalsForGroup.ts` |
+
+---
+
+## 11. Domain-projection Work Views (BP V2 Slice 2)
+
+A Work View on a `domain_projection` process (`process_model_v1`) does not evaluate a lifecycle
+population. Its membership is a **registered domain projection**, named by the view's `projection_key`
+and dispatched on the process's declared domain. Everything in §§ 1–9 about stages, lenses and grains
+describes staged lifecycles; for a projection view the following is the contract.
+
+- **One cohort.** `loadDomainProjectionCohort` is the only membership reader. The totals evaluator
+  (pill and tile counts, the seed) and the provisioning answer (rows) both call it; `total` is the length
+  of the same deduplicated, authorized, canonically ordered cohort the page is sliced from, or **null**
+  when the domain read was bounded (`truncated`). Never the page length, never a guess.
+- **The row is the record; the source is context.** Each row names an existing durable record — child
+  (`customer_members`), person (`persons`) or household (`customers`) — as `<grain>:<id>`, one row per
+  subject. The domain fact that put it there (a `schedule_assignments` row, a `charges` row) is carried as
+  `domain_projection.source` and never becomes what opens.
+- **A distinct terminal.** The answer is `terminal: "projection"`, so every `operational`-keyed consumer
+  (opportunity drawer warming, stage work, primary actions) skips it by construction. Selecting a row opens
+  the existing `DurableRecordSurface` inside the existing Focus Panel boundary; no default subject is
+  committed and nothing opportunity-shaped is prepared for a projection row.
+- **Scope.** Rows and counts are read under the request's **access** scope (site restrictions enforced;
+  `fin.read` for Billing). The workspace site *filter* is not applied to projection views yet — applying
+  it to counts but not rows would make them disagree.
+- **Refusals are explicit.** `projection_unsupported` (configuration), `projection_forbidden`
+  (authorization), `projection_unavailable` (read failed or no scope): an error terminal that keeps the
+  lens set; counts are UNKNOWN. A projection view never returns Enrollment records and never a zero it did
+  not count.
+- **Host.** One work unit per projection department, written idempotently after publish, with an empty
+  `queue_definition`; it is the canonical location (`base_queue_key: "projection"`) and no lane reader can
+  load it as an opportunity lane.
