@@ -98,7 +98,20 @@ async function commitArgsFrom(
         asOf: t(payload?.as_of) || null,
         overrideReason: t(payload?.override_reason) || null,
         supersede: payload?.supersede === true,
+        customAmountCents: customAmountFrom(payload),
     };
+}
+
+/**
+ * The override's custom tuition amount, in whole cents — `custom_amount_cents`, a key no caller can
+ * mistake for setting the catalog price. Absent is null; anything unparseable is NaN so the service
+ * refuses it rather than dropping it.
+ */
+function customAmountFrom(payload: Record<string, unknown> | undefined): number | null {
+    const raw = payload?.custom_amount_cents;
+    if (raw == null || raw === "") return null;
+    const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+    return Number.isFinite(n) ? n : Number.NaN;
 }
 
 /** Both actions ask for the same two things, so both validate them the same way. */
@@ -122,9 +135,9 @@ function validateCommitPayload(payload: Record<string, unknown> | undefined) {
      * A PAYLOAD AMOUNT IS REFUSED RATHER THAN IGNORED.
      *
      * Silently dropping it would let a caller believe it had set a price and leave the difference
-     * to be discovered in a ledger. There is no override-by-amount in this platform: an override
-     * chooses another AUTHORED option, so an amount in the payload is a misunderstanding worth
-     * naming.
+     * to be discovered in a ledger. The one way to price by amount is the OVERRIDE's explicit
+     * `custom_amount_cents` — permissioned, reasoned, and recorded against an authored rate — so a
+     * bare amount here is a misunderstanding worth naming.
      */
     if (payload && ("amount_cents" in payload || "rate_cents" in payload || "amount" in payload)) {
         blockers.push({
@@ -145,7 +158,19 @@ const acceptAction: RegisteredAction = {
     description:
         "Accept the recommended tuition for this assignment and record it as an effective-dated "
         + "pricing term. Creates no charge.",
-    validatePayload: validateCommitPayload,
+    validatePayload(payload) {
+        const base = validateCommitPayload(payload);
+        const blockers = base.ok ? [] : [...base.blockers];
+        // A custom amount is an override, never an acceptance.
+        if (payload && "custom_amount_cents" in payload && payload.custom_amount_cents != null) {
+            blockers.push({
+                code: "custom_amount_requires_override",
+                message: "A custom tuition amount is an override — record it with a reason.",
+                field: "custom_amount_cents",
+            });
+        }
+        return blockers.length > 0 ? { ok: false, blockers } : { ok: true, value: payload ?? {} };
+    },
 
     async resolveEligibility({ supabase, ctx, payload, invocation }) {
         const args = await commitArgsFrom(supabase as SupabaseClient, ctx, payload, invocation?.entityId);
@@ -199,8 +224,9 @@ const overrideAction: RegisteredAction = {
     actionKey: ENROLLMENT_PRICING_OVERRIDE_ACTION_KEY,
     defaultLabel: "Override tuition",
     description:
-        "Record a different authored tuition option than the one recommended, with the reason it "
-        + "applies. Requires the enrollment pricing override permission. Creates no charge.",
+        "Record a different tuition than the one recommended — another authored rate at this site, "
+        + "or a custom amount billed under an authored rate — with the reason it applies. Requires "
+        + "the enrollment pricing override permission. Creates no charge.",
 
     validatePayload(payload) {
         const base = validateCommitPayload(payload);

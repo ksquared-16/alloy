@@ -34,7 +34,10 @@ describe("the write goes through the registered pricing authority", () => {
     it("creates no second writer and no assignment-owned price", () => {
         const code = strip(card);
         expect(code, "no direct term write").not.toMatch(/enrollment_pricing_terms/);
-        expect(code, "the browser authors no money").not.toMatch(/amount_cents:\s*[A-Za-z0-9_.]/);
+        // The browser never sets a bare amount. A custom tuition travels ONLY as the override's
+        // `custom_amount_cents`, which the authority permissions, reasons and records.
+        expect(code, "no bare amount").not.toMatch(/[^_]amount_cents:\s*[A-Za-z0-9_.]/);
+        expect(code).toContain("custom_amount_cents: customRateCents");
     });
 
     it("sends the resolution the operator was shown, not a fresh one", () => {
@@ -47,6 +50,9 @@ describe("the write goes through the registered pricing authority", () => {
         const fn = card.slice(card.indexOf("async function acceptAssignmentTuition"));
         const body = fn.slice(0, fn.indexOf("async function persistAssignmentQuote"));
         expect(body).toContain("view.applicable.find((o) => o.sourceId === selected)");
+        expect(body, "or an additional site rate — still a real authored one").toContain(
+            "view.additional.find((o) => o.sourceId === selected)",
+        );
         expect(body).toContain("no longer applies to this assignment");
         expect(body, "no silent fallback").not.toMatch(/\?\?\s*view\.recommended/);
     });
@@ -54,8 +60,12 @@ describe("the write goes through the registered pricing authority", () => {
     it("an override carries its reason, and only when it is one", () => {
         expect(card).toContain("override_reason: overrideReason.trim()");
         expect(card).toContain("isOverridingSelection");
-        /* "Override" is choosing another authored option — never a typed price. */
-        expect(strip(card), "no free-form price entry").not.toMatch(/name="amount"|placeholder="\$/);
+        /*
+         * A custom amount exists, and it is an override: it marks the selection as one, so it
+         * cannot be saved without a reason, and it is sent beside an authored rate, never alone.
+         */
+        expect(card).toContain("isTuitionOverride(displayView, offeringId.trim(), customRateOn)");
+        expect(card).toContain("(!isOverridingSelection || Boolean(overrideReason.trim()))");
     });
 });
 
@@ -76,9 +86,13 @@ describe("the snapshot is kept, and is not the price", () => {
         const from = card.indexOf("async function save()");
         const body = card.slice(from, card.indexOf("if (roomPicking) {", from));
         expect(body).toMatch(/await persistAssignmentQuote\(\)/);
-        expect(body, "the canonical act is CALLED, not merely defined").toMatch(/await settleTuition\(\)/);
+        expect(body, "the canonical act is CALLED, not merely defined").toMatch(/await settleTuitionAfterSave\(\)/);
         /* Both paths: the secondary-assignment branch and the primary one. */
-        expect((body.match(/await settleTuition\(\)/g) ?? []).length, "every save path settles tuition").toBe(2);
+        expect((body.match(/await settleTuitionAfterSave\(\)/g) ?? []).length, "every save path settles tuition").toBe(2);
+        // …against the view re-read AFTER the schedule write, not the one loaded before it.
+        const after = card.slice(card.indexOf("async function settleTuitionAfterSave"));
+        expect(after.slice(0, 400)).toContain("const fresh = await refreshPricingView();");
+        expect(after.slice(0, 400)).toContain("await settleTuition(fresh);");
     });
 
     it("the snapshot route still writes no term", () => {
@@ -162,11 +176,8 @@ describe("every applicable rate is listed, the recommendation first and preselec
     });
 
     it("names the recommendation inside the list, first, and only when the resolver named one", () => {
-        const at = card.indexOf("const recommendedId = view.recommended?.sourceId ?? null;");
-        expect(at).toBeGreaterThan(-1);
-        const body = card.slice(at, at + 1600);
-        expect(body).toContain("(a.sourceId === recommendedId ? 0 : 1)");
-        expect(body).toContain("o.sourceId === recommendedId ? `Recommended — ${what}` : what");
+        // Behaviour is pinned in assignmentTuitionChoices.test.ts; here, that the card uses it.
+        expect(card).toContain("tuitionChoicesFor(displayView, showAdditionalRates)");
     });
 
     it("an ambiguous resolution names the tie instead of a recommendation", () => {
@@ -180,9 +191,10 @@ describe("every applicable rate is listed, the recommendation first and preselec
 
     it("accepting the recommendation needs no expansion", () => {
         /* The default CHOICE is the resolver's answer; the action still decides. */
-        const eff = card.slice(card.indexOf("if (!pricingView?.recommended || offeringId.trim()) return;"));
-        expect(eff.slice(0, 200)).toContain("setOfferingId(pricingView.recommended.sourceId)");
-        expect(eff.slice(0, 200), "an existing choice is never overwritten").toBeTruthy();
+        const eff = card.slice(card.indexOf("const displayView = draftView ?? pricingView;"));
+        const body = eff.slice(0, 700);
+        expect(body, "a known choice is never overwritten").toContain("if (known) return;");
+        expect(body).toContain('setOfferingId(displayView.recommended?.sourceId ?? "")');
     });
 });
 

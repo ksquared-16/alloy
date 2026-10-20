@@ -27,7 +27,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  *
  * Read-only. No mutations. Accepting a price is a registered action, not a GET.
  */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -48,9 +48,30 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    /*
+     * A DRAFT ROOM CHOICE. The Assignments card asks "what would tuition be in the room I just
+     * picked?" before saving. The room's Program arrives as a category id and resolves to its key
+     * here; the one named child's view is resolved in that program and marked `draft`. Nothing is
+     * written, and a commit still re-reads the saved assignment.
+     */
+    const draftMemberId = request.nextUrl.searchParams.get("draft_customer_member_id")?.trim() || null;
+    const draftProgramCategoryId = request.nextUrl.searchParams.get("draft_program_category_id")?.trim() || null;
+    let draft: { customerMemberId: string; programKey: string } | null = null;
+    if (draftMemberId && draftProgramCategoryId) {
+        const { data: category } = await supabase
+            .from("location_program_categories")
+            .select("key")
+            .eq("id", draftProgramCategoryId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const key = typeof category?.key === "string" ? category.key.trim() : "";
+        if (key) draft = { customerMemberId: draftMemberId, programKey: key };
+    }
+
     const views = await buildOpportunityTuitionViews(supabase, {
         orgId: ctx.orgId,
         opportunityId,
+        draft,
     });
 
     /*

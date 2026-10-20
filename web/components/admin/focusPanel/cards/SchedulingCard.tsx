@@ -1727,7 +1727,6 @@ function ScheduleEditor({
     // Tuition/$ embedded on the assignment — quote snapshot lives on the opportunity
     // enrollment process (no separate Generate Quote chrome).
     const [offeringId, setOfferingId] = useState(() => tuitionPlanIdFromTruth(truth, child.id));
-    const [rateOptions, setRateOptions] = useState<Array<{ id: string; label: string }>>([]);
     /*
      * ── THE CANONICAL VIEW, NOT JUST ITS LABELS ───────────────────────────────────────────────
      *
@@ -1743,6 +1742,18 @@ function ScheduleEditor({
     const [pricingView, setPricingView] = useState<AssignmentTuitionView | null>(null);
     /** Required by the override authority, and never defaulted to something plausible. */
     const [overrideReason, setOverrideReason] = useState("");
+    /** Rates beyond the assignment's own — any program or schedule at this site. Picking one overrides. */
+    const [showAdditionalRates, setShowAdditionalRates] = useState(false);
+    /** A custom amount billed under the selected authored rate. Always an override. */
+    const [customRateOn, setCustomRateOn] = useState(false);
+    const [customRate, setCustomRate] = useState("");
+    /**
+     * Tuition for an UNSAVED room choice: resolved in that room's program so the rates shown are the
+     * ones for the room just picked. Display only — Save re-reads the saved assignment and commits
+     * against that.
+     */
+    const [draftView, setDraftView] = useState<AssignmentTuitionView | null>(null);
+    const savedRoomIdRef = useRef<string | null>(roomId);
     /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
     /*
      * ── WHAT DISCOUNTS ARE EXPECTED ON THIS RELATIONSHIP ──────────────────────────────────────
@@ -1853,10 +1864,52 @@ function ScheduleEditor({
      * saving, and the canonical action still decides. Only when nothing has been chosen — an
      * existing accepted selection is never overwritten by a resolver answer.
      */
+    const displayView = draftView ?? pricingView;
     useEffect(() => {
-        if (!pricingView?.recommended || offeringId.trim()) return;
-        setOfferingId(pricingView.recommended.sourceId);
-    }, [pricingView, offeringId]);
+        if (!displayView) return;
+        const current = offeringId.trim();
+        const known =
+            current
+            && (displayView.applicable.some((o) => o.sourceId === current)
+                || displayView.additional.some((o) => o.sourceId === current));
+        if (known) return;
+        // Nothing chosen, or a choice the room change made meaningless: start from the recommendation.
+        setOfferingId(displayView.recommended?.sourceId ?? "");
+    }, [displayView, offeringId]);
+
+    useEffect(() => {
+        if (!opportunityId || child.kind !== "child") return;
+        const roomChanged = roomId !== savedRoomIdRef.current;
+        if (!roomChanged || !programFromRoom || !programCategoryId) {
+            setDraftView(null);
+            return;
+        }
+        let cancelled = false;
+        void fetch(
+            `/api/admin/financial-config/opportunity/${encodeURIComponent(opportunityId)}`
+                + `?draft_customer_member_id=${encodeURIComponent(child.id)}`
+                + `&draft_program_category_id=${encodeURIComponent(programCategoryId)}`,
+            { credentials: "include" },
+        )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: { assignments?: AssignmentTuitionView[] } | null) => {
+                if (cancelled) return;
+                const v = (body?.assignments ?? []).find((x) => x.customerMemberId === child.id) ?? null;
+                setDraftView(v?.draft ? v : null);
+            })
+            .catch(() => {
+                /* the saved assignment's rates keep showing */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [opportunityId, child.id, child.kind, roomId, programFromRoom, programCategoryId]);
+
+    const tuitionChoices = useMemo(
+        () => tuitionChoicesFor(displayView, showAdditionalRates),
+        [displayView, showAdditionalRates],
+    );
+    const customRateCents = customRateOn ? dollarsToCents(customRate) : null;
 
 
     /*
@@ -1867,14 +1920,18 @@ function ScheduleEditor({
     const canSettleTuitionAlone =
         child.kind === "child" &&
         Boolean(pricingView) &&
+        // An unsaved room's rates are committed by Save, against the saved assignment.
+        !draftView &&
         Boolean(offeringId.trim()) &&
-        (pricingView?.acceptedIsStale === true || offeringId.trim() !== (pricingView?.accepted?.source?.id ?? ""));
+        (customRateOn
+            || pricingView?.acceptedIsStale === true
+            || offeringId.trim() !== (pricingView?.accepted?.source?.id ?? ""));
 
-    /* An override is a selection that differs from the resolver's recommendation — never a price. */
-    const isOverridingSelection =
-        Boolean(offeringId.trim()) &&
-        pricingView?.recommended != null &&
-        offeringId.trim() !== pricingView.recommended.sourceId;
+    /*
+     * An override is anything but taking the recommendation as authored: another applicable rate,
+     * an additional (other program / schedule) rate, or a custom amount. Every one needs a reason.
+     */
+    const isOverridingSelection = isTuitionOverride(displayView, offeringId.trim(), customRateOn);
     /** What the canonical write said. Never optimistic: absent until an action answered. */
     const [tuitionOutcome, setTuitionOutcome] = useState<
         { kind: "accepted" | "overridden"; label: string } | { kind: "needs_attention"; detail: string } | null
@@ -1935,28 +1992,6 @@ function ScheduleEditor({
                 const view = (payload?.assignments ?? []).find((v) => v.customerMemberId === child.id);
                 if (!view) return;
                 setPricingView(view);
-                const recommendedId = view.recommended?.sourceId ?? null;
-                const opts = [...view.applicable]
-                    // The recommendation first; the rest keep the resolver's own order.
-                    .sort((a, b) =>
-                        (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1),
-                    )
-                    .map((o) => {
-                        /*
-                         * The variant names the commitment ("Full time"), and an option can have
-                         * none — measured: the sole applicable option here carried an empty
-                         * `variantLabel`, which rendered "Recommended — : $185.00/weekly". The
-                         * money is the part that is always there, so the name qualifies it only
-                         * when there is a name.
-                         */
-                        const variant = (o.variantLabel ?? "").trim();
-                        const what = variant ? `${variant}: ${o.amountLabel}` : o.amountLabel;
-                        return {
-                            id: o.sourceId,
-                            label: o.sourceId === recommendedId ? `Recommended — ${what}` : what,
-                        };
-                    });
-                if (opts.length) setRateOptions(opts);
             })
             .catch(() => {
                 /* optional — operator still selects an explicit plan before lock-in */
@@ -2098,7 +2133,10 @@ function ScheduleEditor({
         !!start &&
         (!arrive || !depart || depart > arrive) &&
         (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
-        (!roomRequired || Boolean(roomId));
+        (!roomRequired || Boolean(roomId)) &&
+        // Save also commits tuition: an override needs its reason, and a custom rate its amount.
+        (!isOverridingSelection || Boolean(overrideReason.trim())) &&
+        (!customRateOn || customRateCents != null);
 
     /**
      * ── THE CANONICAL COMMERCIAL TERM ─────────────────────────────────────────────────────────
@@ -2117,20 +2155,25 @@ function ScheduleEditor({
      * resolution has moved since the operator looked — the whole point of which is lost if the
      * caller sends a fresh one.
      */
-    async function acceptAssignmentTuition(): Promise<
+    async function acceptAssignmentTuition(viewOverride?: AssignmentTuitionView | null): Promise<
         { ok: true; state: string; label: string } | { ok: false; detail: string }
     > {
-        const view = pricingView;
+        const view = viewOverride ?? pricingView;
         const selected = offeringId.trim();
         if (!view || !selected) return { ok: false, detail: "No tuition option was selected." };
-        const option = view.applicable.find((o) => o.sourceId === selected);
+        const option =
+            view.applicable.find((o) => o.sourceId === selected)
+            ?? view.additional.find((o) => o.sourceId === selected);
         /*
          * AN UNKNOWN SELECTION IS A REFUSAL, NOT A FALLBACK. The snapshot route resolves an
          * unmatched id to the recommendation, which silently discards what the operator chose;
          * the canonical path must never do that.
          */
         if (!option) return { ok: false, detail: "That tuition option no longer applies to this assignment." };
-        const isOverride = view.recommended != null && option.sourceId !== view.recommended.sourceId;
+        const isOverride = isTuitionOverride(view, option.sourceId, customRateOn);
+        if (customRateOn && customRateCents == null) {
+            return { ok: false, detail: "Enter the custom tuition amount." };
+        }
 
         const res = await fetch("/api/admin/actions/execute", {
             method: "POST",
@@ -2161,6 +2204,7 @@ function ScheduleEditor({
                      */
                     /* Override requires its own reason; the action refuses without one. */
                     ...(isOverride ? { override_reason: overrideReason.trim() } : {}),
+                    ...(customRateOn && customRateCents != null ? { custom_amount_cents: customRateCents } : {}),
                     /*
                      * SUPERSEDE, WHEN THERE IS SOMETHING TO SUPERSEDE.
                      *
@@ -2231,10 +2275,10 @@ function ScheduleEditor({
      * the same effective date is recognised rather than duplicated — so no workflow-level
      * idempotency authority is invented here.
      */
-    async function settleTuition(): Promise<void> {
+    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<void> {
         if (!offeringId.trim() || child.kind !== "child") return;
         try {
-            const outcome = await acceptAssignmentTuition();
+            const outcome = await acceptAssignmentTuition(viewOverride);
             if (outcome.ok) {
                 setTuitionOutcome({
                     kind: outcome.state === "overridden" ? "overridden" : "accepted",
@@ -2266,16 +2310,32 @@ function ScheduleEditor({
      * Retiring the entry and loading through the loader gets the same freshness with one reader:
      * the invalidation is exactly what a mutation is supposed to do to a cached configuration.
      */
-    async function refreshPricingView(): Promise<void> {
-        if (!opportunityId) return;
+    async function refreshPricingView(): Promise<AssignmentTuitionView | null> {
+        if (!opportunityId) return null;
         try {
             invalidateFinancialConfig(opportunityId);
             const body = await loadFinancialConfig(opportunityId);
             const view = ((body.assignments ?? []) as AssignmentTuitionView[]).find((v) => v.customerMemberId === child.id);
             if (view) setPricingView(view);
+            return view ?? null;
         } catch {
             /* The card keeps the last canonical answer rather than inventing a fresher one. */
+            return null;
         }
+    }
+
+    /*
+     * AFTER THE SCHEDULE IS WRITTEN, TUITION IS COMMITTED AGAINST WHAT WAS WRITTEN.
+     *
+     * The room (and so the program) may have just changed, which changes the assignment's facts and
+     * its resolution key. Committing with the key the card loaded before saving was refused as
+     * stale. So the canonical view is re-read first and the commit is made against it.
+     */
+    async function settleTuitionAfterSave(): Promise<void> {
+        savedRoomIdRef.current = roomId;
+        const fresh = await refreshPricingView();
+        setDraftView(null);
+        await settleTuition(fresh);
     }
 
     async function persistAssignmentQuote(): Promise<void> {
@@ -2327,7 +2387,7 @@ function ScheduleEditor({
                 await persistAssignmentQuote().catch(() => {
                     /* schedule write succeeded — quote is opportunistic on opportunity */
                 });
-                await settleTuition();
+                await settleTuitionAfterSave();
                 await onSaved();
                 return;
             }
@@ -2370,7 +2430,7 @@ function ScheduleEditor({
             await persistAssignmentQuote().catch(() => {
                 /* schedule write succeeded — quote is opportunistic on opportunity */
             });
-            await settleTuition();
+            await settleTuitionAfterSave();
             await onSaved();
         } catch (e) {
             setError((e as Error).message);
@@ -2444,67 +2504,29 @@ function ScheduleEditor({
                               * The disclosure is absent when there is nothing behind it.
                               */}
 
-                            {pricingView && pricingView.state === "ambiguous" ? (
+                            {displayView && displayView.state === "ambiguous" ? (
                                 <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
-                                    {pricingView.tied.length} configured options apply equally — choose one.
-                                    {pricingView.tied.length > 0 ? (
-                                        <span data-assignment-tuition-tied="true" style={{ display: "block", color: T.slate, fontWeight: 400 }}>
-                                            {pricingView.tied.map((o) => o.amountLabel).join(" · ")}
-                                        </span>
-                                    ) : null}
+                                    {displayView.tied.length} configured options apply equally — choose one.
                                 </div>
                             ) : null}
-
-                            {/*
-                              * ── WHY NOTHING APPLIES ──────────────────────────────────────────
-                              *
-                              * An assignment with no priceable option is the state an operator is
-                              * most likely to misread as a broken screen. The resolution already
-                              * carries its own reason, and this states it — a surface that renders
-                              * an empty option list and says nothing has told the operator that
-                              * tuition is missing, which is a different and wrong claim.
-                              */}
-                            {pricingView && pricingView.state === "no_match" ? (
-                                <div data-assignment-tuition-no-match={pricingView.noMatchReason ?? "unknown"}
+                            {displayView && displayView.state === "no_match" ? (
+                                <div data-assignment-tuition-no-match={displayView.noMatchReason ?? "unknown"}
                                      style={{ fontSize: 11, color: T.ember }}>
-                                    No authored tuition applies to this assignment
-                                    {pricingView.noMatchReason ? ` — ${pricingView.noMatchReason.replace(/_/g, " ")}` : ""}.
+                                    No rate matches this assignment
+                                    {displayView.additional.length > 0 ? " — choose from additional rates." : "."}
                                 </div>
-                            ) : null}
-
-                            {/*
-                              * ── WHAT WAS CONSIDERED AND REJECTED, AND WHY ────────────────────
-                              *
-                              * The diagnostic that used to live on the standalone card. It answers
-                              * the question an operator asks next — "there IS a rate for this
-                              * program, why isn't it here?" — with the resolution's own reason for
-                              * each option it set aside. Quiet and closed by default: it matters
-                              * when the answer is surprising, and not before.
-                              */}
-                            {pricingView && pricingView.rejected.length > 0 ? (
-                                <details data-assignment-tuition-rejected={String(pricingView.rejected.length)}
-                                         style={{ fontSize: 11, color: T.mid40 }}>
-                                    <summary style={{ cursor: "pointer" }}>
-                                        {pricingView.rejected.length} option{pricingView.rejected.length === 1 ? "" : "s"} did not apply
-                                    </summary>
-                                    <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
-                                        {pricingView.rejected.map((r) => (
-                                            <li key={r.sourceId} data-assignment-tuition-rejected-reason={r.reason}>
-                                                {r.detail || r.reason.replace(/_/g, " ")}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </details>
                             ) : null}
                             {/*
                               * Every rate that applies is in the list, the recommendation first and
-                              * preselected — options are never hidden behind a disclosure.
+                              * preselected — options are never hidden behind a disclosure. With a
+                              * room picked but not yet saved, these are that room's program's rates.
                               */}
                             <select
                                 id={`assignment-tuition-embed-${child.id}`}
                                 value={offeringId}
                                 data-assignment-tuition-plan={child.id}
                                 data-assignment-tuition-embed="true"
+                                data-assignment-tuition-draft={draftView ? "true" : undefined}
                                 onChange={(e) => setOfferingId(e.target.value)}
                                 style={{
                                     padding: "6px 8px",
@@ -2518,19 +2540,68 @@ function ScheduleEditor({
                                 }}
                             >
                                 <option value="">
-                                    {rateOptions.length ? "Choose a tuition rate" : "No tuition rates apply yet"}
+                                    {tuitionChoices.length ? "Choose a tuition rate" : "No tuition rates at this site"}
                                 </option>
-                                {/*
-                                 * The label already says which option is the recommendation, because
-                                 * only the resolver knows — an index prefix asserted it from list
-                                 * position, which is true only while a recommendation exists.
-                                 */}
-                                {rateOptions.map((r) => (
+                                {tuitionChoices.filter((r) => !r.additional).map((r) => (
                                     <option key={r.id} value={r.id}>
                                         {r.label}
                                     </option>
                                 ))}
+                                {tuitionChoices.some((r) => r.additional) ? (
+                                    <optgroup label="Additional rates">
+                                        {tuitionChoices.filter((r) => r.additional).map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ) : null}
                             </select>
+                            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                                {displayView && displayView.additional.length > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAdditionalRates((v) => !v)}
+                                        data-assignment-tuition-additional={showAdditionalRates ? "shown" : "hidden"}
+                                        style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine }}
+                                    >
+                                        {showAdditionalRates
+                                            ? "Hide additional rates"
+                                            : `Show additional rates (${displayView.additional.length})`}
+                                    </button>
+                                ) : null}
+                                {offeringId.trim() ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setCustomRateOn((v) => !v)}
+                                        data-assignment-tuition-custom-toggle={customRateOn ? "on" : "off"}
+                                        style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine }}
+                                    >
+                                        {customRateOn ? "Use the listed rate" : "Custom rate"}
+                                    </button>
+                                ) : null}
+                            </div>
+                            {customRateOn && offeringId.trim() ? (
+                                <label style={{ fontSize: 10.5, color: T.slate, display: "block" }}>
+                                    Custom amount
+                                    {(() => {
+                                        const basis = tuitionChoices.find((r) => r.id === offeringId.trim());
+                                        return basis ? ` per ${basis.cadenceKey}` : "";
+                                    })()}
+                                    <input
+                                        value={customRate}
+                                        onChange={(e) => setCustomRate(e.target.value)}
+                                        inputMode="decimal"
+                                        placeholder="$0.00"
+                                        data-assignment-tuition-custom-amount="true"
+                                        style={{
+                                            marginTop: 2, padding: "5px 7px", fontSize: 12, width: "100%",
+                                            borderRadius: 6, color: T.forge, background: "#fff",
+                                            border: `1px solid ${customRate.trim() && customRateCents == null ? T.ember : T.border}`,
+                                        }}
+                                    />
+                                </label>
+                            ) : null}
 
                             {/*
                               * ── WHAT IS ACTUALLY AGREED, FROM THE PERSISTED TERM ────────────
@@ -2809,12 +2880,12 @@ function ScheduleEditor({
                               */}
                             {isOverridingSelection ? (
                                 <label style={{ fontSize: 10.5, color: T.slate, marginTop: 2, display: "block" }}>
-                                    Why this rather than the recommendation
+                                    Reason
                                     <input
                                         value={overrideReason}
                                         onChange={(e) => setOverrideReason(e.target.value)}
                                         data-assignment-override-reason="true"
-                                        placeholder="Required to override"
+                                        placeholder="Required for an override"
                                         style={{
                                             marginTop: 2, padding: "5px 7px", fontSize: 12, width: "100%",
                                             borderRadius: 6, border: `1px solid ${T.border}`, color: T.forge, background: "#fff",
@@ -3064,6 +3135,60 @@ function ScheduleEditor({
 }
 
 // ── Room picker — seed + scored fit; ineligible rooms stay visible for override ──
+/** One row of the tuition list. `additional` rows are other programs' / schedules' site rates. */
+type TuitionChoice = { id: string; label: string; cadenceKey: string; additional: boolean };
+
+/**
+ * The tuition list: every applicable rate, the recommendation first and named; then, when asked
+ * for, every additional site rate, named by program so an operator can tell them apart.
+ */
+export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditional: boolean): TuitionChoice[] {
+    if (!view) return [];
+    const recommendedId = view.recommended?.sourceId ?? null;
+    const describe = (o: AssignmentTuitionView["applicable"][number]) => {
+        // The variant names the commitment ("Full time"); an option can have none, and the money is
+        // the part that is always there.
+        const variant = (o.variantLabel ?? "").trim();
+        return variant ? `${variant}: ${o.amountLabel}` : o.amountLabel;
+    };
+    const own = [...view.applicable]
+        .sort((a, b) => (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1))
+        .map((o) => ({
+            id: o.sourceId,
+            label: o.sourceId === recommendedId ? `Recommended — ${describe(o)}` : describe(o),
+            cadenceKey: o.cadenceKey,
+            additional: false,
+        }));
+    if (!showAdditional) return own;
+    const extra = view.additional.map((o) => ({
+        id: o.sourceId,
+        label: `${o.programKey.replace(/_/g, " ")} · ${describe(o)}`,
+        cadenceKey: o.cadenceKey,
+        additional: true,
+    }));
+    return [...own, ...extra];
+}
+
+/** Anything but the recommendation as authored is an override, and needs a reason. */
+export function isTuitionOverride(
+    view: AssignmentTuitionView | null,
+    selectedId: string,
+    custom: boolean,
+): boolean {
+    if (!view || !selectedId) return false;
+    if (custom) return true;
+    if (view.additional.some((o) => o.sourceId === selectedId)) return true;
+    return view.recommended != null && selectedId !== view.recommended.sourceId;
+}
+
+/** "$1,450.50" / "1450.5" → 145050 cents; null when not a positive amount. */
+export function dollarsToCents(raw: string): number | null {
+    const cleaned = raw.replace(/[$,\s]/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+    const cents = Math.round(Number(cleaned) * 100);
+    return cents > 0 ? cents : null;
+}
+
 function RoomPicker({
     siteId,
     childId,

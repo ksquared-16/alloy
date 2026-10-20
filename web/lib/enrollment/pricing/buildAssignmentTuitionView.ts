@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { composeCommercialExport } from "@/lib/commercial/execution/export/composeCommercialExport";
 import type { CommercialExport } from "@/lib/commercial/execution/commercialExport";
 import {
+    listLocationTuitionOptions,
     resolveAssignmentPricingOptions,
     type ApplicableOption,
     type AssignmentPricingFacts,
@@ -72,6 +73,16 @@ export type AssignmentTuitionView = {
     tied: TuitionOptionView[];
     /** Every option that applies, recommendation included. */
     applicable: TuitionOptionView[];
+    /**
+     * Every other rate this site offers (any program or schedule) — the operator's "additional
+     * rates". Choosing one is an override. Excludes everything already in `applicable`.
+     */
+    additional: TuitionOptionView[];
+    /**
+     * True when this view was resolved against an UNSAVED room's program (`draftProgramKey`). A
+     * draft view is for display; a commit re-reads the saved assignment and re-resolves.
+     */
+    draft: boolean;
     /** Why the others did not, told apart by reason. */
     rejected: Array<{ sourceId: string; reason: string; detail: string }>;
     /** Why nothing applies, when nothing does. */
@@ -121,6 +132,8 @@ export async function buildAssignmentTuitionView(
         cadenceKey?: string | null;
         asOf?: string | null;
         exported?: CommercialExport;
+        /** Resolve as if the assignment were in this program (an unsaved room choice). */
+        draftProgramKey?: string | null;
     },
 ): Promise<AssignmentTuitionView | null> {
     const read = await readAssignmentPricingFacts(supabase, {
@@ -155,7 +168,10 @@ export async function buildAssignmentTuitionView(
     const exported =
         args.exported
         ?? (await composeCommercialExport({ supabase, orgId: args.orgId, asOf: read.facts.asOf })).export;
-    const resolution = resolveAssignmentPricingOptions(exported, read.facts);
+    const draftProgramKey = (args.draftProgramKey ?? "").trim() || null;
+    const draft = draftProgramKey != null && draftProgramKey !== read.facts.programKey;
+    const facts: AssignmentPricingFacts = draft ? { ...read.facts, programKey: draftProgramKey } : read.facts;
+    const resolution = resolveAssignmentPricingOptions(exported, facts);
 
     const accepted = (
         await readAcceptedPricingTerms(supabase, {
@@ -165,13 +181,17 @@ export async function buildAssignmentTuitionView(
     )[0] ?? null;
 
     const applicable = resolution.kind === "no_match" ? [] : resolution.applicable.map(toOptionView);
+    const applicableIds = new Set(applicable.map((o) => o.sourceId));
+    const additional = listLocationTuitionOptions(exported, facts)
+        .filter((o) => !applicableIds.has(o.source.id))
+        .map(toOptionView);
 
     return {
         opportunityCustomerMemberId: read.subject.opportunityCustomerMemberId,
         customerMemberId: read.subject.customerMemberId,
         childLabel: (args.childLabel ?? "").trim() || "Child",
         enrollmentAgreementId: read.subject.enrollmentAgreementId,
-        facts: read.facts,
+        facts,
         factSources: read.sources as unknown as Record<string, string>,
         resolutionKey: resolution.resolutionKey,
         configVersion: resolution.configVersion.version,
@@ -179,6 +199,8 @@ export async function buildAssignmentTuitionView(
         recommended: resolution.kind === "recommended" ? toOptionView(resolution.recommended) : null,
         tied: resolution.kind === "ambiguous" ? resolution.tied.map(toOptionView) : [],
         applicable,
+        additional,
+        draft,
         rejected: resolution.rejected.map((r) => ({
             sourceId: r.source.id,
             reason: r.reason,
@@ -195,7 +217,13 @@ export async function buildAssignmentTuitionView(
 /** Compose the tuition view for every assignment on an opportunity, over one shared catalog read. */
 export async function buildOpportunityTuitionViews(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; asOf?: string | null },
+    args: {
+        orgId: string;
+        opportunityId: string;
+        asOf?: string | null;
+        /** An unsaved room choice for ONE child: resolve that child's view in this program. */
+        draft?: { customerMemberId: string; programKey: string } | null;
+    },
 ): Promise<AssignmentTuitionView[]> {
     /*
      * THE ERROR IS NOT DISCARDED, AND THAT IS THE POINT.
@@ -242,6 +270,10 @@ export async function buildOpportunityTuitionViews(
             childLabel,
             asOf: args.asOf ?? null,
             exported,
+            draftProgramKey:
+                args.draft && String(row.customer_member_id) === args.draft.customerMemberId
+                    ? args.draft.programKey
+                    : null,
         });
         if (view) views.push(view);
     }
