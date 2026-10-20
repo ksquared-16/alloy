@@ -26,6 +26,8 @@ export type OpportunityWorkspaceLifecycleRail = {
          * Decision). The stepper folds it into the parent step instead of drawing its own milestone.
          */
         parent_stage_key?: string;
+        /** An OPTIONAL stage (a branch such as Waitlist): drawn only when the path goes through it. */
+        allow_skipping?: boolean;
     }>;
     current_stage_key: string | null;
     /**
@@ -86,6 +88,7 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
             ...(s.grain ? { grain: String(s.grain) } : {}),
             ...(s.track_key?.trim() ? { track_key: s.track_key.trim() } : {}),
             ...(s.parent_stage_key?.trim() ? { parent_stage_key: s.parent_stage_key.trim() } : {}),
+            ...(s.allow_skipping === true ? { allow_skipping: true } : {}),
         };
     });
     if (stages.length < 2) return null;

@@ -234,7 +234,15 @@ export function buildBusinessProcessCardEvidence(
         });
     }
 
-    const stages: BusinessProcessStage[] = displayStages.map((s) => ({
+    // An OPTIONAL stage (`allow_skipping`, e.g. the Waitlist branch) is drawn only when this path goes
+    // through it — current, entered, or holding one of the family's children. Otherwise it is not a
+    // step the record is on, and drawing it would read as one still ahead.
+    const drawn = displayStages.filter((s) => {
+        if (!s.optional) return true;
+        const state = states.get(s.key);
+        return state === "current" || state === "done" || placed.some((p) => displayKeyOf(p.stageKey) === s.key);
+    });
+    const stages: BusinessProcessStage[] = drawn.map((s) => ({
         key: s.key,
         label: s.label,
         state: states.get(s.key) ?? "future",
@@ -279,6 +287,8 @@ type ConfiguredStage = {
     secondarySupport: string | null;
     grain: string | null;
     parentKey: string | null;
+    /** `allow_skipping` — a branch the path may never enter. */
+    optional: boolean;
 };
 
 function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
@@ -301,6 +311,7 @@ function readConfiguredStages(context: OperationalContext): ConfiguredStage[] {
                 secondarySupport: slot(1),
                 grain: typeof s.grain === "string" && s.grain.trim() ? s.grain.trim() : null,
                 parentKey: typeof s.parent_stage_key === "string" && s.parent_stage_key.trim() ? s.parent_stage_key.trim() : null,
+                optional: s.allow_skipping === true,
             };
         })
         .filter((s): s is ConfiguredStage => s !== null);
