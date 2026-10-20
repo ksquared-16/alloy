@@ -163,7 +163,8 @@ function validateParticipantDecisions(
         const controlId = `work-template-participant-decision-${work.template_key}-${decision.decision_key}`;
 
         for (const input of decision.required_inputs ?? []) {
-            if (input.type === "select" && !(input.options?.length)) {
+            // A sourced select resolves its options from data (the location's programs) at run time.
+            if (input.type === "select" && !(input.options?.length) && !input.options_source) {
                 issues.push({
                     code: "participant_decision_input_options_missing",
                     severity: "error",

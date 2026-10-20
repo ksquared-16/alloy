@@ -174,6 +174,11 @@ export type StageParticipantDecisionInputV1 = {
     hint?: string | null;
     /** EXPLICIT binding onto a target field. Never inferred from `key`. */
     binds_to_target_field?: StageParticipantDecisionBindableTargetField;
+    /**
+     * Options resolved from data instead of listed here. `location_program_categories`: the child's
+     * location's active program categories, valued by category id (participantDecisionInputOptions.ts).
+     */
+    options_source?: "location_program_categories";
 };
 
 /**
@@ -247,6 +252,12 @@ export type StageWorkParticipantDecisionV1 = {
     action_ref: string;
     /** Operator label. Absent falls back to the capability's registered operator label. */
     label?: string;
+    /**
+     * How the child's path READS once this decision is chosen — "Offer pending" for Offer spot, where
+     * the action's name ("Offer spot") is not what the operator now needs to know. Absent falls back
+     * to the decision's label.
+     */
+    state_label?: string;
     /** Visibility. Absent means available; `false` keeps the row authored but hidden. */
     available?: boolean;
     /** Only `child` in V1. Present so the declaration is explicit rather than assumed. */
@@ -577,6 +588,7 @@ function parseParticipantDecisionInput(raw: unknown): StageParticipantDecisionIn
     ) {
         input.binds_to_target_field = binds as StageParticipantDecisionBindableTargetField;
     }
+    if (trimNonEmpty(o.options_source) === "location_program_categories") input.options_source = "location_program_categories";
     return input;
 }
 
@@ -633,6 +645,8 @@ export function parseParticipantDecision(raw: unknown): StageWorkParticipantDeci
     };
     const label = trimNonEmpty(o.label);
     if (label) decision.label = label;
+    const stateLabel = trimNonEmpty(o.state_label);
+    if (stateLabel) decision.state_label = stateLabel;
     if (o.available === false) decision.available = false;
 
     if (Array.isArray(o.required_inputs)) {

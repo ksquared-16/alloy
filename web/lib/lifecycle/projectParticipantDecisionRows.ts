@@ -29,6 +29,12 @@ import type {
     StageWorkParticipantDecisionV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
+import {
+    inputUsesProgramCategories,
+    programCategoryOptionsForLocation,
+    resolveChildOfferLocationId,
+    withSourcedInputOptions,
+} from "@/lib/lifecycle/participantDecisionInputOptions";
 /** One decision as offered to ONE participant. */
 export type ParticipantDecisionOptionVM = {
     decision_key: string;
@@ -176,8 +182,14 @@ function stateLabelFor(
     state: string | null,
     chosen: StageWorkParticipantDecisionV1 | null,
     capabilityLabel: (decision: StageWorkParticipantDecisionV1) => string,
+    /** The answers recorded with the chosen decision (e.g. the placement offered). */
+    answers?: ReadonlyArray<{ value_label?: string | null }> | null,
 ): string {
-    if (chosen) return capabilityLabel(chosen);
+    if (chosen) {
+        const base = chosen.state_label?.trim() || capabilityLabel(chosen);
+        const detail = (answers ?? []).map((a) => a.value_label?.trim()).filter(Boolean).join(", ");
+        return detail ? `${base} · ${detail}` : base;
+    }
     if (classifyChildTrackState(state) === "enrolled_blocking") return "Enrolled";
     return "No path chosen yet";
 }
@@ -207,6 +219,36 @@ export async function projectParticipantDecisionRows(params: {
     const participants = read.ok ? read.participants : [];
 
     const memberIds = participants.map((p) => p.customer_member_id);
+
+    // What each child's chosen path recorded (the placement offered) — read from the journey itself.
+    const answersByInstance = new Map<string, Record<string, { answers?: Array<{ value_label?: string | null }> }>>();
+    const instanceIds = participants.map((p) => p.process_instance_id).filter((id): id is string => Boolean(id));
+    if (instanceIds.length) {
+        const { data } = await params.supabase
+            .from("process_instances")
+            .select("id, metadata")
+            .eq("org_id", params.orgId)
+            .in("id", instanceIds);
+        for (const row of data ?? []) {
+            const r = row as { id: string; metadata?: Record<string, unknown> | null };
+            const recorded = r.metadata?.decision_answers_v1;
+            if (recorded && typeof recorded === "object") answersByInstance.set(r.id, recorded as Record<string, { answers?: Array<{ value_label?: string | null }> }>);
+        }
+    }
+
+    // Placement options sourced from each child's location's programs, resolved per child.
+    const sourcesPrograms = configured.some((d) => (d.required_inputs ?? []).some(inputUsesProgramCategories));
+    const programOptionsByMember = new Map<string, Array<{ value: string; label: string }>>();
+    if (sourcesPrograms) {
+        for (const p of participants) {
+            const locationId = await resolveChildOfferLocationId(params.supabase, {
+                orgId: params.orgId,
+                opportunityId: params.opportunityId,
+                customerMemberId: p.customer_member_id,
+            });
+            programOptionsByMember.set(p.customer_member_id, await programCategoryOptionsForLocation(params.supabase, { orgId: params.orgId, locationId }));
+        }
+    }
 
     const memberNames = new Map<string, string>();
     if (memberIds.length) {
@@ -244,10 +286,11 @@ export async function projectParticipantDecisionRows(params: {
                     targetState,
                     participantLabel: label,
                 });
+                const sourced = sourcesPrograms ? withSourcedInputOptions(decision, programOptionsByMember.get(customerMemberId) ?? []) : decision;
                 return {
                     decision_key: decision.decision_key,
                     label: labelFor(decision),
-                    required_inputs: decision.required_inputs ?? [],
+                    required_inputs: sourced.required_inputs ?? [],
                     enabled: verdict.allowed,
                     ...(verdict.allowed ? {} : { disabled_reason: verdict.message }),
                 };
@@ -257,7 +300,12 @@ export async function projectParticipantDecisionRows(params: {
                 customer_member_id: customerMemberId,
                 process_instance_id: row.process_instance_id ?? "",
                 label,
-                state_label: stateLabelFor(state, chosen, labelFor),
+                state_label: stateLabelFor(
+                    state,
+                    chosen,
+                    labelFor,
+                    chosen && row.process_instance_id ? answersByInstance.get(row.process_instance_id)?.[chosen.decision_key]?.answers ?? null : null,
+                ),
                 resolved: chosen != null,
                 ...(chosen ? { resolved_decision_label: labelFor(chosen) } : {}),
                 decisions,
