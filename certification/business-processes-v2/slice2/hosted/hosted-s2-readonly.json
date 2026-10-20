@@ -1,0 +1,83 @@
+{
+  "console_errors": [],
+  "page_errors": [],
+  "http_errors": [],
+  "non_get": [
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals"
+  ],
+  "views": {
+    "new": {
+      "terminal": "operational",
+      "active_view": "new_leads",
+      "row_grain": "family",
+      "projection_domain": null,
+      "build_sha": "e67863e5d15d",
+      "rows": 27,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration17",
+        "Waitlist18",
+        "Tours0",
+        "All66",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "opportunity_panel": true
+    },
+    "all": {
+      "terminal": "operational",
+      "active_view": "new_work_view_6",
+      "row_grain": "family",
+      "projection_domain": null,
+      "build_sha": "e67863e5d15d",
+      "rows": 66,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration17",
+        "Waitlist18",
+        "Tours0",
+        "All66",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "opportunity_panel": true
+    }
+  },
+  "build": "e67863e5d15d919d6be2ddc61d1e85e198068417",
+  "tiles": [
+    {
+      "title": "Enrollment",
+      "answer": "40Family Leads41Children",
+      "cta": "/workspace/work-unit/new",
+      "unavailable": null,
+      "todays_work_rows": 14
+    }
+  ],
+  "catalog": [
+    {
+      "key": "enrollment",
+      "model": {
+        "kind": "staged_lifecycle"
+      },
+      "dept": "lead_management"
+    }
+  ],
+  "answer_all": {
+    "status": 200,
+    "terminal": "operational",
+    "rows": 27
+  }
+}
