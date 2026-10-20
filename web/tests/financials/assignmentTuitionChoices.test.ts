@@ -82,6 +82,9 @@ describe("reconcileTuitionSelection — an assignment change never silently keep
     it("a tie preselects nothing — the operator chooses", () => {
         expect(reconcileTuitionSelection({ view: tie, current: "", operatorChose: false })).toEqual({ next: "", invalidated: null });
     });
+    it("an automatic selection follows the resolution — a tie clears it", () => {
+        expect(reconcileTuitionSelection({ view: tie, current: "r-rec", operatorChose: false })).toEqual({ next: "", invalidated: null });
+    });
     it("a still-eligible choice stays", () => {
         expect(reconcileTuitionSelection({ view, current: "r-other", operatorChose: true })).toEqual({ next: "r-other", invalidated: null });
     });
@@ -90,5 +93,24 @@ describe("reconcileTuitionSelection — an assignment change never silently keep
     });
     it("an operator's choice the change made ineligible is cleared and named — not replaced", () => {
         expect(reconcileTuitionSelection({ view, current: "r-gone", operatorChose: true })).toEqual({ next: "", invalidated: "r-gone" });
+    });
+});
+
+import { tuitionNoMatchMessage } from "@/components/admin/focusPanel/cards/SchedulingCard";
+
+describe("tuitionNoMatchMessage — the step to take, from the resolution's own reason", () => {
+    const base = { additional: [{}] as never[], facts: { daysPerWeek: null } as never };
+    it("no days yet", () => {
+        expect(tuitionNoMatchMessage({ ...base, noMatchReason: "unsupported_schedule_basis" })).toBe(
+            "Choose days to see matching rates — or choose from additional rates.",
+        );
+    });
+    it("days with no rate", () => {
+        expect(
+            tuitionNoMatchMessage({ additional: [], facts: { daysPerWeek: 4 } as never, noMatchReason: "unsupported_schedule_basis" }),
+        ).toBe("No rate is offered for 4 days a week in this program.");
+    });
+    it("no program", () => {
+        expect(tuitionNoMatchMessage({ ...base, noMatchReason: "missing_required_input" })).toMatch(/^Choose a room or program/);
     });
 });

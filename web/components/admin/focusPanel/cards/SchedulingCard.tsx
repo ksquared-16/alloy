@@ -8,7 +8,7 @@ import { executeFinancialsAction } from "@/lib/financials/executeFinancialsActio
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -1553,8 +1553,36 @@ function ScheduleRegions({
     surface: "detail" | "editor";
     tuitionSelect?: ReactNode;
 }) {
+    const surfaceRef = useRef<HTMLDivElement>(null);
+    /*
+     * THE CARD STAYS INSIDE THE VIEWPORT.
+     *
+     * The elevated card's cap (`min(75vh, 100dvh - 64px, …)`) is a share of the viewport, but the
+     * card starts well down the page (below the Focus Panel header — ~305px measured), so an expanded
+     * editor ran past the bottom edge with Save off-screen. The room actually left below the card's
+     * top is measured here and published as `--alloy-os-sched-viewport-room`, which the card's
+     * max-height honours; the form then scrolls inside it with Save/Cancel pinned.
+     */
+    useLayoutEffect(() => {
+        const card = surfaceRef.current?.closest(".alloy-os-ucard") as HTMLElement | null;
+        if (!card) return;
+        const place = () => {
+            const top = card.getBoundingClientRect().top;
+            const room = Math.max(260, Math.floor(window.innerHeight - Math.max(top, 0) - 12));
+            card.style.setProperty("--alloy-os-sched-viewport-room", `${room}px`);
+        };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+            card.style.removeProperty("--alloy-os-sched-viewport-room");
+        };
+    }, []);
     return (
         <div
+            ref={surfaceRef}
             className="alloy-os-sched-surface"
             style={{ display: "flex", flexDirection: "column", gap: 0, paddingTop: 2, minWidth: 0, minHeight: 0, flex: "1 1 auto" }}
             {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
@@ -2569,8 +2597,7 @@ function ScheduleEditor({
                             {displayView && displayView.state === "no_match" ? (
                                 <div data-assignment-tuition-no-match={displayView.noMatchReason ?? "unknown"}
                                      style={{ fontSize: 11, color: T.ember }}>
-                                    No rate matches this assignment
-                                    {displayView.additional.length > 0 ? " — choose from additional rates." : "."}
+                                    {tuitionNoMatchMessage(displayView)}
                                 </div>
                             ) : null}
                             {/*
@@ -2601,7 +2628,7 @@ function ScheduleEditor({
                                 }}
                             >
                                 <option value="">
-                                    {tuitionChoices.length ? "Choose a tuition rate" : "No tuition rates at this site"}
+                                    {tuitionChoices.length ? "Choose a tuition rate" : "No matching rate"}
                                 </option>
                                 {tuitionChoices.filter((r) => !r.additional).map((r) => (
                                     <option key={r.id} value={r.id}>
@@ -3031,9 +3058,16 @@ function ScheduleEditor({
                     <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
                         <div
                             className="alloy-os-sched-hours-row"
-                            style={{ display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "center", minWidth: 0 }}
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "minmax(0, 128px) auto minmax(0, 128px)",
+                                gap: 8,
+                                alignItems: "center",
+                                justifyContent: "start",
+                                minWidth: 0,
+                            }}
                         >
-                            <div data-arrive="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
+                            <div data-arrive="true" style={{ minWidth: 0 }}>
                                 <AlloyTimeInput
                                     value={arrive}
                                     onChange={setArrive}
@@ -3042,8 +3076,8 @@ function ScheduleEditor({
                                     className="alloy-time-input--sched"
                                 />
                             </div>
-                            <span style={{ color: T.mid40, flex: "0 0 auto" }}>–</span>
-                            <div data-depart="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
+                            <span style={{ color: T.mid40 }}>–</span>
+                            <div data-depart="true" style={{ minWidth: 0 }}>
                                 <AlloyTimeInput
                                     value={depart}
                                     onChange={setDepart}
@@ -3243,11 +3277,34 @@ export function reconcileTuitionSelection(args: {
     operatorChose: boolean;
 }): { next: string; invalidated: string | null } {
     const { view, current } = args;
+    // An automatic selection IS the resolution's answer: one recommendation, or nothing on a tie.
+    if (!args.operatorChose) return { next: view.recommended?.sourceId ?? "", invalidated: null };
     const eligible = view.applicable.some((o) => o.sourceId === current);
     const additional = view.additional.some((o) => o.sourceId === current);
-    if (current && (eligible || (additional && args.operatorChose))) return { next: current, invalidated: null };
-    if (current && args.operatorChose) return { next: "", invalidated: current };
+    if (current && (eligible || additional)) return { next: current, invalidated: null };
+    if (current) return { next: "", invalidated: current };
     return { next: view.recommended?.sourceId ?? "", invalidated: null };
+}
+
+/**
+ * Why no rate matches — said from the resolution's own reason and the facts it used, so the
+ * operator is told the step to take, not that tuition is missing.
+ */
+export function tuitionNoMatchMessage(view: Pick<AssignmentTuitionView, "noMatchReason" | "facts" | "additional">): string {
+    const days = view.facts.daysPerWeek;
+    const why =
+        view.noMatchReason === "missing_required_input"
+            ? "Choose a room or program to see matching rates"
+            : view.noMatchReason === "unsupported_schedule_basis"
+              ? days == null
+                  ? "Choose days to see matching rates"
+                  : `No rate is offered for ${days} day${days === 1 ? "" : "s"} a week in this program`
+              : view.noMatchReason === "not_offered_at_scope"
+                ? "This program has no rate offering for this schedule"
+                : view.noMatchReason === "no_rate_for_scope"
+                  ? "No rate for this program and schedule at this site"
+                  : "No rate matches this assignment";
+    return view.additional.length > 0 ? `${why} — or choose from additional rates.` : `${why}.`;
 }
 
 /** Anything but the recommendation as authored is an override, and needs a reason. */
