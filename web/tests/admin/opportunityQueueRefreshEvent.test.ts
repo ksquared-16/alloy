@@ -28,6 +28,14 @@ describe("opportunityQueueRefreshEvent", () => {
         expect(isQueueMembershipMutationActionKey("create_lead")).toBe(true);
     });
 
+    it.each(["record_tour_outcome", "reschedule_tour", "confirm_tour", "cancel_tour", "update_enrollment_status", "move_to_stage", "offer_spot", "offer_response"])(
+        "%s moves Work View membership, so an off-screen family's lists and counts refetch",
+        (key) => {
+            expect(isQueueMembershipMutationActionKey(key)).toBe(true);
+            expect(shouldRefetchWorkUnitQueueRowsForEvent({ detail: { id: "opp-off-screen", action_key: key }, visibleOpportunityIds: ["opp-1"] })).toBe(true);
+        },
+    );
+
     it("treats stage_work_outcome as a queue-membership mutation", () => {
         expect(isQueueMembershipMutationActionKey("stage_work_outcome")).toBe(true);
     });

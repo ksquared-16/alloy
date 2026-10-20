@@ -510,6 +510,26 @@ export class ProvisioningRuntime {
         for (const f of this.inflight.values()) if (f.speculative && !f.disposed && sameDestination(f.key)) this.dispose(f, "cancelled");
     }
 
+    /**
+     * Truth moved for a WORK UNIT — a lifecycle outcome moves a record BETWEEN its work views (New →
+     * Tours → Decision), so every completed snapshot of every work view of that unit is unusable, not
+     * just the one the operator is looking at: a sibling pill opened next must re-prepare, never answer
+     * from before the move. Speculative warms for the unit are disposed; explicit preparations are left.
+     */
+    invalidateWorkUnit(ref: AttentionRef): void {
+        const target = JSON.parse(provisioningKey({ ...ref, subject: null })) as Record<string, unknown>;
+        const sameWorkUnit = (key: string) => {
+            try {
+                const k = JSON.parse(key) as Record<string, unknown>;
+                return k.workUnit === target.workUnit && k.principal === target.principal && k.tenant === target.tenant;
+            } catch {
+                return false;
+            }
+        };
+        for (const [key, c] of this.completed) if (sameWorkUnit(key)) c.invalidated = true;
+        for (const f of this.inflight.values()) if (f.speculative && !f.disposed && sameWorkUnit(f.key)) this.dispose(f, "cancelled");
+    }
+
     /** Retention boundary: a tenant/principal change FLUSHES. A context never crosses a tenant. */
     flushForPrincipalChange(): void {
         for (const f of this.inflight.values()) if (!f.disposed) this.dispose(f, "cancelled");

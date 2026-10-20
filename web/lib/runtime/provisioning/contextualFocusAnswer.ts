@@ -45,6 +45,7 @@ import type { LensSetEntry } from "@/lib/runtime/provisioning/workUnitProvisioni
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
+import type { SettlementLocators } from "./settlementLocators";
 /**
  * The card + item the operator asked for, in the kernel's own ASPECT vocabulary — finer than the
  * subject and therefore inheriting it.
@@ -85,6 +86,12 @@ export type ContextualFocusAnswer = {
     /** Who the operator asked for. NAMED, never chosen from an evaluated page. */
     subject: { id: string; grain: OperationalGrain; subjectType: OperationalSubjectType };
     aspect: ContextualAspect | null;
+    /**
+     * Settlement-only count locations for the lens set — pill COUNTS, never a choice. A record opened by
+     * deep link (or refresh) shows the same counts as one reached by pill navigation; with no active
+     * lens there is no queue total and no KPI to settle.
+     */
+    settlement?: SettlementLocators;
     timings: { total_ms: number };
 };
 
@@ -97,6 +104,7 @@ export type ContextualFocusInput = {
     recordOfTruth: { entityType: string; id: string };
     subject: { id: string; grain: OperationalGrain; subjectType: OperationalSubjectType };
     aspect?: ContextualAspect | null;
+    settlement?: SettlementLocators;
     startedAt: number;
     now: () => number;
 };
@@ -185,6 +193,7 @@ export function composeContextualFocusAnswer(
                 subjectType: input.subject.subjectType,
             },
             aspect,
+            ...(input.settlement ? { settlement: input.settlement } : {}),
             timings: { total_ms: input.now() - input.startedAt },
         },
     };

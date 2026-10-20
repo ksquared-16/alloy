@@ -311,6 +311,32 @@ describe("D3 — K2 Provisioning Runtime", () => {
         expect(entry).toHaveBeenCalledTimes(1);
     });
 
+    it("16d. a lifecycle move invalidates EVERY work view of the unit — the sibling the record moved to re-prepares", async () => {
+        // Human QA: a family moved Tour → Decision kept answering from the pre-move Decision snapshot
+        // when the operator opened that pill next.
+        const entry = vi.fn(resolves());
+        const k2 = runtimeWith(entry);
+        const tours = refAt(owner("tours_view"));
+        const decision = refAt(owner("decision_view"));
+        await k2.prepare(tours);
+        await k2.prepare(decision);
+        expect(entry).toHaveBeenCalledTimes(2);
+        k2.invalidateWorkUnit(tours);
+        await k2.prepare(refAt(owner("decision_view")));
+        expect(entry).toHaveBeenCalledTimes(3);
+    });
+
+    it("16e. work-unit invalidation never reaches another work unit", async () => {
+        const entry = vi.fn(resolves());
+        const k2 = runtimeWith(entry);
+        const o = owner("decision_view");
+        const otherUnit = { ...refAt(o), target: "other-unit", destination: null } as AttentionRef;
+        await k2.prepare(otherUnit);
+        k2.invalidateWorkUnit(refAt(owner("tours_view")));
+        await k2.prepare(otherUnit);
+        expect(entry).toHaveBeenCalledTimes(1);
+    });
+
     it("18. the Queue Lane failure is unreachable from K2", () => {
         const src = require("fs").readFileSync(
             require("path").join(__dirname, "../../lib/runtime/kernel/provisioning.ts"), "utf8",
