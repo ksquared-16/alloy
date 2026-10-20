@@ -1,22 +1,22 @@
 {
- "tag": "after",
- "build": "747ad20dff47b9744bf77f7c70b66b774127e232",
+ "tag": "after-fix",
+ "build": "5cb6b2ed04e6b5fcfd311ad448d873b666467c9c",
  "header": {
   "rollup": {
    "top": 287,
-   "bottom": 438,
+   "bottom": 455,
    "left": 530,
    "right": 1494,
-   "h": 151
+   "h": 168
   },
   "lens": {
-   "top": 443,
-   "bottom": 500,
+   "top": 460,
+   "bottom": 517,
    "left": 530,
    "right": 1494,
    "h": 57
   },
-  "headerToLedgerTop": 156,
+  "headerToLedgerTop": 173,
   "contextRow": false,
   "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
   "sideItems": [
@@ -34,22 +34,22 @@
    "title": "Manage responsibility"
   },
   "managePayments": {
-   "top": 415,
-   "bottom": 432,
+   "top": 432,
+   "bottom": 449,
    "left": 1371,
    "right": 1494,
    "h": 17
   },
   "actions": {
    "top": 287,
-   "bottom": 317,
-   "left": 1150,
+   "bottom": 341,
+   "left": 989,
    "right": 1494,
-   "h": 30
+   "h": 55
   }
  },
  "gearOpens": 1,
- "responsibilityClosesOnEscape": false,
+ "responsibilityClosesOnEscape": true,
  "prepaid": {
   "text": "PREPAID AVAILABLE | $125.00 | Money a payment brought in that is not yet applied to any charge. It stays on the household's account — usable for any child — until it is applied to a charge or refunded. It does not expire. Held deposits and payments still clearing are not included. | PAYER | Not named | RECEIVED | Sep 18, 2026 | METHOD | Cash | ORIGINAL AMOUNT | $240.00 | APPLIED TO CHARGES | $115.00 | PREPAID REMAINING | $125.00 | Open payment — apply, reallocate or refund →",
   "sources": 1,
@@ -93,10 +93,22 @@
    "Sep 18, 2026 · $240.00 · Cash",
    "Sep 13, 2026 · $25.00 · Check"
   ],
-  "listedAfterChoice": 0,
-  "refundButton": 0
+  "listedAfterChoice": 1,
+  "refundButton": 1
  },
  "paymentRows": [
+  {
+   "cells": "Oct 20, 2026 | Refund | — | Unmapped | $40.00 | Refunded | — | Cash",
+   "gl": "Unmapped",
+   "glState": "unmapped",
+   "glTitle": "Recorded before payment destinations were tracked — not back-filled"
+  },
+  {
+   "cells": "Oct 20, 2026 | Payment | — | Unmapped | −$40.00 | Unapplied | Certt Certhouse | Cash",
+   "gl": "Unmapped",
+   "glState": "unmapped",
+   "glTitle": "No destination was configured for this method when it was received"
+  },
   {
    "cells": "Oct 6, 2026 | Payment | — | Unmapped | −$75.00 | Received | Certt Certhouse | Visa •••• 4242",
    "gl": "Unmapped",
@@ -125,19 +137,19 @@
  "focus": {
   "rollup": {
    "top": 373,
-   "bottom": 524,
+   "bottom": 541,
    "left": 550,
    "right": 1506,
-   "h": 151
+   "h": 168
   },
   "lens": {
-   "top": 529,
-   "bottom": 586,
+   "top": 546,
+   "bottom": 603,
    "left": 550,
    "right": 1506,
    "h": 57
   },
-  "headerToLedgerTop": 156,
+  "headerToLedgerTop": 173,
   "contextRow": false,
   "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
   "sideItems": [
@@ -155,18 +167,18 @@
    "title": "Manage responsibility"
   },
   "managePayments": {
-   "top": 501,
-   "bottom": 518,
+   "top": 518,
+   "bottom": 535,
    "left": 1382,
    "right": 1506,
    "h": 17
   },
   "actions": {
    "top": 373,
-   "bottom": 403,
-   "left": 1162,
+   "bottom": 427,
+   "left": 1001,
    "right": 1506,
-   "h": 30
+   "h": 55
   },
   "prepaidDoor": 1
  },
