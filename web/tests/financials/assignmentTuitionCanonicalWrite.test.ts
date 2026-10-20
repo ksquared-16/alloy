@@ -152,41 +152,30 @@ describe("pricing is not responsibility", () => {
     });
 });
 
-describe("recommended first, the rest behind a disclosure", () => {
+describe("every applicable rate is listed, the recommendation first and preselected", () => {
     const card = src(CARD);
 
-    it("states the recommendation the resolver named", () => {
-        expect(card).toContain("data-assignment-tuition-recommended");
-        expect(card).toContain("pricingView.recommended.amountLabel");
+    it("hides no option behind a disclosure", () => {
+        expect(card).not.toContain('data-assignment-tuition-expand="true"');
+        const select = card.slice(card.indexOf("<select\n                                id={`assignment-tuition-embed-"));
+        expect(select.slice(0, 200)).not.toContain("hidden=");
     });
 
-    it("offers the disclosure only when something is behind it", () => {
-        const at = card.indexOf('data-assignment-tuition-expand="true"');
+    it("names the recommendation inside the list, first, and only when the resolver named one", () => {
+        const at = card.indexOf("const recommendedId = view.recommended?.sourceId ?? null;");
         expect(at).toBeGreaterThan(-1);
-        const guard = card.slice(Math.max(0, at - 400), at);
-        expect(guard, "no empty disclosure").toContain("otherOptions.length > 0");
+        const body = card.slice(at, at + 1600);
+        expect(body).toContain("(a.sourceId === recommendedId ? 0 : 1)");
+        expect(body).toContain("o.sourceId === recommendedId ? `Recommended — ${what}` : what");
     });
 
-    it("other options are everything applicable except the recommendation", () => {
-        const memo = card.slice(card.indexOf("const otherOptions = useMemo"));
-        const body = memo.slice(0, memo.indexOf("[pricingView]"));
-        expect(body).toContain("pricingView.applicable.filter");
-        expect(body).toContain("o.sourceId !== recId");
-    });
-
-    it("manufactures no Recommended heading when the resolver is ambiguous", () => {
+    it("an ambiguous resolution names the tie instead of a recommendation", () => {
         /*
-         * `kind: "ambiguous"` is the configuration declining to say which applies. Labelling one
-         * of a tied set "Recommended" would answer a question the resolver refused to answer.
+         * `kind: "ambiguous"` is the configuration declining to say which applies; with no
+         * recommended id, no option is labelled Recommended.
          */
         expect(card).toContain('data-assignment-tuition-ambiguous="true"');
         expect(card).toContain("configured options apply equally");
-        /* Sliced to the element, not a character window — the style attribute sits between. */
-        const at = card.indexOf("data-assignment-tuition-recommended");
-        const el = card.slice(at, card.indexOf("</div>", at));
-        expect(el, "the heading states the recommendation").toContain("Recommended ·");
-        const guard = card.slice(Math.max(0, at - 260), at);
-        expect(guard, "and is gated on the resolver having named one").toContain("pricingView?.recommended");
     });
 
     it("accepting the recommendation needs no expansion", () => {
