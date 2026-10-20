@@ -296,11 +296,41 @@ export type LedgerEntry = {
      * presentation layer would drift the first time a category was added, and the two Financials
      * surfaces would then disagree about what a row IS while agreeing about what it costs.
      */
-    lens: "charges" | "credits" | "funding";
+    lens: "charges" | "credits" | "funding" | "payments";
+    /**
+     * The row's own date, `YYYY-MM-DD`, so the timeline can order a period's activity. `when` is the
+     * operator's reading of the same fact; this is never rendered.
+     */
+    dateIso?: string | null;
+    /**
+     * ── W7-F026: MONEY MOVING IS LEDGER ACTIVITY ─────────────────────────────────────────────
+     *
+     * Present only where the row IS a payment event — a receipt, money going back out (a refund
+     * the operator asked for, a return the provider took), or a collection still in flight. Every
+     * figure is already decided by the payment authority (`presentPayments`, the collection
+     * lifecycle); the ledger lays it out and opens Payment Details from it.
+     */
+    payment?: LedgerPaymentFacts | null;
     /** Server-decided, never re-derived here: a draft that may be posted. */
     offersPost?: boolean;
     /** Server-decided: posted, not void, not already reversed, not itself a correction. */
     offersReverse?: boolean;
+};
+
+export type LedgerPaymentFacts = {
+    /** The payment record, or the collection attempt while nothing has been recognised yet. */
+    paymentId: string;
+    kind: "receipt" | "refund" | "return" | "collection";
+    /** `Received`, `Pending`, `Failed` … or the collection lifecycle's own words. */
+    statusLabel: string;
+    methodLabel: string | null;
+    payerLabel: string | null;
+    /** Compact allocation state — "Applied", "$40.00 unapplied" — never the applications themselves. */
+    allocationLabel: string | null;
+    /** Received money is answering nothing yet: a business state an operator acts on. */
+    unapplied: boolean;
+    /** False for a collection: there is no payment record to open until it is recognised. */
+    openable: boolean;
 };
 
 export type FinancialsPayer = {
@@ -449,9 +479,11 @@ export type FinancialsEvidence = {
         autopayHealthy: boolean;
         nextChargeLabel: string | null;
     };
-    /** Quiet context line on the summary card — never a ledger reproduction. */
-    /** Detail-only: forward-looking facts, and only where authoritative. */
-    upcoming: { label: string; value: string; unowned?: boolean }[];
+    /*
+     * W7-F026: the Detail-only `upcoming` list is gone. It was always empty — the adapter hard-coded
+     * `[]` — so Details drew an "Upcoming" heading over nothing, while the scheduled drafts it meant
+     * already sit in their own future billing periods in the ledger.
+     */
     /**
      * Detail-only: the receipts themselves, and what each one is currently answering.
      *
@@ -613,6 +645,10 @@ export type StaffEvidence = {
 
 /** A ledger period group for the Financials detail. */
 export type FinancialsLedgerPeriod = {
+    /** The billing period key and its inclusive bounds. Absent on lab fixtures. */
+    key?: string;
+    start?: string;
+    end?: string;
     label: string;
     summary: string;
     open: boolean;

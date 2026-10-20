@@ -3600,11 +3600,11 @@ export default function FinancialsCard({
      * `dismissOneLevel` coalesces the two into one gesture. Clicks inside the card never dismiss.
      */
     useEffect(() => {
-        if (overlay !== "charge_detail") return;
+        if (overlay !== "charge_detail" && overlay !== "payment_detail") return;
         const onPointerDown = (event: PointerEvent) => {
             const target = event.target as Element | null;
             if (!target || typeof target.closest !== "function") return;
-            const card = document.querySelector('[data-financials-overlay="charge_detail"] .alloy-os-ucard');
+            const card = document.querySelector(`[data-financials-overlay="${overlay}"] .alloy-os-ucard`);
             if (!card || card.contains(target)) return;
             if (target.closest('[role="listbox"], [role="menu"], [data-radix-popper-content-wrapper]')) return;
             if (hasInnerDismissibleLayer(document)) return;
@@ -3864,9 +3864,19 @@ export default function FinancialsCard({
         openAddAdjustment();
     }, [entryMode, adjustOpen, adjustableSubjects.length, openAddAdjustment]);
 
-    const paymentBandFor = (labelled: boolean) => vm ? (
-            <section className="alloy-os-financials__band" data-financials-band="payment">
+    /*
+     * ── W7-F026: ONE RECEIPT IMPLEMENTATION, TWO PLACEMENTS ──────────────────────────────────
+     *
+     * `scopedTo` names one payment. The band then renders ONLY that receipt (and anything going back
+     * out against it) — the same per-receipt markup, figures and Hold / Refund acts the Payment
+     * surface has always had — and nothing account-wide: no setup note, no collections, no
+     * "received and not yet applied" total and no Take or record payment entry. That scoped form is
+     * the body of Payment Details, so there is one receipt presentation, not a second one.
+     */
+    const paymentBandFor = (labelled: boolean, scopedTo?: string) => vm ? (
+            <section className="alloy-os-financials__band" data-financials-band={scopedTo ? "payment-detail" : "payment"}>
                 {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
+                {scopedTo ? null : (<>
                 {/*
                     ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
                     This region used to print the platform's own limitations at
@@ -3920,6 +3930,7 @@ export default function FinancialsCard({
                         })}
                     </ul>
                 ) : null}
+                </>)}
 
                 {/*
                     WHAT ARRIVED, AND WHAT IT IS DOING.
@@ -3942,7 +3953,7 @@ export default function FinancialsCard({
                         {presentPayments(
                             vm.payments,
                             Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0])),
-                        ).map((p) => {
+                        ).filter((p) => !scopedTo || p.paymentId === scopedTo || p.refundsPaymentId === scopedTo).map((p) => {
                             const composing = refundTarget?.paymentId === p.paymentId;
                             return (
                                 <li
@@ -4323,6 +4334,7 @@ export default function FinancialsCard({
                     </ul>
                 ) : null}
 
+                {scopedTo ? null : (<>
                 {/* Cash on the account, stated as cash. Never subtracted from
                     what is owed here — applying money is its own act with its
                     own record, and the balance above stays the read model's. */}
@@ -4791,6 +4803,7 @@ export default function FinancialsCard({
                         No payments recorded
                     </p>
                 ) : null}
+                </>)}
             </section>
     ) : null;
 
@@ -5022,6 +5035,115 @@ export default function FinancialsCard({
             );
         }
 
+
+        /*
+         * ── W7-F026: PAYMENT DETAILS — THE RECEIPT'S OWN RECORD ─────────────────────────────
+         *
+         * There was no canonical Payment Details: a receipt's facts and its Hold / Refund acts lived
+         * only in the payment band. This is that band's per-receipt markup, scoped to one payment
+         * (`paymentBandFor(false, id)`) — one implementation, not a second — with what a row cannot
+         * hold: when it arrived, who paid, and WHICH obligations it is answering. Each application
+         * opens its charge's record.
+         */
+        if (overlay === "payment_detail" && surface?.kind === "payment_detail" && vm) {
+            const receipt = vm.payments.find((p) => p.paymentId === surface.paymentId) ?? null;
+            const cur = receipt?.currencyCode || currency;
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="payment_detail"
+                    data-financials-payment-detail-for={surface.paymentId}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Payment details"
+                >
+                    <UniversalCard
+                        title="Payment details"
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="payment_detail"
+                        footerAction={null}
+                    >
+                        {receipt ? (
+                            <>
+                                {/* Charge Details' own fact-cell idiom: label over value, two columns. */}
+                                <span className="mb-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3" data-financials-payment-detail-facts="true">
+                                    {[
+                                        { label: receipt.direction === "outbound" ? "Sent" : "Received", value: receipt.receivedAt ? formatDisplayDate(receipt.receivedAt) || "—" : "—", testId: "received" },
+                                        { label: "Payer", value: receipt.payerLabel ?? "Not named", testId: "payer" },
+                                        ...(receipt.reference ? [{ label: "Reference", value: receipt.reference, testId: "reference" }] : []),
+                                    ].map((f) => (
+                                        <span key={f.testId} className="flex min-w-0 flex-col" data-financials-payment-detail-line={f.testId}>
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{f.label}</span>
+                                            <span className="truncate text-sm text-alloy-midnight/85" title={f.value}>{f.value}</span>
+                                        </span>
+                                    ))}
+                                </span>
+                                {paymentBandFor(false, surface.paymentId)}
+                                {receipt.direction === "inbound" ? (
+                                    <section className="alloy-os-financials__band" data-financials-payment-applications="true">
+                                        <p className="alloy-os-financials__band-label">Applied to</p>
+                                        {receipt.applications.length ? (
+                                            <ul className="alloy-os-financials__payments">
+                                                {receipt.applications.map((a) => (
+                                                    <li
+                                                        key={a.allocationId}
+                                                        className="alloy-os-financials__payment"
+                                                        data-financials-payment-application={a.allocationId}
+                                                        data-financials-payment-application-status={a.status}
+                                                    >
+                                                        {a.chargeId ? (
+                                                            <button
+                                                                type="button"
+                                                                className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                                                data-financials-payment-application-open={a.chargeId}
+                                                                onClick={() => push({ kind: "charge_detail", chargeId: a.chargeId!, label: a.chargeLabel })}
+                                                            >
+                                                                {a.chargeLabel}
+                                                            </button>
+                                                        ) : (
+                                                            <span>{a.chargeLabel}</span>
+                                                        )}
+                                                        <span>{money(a.appliedCents, cur)}</span>
+                                                        <span className="alloy-os-financials__note">
+                                                            {a.status === "active"
+                                                                ? `Applied${a.allocatedAt ? ` ${formatDisplayDate(a.allocatedAt) || ""}` : ""}`
+                                                                : `Moved off${a.reversalReason ? ` · ${a.reversalReason}` : ""}`}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="alloy-os-financials__note">Not applied to any charge yet.</p>
+                                        )}
+                                    </section>
+                                ) : null}
+                            </>
+                        ) : (
+                            <p className="alloy-os-financials__note" data-financials-payment-detail-missing="true">
+                                This payment is no longer on the account&rsquo;s record.
+                            </p>
+                        )}
+                        <div className="alloy-os-depthcard__actions alloy-os-chargedetail__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close alloy-os-chargedetail__action alloy-os-chargedetail__action--neutral"
+                                data-financials-payment-detail-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
 
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
@@ -6457,20 +6579,12 @@ export default function FinancialsCard({
                     /* The same reusable Details, from whichever host renders this card. */
                     onOpenCharge={({ chargeId, label }) => push({ kind: "charge_detail", chargeId, label })}
                     /*
-                     * ── THE BAND IS THE CARD'S, NOT THE WRAPPER'S ────────────────────────────
-                     *
-                     * This was rendered as a SIBLING of the card, immediately below. The content is
-                     * right and stays — see the note that follows — but a sibling of the focused
-                     * card is not owned by it: the band sat outside the card's box at the wrapper's
-                     * left edge, so a focused Details surface had a stray `Record payment →`
-                     * floating beside it with no card around it. Measured mounted at 509,522 with
-                     * no `data-universal-card-key` ancestor, while the card began at x≈528.
-                     *
-                     * Passed as a slot, the focused surface owns everything it presents. No
-                     * z-index, no extra scrim, no second depth mechanism — the composition was the
-                     * defect, so the composition is the repair.
+                     * W7-F026: a payment row opens the receipt's record, the way a charge row
+                     * opens Charge Details. The bottom payment band that used to be passed here is
+                     * gone: Payment above is the one entry into taking money, and a receipt's own
+                     * acts (Hold, Refund) live on its record.
                      */
-                    paymentBand={paymentBandFor(true)}
+                    onOpenPayment={({ paymentId }) => push({ kind: "payment_detail", paymentId })}
                 />
                 {/*
                     WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
@@ -7202,6 +7316,8 @@ export type FinancialsSurface =
      * mistaken for, or widened into, authority to change one.
      */
     | { kind: "charge_detail"; chargeId: string; label: string }
+    /* W7-F026: a receipt's record — the same kind of read as a charge's. */
+    | { kind: "payment_detail"; paymentId: string }
     | { kind: "adjust_charge"; chargeId: string }
     | { kind: "reverse_charge"; chargeId: string; label: string }
     /*

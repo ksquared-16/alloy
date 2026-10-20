@@ -373,11 +373,6 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         /* Nothing restricted on this account. */
         heldDeposits: [],
         heldDepositHistory: [],
-    upcoming: [
-        { label: "Next period", value: "Sep 1 – Sep 30" },
-        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
-        { label: "Scheduled payment", value: "Autopay · Sep 1", unowned: true },
-    ],
 };
 
 export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
@@ -439,11 +434,6 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         /* Nothing restricted on this account. */
         heldDeposits: [],
         heldDepositHistory: [],
-    upcoming: [
-        { label: "Next period", value: "Sep 1 – Sep 30" },
-        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
-        { label: "Subsidy expires", value: "Dec 31", unowned: true },
-    ],
 };
 
 export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
@@ -549,11 +539,6 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
                 open: false,
             },
         ],
-    upcoming: [
-        { label: "Next period", value: "Sep 1 – Sep 30" },
-        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
-        { label: "Subsidy renewal", value: "Jan 1", unowned: true },
-    ],
 };
 
 export const FINANCIALS_FIXTURE = FINANCIALS_PAST_DUE;
