@@ -1,3 +1,10 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-10-20
+supersedes: []
+---
+
 # Assignment Category — Option C Decision Packet
 
 Status: **PROPOSED — Director decision required. No implementation authorized.**
