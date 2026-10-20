@@ -699,6 +699,11 @@ function paymentTimelineEntries(vm: FinancialsCardVM, currency: string): LedgerE
             type: "payment",
             /* The settlement account this tender maps to — never the revenue of what it paid. */
             glCode: row?.glCode ? (row.glAccountName ? `${row.glCode} · ${row.glAccountName}` : row.glCode) : null,
+            /* W7-F042: an Unmapped receipt says which kind of unmapped it is. */
+            glNote:
+                row?.glState === "before_stamping" ? "Recorded before payment destinations were tracked — not back-filled"
+                : row?.glState === "unconfigured_at_receipt" ? "No destination was configured for this method when it was received"
+                : null,
             responsibleParty: null,
             responsibilityUnassigned: false,
             label: p.kind === "receipt" ? "Payment" : p.kind === "refund" ? "Refund" : "Returned",

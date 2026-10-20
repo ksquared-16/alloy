@@ -66,8 +66,9 @@ describe("F031 · three answers, each with its context", () => {
         expect(labels).toEqual(["Due now", "Balance · October 2026", "Scheduled"]);
         expect(host.querySelector('[data-testid="summary-due-now-note"]')!.textContent).toBe("$2,005.00 past due");
         expect(host.querySelector('[data-testid="summary-balance-note"]')!.textContent).toBe("$2,121.00 charged · $40.00 paid");
+        /* W7-F043: not yet due rides Due now's note line; prepaid stacks beside the figures — no row of its own. */
+        expect(host.querySelector('[data-testid="summary-not-yet-due"]')!.textContent).toBe("$225.00 not yet due · next Oct 31, 2026");
         expect([...host.querySelectorAll("[data-financials-summary-context-item]")].map((n) => n.textContent)).toEqual([
-            "$225.00 not yet due · next Oct 31, 2026",
             "$125.00 prepaid available",
         ]);
         for (const gone of ["Current balance", "Responsibility", "Paid", "Available prepaid", "Not yet due"]) {
@@ -133,10 +134,12 @@ describe("F032 · a payment row is a native ledger event", () => {
         expect(paymentGlMappingKey("bitcoin")).toBeNull();
         expect(Object.keys(PAYMENT_METHOD_GL_MAPPING_KEY).sort()).toEqual(["ach", "card", "cash", "check", "manual", "money_order", "other", "subsidy"]);
         const route = code("app/api/admin/financials/gl-mappings/route.ts");
-        expect(route).toMatch(/categoryLabel: `Payments received · \$\{PAYMENT_METHOD_LABELS/);
+        expect(route).toMatch(/categoryLabel: PAYMENT_METHOD_LABELS\[method as keyof typeof PAYMENT_METHOD_LABELS\],\s*mappingKey,\s*group: "payment" as const/);
         expect(route).toMatch(/\.\.\.Object\.values\(PAYMENT_METHOD_GL_MAPPING_KEY\)/);
+        /* W7-F042: the ledger reads the destination STAMPED at receipt, never today's mapping. */
         const vm = code("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
-        expect(vm).toMatch(/const glMappingKey = paymentGlMappingKey\(row\.method\);\s*const account = glMappingKey \? accountByMappingKey\.get\(glMappingKey\) \?\? null : null;/);
+        expect(vm).toMatch(/const stamp = facts\?\.receiptAccount;/);
+        expect(vm).toMatch(/glCode: stamp\?\.gl_account_id \? stamp\.code : null,/);
     });
 
     it("the payer is the payment's own payer_entity; card details come from its collection's stored method", async () => {

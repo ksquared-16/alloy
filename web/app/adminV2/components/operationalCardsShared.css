@@ -3915,3 +3915,72 @@
   font-size: 0.68rem;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+
+/*
+ * W7-F041/F043 — the relationship row spans the rollup, so its end group (method + Manage
+ * payments) sits beneath Payment / Add; secondary account facts share a line or stack beside the
+ * figures instead of claiming a row.
+ */
+.alloy-os-fdetail__rollup > .alloy-os-fdetail__payers {
+  flex: 1 0 100%;
+  margin-top: 0;
+  padding-top: 5px;
+}
+.alloy-os-fdetail__statnotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+.alloy-os-fdetail__statnotes > .alloy-os-fdetail__statnote + .alloy-os-fdetail__statnote::before {
+  content: "· ";
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__statside {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-end;
+  gap: 1px;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__statsidelink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-align: left;
+  cursor: pointer;
+}
+.alloy-os-fdetail__statsidelink:hover { text-decoration: underline; }
+.alloy-os-fdetail__statsidelink:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* W7-F045 — the Payment command's two jobs: take a payment, or refund one. */
+.alloy-os-financials__tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+.alloy-os-financials__tab {
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-financials__tab--on {
+  color: var(--alloy-os-bend-pine, #00a283);
+  border-bottom-color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-financials__tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 1px;
+}

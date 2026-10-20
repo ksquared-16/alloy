@@ -53,6 +53,7 @@ import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 
 /**
  * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
@@ -659,8 +660,8 @@ const addCharge: RegisteredAction = {
                 ...(intent.dateChain
                     ? chargeDateChainPreviewLines(intent.dateChain, intent.reviewRequired)
                     : [
-                          intent.billableOn ? `Invoice date ${intent.billableOn}` : null,
-                          intent.dueDate ? `Due ${intent.dueDate}` : null,
+                          intent.billableOn ? `Invoice date ${humanDay(intent.billableOn)}` : null,
+                          intent.dueDate ? `Due ${humanDay(intent.dueDate)}` : null,
                       ]),
                 intent.periodIssue ? `Billing period · ${intent.periodIssue.message}` : null,
             ].filter((v): v is string => Boolean(v));

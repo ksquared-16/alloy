@@ -88,7 +88,7 @@ describe("the Director's example — Oct 14 add, monthly, due on the 1st", () =>
 
     it("says so in the preview", () => {
         const lines = chargeDateChainPreviewLines(c, false);
-        expect(lines).toContain("Due 2026-11-01");
+        expect(lines).toContain("Due Nov 1, 2026");
         expect(lines.find((l) => l.startsWith("Payment terms"))).toMatch(/due with the next payment/);
     });
 });

@@ -161,15 +161,15 @@ export function dueRuleShort(strategy: string | null | undefined, offsetDays: nu
 export function chargeDateChainPreviewLines(chain: ChargeDateChain, reviewRequired: boolean): string[] {
     const lines: string[] = [];
     if (chain.period) {
-        lines.push(`Billing period ${chain.period.label} · ${chain.period.startsOn} → ${chain.period.endsOn}`);
+        lines.push(`Billing period ${chain.period.label} · ${humanDay(chain.period.startsOn)} → ${humanDay(chain.period.endsOn)}`);
     }
-    lines.push(`Invoice date ${chain.invoice.actual}`);
+    lines.push(`Invoice date ${humanDay(chain.invoice.actual)}`);
     lines.push(
         chain.invoice.late
-            ? `Invoice timing · ${invoiceRuleSentence(chain.invoice.rule.strategy, chain.invoice.rule.offsetDays)} (${invoiceRuleSource(chain.invoice.rule)}) would be ${chain.invoice.intended}; this charge is added later, so it is invoiced the day it is created`
+            ? `Invoice timing · ${invoiceRuleSentence(chain.invoice.rule.strategy, chain.invoice.rule.offsetDays)} (${invoiceRuleSource(chain.invoice.rule)}) would be ${humanDay(chain.invoice.intended)}; this charge is added later, so it is invoiced the day it is created`
             : `Invoice timing · ${invoiceRuleSentence(chain.invoice.rule.strategy, chain.invoice.rule.offsetDays)} (${invoiceRuleSource(chain.invoice.rule)})`,
     );
-    if (chain.due.actual) lines.push(`Due ${chain.due.actual}`);
+    if (chain.due.actual) lines.push(`Due ${humanDay(chain.due.actual)}`);
     const dueRule = chain.due.resolution;
     lines.push(
         dueRule.reason === "no_policy"
@@ -177,14 +177,14 @@ export function chargeDateChainPreviewLines(chain: ChargeDateChain, reviewRequir
             : chain.due.rolledToNextPeriod
               ? `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)}) — this period's payment date had passed, so it is due with the next payment`
             : chain.due.clampedToInvoice
-                ? `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)}) would be ${chain.due.ruleDate}, before this charge is invoiced, so it is due on the invoice date`
+                ? `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)}) would be ${humanDay(chain.due.ruleDate)}, before this charge is invoiced, so it is due on the invoice date`
                 : `Payment terms · ${dueRuleSentence(dueRule.strategy, dueRule.offsetDays)} (${scopeWords(dueRule.sourceScope)})`,
     );
     if (chain.posting.gate === "awaits_period") {
         lines.push(
             reviewRequired
-                ? `Posting · Scheduled until ${chain.posting.notBefore}, when the billing period begins — then needs review`
-                : `Posting · Scheduled until ${chain.posting.notBefore} — activates automatically when the billing period begins`,
+                ? `Posting · Scheduled until ${humanDay(chain.posting.notBefore)}, when the billing period begins — then needs review`
+                : `Posting · Scheduled until ${humanDay(chain.posting.notBefore)} — activates automatically when the billing period begins`,
         );
     } else if (reviewRequired) {
         lines.push("Posting · Review required before it is owed");

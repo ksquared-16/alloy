@@ -107,9 +107,10 @@ describe("F039 · the split is exactly 100%, and two parties balance themselves"
 });
 
 describe("F037 / F040 · where responsibility and funding are managed", () => {
-    it("Manage responsibility is a labelled action beside Manage payments", () => {
+    it("W7-F041 supersedes F037: responsibility has ONE door — the gear beside Anyone responsible", () => {
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
-        expect(detail).toMatch(/data-financials-manage-responsibility="open"[\s\S]{0,300}Manage responsibility <span aria-hidden>&rarr;<\/span>[\s\S]{0,300}data-financials-manage-payments="open"/);
+        expect(detail).not.toMatch(/data-financials-manage-responsibility="open"/);
+        expect(detail).toMatch(/aria-label="Manage responsibility"\s*title="Manage responsibility"\s*data-financials-manage-responsibility="gear"/);
     });
 
     it("expected funding is managed beside each share of the arrangement in force", () => {
