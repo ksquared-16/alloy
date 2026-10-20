@@ -1,0 +1,81 @@
+{
+ "build": "827a345a2f9abd3d886c5180442f0dae89dba36f",
+ "tag": "after-827a345",
+ "accounts": [
+  {
+   "shell": 72.40000009536743,
+   "meaningful": 72.40000009536743,
+   "hydrated": 1394.1000000238419,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 11.799999952316284,
+   "meaningful": 11.799999952316284,
+   "hydrated": 1030.8999999761581,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 138,
+   "meaningful": 138,
+   "hydrated": 1146.8999999761581,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 148.30000007152557,
+   "meaningful": 148.30000007152557,
+   "hydrated": 1348.5,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 148.19999992847443,
+   "meaningful": 148.19999992847443,
+   "hydrated": null,
+   "emptyFrames": 0
+  }
+ ],
+ "charges": [
+  {
+   "shell": 127.5,
+   "meaningful": 127.5,
+   "hydrated": 1808.5,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 128.89999997615814,
+   "meaningful": 128.89999997615814,
+   "hydrated": 1295.6999999284744,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 130.80000007152557,
+   "meaningful": 130.80000007152557,
+   "hydrated": 1137.8999999761581,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 131,
+   "meaningful": 131,
+   "hydrated": 1197.7000000476837,
+   "emptyFrames": 0
+  },
+  {
+   "shell": 130.79999995231628,
+   "meaningful": 130.79999995231628,
+   "hydrated": 1064.2999999523163,
+   "emptyFrames": 0
+  }
+ ],
+ "chargeRowSelector": "[data-financials-charge-index-row]",
+ "accounts_median": {
+  "shell": 138,
+  "meaningful": 138,
+  "hydrated": 1349,
+  "samples": 5
+ },
+ "charges_median": {
+  "shell": 131,
+  "meaningful": 131,
+  "hydrated": 1198,
+  "samples": 5
+ }
+}
