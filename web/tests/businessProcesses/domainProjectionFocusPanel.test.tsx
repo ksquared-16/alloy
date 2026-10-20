@@ -14,8 +14,8 @@ import type { ReactNode } from "react";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("@/components/presentation/durableRecord/DurableRecordSurface", () => ({
-    default: (p: { subjectType: string; subjectId: string; presentation?: string }) => (
-        <div data-durable-surface={`${p.subjectType}:${p.subjectId}`} data-presentation={p.presentation} />
+    default: (p: { subjectType: string; subjectId: string; presentation?: string; contextKey?: string | null }) => (
+        <div data-durable-surface={`${p.subjectType}:${p.subjectId}`} data-presentation={p.presentation} data-context-key={p.contextKey ?? ""} />
     ),
 }));
 vi.mock("@/components/presentation/workUnit/InlineOpportunityFocusPanel", () => ({
@@ -52,6 +52,17 @@ const surface = (subjectId: string | null, projection: typeof frame | null) => (
 );
 
 describe("Focus Panel on a domain-projection surface", () => {
+    it("S3: an Assignments row opens the record on its Assignment context, with the source on the boundary", () => {
+        const el = render(surface(`person:${PERSON}`, { ...frame, selectedSource: { kind: "schedule_assignment", id: "sa-1", reason: "Ends Oct 29 · in 9 days" } }));
+        expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-context-key")).toBe("schedule");
+        expect(el.querySelector("[data-focus-panel-boundary]")?.getAttribute("data-projection-source")).toBe("schedule_assignment:sa-1");
+    });
+
+    it("S3: a Billing row opens the household on its default context", () => {
+        const el = render(surface(`household:${PERSON}`, { ...frame, domain: "billing", projectionKey: "charges_needing_review" }));
+        expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-context-key")).toBe("");
+    });
+
     it("opens the durable person record with the originating process and view on the boundary", () => {
         const el = render(surface(`person:${PERSON}`, frame));
         expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-durable-surface")).toBe(`person:${PERSON}`);
