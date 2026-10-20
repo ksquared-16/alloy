@@ -17,6 +17,11 @@ import {
     findOperationalCalculation,
     listCalculationsByBusinessProcess,
 } from "@/lib/analytics/calculations/registry";
+import {
+    isDomainProjectionModel,
+    signalBusinessProcessForProjectionDomain,
+    type ProcessModelV1,
+} from "@/lib/lifecycle/processModelV1";
 import { formatTargetFromKpi } from "@/lib/metrics/oipKpiObjectPresentation";
 import { drillHrefForMetricKey, type PrimarySignalModel, type SignalState } from "./types";
 
@@ -35,6 +40,46 @@ export function businessProcessForProcessKey(
     if (k.includes("financ") || k.includes("revenue") || k.includes("billing")) return "financial";
     if (k.includes("operational") || k.includes("health") || k.includes("labor")) return "operational_health";
     return null;
+}
+
+/**
+ * The Operational Calculation business process for a process TILE (BP V2 S1).
+ *
+ * A declared domain projection answers from its declaration — Billing reads Financials, Assignments
+ * has no registered calculation family — and is never re-derived from its key's text (a process named
+ * "Billing for Leads" is not Enrollment). A staged lifecycle keeps the key-derived answer above,
+ * which is what Enrollment's configured signals have always been keyed by.
+ */
+export function businessProcessForProcess(args: {
+    processKey: string | null | undefined;
+    processModel?: ProcessModelV1 | null;
+}): OperationalCalculationBusinessProcess | null {
+    if (isDomainProjectionModel(args.processModel)) {
+        return signalBusinessProcessForProjectionDomain(args.processModel.domain);
+    }
+    return businessProcessForProcessKey(args.processKey);
+}
+
+/**
+ * The key a process's card identity is stored under in `cardByProcess` — its business process, else
+ * its own key. ONE function for the Surface Builder (which writes it) and the tile (which reads it):
+ * they previously disagreed for a process with no calculation family, so its configured title and
+ * icon were saved under the process key and read under nothing.
+ */
+export function processCardConfigKey(args: {
+    processKey: string | null | undefined;
+    processModel?: ProcessModelV1 | null;
+}): string | null {
+    return businessProcessForProcess(args) ?? (args.processKey?.trim() || null);
+}
+
+/** Default signal for a process tile — first tile-consumable calculation of its business process. */
+export function defaultSignalKeyForProcessIdentity(args: {
+    processKey: string | null | undefined;
+    processModel?: ProcessModelV1 | null;
+}): string | null {
+    const bp = businessProcessForProcess(args);
+    return bp ? (signalsForBusinessProcess(bp)[0]?.key ?? null) : null;
 }
 
 /** Active calculations consumable on a process tile, for a business process. */

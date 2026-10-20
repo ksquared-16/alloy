@@ -48,10 +48,12 @@ import {
     type WorkspaceProcessTileSnapshot,
 } from "./workspaceProcessSurfaceAssembly";
 import {
-    businessProcessForProcessKey,
-    defaultSignalKeyForProcess,
+    businessProcessForProcess,
+    defaultSignalKeyForProcessIdentity,
+    processCardConfigKey,
     resolvePrimarySignal,
 } from "./workspaceProcessSignal";
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { isKnownCalculationKey } from "@/lib/analytics/calculations/registry";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./types";
@@ -203,13 +205,17 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     // Workspace SCOPE hint — what BOS reads to load an intake spec and the process-effective slash
     // catalog. A hint may be approximate, so the first process is fine here; nulling it would strip
     // BOS of process context entirely and gray every slash command.
-    const defaultDepartmentId = cards[0]?.departmentId ?? null;
+    // Staged lifecycles only: a domain projection (Assignments, Billing) has no intake, and sorting by
+    // label would otherwise put it ahead of Enrollment as the default scope (BP V2 S1).
+    const lifecycleCards = cards.filter((card) => !isDomainProjectionModel(card.processModel));
+    const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? cards[0]?.departmentId ?? null;
 
     // The department ASSERTED when creating a record, which is a different question: "first by sort
     // order" is a config artifact, not operator intent, and asserting it silently books the lead
     // against the wrong department. Implied only when the org has a single process; otherwise the
     // workspace names none and the server resolves the entry department from configuration.
-    const createLeadDepartmentId = cards.length === 1 ? (cards[0]?.departmentId ?? null) : null;
+    const createLeadDepartmentId =
+        lifecycleCards.length === 1 ? (lifecycleCards[0]?.departmentId ?? null) : null;
 
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
@@ -251,17 +257,17 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     const { config: headerConfig, loaded: headerConfigLoaded } = useWorkspaceHeaderSurfaceConfigState();
     const signalKeyForCard = useCallback(
         (card: OperatorLifecycleLandingCard): string | null => {
-            const bp = businessProcessForProcessKey(card.processKey);
+            const bp = businessProcessForProcess(card);
             const configured = bp ? processConfig.primarySignalByProcess[bp] : undefined;
-            return configured ?? defaultSignalKeyForProcess(card.processKey);
+            return configured ?? defaultSignalKeyForProcessIdentity(card);
         },
         [processConfig],
     );
     // The optional SECOND signal an operator configured for this process's card (text-only line).
     const supportingSignalKeyForCard = useCallback(
         (card: OperatorLifecycleLandingCard): string | null => {
-            const bp = businessProcessForProcessKey(card.processKey);
-            return bp ? resolveProcessCardConfig(processConfig, bp).supportingSignalKey : null;
+            const key = processCardConfigKey(card);
+            return key ? resolveProcessCardConfig(processConfig, key).supportingSignalKey : null;
         },
         [processConfig],
     );

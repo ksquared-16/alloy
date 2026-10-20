@@ -2,6 +2,7 @@
  * Enrollment-only Operational Surface data for Workspace processNavTile cover page.
  */
 
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { parseOperatorWorkUnitEntryHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type {
@@ -89,8 +90,13 @@ const DEFAULT_STORY_BODY =
 
 /** Explicit enrollment lifecycle detection — safe for render gating. */
 export function isEnrollmentLifecycleCard(
-    card: Pick<OperatorLifecycleLandingCard, "processKey" | "label" | "entryHref">,
+    card: Pick<OperatorLifecycleLandingCard, "processKey" | "label" | "entryHref"> &
+        Partial<Pick<OperatorLifecycleLandingCard, "processModel">>,
 ): boolean {
+    // A declared domain projection is never Enrollment, whatever its name or key happens to contain
+    // ("Lead Billing" must not acquire Enrollment's surface). The text heuristics below remain only
+    // for staged lifecycles, which is every process published before the model was declarable.
+    if (isDomainProjectionModel(card.processModel)) return false;
     const processKey = card.processKey.trim().toLowerCase();
     if (ENROLLMENT_PROCESS_KEYS.has(processKey)) return true;
     if (processKey.includes("enroll") || processKey.includes("lead")) return true;
@@ -98,7 +104,7 @@ export function isEnrollmentLifecycleCard(
     const label = card.label.trim().toLowerCase();
     if (label.includes("enrollment") || label.includes("lead")) return true;
 
-    const entry = card.entryHref.trim().toLowerCase();
+    const entry = (card.entryHref ?? "").trim().toLowerCase();
     return ENROLLMENT_ENTRY_HREF_MARKERS.some((marker) => entry.includes(marker));
 }
 
@@ -352,7 +358,8 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
             workUnit: args.workUnit,
             workViewId,
             queueKey,
-            entryHref: args.card.entryHref,
+            // Enrollment cards always carry an entry (their `new_leads` last resort).
+            entryHref: args.card.entryHref ?? "",
         });
         const projectionCount = projection?.byViewId[workViewId]?.count;
         const count =
@@ -438,7 +445,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
 
     const workUnit = resolveEnrollmentWorkUnitForSurface({
         departmentId: args.card.departmentId,
-        entryHref: args.card.entryHref,
+        entryHref: args.card.entryHref ?? "",
         workUnits: args.workUnits ?? [],
     });
 

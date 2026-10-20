@@ -1,4 +1,5 @@
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import {
     buildOperatorLifecycleLandingCards,
     type OperatorLifecycleDepartmentRow,
@@ -139,7 +140,16 @@ async function fetchLifecycleRollupsForCards(
     init: RequestInit,
     selectedSiteId: string | null | undefined,
 ): Promise<OperatorLifecycleLandingCard[]> {
-    const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
+    // Lifecycle departments only: a domain projection has no pipeline, lanes or base rows to roll up,
+    // so it is not asked for any — its tile shows no count rather than a count of nothing (BP V2 S1).
+    const departmentIds = [
+        ...new Set(
+            cards
+                .filter((c) => !isDomainProjectionModel(c.processModel))
+                .map((c) => c.departmentId)
+                .filter(Boolean),
+        ),
+    ];
     if (!departmentIds.length) return cards;
 
     const statusStageMap = await fetchOpportunityStatusStageMap(init);
@@ -162,7 +172,7 @@ async function fetchLifecycleRollupsForCards(
     );
 
     const rollupsByLifecycleId = new Map(
-        cards.map((card) => {
+        cards.filter((card) => departmentIds.includes(card.departmentId)).map((card) => {
             const deptSummaries = summariesByDept.find((row) => row.departmentId === card.departmentId);
             const rollups = resolveLifecycleRollupsFromDepartmentSummaries({
                 departmentId: card.departmentId,
@@ -209,7 +219,16 @@ async function fetchWorkViewOperationalSignalsForCards(
     init: RequestInit,
     selectedSiteId: string | null | undefined,
 ): Promise<OperatorLifecycleLandingCard[]> {
-    const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
+    // Lifecycle departments only: a domain projection has no pipeline, lanes or base rows to roll up,
+    // so it is not asked for any — its tile shows no count rather than a count of nothing (BP V2 S1).
+    const departmentIds = [
+        ...new Set(
+            cards
+                .filter((c) => !isDomainProjectionModel(c.processModel))
+                .map((c) => c.departmentId)
+                .filter(Boolean),
+        ),
+    ];
     if (!departmentIds.length) return cards;
 
     const statusStageMap = await fetchOpportunityStatusStageMap(init);

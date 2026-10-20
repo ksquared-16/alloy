@@ -14,7 +14,7 @@ import { workspaceProcessSurfaceId } from "@/lib/adminV2/settings/surfaces/works
 import type { ProcessTileModel } from "@/lib/presentation/runtime";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import {
-    businessProcessForProcessKey,
+    businessProcessForProcess,
     signalsForBusinessProcess,
     signalAnswerText,
     signalStateFromKpiStatus,
@@ -201,7 +201,10 @@ export default function WorkspaceProcessesSurfaceEditor({
     const inspectorRef = useRef<HTMLDivElement>(null);
 
     const configKey = workspaceProcessConfigKey(catalogEntry);
-    const businessProcess = businessProcessForProcessKey(catalogEntry.process_key);
+    const businessProcess = businessProcessForProcess({
+        processKey: catalogEntry.process_key,
+        processModel: catalogEntry.process_model,
+    });
     const signals = businessProcess ? signalsForBusinessProcess(businessProcess) : [];
 
     useEffect(() => {

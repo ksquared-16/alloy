@@ -78,8 +78,19 @@ export function isOrphanedLifecycleWorkView(
  */
 export function savedWorkViewsFromDepartmentMetadata(
     departmentMetadata: unknown,
+    /**
+     * The process whose views are wanted (BP V2 S1). Omitted → the department's active process, which
+     * is what every caller resolved before a department could be asked about a specific process. A
+     * named process that is absent or inactive has no views — it never borrows the active process's.
+     */
+    processId?: string | null,
 ): WorkViewConfigV1Stored[] {
-    const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(departmentMetadata));
+    const config = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
+    const requestedId = processId?.trim() || null;
+    const process = requestedId
+        ? (config.processes.find((p) => p.id === requestedId && p.is_active) ?? null)
+        : activeLifecycleProcess(config);
+    if (requestedId && !process) return [];
     const ordered = normalizeWorkViewsDisplayOrder(process?.work_views_v1 ?? []);
     if (!process) return ordered;
     const activeLifecycleQueueKeys = new Set(

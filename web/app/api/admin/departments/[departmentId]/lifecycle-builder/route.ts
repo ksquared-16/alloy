@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseProcessModelV1, processModelV1Problem } from "@/lib/lifecycle/processModelV1";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { financialRequirementRefusals } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
@@ -265,7 +266,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 const description = descriptionRaw.trim()
                     ? clampLifecycleDescription(descriptionRaw)
                     : undefined;
-                config = createLifecycleProcess(name, config, { primary_entity, description });
+                // BP V2 S1 — absent means staged lifecycle (every existing caller). A model that is
+                // present but unreadable is refused here rather than created as a staged lifecycle.
+                const process_model =
+                    body.process_model === undefined || body.process_model === null
+                        ? undefined
+                        : parseProcessModelV1(body.process_model);
+                if (process_model === null) {
+                    return NextResponse.json(
+                        { error: processModelV1Problem(body.process_model) ?? "Invalid process_model" },
+                        { status: 400 },
+                    );
+                }
+                config = createLifecycleProcess(name, config, { primary_entity, description, process_model });
                 break;
             }
             case "clear_active_process": {

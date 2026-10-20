@@ -168,7 +168,7 @@ export function warmDefaultOperatorLifecycleEntries(
     selectedSiteId: string | null,
     cap: number = OPERATOR_LIFECYCLE_ENTRY_WARM_CAP,
 ): void {
-    const hrefs = [...new Set(cards.map((card) => card.entryHref.trim()).filter(Boolean))].slice(0, cap);
+    const hrefs = [...new Set(cards.map((card) => (card.entryHref ?? "").trim()).filter(Boolean))].slice(0, cap);
     for (const href of hrefs) {
         warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "workspace_idle_default");
     }

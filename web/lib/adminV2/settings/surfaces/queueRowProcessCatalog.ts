@@ -7,6 +7,7 @@
 
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { businessProcessForProcessKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
 import type { SurfaceConfigObject } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
 import type { QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
@@ -16,6 +17,9 @@ export function isVisibleQueueRowCatalogEntry(entry: LifecycleCatalogEntry): boo
     if (!entry.workspace.department_is_active) return false;
     if (!entry.workspace.visible_in_workspace_api) return false;
     if (isLegacyArtifactProcessName(entry.lifecycle_name)) return false;
+    // A domain projection has no queue yet (BP V2 S1); offering a queue-row layout for it would author
+    // an `opportunities` layout that nothing could ever render for that process.
+    if (isDomainProjectionModel(entry.process_model)) return false;
     return entry.workspace.runtime_status === "visible" || entry.workspace.runtime_status === "name_mismatch";
 }
 

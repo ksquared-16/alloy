@@ -12,6 +12,10 @@ import {
 import { LIFECYCLE_PRIMARY_ENTITIES } from "@/lib/lifecycle/lifecycleConfiguration";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
 import { createLifecycleViaBuilderPath } from "@/lib/lifecycle/clientCreateLifecycleViaBuilder";
+import {
+    PROCESS_MODEL_CREATE_OPTIONS,
+    processModelForCreateChoice,
+} from "@/lib/lifecycle/processModelV1";
 import { LIFECYCLE_DESCRIPTION_MAX_CHARS } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -41,6 +45,10 @@ export default function LifecycleCreateForm({
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [primaryEntity, setPrimaryEntity] = useState<LifecyclePrimaryEntityKey>("opportunity");
+    const [processType, setProcessType] =
+        useState<(typeof PROCESS_MODEL_CREATE_OPTIONS)[number]["value"]>("staged_lifecycle");
+    const processModel = processModelForCreateChoice(processType);
+    const processTypeOption = PROCESS_MODEL_CREATE_OPTIONS.find((o) => o.value === processType);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +76,7 @@ export default function LifecycleCreateForm({
                     lifecycleName: trimmed,
                     lifecycleDescription: description.trim() || undefined,
                     primaryEntity,
+                    ...(processModel ? { processModel } : {}),
                     createdByUserId: userId,
                 });
                 targetDeptId = created.runtimeDepartmentId;
@@ -96,6 +105,7 @@ export default function LifecycleCreateForm({
                             name: trimmed,
                             description: description.trim() || undefined,
                             primary_entity: primaryEntity,
+                            ...(processModel ? { process_model: processModel } : {}),
                         }),
                     }
                 );
@@ -112,7 +122,7 @@ export default function LifecycleCreateForm({
         } finally {
             setBusy(false);
         }
-    }, [departmentId, name, description, primaryEntity, activationMode, createdByUserId, onCreated, onPersistenceAudit]);
+    }, [departmentId, name, description, primaryEntity, processModel, activationMode, createdByUserId, onCreated, onPersistenceAudit]);
 
     return (
         <section
@@ -156,6 +166,30 @@ export default function LifecycleCreateForm({
                     </span>
                 </label>
                 <label className="block text-xs font-medium text-alloy-midnight/70">
+                    Process type
+                    <select
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 bg-white px-3 py-2 text-sm"
+                        value={processType}
+                        onChange={(e) =>
+                            setProcessType(e.target.value as (typeof PROCESS_MODEL_CREATE_OPTIONS)[number]["value"])
+                        }
+                        data-testid="lifecycle-create-process-type"
+                    >
+                        {PROCESS_MODEL_CREATE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                                {o.label}
+                            </option>
+                        ))}
+                    </select>
+                    {processTypeOption ? (
+                        <span className="mt-1 block text-[11px] text-alloy-midnight/50">
+                            {processTypeOption.description}
+                        </span>
+                    ) : null}
+                </label>
+                {/* A domain projection has no lifecycle record, so it is never asked for one. */}
+                {processModel ? null : (
+                <label className="block text-xs font-medium text-alloy-midnight/70">
                     Primary record type
                     <select
                         className="mt-1 w-full rounded-md border border-alloy-forge/20 bg-white px-3 py-2 text-sm"
@@ -170,6 +204,7 @@ export default function LifecycleCreateForm({
                         ))}
                     </select>
                 </label>
+                )}
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
