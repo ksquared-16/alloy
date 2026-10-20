@@ -9,6 +9,7 @@ import {
 } from "@/lib/financials/workspace/chargeIndex";
 import { resolveFinancialWorkQueue } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { readResponsibility } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +56,24 @@ export async function GET(request: NextRequest) {
             typeKey: params.get("type"),
             periodKey: params.get("period"),
         });
+        /*
+         * W7-F028: WHO OWES EACH LISTED CHARGE — the account ledger's own reader, indexed by charge,
+         * asked only about the rows this view returns. A failed read is an absence, never a reason to
+         * fail the list (the reader's own rule).
+         */
+        const owed = (await readResponsibility(supabase, ctx.orgId, result.rows.map((r) => r.chargeId))).responsibilityByCharge;
         return NextResponse.json({
             ok: true,
             ...result,
+            rows: result.rows.map((r) => {
+                const o = owed.get(r.chargeId);
+                return {
+                    ...r,
+                    responsibility: o
+                        ? { name: o.name, unassigned: o.unassigned, assignedCents: o.assignedCents, unassignedCents: o.unassignedCents }
+                        : null,
+                };
+            }),
             /* Said, not hidden: the read is bounded, newest first. */
             truncated: all.rows.length >= 2000,
         });

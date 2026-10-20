@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
+import type { ChargeDetailSeed } from "@/lib/financials/workspace/chargeDetailSeed";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -47,7 +48,7 @@ export default function FinancialsAccountDetail({
     /** "account" in Financials → Accounts: balance, due, past due, Payment, Add. */
     summaryVariant?: "period" | "account";
     /** W7-F021: open the canonical Charge Details for this charge (Charges workspace host). */
-    openCharge?: { chargeId: string; label: string } | null;
+    openCharge?: { chargeId: string; label: string; seed?: ChargeDetailSeed | null } | null;
     onSurfacesClosed?: () => void;
 }) {
     const model = useMemo<FocusPanelCardModel>(

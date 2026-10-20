@@ -19,7 +19,8 @@ describe("awaitingPostingReason", () => {
     it("a charge waiting for its billing period is nobody's work, and names the day", () => {
         const r = awaitingPostingReason({ post_gate: "period_not_started", post_not_before: "2026-11-01" });
         expect(r.key).toBe("period_not_started");
-        expect(r.label, "W7-F015: a human date, never ISO").toBe("Posts Nov 1, 2026");
+        /* W7-F027: the operator's word is Scheduled; W7-F015: a human date, never ISO. */
+        expect(r.label).toBe("Scheduled · activates Nov 1, 2026");
         expect(r.postsOn).toBe("2026-11-01");
         expect(r.operatorActionable).toBe(false);
         expect(r.explanation).toContain("Nothing to do");
@@ -46,21 +47,27 @@ describe("awaitingPostingReason", () => {
         expect(r.key).toBe("review_required");
     });
 
-    it("an exhausted failure is attention work; a retryable one is not yet", () => {
+    /*
+     * W7-F027: NOTHING RETRIES A FAILED POST — `shouldRetryPost` has no caller and the activation
+     * job only picks up `period_not_started`. "Will retry" promised what never happens, so every
+     * failure is a person's, whatever its attempt record says.
+     */
+    it("every failed post is attention work — no failure is described as retrying itself", () => {
         const attention = awaitingPostingReason({
             post_gate: "post_failed",
             post_attempt: { attempts: 5, attention_required: true, retryable: false },
         });
         expect(attention.key).toBe("post_failed");
         expect(attention.operatorActionable).toBe(true);
-        expect(attention.label).toContain("needs attention");
+        expect(attention.label).toBe("Posting failed");
 
-        const retrying = awaitingPostingReason({
+        const once = awaitingPostingReason({
             post_gate: "post_failed",
             post_attempt: { attempts: 1, attention_required: false, retryable: true },
         });
-        expect(retrying.operatorActionable).toBe(false);
-        expect(retrying.label).toContain("will retry");
+        expect(once.operatorActionable).toBe(true);
+        expect(once.label).not.toMatch(/retry/i);
+        expect(once.explanation).toMatch(/not retried on its own/);
     });
 
     it("a FAILURE outranks a review boundary and a calendar", () => {
@@ -84,13 +91,19 @@ describe("awaitingPostingReason", () => {
         expect(r.key).toBe("review_required");
     });
 
-    it("the historical drafts are named as unrecorded rather than given an invented reason", () => {
-        /* The deployed census: 35 drafts, every one `never_attempted`, none bound to a period. */
+    it("the historical drafts are Legacy drafts — named for what they are, and not today's work", () => {
+        /*
+         * W7-F027 census, deployed staging 2026-10-20: all 34 rows in Needs attention were these —
+         * created Aug–Sep, before automatic posting. They never activate on their own and someone
+         * may still post or cancel one, but they must not define the modern workflow.
+         */
         for (const metadata of [null, undefined, {}, { source: "charge_template" }]) {
             const r = awaitingPostingReason(metadata);
             expect(r.key).toBe("unclassified");
-            expect(r.operatorActionable).toBe(true);
-            expect(r.explanation).toContain("never recorded");
+            expect(r.label).toBe("Legacy draft");
+            expect(r.operatorActionable).toBe(false);
+            expect(r.explanation).toMatch(/before automatic posting/);
+            expect(r.explanation).toMatch(/will not activate on its own/);
         }
     });
 });
@@ -104,6 +117,7 @@ describe("operatorActionableCount", () => {
             awaitingPostingReason({}),
         ];
         expect(reasons.length).toBe(4);
-        expect(operatorActionableCount(reasons)).toBe(2);
+        /* Only the review hold. The legacy draft is listed apart, not counted as work. */
+        expect(operatorActionableCount(reasons)).toBe(1);
     });
 });

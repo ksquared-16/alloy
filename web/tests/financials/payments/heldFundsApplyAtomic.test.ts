@@ -347,7 +347,8 @@ describe("the lifecycle is reachable by an operator", () => {
          * those passed a component test — because a component test supplies the prop itself.
          */
         const host = code(HOST);
-        const at = host.indexOf("onReverseAdjustment={openReverseAdjustment}");
+        /* W7-F030: the Details mount no longer passes onReverseAdjustment — anchor on the held acts. */
+        const at = host.indexOf("onApplyHeldFunds={");
         expect(at).toBeGreaterThan(-1);
         const block = host.slice(at, at + 400);
         expect(block).toMatch(/onApplyHeldFunds=\{/);

@@ -303,6 +303,11 @@ export type LedgerEntry = {
      */
     dateIso?: string | null;
     /**
+     * W7-F027: why an unposted row is unposted, from the canonical classifier — Scheduled (its
+     * period has not begun), Review required, Posting failed, or Legacy draft. Null when posted.
+     */
+    awaiting?: { key: string; label: string; explanation: string; postsOn: string | null } | null;
+    /**
      * ── W7-F026: MONEY MOVING IS LEDGER ACTIVITY ─────────────────────────────────────────────
      *
      * Present only where the row IS a payment event — a receipt, money going back out (a refund

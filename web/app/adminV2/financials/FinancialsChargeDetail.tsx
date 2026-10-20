@@ -30,6 +30,7 @@ import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsRe
 import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { invoiceRuleShort } from "@/lib/financials/chargeDates/describeChargeDateChain";
+import { FinancialsChargeState, financialsChargeState } from "@/components/operationalCards/FinancialsLedger";
 
 type Application = {
     paymentId: string;
@@ -250,6 +251,53 @@ function Group(props: { children: React.ReactNode }) {
     );
 }
 
+/* W7-F029: the seed's shape lives with the lib, so a host can build one without naming this component. */
+import type { ChargeDetailSeed } from "@/lib/financials/workspace/chargeDetailSeed";
+export type { ChargeDetailSeed };
+
+
+/**
+ * W7-F029: the seed as a record the one render path can draw. Every field the row did not read is
+ * an explicit absence (no position, no applications, no arrangement), so the sections that need
+ * them stay closed until the authoritative read arrives — nothing is guessed to fill them.
+ */
+function detailFromSeed(chargeId: string, seed: ChargeDetailSeed): ChargeDetail {
+    const status = seed.status === "scheduled" ? "draft" : seed.status === "reversed" ? "posted" : seed.status;
+    const awaitingKey = seed.awaiting?.key ?? null;
+    return {
+        chargeId,
+        label: seed.label,
+        description: null,
+        currencyCode: "USD",
+        status,
+        serviceDate: seed.serviceDate ?? null,
+        invoiceDate: seed.invoiceDate ?? null,
+        dueDate: seed.dueDate ?? null,
+        postedAt: seed.postedAt ?? null,
+        billingPeriodLabel: seed.billingPeriodLabel ?? null,
+        awaiting: seed.awaiting
+            ? {
+                  key: seed.awaiting.key,
+                  label: seed.awaiting.label,
+                  explanation: seed.awaiting.explanation,
+                  operatorActionable: awaitingKey === "review_required" || awaitingKey === "post_failed",
+                  postsOn: seed.awaiting.postsOn ?? null,
+              }
+            : null,
+        customerId: null,
+        customerMemberId: null,
+        householdName: seed.householdName ?? null,
+        childName: seed.childName ?? null,
+        billableSourceType: seed.childName ? "enrollment_agreement" : "customer",
+        enrollmentAgreementId: null,
+        position: null,
+        responsibility: { allocatedCents: 0, unassignedCents: 0, parties: [] },
+        expectedFunding: [],
+        applications: [],
+        accountArrangement: null,
+    };
+}
+
 /** What the host needs to offer the draft lifecycle (W7-F016), read from the same projection. */
 export type ChargeDetailFacts = {
     chargeId: string;
@@ -259,6 +307,8 @@ export type ChargeDetailFacts = {
     amountCents: number;
     serviceDate: string | null;
     customerMemberId: string | null;
+    /** W7-F027: why it is unposted, so the host can offer Post only where a person is needed. */
+    awaiting: { key: string; label: string; explanation: string } | null;
 };
 
 export default function FinancialsChargeDetail({
@@ -266,8 +316,11 @@ export default function FinancialsChargeDetail({
     refreshKey = 0,
     onLoaded,
     bare = false,
+    seed = null,
 }: {
     chargeId: string;
+    /** W7-F029: first paint from the row that was clicked; replaced by the authoritative read. */
+    seed?: ChargeDetailSeed | null;
     /**
      * W7 Scenario 8 final presentation: hosted inside a command card (Charge details), the card IS
      * the surface, so this record draws no second box inside it. The Charges section keeps its frame.
@@ -277,12 +330,14 @@ export default function FinancialsChargeDetail({
     refreshKey?: number;
     onLoaded?: (facts: ChargeDetailFacts) => void;
 }) {
-    const [detail, setDetail] = useState<ChargeDetail | null>(null);
+    const [loaded, setDetail] = useState<ChargeDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const shownChargeRef = useRef<string | null>(null);
 
     useEffect(() => {
+        /* Only the authoritative read reports facts — a seed never decides what the host offers. */
+        const detail = loaded;
         if (!detail || !onLoaded) return;
         onLoaded({
             chargeId: detail.chargeId,
@@ -292,8 +347,11 @@ export default function FinancialsChargeDetail({
             amountCents: Number(detail.amountCents ?? 0),
             serviceDate: detail.serviceDate,
             customerMemberId: detail.customerMemberId,
+            awaiting: detail.awaiting
+                ? { key: detail.awaiting.key, label: detail.awaiting.label, explanation: detail.awaiting.explanation }
+                : null,
         });
-    }, [detail, onLoaded]);
+    }, [loaded, onLoaded]);
 
     useEffect(() => {
         let live = true;
@@ -340,6 +398,15 @@ export default function FinancialsChargeDetail({
         const body = (await res.json()) as { ok?: boolean; detail?: ChargeDetail };
         if (res.ok && body.ok && body.detail) setDetail(body.detail);
     }, [chargeId]);
+
+    /*
+     * W7-F029: ONE RENDER PATH. While the authoritative read is in flight, the record is drawn from
+     * the seed through the SAME markup below — same header, same pair, same dates row, same state
+     * line — and the sections a row cannot know (amount breakdown, responsibility detail, payments,
+     * history, collection) wait. When the read lands it replaces the seed wholesale.
+     */
+    const provisional = !loaded && loading && Boolean(seed);
+    const detail: ChargeDetail | null = loaded ?? (provisional && seed ? detailFromSeed(chargeId, seed) : null);
 
     if (loading && !detail) {
         return (
@@ -396,28 +463,30 @@ export default function FinancialsChargeDetail({
      * "Posting failed · Needs attention" — from the canonical awaiting-posting vocabulary. Only a
      * failure, or an unclassified draft, also carries its sentence, because only those need action.
      */
+    /*
+     * W7-F027: THE OPERATOR'S LIFECYCLE — Scheduled, Review required, Posting failed, Legacy draft,
+     * Posted, Cancelled — never "Draft · Posts …" or "Awaiting posting". A Scheduled charge says
+     * when it activates and asks nothing; the three exceptional states carry their sentence.
+     */
     const posting: { text: string; tone: "plain" | "attention"; explain: string | null } =
-        detail.status === "posted" || detail.postedAt
+        detail.status !== "draft" && detail.status !== "void"
             ? { text: detail.postedAt ? `Posted ${day(detail.postedAt)}` : "Posted", tone: "plain", explain: null }
-            : detail.awaiting?.key === "period_not_started"
-              ? {
-                    text: detail.awaiting.postsOn ? `Draft · Posts ${day(detail.awaiting.postsOn)}` : "Draft · Posts when its period begins",
-                    tone: "plain",
-                    explain: null,
-                }
+            : detail.status === "void"
+              ? { text: "Cancelled — never activated", tone: "plain", explain: null }
               : detail.awaiting?.key === "review_required"
-                ? { text: "Waiting for review", tone: "plain", explain: null }
+                ? { text: "Review required", tone: "attention", explain: detail.awaiting.explanation }
                 : detail.awaiting?.key === "post_failed"
-                  ? {
-                        text: detail.awaiting.operatorActionable ? "Posting failed · Needs attention" : "Posting failed · Will retry",
-                        tone: "attention",
-                        explain: detail.awaiting.explanation,
-                    }
-                  : detail.awaiting
-                    ? { text: detail.awaiting.label, tone: "attention", explain: detail.awaiting.explanation }
-                    : detail.status === "void"
-                      ? { text: "Cancelled — never posted", tone: "plain", explain: null }
-                      : { text: detail.status.charAt(0).toUpperCase() + detail.status.slice(1), tone: "plain", explain: null };
+                  ? { text: "Posting failed", tone: "attention", explain: detail.awaiting.explanation }
+                  : detail.awaiting?.key === "unclassified"
+                    ? { text: "Legacy draft", tone: "plain", explain: detail.awaiting.explanation }
+                    : {
+                          text: detail.awaiting?.postsOn
+                              ? `Scheduled · activates ${day(detail.awaiting.postsOn)}`
+                              : "Scheduled · activates when its period begins",
+                          tone: "plain",
+                          explain: null,
+                      };
+    const headerState = financialsChargeState({ status: detail.status, awaitingKey: detail.awaiting?.key ?? null });
 
     /*
      * WHO OWES IT, in one line: "Mara Monthly · 100%". The arrangement's shares say it as the
@@ -431,7 +500,9 @@ export default function FinancialsChargeDetail({
               : "remainder";
     const shares = detail.accountArrangement?.shares ?? [];
     const responsibilitySummary =
-        shares.length > 0
+        provisional
+            ? (seed?.responsibleParty ?? "Reading…")
+            : shares.length > 0
             ? shares.map((sh) => `${sh.name} · ${shareTerm(sh)}`).join(", ")
             : detail.responsibility.parties.length > 0
               ? detail.responsibility.parties.map((p) => `${p.name} · ${money(p.assignedCents, currency)}`).join(", ")
@@ -445,6 +516,8 @@ export default function FinancialsChargeDetail({
         <section
             className={bare ? "mb-1" : "mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"}
             data-financials-charge-detail={detail.chargeId}
+            data-financials-charge-detail-provisional={provisional ? "true" : undefined}
+            aria-busy={provisional ? "true" : undefined}
         >
             {/* HEADER — what it is, and whose. */}
             <p className="truncate text-sm font-semibold text-alloy-midnight" data-financials-charge-label="true">
@@ -452,11 +525,7 @@ export default function FinancialsChargeDetail({
             </p>
             <p className="truncate text-xs text-alloy-midnight/65">
                 <span data-financials-charge-status={detail.status} data-financials-charge-state="true">
-                    {detail.status === "draft"
-                        ? "Draft charge"
-                        : detail.status === "void"
-                          ? "Cancelled draft"
-                          : "Posted charge"}
+                    <FinancialsChargeState state={headerState.key} label={headerState.label} />
                 </span>
                 {detail.householdName ? ` · ${detail.householdName}` : ""}
             </p>
@@ -560,7 +629,14 @@ export default function FinancialsChargeDetail({
                 </>
             ) : null}
 
-            {e ? (
+            {provisional ? (
+                seed?.amountLabel ? (
+                    <>
+                        <Group>Amount</Group>
+                        <Row label="Charge" value={seed.amountLabel} strong testId="net" />
+                    </>
+                ) : null
+            ) : e ? (
                 <>
                     <Group>Amount</Group>
                     {/*
@@ -581,7 +657,7 @@ export default function FinancialsChargeDetail({
                 /* A draft owes nothing yet, and saying $0 outstanding would read as settled. */
                 <>
                     <Group>Amount</Group>
-                    <Row label="Owed" value="Not yet — a draft owes nothing" muted testId="no-position" />
+                    <Row label="Owed" value="Not yet — it owes nothing until it activates" muted testId="no-position" />
                 </>
             )}
 
@@ -623,7 +699,7 @@ export default function FinancialsChargeDetail({
                 data-financials-charge-posting="true"
                 data-financials-charge-awaiting={detail.awaiting?.key}
             >
-                <span className="mr-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Posting</span>
+                <span className="mr-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">State</span>
                 {posting.text}
             </p>
             {posting.explain ? (
@@ -887,6 +963,14 @@ export default function FinancialsChargeDetail({
                         </>
                     ) : null}
                 </>
+            ) : null}
+            {provisional ? (
+                /* What the row cannot know is said to be arriving — never invented. */
+                <span
+                    className="mt-3 block h-10 animate-pulse rounded bg-alloy-stone/10"
+                    data-financials-charge-detail-hydrating="true"
+                    aria-label="Reading responsibility, payments and history"
+                />
             ) : null}
         </section>
     );

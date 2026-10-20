@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 import { resolveChargeDetail } from "@/lib/financials/workspace/resolveChargeDetail";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -26,14 +26,13 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
     const ctx = gate.access;
 
+    /*
+     * W7-F029: the gate already carries the caller's capabilities; re-reading the grants from the
+     * database cost two serialized round trips on every Charge Details open. Same key, same refusal.
+     */
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
+    if (denied) return denied;
     const supabase = createAdminClient();
-    const allowed = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
-    if (!allowed.ok) {
-        return NextResponse.json(
-            { error: allowed.message, required_permission: allowed.requiredPermission },
-            { status: 403 },
-        );
-    }
 
     const { id } = await context.params;
     try {

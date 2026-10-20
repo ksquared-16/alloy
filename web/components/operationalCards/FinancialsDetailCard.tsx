@@ -13,6 +13,8 @@ import {
     RowAction,
     FinancialsLedgerPeriod as LedgerPeriod,
     FinancialsLedgerRow,
+    financialsChargeState,
+    type FinancialsChargeStateKey,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
 import { Action, ActionRow, FooterAction, SectionHead } from "@/components/cardLab/CardLabKit";
@@ -52,16 +54,23 @@ const UNASSIGNED_LABEL = "Unassigned";
 const HOUSEHOLD_SUBJECT = "__household__";
 
 /*
- * W7-F021 — the three states an operator reads a ledger row in. A draft waiting on its period or a
- * review is Scheduled; posted, partly paid and paid are Posted; a void draft is Cancelled.
+ * W7-F021 / W7-F027 — the states an operator reads a ledger row in, from the ONE shared state rule
+ * (`financialsChargeState`). Scheduled activates by itself; Needs attention is a person's decision;
+ * Posted is standing money (a reversed original is history of posted money); Cancelled was
+ * withdrawn before it activated; a Legacy draft predates automatic posting.
  */
-const LEDGER_STATUS_GROUPS = ["Scheduled", "Posted", "Cancelled"] as const;
-function ledgerStatusGroup(status: string | null | undefined): string | null {
-    const s = (status ?? "").toLowerCase();
-    if (!s) return null;
-    if (s === "void" || s === "cancelled" || s === "canceled") return "Cancelled";
-    if (s === "draft" || s === "scheduled" || s === "pending") return "Scheduled";
-    return "Posted";
+const LEDGER_STATUS_GROUPS = ["Scheduled", "Needs attention", "Posted", "Cancelled", "Legacy draft"] as const;
+const STATE_GROUP: Record<FinancialsChargeStateKey, (typeof LEDGER_STATUS_GROUPS)[number]> = {
+    scheduled: "Scheduled",
+    attention: "Needs attention",
+    posted: "Posted",
+    reversed: "Posted",
+    cancelled: "Cancelled",
+    legacy: "Legacy draft",
+};
+function ledgerStatusGroup(e: { status?: string | null; awaiting?: { key: string } | null }): string | null {
+    if (!e.status) return null;
+    return STATE_GROUP[financialsChargeState({ status: e.status, awaitingKey: e.awaiting?.key ?? null }).key];
 }
 
 export default function FinancialsDetailCard({
@@ -75,7 +84,6 @@ export default function FinancialsDetailCard({
     onManagePayment,
     onMovePayment,
     onAddAdjustment,
-    onReverseAdjustment,
     onApplyHeldFunds,
     onReleaseHeldFunds,
     onRefundHeldFunds,
@@ -226,7 +234,6 @@ export default function FinancialsDetailCard({
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
     onAddAdjustment?: () => void;
-    onReverseAdjustment?: (args: { applicationId: string }) => void;
     /*
      * THE THREE THINGS THAT MAY BECOME OF HELD MONEY.
      *
@@ -400,14 +407,14 @@ export default function FinancialsDetailCard({
      * ("Unassigned", "Posted"). The payer is the payment's own question, asked under its lens.
      */
     const inResponsibleScope = useCallback(
-        (e: { responsibleParty?: string | null; type?: string; status?: string | null; payment?: { payerLabel: string | null } | null }) =>
+        (e: { responsibleParty?: string | null; type?: string; status?: string | null; awaiting?: { key: string } | null; payment?: { payerLabel: string | null } | null }) =>
             e.payment
                 ? !responsibleParty && !chargeType && !statusGroup
                   && (lens !== "payments" || !payer || (e.payment.payerLabel ?? "") === payer)
                 : (!responsibleParty
                     || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty)
                   && (!chargeType || e.type === chargeType)
-                  && (!statusGroup || ledgerStatusGroup(e.status) === statusGroup),
+                  && (!statusGroup || ledgerStatusGroup(e) === statusGroup),
         [responsibleParty, chargeType, statusGroup, lens, payer],
     );
     const inSubjectScope = useCallback(
@@ -483,7 +490,7 @@ export default function FinancialsDetailCard({
         return [...byType.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
     }, [chargeEntries]);
     const statusChoices = useMemo(
-        () => LEDGER_STATUS_GROUPS.filter((g) => chargeEntries.some((e) => ledgerStatusGroup(e.status) === g)),
+        () => LEDGER_STATUS_GROUPS.filter((g) => chargeEntries.some((e) => ledgerStatusGroup(e) === g)),
         [chargeEntries],
     );
 
@@ -527,8 +534,6 @@ export default function FinancialsDetailCard({
     /* The receipt facts a payment row's Apply and Move act on — the evidence's, never re-derived. */
     const receiptsById = useMemo(() => new Map(evidence.payments.map((p) => [p.paymentId, p])), [evidence.payments]);
 
-    /* Adjustments ARE "credits & adjustments" — they belong to that lens, and to the whole view. */
-    const showAdjustments = lens === "all" || lens === "credits";
 
     return (
         <div className="alloy-os-billing alloy-os-billing--detail" data-financials-detail="true">
@@ -1039,41 +1044,12 @@ export default function FinancialsDetailCard({
                   * the same bounded projection — so while the ledger waits for its own authority,
                   * they wait with it. Showing them would be the same partial truth in a second place.
                   */}
-                {!ledgerPending && showAdjustments && evidence.adjustments.length ? (
-                    <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
-                        {/*
-                          * ── NO FOOTER LINK FARM ───────────────────────────────────────────────
-                          *
-                          * This block used to end in a row of links — "Reverse Credit →" once per
-                          * unreversed adjustment, then "Add adjustment →" — so an account with six
-                          * credits grew six identical-looking commands under the ledger, none of
-                          * which said WHICH credit it acted on except by repeating its amount.
-                          *
-                          * A transaction's commands belong to the transaction. Reverse is now a row
-                          * action on the row it reverses, and Add adjustment is gone from here
-                          * entirely: it is the Adjustment mode of the one financial entry command.
-                          */}
-                        <FinancialsLedgerHead />
-                        {evidence.adjustments.map((a) => (
-                            <FinancialsLedgerRow
-                                key={a.applicationId}
-                                row={{
-                                    ...ledgerRowFromAdjustment(a),
-                                    actions:
-                                        !a.reversed && !a.isReversal && onReverseAdjustment ? (
-                                            <RowAction
-                                                kind="reverse"
-                                                command="billing.reverse_adjustment"
-                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel} — the original stays on the record`}
-                                                onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
-                                            />
-                                        ) : undefined,
-                                }}
-                            />
-                        ))}
-                    </div>
-                ) : null}
-
+                {/*
+                  * W7-F030: NO SECOND ADJUSTMENTS TABLE. Credits, adjustments and their reversals are
+                  * ledger rows (the Credits & adjustments lens shows exactly them), and a row opens
+                  * its record — where Reverse adjustment now lives. The table existed to host that
+                  * one act and repeated every reduction the ledger already showed.
+                  */}
                 {/*
                   * ── HELD DEPOSITS — A POSITION, WITH THE ACTS THAT DISCHARGE IT ───────────────
                   *
@@ -1430,12 +1406,25 @@ function ledgerRowFromEntry(
          * already says which rows are unposted; they read "Upcoming" (waiting for their period) or
          * "Draft" (waiting for something else), and carry the muted upcoming tone.
          */
-        status: e.status === "scheduled" ? "Upcoming" : e.status === "draft" ? "Draft" : e.status === "void" ? "Cancelled" : e.status ?? "—",
-        ...(e.status === "scheduled" || e.status === "draft"
-            ? { tone: "upcoming" as const }
-            : e.status === "void"
-              ? { tone: "muted" as const }
-              : {}),
+        /*
+         * W7-F027: THE OPERATOR'S STATE, never the storage word. "Upcoming", "Draft" and a raw
+         * lowercase "posted" were three vocabularies in one column; the shared rule names every row
+         * Scheduled, Review required, Posting failed, Posted, Reversed, Cancelled or Legacy draft,
+         * and the Charges workspace reads the same rule. The reason travels on the title.
+         */
+        ...(() => {
+            const st = financialsChargeState({ status: e.status, awaitingKey: e.awaiting?.key ?? null });
+            return {
+                status: e.status ? st.label : "—",
+                state: e.status ? st.key : undefined,
+                stateTitle: e.awaiting?.explanation ?? null,
+                ...(st.key === "scheduled" || st.key === "legacy" || st.key === "attention"
+                    ? { tone: "upcoming" as const }
+                    : st.key === "cancelled" || st.key === "reversed"
+                      ? { tone: "muted" as const }
+                      : {}),
+            };
+        })(),
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
         responsibilityAssignedCents: e.responsibilityAssignedCents,
@@ -1508,42 +1497,6 @@ function ledgerRowFromEntry(
     };
 }
 
-/**
- * A manual reduction as a LEDGER ROW.
- *
- * It used to be prose — "Raises what is owed · Sep 14, 2026 · Reason…" — in a section of its own
- * beneath an empty ledger. The facts it carried are all columns: what it was, for whom, how much,
- * whether it has posted, and who owes the charge it reduces. The one fact with no column is the
- * REASON, which is free text, so it becomes the Description preview and the row's full title.
- *
- * `muted` for a reversed row: history that no longer counts. That is a business state, not a sign.
- */
-function ledgerRowFromAdjustment(a: FinancialsEvidence["adjustments"][number]): FinancialsLedgerRowView {
-    const direction = a.reducesObligation ? "Lowers what is owed" : "Raises what is owed";
-    const state = a.reversed ? "reversed" : a.isReversal ? "reversal" : a.applied ? "posted" : "draft";
-    return {
-        key: a.applicationId,
-        when: a.recordedOn ?? "—",
-        type: a.categoryLabel,
-        child: a.subjectName ?? "Household",
-        /* The reason is the description; the direction explains a row whose sign alone would not. */
-        description: a.reason ?? direction,
-        /*
-         * The reduction read carries no resolved GL account. Core DOES map the credit and
-         * adjustment categories, so this is the row not knowing rather than the tenant not having
-         * configured one — and "Unmapped" would accuse them of the latter.
-         */
-        glLabel: null,
-        glApplies: false,
-        amount: a.amountLabel,
-        status: state,
-        /* A reduction is not an obligation: responsibility belongs to the charge it reduces. */
-        responsibleParty: null,
-        responsibilityApplies: false,
-        tone: a.reversed ? "muted" : undefined,
-        title: [direction, a.reason, a.applied ? null : "Recorded, not yet posted"].filter(Boolean).join(" · "),
-    };
-}
 
 /**
  * A PAYMENT EVENT AS A LEDGER ROW — W7-F026.

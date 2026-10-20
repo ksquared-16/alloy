@@ -17,7 +17,7 @@ import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinanci
 /** Every stored status the index reads. */
 export const CHARGE_INDEX_STATUSES = ["draft", "posted", "partially_paid", "paid", "void"] as const;
 
-export const CHARGE_INDEX_VIEWS = ["attention", "scheduled", "posted", "cancelled"] as const;
+export const CHARGE_INDEX_VIEWS = ["scheduled", "attention", "posted", "cancelled", "legacy"] as const;
 export type ChargeIndexView = (typeof CHARGE_INDEX_VIEWS)[number];
 
 export const CHARGE_INDEX_VIEW_LABELS: Record<ChargeIndexView, string> = {
@@ -25,13 +25,16 @@ export const CHARGE_INDEX_VIEW_LABELS: Record<ChargeIndexView, string> = {
     scheduled: "Scheduled",
     posted: "Posted",
     cancelled: "Cancelled",
+    legacy: "Legacy drafts",
 };
 
 /**
  * WHICH QUESTION A ROW ANSWERS.
  *
- * A draft a PERSON must act on (review required, a failed post, an unclassified hold) is attention;
- * a draft the clock will post when its period begins is scheduled. Posted, partially paid and paid
+ * W7-F027: Needs attention is ONLY a draft a person must decide — a configured review, or a post
+ * that failed (nothing retries one). A draft the clock will activate when its period begins is
+ * Scheduled. A draft from before automatic posting (no recorded reason) is a LEGACY draft, listed
+ * apart so history cannot define the workflow: it is not today's work, and it never auto-activates. Posted, partially paid and paid
  * are all posted obligations — payment state is the Accounts ledger's question, not this one's. A
  * void charge is a cancelled draft, kept and attributed, never deleted.
  */
@@ -39,7 +42,10 @@ export function chargeIndexViewOf(row: Pick<FinancialWorkRow, "status" | "awaiti
     const status = row.status ?? "draft";
     if (status === "void") return "cancelled";
     if (status !== "draft") return "posted";
-    return row.awaiting.operatorActionable || row.awaiting.key === "post_failed" ? "attention" : "scheduled";
+    if (row.awaiting.key === "unclassified") return "legacy";
+    return row.awaiting.operatorActionable || row.awaiting.key === "post_failed" || row.awaiting.key === "review_required"
+        ? "attention"
+        : "scheduled";
 }
 
 export type ChargeIndexFilters = {
@@ -74,6 +80,7 @@ function matchesQuery(row: FinancialWorkRow, query: string): boolean {
 function sortKey(row: FinancialWorkRow, view: ChargeIndexView): string {
     if (view === "scheduled" || view === "attention") return row.awaiting.postsOn ?? row.serviceDate ?? "";
     if (view === "cancelled") return row.voidedAt ?? row.createdAt ?? "";
+    if (view === "legacy") return row.serviceDate ?? row.createdAt ?? "";
     return row.postedAt ?? row.serviceDate ?? "";
 }
 
@@ -86,7 +93,7 @@ export function applyChargeIndex(all: readonly FinancialWorkRow[], filters: Char
             && (!filters.periodKey || r.billingPeriodKey === filters.periodKey),
     );
 
-    const counts: Record<ChargeIndexView, number> = { attention: 0, scheduled: 0, posted: 0, cancelled: 0 };
+    const counts: Record<ChargeIndexView, number> = { attention: 0, scheduled: 0, posted: 0, cancelled: 0, legacy: 0 };
     for (const r of narrowed) counts[chargeIndexViewOf(r)] += 1;
 
     const rows = narrowed

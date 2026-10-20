@@ -672,7 +672,7 @@ export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
         invoice: "7 days before the billing period begins (organization default)",
         due: "On the first day of the billing period (organization default)",
     },
-    posting: "Posts on confirm — the billing period has begun",
+    posting: "Active on confirm — the billing period has begun",
     awaitsPeriodUntil: null,
     overridden: "Service date set by operator",
     chargeTo: "All responsible payers (default split)",

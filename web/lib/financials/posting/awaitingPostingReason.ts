@@ -53,12 +53,22 @@ export type AwaitingPostingReason = {
     postsOn: string | null;
 };
 
+/*
+ * ── W7-F027: A LEGACY DRAFT IS NOT TODAY'S WORK ──────────────────────────────────────────────
+ *
+ * Measured on deployed staging (2026-10-20): every one of the 34 rows in Charges → Needs attention
+ * was an unclassified draft created in August or September, before automatic posting existed —
+ * none review-held, none failed. They were defining the modern workflow ("go to Needs attention and
+ * press Post"), which the product no longer has. They are named for what they are and listed apart:
+ * someone may still post or cancel one, from its Charge Details, but they are not counted as work a
+ * person is needed for today.
+ */
 const UNCLASSIFIED: AwaitingPostingReason = {
     key: "unclassified",
-    label: "Awaiting posting",
+    label: "Legacy draft",
     explanation:
-        "Why this draft is waiting was never recorded — it predates automatic posting. Review the amount, then post it if it is right.",
-    operatorActionable: true,
+        "Created before automatic posting, so why it was never posted was not recorded. It will not activate on its own: post it if the amount is right, or cancel it.",
+    operatorActionable: false,
     postsOn: null,
 };
 
@@ -82,16 +92,18 @@ export function awaitingPostingReason(
     const gate = text(md["post_gate"]);
 
     if (gate === "post_failed") {
+        /*
+         * W7-F027: NOTHING RETRIES A FAILED POST. `shouldRetryPost` exists and has no caller — the
+         * activation job only picks up `period_not_started` — so "will retry" promised something
+         * that never happens. Every failed post is a person's, whatever the attempt record says.
+         */
         const attempt = (md["post_attempt"] ?? {}) as Record<string, unknown>;
-        const attentionRequired = attempt["attention_required"] === true;
         const attempts = Number(attempt["attempts"] ?? 0);
         return {
             key: "post_failed",
-            label: attentionRequired ? "Posting failed — needs attention" : "Posting failed — will retry",
-            explanation: attentionRequired
-                ? `Posting was attempted ${attempts || 1} time(s) and could not complete, and it will not be retried on its own. This one needs a person.`
-                : `Posting was attempted ${attempts || 1} time(s) and could not complete. It will be retried automatically.`,
-            operatorActionable: attentionRequired,
+            label: "Posting failed",
+            explanation: `Activation was attempted ${attempts || 1} time(s) and could not complete, and it is not retried on its own. Check the reason, then post or cancel it.`,
+            operatorActionable: true,
             postsOn: null,
         };
     }
@@ -99,9 +111,9 @@ export function awaitingPostingReason(
     if (gate === "review_required" || md["review_required"] === true) {
         return {
             key: "review_required",
-            label: "Waiting for review",
+            label: "Review required",
             explanation:
-                "A posting-review policy holds this for a person to approve before it becomes owed. Posting it is the approval.",
+                "Your posting-review policy holds this for a person to approve before it becomes owed. Approving it posts it.",
             operatorActionable: true,
             postsOn: null,
         };
@@ -111,10 +123,11 @@ export function awaitingPostingReason(
         const postsOn = text(md["post_not_before"]);
         return {
             key: "period_not_started",
-            label: postsOn ? `Posts ${humanDay(postsOn)}` : "Waiting for its billing period",
+            /* W7-F027: the operator's word is Scheduled; the activation date says when. */
+            label: postsOn ? `Scheduled · activates ${humanDay(postsOn)}` : "Scheduled",
             explanation: postsOn
-                ? `Not owed yet. Its billing period begins on ${humanDay(postsOn)}, and it posts on its own that day. Nothing to do.`
-                : "Not owed yet — its billing period has not begun. It posts on its own when the period starts. Nothing to do.",
+                ? `Not owed yet. Its billing period begins on ${humanDay(postsOn)}, and it activates on its own that day. Nothing to do.`
+                : "Not owed yet — its billing period has not begun. It activates on its own when the period starts. Nothing to do.",
             operatorActionable: false,
             postsOn,
         };

@@ -48,33 +48,62 @@ import {
     type ChargeIndexView,
 } from "@/lib/financials/workspace/chargeIndex";
 import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
+import { FinancialsChargeState, financialsChargeState } from "@/components/operationalCards/FinancialsLedger";
+import type { ChargeDetailSeed } from "@/lib/financials/workspace/chargeDetailSeed";
+
+/** The index row, with who owes it (W7-F028) — the account ledger's own responsibility reader. */
+type IndexRow = FinancialWorkRow & {
+    responsibility?: { name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number } | null;
+};
 
 type IndexPayload = {
-    rows: FinancialWorkRow[];
+    rows: IndexRow[];
     counts: Record<ChargeIndexView, number>;
     typeOptions: ChargeIndexOption[];
     periodOptions: ChargeIndexOption[];
     truncated?: boolean;
 };
 
-type OpenCharge = { chargeId: string; label: string; customerId: string; customerMemberId: string | null; childName: string | null };
+type OpenCharge = { chargeId: string; label: string; customerId: string; customerMemberId: string | null; childName: string | null; seed: ChargeDetailSeed };
 
 /** The date part of a stored timestamp, for a label — never printed raw. */
 function dayOf(stamp: string | null | undefined): string | null {
     return stamp ? stamp.substring(0, 10) : null;
 }
 
-/** What a row's state reads as, in the operator's words. */
-function stateLine(row: FinancialWorkRow): string {
+/**
+ * What a row's state reads as, in the operator's words — the SAME rule the account ledger uses
+ * (`financialsChargeState`), with the one fact a cross-account list adds: when.
+ */
+function stateOf(row: FinancialWorkRow): { key: ReturnType<typeof financialsChargeState>["key"]; label: string } {
     const status = row.status ?? "draft";
-    if (status === "void") return `Cancelled${row.voidedAt ? ` ${shortDate(dayOf(row.voidedAt))}` : ""}`;
-    if (status !== "draft") {
+    const st = financialsChargeState({ status, awaitingKey: status === "draft" ? row.awaiting.key : null });
+    if (st.key === "cancelled") return { ...st, label: `Cancelled${row.voidedAt ? ` ${shortDate(dayOf(row.voidedAt))}` : ""}` };
+    if (st.key === "posted") {
         const paid = status === "paid" ? " · paid" : status === "partially_paid" ? " · partly paid" : "";
-        return `Posted${row.postedAt ? ` ${shortDate(dayOf(row.postedAt))}` : ""}${paid}`;
+        return { ...st, label: `Posted${row.postedAt ? ` ${shortDate(dayOf(row.postedAt))}` : ""}${paid}` };
     }
-    if (row.awaiting.key === "period_not_started" && row.awaiting.postsOn) return `Draft · Posts ${shortDate(row.awaiting.postsOn)}`;
-    return row.awaiting.label;
+    if (st.key === "scheduled" && row.awaiting.postsOn) return { ...st, label: `Scheduled · activates ${shortDate(row.awaiting.postsOn)}` };
+    return st;
 }
+
+/** Who owes it, in the ledger's three obligation states — never a blank. */
+function responsibilityOf(row: IndexRow): { text: string; state: string } {
+    const r = row.responsibility;
+    if (!r) return { text: "Not allocated", state: "not-allocated" };
+    if (r.name && r.unassignedCents > 0) return { text: `${r.name} · part unassigned`, state: "partial" };
+    if (r.name) return { text: r.name, state: "named" };
+    return r.unassigned ? { text: "Unassigned", state: "unassigned" } : { text: "Not allocated", state: "not-allocated" };
+}
+
+/* W7-F027: what each view is, said once under the tabs — the reason a row is where it is. */
+const VIEW_HINT: Record<ChargeIndexView, string> = {
+    scheduled: "Future-period charges. Each activates by itself when its billing period begins — nothing to do.",
+    attention: "Only charges a person must decide: a configured posting review, or an activation that failed. Open one to act.",
+    posted: "Active charges, newest first.",
+    cancelled: "Scheduled charges withdrawn before they activated. Kept on the record.",
+    legacy: "Created before automatic posting, so they never activate on their own. Open one to post or cancel it.",
+};
 
 /**
  * A COMMAND LAYER on this page — the same shell, backdrop and dismissal the account commands use
@@ -178,8 +207,6 @@ export default function FinancialsCharges({
     const [nonce, setNonce] = useState(0);
     const [open, setOpen] = useState<OpenCharge | null>(null);
     const [dialog, setDialog] = useState<"tuition" | "bulk" | null>(null);
-    const [posting, setPosting] = useState<string | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
 
     /*
      * ── ESCAPE CLOSES THE LAYER, NEVER THE FINANCIALS APP (W7-F021, measured on deployed) ──────
@@ -259,58 +286,33 @@ export default function FinancialsCharges({
         await onChargesChanged?.();
     }, [onChargesChanged]);
 
-    /*
-     * POSTING GOES THROUGH THE REGISTERED ACTION, from the operator's own session. `charge.post` owns
-     * eligibility, authorization, idempotency and audit; a refusal is shown as it came back.
-     */
-    const postCharge = useCallback(
-        async (row: FinancialWorkRow) => {
-            setPosting(row.chargeId);
-            setActionError(null);
-            try {
-                const res = await fetch("/api/admin/actions/execute", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        action_key: "charge.post",
-                        entity_type: "child",
-                        entity_id: row.customerMemberId ?? row.customerId ?? "",
-                        mode: "execute",
-                        confirmation: { confirmed: true },
-                        payload: { charge_id: row.chargeId, charge_label: row.typeLabel ?? row.categoryLabel },
-                    }),
-                });
-                const json = (await res.json()) as { ok?: boolean; error?: unknown };
-                if (!res.ok || json.ok === false) {
-                    setActionError(
-                        typeof json.error === "string"
-                            ? json.error
-                            : ((json.error as { message?: string } | undefined)?.message ?? "Posting was refused."),
-                    );
-                    return;
-                }
-                await refresh();
-            } catch (e) {
-                setActionError(e instanceof Error ? e.message : "Posting failed.");
-            } finally {
-                setPosting(null);
-            }
-        },
-        [refresh],
-    );
-
     const rows = data?.rows ?? [];
-    const counts = data?.counts ?? { attention: 0, scheduled: 0, posted: 0, cancelled: 0 };
+    const counts = data?.counts ?? { attention: 0, scheduled: 0, posted: 0, cancelled: 0, legacy: 0 };
     const filtered = Boolean(debounced || typeKey || periodKey);
-    const openRow = (row: FinancialWorkRow) => {
+    const openRow = (row: IndexRow) => {
         if (!row.customerId) return;
+        const label = row.typeLabel ?? row.categoryLabel;
         setOpen({
             chargeId: row.chargeId,
-            label: row.typeLabel ?? row.categoryLabel,
+            label,
             customerId: row.customerId,
             customerMemberId: row.customerMemberId,
             childName: row.childName,
+            /* W7-F029: the row already read these — Charge Details paints them on the click. */
+            seed: {
+                label,
+                status: row.status ?? "draft",
+                awaiting: (row.status ?? "draft") === "draft" ? row.awaiting : null,
+                householdName: row.householdName,
+                childName: row.childName,
+                amountLabel: moneyExact(row.amountCents, row.currencyCode),
+                serviceDate: row.serviceDate,
+                billingPeriodLabel: row.billingPeriodKey ? billingPeriodLabel(row.billingPeriodKey) || null : null,
+                invoiceDate: row.billableOn ?? null,
+                dueDate: row.dueDate ?? null,
+                postedAt: row.postedAt ? dayOf(row.postedAt) : null,
+                responsibleParty: row.responsibility === undefined ? null : responsibilityOf(row).text,
+            },
         });
     };
 
@@ -406,7 +408,6 @@ export default function FinancialsCharges({
                             data-active={view === key ? "true" : undefined}
                             onClick={() => {
                                 setView(key);
-                                setActionError(null);
                             }}
                             className={`rounded-full px-2.5 py-1 text-xs transition ${
                                 view === key ? "bg-alloy-bend-pine/10 font-medium text-alloy-midnight" : "text-alloy-midnight/60 hover:bg-alloy-stone/5"
@@ -418,20 +419,25 @@ export default function FinancialsCharges({
                     ))}
                 </div>
 
-                {actionError ? (
-                    <p className="px-4 py-2 text-xs text-alloy-ember" data-financials-action-error="true">
-                        {actionError}
-                    </p>
-                ) : null}
+                <p className="border-b border-alloy-stone/10 px-4 py-1.5 text-[11px] text-alloy-midnight/55" data-financials-charges-view-hint={view}>
+                    {VIEW_HINT[view]}
+                </p>
 
                 {/* ── THE LIST ── */}
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-charge-index="true" aria-busy={loading ? "true" : undefined}>
-                    <div className="sticky top-0 grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] gap-3 border-b border-alloy-stone/10 bg-white px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                    {/*
+                      * W7-F028: THE ACCOUNT LEDGER'S ROW LANGUAGE — its classes, type scale, amount
+                      * weight and state mark — in a compact cross-account variant: the charge's own
+                      * grain first (child, household beneath), then type, amount, period, state and
+                      * who owes it. One representation of a charge to learn, not two.
+                      */}
+                    <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head alloy-os-chargeindex__row sticky top-0 bg-white">
                         <span>Charge for</span>
                         <span>Charge type</span>
-                        <span className="text-right">Amount</span>
+                        <span>Amount</span>
                         <span>Billing period</span>
                         <span>State</span>
+                        <span>Responsible party</span>
                     </div>
                     {error ? (
                         <p className="px-4 py-4 text-xs text-alloy-ember" data-financials-charges-error="true">
@@ -445,7 +451,10 @@ export default function FinancialsCharges({
                             body={filtered ? "Change the search or the filters." : `Nothing ${CHARGE_INDEX_VIEW_LABELS[view].toLowerCase()} for ${scopeLabel.toLowerCase()}.`}
                         />
                     ) : (
-                        rows.map((row) => (
+                        rows.map((row) => {
+                            const st = stateOf(row);
+                            const owes = responsibilityOf(row);
+                            return (
                             <div
                                 key={row.chargeId}
                                 role="button"
@@ -459,51 +468,46 @@ export default function FinancialsCharges({
                                 }}
                                 data-financials-charge-index-row={row.chargeId}
                                 data-financials-charge-index-type={row.typeKey}
-                                className="grid cursor-pointer grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_6rem_8rem_minmax(0,1.2fr)] items-center gap-3 border-b border-alloy-stone/10 px-4 py-2 text-xs transition hover:bg-alloy-stone/5 focus:bg-alloy-bend-pine/5 focus:outline-none"
+                                data-financials-charge-index-state={st.key}
+                                className="alloy-os-billingdetail__row alloy-os-chargeindex__row cursor-pointer"
                             >
                                 {/*
                                   * W7-F025: THE CHARGE'S OWN GRAIN LEADS. A child's charge names the child,
                                   * with the household as its account; a household charge names the household.
-                                  * "Account-wide" is never shown in a child's place.
                                   */}
-                                <span className="min-w-0" data-financials-charge-index-grain={row.childName ? "child" : "household"}>
-                                    <span className="block truncate text-sm font-medium text-alloy-midnight">
+                                <span className="alloy-os-chargeindex__for" data-financials-charge-index-grain={row.childName ? "child" : "household"}>
+                                    <span className="alloy-os-billingdetail__subject">
                                         {row.childName ?? row.householdName ?? "Household"}
                                     </span>
-                                    <span className="block truncate text-[11px] text-alloy-midnight/55">
+                                    <span className="alloy-os-chargeindex__account">
                                         {row.childName ? (row.householdName ?? "Household") : "Household charge"}
                                     </span>
                                 </span>
-                                <span className="truncate text-alloy-midnight/75">{row.typeLabel ?? row.categoryLabel}</span>
-                                <span className="text-right tabular-nums text-alloy-midnight">{moneyExact(row.amountCents, row.currencyCode)}</span>
-                                <span className="truncate text-alloy-midnight/75">
+                                <span className="alloy-os-billingdetail__type">{row.typeLabel ?? row.categoryLabel}</span>
+                                <span className="alloy-os-billingdetail__amount">{moneyExact(row.amountCents, row.currencyCode)}</span>
+                                <span className="alloy-os-billingdetail__status">
                                     {row.billingPeriodKey ? billingPeriodLabel(row.billingPeriodKey) : "Unplaced"}
                                 </span>
-                                <span className="flex min-w-0 items-center justify-between gap-2">
-                                    <span
-                                        className={`truncate ${row.awaiting.key === "post_failed" && (row.status ?? "draft") === "draft" ? "text-alloy-ember" : "text-alloy-midnight/70"}`}
-                                        data-financials-awaiting-reason={(row.status ?? "draft") === "draft" ? row.awaiting.key : undefined}
-                                        title={(row.status ?? "draft") === "draft" ? row.awaiting.explanation : undefined}
-                                    >
-                                        {stateLine(row)}
-                                    </span>
-                                    {view === "attention" ? (
-                                        <button
-                                            type="button"
-                                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary shrink-0"
-                                            disabled={posting !== null}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                void postCharge(row);
-                                            }}
-                                            data-financials-post-charge={row.chargeId}
-                                        >
-                                            {posting === row.chargeId ? "Posting…" : "Post"}
-                                        </button>
-                                    ) : null}
+                                <span
+                                    className="alloy-os-billingdetail__status"
+                                    data-financials-awaiting-reason={(row.status ?? "draft") === "draft" ? row.awaiting.key : undefined}
+                                >
+                                    <FinancialsChargeState
+                                        state={st.key}
+                                        label={st.label}
+                                        title={(row.status ?? "draft") === "draft" ? row.awaiting.explanation : null}
+                                    />
+                                </span>
+                                <span
+                                    className="alloy-os-billingdetail__source"
+                                    data-financials-responsible="true"
+                                    data-financials-responsibility={owes.state}
+                                >
+                                    {owes.text}
                                 </span>
                             </div>
-                        ))
+                            );
+                        })
                     )}
                     {data?.truncated ? (
                         <p className="px-4 py-2 text-[11px] text-alloy-midnight/45">Showing the most recent 2,000 charges. Search or filter to narrow.</p>
@@ -523,7 +527,7 @@ export default function FinancialsCharges({
                         customerMemberId={open.customerMemberId}
                         participationId={null}
                         displayName={open.childName}
-                        openCharge={{ chargeId: open.chargeId, label: open.label }}
+                        openCharge={{ chargeId: open.chargeId, label: open.label, seed: open.seed }}
                         onSurfacesClosed={() => {
                             setOpen(null);
                             void refresh();

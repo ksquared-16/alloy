@@ -612,11 +612,12 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
     },
     "financials.charges_awaiting_post_count": {
         key: "financials.charges_awaiting_post_count",
-        label: "Charges awaiting posting",
+        label: "Charges needing attention",
         description:
-            "Draft childcare charges an operator could post, in scope — the same cohort the Financials "
-            + "work queue lists, counted from the same projection so the tile and the list cannot "
-            + "disagree. `charge.post` owns the eligibility; this restates no rule of its own.",
+            "Childcare charges a person must decide, in scope — a configured posting review or a failed "
+            + "activation, the same cohort as Charges → Needs attention, counted from the same projection "
+            + "so the tile and the list cannot disagree. Scheduled charges activate by themselves and are "
+            + "not counted; nor are legacy drafts from before automatic posting.",
         pack: "financials",
         computationKind: "entity_snapshot",
         format: "count",

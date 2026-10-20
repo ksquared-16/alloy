@@ -186,7 +186,15 @@ export async function resolveFinancialsChargesAwaitingPostCount(ctx: MetricResol
      * reconcile that.
      */
     const queue = await resolveFinancialWorkQueue(ctx.supabase, financialScopeArgs(ctx));
-    return countResult(ctx, "financials.charges_awaiting_post_count", queue.counts.actionable, {
+    /*
+     * W7-F027: the count is the charges a PERSON must act on — a configured review or a failed
+     * activation — the same cohort as Charges → Needs attention. It was every draft, so Overview
+     * asked operators to "review" 39 charges of which 5 activate by themselves and 34 predate
+     * automatic posting. The key is stable; what it counts is the modern answer.
+     */
+    return countResult(ctx, "financials.charges_awaiting_post_count", queue.counts.needsAPerson, {
+        drafts: queue.counts.actionable,
+        scheduled: queue.counts.waitingOnADate,
         households: queue.counts.households,
         site_scoped: queue.counts.siteScoped,
         org_scoped: queue.counts.orgScoped,

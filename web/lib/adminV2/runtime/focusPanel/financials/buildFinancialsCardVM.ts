@@ -32,6 +32,7 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
+import { awaitingPostingReason, type AwaitingPostingReason } from "@/lib/financials/posting/awaitingPostingReason";
 import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { selectOpenCollections } from "@/lib/adminV2/runtime/focusPanel/financials/selectOpenCollections";
 import {
@@ -226,6 +227,12 @@ export type FinancialsLedgerRow = {
      *               longer represents an open obligation, and no further correction is lawful.
      */
     lifecycleStatus: "scheduled" | "draft" | "posted" | "reversed" | "void";
+    /**
+     * W7-F027: WHY AN UNPOSTED ROW IS UNPOSTED — the canonical classifier's answer over the
+     * metadata the posting authority wrote, the same one the Charges workspace reads. Null on every
+     * row that is not a draft. The ledger states this, not a guess from `billable_on`.
+     */
+    awaiting?: AwaitingPostingReason | null;
     /** The charge this row corrects, when it is a correction. Null for an original charge. */
     correctsChargeId: string | null;
     /** `reversal` | `credit` | `replacement` — from the correction's own metadata. */
@@ -1759,6 +1766,7 @@ async function buildFinancialsCardVMInner(
             currencyCode: t(c.currency_code) || "USD",
             status,
             lifecycleStatus: canonical.lifecycleStatus,
+            awaiting: status === "draft" ? awaitingPostingReason(metadata) : null,
             correctsChargeId,
             correctionKind,
             reversedByChargeId,

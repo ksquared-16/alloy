@@ -118,10 +118,16 @@ describe("Financials workspace — Work and Studio", () => {
 });
 
 describe("Financials workspace — every mutation goes through a registered action", () => {
+    /*
+     * W7-F027: the Charges list no longer posts at all — a Scheduled charge activates by itself, and
+     * an exceptional draft is posted from its Charge Details through the shared command authority.
+     */
     it("posts a charge through `charge.post`, never a page-local write", () => {
         const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
-        expect(charges).toContain('action_key: "charge.post"');
-        expect(charges).toContain("/api/admin/actions/execute");
+        expect(charges).not.toContain('action_key: "charge.post"');
+        const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card).toMatch(/runRowAction\("post", rowForCharge\(surface\.chargeId\)\)/);
+        expect(card).toMatch(/const result = await executeFinancialCommand\(\{\s*action: actionKey,/);
     });
 
     it("tuition billing is ONE canonical run, previewed and confirmed — not a client loop", () => {
