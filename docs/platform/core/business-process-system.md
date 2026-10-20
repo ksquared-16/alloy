@@ -80,8 +80,12 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   active stages, `tracks_v1`, `entry_points_v1` and `participation_v1`.
 - **A projection's Work Views name a registered projection (BP V2 Slice 2).** Each view carries one
   `projection_key` from the closed registry for the process's domain
-  (`web/lib/businessProcesses/projections/domainProjectionCatalog.ts`): Assignments `current_assignments`
-  (child and staff-person records), Billing `charges_needing_review` (household records, `fin.read`).
+  (`web/lib/businessProcesses/projections/domainProjectionCatalog.ts`). Assignments (child and staff-person
+  records, BP V2 Slice 3): `current_assignments`, `assignments_ending_soon` (ends within 30 days, today
+  included), `assignments_upcoming_changes` (starts within the next 30 days), `schedule_gaps` (operational
+  child agreements with no committed schedule in effect or ahead), `assignments_proposed_incomplete`
+  (proposed awaiting disposition; committed missing its assignment type). Billing: `charges_needing_review`
+  (household records, `fin.read`).
   Publication refuses an unregistered key and refuses `filters_v1`, sorts, `compat_queue_key` and
   `row_grain_v1` on such a view (`projection_work_view_invalid`) — the projection is its membership and
   order. `projection_key` on a staged lifecycle is refused. The runtime contract is

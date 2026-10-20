@@ -321,9 +321,19 @@ describes staged lifecycles; for a projection view the following is the contract
   (opportunity drawer warming, stage work, primary actions) skips it by construction. Selecting a row opens
   the existing `DurableRecordSurface` inside the existing Focus Panel boundary; no default subject is
   committed and nothing opportunity-shaped is prepared for a projection row.
-- **Scope.** Rows and counts are read under the request's **access** scope (site restrictions enforced;
-  `fin.read` for Billing). The workspace site *filter* is not applied to projection views yet — applying
-  it to counts but not rows would make them disagree.
+- **Scope.** Rows and counts are read under the request's access scope (site restrictions enforced;
+  `fin.read` for Billing) **intersected with the `/workspace` site selection** (BP V2 Slice 3). The
+  selection is part of the answer's identity (`workspace_site_id` on the provisioning-answer URL) and of the
+  totals request, so rows and counts always read the same sites; a selection outside the actor's sites
+  yields nothing, never more. A site change re-prepares a projection view. Lifecycle (Enrollment) answers
+  ignore the selection, as before.
+- **Grain and facts.** Assignments views count PEOPLE (one row per child or staff person); the assignments
+  behind them are counted separately (`factTotal`) and never called people. "In effect" is always decided
+  by `resolveAssignmentLifecycleState` against the org-local business date — never by stored status or
+  "latest row" (see `effective-dated-assignment-doctrine.md` § cardinality for child vs staff primaries).
+- **Why a row is there.** Each row carries a source-backed reason ("Ends Oct 29 · in 9 days", "Primary
+  change starts Oct 30", "No committed schedule") and the source's site, room, type and dates. Nothing is
+  persisted to produce it.
 - **Refusals are explicit.** `projection_unsupported` (configuration), `projection_forbidden`
   (authorization), `projection_unavailable` (read failed or no scope): an error terminal that keeps the
   lens set; counts are UNKNOWN. A projection view never returns Enrollment records and never a zero it did

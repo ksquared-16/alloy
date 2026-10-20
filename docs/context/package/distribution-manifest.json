@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "3791dac3ea6f3e592ae462e2f0cc5137bc121778",
+      "blob_sha": "e9b99d99079305e0bbca52a77bf6b6608ba53230",
       "exists": true
     },
     {
@@ -197,7 +197,7 @@
     {
       "path": "docs/platform/core/work-view-membership-and-navigation.md",
       "tier": 3,
-      "blob_sha": "cfd5371f98a180cd2848e1dbf0f9b66d19df233c",
+      "blob_sha": "fc011dad2a9a02076c1e72bb7b4fa74f9683b2b5",
       "exists": true
     },
     {
