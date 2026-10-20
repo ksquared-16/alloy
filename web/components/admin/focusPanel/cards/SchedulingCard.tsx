@@ -7,6 +7,7 @@ import { ATTENDANCE_TYPE_LABELS } from "@/lib/programs/programOfferings";
 import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financials/reductions/reductionReasonLabels";
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import { pricingRefusalCode } from "@/lib/enrollment/pricing/pricingRefusal";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -2346,7 +2347,7 @@ function ScheduleEditor({
                 ?? say(json.message)
                 ?? json.blockers?.map((b) => b.message).filter(Boolean).join("; ")
                 ?? `Refused (${res.status}).`;
-            const code = (json.blockers as Array<{ code?: string }> | undefined)?.[0]?.code;
+            const code = pricingRefusalCode(json);
             return { ok: false, detail: detail || `Refused (${res.status}).`, ...(code ? { code } : {}) };
         }
         const term = json.result?.term;
