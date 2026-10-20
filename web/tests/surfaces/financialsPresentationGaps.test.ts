@@ -23,14 +23,20 @@ describe("THE GATE — available prepaid reaches the account summary", () => {
      * "AVAILABLE PREPAID $125.00", and the Accounts workspace — the account's ONE summary, in the
      * dedicated financial workspace — rendered no such node at all.
      */
+    /*
+     * W7-F031: the account strip IS the shared account summary, which states prepaid as context —
+     * "$X prepaid available" — from the adapter's canonical figure.
+     */
     it("states Available in the account summary strip", () => {
-        expect(body, "the account strip reads the canonical figure").toContain("period.availablePrepaid");
-        expect(body).toContain('testId="available-prepaid"');
+        expect(body, "the account strip is the shared summary").toContain("<FinancialsAccountSummary evidence={evidence} />");
+        const adapter = src("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter).toMatch(/key: "prepaid", text: `\$\{money\(vm\.prepaid!\.availableCents, currency\)\} prepaid available`/);
     });
 
     /* Zero is silence. A permanent "Available $0.00" is the noise the density doctrine forbids. */
     it("renders it only when the authority says there is money", () => {
-        expect(body).toMatch(/\{period\.availablePrepaid \?/);
+        const adapter = src("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter).toMatch(/\(vm\.prepaid\?\.availableCents \?\? 0\) > 0\s*\?\s*\[\{ key: "prepaid"/);
     });
 
     /*
