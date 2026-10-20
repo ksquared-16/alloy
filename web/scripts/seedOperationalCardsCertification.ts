@@ -34,12 +34,16 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { exitUnlessLocalCertificationTarget } from "./lib/localCertificationTarget";
 import { resolve } from "path";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
+
+// Local-only fixture: refuse any database not on this machine before a client exists (Q1.0).
+exitUnlessLocalCertificationTarget("operational_cards_certification");
 
 /** RFC-2606 reserved. Nothing real can ever live here, so the selector cannot over-match. */
 const CERT_DOMAIN = "operational-cards-cert.alloy.invalid";
