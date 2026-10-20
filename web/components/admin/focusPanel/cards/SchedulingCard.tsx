@@ -1287,6 +1287,7 @@ function ScheduleWorkSurface({
                 )}
                 onCancel={cancelToDetail}
                 onSaved={onSaved}
+                onNotice={setActionError}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
                         throw new Error("Choose an Assignment Category before creating.");
@@ -1564,7 +1565,10 @@ function ScheduleRegions({
      * max-height honours; the form then scrolls inside it with Save/Cancel pinned.
      */
     useLayoutEffect(() => {
-        const card = surfaceRef.current?.closest(".alloy-os-ucard") as HTMLElement | null;
+        // The element whose max-height governs: the linked host's card when the editor is opened from
+        // another card (Children), else the elevated Universal Card itself.
+        const card = (surfaceRef.current?.closest(".alloy-os-focus-panel-linked-host__card")
+            ?? surfaceRef.current?.closest(".alloy-os-ucard")) as HTMLElement | null;
         if (!card) return;
         const place = () => {
             const top = card.getBoundingClientRect().top;
@@ -1710,6 +1714,7 @@ function ScheduleEditor({
     programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
+    onNotice,
     onCreateSecondary,
 }: {
     child: SchedSubject;
@@ -1727,6 +1732,8 @@ function ScheduleEditor({
     programCategoryId?: string | null;
     onCancel: () => void;
     onSaved: () => Promise<void>;
+    /** A message for the card to show after the editor closes (e.g. tuition not recorded). */
+    onNotice?: (message: string) => void;
     onCreateSecondary?: (payload: {
         schedule_pattern_id: string | null;
         start_date: string;
@@ -2358,8 +2365,9 @@ function ScheduleEditor({
      * the same effective date is recognised rather than duplicated — so no workflow-level
      * idempotency authority is invented here.
      */
-    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<void> {
-        if (!offeringId.trim() || child.kind !== "child") return;
+    /** Settle tuition; answers the refusal detail when it did not settle (null when it did, or had nothing to settle). */
+    async function settleTuition(viewOverride?: AssignmentTuitionView | null): Promise<string | null> {
+        if (!offeringId.trim() || child.kind !== "child") return null;
         try {
             const outcome = await acceptAssignmentTuition(viewOverride);
             if (outcome.ok) {
@@ -2369,14 +2377,14 @@ function ScheduleEditor({
                 });
                 /* Persisted truth is re-read; the dropdown's value is not the answer. */
                 await refreshPricingView();
-            } else {
-                setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+                return null;
             }
+            setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+            return outcome.detail;
         } catch (e) {
-            setTuitionOutcome({
-                kind: "needs_attention",
-                detail: e instanceof Error ? e.message : "Tuition could not be accepted.",
-            });
+            const detail = e instanceof Error ? e.message : "Tuition could not be accepted.";
+            setTuitionOutcome({ kind: "needs_attention", detail });
+            return detail;
         }
     }
 
@@ -2417,7 +2425,9 @@ function ScheduleEditor({
     async function settleTuitionAfterSave(): Promise<void> {
         const fresh = await refreshPricingView();
         setDraftView(null);
-        await settleTuition(fresh);
+        const refused = await settleTuition(fresh);
+        // The editor closes after Save; a tuition step that did not settle must not close with it.
+        if (refused) onNotice?.(`Assignment saved — tuition was not recorded: ${refused}`);
     }
 
     async function persistAssignmentQuote(): Promise<void> {
@@ -3295,10 +3305,11 @@ export function tuitionNoMatchMessage(view: Pick<AssignmentTuitionView, "noMatch
     const why =
         view.noMatchReason === "missing_required_input"
             ? "Choose a room or program to see matching rates"
-            : view.noMatchReason === "unsupported_schedule_basis"
-              ? days == null
-                  ? "Choose days to see matching rates"
-                  : `No rate is offered for ${days} day${days === 1 ? "" : "s"} a week in this program`
+            : days == null
+              ? // Rates are priced by days a week; until days are chosen, that is the step to take.
+                "Choose days to see matching rates"
+              : view.noMatchReason === "unsupported_schedule_basis"
+                ? `No rate is offered for ${days} day${days === 1 ? "" : "s"} a week in this program`
               : view.noMatchReason === "not_offered_at_scope"
                 ? "This program has no rate offering for this schedule"
                 : view.noMatchReason === "no_rate_for_scope"

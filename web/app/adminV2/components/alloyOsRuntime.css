@@ -7106,8 +7106,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: relative;
   z-index: 1;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
-  /* Viewport-based — match in-grid elevated cards (never resting-cell %). */
-  max-height: min(75vh, calc(100dvh - 64px));
+  /* Viewport-based — match in-grid elevated cards (never resting-cell %).
+   * `--alloy-os-sched-viewport-room` is the measured space below this card's top (published by the
+   * scheduling surface): the host starts well down the page, so a share of the viewport alone let an
+   * expanded editor run past the bottom edge with Save off-screen. */
+  max-height: min(75vh, calc(100dvh - 64px), var(--alloy-os-sched-viewport-room, 100dvh));
   /* Clip to the bordered shell — overflow:visible let the schedule footer paint
    * below the max-height border box (white card ended above Cancel/Create). */
   overflow: hidden;
