@@ -124,6 +124,12 @@ export type FinancialWorkQueue = {
         waitingOnADate: number;
     };
     scope: { siteLocationId: string | null; siteScope: "all" | "restricted" };
+    /**
+     * The charge read returned as many rows as its limit allowed, so drafts may exist beyond what this
+     * queue holds and every count above is a lower bound. Observability only — it changes no row, no
+     * count and no classification; it lets a consumer say "at least N" instead of N.
+     */
+    readLimitReached?: boolean;
 };
 
 export async function resolveFinancialWorkQueue(
@@ -377,5 +383,6 @@ export async function resolveFinancialWorkQueue(
             waitingOnADate: rows.filter((r) => r.awaiting.key === "period_not_started").length,
         },
         scope: { siteLocationId: activeSiteLocationId, siteScope: args.siteScope },
+        readLimitReached: (chargeRows ?? []).length >= limit,
     };
 }

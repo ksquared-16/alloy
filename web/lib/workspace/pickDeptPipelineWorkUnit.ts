@@ -1,4 +1,5 @@
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { isDomainProjectionHostWorkUnit } from "@/lib/businessProcesses/projections/domainProjectionHost";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
@@ -86,6 +87,10 @@ export function pickDeptWorkViewHostWorkUnit<
         const pipelineRow = forDept.find((row) => row.id === pipeline.id) ?? null;
         if (pipelineRow) return pipelineRow;
     }
+    // BP V2 S2 — a domain-projection department's only host. It has no pipeline and no stage units, so
+    // the two branches above can never pick it, and nothing else can be its host.
+    const projectionHost = forDept.find((row) => isDomainProjectionHostWorkUnit(row));
+    if (projectionHost) return projectionHost;
     const lifecycleHosts = sortLifecycleDeptWorkUnits(
         forDept
             .filter((row) => isLifecycleStageWorkUnitKey(String(row.key ?? "")))

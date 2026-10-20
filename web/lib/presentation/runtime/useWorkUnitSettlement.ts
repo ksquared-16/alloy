@@ -102,7 +102,8 @@ export function useWorkUnitSettlement(
     // the queue total count a cohort's rows, and all three arrive via `settlement` locators the
     // contextual answer does not carry. Settling anything for it would mean picking a lens to count.
     const settleable =
-        snapshot && (snapshot.terminal === "operational" || snapshot.terminal === "empty")
+        snapshot
+        && (snapshot.terminal === "operational" || snapshot.terminal === "empty" || snapshot.terminal === "projection")
             ? snapshot
             : null;
     // A contextual surface HAS a host work unit; that is hosting truth and stays true. What it has no

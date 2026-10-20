@@ -25,6 +25,9 @@ import "server-only";
  * predicates into a second owner is the defect that once printed thirteen child rows under a pill
  * of eight.
  */
+import { resolveDepartmentDomainProjection } from "@/lib/businessProcesses/projections/domainProjectionDepartment";
+import { loadDomainProjectionCohort } from "@/lib/businessProcesses/projections/domainProjectionRegistry";
+import type { DomainProjectionScope } from "@/lib/businessProcesses/projections/domainProjectionTypes";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
@@ -133,6 +136,12 @@ export async function evaluateWorkViewTotalsForGroup(args: {
     spans: WorkViewTotalsSpansContract;
     /** Interval recorder. Diagnostic only; an absent timeline changes nothing. */
     timeline?: WorkViewTotalsTimeline;
+    /**
+     * BP V2 S2 — the caller's identity and access scope, for a department served by a domain
+     * projection. Absent → such a department's views report UNKNOWN (never a count the projection did
+     * not produce). Ignored for every staged lifecycle.
+     */
+    projection?: { userId: string | null; scope: DomainProjectionScope };
 }): Promise<WorkViewTotalRowContract[]> {
     const {
         supabase,
@@ -165,6 +174,50 @@ export async function evaluateWorkViewTotalsForGroup(args: {
              */
             if (!prerequisite.accessible) return unknownAll();
             const metadata = prerequisite.departmentMetadata;
+
+            // ── BP V2 S2: A DOMAIN PROJECTION IS COUNTED BY ITS PROJECTION, AND ONLY BY IT. ──
+            //
+            // Before any lane, stage population or Enrollment enrichment below: none of them describes
+            // a projection department, and the stage-less lane path would count opportunities on the
+            // host. The count is the length of the SAME cohort the answer slices its rows from
+            // (`loadDomainProjectionCohort`); a refused or truncated cohort is UNKNOWN, never a number.
+            const departmentProjection = resolveDepartmentDomainProjection(metadata);
+            if (departmentProjection) {
+                const projectionArgs = args.projection;
+                if (!projectionArgs) return unknownAll();
+                const cohorts = new Map<string, ReturnType<typeof loadDomainProjectionCohort>>();
+                const results = await Promise.all(
+                    [...group.viewIds].map(async (workViewId): Promise<TotalOut> => {
+                        const view = departmentProjection.views.find((v) => v.id === workViewId);
+                        const key = view?.projection_key ?? "";
+                        if (!view || !key) {
+                            return { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId, count: null, known: false };
+                        }
+                        let pending = cohorts.get(key);
+                        if (!pending) {
+                            pending = loadDomainProjectionCohort(supabase, {
+                                domain: departmentProjection.domain,
+                                projectionKey: key,
+                                orgId,
+                                userId: projectionArgs.userId,
+                                scope: projectionArgs.scope,
+                            });
+                            cohorts.set(key, pending);
+                        }
+                        const cohort = await pending;
+                        const known = cohort.status === "ok" && cohort.total != null;
+                        return {
+                            workUnitId: group.workUnitId,
+                            queueKey: group.queueKey,
+                            workViewId,
+                            count: known ? (cohort as { total: number }).total : null,
+                            known,
+                        };
+                    }),
+                );
+                spans.views += results.length;
+                return results;
+            }
 
             // ── A CHILD LENS IS COUNTED BY ITS OWN MEMBERSHIP, NOT BY THE OPPORTUNITY LANE. ──
             //

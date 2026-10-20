@@ -47,7 +47,7 @@ import { settlementForAnswer } from "./workUnitProvisioningPrefetch";
  * `empty` means a SELECTED cohort holds no rows. `contextual` means no cohort was selected at all, so
  * there is nothing whose emptiness could be reported. Collapsing the two would re-introduce a lens.
  */
-export type PreparationOutcome = "operational" | "empty" | "error" | "contextual";
+export type PreparationOutcome = "operational" | "empty" | "error" | "contextual" | "projection";
 
 /** Why a preparation was thrown away. NOT an outcome — it never reaches K3. */
 export type DisposalReason = "superseded" | "cancelled";
@@ -460,7 +460,12 @@ export class ProvisioningRuntime {
         // Same-key finer movement (an ASPECT change within the same subject) legitimately reuses; a
         // subject change has a different key and so never lands here.
         if (ref.scope < ENTRY_PREPARATION_SCOPE) return false;
-        return done.terminal.outcome === "operational" || done.terminal.outcome === "empty";
+        // A projection cohort (BP V2 S2) is a lens answer exactly like these two: reusable under its key.
+        return (
+            done.terminal.outcome === "operational"
+            || done.terminal.outcome === "empty"
+            || done.terminal.outcome === "projection"
+        );
     }
 
     private dispose(f: Inflight, reason: DisposalReason) {

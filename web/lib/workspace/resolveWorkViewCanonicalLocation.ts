@@ -23,6 +23,10 @@
  * rendered rows-response total IS the count every badge showed.
  */
 
+import {
+    DOMAIN_PROJECTION_BASE_QUEUE_KEY,
+    isDomainProjectionHostWorkUnit,
+} from "@/lib/businessProcesses/projections/domainProjectionHost";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
@@ -198,7 +202,11 @@ export function resolveWorkViewCanonicalLocation(
 ): WorkViewCanonicalLocation | null {
     const host = hostWorkUnitForConfiguredWorkView(view, deptWorkUnits, departmentId);
     if (!host) return null;
-    const baseQueueKey = workViewBaseQueueKeyForHost(view, host.queue_definition);
+    // A projection host has no lane definition by design; its views all locate on the one projection
+    // lane, which only the registered projection branch serves.
+    const baseQueueKey = isDomainProjectionHostWorkUnit(host)
+        ? DOMAIN_PROJECTION_BASE_QUEUE_KEY
+        : workViewBaseQueueKeyForHost(view, host.queue_definition);
     if (!baseQueueKey) return null;
     return {
         workUnitId: String(host.id),

@@ -1,5 +1,7 @@
 "use client";
 
+import { DOMAIN_PROJECTION_CATALOG } from "@/lib/businessProcesses/projections/domainProjectionCatalog";
+import type { ProcessProjectionDomain } from "@/lib/lifecycle/processModelV1";
 import Link from "next/link";
 import LayoutAssignmentCard from "@/components/adminV2/settings/configurationRuntime/LayoutAssignmentCard";
 import WorkViewConditionEditor from "@/components/adminV2/settings/businessProcess/WorkViewConditionEditor";
@@ -251,7 +253,14 @@ export default function WorkViewProcessEditorCard({
     onSelect: _onSelect,
     onChange,
     onDelete,
+    projectionDomain = null,
 }: {
+    /**
+     * BP V2 S2 — set when the process is a domain projection. The view then selects ONE registered
+     * projection (the projection is its membership and order), so the condition, sort and row-type
+     * editors — which publication refuses on such a view — are replaced by that choice.
+     */
+    projectionDomain?: ProcessProjectionDomain | null;
     view: WorkViewConfigV1Stored;
     selected: boolean;
     workUnitKey: string | null;
@@ -326,6 +335,32 @@ export default function WorkViewProcessEditorCard({
                 :   null}
             </header>
 
+            {projectionDomain ? (
+                <div
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
+                    data-testid="work-view-projection-picker"
+                >
+                    <label className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium text-alloy-midnight/60">Records</span>
+                        <select
+                            className="rounded border border-alloy-stone/40 bg-white px-2 py-1 text-[11px] text-alloy-midnight"
+                            value={view.projection_key ?? ""}
+                            onChange={(e) => onChange({ projection_key: e.target.value || undefined })}
+                            data-testid={`process-work-view-projection-${view.id}`}
+                        >
+                            <option value="">Choose…</option>
+                            {DOMAIN_PROJECTION_CATALOG[projectionDomain].map((p) => (
+                                <option key={p.key} value={p.key}>
+                                    {p.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                        This view lists the records the chosen projection returns, in its own order.
+                    </p>
+                </div>
+            ) : (
             <WorkViewGrainBanner
                 catchAll={isWorkViewCatchAll(view)}
                 stageGrains={
@@ -336,6 +371,7 @@ export default function WorkViewProcessEditorCard({
                 onDeclareGrain={(grain) => onChange({ row_grain_v1: grain })}
                 viewId={view.id}
             />
+            )}
 
             <div className="space-y-0 px-4 pb-4">
                 <WorkViewEditorSection
@@ -370,6 +406,7 @@ export default function WorkViewProcessEditorCard({
                     </div>
                 </WorkViewEditorSection>
 
+                {projectionDomain ? null : (<>
                 <WorkViewEditorSection
                     sectionId="conditions"
                     title="Show work when…"
@@ -401,6 +438,7 @@ export default function WorkViewProcessEditorCard({
                         onChange={(sorts) => onChange(syncSortFields(sorts))}
                     />
                 </WorkViewEditorSection>
+                </>)}
 
                 <WorkViewEditorSection
                     sectionId="presentation"

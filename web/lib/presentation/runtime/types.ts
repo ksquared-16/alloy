@@ -162,7 +162,12 @@ export type PrimarySignalModel = {
  */
 export type QueueRowModel = {
     context: QueueRowContext | null;
-    entityType: "opportunity" | "job" | "schedule";
+    /**
+     * `durable_subject` — BP V2 S2: a domain-projection row whose `entityId` is `<grain>:<id>` of a
+     * durable child / person / household record. Nothing opportunity-shaped (drawer warming, stage
+     * work) may run for it; it opens through the durable record panel.
+     */
+    entityType: "opportunity" | "job" | "schedule" | "durable_subject";
     entityId: string;
     /**
      * Per-row compact slots resolved from the row's matching Queue Row Variant. Present only when
@@ -634,7 +639,7 @@ export function opportunityQueuePreviewSeedFromRowContext(
  */
 export function queueRowModelFromQueueItem(
     item: unknown,
-    queueEntityType: "opportunity" | "job" | "schedule",
+    queueEntityType: QueueRowModel["entityType"],
 ): QueueRowModel | null {
     if (item == null || typeof item !== "object") return null;
     const row = item as { id?: unknown; _queue_row_context?: QueueRowContext };

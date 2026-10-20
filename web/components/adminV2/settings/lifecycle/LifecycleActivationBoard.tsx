@@ -1,5 +1,6 @@
 "use client";
 
+import { isDomainProjectionModel } from "@/lib/lifecycle/processModelV1";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import LifecycleCreateForm from "@/components/adminV2/settings/lifecycle/LifecycleCreateForm";
@@ -2127,6 +2128,11 @@ export default function LifecycleActivationBoard({
                                 stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
                                 queueLanes={workViewQueueLanes}
                                 onDraftSaved={refreshConfigurationState}
+                                projectionDomain={
+                                    isDomainProjectionModel(catalogEntry?.process_model)
+                                        ? catalogEntry.process_model.domain
+                                        : null
+                                }
                             />
                         </div>
                     :   null}

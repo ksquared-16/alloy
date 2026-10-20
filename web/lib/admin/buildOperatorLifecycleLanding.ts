@@ -404,11 +404,26 @@ export function buildOperatorLifecycleLandingCards(args: {
         .map((entry) => {
             const processModel = resolveProcessModel({ process_model_v1: entry.process_model });
             if (isDomainProjectionModel(processModel)) {
-                // A domain projection publishes as its own process with its own identity, and has no
-                // runnable Work Views yet. It gets NONE of the lifecycle fallbacks below: no
-                // department pipeline lanes, no builder stages, no work-unit list, no `new_leads`
-                // entry, no Enrollment surface fields. Any of those would route the operator into
-                // another process's queue.
+                // A domain projection is its own process with its own identity. Its tile lists ONLY its
+                // own published Work Views (BP V2 S2), located on its projection host — and gets NONE
+                // of the lifecycle fallbacks below: no department pipeline lanes, no builder stages, no
+                // work-unit list, no `new_leads` entry, no Enrollment surface fields. Any of those would
+                // route the operator into another process's queue. With no published views (or no host
+                // yet) it keeps the honest unavailable state.
+                const dept = departmentsById.get(entry.department_id);
+                const hasViews = Boolean(
+                    lifecycleBuilderFromDepartmentMetadata(dept?.metadata)
+                        .processes.find((p) => p.id === entry.process_id)?.work_views_v1?.length,
+                );
+                const projectionQueues = hasViews
+                    ? workViewNavEntriesForDepartment({
+                          departmentId: entry.department_id,
+                          departmentMetadata: dept?.metadata,
+                          workUnits: args.workUnits,
+                          processId: entry.process_id,
+                      }).filter((q) => Boolean(q.work_view_id && q.host_work_unit_id && q.base_queue_key))
+                    : [];
+                const projectionEntry = projectionQueues[0]?.href ?? null;
                 return {
                     id: entry.id,
                     departmentId: entry.department_id,
@@ -416,9 +431,9 @@ export function buildOperatorLifecycleLandingCards(args: {
                     processModel,
                     label: entry.lifecycle_name.trim() || entry.process_key,
                     description: processDescriptionForEntry(entry, departmentsById),
-                    entryHref: null,
-                    unavailableReason: DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
-                    workQueues: [],
+                    entryHref: projectionEntry,
+                    unavailableReason: projectionEntry ? null : DOMAIN_PROJECTION_WORK_VIEWS_UNAVAILABLE,
+                    workQueues: projectionQueues,
                     stageCount: 0,
                     activeRecordCount: null,
                     needsAttentionCount: null,

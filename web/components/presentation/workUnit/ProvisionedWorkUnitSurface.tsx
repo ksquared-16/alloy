@@ -11,6 +11,7 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
+import { DomainProjectionFocusProvider } from "./DomainProjectionFocusContext";
 import { useEffect, useId, useMemo, useRef } from "react";
 import type { FocusPanelSummaryDocProjection } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
@@ -66,7 +67,9 @@ export function ProvisionedWorkUnitSurface() {
     // "has a lens" side by not being an error.
     const committedWithLens =
         committed
-        && (committed.snapshot.terminal === "operational" || committed.snapshot.terminal === "empty")
+        && (committed.snapshot.terminal === "operational"
+            || committed.snapshot.terminal === "empty"
+            || committed.snapshot.terminal === "projection")
             ? committed.snapshot
             : null;
 
@@ -235,9 +238,13 @@ export function ProvisionedWorkUnitSurface() {
     const snapshot = committed.snapshot;
     const op = snapshot.terminal === "operational" ? snapshot : null;
     const contextual = snapshot.terminal === "contextual" ? snapshot : null;
+    // BP V2 S2 — a domain-projection cohort: rows open durable records; no Record of Attention.
+    const projectionSnap = snapshot.terminal === "projection" ? snapshot : null;
     // Same terminals as `committedWithLens` above, re-narrowed off the local `snapshot` for the render.
     const withLens =
-        snapshot.terminal === "operational" || snapshot.terminal === "empty" ? snapshot : null;
+        snapshot.terminal === "operational" || snapshot.terminal === "empty" || snapshot.terminal === "projection"
+            ? snapshot
+            : null;
     // ONE reading of "did the operator select a cohort", shared by every attribute below. Deriving it
     // per-attribute is how a surface ends up claiming a lens in one place and denying it in another.
     //
@@ -267,7 +274,10 @@ export function ProvisionedWorkUnitSurface() {
      * the atomic-subject contract forbids, and is worse than the latency it removes.
      */
     const selectedSubjectId =
-        attentionSubject ?? (op ? String(op.recordOfAttention.id) : null);
+        attentionSubject
+        ?? (op ? String(op.recordOfAttention.id) : null)
+        ?? projectionSnap?.selectedRowId
+        ?? null;
     const answerDescribesSelection =
         op != null && selectedSubjectId != null
         && String(op.recordOfAttention.id) === String(selectedSubjectId);
@@ -302,7 +312,15 @@ export function ProvisionedWorkUnitSurface() {
             // (scope is a statement about the subject's place in a cohort).
             data-active-work-view={withLens ? withLens.activeWorkView.id : undefined}
             data-cohort-selected={cohortSelected === null ? undefined : cohortSelected ? "true" : "false"}
-            data-row-grain={withLens ? withLens.rowGrain : undefined}
+            data-row-grain={withLens && withLens.terminal !== "projection" ? withLens.rowGrain : undefined}
+            data-projection-domain={projectionSnap?.projection.domain}
+            data-projection-total={
+                projectionSnap
+                    ? projectionSnap.projection.total == null
+                        ? "unknown"
+                        : String(projectionSnap.projection.total)
+                    : undefined
+            }
             data-record-of-attention={
                 snapshot.terminal === "operational" ? snapshot.recordOfAttention.id : undefined
             }
@@ -341,7 +359,9 @@ export function ProvisionedWorkUnitSurface() {
             data-queue-row-has-contact-email={
                 firstRowKeys?.contact.fieldKeys?.some((k) => k.includes("email")) ? "true" : "false"
             }
-            data-focus-panel-scope={withLens ? withLens.focusPanelScopeState : undefined}
+            data-focus-panel-scope={
+                withLens && withLens.terminal !== "projection" ? withLens.focusPanelScopeState : undefined
+            }
             data-operational-at-first-sight={committed.outcome === "operational" ? "true" : "false"}
         >
             <div
@@ -426,7 +446,20 @@ export function ProvisionedWorkUnitSurface() {
                     // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={retainedSummaryDoc}
                 >
-                    <WorkUnitSurfaceBodyFromModel model={effectiveModel} intents={intents} />
+                    <DomainProjectionFocusProvider
+                        frame={
+                            projectionSnap
+                                ? {
+                                      businessProcessKey: projectionSnap.businessProcess.key,
+                                      workViewId: projectionSnap.activeWorkView.id,
+                                      domain: projectionSnap.projection.domain,
+                                      projectionKey: projectionSnap.projection.projectionKey,
+                                  }
+                                : null
+                        }
+                    >
+                        <WorkUnitSurfaceBodyFromModel model={effectiveModel} intents={intents} />
+                    </DomainProjectionFocusProvider>
                 </OperationalSubjectProvider>
             </div>
         </div>

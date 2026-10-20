@@ -31,7 +31,9 @@ export type LifecycleSubjectType =
     | "customer"
     | "vendor"
     | "associate"
-    | "agent";
+    | "agent"
+    /** BP V2 S2 — a durable person (staff) row from a domain projection. */
+    | "person";
 
 /** Queue membership grains implemented today in queue_definition v2. */
 export type QueueMembershipGrain = "case" | "child" | "candidate";
@@ -159,7 +161,11 @@ export type QueueRowPresentationMode = "single_subject" | "grouped_subjects";
 export type QueueRowCountUnit = "enrollment_track" | "cases" | "children" | "candidates";
 
 export type QueueRowDrawerOpen = {
-    entity_type: "opportunities";
+    /**
+     * `opportunities` for every lifecycle row. A domain-projection row (BP V2 S2) names the durable
+     * record it opens instead — the table of the canonical record, never an assignment or a charge.
+     */
+    entity_type: "opportunities" | "persons" | "customer_members" | "customers";
     entity_id: string;
     /** Single-child focus — row click or child line click inside grouped card. */
     active_subject?: LifecycleSubjectRef;
@@ -244,6 +250,19 @@ export type QueueRowContext = {
      * TODO(phase-1): populate from OCM columns in partial adapter.
      */
     placement_context?: SubjectPlacementContext | null;
+
+    /**
+     * BP V2 S2 — present ONLY on a row a registered domain projection produced. It names the durable
+     * record the row opens (`subject`) and, separately, the domain fact that put it in the cohort
+     * (`source`). The source is context: it is never the identity of what opens.
+     */
+    domain_projection?: {
+        domain: "assignments" | "billing";
+        projection_key: string;
+        subject: { type: "child" | "person" | "household"; id: string };
+        source: { kind: "schedule_assignment" | "charge"; id: string; count: number; status_label: string };
+        site_location_id: string | null;
+    } | null;
 
     /**
      * Waitlist ranking context for candidate-grain rows (Variants Phase 5). Populated from the

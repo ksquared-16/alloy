@@ -289,7 +289,8 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             // SETTLEMENT is the part contextual genuinely does not have: count locators belong to a
             // chosen cohort. Kept separate rather than folded in, so the absence stays visible.
             const snap =
-                hosted && (hosted.terminal === "operational" || hosted.terminal === "empty")
+                hosted
+                && (hosted.terminal === "operational" || hosted.terminal === "empty" || hosted.terminal === "projection")
                     ? hosted
                     : null;
             const currentWorkUnitId = hosted?.workUnit.id ?? null;
@@ -446,7 +447,8 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             // warming is a wasted fetch, and on a contextual surface an empty lens set warms nothing.
             const hosted = rawSnap && rawSnap.terminal !== "error" ? rawSnap : null;
             const snap =
-                hosted && (hosted.terminal === "operational" || hosted.terminal === "empty")
+                hosted
+                && (hosted.terminal === "operational" || hosted.terminal === "empty" || hosted.terminal === "projection")
                     ? hosted
                     : null;
             const locators = snap?.settlement ?? null;
@@ -522,6 +524,10 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     const prefetchRecord = useCallback(
         (row: QueueRowModel) => {
             if (row.entityId == null) return;
+            // BP V2 S2 — a domain-projection row opens a durable record whose panel loads on selection.
+            // There is no opportunity provisioning or drawer VM to warm, and warming one would send a
+            // person/household id to an opportunity endpoint: one 404 per hover.
+            if (row.entityType === "durable_subject") return;
             const current = kernel.attention.get();
             // Hover is the strongest first-use signal — warm the COMPLETE commit-critical answer
             // (provisioning + VM + stage-work) so even a never-visited row commits with zero network.
@@ -597,7 +603,8 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         for (let d = 1; d <= 2; d++) {
             for (const j of [idx - d, idx + d]) {
                 const r = rows[j];
-                if (r && r.entityId && r.entityId !== selectedSubjectId) {
+                // Durable-subject rows (BP V2 S2) have no opportunity answer or VM to prepare.
+                if (r && r.entityId && r.entityId !== selectedSubjectId && r.entityType !== "durable_subject") {
                     // `subjectId|opportunityId` — the subject drives provisioning, the opportunity
                     // (absent for an unanchored child row) drives the VM warm. Same rule as hover.
                     neighbours.push(`${String(r.entityId)}|${resolveQueueRowOpportunityId(r) ?? ""}`);

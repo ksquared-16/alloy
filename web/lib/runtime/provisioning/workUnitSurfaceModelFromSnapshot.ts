@@ -205,11 +205,12 @@ function queueRowModelsFrom(
     activeWorkViewId: string | null,
     activeWorkViewLabel: string | null,
     processKey: string | null,
+    entityType: QueueRowModel["entityType"] = "opportunity",
 ): QueueRowModel[] {
     const queueRowVariants = p.queue.rowVariants;
     return rows
         .map((r) => {
-            const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, "opportunity");
+            const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, entityType);
             if (model && queueRowVariants.length > 0) {
                 const presentation = resolveRowVariantPresentation(
                     r.context,
@@ -382,6 +383,55 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
             selectedSubject: { selectedRecordId: null, source: "no_cohort" },
             rightRailActions: [],
             departmentId: snapshot.workUnit.departmentId,
+            workUnitId: snapshot.workUnit.id,
+            ready: true,
+            readiness: READY_ALL,
+        };
+    }
+
+    // ── BP V2 S2: A DOMAIN-PROJECTION COHORT — the same surface, its rows from the projection. ──
+    //
+    //    Same pills, same queue, same compact rows (one mapping, `queueRowModelsFrom`). What differs is
+    //    only what a row IS: `durable_subject`, so nothing opportunity-shaped runs for it, and there is no
+    //    default subject — a projection names no Record of Attention, so the panel waits for a selection
+    //    instead of opening a record the operator did not choose. Counts settle exactly as elsewhere.
+    if (snapshot.terminal === "projection") {
+        const pp = snapshot.presentation;
+        return {
+            header: headerFromPresentation(pp),
+            workViews: lensSetInDeclaredOrder(snapshot.lensSet).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                isActive: l.id === snapshot.activeWorkView.id,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
+            queue: {
+                rows: queueRowModelsFrom(
+                    snapshot.rows,
+                    pp,
+                    snapshot.activeWorkView.id,
+                    snapshot.activeWorkView.label,
+                    snapshot.businessProcess.key,
+                    "durable_subject",
+                ),
+                // Settlement (U-S6), from the SAME cohort — never the page length.
+                totalCount: null,
+                loading: false,
+                error: null,
+                rowConfig: pp.queue.rowSlots,
+            },
+            activeWorkViewId: snapshot.activeWorkView.id,
+            selectedRecordId: snapshot.selectedRowId,
+            selectedSubject: snapshot.selectedRowId
+                ? { selectedRecordId: snapshot.selectedRowId, source: "url" }
+                : { selectedRecordId: null, source: "empty" },
+            rightRailActions: snapshot.actionsProjection?.actions ?? [],
+            departmentId: snapshot.actionsProjection?.departmentId ?? snapshot.workUnit.departmentId,
             workUnitId: snapshot.workUnit.id,
             ready: true,
             readiness: READY_ALL,
