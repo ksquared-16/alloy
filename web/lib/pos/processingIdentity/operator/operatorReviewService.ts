@@ -49,6 +49,7 @@ import {
     projectIdentityReadiness,
     type IdentityReviewReadiness,
 } from "./caseStateModel";
+import { applyOperatorValueEdits, readOperatorValueEdits } from "./operatorValueEdits";
 import {
     buildRecommendations,
     deriveResolutionSetFromResolutions,
@@ -370,6 +371,18 @@ export async function buildPlan(
             );
         }
         resolutionSet = deriveResolutionSetFromResolutions(rows);
+        // The operator's corrections to the proposal (never to the submission) — applied here, on the
+        // one path to the lead writer, so approve commits the corrected facts.
+        {
+            const { data: editRow } = await deps.supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", deps.orgId)
+                .eq("id", input.caseId)
+                .maybeSingle();
+            const edits = readOperatorValueEdits((editRow as { metadata?: Record<string, unknown> } | null)?.metadata);
+            resolutionSet = applyOperatorValueEdits(resolutionSet, edits);
+        }
         // Bind the plan to the resolution generations it was built from.
         sourceResolutionVersions =
             sourceResolutionVersions ?? Array.from(new Set(rows.map((r) => r.generation_id)));

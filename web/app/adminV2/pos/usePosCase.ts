@@ -75,6 +75,10 @@ export interface PosCaseState {
     /** Re-pull case + recommendation + eligibility after the operator resolves subjects in review. */
     refreshAfterReview: () => Promise<void>;
     isClosed: boolean;
+    /** "Reject / Do not create": closes the case with a reason; nothing canonical is created. */
+    reject: (reasonCode: string, note: string | null) => Promise<boolean>;
+    rejecting: boolean;
+    rejectErr: string | null;
 }
 
 export function usePosCase(caseId: string | null): PosCaseState {
@@ -232,8 +236,41 @@ export function usePosCase(caseId: string | null): PosCaseState {
         }
     }, [caseId, reload]);
 
+    const [rejecting, setRejecting] = useState(false);
+    const [rejectErr, setRejectErr] = useState<string | null>(null);
+    const reject = useCallback(
+        async (reasonCode: string, note: string | null) => {
+            if (!caseId) return false;
+            setRejecting(true);
+            setRejectErr(null);
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}/reject`, {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason_code: reasonCode, note }),
+                });
+                const body = (await res.json().catch(() => null)) as { error?: string } | null;
+                if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+                dispatchOperationalWorkRefresh({ processing_case_id: caseId, kind: "complete" });
+                invalidateProcessingCase(caseId);
+                await reload();
+                return true;
+            } catch (e) {
+                setRejectErr(e instanceof Error ? e.message : "Reject failed");
+                return false;
+            } finally {
+                setRejecting(false);
+            }
+        },
+        [caseId, reload],
+    );
+
     const detail = data?.detail ?? null;
     return {
+        reject,
+        rejecting,
+        rejectErr,
         detail,
         evidence: data?.evidence ?? [],
         destinations: data?.affectedRecordTypes ?? [],

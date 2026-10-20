@@ -51,7 +51,9 @@ const OUTCOME_META: Record<
         description: "Decline the proposed action and close the case as rejected.",
         requiresReason: true,
         terminal: true,
-        resultStatus: "rejected",
+        // `processing_cases.status` has no "rejected": a rejection is a COMPLETED case whose
+        // disposition says rejected (metadata.disposition). It never reaches the Commit Engine.
+        resultStatus: "completed",
     },
     needs_more_information: {
         label: "Needs more information",

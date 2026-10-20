@@ -70,6 +70,8 @@ export interface ProcessingCaseQueueRow {
     relatedSourceCount: number;
     /** The family or child this case was for no longer exists: evidence only, never actionable. */
     subjectRemoved?: boolean;
+    /** Closed by an operator Reject ("do not create") rather than an approval. */
+    rejected?: boolean;
     sourceDisplay: SourceDisplayDescriptor | null;
     /**
      * Configurable case title (`metadata.case_title`) resolved at intake from the form's title
@@ -111,6 +113,8 @@ export interface ProcessingCaseDetail {
     archivedAt: string | null;
     /** The family or child this case was for no longer exists: evidence only — no approve, no commit. */
     subjectRemoved: boolean;
+    /** The operator's terminal disposition other than approve (Reject), from `metadata.disposition`. */
+    disposition?: { outcome: string; reasonLabel: string | null; note: string | null; at: string | null } | null;
     sources: Array<SourceRef & { display: SourceDisplayDescriptor }>;
     /** Configurable case title (`metadata.case_title`): person + purpose. Null when not computed. */
     caseTitle: string | null;

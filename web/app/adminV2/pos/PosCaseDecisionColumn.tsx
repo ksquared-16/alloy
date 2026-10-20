@@ -19,6 +19,8 @@ import { buildApprovalResultView } from "@/lib/pos/approvalResultPresentation";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosIdentityReviewOverlay from "./PosIdentityReviewOverlay";
+import PosRejectDialog from "./PosRejectDialog";
+import { CorrectionsSummary, ProposedValuesEditor, useProposedValues } from "./PosProposedValues";
 import ProcessingLeadAcknowledgement from "./ProcessingLeadAcknowledgement";
 import type { PosCaseState } from "./usePosCase";
 
@@ -99,9 +101,14 @@ export interface QueueNavigation {
 }
 
 export default function PosCaseDecisionColumn({ state, queue }: { state: PosCaseState; queue?: QueueNavigation }) {
-    const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, needsIdentityReview, reviewEligible, refreshAfterReview, isClosed } = state;
+    const { detail, evidence, rec, recLoading, approve, approving, approveErr, approveResult, needsIdentityReview, reviewEligible, refreshAfterReview, isClosed, reject, rejecting, rejectErr } = state;
     const [reviewOpen, setReviewOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const [rejectOpen, setRejectOpen] = useState(false);
+    const [valuesTick, setValuesTick] = useState(0);
+    const proposedValues = useProposedValues(detail?.id ?? null, valuesTick);
     if (!detail) return null;
+    const canEditValues = Boolean(proposedValues?.editable && proposedValues.subjects.length > 0);
 
     const recommendedActionKey = rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].key : null;
     // Approve label in business language: "Approve — Create enrollment lead" / "Approve — Link existing".
@@ -151,8 +158,14 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
             : null;
 
     // The completed conclusion: a human title + concrete ✓ outcomes (Linked / Created / Updated).
-    const conclusionTitle = leadRecords ? "Family confirmed" : "Completed";
-    const conclusionLines = resultView
+    const rejected = detail.disposition?.outcome === "rejected";
+    const conclusionTitle = rejected ? "Rejected — nothing was created" : leadRecords ? "Family confirmed" : "Completed";
+    const conclusionLines = rejected
+        ? [
+              `Reason: ${detail.disposition?.reasonLabel ?? "—"}`,
+              ...(detail.disposition?.note ? [`Note: ${detail.disposition.note}`] : []),
+          ]
+        : resultView
         ? [
               ...resultView.linked.map((l) => `Linked ${l.primary}`),
               ...resultView.created.map((l) => `Created ${l.primary}`),
@@ -215,8 +228,9 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
                         </div>
                     ) : null}
                     {approveErr ? <div className="mb-2 text-[11px] text-amber-700">{approveErr}</div> : null}
+                    <CorrectionsSummary view={proposedValues} />
                     {commitAvailable ? (
-                        <div className="space-y-2">
+                        <div className="mt-2 space-y-2">
                             {/* Review matches — the existing identity-review model, inside the Mailroom.
                                 Primary when a subject still needs a decision, a quiet secondary otherwise. */}
                             <button
@@ -244,6 +258,26 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
                             >
                                 {approving ? "Saving…" : reviewRequired ? "Resolve matches to approve" : approveLabel}
                             </button>
+                            <div className="flex gap-2">
+                                {canEditValues ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditOpen(true)}
+                                        data-testid="processing-edit-values-open"
+                                        className="flex-1 rounded-md border border-alloy-stone/25 px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/80 hover:bg-alloy-stone/10"
+                                    >
+                                        Edit values
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => setRejectOpen(true)}
+                                    data-testid="processing-reject-open"
+                                    className="flex-1 rounded-md border border-rose-200 px-3 py-1.5 text-[12px] font-medium text-rose-700 hover:bg-rose-50"
+                                >
+                                    Reject
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="rounded-md border border-alloy-stone/20 bg-alloy-stone/40 px-3 py-2 text-center text-[11.5px] text-alloy-midnight/45">
@@ -253,6 +287,29 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
                 </WorkspaceActionBar>
             ) : null}
 
+            {editOpen && proposedValues ? (
+                <ProposedValuesEditor
+                    caseId={detail.id}
+                    view={proposedValues}
+                    onClose={() => setEditOpen(false)}
+                    onSaved={() => {
+                        setValuesTick((t) => t + 1);
+                        void refreshAfterReview();
+                    }}
+                />
+            ) : null}
+            {rejectOpen ? (
+                <PosRejectDialog
+                    busy={rejecting}
+                    error={rejectErr}
+                    onClose={() => setRejectOpen(false)}
+                    onReject={(code, note) =>
+                        void reject(code, note).then((ok) => {
+                            if (ok) setRejectOpen(false);
+                        })
+                    }
+                />
+            ) : null}
             {reviewOpen ? (
                 <PosIdentityReviewOverlay
                     caseId={detail.id}
