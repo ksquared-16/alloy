@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "fa3a8eca42fd6d040a37cb19cf8155f63e7c9730",
+      "blob_sha": "d24ae1e3cd562eb79f082f8abffc64faccd248e9",
       "exists": true
     },
     {
@@ -125,7 +125,7 @@
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "06998343408c3cf6289db9d07b711edeb76146b6",
+      "blob_sha": "2b527c610b54e169b174dce6d41186ead9c9114e",
       "exists": true
     },
     {

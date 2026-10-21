@@ -900,6 +900,25 @@ past due       = owed rows whose due date has passed, MINUS what was applied
 collectible    = resolveFamilyCollectible, per charge (subsidy-aware)
 ```
 
+**Due classification (BP V2 Slice 6A).** Past due, Not yet due and Due within are classified by
+`web/lib/financials/account/accountDueClassification.ts` — moved there unchanged from the card's view
+model, which imports it, so every reader classifies one way:
+
+```
+past due       = owed (posted/partially_paid/paid), non-reversed rows due STRICTLY before today,
+                 MINUS applied money; credits kept; shown only when positive
+not yet due    = owed, non-reversed, positive rows due STRICTLY after today with a residual
+due within     = the not-yet-due rule over an INCLUSIVE window (today is due, never "not yet due")
+today          = the org-local business date (`fetchOrgBusinessDate`)
+```
+
+None of them applies submitted-claim suppression — that is `computeCollectiblePosition`'s; the card's
+"Due now" composes it in its presentation adapter. Across households the same chain runs in
+`readAccountDuePositions` (`lib/financials/account/accountDuePositions.ts`): owed dated candidates paged
+to completion, the account ledger's ownership rule, full ledgers paged per id batch,
+`readAppliedByChargeId`, Financials' location rule per charge, then the functions above — truncation is
+reported, a failed read is unavailable.
+
 Past due is the **residual, not the face amount**. `charges.status` is deliberately never advanced
 to `partially_paid` / `paid`: a stored status would be a second answer to "how much is left", and
 the first reversal would make the two disagree. The applications are the record.
