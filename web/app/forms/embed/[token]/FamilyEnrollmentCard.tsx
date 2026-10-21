@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { onParticipantProgress } from "./participantProgressSignal";
 
 type Row = {
     key: string;
@@ -263,14 +264,17 @@ export default function FamilyEnrollmentCard({ token }: { token: string }) {
         };
     }, [token, version]);
 
+    // Paperwork submitted or a fee paid anywhere on the page: re-read the family's own truth.
+    useEffect(() => onParticipantProgress(() => setVersion((v) => v + 1)), []);
+
     if (!family) return null;
 
     const pathByChild = new Map(family.children.map((c) => [c.customerMemberId, c.participantPath]));
 
     return (
-        <section data-family-enrollment="card" aria-label={family.headline}>
-            <h3>{family.headline}</h3>
-            {family.childCount < 2 ? null : <ul data-family-enrollment="rows">
+        <section data-family-enrollment="card" aria-label={family.headline} className="mt-4 rounded-2xl border border-alloy-midnight/[0.08] bg-white px-5 py-4 shadow-sm">
+            <h3 className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">{family.headline}</h3>
+            {family.childCount < 2 ? null : <ul data-family-enrollment="rows" className="divide-y divide-alloy-midnight/[0.06] text-[13.5px]">
                 {family.progress.map((row) => {
                     const focused = row.customerMemberId != null && row.customerMemberId === family.focusedCustomerMemberId;
                     const path = row.customerMemberId ? pathByChild.get(row.customerMemberId) ?? null : null;
@@ -280,19 +284,23 @@ export default function FamilyEnrollmentCard({ token }: { token: string }) {
                             data-family-enrollment-row={row.key.startsWith("child:") ? "child" : row.key}
                             data-family-enrollment-complete={row.complete ? "true" : "false"}
                             aria-current={focused ? "true" : undefined}
+                            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2"
                         >
-                            <span data-family-enrollment="label">{row.label}</span>
-                            {" — "}
-                            <span data-family-enrollment="detail">{row.detail}</span>
-                            {focused ? <span data-family-enrollment="focused"> · You are here</span> : null}
-                            {!focused && path ? (
-                                <>
-                                    {" · "}
-                                    <a data-family-enrollment="open" href={path}>
-                                        Open
-                                    </a>
-                                </>
-                            ) : null}
+                            <span data-family-enrollment="label" className={focused ? "font-semibold text-alloy-midnight" : "text-alloy-midnight/80"}>{row.label}</span>
+                            {/* Separators stay in the text for screen readers; the layout carries them visually. */}
+                            <span className="sr-only"> — </span>
+                            <span className="flex items-center gap-2">
+                                <span data-family-enrollment="detail" className={row.complete ? "font-medium text-alloy-bend-pine" : "text-alloy-midnight/60"}>{row.detail}</span>
+                                {focused ? <span data-family-enrollment="focused" className="text-[12px] text-alloy-midnight/45"><span className="sr-only"> · </span>You are here</span> : null}
+                                {!focused && path ? (
+                                    <>
+                                        <span className="sr-only"> · </span>
+                                        <a data-family-enrollment="open" href={path} className="text-[13px] font-medium text-alloy-bend-pine underline underline-offset-2">
+                                            Open
+                                        </a>
+                                    </>
+                                ) : null}
+                            </span>
                         </li>
                     );
                 })}

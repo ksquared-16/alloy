@@ -31,6 +31,7 @@ import {
 } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
 import {
     PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES,
     PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES,
     PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES,
     PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES,
@@ -424,6 +425,9 @@ export function buildHouseholdCardEvidence(
             drawerRow,
             resolveIdentityPhotoUrlFromRaw(row as unknown as Record<string, unknown>),
         );
+
+        // A child's physician or dentist is not a household adult — not a parent, not "additional".
+        if (PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES.has(normPersonDrawerHouseholdRole(row.role_type))) continue;
 
         const sectionKey = nestedConfig
             ? resolveHouseholdContactSectionKey({

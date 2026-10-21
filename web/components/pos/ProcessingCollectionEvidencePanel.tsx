@@ -5,6 +5,7 @@ import type { ProcessingCollectionGroupEvidence, ProcessingCollectionInstancePro
 import { instanceOriginLabel } from "@/lib/pos/processingCase/collection/collectionDisplayAdapters";
 import type { RelatedRecordFieldDecisionKind, RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
+import { healthFactKindForFormProvider } from "@/lib/health/healthFactFormMembers";
 
 function formatValue(display: string | null | undefined): string {
     if (display === null || display === undefined || display === "") return "—";
@@ -192,10 +193,72 @@ function InstanceBlock({ instance, caseId, onCommitted }: { instance: Processing
             ) : null}
 
             {caseId && isNewChildCommitEligible(instance) ? <NewChildCommitBlock instance={instance} caseId={caseId} onCommitted={onCommitted} /> : null}
+            {caseId && healthFactDecisionKind(instance) ? <HealthFactDecisionBlock instance={instance} caseId={caseId} kind={healthFactDecisionKind(instance)!} onCommitted={onCommitted} /> : null}
             {caseId && relationshipDecisionLabel(instance) ? <RelationshipDecisionBlock instance={instance} caseId={caseId} label={relationshipDecisionLabel(instance)!} onCommitted={onCommitted} /> : null}
             {result ? <p className="mt-2 text-[11px] font-medium text-alloy-juniper">Commit result: {result.status}</p> : null}
             {error ? <p className="mt-2 text-[11px] text-amber-800">{error}</p> : null}
             {hasWarnings ? <ul className="mt-2 space-y-0.5 text-[11px] text-amber-800">{instance.diagnostics.map((d, i) => <li key={`${d.code}:${i}`}>{d.message}</li>)}</ul> : null}
+        </div>
+    );
+}
+
+/** A valid allergy, condition or medication row — recorded on the child's Medical card only on approval. */
+function healthFactDecisionKind(instance: ProcessingCollectionInstanceProposal): string | null {
+    if (instance.status !== "valid") return null;
+    return healthFactKindForFormProvider(instance.collection_provider_ref);
+}
+
+/**
+ * Record or reject a health fact the family wrote. The server reads the fact from the submission,
+ * writes it onto the child the paperwork is about, and requires permission to change health
+ * information; nothing here asserts a child, a kind or a severity.
+ */
+function HealthFactDecisionBlock({ instance, caseId, kind, onCommitted }: { instance: ProcessingCollectionInstanceProposal; caseId: string; kind: string; onCommitted?: () => void }) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState<string | null>(null);
+    const [reason, setReason] = useState("");
+    const base = `/api/admin/processing/cases/${caseId}/related-record-proposals/${encodeURIComponent(instance.proposal_id)}`;
+    const act = async (action: "commit" | "reject") => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`${base}/${action}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(action === "commit"
+                    ? { decision: { proposal_id: instance.proposal_id, instance_decision: "approve", field_decisions: [] } }
+                    : { reason: reason || null }),
+            });
+            const json = (await res.json()) as { error?: string; data?: { outcome?: string } };
+            if (!res.ok) {
+                setError(json.error ?? (action === "commit" ? `The ${kind} could not be recorded.` : "The proposal could not be rejected."));
+                return;
+            }
+            const outcome = json.data?.outcome;
+            setDone(action === "reject"
+                ? "Rejected — nothing was recorded"
+                : outcome === "already_on_record" ? `Already on the child's Medical card`
+                : outcome === "corrected" ? `Updated the ${kind} on the child's Medical card`
+                : `Recorded on the child's Medical card`);
+            onCommitted?.();
+        } finally {
+            setBusy(false);
+        }
+    };
+    if (done) return <p className="mt-2 text-[11px] font-medium text-alloy-juniper" data-testid="health-fact-decision-done">{done}</p>;
+    return (
+        <div className="mt-2 space-y-1.5 border-t border-stone-100 pt-2" data-testid="health-fact-decision">
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="rounded bg-alloy-midnight px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void act("commit")} data-testid="health-fact-commit">
+                    {busy ? "Working..." : `Record ${kind} on Medical card`}
+                </button>
+                <input aria-label="Reason to reject" placeholder="Reason (optional)" className="min-w-[10rem] rounded border border-stone-200 px-1.5 py-0.5 text-[12px]" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="health-fact-reject-reason" />
+                <button type="button" className="rounded border border-stone-200 px-2 py-1 text-[11px] disabled:opacity-50" disabled={busy} onClick={() => void act("reject")} data-testid="health-fact-reject">
+                    Reject
+                </button>
+            </div>
+            {error ? <p className="text-[11px] text-amber-800" data-testid="health-fact-decision-error">{error}</p> : null}
         </div>
     );
 }

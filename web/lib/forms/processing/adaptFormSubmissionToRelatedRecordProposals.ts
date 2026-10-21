@@ -11,6 +11,7 @@ import {
     classifyCollectionProvider,
 } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
+import { healthFactKindForFormProvider, readHealthFactRow } from "@/lib/health/healthFactFormMembers";
 import {
     collectionBindingAuthoringEnabledForProvider,
 } from "@/lib/fields/formsRelationshipOperationalSupport";
@@ -23,6 +24,7 @@ import type {
     RelatedRecordInstanceProposal,
     RelatedRecordProposalBundle,
     RelatedRecordCollectionProposal,
+    RelatedRecordHealthFactIntent,
     RelatedRecordProposalOrigin,
     RelatedRecordProposalStatus,
     RelatedRecordRelationshipIntent,
@@ -183,6 +185,35 @@ function buildInstanceProposal(args: {
           }
         : undefined;
 
+    // ── health facts: read in Health's own words; nothing the client sends names the kind ─────────
+    const healthKind = healthFactKindForFormProvider(row.provider_ref);
+    let healthFactIntent: RelatedRecordHealthFactIntent | undefined;
+    if (healthKind) {
+        const reading = readHealthFactRow(healthKind, nestedFields, row.values);
+        healthFactIntent = {
+            fact_kind: reading.fact_kind,
+            payload: reading.payload,
+            missing_required: [...reading.missing_required],
+            unresolved_member_field_ids: [...reading.unresolved_member_field_ids],
+            unrecognized_severity: reading.unrecognized_severity,
+        };
+        if (reading.missing_required.length > 0) {
+            diagnostics.push({
+                code: "missing_field_binding",
+                message: `This ${healthKind} has no ${reading.missing_required.join(", ")} — it cannot be recorded until one is given.`,
+                path: `groups.${groupId}.${rowIndex}.values`,
+            });
+            status = status === "valid" ? "incomplete" : status;
+        }
+        if (reading.unrecognized_severity) {
+            diagnostics.push({
+                code: "missing_field_binding",
+                message: `Severity "${reading.unrecognized_severity}" is not one Alloy records; it was left out rather than guessed.`,
+                path: `groups.${groupId}.${rowIndex}.values`,
+            });
+        }
+    }
+
     return {
         proposal_id: proposalId,
         collection_provider_ref: row.provider_ref,
@@ -193,6 +224,7 @@ function buildInstanceProposal(args: {
         field_proposals: fieldProposals,
         execution_kind: executionKind,
         ...(relationshipIntent ? { relationship_intent: relationshipIntent } : {}),
+        ...(healthFactIntent ? { health_fact_intent: healthFactIntent } : {}),
         source_lineage: {
             source_kind: SOURCE_KIND,
             source_record_id: ctx.formSubmissionId,

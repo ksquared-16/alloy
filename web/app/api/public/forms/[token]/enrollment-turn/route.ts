@@ -45,6 +45,7 @@ import {
     applyConfirmationGroup,
     applyConfirmationGroupMemberEdit,
 } from "@/lib/enrollment/participantRuntime/applyConfirmationGroup";
+import { writePartyRowsIntoDrafts } from "@/lib/enrollment/participantRuntime/partyRowsIntoDrafts";
 import { applyPartyResponse } from "@/lib/enrollment/participantRuntime/applyPartyResponse";
 
 function plaintextToken(raw: string): string {
@@ -231,6 +232,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
         if (!applied.ok) return publicErr(applied.error, 409, { code: "party_refused" });
 
+        /*
+         * THE PERSON IS NOW A ROW OF EVERY FORM THAT COLLECTS THAT ROLE — the same person, linked, so
+         * review does not ask again and Processing links rather than duplicates (partyRowsIntoDrafts).
+         */
+        let partyDraftGroups: Awaited<ReturnType<typeof writePartyRowsIntoDrafts>> = {};
+        if (applied.outcome === "attached") {
+            try {
+                partyDraftGroups = await writePartyRowsIntoDrafts(supabase, {
+                    orgId: access.value.orgId,
+                    sessionId: access.value.sessionId,
+                    customerMemberId: current.context.needsContext.subjectId ?? null,
+                    relationshipOptions: current.value.relationship_options,
+                });
+            } catch (e) {
+                console.warn("[enrollment-turn] party rows into drafts", e instanceof Error ? e.message : e);
+            }
+        }
+
         // Re-resolve: the canonical graph moved, so the platform decides what comes next.
         const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
@@ -240,6 +259,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
         const partyResponse = publicOk({
             outcome: applied.outcome,
+            draft_groups: partyDraftGroups,
             objective: participantObjectiveWireModel(after.value, {
                 subjectDisplayName: canonical.subjectDisplayName,
             }),

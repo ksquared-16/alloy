@@ -27,12 +27,21 @@ export type PartyResponse = {
     readonly decline?: boolean;
     /** Opaque handle for a household person the server offered for reuse. */
     readonly select_ref?: string;
-    readonly identity?: { readonly full_name?: unknown; readonly phone?: unknown; readonly email?: unknown };
+    readonly identity?: { readonly full_name?: unknown; readonly phone?: unknown; readonly email?: unknown; readonly relationship_type?: unknown };
+    /** With `select_ref`: the relationship to THIS child, which can differ from a sibling's. */
+    readonly relationship_type?: unknown;
 };
 
 export type ApplyPartyResult =
     | { readonly ok: true; readonly outcome: "declined" | "attached"; readonly person_id?: string }
     | { readonly ok: false; readonly error: string };
+
+/** A relationship the family chose — only one the organization's vocabulary offers. */
+function kinshipFrom(objective: ParticipantEnrollmentObjective, raw: unknown): string | null {
+    const v = typeof raw === "string" ? raw.trim() : "";
+    if (!v) return null;
+    return objective.relationship_options.some((o) => o.value === v) ? v : null;
+}
 
 export async function applyPartyResponse(
     supabase: SupabaseClient,
@@ -94,6 +103,7 @@ export async function applyPartyResponse(
             role: offer.role,
             personId: candidate.person_id,
             priority: offer.existing.length + 1,
+            relationshipType: kinshipFrom(input.objective, input.response.relationship_type) ?? candidate.relationship_type ?? null,
         });
         return attached.ok
             ? { ok: true, outcome: "attached", person_id: attached.person_id }
@@ -114,6 +124,7 @@ export async function applyPartyResponse(
         },
         // Canonical ordering: the next place in this role's own list.
         priority: offer.existing.length + 1,
+        relationshipType: kinshipFrom(input.objective, input.response.identity?.relationship_type),
     });
     return attached.ok
         ? { ok: true, outcome: "attached", person_id: attached.person_id }

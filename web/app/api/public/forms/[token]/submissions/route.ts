@@ -1,3 +1,4 @@
+import { syncPartyRowsForSubmission } from "@/lib/enrollment/participantRuntime/partyRowsIntoDrafts";
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
@@ -185,6 +186,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .maybeSingle();
             if (exSub) {
                 const full = exSub as Record<string, unknown>;
+                // The child's people the conversation added since this draft was made are its rows now.
+                const healed = await syncPartyRowsForSubmission(supabase, {
+                    orgId: ctx.orgId,
+                    submissionId: String(full.id),
+                    customerMemberId: full.customer_member_id as string | null,
+                });
+                if (healed) {
+                    const p = (full.payload ?? {}) as Record<string, unknown>;
+                    full.payload = { ...p, groups: { ...((p.groups ?? {}) as Record<string, unknown>), ...healed } };
+                }
                 const { org_id: _o, ...rest } = full;
                 void _o;
                 return publicOk(rest, 201);
@@ -330,6 +341,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq("id", ctx.packet.current_session_item_id)
             .eq("org_id", ctx.orgId);
         if (upSiErr) return publicErr(upSiErr.message, 400);
+        // A packet draft holds the child's canonical people as linked rows from its first open.
+        const healed = await syncPartyRowsForSubmission(supabase, {
+            orgId: ctx.orgId,
+            submissionId: String(row.id),
+            customerMemberId: row.customer_member_id as string | null,
+        });
+        if (healed) {
+            const p = (row.payload ?? {}) as Record<string, unknown>;
+            row.payload = { ...p, groups: { ...((p.groups ?? {}) as Record<string, unknown>), ...healed } };
+        }
     }
 
     const { org_id: _omit, ...rest } = row;

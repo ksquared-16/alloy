@@ -47,6 +47,7 @@ import {
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
 import ParticipantPaymentCard from "./ParticipantPaymentCard";
+import { announceParticipantProgress } from "./participantProgressSignal";
 import FamilyEnrollmentCard from "./FamilyEnrollmentCard";
 import { CompiledArtifactReview } from "./CompiledArtifactReview";
 import { ParticipantDocumentCanvas } from "./ParticipantDocumentCanvas";
@@ -755,6 +756,8 @@ export function FormEmbedClient({
             window.sessionStorage.removeItem(storageKey(token));
             setValidationErrors(null);
             setMessage(null);
+            // A submitted document can make a fee due and completes a family row: the panels re-read.
+            announceParticipantProgress();
 
             const data = json.ok ? json.data : undefined;
             if (data?.next_form_available === true && data.packet_complete === false) {
@@ -1449,6 +1452,13 @@ export function FormEmbedClient({
                             if (!mine) return;
                             setPayload((prev) => ({ ...prev, values: { ...((prev.values ?? {}) as Record<string, unknown>), ...mine } }));
                             setResolvedArtifactValues((prev) => (prev ? { ...prev, ...mine } : prev));
+                        }}
+                        onDraftGroups={(updates) => {
+                            // The person the conversation added is now this draft's row: hold it, so
+                            // review shows them and autosave cannot write the old rows back.
+                            const mine = submissionId ? updates[submissionId] : undefined;
+                            if (!mine) return;
+                            setPayload((prev) => ({ ...prev, groups: { ...(prev.groups ?? {}), ...(mine as NonNullable<typeof prev.groups>) } }));
                         }}
                         onValueSettled={(fieldIds, value) => {
                             // Merge into the rendered artifact immediately. The session already
