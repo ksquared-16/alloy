@@ -1,3 +1,4 @@
+import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 /**
  * CP-1 / S4.2 — Shared Canonical Dependencies (Module C).
@@ -376,6 +377,7 @@ export async function resolveSharedCanonicalDeps(
 
     const tPrep0 = Date.now();
     const tHousehold0 = Date.now();
+    const tRelationships0 = Date.now();
     const [, deptMetadata, statusDefsPack] = await Promise.all([
         attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
             // NESTED INSIDE `status_and_dept_ms`, not serial with it: both clocks start on adjacent
@@ -388,6 +390,17 @@ export async function resolveSharedCanonicalDeps(
         :   Promise.resolve(null),
         fetchEffectiveStatusDefinitionsTagged(supabase, orgId, "opportunities", {
             activeOnly: true,
+        }),
+        /*
+         * THE CHILDREN'S CANONICAL RELATIONSHIPS — the same bags the entity GET attaches.
+         *
+         * This drawer record is the focus panel's truth in the work views (Registration, Decision…),
+         * and it never carried them: the Household card fell back to household rows, so a pick-up —
+         * a child relationship with no household row — counted 0 (Lil' Sunshine ZZQALM234600).
+         * One bounded read for every child; an error yields [] exactly as the entity GET does.
+         */
+        attachDrawerChildRelationships(supabase, orgId, record as Record<string, unknown>).then(() => {
+            phases_ms.child_relationships_nested_ms = Date.now() - tRelationships0;
         }),
     ]);
     phases_ms.status_and_dept_ms = Date.now() - tPrep0;
@@ -501,4 +514,34 @@ export async function resolveSharedCanonicalDeps(
         earlyHeaderActions,
         phases_ms,
     };
+}
+
+/** Attach `_person_child_relationships_by_member` for the record's children (never throws). */
+export async function attachDrawerChildRelationships(
+    supabase: Parameters<typeof attachPersonChildRelationshipsToEntityRecord>[0]["supabase"],
+    orgId: string,
+    record: Record<string, unknown>,
+): Promise<void> {
+    try {
+        const customerId = String(record.customer_id ?? "").trim();
+        const children = (record._inquiry_children as { customer_member_id?: string | null; id?: string | null; person_id?: string | null }[] | undefined) ?? [];
+        const memberChildIds = new Map<string, string | null>();
+        for (const child of children) {
+            const memberId = child.customer_member_id != null ? String(child.customer_member_id).trim() : "";
+            if (!memberId) continue;
+            memberChildIds.set(memberId, child.person_id != null ? String(child.person_id) : child.id != null ? String(child.id) : null);
+        }
+        record._person_child_relationships_by_member =
+            customerId && memberChildIds.size > 0
+                ? await attachPersonChildRelationshipsToEntityRecord({
+                      supabase,
+                      orgId,
+                      customerId,
+                      customerMemberIds: [...memberChildIds.keys()],
+                      memberChildIds,
+                  })
+                : [];
+    } catch {
+        record._person_child_relationships_by_member = [];
+    }
 }

@@ -3,13 +3,14 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolvePersonChildRelationshipsFromStore } from "./personChildRelationshipResolverRegistry";
+import { resolvePersonChildRelationshipsForMembersFromStore } from "./personChildRelationshipResolverRegistry";
+import type { PersonChildRelationshipCollectionResult } from "./personChildRelationshipEntity";
 
 export type PersonChildRelationshipMemberBag = {
     customer_member_id: string;
     customer_id: string;
     child_id: string | null;
-    items: Awaited<ReturnType<typeof resolvePersonChildRelationshipsFromStore>>["items"];
+    items: PersonChildRelationshipCollectionResult["items"];
 };
 
 export async function attachPersonChildRelationshipsToEntityRecord(args: {
@@ -20,19 +21,20 @@ export async function attachPersonChildRelationshipsToEntityRecord(args: {
     memberChildIds?: ReadonlyMap<string, string | null>;
 }): Promise<PersonChildRelationshipMemberBag[]> {
     const bags: PersonChildRelationshipMemberBag[] = [];
+    // One bounded read for every child (was five queries per child, in sequence).
+    const resolved = await resolvePersonChildRelationshipsForMembersFromStore({
+        supabase: args.supabase,
+        orgId: args.orgId,
+        customerId: args.customerId,
+        customerMemberIds: args.customerMemberIds,
+    });
     for (const memberId of args.customerMemberIds) {
         if (!memberId.trim()) continue;
-        const resolved = await resolvePersonChildRelationshipsFromStore({
-            supabase: args.supabase,
-            orgId: args.orgId,
-            customerId: args.customerId,
-            customerMemberId: memberId,
-        });
         bags.push({
             customer_member_id: memberId,
             customer_id: args.customerId,
             child_id: args.memberChildIds?.get(memberId) ?? null,
-            items: resolved.items,
+            items: resolved.get(memberId.trim())?.items ?? [],
         });
     }
     return bags;
