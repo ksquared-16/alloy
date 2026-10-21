@@ -1,0 +1,14 @@
+{
+ "build": "a45a058dd67aa9a110fda5a727136e01ed4bddb3",
+ "strip": "DUE NOW | $1,835.00 | $1,835.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,051.00 | $2,116.00 charged · $65.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+ "form": {
+  "amount": "1835.00",
+  "total": "Total applied\n$1,835.00",
+  "excluded": null
+ },
+ "household": {
+  "amount": "1650.00",
+  "total": "Total applied\n$1,650.00",
+  "excluded": "Not included: $185.00 owed by named responsible people — choose who paid."
+ }
+}
