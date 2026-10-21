@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { resolvePersonChildRelationshipsForMembersFromStore, resolvePersonChildRelationshipsFromStore } from "@/lib/fields/personChildRelationship/personChildRelationshipResolverRegistry";
 import { attachDrawerChildRelationships } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
+import { fillEmptyRelationshipTypeFromStatedKinship as applyStatedKinship } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
@@ -176,6 +177,19 @@ describe.skipIf(!env)("household relationship projection (cert DB)", () => {
         expect(ev.otherParentGuardianCount).toBe(0);
         expect(JSON.stringify(ev)).not.toContain("Lee Park");
         expect(JSON.stringify(ev)).not.toContain("Former Contact");
+    });
+
+    it("the relationship the family stated reaches an empty edge, matched to the org's own vocabulary only", async () => {
+        const kin = await person("Kin Person");
+        await relate(ids.a, ids.cal, kin, ["emergency_contact"]);
+        const read = async () => ((await ok(db.from("person_child_relationships").select("relationship_type").eq("person_id", kin).single())) as { relationship_type: string | null }).relationship_type;
+        await applyStatedKinship(db, ORG, kin, [ids.cal], "Not A Real Relationship");
+        expect(await read()).toBeNull();
+        await applyStatedKinship(db, ORG, kin, [ids.cal], "Grandparent");
+        expect(await read()).toBe("grandparent");
+        // An edge that already says something is never overwritten.
+        await applyStatedKinship(db, ORG, kin, [ids.cal], "Uncle");
+        expect(await read()).toBe("grandparent");
     });
 
     it("a household with no customer or no children gets an empty list, never an error", async () => {

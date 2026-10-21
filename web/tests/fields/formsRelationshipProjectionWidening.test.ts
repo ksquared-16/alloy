@@ -36,7 +36,7 @@ describe("POS-FP17 — Forms projection widening", () => {
         }
         // natives + one per definition + the child's own health collections (allergies, conditions,
         // medications — committed through Health on approval). Nothing else hand-authored.
-        const HEALTH_REFS = ["health.allergies", "health.conditions", "health.medications"];
+        const HEALTH_REFS = ["health.allergies", "health.conditions", "health.medications", "health.insurance"];
         expect(seeds.filter((p) => p.refKey.startsWith("health.")).map((p) => p.refKey)).toEqual(HEALTH_REFS);
         expect(seeds.length).toBe(NATIVE_REFS.length + collectableRelationshipDefinitions().length + HEALTH_REFS.length);
     });
