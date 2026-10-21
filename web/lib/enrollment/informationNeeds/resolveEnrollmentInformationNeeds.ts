@@ -28,6 +28,7 @@
  * be worse than the gap it papers over. Requirement-level progress keeps reporting it.
  */
 
+import { hiddenFieldKeysForAnswers } from "@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
@@ -111,10 +112,11 @@ export function assembleEnrollmentInformationNeeds(
             needs: [],
         };
     }
+    const sharedValues = (session.shared_values ?? {}) as Record<string, unknown>;
     const needs = projectEnrollmentInformationNeeds({
         forms: [...forms],
         subjectId,
-        sharedValues: (session.shared_values ?? {}) as Record<string, unknown>,
+        sharedValues,
         canonicalValues: input.canonicalValues,
         confirmations: readEnrollmentNeedConfirmations(session.metadata),
         declines: readEnrollmentNeedDeclines(session.metadata),
@@ -130,6 +132,7 @@ export function assembleEnrollmentInformationNeeds(
         subject_id: subjectId,
         ...summarizeEnrollmentInformationNeeds(needs),
         needs,
+        hidden_field_keys: [...hiddenFieldKeysForAnswers({ forms, subjectId, sharedValues, canonicalValues: input.canonicalValues })],
     };
 }
 

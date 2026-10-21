@@ -90,14 +90,23 @@ export function participantEvidenceObligations(
 export function outstandingRequiredEvidence(
     forms: readonly PinnedRequirementForm[],
     onFile: ReadonlySet<string>,
+    /**
+     * `${session_item_id}:${field_id}` hidden by the author's condition for this family's answers.
+     * A required attachment behind a "show when …" the family did not meet is not owed — the same
+     * rule the questions follow.
+     */
+    hidden: ReadonlySet<string> = new Set(),
 ): ParticipantEvidenceObligation[] {
-    return participantEvidenceObligations(forms).filter((o) => o.required && !onFile.has(o.field_id));
+    return participantEvidenceObligations(forms).filter(
+        (o) => o.required && !onFile.has(o.field_id) && !hidden.has(`${o.session_item_id}:${o.field_id}`),
+    );
 }
 
 /** Is every required attachment on file? The gate preparation language must respect. */
 export function requiredEvidenceSatisfied(
     forms: readonly PinnedRequirementForm[],
     onFile: ReadonlySet<string>,
+    hidden: ReadonlySet<string> = new Set(),
 ): boolean {
-    return outstandingRequiredEvidence(forms, onFile).length === 0;
+    return outstandingRequiredEvidence(forms, onFile, hidden).length === 0;
 }

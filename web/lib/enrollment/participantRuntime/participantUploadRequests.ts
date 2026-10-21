@@ -20,6 +20,7 @@
  */
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
 
 export type ParticipantUploadRequest = {
     readonly field_id: string;
@@ -107,5 +108,9 @@ export function outstandingUploadRequests(
     schema: Pick<FormSchemaV1, "fields">,
     values: Readonly<Record<string, unknown>>,
 ): ParticipantUploadRequest[] {
-    return participantUploadRequests(schema).filter((r) => !uploadIsOnFile(values[r.field_id]));
+    // An attachment behind a "show when …" these answers do not meet is not owed — the same rule
+    // the questions follow.
+    return participantUploadRequests(schema).filter(
+        (r) => !uploadIsOnFile(values[r.field_id]) && fieldShownForAnswers(schema as FormSchemaV1, r.field_id, (id) => values[id]),
+    );
 }

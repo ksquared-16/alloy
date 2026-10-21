@@ -40,3 +40,22 @@ export function brandingMetadataPatch(
         logo_url: branding.logo_url?.trim() || null,
     };
 }
+
+/**
+ * The monogram a branded header shows when no logo is configured: the initials of the school's
+ * name ("Lil' Sunshine Childcare" → "LS"), never the first letters of a placeholder. Without a
+ * configured name there is nothing to abbreviate — "Your school" became an unexplained "YO".
+ */
+export function brandMonogram(brandName: string | null | undefined): string {
+    const words = (brandName ?? "")
+        .replace(/['’]/g, "")
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean);
+    // Connective words carry no identity: "School of Enrichment" → "SE".
+    const significant = words.filter((w) => !["of", "the", "and", "for", "at"].includes(w.toLowerCase()));
+    if (significant.length) words.splice(0, words.length, ...significant);
+    if (!words.length) return "";
+    if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+    return (words[0]![0]! + words[1]![0]!).toUpperCase();
+}
+
