@@ -17,8 +17,8 @@ import { projectionTableStub } from "./projectionTableStub";
 const ORG = "org-1";
 const R = "site-r";
 const L = "site-l";
-const allowRead = async () => ({ ok: true as const });
-const denyRead = async () => ({ ok: false as const, message: "no fin.read" });
+const allowRead = (async () => ({ ok: true as const })) as never;
+const denyRead = (async () => ({ ok: false as const, message: "no fin.read" })) as never;
 const ctx = (scope: DomainProjectionScope): DomainProjectionContext => ({ orgId: ORG, userId: "u-1", scope });
 const ALL: DomainProjectionScope = { siteScope: "all", allowedSiteLocationIds: [] };
 
