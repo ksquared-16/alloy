@@ -122,6 +122,15 @@ type Props = {
      * its stack, so nothing compact renders first.
      */
     openCharge?: { chargeId: string; label: string; seed?: ChargeDetailSeed | null } | null;
+    /**
+     * ── OPEN ON ONE COLLECTION (BP V2 S6) ─────────────────────────────────────────────────────
+     *
+     * A Billing "payment exception" names a collection the provider confirmed and Financials has not
+     * recorded. The card already lists those, read-only, on its Payment surface in the shared lifecycle
+     * words (never as a payment). This starts the card on that surface with the named attempt marked —
+     * nothing else changes, and recognition stays where it is owned (Payments · Needs recognition).
+     */
+    openCollection?: { attemptId: string } | null;
     /** Called once the operator has closed every surface the card was opened with. */
     onSurfacesClosed?: () => void;
 };
@@ -378,6 +387,7 @@ export default function FinancialsCard({
     summaryVariant = "period",
     detailsAreTheSurface = false,
     openCharge = null,
+    openCollection = null,
     onSurfacesClosed,
 }: Props) {
     const scope = context.participantScope ?? null;
@@ -484,13 +494,15 @@ export default function FinancialsCard({
             ? [{ kind: "detail" }]
             : openCharge
               ? [{ kind: "charge_detail", chargeId: openCharge.chargeId, label: openCharge.label, seed: openCharge.seed ?? null }]
-              : [],
+              : openCollection
+                ? [{ kind: "payment" }]
+                : [],
     );
     /*
      * A card opened ON a charge has no resting surface of its own in that host: when the operator
      * closes back past what it was opened with, the host is told, and unmounts it.
      */
-    const openedOnCharge = useRef(Boolean(openCharge) && !detailsAreTheSurface);
+    const openedOnCharge = useRef((Boolean(openCharge) || Boolean(openCollection)) && !detailsAreTheSurface);
     useEffect(() => {
         if (openedOnCharge.current && stack.length === 0) onSurfacesClosed?.();
     }, [stack.length, onSurfacesClosed]);
@@ -4143,6 +4155,8 @@ export default function FinancialsCard({
                                     data-financials-collection={c.attemptId}
                                     data-financials-collection-rail={c.rail}
                                     data-financials-collection-state={state}
+                                    data-financials-collection-focused={openCollection?.attemptId === c.attemptId ? "true" : undefined}
+                                    style={openCollection?.attemptId === c.attemptId ? { outline: "2px solid rgba(0,162,131,0.45)", borderRadius: 8 } : undefined}
                                 >
                                     <span>{money(c.amountCents, c.currencyCode)}</span>
                                     <span className="alloy-os-financials__note">

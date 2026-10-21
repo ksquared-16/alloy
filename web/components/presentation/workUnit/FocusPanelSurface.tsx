@@ -231,6 +231,7 @@ export function FocusPanelSurface({
                                     contextSiteId={durableEntry!.contextSiteId}
                                     focusSource={durableEntry!.focusSource}
                                     origin={durableEntry!.origin}
+                                    leadCard={durableEntry!.leadCard}
                                     /*
                                      * BP V2 S4 — A CONFIRMED WRITE MOVES THE VIEW. The card fires this only
                                      * after the canonical writer succeeded and it re-read its own truth;

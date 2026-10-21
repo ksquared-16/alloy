@@ -21,6 +21,7 @@ import { loadSubjectContexts } from "@/lib/context/loadSubjectContexts";
 import { COMPENSATION_READ_PERMISSION_KEY } from "@/lib/access/compensationAuthority";
 import { durableRecordContextOptions } from "@/lib/context/durableRecordContextOptions";
 import { durableRecordRelatedWork } from "@/lib/context/durableRecordRelatedWork";
+import { resolveHouseholdFinancialFocus } from "@/lib/runtime/focus/householdFinancialFocusSource";
 
 /**
  * GET `/api/admin/durable-record?subject_type=person|child&subject_id=…`
@@ -65,6 +66,9 @@ export async function GET(request: NextRequest) {
     // BP V2 S4 — the site the caller is viewing this subject's Assignment through (a Work View row's
     // commitment or agreement site). A request only: `loadSubjectContexts` honours it inside scope.
     const scheduleSiteId = (searchParams.get("context_site_id") ?? "").trim() || null;
+    // BP V2 S6 — a Billing row's financial source, checked against THIS household (household grain only).
+    const focusKind = (searchParams.get("focus_kind") ?? "").trim();
+    const focusId = (searchParams.get("focus_id") ?? "").trim();
 
     if (
         !subjectId
@@ -205,6 +209,21 @@ export async function GET(request: NextRequest) {
                  * reach for a case to get it.
                  */
                 householdSubject: composed.subject,
+                /*
+                 * BP V2 S6 — the entry's financial source, verified: it must exist in this org, belong to
+                 * this household and be readable (`fin.read`). Only a status is returned for anything else,
+                 * so a stale or foreign id discloses nothing. Absent when the entry named no source.
+                 */
+                financialFocus:
+                    focusKind && focusId
+                        ? await resolveHouseholdFinancialFocus(supabase, {
+                              orgId: ctx.orgId,
+                              userId: ctx.userId,
+                              householdId: subjectId,
+                              kind: focusKind,
+                              id: focusId,
+                          })
+                        : null,
             });
         }
 
