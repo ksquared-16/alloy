@@ -33,6 +33,8 @@ export type AssignmentRosterSubject = {
         isPrimary: boolean;
         roleLabel: "Primary" | "Secondary";
         assignmentTypeLabel: string | null;
+        assignmentTypeId?: string | null;
+        schedulePatternId?: string | null;
         roomName: string | null;
         weekdaysLabel: string;
         timeLabel?: string | null;
@@ -69,9 +71,10 @@ export type AssignmentRosterBulkHandlers = {
         subjects: AssignmentRosterSubject[],
         preview: BulkAssignmentPreviewRow[],
     ) => void | Promise<void>;
+    /** Answers the refusals, one line per row the server refused (empty = all applied). */
     onBulkRoomChange?: (
-        rows: { customerMemberId: string; payload: Record<string, unknown> }[],
-    ) => void | Promise<void>;
+        rows: { customerMemberId: string; subjectName: string; payload: Record<string, unknown> }[],
+    ) => Promise<string[]>;
     assignmentTypes?: OrgAssignmentTypeOption[];
     siteId?: string;
     busy?: boolean;
@@ -112,6 +115,7 @@ export default function AssignmentRosterPanel({
     const [bulkTypeId, setBulkTypeId] = useState("");
     const [bulkPatternId, setBulkPatternId] = useState("");
     const [bulkRoomId, setBulkRoomId] = useState("");
+    const [bulkRoomResult, setBulkRoomResult] = useState<string[] | null>(null);
     const [bulkStartDate, setBulkStartDate] = useState(new Date().toISOString().slice(0, 10));
 
     useEffect(() => {
@@ -497,28 +501,51 @@ export default function AssignmentRosterPanel({
                             className="rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                             disabled={bulk?.busy || !bulkRoomId || selectedAssignments.length === 0}
                             onClick={() => {
-                                const rows = selectedAssignments.map((r) => {
+                                /*
+                                 * A room change SUPERSEDES the row with its own category and pattern,
+                                 * changing only the room. It used to send neither (category undefined,
+                                 * pattern only if typed into another panel), so the server refused every
+                                 * row — silently, because the result was never read. A PRIMARY's room
+                                 * changes through the primary schedule, and a staff room from the staff
+                                 * record, so those are named and left alone rather than sent to be refused.
+                                 */
+                                const skipped: string[] = [];
+                                const rows = selectedAssignments.flatMap((r) => {
                                     const subject = subjects.find((s) => s.subjectKey === r.subjectKey);
                                     const assignment = subject?.assignments.find(
                                         (a) => a.assignmentId === r.assignmentId,
                                     );
-                                    return {
-                                        customerMemberId: subject?.customerMemberId ?? "",
+                                    const name = subject?.subjectName ?? "Assignment";
+                                    if (r.isPrimary) {
+                                        skipped.push(`${name}: a primary's room changes from its primary schedule`);
+                                        return [];
+                                    }
+                                    if (!subject?.customerMemberId) {
+                                        skipped.push(`${name}: a staff room changes from the staff record`);
+                                        return [];
+                                    }
+                                    return [{
+                                        customerMemberId: subject.customerMemberId,
+                                        subjectName: name,
                                         payload: {
                                             subject_type: "child",
-                                            enrollment_agreement_id: subject?.enrollmentAgreementId ?? null,
-                                            schedule_pattern_id: bulkPatternId || undefined,
+                                            enrollment_agreement_id: subject.enrollmentAgreementId ?? null,
+                                            schedule_pattern_id: assignment?.schedulePatternId ?? undefined,
                                             start_date: bulkStartDate,
                                             room_location_id: bulkRoomId,
-                                            assignment_type_id: undefined,
-                                            is_primary: r.isPrimary,
+                                            assignment_type_id: assignment?.assignmentTypeId ?? undefined,
+                                            is_primary: false,
                                             supersedes_assignment_id: r.assignmentId,
                                             assignment_type_label: assignment?.assignmentTypeLabel ?? "Assignment",
                                         },
-                                    };
+                                    }];
                                 });
-                                void bulk?.onBulkRoomChange?.(rows.filter((r) => r.customerMemberId));
-                                setBulkMode(null);
+                                setBulkRoomResult(null);
+                                void (bulk?.onBulkRoomChange?.(rows) ?? Promise.resolve([] as string[])).then((refused) => {
+                                    const lines = [...skipped, ...refused];
+                                    setBulkRoomResult(lines);
+                                    if (lines.length === 0) setBulkMode(null);
+                                });
                             }}
                         >
                             Apply room change
@@ -531,6 +558,13 @@ export default function AssignmentRosterPanel({
                             Cancel
                         </button>
                     </div>
+                    {bulkRoomResult && bulkRoomResult.length > 0 ? (
+                        <ul className="mt-2 text-[11px] text-alloy-ember" data-bulk-room-result="refused">
+                            {bulkRoomResult.map((line) => (
+                                <li key={line}>{line}</li>
+                            ))}
+                        </ul>
+                    ) : null}
                 </div>
             ) : null}
 
