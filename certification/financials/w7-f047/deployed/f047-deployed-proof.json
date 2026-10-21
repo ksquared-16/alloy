@@ -1,0 +1,179 @@
+{
+ "build": "1dc9ac72e02b842d225e5a1cb155f90b285903c8",
+ "header": {
+  "doors": [
+   {
+    "text": "visa •••• 4242",
+    "aria": "Manage payments — visa •••• 4242",
+    "title": "Manage payment methods and autopay"
+   }
+  ],
+  "manageTextLink": false,
+  "row": "Certt Certhouse$499.00Sibling Discount · 10%visa •••• 4242",
+  "opens": 1,
+  "escapeCloses": true
+ },
+ "payment": {
+  "tabs": [
+   "Payment",
+   "Refunds"
+  ],
+  "floatingMenu": 0,
+  "setupNote": 0,
+  "applyTowardValue": "Field trip · Dec 1, 2026 · $40.00 outstanding\n▾",
+  "fieldLabels": [
+   "APPLY TOWARD",
+   "AMOUNT",
+   "METHOD",
+   "WHO PAID"
+  ],
+  "payer": "Certt Certhouse · primary contact · also responsible\n▾",
+  "commitDefault": "Confirm payment",
+  "body": "PAYMENT | Payment | Refunds | $165.00 received and not yet applied | APPLY TOWARD | Field trip · Dec 1, 2026 · $40.00 outstanding | ▾ | Responsible: Certt Certhouse | AMOUNT | METHOD | Cash | ▾ | WHO PAID | Certt Certhouse · primary contact · also responsible | ▾ | Confirm payment | Cancel",
+  "applyTowardOptions": [
+   "Field trip · Dec 1, 2026 · $40.00 outstanding",
+   "Monthly tuition · Oct 20, 2026 · $185.00 outstanding",
+   "Monthly tuition · Oct 17, 2026 · $185.00 outstanding",
+   "Monthly tuition · Oct 6, 2026 · $185.00 outstanding",
+   "Materials · Oct 2, 2026 · $18.00 outstanding",
+   "Materials · Oct 2, 2026 · $18.00 outstanding",
+   "Field trip · Oct 1, 2026 · $40.00 outstanding",
+   "Monthly tuition · Oct 1, 2026 · $1,450.00 outstanding",
+   "Materials · Sep 30, 2026 · $18.00 outstanding",
+   "Registration fee · Sep 30, 2026 · $75.00 outstanding",
+   "Materials · Sep 28, 2026 · $18.00 outstanding",
+   "Registration fee · Sep 25, 2026 · $75.00 outstanding",
+   "Registration fee · Sep 18, 2026 · $75.00 outstanding",
+   "Late pickup · Sep 18, 2026 · $25.00 outstanding",
+   "Late pickup · Sep 14, 2026 · $25.00 outstanding",
+   "Materials · Sep 2, 2026 · $18.00 outstanding",
+   "Materials · Sep 2, 2026 · $18.00 outstanding",
+   "Monthly tuition · Sep 1, 2026 · $145.00 outstanding",
+   "Monthly tuition · Sep 1, 2026 · $400.00 outstanding",
+   "Registration fee · Aug 26, 2026 · $75.00 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $7.77 outstanding",
+   "Adjustment · $7.77 outstanding",
+   "Adjustment · $7.77 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding",
+   "Adjustment · $12.34 outstanding"
+  ],
+  "methodOptions": [
+   "visa •••• 4242 · Expires 12/31 · Default · Certt Certhouse",
+   "New card",
+   "Bank account",
+   "Cash",
+   "Check",
+   "Money order",
+   "External payment (taken outside Alloy)",
+   "Other"
+  ],
+  "card": {
+   "w": 582,
+   "h": 471
+  },
+  "commitByMethod": {
+   "newCard": "Continue to card details",
+   "cardOnFile": "Confirm payment",
+   "check": "Confirm payment"
+  },
+  "cancelCloses": true,
+  "escapeCloses": true,
+  "detailStillOpen": 1
+ },
+ "refunds": {
+  "formOpen": 1,
+  "formText": "Refund Card payment | $75.00 original · $0.00 already refunded · $75.00 refundable | Refund $75.00 | Cancel",
+  "card": {
+   "w": 582,
+   "h": 465
+  }
+ },
+ "settings": {
+  "status": "Ready — card and bank payments",
+  "rows": [
+   {
+    "method": "card",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Stripe · ready",
+    "text": "Card | Collected through Stripe — a card on file, or a new card entered in Stripe's own fields | On | Stripe · ready | 5000 · Payments | ▾"
+   },
+   {
+    "method": "ach",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Stripe · ready",
+    "text": "Bank transfer | Bank-account debits collected through Stripe | On | Stripe · ready | 5000 · Payments | ▾"
+   },
+   {
+    "method": "cash",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Recorded by staff — no processor",
+    "text": "Cash | Cash received at the front desk | On | Recorded by staff — no processor | 5000 · Payments | ▾"
+   },
+   {
+    "method": "check",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Recorded by staff — no processor",
+    "text": "Check | Paper checks — the check number is recorded | On | Recorded by staff — no processor | 5000 · Payments | ▾"
+   },
+   {
+    "method": "money_order",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Recorded by staff — no processor",
+    "text": "Money order | Money orders received | On | Recorded by staff — no processor | 5000 · Payments | ▾"
+   },
+   {
+    "method": "manual",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Recorded by staff — no processor",
+    "text": "External payment | Paid outside Alloy and recorded here | On | Recorded by staff — no processor | 5000 · Payments | ▾"
+   },
+   {
+    "method": "other",
+    "accepted": "true",
+    "destination": "mapped",
+    "processor": "Recorded by staff — no processor",
+    "text": "Other | Anything else, recorded by staff | On | Recorded by staff — no processor | 5000 · Payments | ▾"
+   }
+  ],
+  "noAssetNote": null,
+  "oldRailCards": 0,
+  "moneyOrderAfterOff": "false",
+  "methodsWhileOff": [
+   "visa •••• 4242 · Expires 12/31 · Default · Certt Certhouse",
+   "New card",
+   "Bank account",
+   "Cash",
+   "Check",
+   "External payment (taken outside Alloy)",
+   "Other"
+  ],
+  "moneyOrderRestored": "true"
+ },
+ "accountingTools": [
+  "gl_codes",
+  "accounting_calendar"
+ ],
+ "writes": [
+  "POST /api/admin/queue-view-totals {\"targets\":[{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"queueKey\":\"lifecycle_lead\",\"workViewId\":\"new_leads\"},{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a",
+  "POST /api/admin/queue-view-totals {\"targets\":[{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"queueKey\":\"lifecycle_lead\",\"workViewId\":\"new_leads\"},{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a",
+  "PUT /api/admin/financials/accepted-payment-methods {\"method\":\"money_order\",\"accepted\":false}",
+  "POST /api/admin/queue-view-totals {\"targets\":[{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"queueKey\":\"lifecycle_lead\",\"workViewId\":\"new_leads\"},{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a",
+  "POST /api/admin/queue-view-totals {\"targets\":[{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"queueKey\":\"lifecycle_lead\",\"workViewId\":\"new_leads\"},{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a",
+  "PUT /api/admin/financials/accepted-payment-methods {\"method\":\"money_order\",\"accepted\":true}",
+  "POST /api/admin/queue-view-totals {\"targets\":[{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"queueKey\":\"lifecycle_lead\",\"workViewId\":\"new_leads\"},{\"workUnitId\":\"587de5bc-c43d-47b1-b1a0-0a"
+ ]
+}
