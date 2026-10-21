@@ -363,6 +363,8 @@ describe.skipIf(!env)("participant, medical & canonical data convergence (cert D
         expect(vm.criticalFacts[0]).toMatchObject({ severity: "life_threatening", effect: "Hives", instruction: "EpiPen Jr. in backpack; call 911" });
         expect(vm.careProviders.map((c) => [c.role, c.name])).toEqual([["physician", "Dr. Lee Park"]]);
         expect(vm.emergencyContacts.map((c) => c.name)).toEqual(["Mary Rivers"]);
+        // The organization's word for the relationship, never its stored key.
+        expect(vm.emergencyContacts[0]!.relationship).toBe("Grandparent");
         expect(vm.gaps.map((g) => g.concept)).not.toContain("physician_dentist");
 
         const sibling = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });

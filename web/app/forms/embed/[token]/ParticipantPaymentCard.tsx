@@ -78,7 +78,11 @@ function headline(view: PaymentView): string {
         case "PROCESSING":
             return "Payment processing";
         case "NOT_DUE":
-            return "Enrollment fee — not due yet";
+            // One child paid, a sibling's fee not yet due: the family has paid — never "not due yet"
+            // under a payment it just made.
+            return view.appliedCents > 0
+                ? `${money(view.appliedCents, view.currencyCode)} paid · nothing more is due yet`
+                : "Enrollment fee — not due yet";
         case "ATTENTION_REQUIRED":
             return "Enrollment fee needs attention";
         default:

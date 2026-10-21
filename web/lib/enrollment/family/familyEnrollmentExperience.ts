@@ -201,7 +201,16 @@ export function composeFamilyEnrollmentExperience(
             key: "payment",
             label: "Payment",
             // A fee that is not due yet is not "$0.00 due" — it is not due.
-            detail: settled ? "Complete" : f.state === "NOT_DUE" ? "Not due yet" : `${(f.collectibleNowCents / 100).toFixed(2)} due`,
+            // A fee that is not due yet is not "$0.00 due" — it is not due. And when one child's fee is
+            // already paid while a sibling's is not yet due, the family has PAID something: say so,
+            // rather than "Not due yet" under a payment it just made (Lil' Sunshine, ZZQALM234600).
+            detail: settled
+                ? "Complete"
+                : f.state === "NOT_DUE"
+                  ? (f.appliedCents ?? 0) > 0
+                      ? `$${((f.appliedCents ?? 0) / 100).toFixed(2)} paid · the rest is not due yet`
+                      : "Not due yet"
+                  : `${(f.collectibleNowCents / 100).toFixed(2)} due`,
             complete: settled,
         });
     }

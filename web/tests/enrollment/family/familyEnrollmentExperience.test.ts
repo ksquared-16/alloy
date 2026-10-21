@@ -123,6 +123,13 @@ describe("the family journey a parent reads", () => {
         expect(details).toEqual(["Submitted · in_review", "3 of 4 complete"]);
     });
 
+    it("one child's fee paid while a sibling's is not yet due reads as paid, never 'Not due yet' (ZZQALM234600)", () => {
+        const f = compose({ financials: money({ state: "NOT_DUE", collectibleNowCents: 0, appliedCents: 7500, outstandingCents: 0 }) });
+        expect(f.progress.find((r) => r.key === "payment")?.detail).toBe("$75.00 paid · the rest is not due yet");
+        const none = compose({ financials: money({ state: "NOT_DUE", collectibleNowCents: 0, appliedCents: 0 }) });
+        expect(none.progress.find((r) => r.key === "payment")?.detail).toBe("Not due yet");
+    });
+
     it("says nothing about payment when no fee is configured", () => {
         // A "$0.00 due" row invites a question that has no answer.
         const f = compose({ financials: money({ state: "NOT_APPLICABLE", grossCents: 0, collectibleNowCents: 0 }) });
