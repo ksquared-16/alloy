@@ -13,6 +13,7 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
 import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
+import { adaptPersonContactFactsToProposals } from "@/lib/fields/personContactFacts/personContactFactProposals";
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
@@ -111,6 +112,11 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
             if (proposalBundle && schema && capture) {
                 proposalBundle.collections.push(
                     ...adaptHealthCaptureToProposals(schema, payload, capture, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
+                );
+            }
+            if (proposalBundle && schema) {
+                proposalBundle.collections.push(
+                    ...adaptPersonContactFactsToProposals(schema, payload, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
                 );
             }
             const collectionEvidence = proposalBundle

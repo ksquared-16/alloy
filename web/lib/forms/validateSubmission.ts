@@ -11,6 +11,11 @@ const signatureEntrySchema = z
         typed_full_name: z.string().optional(),
         drawn_document_id: z.string().optional(),
         acknowledged_at: z.string().optional(),
+        /**
+         * The signer's printed legal name, typed BY THE SIGNER beside a drawn mark. A drawn mark alone
+         * says nothing about who made it; `typed_full_name` keeps meaning "a typed signature".
+         */
+        signer_printed_name: z.string().optional(),
     })
     .strict();
 
@@ -427,6 +432,11 @@ function validateSignaturePayload(
             errors.push(err([...path, "typed_full_name"], "typed name required by field config", "custom"));
         }
     } else if (sig.kind === "drawn") {
+        // A field that requires a typed name requires one whatever the method: the drawn mark is the
+        // signature, the printed name is who made it. Never inferred from the link recipient.
+        if (cfg.require_typed_name && !sig.signer_printed_name?.trim()) {
+            errors.push(err([...path, "signer_printed_name"], "Signer's printed name required", "custom"));
+        }
         const id = sig.drawn_document_id;
         if (!id || !isUuid(id)) {
             errors.push(err([...path, "drawn_document_id"], "drawn_document_id UUID required", "custom"));

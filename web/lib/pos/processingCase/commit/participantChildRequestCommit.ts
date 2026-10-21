@@ -146,7 +146,7 @@ export async function rejectNewChildProposal(
         readonly reason: string | null;
         readonly request: ParticipantChildRequestRow | null;
         /** What is being rejected: a proposed new child, or a proposed relationship (guardian, contact…). */
-        readonly commitKind?: "new_child" | "relationship" | "health_fact";
+        readonly commitKind?: "new_child" | "relationship" | "health_fact" | "person_contact_facts";
         readonly now?: string;
     },
 ): Promise<RejectNewChildProposalResult> {
@@ -164,6 +164,10 @@ export async function rejectNewChildProposal(
             if (ledger && typeof ledger === "object" && (ledger as Record<string, unknown>)[input.proposalId]) {
                 return { ok: false, status: 409, error: "This has already been recorded on the child's Medical record, so the proposal cannot be rejected." };
             }
+        }
+        const facts = (input.metadata as Record<string, unknown>).person_contact_fact_commits;
+        if (facts && typeof facts === "object" && (facts as Record<string, unknown>)[input.proposalId]) {
+            return { ok: false, status: 409, error: "These details have already been recorded on the parent's record, so the proposal cannot be rejected." };
         }
     }
     const already = stored.decisions?.[input.proposalId]?.instance_decision === "reject";

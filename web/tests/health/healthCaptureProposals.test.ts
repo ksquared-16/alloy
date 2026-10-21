@@ -57,6 +57,18 @@ describe("health capture → proposals", () => {
         expect(imm.instances[1]!.health_fact_intent!.payload).toMatchObject({ vaccine_key: "varicella", history_state: "had_disease", doses: [] });
     });
 
+    it("Tdap is its own vaccine, never folded into DTaP; an empty Tdap row proposes nothing", () => {
+        const tdapDecl = parseHealthCaptureDeclaration({ health_capture: { immunization_grid: { vaccines: [
+            { vaccine_key: "dtap", dose_field_ids: ["imm_dtap_dose_1"] },
+            { vaccine_key: "tdap", dose_field_ids: ["imm_tdap_dose_1"] },
+        ] } } })!;
+        expect(tdapDecl.immunization_grid!.vaccines.map((v) => v.vaccine_key)).toEqual(["dtap", "tdap"]);
+        const withTdap = adaptHealthCaptureToProposals(schema, { values: { imm_dtap_dose_1: "2023-06-12", imm_tdap_dose_1: "2025-09-01" } }, tdapDecl, ctx)[0]!;
+        expect(withTdap.instances.map((i) => [i.instance_key, (i.health_fact_intent!.payload as { doses: unknown[] }).doses.length])).toEqual([["dtap", 1], ["tdap", 1]]);
+        const emptyTdap = adaptHealthCaptureToProposals(schema, { values: { imm_dtap_dose_1: "2023-06-12", imm_tdap_dose_1: "" } }, tdapDecl, ctx)[0]!;
+        expect(emptyTdap.instances.map((i) => i.instance_key)).toEqual(["dtap"]);
+    });
+
     it("a typed non-date is never turned into a dose", () => {
         expect(reportedDoseDate("last spring")).toBeNull();
         expect(reportedDoseDate("2023-06-12T00:00:00Z")).toBe("2023-06-12");

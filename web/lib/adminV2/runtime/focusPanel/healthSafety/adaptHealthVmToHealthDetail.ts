@@ -228,6 +228,8 @@ export function adaptHealthVmToHealthDetail(
             assurance: m.assurance === "verified" ? "Verified" : "Reported by the family — not verified",
         })),
         consents: (vm.consents ?? []).map((c) => ({
+            consentId: c.consentId,
+            active: c.status === "active",
             label: c.label,
             state: c.status === "active" ? "Authorized" : c.status === "withdrawn" ? "Withdrawn" : "Superseded",
             detail: c.status === "withdrawn"

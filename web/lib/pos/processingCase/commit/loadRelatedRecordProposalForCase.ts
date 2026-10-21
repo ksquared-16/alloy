@@ -8,6 +8,7 @@ import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
 import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
 import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
+import { adaptPersonContactFactsToProposals } from "@/lib/fields/personContactFacts/personContactFactProposals";
 import {
     adaptParticipantChildRequestToRelatedRecordProposals,
     loadParticipantChildRequests,
@@ -23,6 +24,8 @@ export type RelatedRecordProposalCaseContext = {
      * not inference: a child-scoped relationship from Ben's paperwork is Ben's.
      */
     expectedCustomerMemberId?: string | null;
+    /** The adult the SOURCE is attributed to — a form submission's own `person_id`. */
+    expectedPersonId?: string | null;
     source: { source_kind: string; source_id: string };
     /** Present when the source is a family's new-child statement. */
     participantChildRequest?: ParticipantChildRequestRow;
@@ -81,12 +84,12 @@ export async function loadRelatedRecordProposalForCase(args: {
         if (source.source_kind !== "form_submission") continue;
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_id, customer_member_id")
+            .select("id, payload, form_definition_version_id, customer_id, customer_member_id, person_id")
             .eq("org_id", args.orgId)
             .eq("id", source.source_id)
             .maybeSingle();
         if (subError) throw new Error(subError.message);
-        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null; customer_member_id?: string | null } | null;
+        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null; customer_member_id?: string | null; person_id?: string | null } | null;
         if (!subRow) continue;
 
         let schemaJson: unknown = null;
@@ -124,9 +127,12 @@ export async function loadRelatedRecordProposalForCase(args: {
                 );
             }
         }
+        bundle.collections.push(
+            ...adaptPersonContactFactsToProposals(schemaParsed.data, payload, { formSubmissionId: subRow.id, formDefinitionVersionId: subRow.form_definition_version_id }),
+        );
         for (const collection of bundle.collections) {
             const proposal = collection.instances.find((inst) => inst.proposal_id === args.proposalId);
-            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, source };
+            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, expectedPersonId: subRow.person_id ?? null, source };
         }
     }
     return null;

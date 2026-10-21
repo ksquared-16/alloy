@@ -97,11 +97,16 @@ export async function executeMedicalConsentProposalCommit(args: {
             : Promise.resolve({ data: null }),
         args.supabase.from("form_submissions").select("submitted_at").eq("org_id", args.orgId).eq("id", submissionId).maybeSingle(),
         args.supabase.from("form_submission_documents").select("document_id, role, created_at").eq("form_submission_id", submissionId).eq("role", "generated_pdf").order("created_at", { ascending: false }).limit(1),
-        // A drawn signature carries the signer's typed name on its signature record, not the payload.
-        args.supabase.from("form_submission_signatures").select("field_id, typed_full_name, signer_acknowledged_at").eq("org_id", args.orgId).eq("form_submission_id", submissionId).in("field_id", intent.signature_field_ids),
+        // The signature record carries who signed (`metadata.signer`, FI-02) and when they acknowledged.
+        args.supabase.from("form_submission_signatures").select("field_id, typed_full_name, signer_acknowledged_at, metadata").eq("org_id", args.orgId).eq("form_submission_id", submissionId).in("field_id", intent.signature_field_ids),
     ]);
-    const firstSig = ((sigRows ?? []) as { field_id: string; typed_full_name: string | null; signer_acknowledged_at: string | null }[])
+    const firstSig = ((sigRows ?? []) as { field_id: string; typed_full_name: string | null; signer_acknowledged_at: string | null; metadata: { signer?: { printed_name?: string | null } } | null }[])
         .find((r) => r.field_id === intent.signature_field_ids[0]);
+    // The grantor is who the signer said they are — never the link's recipient, never inferred.
+    const grantedByName = intent.signed_by_name?.trim() || firstSig?.metadata?.signer?.printed_name?.trim() || firstSig?.typed_full_name?.trim() || null;
+    if (!grantedByName) {
+        return fail(409, "signer_unknown", "The signature does not say who signed, so the authorization cannot be recorded. Ask the family to sign again with their printed name.");
+    }
     const parsed = safeParseFormSchema((version as { schema_json?: unknown } | null)?.schema_json ?? null);
     const textSha = parsed.success ? consentTextSha256(parsed.data.fields, intent.text_field_ids) : null;
     const grantedAt = intent.signed_at || firstSig?.signer_acknowledged_at || (sub as { submitted_at?: string | null } | null)?.submitted_at || new Date().toISOString();
@@ -116,7 +121,7 @@ export async function executeMedicalConsentProposalCommit(args: {
             textFormDefinitionVersionId: intent.form_definition_version_id,
             textFieldIds: intent.text_field_ids,
             textSha256: textSha,
-            grantedByName: intent.signed_by_name || firstSig?.typed_full_name?.trim() || null,
+            grantedByName,
             grantedAt,
             sourceKind: "form_submission",
             sourceRef: `form_submission:${submissionId}`,

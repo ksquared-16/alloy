@@ -140,7 +140,7 @@ export type HealthCareProvider = {
 
 export type HealthInsuranceDetail = { provider: string; lines: string[]; assurance: string };
 export type HealthImmunizationDetail = { vaccine: string; doses: string; assurance: string };
-export type HealthConsentDetail = { label: string; state: string; detail: string };
+export type HealthConsentDetail = { consentId?: string; active?: boolean; label: string; state: string; detail: string };
 
 export type HealthProfileFact = { label: string; value: string };
 

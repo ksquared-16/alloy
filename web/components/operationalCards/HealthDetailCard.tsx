@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -52,6 +53,8 @@ export default function HealthDetailCard({
         addMedication?: (() => void) | null;
         editProfile?: (() => void) | null;
         uploadDocument?: (() => void) | null;
+        /** Record the family's withdrawal of an active authorization. Resolves to an error, or null. */
+        withdrawConsent?: ((consentId: string, reason: string) => Promise<string | null>) | null;
         unavailableReason?: (key: "editProfile" | "uploadDocument") => string | null;
     };
 }) {
@@ -291,9 +294,14 @@ export default function HealthDetailCard({
                                 <>
                                     <SectionHead>Medical authorizations</SectionHead>
                                     {evidence.consents.map((c, idx) => (
-                                        <p key={`${c.label}:${idx}`} className="alloy-os-healthdetail__why" data-health-consent={c.state}>
-                                            <strong>{c.label}</strong> — {c.state}. {c.detail}
-                                        </p>
+                                        <div key={`${c.label}:${idx}`} data-health-consent={c.state}>
+                                            <p className="alloy-os-healthdetail__why">
+                                                <strong>{c.label}</strong> — {c.state}. {c.detail}
+                                            </p>
+                                            {c.active && c.consentId && commands?.withdrawConsent ? (
+                                                <ConsentWithdrawControl consentId={c.consentId} label={c.label} withdraw={commands.withdrawConsent} />
+                                            ) : null}
+                                        </div>
                                     ))}
                                 </>
                             ) : null}
@@ -369,5 +377,66 @@ function Prov({
             <span className={clsx(p.confirmed && "alloy-os-healthdetail__prov--confirmed")}>{p.source}</span>
             {p.detail ? <span> · {p.detail}</span> : null}
         </p>
+    );
+}
+
+/**
+ * WITHDRAW AN AUTHORIZATION — the family told the school they revoke it.
+ *
+ * Reason required, confirmation explicit, refusal surfaced verbatim (an operator without permission
+ * to change health information is told so). The host re-reads the record afterwards; the original
+ * authorization and its signed copy remain, now marked withdrawn.
+ */
+export function ConsentWithdrawControl({
+    consentId,
+    label,
+    withdraw,
+}: {
+    consentId: string;
+    label: string;
+    withdraw: (consentId: string, reason: string) => Promise<string | null>;
+}) {
+    const [open, setOpen] = useState(false);
+    const [reason, setReason] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    if (!open) {
+        return (
+            <button type="button" className="alloy-os-health__details" data-health-consent-withdraw={consentId} onClick={() => setOpen(true)}>
+                Record withdrawal…
+            </button>
+        );
+    }
+    return (
+        <div className="alloy-os-healthdetail__why" data-health-consent-withdraw-form={consentId}>
+            <label>
+                Why is the family withdrawing the {label.toLowerCase()}?
+                <input
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g. Parent revoked by phone on Oct 21"
+                    data-health-consent-withdraw-reason="true"
+                />
+            </label>
+            <button
+                type="button"
+                disabled={busy || reason.trim().length < 3}
+                data-health-consent-withdraw-confirm="true"
+                onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    const failure = await withdraw(consentId, reason.trim());
+                    setBusy(false);
+                    if (failure) setError(failure);
+                    else setOpen(false);
+                }}
+            >
+                {busy ? "Recording…" : "Confirm withdrawal"}
+            </button>
+            <button type="button" disabled={busy} onClick={() => { setOpen(false); setError(null); }}>
+                Cancel
+            </button>
+            {error ? <p role="alert" data-health-consent-withdraw-error="true">{error}</p> : null}
+        </div>
     );
 }

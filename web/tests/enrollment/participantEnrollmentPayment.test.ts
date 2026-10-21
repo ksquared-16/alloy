@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     buildParticipantPaymentView,
+    defaultParticipantPaymentChargeId,
     payableChargeIds,
 } from "@/lib/enrollment/financial/participantEnrollmentPayment";
 import { readPayerUsableMethods } from "@/lib/financials/payments/paymentMethodService";
@@ -455,5 +456,33 @@ describe("which obligations a link may name", () => {
             } as never),
         );
         expect([...ids]).toEqual([]);
+    });
+});
+
+describe("FI-04 — the fee offered first is the current child's", () => {
+    const AVA = "member-ava";
+    const BEN = "member-ben";
+    const line = (chargeId: string, subject: string | null, cents: number) => ({ chargeId, subjectCustomerMemberId: subject, collectibleNowCents: cents });
+
+    it("Ben's session defaults to Ben's fee even when Ava's is listed first (ZZQAV5082106)", () => {
+        expect(defaultParticipantPaymentChargeId([line("ch-ava", AVA, 5000), line("ch-ben", BEN, 5000)], BEN)).toBe("ch-ben");
+    });
+
+    it("Ben's fee not due (or paid) falls through to the first payable fee — never a dead default", () => {
+        expect(defaultParticipantPaymentChargeId([line("ch-ava", AVA, 5000), line("ch-ben", BEN, 0)], BEN)).toBe("ch-ava");
+    });
+
+    it("mixed due / not due: only payable lines qualify, in listed order, for a household or unknown focus", () => {
+        const lines = [line("", AVA, 0), line("ch-hh", null, 2500), line("ch-ben", BEN, 5000)];
+        expect(defaultParticipantPaymentChargeId(lines, null)).toBe("ch-hh");
+        expect(defaultParticipantPaymentChargeId(lines, BEN)).toBe("ch-ben");
+    });
+
+    it("a child outside this family's lines matches nothing — the default stays inside the household", () => {
+        expect(defaultParticipantPaymentChargeId([line("ch-ava", AVA, 5000)], "member-from-another-family")).toBe("ch-ava");
+    });
+
+    it("nothing payable → no default", () => {
+        expect(defaultParticipantPaymentChargeId([line("ch-ava", AVA, 0)], AVA)).toBeNull();
     });
 });
