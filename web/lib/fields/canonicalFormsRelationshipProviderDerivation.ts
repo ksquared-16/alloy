@@ -40,6 +40,7 @@ export const FORMS_REPEATABLE_COLLECTION_REFS: readonly string[] = [
     "health_allergies",
     "health_conditions",
     "health_medications",
+    "health_insurance",
 ];
 
 /** Open by design: a new relationship definition widens this set without a code change. */
@@ -118,6 +119,7 @@ const HEALTH_FORM_COLLECTIONS: ReadonlyArray<readonly [string, string, string]> 
     ["health.allergies", "health_allergies", "Allergies"],
     ["health.conditions", "health_conditions", "Medical conditions"],
     ["health.medications", "health_medications", "Medications"],
+    ["health.insurance", "health_insurance", "Health insurance"],
 ];
 
 function wholeCollectionProvider(

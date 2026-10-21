@@ -109,7 +109,10 @@ export function collapseAddressRun(fields: readonly FormField[], start: number):
                 ...(width !== "full" ? { layout_width: width } : {}),
             } as FormField;
         }),
-        ...(subject ? { address_binding: { subject, role: "home" } } : {}),
+        // The SAME binding Studio authors for a family address: the person role (`guardian`), whose
+        // address purpose the prefill policy declares. `role: "home"` named an address purpose in
+        // the person-role slot, so imported addresses never prefilled.
+        ...(subject ? { address_binding: { subject, role: subject === "person" ? "guardian" : subject } } : {}),
     } as FormField;
 
     return { indices, group };

@@ -15,6 +15,7 @@ import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { executeExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
 import { executeHealthFactProposalCommit } from "@/lib/pos/processingCase/commit/executeHealthFactProposalCommit";
+import { executeMedicalConsentProposalCommit } from "@/lib/pos/processingCase/commit/executeMedicalConsentProposalCommit";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 import {
@@ -175,6 +176,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 audit_event_id: outcome.audit_event_id,
                 participant_child_request: settled,
             });
+        }
+
+        // A signed medical authorization: recorded as the child's consent STATE through Medical.
+        if (proposalContext?.proposal.execution_kind === "medical_consent") {
+            const access = await getAdminAccessContextCached();
+            const outcome = await executeMedicalConsentProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                access: { permissionKeys: access.ok ? access.permissionKeys : null },
+                caseId,
+                proposalId,
+                metadata,
+            });
+            return outcome.ok
+                ? jsonData({ caseId, proposalId, alreadyDone: outcome.already_applied, ...outcome.record })
+                : NextResponse.json({ error: outcome.error, code: outcome.code }, { status: outcome.status });
         }
 
         // A child's allergy, condition or medication: committed through Health, which requires

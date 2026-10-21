@@ -62,7 +62,10 @@ describe("health fact payloads — tolerant of absence, intolerant of invention"
         expect(healthFactLabel({ fact_kind: "allergy", payload: { allergen: "Peanut" } })).toBe("Peanut");
         expect(healthFactLabel({ fact_kind: "condition", payload: { condition: "Asthma" } })).toBe("Asthma");
         expect(healthFactLabel({ fact_kind: "medication", payload: { medication: "EpiPen" } })).toBe("EpiPen");
-        expect(healthFactLabel({ fact_kind: "immunization", payload: { vaccine_key: "dtap" } })).toBe("dtap");
+        expect(healthFactLabel({ fact_kind: "immunization", payload: { vaccine_key: "dtap" } })).toBe("DTaP (diphtheria, tetanus, pertussis)");
+        // A key the vocabulary does not know is shown as given — never invented.
+        expect(healthFactLabel({ fact_kind: "immunization", payload: { vaccine_key: "xyz" } })).toBe("xyz");
+        expect(healthFactLabel({ fact_kind: "insurance", payload: { provider: "Pacific Health Plan" } })).toBe("Pacific Health Plan");
         // An empty payload still names its kind rather than rendering blank.
         expect(healthFactLabel({ fact_kind: "allergy", payload: {} })).toBe("Allergy");
     });

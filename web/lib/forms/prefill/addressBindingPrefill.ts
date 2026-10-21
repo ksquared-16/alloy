@@ -86,6 +86,15 @@ const ROLE_POLICY: Readonly<Record<string, {
     billing_contact: { addressRole: "mailing", subject: "billing_contact", householdFallback: false },
 };
 
+/**
+ * Forms imported before the importer matched Studio carry `role: "home"` — an address purpose in
+ * the person-role slot. On a person-bound group that always meant the family's own address, so it
+ * reads as the guardian's; nothing else is aliased.
+ */
+function policyRole(subject: string, role: string): string {
+    return role === "home" && subject === "person" ? "guardian" : role;
+}
+
 export type AddressBindingOutcome =
     /** Answered from an address the resolved person owns. */
     | "person_owned_address"
@@ -150,7 +159,7 @@ export function planAddressBindingSites(schema: Pick<FormSchemaV1, "fields">): A
         sites.push({
             groupId: field.id,
             subject: binding.subject.trim().toLowerCase(),
-            role: binding.role.trim().toLowerCase(),
+            role: policyRole(binding.subject.trim().toLowerCase(), binding.role.trim().toLowerCase()),
             leaves,
         });
     }

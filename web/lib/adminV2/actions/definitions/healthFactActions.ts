@@ -32,11 +32,13 @@ import {
     HealthFactError,
 } from "@/lib/health/healthFactService";
 import { isHealthFactKind, type HealthFactKind } from "@/lib/health/healthFactModel";
+import { MedicalConsentError, withdrawMedicalConsent } from "@/lib/health/medicalConsentService";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const HEALTH_FACT_ADD_ACTION_KEY = "health_fact.add";
 export const HEALTH_FACT_EDIT_ACTION_KEY = "health_fact.edit";
 export const HEALTH_FACT_END_ACTION_KEY = "health_fact.end";
+export const MEDICAL_CONSENT_WITHDRAW_ACTION_KEY = "medical_consent.withdraw";
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -58,6 +60,10 @@ function childIdFrom(payload: Record<string, unknown> | undefined, entityId: str
 function mapError(err: unknown, correlationId: string): ActionResult {
     if (err instanceof HealthAccessDeniedError) {
         return { ok: false, correlationId, status: 403, error: err.message };
+    }
+    if (err instanceof MedicalConsentError) {
+        const status = err.code === "invalid_input" ? 400 : err.code === "not_active" ? 409 : 500;
+        return { ok: false, correlationId, status, error: err.message };
     }
     if (err instanceof HealthFactError) {
         const status = err.code === "not_found" ? 404 : err.code === "invalid_input" ? 400 : 409;
@@ -281,4 +287,68 @@ const endFact: RegisteredAction = {
     },
 };
 
-export const healthFactActions: RegisteredAction[] = [addFact, editFact, endFact];
+/**
+ * WITHDRAW A MEDICAL AUTHORIZATION — the family told the school they revoke it. The consent's state
+ * moves to withdrawn with a reason and a date; nothing is deleted, and what was granted stays readable.
+ */
+const withdrawConsent: RegisteredAction = {
+    ...BASE,
+    actionKey: MEDICAL_CONSENT_WITHDRAW_ACTION_KEY,
+    defaultLabel: "Withdraw medical authorization",
+    description: "Record that the family withdrew a medical authorization. Never a deletion.",
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        const blockers = [
+            ...(t(src.consent_id) ? [] : [{ code: "missing_consent", message: "An authorization is required.", field: "consent_id" }]),
+            ...(t(src.reason) ? [] : [{ code: "missing_reason", message: "Say why it was withdrawn.", field: "reason" }]),
+        ];
+        return blockers.length ? { ok: false, blockers } : { ok: true, value: src };
+    },
+
+    async resolveEligibility({ payload }) {
+        const ok = Boolean(t(payload?.consent_id)) && Boolean(t(payload?.reason));
+        return {
+            eligible: ok,
+            blockers: ok ? [] : [{ code: "missing_input", message: "An authorization and a reason are required." }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview() {
+        return {
+            summary: "Withdraw this medical authorization",
+            changes: ["The authorization becomes withdrawn, with the date and your reason. The signed copy and its history remain."],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        try {
+            const row = await withdrawMedicalConsent(supabase as SupabaseClient, {
+                access: await resolveHealthAccessForActor(supabase as SupabaseClient, ctx.orgId, ctx.userId),
+                orgId: ctx.orgId,
+                consentId: t(payload.consent_id),
+                reason: t(payload.reason),
+                actorUserId: ctx.userId ?? null,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: MEDICAL_CONSENT_WITHDRAW_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: childIdFrom(payload, invocation.entityId),
+                    affectedId: row.id,
+                    detail: { status: row.status, withdrawn_at: row.withdrawn_at },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const healthFactActions: RegisteredAction[] = [addFact, editFact, endFact, withdrawConsent];

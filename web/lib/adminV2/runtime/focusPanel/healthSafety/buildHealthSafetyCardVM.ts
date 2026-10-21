@@ -36,6 +36,7 @@ import {
     type HealthAccessSubject,
 } from "@/lib/health/healthAccess";
 import { resolveActiveHealthFacts } from "@/lib/health/healthFactCollectionResolver";
+import { readMedicalConsents } from "@/lib/health/medicalConsentService";
 import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
 import {
     CRITICAL_SEVERITIES,
@@ -43,13 +44,15 @@ import {
     readAllergyPayload,
     readConditionPayload,
     readMedicationPayload,
+    readImmunizationPayload,
+    readInsurancePayload,
     type HealthSeverity,
     type PersonHealthFactRow,
 } from "@/lib/health/healthFactModel";
 
 export type HealthSafetyFact = {
     factId: string;
-    kind: "allergy" | "condition" | "medication" | "immunization";
+    kind: "allergy" | "condition" | "medication" | "immunization" | "insurance";
     label: string;
     severity: HealthSeverity | null;
     /** What happens — the reaction, or what the condition does. */
@@ -104,6 +107,48 @@ export type HealthSafetyCareProvider = {
     roleLabel: string;
 };
 
+/** How sure Alloy is of a medical record — never implied beyond what the evidence supports. */
+export type HealthSafetyAssurance = "reported" | "verified";
+
+export type HealthSafetyInsurance = {
+    factId: string;
+    provider: string | null;
+    planName: string | null;
+    policyNumber: string | null;
+    groupNumber: string | null;
+    memberId: string | null;
+    subscriberName: string | null;
+    subscriberRelationship: string | null;
+    phone: string | null;
+    /** Coverage as reported. Alloy does not verify eligibility. */
+    assurance: HealthSafetyAssurance;
+    effectiveFrom: string | null;
+    sourceKind: string;
+};
+
+export type HealthSafetyImmunization = {
+    factId: string;
+    vaccineKey: string | null;
+    label: string;
+    doses: Array<{ doseNumber: number | null; administeredOn: string | null }>;
+    historyState: string | null;
+    /** `reported` until an operator verifies it against evidence (a Documents dependency). */
+    assurance: HealthSafetyAssurance;
+    sourceKind: string;
+};
+
+export type HealthSafetyConsent = {
+    consentId: string;
+    kind: string;
+    label: string;
+    status: "active" | "withdrawn" | "superseded";
+    grantedByName: string | null;
+    grantedAt: string;
+    withdrawnAt: string | null;
+    withdrawalReason: string | null;
+    evidenceDocumentId: string | null;
+};
+
 export type HealthSafetyCardVM = {
     participant: { customerMemberId: string; displayName: string | null } | null;
     /** Life-threatening and severe facts, most severe first. The card's top region. */
@@ -118,6 +163,12 @@ export type HealthSafetyCardVM = {
     emergencyContacts: HealthSafetyContact[];
     /** Physician and dentist, from the child's relationship roles. */
     careProviders: HealthSafetyCareProvider[];
+    /** Health insurance, as reported. */
+    insurance: HealthSafetyInsurance[];
+    /** Immunizations by vaccine, with their assurance. */
+    immunizations: HealthSafetyImmunization[];
+    /** Medical authorizations: the current state per kind, then history. */
+    consents: HealthSafetyConsent[];
     /** Owners this VM deliberately does not project, and why. */
     gaps: Array<{ concept: string; reason: string }>;
     /** Set when the caller may not see health information, or health is unavailable. */
@@ -185,6 +236,9 @@ function emptyVm(): HealthSafetyCardVM {
         requirements: [],
         emergencyContacts: [],
         careProviders: [],
+        insurance: [],
+        immunizations: [],
+        consents: [],
         gaps: [],
         unavailableReason: null,
         permissionDenied: false,
@@ -225,7 +279,7 @@ export async function buildHealthSafetyCardVM(
     }
 
     const hClock = healthClock();
-    const [factsResult, profileResult, documentsResult, contactsResult] = await Promise.allSettled([
+    const [factsResult, profileResult, documentsResult, contactsResult, consentsResult] = await Promise.allSettled([
         hClock.time("health_facts_ms", () => resolveActiveHealthFacts(supabase, {
             orgId: args.orgId,
             subjectEntityId: memberId,
@@ -252,6 +306,9 @@ export async function buildHealthSafetyCardVM(
                 .eq("org_id", args.orgId)
                 .eq("customer_member_id", memberId)
                 .eq("status", "active"),
+        ),
+        hClock.time("health_consents_ms", () =>
+            readMedicalConsents(supabase, { orgId: args.orgId, access: args.access, customerMemberId: memberId }),
         ),
     ]);
     recordHealthSpans(hClock.spans());
@@ -316,10 +373,59 @@ export async function buildHealthSafetyCardVM(
         }
         // Immunization is compliance evidence rather than a care instruction, so it never competes
         // for the critical region; the requirement below is where it matters.
+        if (row.fact_kind === "insurance") {
+            const p = readInsurancePayload(row.payload);
+            vm.insurance.push({
+                factId: row.id,
+                provider: p.provider,
+                planName: p.planName,
+                policyNumber: p.policyNumber,
+                groupNumber: p.groupNumber,
+                memberId: p.memberId,
+                subscriberName: p.subscriberName,
+                subscriberRelationship: p.subscriberRelationship,
+                phone: p.phone,
+                assurance: row.confirmed_at ? "verified" : "reported",
+                effectiveFrom: row.effective_from,
+                sourceKind: row.source_kind,
+            });
+            continue;
+        }
+        if (row.fact_kind === "immunization") {
+            const p = readImmunizationPayload(row.payload);
+            vm.immunizations.push({
+                factId: row.id,
+                vaccineKey: p.vaccineKey,
+                label: healthFactLabel(row),
+                doses: p.doses.map((d) => ({ doseNumber: d.doseNumber, administeredOn: d.administeredOn })),
+                historyState: p.historyState,
+                // A typed date is a report. Only an operator's verification against evidence may say
+                // otherwise — never inferred from the answer itself.
+                assurance: row.confirmed_at ? "verified" : "reported",
+                sourceKind: row.source_kind,
+            });
+            continue;
+        }
         vm.careFacts.push({ ...baseFact(row), severity: null, effect: null, instruction: null });
     }
 
     vm.criticalFacts.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+    vm.immunizations.sort((a, b) => a.label.localeCompare(b.label));
+
+    // ── MEDICAL AUTHORIZATIONS (consent STATE; the signed artifact is evidence, owned elsewhere) ─
+    if (consentsResult.status === "fulfilled") {
+        vm.consents = consentsResult.value.map((c) => ({
+            consentId: c.id,
+            kind: c.consent_kind,
+            label: c.consent_kind === "medical_records_release" ? "Medical records release" : "Emergency medical treatment",
+            status: c.status,
+            grantedByName: c.granted_by_name,
+            grantedAt: c.granted_at,
+            withdrawnAt: c.withdrawn_at,
+            withdrawalReason: c.withdrawal_reason,
+            evidenceDocumentId: c.evidence_document_id,
+        }));
+    }
 
     // ── PROFILE FACTS (child grain, post-M1) ────────────────────────────────────────────────────
     if (profileResult.status === "fulfilled") {

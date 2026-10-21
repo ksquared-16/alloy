@@ -85,7 +85,7 @@ describe("the postal lines become one address with components", () => {
         if (!schema.success) return;
         const group = schema.data.fields.find((f) => f.type === "group")!;
         if (group.type !== "group") throw new Error(`expected a group, got ${group.type}`);
-        expect(group.address_binding).toEqual({ subject: "person", role: "home" });
+        expect(group.address_binding).toEqual({ subject: "person", role: "guardian" }); // Studio parity: the person ROLE, which the prefill policy resolves
     });
 
     it("lays the components out the way an address is written", () => {

@@ -205,7 +205,10 @@ function InstanceBlock({ instance, caseId, onCommitted }: { instance: Processing
 /** A valid allergy, condition or medication row — recorded on the child's Medical card only on approval. */
 function healthFactDecisionKind(instance: ProcessingCollectionInstanceProposal): string | null {
     if (instance.status !== "valid") return null;
-    return healthFactKindForFormProvider(instance.collection_provider_ref);
+    const ref = instance.collection_provider_ref;
+    if (ref === "health.immunizations") return "reported immunization";
+    if (ref === "medical.consents") return "medical authorization";
+    return healthFactKindForFormProvider(ref);
 }
 
 /**

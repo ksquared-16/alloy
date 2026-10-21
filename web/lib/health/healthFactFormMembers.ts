@@ -32,6 +32,7 @@ export const HEALTH_FACT_FORM_KIND_BY_PROVIDER_REF: Readonly<Record<string, Excl
         "health.allergies": "allergy",
         "health.conditions": "condition",
         "health.medications": "medication",
+        "health.insurance": "insurance",
     });
 
 export function healthFactKindForFormProvider(refKey: string): Exclude<HealthFactKind, "immunization"> | null {
@@ -62,6 +63,16 @@ export const HEALTH_FACT_FORM_MEMBERS: Readonly<Record<Exclude<HealthFactKind, "
         { key: "severity", label: "Severity", kind: "severity", patterns: [/\bseverity\b/i, /how (serious|severe)/i] },
         { key: "restrictions", label: "Restrictions", kind: "text", patterns: [/\brestrictions?\b/i, /\blimitations?\b/i] },
         { key: "care_instructions", label: "Care instructions", kind: "text", patterns: [/care instructions?/i, /what (should|to) (we|staff)? ?do/i, /\bcare plan\b/i] },
+    ],
+    insurance: [
+        { key: "provider", label: "Insurance provider", required: true, kind: "text", patterns: [/\binsurance (company|provider|carrier)\b/i, /\binsurer\b/i, /\bprovider\b/i, /\bcarrier\b/i] },
+        { key: "plan_name", label: "Plan", kind: "text", patterns: [/\bplan( name)?\b/i] },
+        { key: "policy_number", label: "Policy number", kind: "text", patterns: [/\bpolicy\b/i] },
+        { key: "group_number", label: "Group number", kind: "text", patterns: [/\bgroup\b/i] },
+        { key: "member_id", label: "Member ID", kind: "text", patterns: [/\bmember\b/i, /\bsubscriber id\b/i] },
+        { key: "subscriber_name", label: "Coverage holder", kind: "text", patterns: [/\b(policy|coverage) holder\b/i, /\bsubscriber\b/i, /\binsured\b/i] },
+        { key: "subscriber_relationship", label: "Coverage holder's relationship to the child", kind: "text", patterns: [/\brelationship\b/i] },
+        { key: "phone", label: "Insurance phone", kind: "text", patterns: [/\bphone\b/i] },
     ],
     medication: [
         { key: "medication", label: "Medication", required: true, kind: "text", patterns: [/\bmedication\b/i, /\bmedicine\b/i] },
@@ -191,7 +202,15 @@ export function readHealthFactRow(
 
 /** The key two readings of the same fact share — "Peanuts" and " peanuts " are one allergy. */
 export function healthFactIdentityKey(kind: HealthFactKind, payload: Readonly<Record<string, unknown>>): string | null {
+    const norm = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase().replace(/\s+/g, " ") : "");
+    if (kind === "insurance") {
+        // One coverage is one provider + policy (or member id): a corrected policy number on the same
+        // provider is a correction only when both name the same policy; a second plan is a second fact.
+        const provider = norm(payload.provider);
+        if (!provider) return null;
+        return `insurance:${provider}:${norm(payload.policy_number) || norm(payload.member_id)}`;
+    }
     const primary = kind === "allergy" ? payload.allergen : kind === "condition" ? (payload.condition ?? payload.condition_type) : kind === "medication" ? payload.medication : payload.vaccine_key;
     if (typeof primary !== "string" || !primary.trim()) return null;
-    return `${kind}:${primary.trim().toLowerCase().replace(/\s+/g, " ")}`;
+    return `${kind}:${norm(primary)}`;
 }
