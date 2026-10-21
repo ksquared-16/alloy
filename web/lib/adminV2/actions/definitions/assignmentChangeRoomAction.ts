@@ -10,6 +10,7 @@ import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational
 import { createOperationalAssignment } from "@/lib/operationalAssignments/operationalAssignmentService";
 import { operatorFacingAssignmentError } from "@/lib/operationalAssignments/operatorAssignmentErrors";
 import { isValidIsoDateString } from "@/lib/childcareOperational/effectiveDating";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export const ASSIGNMENT_CHANGE_ROOM_ACTION_KEY = "assignment.change_room";
 
@@ -19,6 +20,7 @@ function t(v: unknown): string {
 
 export const assignmentChangeRoomAction: RegisteredAction = {
     actionKey: ASSIGNMENT_CHANGE_ROOM_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_CHANGE_ROOM_ACTION_KEY),
     defaultLabel: "Move to room",
     description:
         "Move an assignment to another eligible room/operational space with an effective date (history-preserving supersede).",

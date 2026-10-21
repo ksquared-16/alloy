@@ -23,11 +23,13 @@ import {
     validateScheduleCreatePayload,
     trimmedValue,
 } from "@/lib/scheduling/commands/scheduleCreateInputs";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export { SCHEDULE_CREATE_ACTION_KEY };
 
 export const scheduleCreateAction: RegisteredAction = {
     actionKey: SCHEDULE_CREATE_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(SCHEDULE_CREATE_ACTION_KEY),
     defaultLabel: "Create schedule",
     description: "Place a child by creating their schedule (room + pattern), effective-dated.",
     supportedEntityTypes: ["child"],

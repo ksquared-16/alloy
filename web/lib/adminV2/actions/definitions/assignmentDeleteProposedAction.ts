@@ -20,6 +20,7 @@ import {
     customerMemberIdFromProposedDraftAssignmentId,
     isProposedDraftAssignmentId,
 } from "@/lib/scheduling/projection/proposedDraftAssignmentId";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export const ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY = "assignment.delete_proposed";
 
@@ -29,6 +30,7 @@ function t(v: unknown): string {
 
 export const assignmentDeleteProposedAction: RegisteredAction = {
     actionKey: ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_DELETE_PROPOSED_ACTION_KEY),
     defaultLabel: "Delete proposed assignment",
     description: "Remove a Proposed (planning-only) assignment from scheduling projections. Committed assignments are never eligible.",
     supportedEntityTypes: ["child", "person", "schedule"],

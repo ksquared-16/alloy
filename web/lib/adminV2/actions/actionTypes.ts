@@ -203,7 +203,16 @@ export type RegisteredAction = {
     buildPreview: (deps: ActionHandlerDeps) => Promise<ActionPreview>;
     /** Execute the action. Server-authoritative; delegates to invariant-owning code. */
     execute: (deps: ActionHandlerDeps) => Promise<ActionResult>;
+    /**
+     * SITE AUTHORITY (BP V2 S4A) — for an action that writes at a site: resolve, from authoritative rows,
+     * every site the invocation would touch and decide whether `ctx.accessScope` holds them. Enforced by
+     * `runRegisteredAction` before preview, eligibility and execute, so every caller (card, BOS,
+     * automation, API) gets the same verdict and a refused invocation writes nothing.
+     */
+    authorizeSites?: (deps: ActionHandlerDeps) => Promise<ActionSiteVerdict>;
 };
+
+export type ActionSiteVerdict = { allowed: true } | { allowed: false; code: string; message: string };
 
 export function normalizeActionEntityType(entityType: string): string {
     const raw = (entityType ?? "").trim().toLowerCase();
