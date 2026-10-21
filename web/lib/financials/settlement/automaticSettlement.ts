@@ -28,8 +28,12 @@
  *   · not reversed, and not itself a reversal or credit row (amount > 0);
  *   · outstanding — amount − active allocations of POSTED payments > 0 (`readAppliedByChargeId`);
  *   · collectible — capped at `currentlyCollectibleCents` (a submitted subsidy claim suppresses);
- *   · due by the settlement date — its effective due date (`due_date`, else its invoice date
- *     `billable_on`) is on or before `asOf`. A not-yet-due obligation is never settled early.
+ *   · due by the settlement date — its `due_date` is on or before `asOf`, by the SAME rule as the
+ *     canonical Due / Past due classification (`accountDueClassification`, #1553). A charge with no
+ *     due date (no payment terms configured) is not "due" there and is not settled automatically
+ *     here either — it waits for explicit allocation rather than for invented terms (deployed proof
+ *     on 769c36ba: an invoice-date fallback offered Certhouse $2,594 against a canonical $2,005).
+ *     A not-yet-due obligation is never settled early.
  *
  * ── WHOSE OUTSTANDING ─────────────────────────────────────────────────────────────────────────
  *
@@ -113,9 +117,9 @@ export type SettlementPlan = {
     outcome: "settled" | "partial_left_unapplied" | "nothing_eligible";
 };
 
-/** A posted charge's effective due date: its due date, else the day it was invoiced. */
+/** A posted charge's due date — the canonical due authority's only input; no fallback. */
 export function effectiveDueOn(c: Pick<SettlementCandidate, "dueDate" | "billableOn">): string | null {
-    return c.dueDate || c.billableOn || null;
+    return c.dueDate || null;
 }
 
 /**
@@ -251,7 +255,7 @@ export async function readSettlementCandidates(
         const meta = (c.metadata ?? {}) as Record<string, unknown>;
         if (!OWED.has(t(c.status)) || n(c.amount_cents) <= 0) return false;
         if (t(meta.correction_kind) === "reversal" || reversedIds.has(t(c.id))) return false;
-        const due = t(c.due_date) || t(c.billable_on);
+        const due = t(c.due_date);
         return Boolean(due) && due <= args.asOf;
     });
     if (!owed.length) return [];

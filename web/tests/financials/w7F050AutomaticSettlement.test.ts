@@ -132,9 +132,10 @@ describe("the matrix", () => {
         expect(p).toMatchObject({ appliedCents: 0, unappliedCents: 250_00, outcome: "nothing_eligible" });
     });
 
-    it("an undated posted charge is due from its invoice date", () => {
+    it("an undated posted charge is not due — by the canonical due authority — and is not settled automatically", () => {
         const p = plan(50_00, null, [charge({ chargeId: "undated", amountCents: 50_00, dueDate: null, billableOn: "2026-10-10" })]);
-        expect(p.lines[0]).toMatchObject({ chargeId: "undated", effectiveDueOn: "2026-10-10", dueClass: "past_due" });
+        expect(p.lines).toEqual([]);
+        expect(p.unappliedCents).toBe(50_00);
     });
 
     it("a named payer settles their own share first, then what the account owes — capped by the charge", () => {

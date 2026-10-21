@@ -1,0 +1,166 @@
+{
+ "build": "769c36baf23c803959b24451b276687a1600794b",
+ "split": {
+  "strip": "DUE NOW | $0.00 | $75.00 not yet due · next Nov 6, 2026 | BALANCE · OCTOBER 2026 | $75.00 | $75.00 charged · $0.00 paid",
+  "payerOptions": [
+   "Dana Split · parent · also responsible",
+   "Gale Split · guardian",
+   "Rosa Split · parent · also responsible",
+   "Not known — record to the household"
+  ],
+  "danaEligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Change allocation",
+   "amount": "",
+   "lines": [],
+   "total": null,
+   "unapplied": null,
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "dana20": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $20.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "20.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $20.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "dana100": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $100.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "100.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $100.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "household10": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to the household's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $10.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "10.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $10.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  }
+ },
+ "monthly": {
+  "stripBefore": "DUE NOW | $0.00 | $36.00 not yet due · next Nov 6, 2026 | BALANCE · OCTOBER 2026 | $26.00 | $26.00 charged · $0.00 paid | SCHEDULED | $18.00 | activates with its period",
+  "ledgerBefore": [
+   "Nov 12, 2026Consumable feeMilo Monthly4030 · Supply Fees$18.00ScheduledMara MonthlyMaterials",
+   "Oct 20, 2026Consumable feeMilo Monthly4030 · Supply Fees$18.00PostedMara MonthlyMaterials",
+   "Oct 16, 2026Consumable feeMilo Monthly4030 · Supply Fees$18.00PostedMara MonthlyMaterials",
+   "—AdjustmentMilo Monthly4030 · Supply Fees-$5.00PostedNot allocatedOne-time · W7-F036 certification: Materials billed $5 over the agreed price",
+   "—CreditMilo Monthly4060 · Discounts & Credits-$5.00PostedNot allocatedOne-time · Skipping 1 of 5"
+  ],
+  "eligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Mara Monthly's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Change allocation",
+   "amount": "",
+   "lines": [],
+   "total": null,
+   "unapplied": null,
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "over": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Mara Monthly's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $10.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "10.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $10.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "partialPreview": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Mara Monthly's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $1.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "1.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $1.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  }
+ },
+ "certhouse": {
+  "stripBefore": "DUE NOW | $2,005.00 | $2,005.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,076.00 | $2,116.00 charged · $40.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+  "eligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyFee · Aug 26, 2026 · past due$75.00Tuition · Sep 1, 2026 · past due$360.00Consumable fee · Sep 2, 2026 · past due$18.00Consumable fee · Sep 2, 2026 · past due$18.00Late pickup · Sep 14, 2026 · past due$25.00Fee · Sep 18, 2026",
+   "amount": "2594.00",
+   "lines": [
+    "Fee · Aug 26, 2026 · past due$75.00",
+    "Tuition · Sep 1, 2026 · past due$360.00",
+    "Consumable fee · Sep 2, 2026 · past due$18.00",
+    "Consumable fee · Sep 2, 2026 · past due$18.00",
+    "Late pickup · Sep 14, 2026 · past due$25.00",
+    "Fee · Sep 18, 2026 · past due$75.00",
+    "Fee · Sep 25, 2026 · past due$75.00",
+    "Fee · Sep 30, 2026 · past due$75.00",
+    "Consumable fee · Oct 2, 2026 · past due$13.00",
+    "One-time charge · Oct 11, 2026 · past due$40.00",
+    "Tuition · Oct 11, 2026 · past due$1,450.00",
+    "Tuition · Oct 16, 2026 · past due$185.00",
+    "Tuition · Oct 17, 2026 · past due$185.00"
+   ],
+   "total": "Total applied$2,594.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "card5": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyFee · Aug 26, 2026 · past due$5.00Total applied$5.00Change allocation",
+   "amount": "5.00",
+   "lines": [
+    "Fee · Aug 26, 2026 · past due$5.00"
+   ],
+   "total": "Total applied$5.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  }
+ },
+ "writes": [
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":2000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":10000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":10000,\"payment_method\":\"cash\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000,\"payment_method\":\"cash\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0001\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0001\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0001\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0001\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0001\",\"amount_cents\":1000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0001\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0001\",\"amount_cents\":100,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0001\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"card\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":500,\"payment_method\":\"card\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}"
+ ],
+ "responses": []
+}

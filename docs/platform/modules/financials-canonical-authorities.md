@@ -885,8 +885,10 @@ writer, through `applyPaymentToCharge` and `attributePaymentToResponsibility`).
 **Eligible obligation:** stored status posted/partially_paid/paid (never a draft — a Scheduled charge
 awaiting its period is a draft — never void); not reversed and not itself a reversal or credit;
 outstanding (amount − linked corrections − active applications of posted payments) > 0; capped at
-`currentlyCollectibleCents` (a submitted subsidy claim suppresses); effective due date (`due_date`,
-else invoice date `billable_on`) on or before the settlement date. Not-yet-due money is never taken.
+`currentlyCollectibleCents` (a submitted subsidy claim suppresses); `due_date` on or before the
+settlement date — the same predicate as the canonical Due / Past due classification (§8). A charge
+with no due date is not "due" and is not settled automatically; it waits for explicit allocation.
+Not-yet-due money is never taken.
 
 **Whose outstanding:** each charge's outstanding splits into what NAMED people still owe (their share
 minus attributions on still-active applications) and what the ACCOUNT owes as a whole (no arrangement,
