@@ -94,10 +94,16 @@ function PrimaryBadge() {
 
 function TypeChip({ assignment }: { assignment: Assignment }) {
     const tone = typeTone(assignment);
-    const label = assignment.assignmentType.label?.trim() || "Untitled type";
+    /*
+     * No named type (a proposal whose days match more than one schedule type, so none was written):
+     * say what IS saved — its days — rather than "Untitled type", and never a type it does not have.
+     */
+    const named = assignment.assignmentType.label?.trim() || "";
+    const label = named || formatCompactScheduleWeekdays(assignment.weekdays) || "Schedule";
     return (
         <span
             data-assignment-type={assignment.assignmentType.key ?? "unknown"}
+            data-assignment-type-named={named ? "true" : "false"}
             style={{
                 display: "inline-flex",
                 alignItems: "center",
