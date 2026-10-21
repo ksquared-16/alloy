@@ -88,6 +88,11 @@ export type CompleteStageWorkWithOutcomeInput = {
     /** Suppresses duplicate execution from a double-submit of the same outcome. */
     idempotencyKey?: string | null;
     /**
+     * The runtime, not an operator, is recording this outcome (e.g. per-child work completing once
+     * every child has a path). No Activity event: the operator's own action is the business event.
+     */
+    runtimeRecorded?: boolean;
+    /**
      * The operator confirmed that recording this outcome closes a Tour that is still ahead. Without it
      * such an outcome is refused before anything is written (`confirmation_required` on the result).
      */
@@ -436,7 +441,7 @@ export async function completeStageWorkWithOutcome(
                         // Only follow-up contact attempts write a trace. Every other outcome is still
                         // the operator's business action and gets its own Activity event — the stage
                         // and status lines it causes are folded into it by the activity normalizer.
-                        if (!traced.logged) {
+                        if (!traced.logged && !input.runtimeRecorded) {
                             await recordStageOutcomeActivity({
                                 supabase: input.supabase,
                                 orgId: input.orgId,

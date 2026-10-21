@@ -500,6 +500,14 @@ export function buildChildrenCardEvidence(
     });
 
     const count = children.length;
+    // Children on the enrollment path, counted by their OWN stage's words: a child Enrolling (in
+    // Registration) is not "enrolled", and the summary must not say so.
+    const onPathByStage = new Map<string, number>();
+    for (const c of children) {
+        if (c.statusTone !== "positive") continue;
+        const label = (c.status ?? "enrolled").trim().toLowerCase();
+        onPathByStage.set(label, (onPathByStage.get(label) ?? 0) + 1);
+    }
     const enrolledCount = children.filter((c) => c.statusTone === "positive").length;
     const waitlistedCount = children.filter((c) => c.statusTone === "work").length;
     const attentionCount = children.filter((c) => c.needsAttention).length;
@@ -510,7 +518,7 @@ export function buildChildrenCardEvidence(
     } else {
         const noun = count === 1 ? "1 child" : `${count} children`;
         const parts: string[] = [];
-        if (enrolledCount > 0) parts.push(`${enrolledCount} enrolled`);
+        for (const [label, n] of onPathByStage) parts.push(`${n} ${label}`);
         if (waitlistedCount > 0) parts.push(`${waitlistedCount} waitlisted`);
         answerLine = parts.length > 0 ? `${noun} · ${parts.join(", ")}` : noun;
     }

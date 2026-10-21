@@ -112,6 +112,19 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.answerLine).toBe("3 children · 2 enrolled, 1 waitlisted");
     });
 
+    it("never calls a child in Registration (Enrolling) enrolled", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    { id: "c1", display_name: "Ava", outcome_status_key: "enrolling", stage_key: "enrolling" },
+                    { id: "c2", display_name: "Ben", outcome_status_key: "waitlisted", stage_key: "waitlist" },
+                ],
+            }),
+        );
+        expect(evidence.answerLine).toBe("2 children · 1 enrolling, 1 waitlisted");
+    });
+
     it("humanizes an unlabeled status key instead of showing the raw key", () => {
         // Org missing a status_definitions label for this key on opportunity_customer_members.
         const evidence = buildChildrenCardEvidence(

@@ -63,6 +63,7 @@ export async function completeFamilyDecisionWorkWhenResolved(input: {
         subject: { journey_segment: "family", opportunity_id: input.opportunityId },
         correlationId: input.correlationId ?? null,
         idempotencyKey: `${input.orgId}:${work.id}:${outcomeKey}:all_children_have_a_path`,
+        runtimeRecorded: true,
     });
     if (!result.ok) return { completed: false, reason: "failed", message: result.error };
     return { completed: true, work_id: String(work.id), outcome_key: outcomeKey };

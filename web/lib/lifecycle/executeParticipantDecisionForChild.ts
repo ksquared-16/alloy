@@ -602,8 +602,9 @@ export async function executeParticipantDecisionForChild(
         };
     }
 
-    // The operator's action, in Activity: "Offer spot · Ava · Toddler room". The status and stage
-    // lines this decision wrote are folded into it by the activity normalizer.
+    // The business event, in Activity: what the path MEANS once chosen when configuration says so
+    // ("Spot offered · Ava · Infant A"), else the command's label. The status and stage lines this
+    // decision wrote are folded into it by the activity normalizer.
     await recordParticipantDecisionActivity({
         supabase: input.supabase,
         orgId: input.orgId,
@@ -611,7 +612,7 @@ export async function executeParticipantDecisionForChild(
         userId: input.userId,
         stageKey: input.stageKey,
         decisionKey,
-        decisionLabel: decision.label?.trim() || decisionKey,
+        decisionLabel: decision.state_label?.trim() || decision.label?.trim() || decisionKey,
         answers: bound.answers,
         child: {
             customerMemberId,
