@@ -65,7 +65,14 @@ describe("the write goes through the registered pricing authority", () => {
          * cannot be saved without a reason, and it is sent beside an authored rate, never alone.
          */
         expect(card).toContain("isTuitionOverride(displayView, offeringId.trim(), customRateOn)");
-        expect(card).toContain("(!isOverridingSelection || Boolean(overrideReason.trim()))");
+        // A primary Save still cannot carry an override without its reason; a secondary commits no tuition.
+        expect(card).toContain("(createAsSecondary || !isOverridingSelection || Boolean(overrideReason.trim()))");
+    });
+
+    it("a secondary save never touches the child's tuition: no draft, no quote, no accept, no tuition region", () => {
+        expect(card).toContain('if (!opportunityId || child.kind !== "child" || createAsSecondary) return;');
+        expect(card).toContain("createAsSecondary ? Promise.resolve() : settleTuitionAfterSave()");
+        expect(card).toContain("opportunityId && !createAsSecondary ? (");
     });
 });
 
