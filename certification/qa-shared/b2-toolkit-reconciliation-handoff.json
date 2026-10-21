@@ -1,0 +1,129 @@
+{
+  "schema": "alloy.shared_qa_b2_handoff.v1",
+  "alloy_candidate_base": "66d6ee27f2348bbfb73cca909f78d2ccb22e71a1",
+  "b1_toolkit": "20261021-0cc773d1f3a1",
+  "phase_a_census": {
+    "gar": "gar_fe64d722881976",
+    "query_hash": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
+    "audited_functions": "all_true",
+    "seed_default_rbac": "all_true",
+    "qa_orgs_present": false,
+    "firefly_present": true,
+    "payment_note": "customer_payment_methods.stripe_payment_method_id reported false on deployed staging (non-blocking for B2 authz); customers.stripe_customer_id true"
+  },
+  "npm_scripts": {
+    "ensure_shared_tenant": "dev:qa:ensure-shared-tenant",
+    "qa_authz_fixture_ensure": "dev:qa:authz-fixture-ensure",
+    "qa_authz_fixture_reset": "dev:qa:authz-fixture-reset"
+  },
+  "fixtures": {
+    "qa_authz_fixture_ensure": {
+      "path": "certification/fixtures/qa-authz-vendors-ensure.sql",
+      "sha256": "09271ccd102dbb728bb336647fb61869d923652a1b89879f3bb20544f6191727",
+      "fixture_safety_profile_needed": "qa_authz_vendors",
+      "id_prefix": "aa000000-",
+      "frozen_org": "4acc9386-c485-486f-aa1f-05d83499d142",
+      "requires": ["ORG_ID", "QA_RUN_ID", "CERT_FIXTURE_APPLY=1"]
+    },
+    "qa_authz_fixture_reset": {
+      "path": "certification/fixtures/qa-authz-vendors-reset.sql",
+      "sha256": "35b38ce6d196f38b0d64f2b3381b0d0cb223810b5f53c6e36fd4a54200a193c9",
+      "fixture_safety_profile_needed": "qa_authz_vendors",
+      "id_prefix": "aa000000-",
+      "requires": ["ORG_ID", "QA_RUN_ID", "CERT_FIXTURE_APPLY=1"]
+    }
+  },
+  "censuses": {
+    "documents_zero_residue": {
+      "path": "certification/qa-shared/documents-zero-residue-census.sql",
+      "sha256": "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f",
+      "plan": "authz_q1",
+      "cleanup": "zero_residue"
+    },
+    "bp_quiesced_retained": {
+      "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
+      "sha256": "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083",
+      "plan": "bp_v2",
+      "cleanup": "quiesced_retained"
+    },
+    "phase_a_preflight": {
+      "path": "certification/qa-shared/b2-phase-a-preflight-census.sql",
+      "sha256": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46"
+    }
+  },
+  "toolkit_reconciliation_entries_required": [
+    {
+      "key": "ensure_shared_qa_tenant",
+      "description": "Ensure the frozen QA Shared and QA Secondary organizations and structure once. Dry-run by default.",
+      "environments": ["staging"],
+      "runner": "dev:qa:ensure-shared-tenant",
+      "supportsDryRun": true,
+      "dry_run_env": { "DRY_RUN": "1" },
+      "apply_env": { "DRY_RUN": "0", "CERT_QA_ENSURE_APPLY": "1" },
+      "frozen_context": {},
+      "note": "Separately approved one-time; B2 must not execute apply against staging. When applying, trusted host supplies QA_SHARED_ACTOR_USER_ID and QA_SECONDARY_ACTOR_USER_ID."
+    },
+    {
+      "key": "qa_authz_fixture_ensure",
+      "description": "Seed Documents authz_q1 vendor fixtures V1/V2 (aa000000- namespace) into the frozen QA Shared org for the open QA run.",
+      "environments": ["staging"],
+      "runner": "dev:qa:authz-fixture-ensure",
+      "supportsDryRun": false,
+      "frozen_context": {
+        "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+      },
+      "fixture_path": "certification/fixtures/qa-authz-vendors-ensure.sql",
+      "fixture_sha256": "09271ccd102dbb728bb336647fb61869d923652a1b89879f3bb20544f6191727",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1",
+      "apply_env": { "DRY_RUN": "0", "CERT_FIXTURE_APPLY": "1" },
+      "result_shape": ["seeded", "failed"]
+    },
+    {
+      "key": "qa_authz_fixture_reset",
+      "description": "Reset Documents authz_q1 vendor fixture residue for the named QA run in the frozen QA Shared org.",
+      "environments": ["staging"],
+      "runner": "dev:qa:authz-fixture-reset",
+      "supportsDryRun": false,
+      "frozen_context": {
+        "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+      },
+      "fixture_path": "certification/fixtures/qa-authz-vendors-reset.sql",
+      "fixture_sha256": "35b38ce6d196f38b0d64f2b3381b0d0cb223810b5f53c6e36fd4a54200a193c9",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1",
+      "apply_env": { "DRY_RUN": "0", "CERT_FIXTURE_APPLY": "1" },
+      "result_shape": ["reset", "failed"]
+    }
+  ],
+  "fixture_safety_profile_required": {
+    "key": "qa_authz_vendors",
+    "idPrefix": "aa000000-",
+    "ownership": {},
+    "requireReplicaWindow": false,
+    "note": "Add to Vacilando lib/hosted-fixture-safety.mjs FIXTURE_SAFETY_PROFILES. Deletes must be fixture-scoped (aa000000- / :'vendor_*' / qa_run_id / external_source)."
+  },
+  "plan_residue_census_registration": {
+    "authz_q1": {
+      "residue_census": "certification/qa-shared/documents-zero-residue-census.sql",
+      "residue_census_sha256": "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f"
+    },
+    "bp_v2": {
+      "residue_census": "certification/qa-shared/bp-quiesced-retained-census.sql",
+      "residue_census_sha256": "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083"
+    }
+  },
+  "hosted_activation_gates_remaining": [
+    "b2_runners_and_censuses_merged",
+    "documents_revised_plan_contract_approved",
+    "staging_email_fallback_cannot_send_from_qa_activity",
+    "bp_financial_quiescence_proven",
+    "staging_project_identity_and_integration_defaults_verified",
+    "one_time_org_ensure_separately_approved"
+  ],
+  "do_not": [
+    "create QA organizations during B2",
+    "open hosted QA runs",
+    "write Firefly or production"
+  ]
+}

@@ -1,0 +1,151 @@
+/**
+ * Shared QA Tenant Architecture V1 — Alloy-side frozen registry (B2).
+ *
+ * Mirrors Vacilando toolkit `lib/qa-plan-registry.mjs` (B1 @ 0cc773d1f3a1).
+ * Organization ids, structure ids, and identity emails are permanent and reviewed
+ * like code. Hosted org creation is separately approved; this module never writes.
+ */
+
+export const QA_HOSTED_PROJECT_REF = "ikaxilmwmrmbagoidedu";
+export const QA_PRODUCTION_PROJECT_REF = "vslwnntzzgpnmrpjipat";
+
+/** Firefly Early Learning — certified operating tenant; never a QA target. */
+export const FORBIDDEN_QA_ORG_IDS = Object.freeze([
+  "93667019-bd28-49b5-a688-acc9bb1e0a19",
+] as const);
+
+export const QA_ORGS = Object.freeze({
+  qa_shared: Object.freeze({
+    key: "qa_shared",
+    id: "4acc9386-c485-486f-aa1f-05d83499d142",
+    name: "ZZ Alloy QA",
+    slug: "zz-alloy-qa",
+    actor: "qa_shared_actor",
+    actor_email: "qa-shared-actor@example.com",
+    actor_display_name: "QA Shared Administrator",
+  }),
+  qa_secondary: Object.freeze({
+    key: "qa_secondary",
+    id: "ad53fee2-2570-460f-9300-f0e106c473b6",
+    name: "ZZ Alloy QA — Cross-Org",
+    slug: "zz-alloy-qa-cross-org",
+    actor: "qa_secondary_admin",
+    actor_email: "qa-secondary-admin@example.com",
+    actor_display_name: "QA Secondary Administrator",
+  }),
+} as const);
+
+/** B1 identity emails / display names mirrored for Alloy-side plan compatibility checks. */
+export const QA_IDENTITIES = Object.freeze({
+  qa_shared_actor: Object.freeze({
+    key: "qa_shared_actor",
+    kind: "actor",
+    org: "qa_shared",
+    email: "qa-shared-actor@example.com",
+    display_name: "QA Shared Administrator",
+  }),
+  qa_pool_01: Object.freeze({ key: "qa_pool_01", kind: "pool", org: "qa_shared", email: "qa-pool-01@example.com", display_name: "QA Pool 01" }),
+  qa_pool_02: Object.freeze({ key: "qa_pool_02", kind: "pool", org: "qa_shared", email: "qa-pool-02@example.com", display_name: "QA Pool 02" }),
+  qa_pool_03: Object.freeze({ key: "qa_pool_03", kind: "pool", org: "qa_shared", email: "qa-pool-03@example.com", display_name: "QA Pool 03" }),
+  qa_pool_04: Object.freeze({ key: "qa_pool_04", kind: "pool", org: "qa_shared", email: "qa-pool-04@example.com", display_name: "QA Pool 04" }),
+  qa_pool_05: Object.freeze({ key: "qa_pool_05", kind: "pool", org: "qa_shared", email: "qa-pool-05@example.com", display_name: "QA Pool 05" }),
+  qa_secondary_admin: Object.freeze({
+    key: "qa_secondary_admin",
+    kind: "actor",
+    org: "qa_secondary",
+    email: "qa-secondary-admin@example.com",
+    display_name: "QA Secondary Administrator",
+  }),
+} as const);
+
+export const QA_PLAN_KEYS = Object.freeze(["authz_q1", "bp_v2"] as const);
+
+export const QA_STRUCTURE = Object.freeze({
+  departments: Object.freeze({
+    qa_d1: Object.freeze({
+      key: "qa_d1",
+      org: "qa_shared",
+      id: "0704e72c-f73d-44b2-87d9-89924e222464",
+      name: "QA D1",
+      dept_key: "qa_d1",
+    }),
+    qa_d2: Object.freeze({
+      key: "qa_d2",
+      org: "qa_shared",
+      id: "609d088b-0446-4a7f-b529-f971fb5d73c8",
+      name: "QA D2",
+      dept_key: "qa_d2",
+    }),
+  }),
+  sites: Object.freeze({
+    qa_north: Object.freeze({
+      key: "qa_north",
+      org: "qa_shared",
+      id: "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+      name: "QA North",
+    }),
+    qa_south: Object.freeze({
+      key: "qa_south",
+      org: "qa_shared",
+      id: "cfb73302-3bbe-49db-b173-876fda776a6d",
+      name: "QA South",
+    }),
+  }),
+} as const);
+
+/** Fixture UUID namespace for Documents authz vendor SQL (hex-only). */
+export const QA_AUTHZ_FIXTURE_UUID_PREFIX = "aa000000-";
+
+export const QA_AUTHZ_VENDOR_IDS = Object.freeze({
+  v1: "aa000000-0000-4000-8000-000000000001",
+  v2: "aa000000-0000-4000-8000-000000000002",
+} as const);
+
+export const QA_FIXTURE_EXTERNAL_SOURCE = "alloy_qa_fixture";
+
+export const QA_AUTHZ_FIXTURE_PATHS = Object.freeze({
+  ensure: "certification/fixtures/qa-authz-vendors-ensure.sql",
+  reset: "certification/fixtures/qa-authz-vendors-reset.sql",
+} as const);
+
+/** Exact content pins — update deliberately with Vacilando reconciliation pins. */
+export const QA_AUTHZ_FIXTURE_SHA256 = Object.freeze({
+  ensure: "09271ccd102dbb728bb336647fb61869d923652a1b89879f3bb20544f6191727",
+  reset: "35b38ce6d196f38b0d64f2b3381b0d0cb223810b5f53c6e36fd4a54200a193c9",
+} as const);
+
+export const QA_CENSUS_PATHS = Object.freeze({
+  documents_zero_residue: "certification/qa-shared/documents-zero-residue-census.sql",
+  bp_quiesced_retained: "certification/qa-shared/bp-quiesced-retained-census.sql",
+  phase_a_preflight: "certification/qa-shared/b2-phase-a-preflight-census.sql",
+} as const);
+
+export const QA_CENSUS_SHA256 = Object.freeze({
+  documents_zero_residue: "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f",
+  bp_quiesced_retained: "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083",
+  phase_a_preflight: "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
+} as const);
+
+export const SEEDED_ASSIGNABLE_ROLES = Object.freeze(["admin", "ops", "school_director"] as const);
+export const RESERVED_ROLE_KEYS = Object.freeze([
+  "owner",
+  "admin",
+  "ops",
+  "manager",
+  "regional_lead",
+  "school_director",
+] as const);
+
+export type QaOrgKey = keyof typeof QA_ORGS;
+
+export function isForbiddenQaOrgId(orgId: string): boolean {
+  return (FORBIDDEN_QA_ORG_IDS as readonly string[]).includes(orgId);
+}
+
+export function isRegisteredQaOrgId(orgId: string): boolean {
+  return Object.values(QA_ORGS).some((o) => o.id === orgId);
+}
+
+export function qaOrgById(orgId: string) {
+  return Object.values(QA_ORGS).find((o) => o.id === orgId) ?? null;
+}

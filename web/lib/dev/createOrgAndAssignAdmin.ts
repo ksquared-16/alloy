@@ -21,6 +21,10 @@ export type CreateOrgParams = {
     name: string;
     industry_key: string;
     admin_user_id: string;
+    /** Optional frozen id (Shared QA B2). When set, insert uses this id exactly. */
+    org_id?: string;
+    /** Optional frozen slug. When omitted, a random suffix is appended. */
+    slug?: string;
 };
 
 export type CreateOrgResult =
@@ -50,16 +54,24 @@ export async function createOrgAndAssignAdmin(supabase: SupabaseClient, params: 
         return { ok: false, error: `Unknown or inactive industry_key: ${industry_key}` };
     }
 
-    const slug = `${slugify(name)}-${crypto.randomUUID().slice(0, 8)}`;
+    const requestedSlug = typeof params.slug === "string" ? params.slug.trim() : "";
+    const slug = requestedSlug || `${slugify(name)}-${crypto.randomUUID().slice(0, 8)}`;
+    const requestedOrgId = typeof params.org_id === "string" ? params.org_id.trim() : "";
+    if (requestedOrgId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedOrgId)) {
+        return { ok: false, error: "org_id is not a canonical uuid" };
+    }
+
+    const insertRow: Record<string, string> = {
+        name,
+        slug,
+        status: "active",
+        industry_id,
+    };
+    if (requestedOrgId) insertRow.id = requestedOrgId;
 
     const { data: orgRow, error: orgErr } = await supabase
         .from("orgs")
-        .insert({
-            name,
-            slug,
-            status: "active",
-            industry_id,
-        })
+        .insert(insertRow)
         .select("id")
         .single();
 
