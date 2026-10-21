@@ -124,7 +124,8 @@ export async function resolveFormsRelationshipPrefillValues(
         if (!rawValue) {
             const { data: personRow } = await supabase
                 .from("persons")
-                .select("id, first_name, last_name, full_name, display_name, email, phone")
+                // persons has no display_name column; selecting it failed the read and left the leaf empty.
+                .select("id, first_name, last_name, full_name, email, phone")
                 .eq("org_id", orgId)
                 .eq("id", resolution.target_record_id)
                 .maybeSingle();

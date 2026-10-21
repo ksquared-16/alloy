@@ -30,7 +30,11 @@ export async function resolvePersonChildRelationshipsFromStore(args: {
     const personIds = [...new Set(relationships.map((r) => r.person_id))];
     const { data: persons } = await args.supabase
         .from("persons")
-        .select("id, display_name, full_name, first_name, last_name, email, phone")
+        // persons has NO display_name column. Selecting it failed the whole query, every relationship
+        // resolved as missing_person, and every focus-panel relationship bag was empty on deployed
+        // staging (Lil' Sunshine ZZQALM234600: Household card "0 Authorized pickups"). The resolver
+        // derives the display name from full_name / first + last.
+        .select("id, full_name, first_name, last_name, email, phone")
         .eq("org_id", args.orgId)
         .in("id", personIds);
     const personsById = new Map<string, Record<string, unknown>>();

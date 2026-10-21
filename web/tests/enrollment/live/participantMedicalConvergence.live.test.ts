@@ -326,6 +326,15 @@ describe.skipIf(!env)("participant, medical & canonical data convergence (cert D
         expect(primaryHouseholdAdult(links)?.person_id).toBe(momId);
     });
 
+    it("R · the canonical relationship resolver reads real persons (focus-panel bags are never silently empty)", async () => {
+        const { resolvePersonChildRelationshipsFromStore } = await import("@/lib/fields/personChildRelationship/personChildRelationshipResolverRegistry");
+        const result = await resolvePersonChildRelationshipsFromStore({ supabase: db, orgId: ORG, customerId: ids.customer, customerMemberId: ids.ava });
+        expect(result.status).not.toBe("missing_person");
+        const byName = new Map(result.items.map((i) => [String(i.person?.full_name ?? ""), [...i.operational_roles].sort()]));
+        expect(byName.get("Dr. Lee Park")).toEqual(["physician"]);
+        expect(byName.get("Mary Rivers")).toEqual(["authorized_pickup", "emergency_contact"]);
+    });
+
     let allergyFactId = "";
 
     it("M · a caller without health.manage writes nothing", async () => {
