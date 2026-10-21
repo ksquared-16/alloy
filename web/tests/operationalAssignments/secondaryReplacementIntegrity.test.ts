@@ -1,10 +1,9 @@
 /**
- * Replacing a secondary assignment never loses the commitment, never touches another subject's row,
- * and never writes a room outside the assignment's site (nor a non-classroom room for staff).
+ * Replacing a secondary assignment goes through ONE transactional database function, and a new
+ * assignment never names a room outside its site (nor a non-classroom room for staff).
  *
- * Before: the prior row was closed, then the successor inserted, with nothing between them — an
- * insert refusal left the commitment closed and nothing in its place; and the prior row was found
- * by id alone.
+ * The transaction itself (rollback, concurrency, replay, subject/org/site binding) is proven live in
+ * tests/access/live/secondaryAssignmentReplacement.live.test.ts; this file proves the wiring.
  */
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -45,27 +44,6 @@ function seeded() {
 
 const child = (memberId = MEMBER_ID) => ({ type: "child" as const, customerMemberId: memberId, siteLocationId: SITE_ID });
 
-/** The real mock, with the schedule_assignments INSERT refused the way the consistency trigger would. */
-function refusingInserts(supabase: SupabaseClient): SupabaseClient {
-    return new Proxy(supabase, {
-        get(target, prop, recv) {
-            if (prop !== "from") return Reflect.get(target, prop, recv);
-            return (table: string) => {
-                const chain = target.from(table) as unknown as Record<string, unknown>;
-                if (table !== "schedule_assignments") return chain;
-                return new Proxy(chain, {
-                    get(c, p, r) {
-                        if (p !== "insert") return Reflect.get(c, p, r);
-                        return () => ({
-                            select: () => ({ single: async () => ({ data: null, error: { message: "assignment type does not support subject" } }) }),
-                        });
-                    },
-                });
-            };
-        },
-    }) as SupabaseClient;
-}
-
 async function secondary(supabase: SupabaseClient, memberId = MEMBER_ID) {
     return createOperationalAssignment(supabase, {
         orgId: ORG_ID,
@@ -78,101 +56,91 @@ async function secondary(supabase: SupabaseClient, memberId = MEMBER_ID) {
     });
 }
 
+/** The real mock, with the replacement function stubbed: records what the service asked and answers as told. */
+function withReplaceRpc(supabase: SupabaseClient, answer: (args: Record<string, unknown>) => { data?: unknown; error?: { message: string } }) {
+    const calls: Array<Record<string, unknown>> = [];
+    const proxied = new Proxy(supabase, {
+        get(target, prop, recv) {
+            if (prop !== "rpc") return Reflect.get(target, prop, recv);
+            return async (fn: string, args: Record<string, unknown>) => {
+                if (fn !== "replace_secondary_schedule_assignment") return (target.rpc as (f: string, x: unknown) => unknown)(fn, args);
+                calls.push(args);
+                const r = answer(args);
+                return { data: r.data ?? null, error: r.error ?? null };
+            };
+        },
+    }) as SupabaseClient;
+    return { proxied, calls };
+}
+
 describe("secondary replacement integrity", () => {
-    it("a refused successor leaves the prior commitment live and unchanged", async () => {
+    /*
+     * The transactional guarantees (rollback, concurrency, replay, subject/org/site binding) are proven
+     * against a live database in tests/access/live/secondaryAssignmentReplacement.live.test.ts. Here:
+     * the service sends the replacement to that one function — never a two-call write — with the
+     * subject it resolved and a deterministic key, and speaks its refusals in the service vocabulary.
+     */
+    it("a replacement is ONE call to the transactional function, carrying the resolved subject and a stable key", async () => {
         const store = seeded();
         const supabase = createOperationalEnrollmentMockSupabase(store);
         const prior = await secondary(supabase);
-
-        await expect(
-            createOperationalAssignment(refusingInserts(supabase), {
-                orgId: ORG_ID,
-                subject: child(),
-                schedulePatternId: PATTERN_ID,
-                startDate: LATER,
-                isPrimary: false,
-                supersedesAssignmentId: prior.id,
-                todayYmd: TODAY,
-            }),
-        ).rejects.toMatchObject({ code: "db_error" });
-
-        const rows = store.schedule_assignments;
-        expect(rows).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: prior.id, status: prior.status, end_date: null });
-    });
-
-    it("a successful replacement closes the prior row the day before and links the successor", async () => {
-        const store = seeded();
-        const supabase = createOperationalEnrollmentMockSupabase(store);
-        const prior = await secondary(supabase);
-        const next = await createOperationalAssignment(supabase, {
+        const { proxied, calls } = withReplaceRpc(supabase, (args) => ({
+            data: { ok: true, replayed: false, successor: { id: "succ-1", supersedes_assignment_id: args.p_prior_assignment_id } },
+        }));
+        const input = {
             orgId: ORG_ID,
             subject: child(),
             schedulePatternId: PATTERN_ID,
             startDate: LATER,
+            roomLocationId: UNIT_ID,
             isPrimary: false,
             supersedesAssignmentId: prior.id,
             todayYmd: TODAY,
+        };
+        const next = await createOperationalAssignment(proxied, input);
+        await createOperationalAssignment(proxied, input);
+        expect(next.id).toBe("succ-1");
+        expect(calls).toHaveLength(2);
+        expect(calls[0]).toMatchObject({
+            p_org_id: ORG_ID,
+            p_prior_assignment_id: prior.id,
+            p_subject_type: "child",
+            p_customer_member_id: MEMBER_ID,
+            p_successor: { site_location_id: SITE_ID, start_date: LATER, room_location_id: UNIT_ID, status: "planned", commitment_kind: "proposed" },
         });
-        const byId = new Map(store.schedule_assignments.map((r) => [r.id, r]));
-        expect(byId.get(prior.id)).toMatchObject({ status: "superseded", end_date: "2026-08-02" });
-        expect(byId.get(next.id)).toMatchObject({ supersedes_assignment_id: prior.id, is_primary: false });
-    });
-
-    it("refuses to close ANOTHER child's row, and writes nothing", async () => {
-        const store = seeded();
-        const supabase = createOperationalEnrollmentMockSupabase(store);
-        const theirs = await secondary(supabase, OTHER_MEMBER);
-        await expect(
-            createOperationalAssignment(supabase, {
-                orgId: ORG_ID,
-                subject: child(MEMBER_ID),
-                schedulePatternId: PATTERN_ID,
-                startDate: LATER,
-                isPrimary: false,
-                supersedesAssignmentId: theirs.id,
-                todayYmd: TODAY,
-            }),
-        ).rejects.toMatchObject({ code: "not_found" });
+        // The same intent produces the same key, so a resubmission replays in the database.
+        expect(calls[1]!.p_replacement_key).toBe(calls[0]!.p_replacement_key);
+        // Nothing was written outside the function: the prior row is as it was.
         expect(store.schedule_assignments).toHaveLength(1);
-        expect(store.schedule_assignments[0]).toMatchObject({ id: theirs.id, end_date: null });
+        expect(store.schedule_assignments[0]).toMatchObject({ id: prior.id, end_date: null });
     });
 
-    it("a prior row someone else already superseded is a conflict, and the successor is removed", async () => {
+    it("speaks the function's refusals in the service vocabulary", async () => {
         const store = seeded();
         const supabase = createOperationalEnrollmentMockSupabase(store);
         const prior = await secondary(supabase);
-        // Another operator's replacement lands between this one's read and its close.
-        const raced = new Proxy(supabase, {
-            get(target, prop, recv) {
-                if (prop !== "from") return Reflect.get(target, prop, recv);
-                return (table: string) => {
-                    const chain = target.from(table) as unknown as Record<string, unknown>;
-                    if (table !== "schedule_assignments") return chain;
-                    return new Proxy(chain, {
-                        get(c, p, r) {
-                            if (p === "update") {
-                                const row = store.schedule_assignments.find((x) => x.id === prior.id)!;
-                                row.status = "superseded";
-                            }
-                            return Reflect.get(c, p, r);
-                        },
-                    });
-                };
-            },
-        }) as SupabaseClient;
-        await expect(
-            createOperationalAssignment(raced, {
-                orgId: ORG_ID,
-                subject: child(),
-                schedulePatternId: PATTERN_ID,
-                startDate: LATER,
-                isPrimary: false,
-                supersedesAssignmentId: prior.id,
-                todayYmd: TODAY,
-            }),
-        ).rejects.toMatchObject({ code: "conflict" });
-        expect(store.schedule_assignments.map((r) => r.id)).toEqual([prior.id]);
+        const cases: Array<[string, string]> = [
+            ["prior_not_found", "not_found"],
+            ["primary_not_supported: x", "invalid_state"],
+            ["stale_predecessor: x", "conflict"],
+            ["site_mismatch: x", "validation_failed"],
+            ["invalid_successor_start: x", "validation_failed"],
+            ['new row violates check constraint "schedule_assignments_status_check"', "db_error"],
+        ];
+        for (const [message, code] of cases) {
+            const { proxied } = withReplaceRpc(supabase, () => ({ error: { message } }));
+            await expect(
+                createOperationalAssignment(proxied, {
+                    orgId: ORG_ID,
+                    subject: child(),
+                    schedulePatternId: PATTERN_ID,
+                    startDate: LATER,
+                    isPrimary: false,
+                    supersedesAssignmentId: prior.id,
+                    todayYmd: TODAY,
+                }),
+            ).rejects.toMatchObject({ code });
+        }
     });
 
     it("refuses a room that does not resolve to the assignment's site", async () => {

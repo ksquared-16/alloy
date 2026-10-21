@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { derivePlacementStatusFromStartDate } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import type { ScheduleAssignmentRow } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOperational/operationalEnrollmentErrors";
-import { assertValidIsoDate, computePriorRowCloseDate } from "@/lib/childcareOperational/effectiveDating";
+import { assertValidIsoDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { validateRoomLocationUnderSite, validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
 import { canonicalUnitRoleFromStorage, isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
@@ -65,6 +65,8 @@ export type CreateOperationalAssignmentInput = {
      * Primary home changes still use `assignment.set_primary`.
      */
     supersedesAssignmentId?: string | null;
+    /** Idempotency for a replacement: a retry with the same key replays instead of chaining a successor. */
+    replacementKey?: string | null;
     /**
      * Force proposed even if an agreement id is present (rare). Default: proposed
      * when agreement is absent, committed when present.
@@ -272,47 +274,6 @@ export async function createOperationalAssignment(
         }
     }
 
-    /*
-     * REPLACING A SECONDARY: ITS OWN SUBJECT'S ROW ONLY, AND NEVER A CLOSE WITHOUT A SUCCESSOR.
-     *
-     * This closed the prior row and THEN inserted its successor, in two calls with nothing between
-     * them: any insert refusal (the consistency trigger — pattern or site mismatch, a room or program
-     * outside the org, a category that does not support the subject, staff employment) left the
-     * commitment closed and nothing in its place. And the prior row was found by id alone, so a
-     * crafted id could close ANOTHER subject's assignment while the successor was written for this one.
-     *
-     * Now the prior row must belong to the subject being written, the successor is inserted FIRST,
-     * and the prior row is closed only if it is still live (a concurrent edit that got there first
-     * is a conflict, not a second successor). Should the close not land, the successor is removed —
-     * the same compensation the primary path uses. Secondaries carry no uniqueness or overlap
-     * constraint, so the instant both rows are live is invisible to every rule; it is NOT a
-     * transaction, and a crash between the two calls leaves both rows live (visible and
-     * recoverable) rather than the commitment lost. A truly atomic replacement needs a database
-     * function — a decision, not something to slip in here.
-     */
-    let priorIsPrimary = isPrimary;
-    let prior: ScheduleAssignmentRow | null = null;
-    if (supersedesAssignmentId) {
-        const { data: priorRaw, error: priorErr } = await supabase
-            .from("schedule_assignments")
-            .select("*")
-            .eq("org_id", input.orgId)
-            .eq("id", supersedesAssignmentId)
-            .maybeSingle();
-        if (priorErr) throw new OperationalEnrollmentServiceError("db_error", priorErr.message);
-        prior = priorRaw as ScheduleAssignmentRow | null;
-        if (!prior || !LIVE_STATUSES.includes(prior.status) || !priorBelongsToSubject(prior, input.subject.type, subject)) {
-            throw new OperationalEnrollmentServiceError("not_found", "Assignment to supersede was not found");
-        }
-        if (prior.is_primary === true) {
-            throw new OperationalEnrollmentServiceError(
-                "invalid_state",
-                "Primary assignment edits must use the primary schedule path or assignment.set_primary"
-            );
-        }
-        priorIsPrimary = false;
-    }
-
     const row = {
         org_id: input.orgId,
         subject_type: input.subject.type,
@@ -323,7 +284,7 @@ export async function createOperationalAssignment(
         room_location_id: roomLocationId,
         program_category_id: trimOrNull(input.programCategoryId),
         operational_assignment_type_id: trimOrNull(input.assignmentTypeId),
-        is_primary: supersedesAssignmentId ? priorIsPrimary : isPrimary,
+        is_primary: supersedesAssignmentId ? false : isPrimary,
         commitment_kind: subject.commitmentKind,
         schedule_pattern_id: schedulePatternId,
         start_date: startDate,
@@ -344,55 +305,90 @@ export async function createOperationalAssignment(
         updated_by: trimOrNull(input.actorUserId),
     };
 
+    if (supersedesAssignmentId) return replaceSecondaryAssignment(supabase, input, subject, row, supersedesAssignmentId);
+
     const { data, error } = await supabase.from("schedule_assignments").insert(row).select("*").single();
     if (error || !data) {
         throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "Could not create assignment");
     }
-    const created = data as ScheduleAssignmentRow;
-    if (prior) {
-        const { data: closed, error: closeError } = await supabase
-            .from("schedule_assignments")
-            .update({
-                status: "superseded",
-                end_date: computePriorRowCloseDate(startDate),
-                updated_by: trimOrNull(input.actorUserId),
-            })
-            .eq("org_id", input.orgId)
-            .eq("id", prior.id)
-            .in("status", LIVE_STATUSES)
-            .select("id")
-            .maybeSingle();
-        if (closeError || !closed) {
-            await supabase.from("schedule_assignments").delete().eq("org_id", input.orgId).eq("id", created.id);
-            if (closeError) throw new OperationalEnrollmentServiceError("db_error", closeError.message);
-            throw new OperationalEnrollmentServiceError(
-                "conflict",
-                "This assignment was changed by someone else — reopen it and try again",
-                { assignment_id: prior.id }
-            );
-        }
-    }
-    return created;
+    return data as ScheduleAssignmentRow;
 }
 
-const LIVE_STATUSES = ["planned", "active", "ending"];
-
-/**
- * The prior row is this subject's: same subject type and the same child (by member, or by agreement
- * for rows written before members were carried) or the same staff person.
+/*
+ * REPLACING A SECONDARY IS ONE TRANSACTION: `replace_secondary_schedule_assignment`.
+ *
+ * The predecessor is locked, bound to this subject and site, closed and succeeded inside one database
+ * transaction — a refused successor (the consistency trigger included) rolls the close back with it,
+ * and concurrent replacements serialise on the predecessor's lock. A retry carrying the same
+ * replacement key is answered with the successor it already created; any other request against a
+ * superseded predecessor is stale. This service still resolves the subject, validates pattern and
+ * room and builds the successor; the function decides nothing about category or overlap.
  */
-function priorBelongsToSubject(
-    prior: ScheduleAssignmentRow,
-    subjectType: string,
-    subject: { customerMemberId: string | null; personId: string | null; enrollmentAgreementId: string | null }
-): boolean {
-    if (prior.subject_type !== subjectType) return false;
-    if (subjectType !== "child") return Boolean(subject.personId) && prior.subject_person_id === subject.personId;
-    return (
-        (Boolean(subject.customerMemberId) && prior.customer_member_id === subject.customerMemberId) ||
-        (Boolean(subject.enrollmentAgreementId) && prior.enrollment_agreement_id === subject.enrollmentAgreementId)
-    );
+async function replaceSecondaryAssignment(
+    supabase: SupabaseClient,
+    input: CreateOperationalAssignmentInput,
+    subject: { customerMemberId: string | null; personId: string | null; enrollmentAgreementId: string | null },
+    row: Record<string, unknown>,
+    priorId: string
+): Promise<ScheduleAssignmentRow> {
+    // Deterministic for the same intent, so a resubmitted identical request replays rather than chains.
+    const replacementKey =
+        trimOrNull(input.replacementKey) ??
+        ["r", priorId, row.start_date, row.end_date, row.schedule_pattern_id, row.room_location_id,
+            row.operational_assignment_type_id, row.program_category_id].map((v) => String(v ?? "")).join(":");
+    const { data, error } = await supabase.rpc("replace_secondary_schedule_assignment", {
+        p_org_id: input.orgId,
+        p_prior_assignment_id: priorId,
+        p_subject_type: input.subject.type,
+        p_customer_member_id: subject.customerMemberId,
+        p_enrollment_agreement_id: subject.enrollmentAgreementId,
+        p_subject_person_id: subject.personId,
+        p_replacement_key: replacementKey,
+        p_actor: trimOrNull(input.actorUserId),
+        p_successor: {
+            site_location_id: row.site_location_id,
+            room_location_id: row.room_location_id,
+            program_category_id: row.program_category_id,
+            operational_assignment_type_id: row.operational_assignment_type_id,
+            schedule_pattern_id: row.schedule_pattern_id,
+            start_date: row.start_date,
+            end_date: row.end_date,
+            status: row.status,
+            commitment_kind: row.commitment_kind,
+            assignment_kind: row.assignment_kind,
+            source_key: row.source_key,
+            metadata: row.metadata,
+        },
+    });
+    if (error) throw replacementRefusal(error.message, priorId);
+    const successor = (data as { successor?: ScheduleAssignmentRow } | null)?.successor;
+    if (!successor) throw new OperationalEnrollmentServiceError("db_error", "Replacement returned no successor");
+    return successor;
 }
+
+/** The function's refusals, in this service's vocabulary. */
+function replacementRefusal(message: string, priorId: string): OperationalEnrollmentServiceError {
+    const m = message ?? "";
+    if (m.includes("prior_not_found")) return new OperationalEnrollmentServiceError("not_found", "Assignment to supersede was not found");
+    if (m.includes("primary_not_supported")) {
+        return new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Primary assignment edits must use the primary schedule path or assignment.set_primary"
+        );
+    }
+    if (m.includes("stale_predecessor")) {
+        return new OperationalEnrollmentServiceError(
+            "conflict",
+            "This assignment was changed by someone else — reopen it and try again",
+            { assignment_id: priorId }
+        );
+    }
+    if (m.includes("site_mismatch") || m.includes("invalid_successor_start")) {
+        return new OperationalEnrollmentServiceError("validation_failed", m, { assignment_id: priorId });
+    }
+    return new OperationalEnrollmentServiceError("db_error", m);
+}
+
 
 export async function listOperationalAssignments(
     supabase: SupabaseClient,
