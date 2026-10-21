@@ -40,6 +40,7 @@ import {
 import { artifactSlotsForProjection, collectionDeclaredPartySlots } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
+import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type {
     EnrollmentInformationNeed,
@@ -68,6 +69,8 @@ export type ParticipantEnrollmentObjective = {
     readonly parties: readonly ChildParty[];
     /** Household people not yet related to this child — the reuse offer. */
     readonly party_candidates: readonly ChildParty[];
+    /** The organization's relationship-to-the-child vocabulary, for a person the family adds. */
+    readonly relationship_options: readonly { readonly value: string; readonly label: string }[];
 };
 
 export type ParticipantEnrollmentObjectiveResult =
@@ -84,6 +87,7 @@ function buildParticipantObjective(
         readonly requiresConfirmation?: ReadonlySet<string>;
         readonly parties?: readonly ChildParty[];
         readonly candidates?: readonly ChildParty[];
+        readonly relationshipOptions?: readonly { readonly value: string; readonly label: string }[];
         readonly partyDeclines?: Readonly<Record<string, { declined_at: string }>>;
     },
 ): ParticipantEnrollmentObjective {
@@ -123,6 +127,7 @@ function buildParticipantObjective(
         outstanding_evidence,
         parties,
         party_candidates: context?.candidates ?? [],
+        relationship_options: context?.relationshipOptions ?? [],
         process_instance_id: progress.process_instance_id,
         session_id: needs.session_id,
         business_process_revision_id: progress.business_process_revision_id,
@@ -169,6 +174,7 @@ export type ParticipantObjectiveContext = {
     /** Canonical parties for this child, and the roles the parent has declined to add. */
     readonly parties?: readonly ChildParty[];
     readonly partyCandidates?: readonly ChildParty[];
+    readonly relationshipOptions?: readonly { readonly value: string; readonly label: string }[];
     readonly customerId?: string | null;
 };
 
@@ -190,6 +196,7 @@ export function recomputeParticipantObjectiveFromContext(
         requiresConfirmation: context.requiresConfirmation,
         parties: context.parties,
         candidates: context.partyCandidates,
+        relationshipOptions: context.relationshipOptions,
         partyDeclines: readPartyOfferDeclines(postWriteSession?.metadata),
     });
 }
@@ -277,6 +284,7 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
                 requiresConfirmation,
                 parties: partyContext.parties,
                 candidates: partyContext.candidates,
+                relationshipOptions: partyContext.relationshipOptions,
                 partyDeclines: readPartyOfferDeclines(contextWithRoles.session?.metadata),
             },
         ),
@@ -288,6 +296,7 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
             evidenceOnFile,
             parties: partyContext.parties,
             partyCandidates: partyContext.candidates,
+            relationshipOptions: partyContext.relationshipOptions,
             customerId: partyContext.customerId,
         },
     };
@@ -378,11 +387,16 @@ async function resolveTenantPartyRoles(
 async function resolveChildPartyContext(
     supabase: SupabaseClient,
     input: { readonly orgId: string; readonly customerMemberId: string | null },
-): Promise<{ parties: readonly ChildParty[]; candidates: readonly ChildParty[]; customerId: string | null }> {
+): Promise<{
+    parties: readonly ChildParty[];
+    candidates: readonly ChildParty[];
+    customerId: string | null;
+    relationshipOptions: readonly { value: string; label: string }[];
+}> {
     const childId = (input.customerMemberId ?? "").trim();
-    if (!childId) return { parties: [], candidates: [], customerId: null };
+    if (!childId) return { parties: [], candidates: [], customerId: null, relationshipOptions: [] };
     try {
-        const [parties, { data: child }] = await Promise.all([
+        const [parties, { data: child }, optionItems] = await Promise.all([
             resolveChildParties(supabase, { orgId: input.orgId, customerMemberId: childId }),
             supabase
                 .from("customer_members")
@@ -390,7 +404,11 @@ async function resolveChildPartyContext(
                 .eq("org_id", input.orgId)
                 .eq("id", childId)
                 .maybeSingle(),
+            loadPersonChildRelationshipOptionSetItems(supabase, input.orgId).catch(() => []),
         ]);
+        const relationshipOptions = optionItems
+            .filter((i) => i.is_active !== false)
+            .map((i) => ({ value: i.item_key, label: i.label || i.item_key }));
         const customerId = String((child as { customer_id?: string } | null)?.customer_id ?? "") || null;
         const candidates = customerId
             ? await resolveHouseholdCandidates(supabase, {
@@ -399,8 +417,8 @@ async function resolveChildPartyContext(
                   excludePersonIds: new Set(parties.map((p) => p.person_id)),
               })
             : [];
-        return { parties, candidates, customerId };
+        return { parties, candidates, customerId, relationshipOptions };
     } catch {
-        return { parties: [], candidates: [], customerId: null };
+        return { parties: [], candidates: [], customerId: null, relationshipOptions: [] };
     }
 }

@@ -4,6 +4,12 @@
  * Doctrine: each role maps to distinct person.* refKeys — never reuse primary contact scalars.
  */
 
+import {
+    PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES,
+} from "@/lib/admin/person/personDrawerHouseholdRoles";
 import { buildOpportunityFamilyContactRows, resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import { isOpaqueIdValue, pickEntityId } from "./proofRecordContext";
 import type { OpportunityPrimaryContactPerson } from "./resolveOpportunityPrimaryContactPerson";
@@ -66,6 +72,15 @@ function vmKeysFor(kind: RoleKind): {
     };
 }
 
+function isDeclaredNonParentRole(roleKey: string): boolean {
+    return (
+        PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES.has(roleKey) ||
+        PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES.has(roleKey) ||
+        PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES.has(roleKey) ||
+        PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES.has(roleKey)
+    );
+}
+
 function resolveFromFamilyRows(
     vmRecord: Record<string, unknown>,
     kind: RoleKind,
@@ -89,6 +104,10 @@ function resolveFromFamilyRows(
                 if (primaryId && personId === primaryId) return false;
                 const roleKey = normRoleKey(row.role_type);
                 if (roleKey === "primary_contact" || roleKey === "primary") return false;
+                // The fallback is for an adult whose role was never named — never for someone whose
+                // role says what they are. A physician, a pick-up person or an emergency contact is
+                // not the family's second parent.
+                if (isDeclaredNonParentRole(roleKey)) return false;
                 return Boolean(pickDisplay(row.name));
             })
         :   undefined);

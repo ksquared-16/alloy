@@ -15,6 +15,13 @@ export const PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES = new Set([
 ]);
 export const PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES = new Set(["emergency_contact", "emergency"]);
 export const PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES = new Set(["authorized_pickup", "pickup"]);
+/**
+ * A child's care providers. They are related to a CHILD (person_child_relationships), never members
+ * of the household — the relationship definitions give them no `customer_persons` write target — so
+ * a household row that carries one of these roles is never a parent, an additional adult or an
+ * emergency contact. The child's Medical card is where they belong.
+ */
+export const PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES = new Set(["physician", "dentist"]);
 export const PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES = new Set([
     "payer",
     "billing",

@@ -34,6 +34,7 @@ import {
     voiceForSubject,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
+import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -173,6 +174,8 @@ export type ParticipantObjectiveWire = {
             readonly candidates: readonly { readonly ref: string; readonly name: string; readonly detail: string | null }[];
             /** Zero means declining is always available, which is every role today. */
             readonly minimum: number;
+            /** Relationship-to-the-child choices; empty when this role does not collect one. */
+            readonly relationship_options: readonly { readonly value: string; readonly label: string }[];
         } | null;
         readonly evidence: readonly {
             readonly field_id: string;
@@ -575,12 +578,20 @@ export function participantObjectiveWireModel(
                 ? {
                       role_label: turn.party.role_label,
                       existing: turn.party.existing.map((p) => p.full_name),
-                      candidates: objective.party_candidates.map((c) => ({
+                      // Someone who already holds this role with a sibling comes first.
+                      candidates: [...objective.party_candidates]
+                          .sort((a, b) => Number(b.roles.includes(turn.party!.role)) - Number(a.roles.includes(turn.party!.role)))
+                          .map((c) => ({
                           ref: confirmationRef(c.person_id),
                           name: c.full_name,
                           detail: c.phone ?? c.email ?? null,
                       })),
                       minimum: turn.party.minimum,
+                      // Asked only where the relationship definition collects it (emergency contact,
+                      // pick-up, guardian — not a physician), from the organization's own vocabulary.
+                      relationship_options: relationshipDefinitionForRole(turn.party.role)?.nested_field_keys.includes("relationship_type")
+                          ? objective.relationship_options
+                          : [],
                   }
                 : null,
             evidence: (turn.evidence ?? []).map((e) => ({

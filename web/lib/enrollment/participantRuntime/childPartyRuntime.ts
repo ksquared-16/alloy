@@ -25,9 +25,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ensureContactForPerson } from "@/lib/admin/actions/createLeadChildScopedContactPersistence";
+import { ensureCustomerPersonRoleLink } from "@/lib/admin/actions/createLeadRoleContactPersistence";
+
 import {
     addPersonChildRelationshipRole,
     createPersonChildRelationship,
+    updatePersonChildRelationship,
 } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import { validateOperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipValidation";
@@ -39,6 +43,8 @@ export type ChildParty = CollectedParty & {
     readonly full_name: string;
     readonly phone: string | null;
     readonly email: string | null;
+    /** The relationship to the child (an option-set key), when the family gave one. */
+    readonly relationship_type?: string | null;
 };
 
 /**
@@ -55,12 +61,12 @@ export async function resolveChildParties(
     try {
         const { data: rels } = await supabase
             .from("person_child_relationships")
-            .select("id, person_id, priority, status")
+            .select("id, person_id, priority, status, relationship_type")
             .eq("org_id", input.orgId)
             .eq("customer_member_id", input.customerMemberId)
             .order("priority", { ascending: true, nullsFirst: false });
 
-        const rows = ((rels ?? []) as { id: string; person_id: string; priority: number | null; status?: string | null }[])
+        const rows = ((rels ?? []) as { id: string; person_id: string; priority: number | null; status?: string | null; relationship_type?: string | null }[])
             .filter((r) => (r.status ?? "active") === "active");
         if (rows.length === 0) return [];
 
@@ -104,6 +110,7 @@ export async function resolveChildParties(
                 full_name: name,
                 phone: (String(person.phone ?? "").trim() || null),
                 email: (String(person.email ?? "").trim() || null),
+                relationship_type: (String(row.relationship_type ?? "").trim() || null),
             }];
         });
     } catch {
@@ -123,29 +130,63 @@ export async function resolveHouseholdCandidates(
     input: { readonly orgId: string; readonly customerId: string; readonly excludePersonIds: ReadonlySet<string> },
 ): Promise<ChildParty[]> {
     try {
-        const { data: links } = await supabase
-            .from("customer_persons")
-            .select("person_id, status")
-            .eq("org_id", input.orgId)
-            .eq("customer_id", input.customerId);
+        // Household people, and everyone already related to another child of this household — a
+        // sibling's physician is offered for reuse without being made a household member.
+        const [{ data: links }, { data: childEdges }] = await Promise.all([
+            supabase
+                .from("customer_persons")
+                .select("person_id, status")
+                .eq("org_id", input.orgId)
+                .eq("customer_id", input.customerId),
+            supabase
+                .from("person_child_relationships")
+                .select("id, person_id, status, relationship_type")
+                .eq("org_id", input.orgId)
+                .eq("customer_id", input.customerId),
+        ]);
         const ids = [...new Set(
-            ((links ?? []) as { person_id: string; status?: string | null }[])
+            ([...((links ?? []) as { person_id: string; status?: string | null }[]), ...((childEdges ?? []) as { person_id: string; status?: string | null }[])])
                 .filter((l) => (l.status ?? "active") === "active")
                 .map((l) => l.person_id)
                 .filter((id) => id && !input.excludePersonIds.has(id)),
         )];
         if (ids.length === 0) return [];
 
-        const { data: personRows } = await supabase
-            .from("persons")
-            .select("id, first_name, last_name, full_name, email, phone")
-            .eq("org_id", input.orgId)
-            .in("id", ids);
+        const edges = ((childEdges ?? []) as { id: string; person_id: string; status?: string | null; relationship_type?: string | null }[])
+            .filter((e) => (e.status ?? "active") === "active" && ids.includes(e.person_id));
+        const [{ data: personRows }, { data: edgeRoles }] = await Promise.all([
+            supabase
+                .from("persons")
+                .select("id, first_name, last_name, full_name, email, phone")
+                .eq("org_id", input.orgId)
+                .in("id", ids),
+            edges.length > 0
+                ? supabase
+                      .from("person_child_relationship_roles")
+                      .select("relationship_id, role_key, is_active")
+                      .eq("org_id", input.orgId)
+                      .in("relationship_id", edges.map((e) => e.id))
+                : Promise.resolve({ data: [] as unknown[] }),
+        ]);
+        // The roles each person already holds with a sibling, so the offer can put the sibling's
+        // physician first when it asks for a physician.
+        const personByEdge = new Map(edges.map((e) => [e.id, e.person_id]));
+        const rolesByPerson = new Map<string, Set<string>>();
+        for (const r of (edgeRoles ?? []) as { relationship_id: string; role_key: string; is_active?: boolean }[]) {
+            if (r.is_active === false) continue;
+            const pid = personByEdge.get(r.relationship_id);
+            if (!pid) continue;
+            const set = rolesByPerson.get(pid) ?? new Set<string>();
+            set.add(r.role_key);
+            rolesByPerson.set(pid, set);
+        }
 
         return ((personRows ?? []) as Record<string, unknown>[]).map((person, index) => ({
             party_id: String(person.id),
             person_id: String(person.id),
-            roles: [],
+            roles: [...(rolesByPerson.get(String(person.id)) ?? [])],
+            // Grandma to one child is grandma to her sibling: the stated kinship travels with reuse.
+            relationship_type: edges.find((e) => e.person_id === String(person.id) && (e.relationship_type ?? "").trim())?.relationship_type ?? null,
             priority: index + 1,
             full_name:
                 String(person.full_name ?? "").trim() ||
@@ -186,6 +227,8 @@ export async function attachPartyRole(
         /** Reuse this person. Absent means create one from `identity`. */
         readonly personId?: string | null;
         readonly identity?: { readonly full_name: string; readonly phone?: string | null; readonly email?: string | null };
+        /** Relationship to the child — an option-set key, validated by the relationship service. */
+        readonly relationshipType?: string | null;
         /** Canonical ordering — what "#1" means. Defaults to the end of the role's existing list. */
         readonly priority?: number | null;
     },
@@ -231,17 +274,33 @@ export async function attachPartyRole(
         if (error || !data) return { ok: false, error: error?.message ?? "Could not record that person." };
         personId = String((data as { id: string }).id);
         createdPerson = true;
+    }
 
-        // The household link, so the person is offerable for reuse next time.
-        await supabase.from("customer_persons").insert({
-            org_id: input.orgId,
-            customer_id: input.customerId,
-            person_id: personId,
-            role_type: definition.operational_role_key,
-            is_primary: false,
-            status: "active",
-            metadata: { source: "participant_party_v1" },
-        });
+    /*
+     * THE HOUSEHOLD LINK ONLY WHERE THE DEFINITION WRITES ONE.
+     *
+     * The relationship definition names its write targets, the same ones the operator's
+     * `executeRelationshipAction` honours: a guardian and an emergency contact are household people
+     * (`customer_persons`); a physician, a dentist and an authorized pick-up are related to the CHILD
+     * only. Writing a household row for a physician is what put "Dr. Lee Park — Parent" on the
+     * Household card. Sibling reuse does not need that row — `resolveHouseholdCandidates` also offers
+     * everyone already related to another child of this household.
+     */
+    if (definition.write_targets.includes("customer_persons")) {
+        try {
+            await ensureCustomerPersonRoleLink(supabase, {
+                orgId: input.orgId,
+                customerId: input.customerId,
+                personId,
+                roleType: definition.operational_role_key,
+            });
+        } catch {
+            return { ok: false, error: "Could not add that person to the household." };
+        }
+    }
+    if (definition.write_targets.includes("contacts")) {
+        // The compatibility contact row every operator-added relationship has.
+        await ensureContactForPerson(supabase, { orgId: input.orgId, customerId: input.customerId, personId }).catch(() => null);
     }
 
     /*
@@ -267,6 +326,21 @@ export async function attachPartyRole(
             definition.operational_role_key,
         );
         if (!added.ok) return { ok: false, error: "Could not add that role." };
+        // The kinship the family just stated fills an edge that had none; it never overwrites one.
+        const kinship = (input.relationshipType ?? "").trim();
+        if (kinship) {
+            const { data: edge } = await supabase
+                .from("person_child_relationships")
+                .select("relationship_type")
+                .eq("org_id", input.orgId)
+                .eq("id", String((existing as { id: string }).id))
+                .maybeSingle();
+            if (!String((edge as { relationship_type?: string | null } | null)?.relationship_type ?? "").trim()) {
+                await updatePersonChildRelationship(supabase, input.orgId, String((existing as { id: string }).id), {
+                    relationship_type: kinship,
+                }).catch(() => null);
+            }
+        }
         return { ok: true, person_id: personId, created_person: createdPerson };
     }
 
@@ -277,6 +351,7 @@ export async function attachPartyRole(
         personId,
         priority: input.priority ?? null,
         operationalRoles: [definition.operational_role_key],
+        relationshipType: (input.relationshipType ?? "").trim() || null,
     });
     if (!created.ok) return { ok: false, error: created.error };
 
