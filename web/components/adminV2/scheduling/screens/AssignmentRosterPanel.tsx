@@ -530,6 +530,10 @@ export default function AssignmentRosterPanel({
                                         payload: {
                                             subject_type: "child",
                                             enrollment_agreement_id: subject.enrollmentAgreementId ?? null,
+                                            // A pre-enrolment (proposed) child has no agreement: the action
+                                            // anchors it by member + site, as the Assignments card does.
+                                            customer_member_id: subject.customerMemberId,
+                                            site_location_id: bulk?.siteId || undefined,
                                             schedule_pattern_id: assignment?.schedulePatternId ?? undefined,
                                             start_date: bulkStartDate,
                                             room_location_id: bulkRoomId,

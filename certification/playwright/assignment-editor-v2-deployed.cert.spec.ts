@@ -1136,6 +1136,8 @@ test.describe("Assignment editor V2 — deployed", () => {
             await page.waitForTimeout(7000);
             for (const r of responses.slice(before)) say(`move ${room!.slice(0, 8)}@${date}: ${r}`);
             if (responses.length === before) say(`move ${room!.slice(0, 8)}@${date}: NO request sent`);
+            const listed = page.locator('[data-bulk-room-result="refused"]');
+            say(`move ${room!.slice(0, 8)}@${date}: panel lists=${(await listed.count()) ? JSON.stringify(await listed.locator("li").allTextContents()) : "none (panel closed: all applied)"}`);
             await openLens();
             say(`after ${room!.slice(0, 8)}: ${await lineState()}`);
             await shot(page, `v5cert-roster-${label}-${room!.slice(0, 8)}`);
