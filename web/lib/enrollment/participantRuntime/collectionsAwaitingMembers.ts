@@ -18,10 +18,12 @@ export type CollectionAwaitingMembers = {
     readonly label: string;
     readonly complete: number;
     readonly needed: number;
+    /** An optional collection offered once (insurance, medications): the family may skip it. */
+    readonly optional?: boolean;
 };
 
-function memberCount(control: CompiledArtifactControl): { complete: number; needed: number } | null {
-    const v = control.value as { complete?: unknown; needed?: unknown; started?: unknown } | null;
+function memberCount(control: CompiledArtifactControl): { complete: number; needed: number; optional?: boolean } | null {
+    const v = control.value as { complete?: unknown; needed?: unknown; started?: unknown; offer_optional?: unknown } | null;
     if (!v || typeof v !== "object") return null;
     const complete = typeof v.complete === "number" ? v.complete : null;
     const needed = typeof v.needed === "number" ? v.needed : null;
@@ -29,7 +31,10 @@ function memberCount(control: CompiledArtifactControl): { complete: number; need
     if (complete == null || needed == null) return null;
     // A member someone started (a guardian with no relationship yet) must be finished: submit
     // refuses it whether or not the group is required, so it is awaited like a missing one.
-    return { complete, needed: Math.max(needed, started ?? 0) };
+    const awaited = Math.max(needed, started ?? 0);
+    // Offered while nothing has been entered; once a row exists it is awaited like any member.
+    if (v.offer_optional === true && awaited === 0 && complete === 0) return { complete, needed: 0, optional: true };
+    return { complete, needed: awaited };
 }
 
 /** Shown, required collections with fewer complete members than they need, in document order. */
@@ -41,7 +46,7 @@ export function collectionsAwaitingMembers(artifact: CompiledArtifact | null): C
         for (const control of section.controls) {
             if (control.input_type !== "group" || seen.has(control.field_id)) continue;
             const count = memberCount(control);
-            if (!count || count.complete >= count.needed) continue;
+            if (!count || (count.complete >= count.needed && !count.optional)) continue;
             seen.add(control.field_id);
             out.push({ fieldId: control.field_id, label: control.participant_label ?? control.label, ...count });
         }
@@ -59,6 +64,9 @@ export function oneMemberOf(label: string): string {
 
 /** The prompt for a collection still short of its minimum. */
 export function collectionPrompt(c: CollectionAwaitingMembers): { title: string; detail: string } {
+    if (c.optional) {
+        return { title: `${c.label.replace(/\s*\(if applicable\)\s*$/i, "")}`, detail: "Optional — add one if it applies, or skip." };
+    }
     const one = oneMemberOf(c.label);
     const article = /^[aeiou]/.test(one) ? "an" : "a";
     // "other child in your household" already says "another" — never "Add an other child".

@@ -301,6 +301,8 @@ export function FormEmbedClient({
     const [validationErrors, setValidationErrors] = useState<NormalizedValidationError[] | null>(null);
     const [schema, setSchema] = useState<FormSchemaV1 | null>(null);
     const [payload, setPayload] = useState<FormPayload>(() => emptyPayload());
+    /** Collections the review has already offered this visit — an optional one is offered once. */
+    const offeredCollections = useRef<Set<string>>(new Set());
     const [submissionId, setSubmissionId] = useState<string | null>(null);
     const [optionValuesByFieldId, setOptionValuesByFieldId] = useState<Record<string, readonly string[]>>({});
     const [optionChoicesByFieldId, setOptionChoicesByFieldId] = useState<
@@ -1500,6 +1502,7 @@ export function FormEmbedClient({
                                    minimum is asked for as its own step, in the same rows the review
                                    edits — never discovered as a document that cannot be finished. */
                                 const first = collectionsAwaitingMembers(compiled)[0] ?? null;
+                                offeredCollections.current = new Set(first ? [first.fieldId] : []);
                                 setPeopleFocus(first?.fieldId ?? null);
                                 setReviewStep(first ? "people" : "review");
                             }}
@@ -1559,8 +1562,11 @@ export function FormEmbedClient({
                             const count = (control?.value ?? null) as { complete?: number; needed?: number } | null;
                             const complete = count?.complete ?? 0;
                             const needed = count?.needed ?? 0;
-                            const prompt = collectionPrompt({ fieldId: peopleFocus, label: control?.participant_label ?? control?.label ?? "", complete, needed });
-                            const next = collectionsAwaitingMembers(compiled).find((c) => c.fieldId !== peopleFocus) ?? null;
+                            const awaiting = collectionsAwaitingMembers(compiled);
+                            const optional = Boolean((count as { offer_optional?: boolean } | null)?.offer_optional) && needed === 0;
+                            const prompt = collectionPrompt({ fieldId: peopleFocus, label: control?.participant_label ?? control?.label ?? "", complete, needed, optional });
+                            // Each collection is offered ONCE: an optional one the family skipped is not offered again.
+                            const next = awaiting.find((c) => c.fieldId !== peopleFocus && !offeredCollections.current.has(c.fieldId)) ?? null;
                             return (
                                 <IntakeCard>
                                     <div data-participant-collection={peopleFocus}>
@@ -1588,12 +1594,13 @@ export function FormEmbedClient({
                                             data-participant-collection-continue="true"
                                             disabled={complete < needed}
                                             onClick={() => {
+                                                if (next) offeredCollections.current.add(next.fieldId);
                                                 setPeopleFocus(next?.fieldId ?? null);
                                                 setReviewStep(next ? "people" : "review");
                                             }}
                                             className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white disabled:bg-alloy-midnight/25"
                                         >
-                                            {complete < needed ? `${needed - complete} more needed` : next ? "Continue" : "Continue to your paperwork"}
+                                            {complete < needed ? `${needed - complete} more needed` : optional && complete === 0 ? "Skip" : next ? "Continue" : "Continue to your paperwork"}
                                         </button>
                                     </div>
                                 </IntakeCard>

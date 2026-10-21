@@ -275,7 +275,18 @@ export function compileParticipantArtifact(
                         required: needed > 0,
                         // How many COMPLETE members it has against how many it needs, so the minimum
                         // stays visible beside the group rather than appearing first as a refusal.
-                        value: complete == null ? null : started != null && started > complete ? { complete, needed, started } : { complete, needed },
+                        value: complete == null
+                            ? null
+                            : {
+                                  complete,
+                                  needed,
+                                  ...(started != null && started > complete ? { started } : {}),
+                                  // An optional MEDICAL collection (insurance, medications) is offered
+                                  // once in the collections step — otherwise a family has no way in.
+                                  ...(needed === 0 && String((g.collection_binding as { collection_provider_ref?: string } | undefined)?.collection_provider_ref ?? "").startsWith("health.")
+                                      ? { offer_optional: true }
+                                      : {}),
+                              },
                         content: null,
                         shared_key: null,
                     });
