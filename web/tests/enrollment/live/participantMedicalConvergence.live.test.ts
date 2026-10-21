@@ -68,8 +68,20 @@ const ids = {
 const SCHEMA: FormSchemaV1 = validateFormSchema({
     schema_version: 1,
     title: "ZZ Cert TA-806",
-    sections: [{ id: "s", field_ids: ["ec", "dr", "allergies"] }],
+    sections: [{ id: "s", field_ids: ["og", "ec", "dr", "allergies"] }],
     fields: [
+        {
+            id: "og",
+            type: "group",
+            label: "Other parents or guardians",
+            required: false,
+            repeat: { min: 0, max: 3 },
+            collection_binding: { collection_provider_ref: "person.contact_role.parents", iteration_entity_type: "person", iteration_alias: "guardian" },
+            fields: [
+                { id: "og__full_name", type: "text", label: "Name", required: true, field_source: { entity_type: "person", field_key: "full_name" } },
+                { id: "og__relationship_type", type: "text", label: "Relationship to the child", required: true, field_source: { entity_type: "person_child_relationship", field_key: "relationship_type" } },
+            ],
+        },
         {
             id: "ec",
             type: "group",
@@ -286,6 +298,32 @@ describe.skipIf(!env)("participant, medical & canonical data convergence (cert D
 
         const benSync = await writePartyRowsIntoDrafts(db, { orgId: ORG, sessionId: "", customerMemberId: ids.ben, submissionIds: [benDraft], relationshipOptions: options });
         expect(benSync).toEqual({});
+    });
+
+    it("C · an inquiry family's adult (primary_contact, unflagged) prefills and is never 'another' guardian (ZZQALM234600)", async () => {
+        const mom = await ok(db.from("persons").insert({ org_id: ORG, first_name: "Parent", last_name: `Cert${RUN}`, email: `zz.cert.${RUN}@test.invalid`, phone: "5551234567" }).select("id").single());
+        const momId = (mom as { id: string }).id;
+        ids.persons.push(momId);
+        await ok(db.from("customer_persons").insert({ org_id: ORG, customer_id: ids.customer, person_id: momId, role_type: "primary_contact", is_primary: false }));
+        // The conversation attaches her as Ava's guardian — a true canonical fact.
+        const attached = await attachPartyRole(db, { orgId: ORG, customerId: ids.customer, customerMemberId: ids.ava, role: "guardian", personId: momId });
+        expect(attached.ok).toBe(true);
+
+        // A draft that an earlier sync already polluted with her as "another" guardian heals.
+        const draft = await draftFor(ids.ava, {
+            values: {},
+            groups: { og: [{ instance_key: `col:person.contact_role.parents:${momId}`, values: { og__full_name: "Parent" }, collection: { provider_ref: "person.contact_role.parents", item_id: momId, origin: "existing", iteration_entity_type: "person" } }] },
+        } as FormPayload);
+        await writePartyRowsIntoDrafts(db, { orgId: ORG, sessionId: "", customerMemberId: ids.ava, submissionIds: [draft] });
+        const stored = (await ok(db.from("form_submissions").select("payload").eq("id", draft).single())) as { payload: FormPayload };
+        expect(stored.payload.groups!.og ?? []).toEqual([]);
+        // Her people are still Ava's: emergency contact and physician rows are linked as before.
+        expect(stored.payload.groups!.ec![0]!.collection).toMatchObject({ item_id: grandmaId });
+
+        // And her identity is what the guardian fields prefill from.
+        const { primaryHouseholdAdult } = await import("@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues");
+        const links = (await ok(db.from("customer_persons").select("person_id, is_primary, role_type, status").eq("customer_id", ids.customer))) as never[];
+        expect(primaryHouseholdAdult(links)?.person_id).toBe(momId);
     });
 
     let allergyFactId = "";

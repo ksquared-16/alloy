@@ -60,3 +60,16 @@ describe("mergePartyRowsIntoGroup", () => {
         expect(mergePartyRowsIntoGroup(group, [], [], label)).toBeNull();
     });
 });
+
+describe("the primary adult is not 'another' guardian (ZZQALM234600)", () => {
+    const guardians = {
+        ...group,
+        id: "occ_other_guardians",
+        repeat: { min: 0, max: 3 },
+        collection_binding: { collection_provider_ref: "person.contact_role.parents", iteration_entity_type: "person", iteration_alias: "guardian" },
+    } as unknown as FormField & { type: "group" };
+    it("removes a linked row for the primary adult and writes none", () => {
+        const stale = [{ instance_key: "col:person.contact_role.parents:p-mom", values: { occ_emergency_contacts__full_name: "Parent Z" }, collection: { provider_ref: "person.contact_role.parents", item_id: "p-mom", origin: "existing", iteration_entity_type: "person" } }] as never;
+        expect(mergePartyRowsIntoGroup(guardians, stale, [], label, new Set(["p-mom"]))).toEqual([]);
+    });
+});

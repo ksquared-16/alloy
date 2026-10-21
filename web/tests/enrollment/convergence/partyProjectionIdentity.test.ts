@@ -32,3 +32,18 @@ describe("party projection identity", () => {
         expect(fill.values).toMatchObject({ ec1_first: "Mary", ec1_last: "Ann Rivers", ec1_name: "Mary Ann Rivers" });
     });
 });
+
+import { primaryHouseholdAdult } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
+
+describe("the household's primary adult", () => {
+    it("is the flagged person, else the unique primary contact, else the unique parent — never a guess", () => {
+        expect(primaryHouseholdAdult([{ person_id: "a", role_type: "parent" }, { person_id: "b", role_type: "parent", is_primary: true }])?.person_id).toBe("b");
+        // An inquiry family: the adult is a primary contact without the flag (Lil' Sunshine).
+        expect(primaryHouseholdAdult([{ person_id: "p", role_type: "primary_contact" }, { person_id: "e", role_type: "emergency_contact" }])?.person_id).toBe("p");
+        expect(primaryHouseholdAdult([{ person_id: "m", role_type: "parent" }])?.person_id).toBe("m");
+        // Two equal parents are ambiguous: asked, not chosen. A physician is never a guardian.
+        expect(primaryHouseholdAdult([{ person_id: "m", role_type: "parent" }, { person_id: "f", role_type: "parent" }])).toBeNull();
+        expect(primaryHouseholdAdult([{ person_id: "d", role_type: "physician" }])).toBeNull();
+        expect(primaryHouseholdAdult([{ person_id: "x", role_type: "primary_contact", status: "inactive" }])).toBeNull();
+    });
+});

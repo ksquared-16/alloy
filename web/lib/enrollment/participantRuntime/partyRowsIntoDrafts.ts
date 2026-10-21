@@ -35,6 +35,7 @@ import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepe
 import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
 import { extractCollectionSubmissionEnvelope } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 import { resolveChildParties, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
+import { primaryHouseholdAdult } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
 
 /** submission id → group id → the rows now held for that group. */
@@ -114,6 +115,8 @@ export function mergePartyRowsIntoGroup(
     saved: readonly FormPayloadGroupRow[],
     parties: readonly ChildParty[],
     relationshipLabel: (key: string | null | undefined) => string | null = (k) => k ?? null,
+    /** People this group must not hold as rows (the primary adult, in the guardian collection). */
+    excludePersonIds: ReadonlySet<string> = new Set(),
 ): FormPayloadGroupRow[] | null {
     if (!groupFieldHasCollectionBinding(group)) return null;
     const binding = group.collection_binding!;
@@ -123,9 +126,9 @@ export function mergePartyRowsIntoGroup(
     const holders = [...parties]
         .filter((p) => p.roles.includes(role))
         .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
-    if (holders.length === 0) return null;
+    const remaining = saved.filter((r) => !(r.collection?.item_id && excludePersonIds.has(r.collection.item_id)));
+    if (holders.length === 0 && remaining.length === saved.length) return null;
 
-    const remaining = [...saved];
     const out: FormPayloadGroupRow[] = [];
     for (const party of holders) {
         const canonical = rowValuesFor(group, party, relationshipLabel);
@@ -163,11 +166,13 @@ export function mergePartyRowsIntoPayloadGroups(
     groups: Readonly<Record<string, FormPayloadGroupRow[]>>,
     parties: readonly ChildParty[],
     relationshipLabel?: (key: string | null | undefined) => string | null,
+    primaryAdultId?: string | null,
 ): Record<string, FormPayloadGroupRow[]> {
     const changed: Record<string, FormPayloadGroupRow[]> = {};
     for (const field of schema.fields) {
         if (field.type !== "group") continue;
-        const next = mergePartyRowsIntoGroup(field, groups[field.id] ?? [], parties, relationshipLabel);
+        const guardianGroup = relationshipDefinitionForRef(field.collection_binding?.collection_provider_ref ?? "")?.operational_role_key === "guardian";
+        const next = mergePartyRowsIntoGroup(field, groups[field.id] ?? [], parties, relationshipLabel, guardianGroup && primaryAdultId ? new Set([primaryAdultId]) : new Set());
         if (next) changed[field.id] = next;
     }
     return changed;
@@ -228,8 +233,20 @@ export async function writePartyRowsIntoDrafts(
         .filter((x) => x.parsed.success && x.parsed.data.fields.some((f) => f.type === "group" && groupFieldHasCollectionBinding(f) && relationshipDefinitionForRef(f.collection_binding!.collection_provider_ref)));
     if (parsedDrafts.length === 0) return updates;
 
-    const parties = await resolveChildParties(supabase, { orgId: input.orgId, customerMemberId: childId });
-    if (parties.length === 0) return updates;
+    const allParties = await resolveChildParties(supabase, { orgId: input.orgId, customerMemberId: childId });
+    if (allParties.length === 0) return updates;
+    /*
+     * THE PRIMARY ADULT IS NOT "ANOTHER" GUARDIAN.
+     *
+     * Deployed (Lil' Sunshine, ZZQALM234600): the conversation attached the household's own parent
+     * as the child's guardian — a true canonical fact — and this sync then wrote her into "Other
+     * parents or guardians", a row with no relationship that submit refused. The primary adult is
+     * printed by the primary-guardian fields; the guardian collection holds the others.
+     */
+    const primaryId = await primaryAdultOfChild(supabase, input.orgId, childId);
+    const parties = allParties.map((party) =>
+        party.person_id === primaryId ? { ...party, roles: party.roles.filter((r) => r !== "guardian") } : party,
+    );
     const labelByKey = new Map((input.relationshipOptions ?? []).map((o) => [o.value, o.label]));
     const relationshipLabel = (k: string | null | undefined) => (k ? labelByKey.get(k) ?? k : null);
 
@@ -237,7 +254,7 @@ export async function writePartyRowsIntoDrafts(
         if (!parsed.success) continue;
         const payload = (draft.payload ?? {}) as Record<string, unknown>;
         const groups = (payload.groups && typeof payload.groups === "object" ? payload.groups : {}) as Record<string, FormPayloadGroupRow[]>;
-        const changed = mergePartyRowsIntoPayloadGroups(parsed.data, groups, parties, relationshipLabel);
+        const changed = mergePartyRowsIntoPayloadGroups(parsed.data, groups, parties, relationshipLabel, primaryId);
         if (Object.keys(changed).length === 0) continue;
         const nextGroups = { ...groups, ...changed };
         const meta = (payload.meta && typeof payload.meta === "object" ? payload.meta : {}) as Record<string, unknown>;
@@ -258,6 +275,18 @@ export async function writePartyRowsIntoDrafts(
         updates[draft.id] = changed;
     }
     return updates;
+}
+
+async function primaryAdultOfChild(supabase: SupabaseClient, orgId: string, childId: string): Promise<string | null> {
+    const { data: child } = await supabase.from("customer_members").select("customer_id").eq("org_id", orgId).eq("id", childId).maybeSingle();
+    const customerId = String((child as { customer_id?: string } | null)?.customer_id ?? "");
+    if (!customerId) return null;
+    const { data: links } = await supabase
+        .from("customer_persons")
+        .select("person_id, is_primary, role_type, status")
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId);
+    return primaryHouseholdAdult((links ?? []) as Parameters<typeof primaryHouseholdAdult>[0])?.person_id ?? null;
 }
 
 /**
