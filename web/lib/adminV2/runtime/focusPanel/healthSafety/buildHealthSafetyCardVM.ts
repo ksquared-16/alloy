@@ -36,6 +36,7 @@ import {
     type HealthAccessSubject,
 } from "@/lib/health/healthAccess";
 import { resolveActiveHealthFacts } from "@/lib/health/healthFactCollectionResolver";
+import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
 import {
     CRITICAL_SEVERITIES,
     healthFactLabel,
@@ -390,6 +391,10 @@ export async function buildHealthSafetyCardVM(
                 });
             }
         }
+        // The organization's own word for the relationship ("Grandparent"), never its stored key.
+        const kinshipLabels = new Map(
+            (await loadPersonChildRelationshipOptionSetItems(supabase, args.orgId).catch(() => [])).map((o) => [o.item_key, o.label || o.item_key]),
+        );
         const holds = (r: Record<string, unknown>, role: string) => rolesByRelationship.get(t(r.id))?.has(role) ?? false;
         for (const role of ["physician", "dentist"] as const) {
             for (const r of rows.filter((row) => holds(row, role))) {
@@ -411,7 +416,7 @@ export async function buildHealthSafetyCardVM(
                 return {
                     personId: t(r.person_id),
                     name: person?.name || null,
-                    relationship: t(r.relationship_type) || null,
+                    relationship: t(r.relationship_type) ? kinshipLabels.get(t(r.relationship_type)) ?? t(r.relationship_type) : null,
                     // The phone belongs to the CANONICAL person, never copied onto the child.
                     phone: person?.phone ?? null,
                     priority: Number.isFinite(priorityRaw) ? priorityRaw : null,

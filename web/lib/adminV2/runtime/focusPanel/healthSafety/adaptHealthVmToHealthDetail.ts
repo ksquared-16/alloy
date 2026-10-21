@@ -25,6 +25,7 @@
  * exactly like emergency contacts — never flat fields, never written from here.
  */
 
+import { formatPhoneDisplay } from "@/lib/phone/phonePresentation";
 import type {
     HealthSafetyCardVM,
     HealthSafetyDocument,
@@ -181,7 +182,7 @@ export function adaptHealthVmToHealthDetail(
         .map((c, i) => ({
             name: c.name ?? "Contact",
             relationship: c.relationship ?? "Relationship not recorded",
-            phone: c.phone ?? "No phone on file",
+            phone: c.phone ? formatPhoneDisplay(c.phone) : "No phone on file",
             order: i === 0 ? "First" : `#${i + 1}`,
         }));
 
@@ -209,7 +210,7 @@ export function adaptHealthVmToHealthDetail(
         careProviders: vm.careProviders.map((c) => ({
             name: c.name ?? c.roleLabel,
             role: c.roleLabel,
-            phone: c.phone ?? "No phone on file",
+            phone: c.phone ? formatPhoneDisplay(c.phone) : "No phone on file",
         })),
         lastUpdated: shortDate(newestFact) ?? "Not recorded",
     };
