@@ -29,12 +29,14 @@ export type DepartmentWorkItemsResponse = {
 };
 
 type CardLike = { id: string; departmentId: string; workItems?: LandingWorkItems | null };
+/** A card after the Work Items pass: it always carries the field (null = no line). */
+export type WithLandingWorkItems<T> = T & { workItems: LandingWorkItems | null };
 
 /** Apply the server's answer to the cards. `response` null = the read failed or timed out. */
-export function applyLandingWorkItems<T extends CardLike>(cards: readonly T[], response: DepartmentWorkItemsResponse | null): T[] {
+export function applyLandingWorkItems<T extends CardLike>(cards: readonly T[], response: DepartmentWorkItemsResponse | null): WithLandingWorkItems<T>[] {
     const perDepartment = new Map<string, number>();
     for (const c of cards) if (c.departmentId) perDepartment.set(c.departmentId, (perDepartment.get(c.departmentId) ?? 0) + 1);
-    return cards.map((card) => {
+    return cards.map((card): WithLandingWorkItems<T> => {
         if (!card.departmentId) return { ...card, workItems: null };
         if ((perDepartment.get(card.departmentId) ?? 0) > 1) return { ...card, workItems: { state: "shared_department" } };
         if (!response || response.ok !== true) return { ...card, workItems: { state: "unavailable" } };
@@ -53,9 +55,9 @@ export async function fetchLandingWorkItems<T extends CardLike>(
     init: RequestInit,
     selectedSiteId: string | null | undefined,
     fetchImpl: typeof fetch = fetch,
-): Promise<T[]> {
+): Promise<WithLandingWorkItems<T>[]> {
     const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
-    if (!departmentIds.length) return [...cards];
+    if (!departmentIds.length) return cards.map((c) => ({ ...c, workItems: null }));
     const params = new URLSearchParams({ scope: "workspace", summary: "by_department", department_ids: departmentIds.join(",") });
     const site = (selectedSiteId ?? "").trim();
     if (site) params.set("workspace_site_id", site);
