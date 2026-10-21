@@ -7,6 +7,7 @@ import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actio
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { promoteProposedAssignment } from "@/lib/operationalAssignments/operationalAssignmentService";
 import { operatorFacingAssignmentError } from "@/lib/operationalAssignments/operatorAssignmentErrors";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export const ASSIGNMENT_PROMOTE_PROPOSED_ACTION_KEY = "assignment.promote_proposed";
 
@@ -16,6 +17,7 @@ function t(v: unknown): string {
 
 export const assignmentPromoteProposedAction: RegisteredAction = {
     actionKey: ASSIGNMENT_PROMOTE_PROPOSED_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_PROMOTE_PROPOSED_ACTION_KEY),
     defaultLabel: "Promote proposed assignment",
     description: "Promote a Proposed (planning) Assignment onto an enrollment agreement as committed truth.",
     supportedEntityTypes: ["child"],

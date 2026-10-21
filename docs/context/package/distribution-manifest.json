@@ -59,7 +59,7 @@
     {
       "path": "docs/platform/core/effective-dated-assignment-doctrine.md",
       "tier": 2,
-      "blob_sha": "0d0bf34cc50647f4f831a325bab4a399627d043c",
+      "blob_sha": "69c26a43720aa878d6d3d75a061812361797d5e1",
       "exists": true
     },
     {
@@ -95,7 +95,7 @@
     {
       "path": "docs/platform/governance/roles-and-permissions.md",
       "tier": 2,
-      "blob_sha": "9e84689b917a4b60deebff95b06e5bcd5263d291",
+      "blob_sha": "fea4086c3946f937217ce83856098901fa71352f",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "af59c1f91cebb0daa952258669bf2fcfcfbeeaf8",
+      "blob_sha": "eaf127b53dff8b6f083118cf37dc19d416faf281",
       "exists": true
     },
     {

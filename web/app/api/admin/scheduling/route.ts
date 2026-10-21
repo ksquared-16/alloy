@@ -8,6 +8,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { SCHEDULING_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { authorizeActionSites } from "@/lib/adminV2/actions/actionExecutor";
 import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import {
     operationalEnrollmentErrorResponse,
@@ -804,9 +806,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "schedule.create is not registered", code: "server_error" }, { status: 500 });
     }
 
-    const result = await action.execute({
+    /*
+     * BP V2 S4A — this route executes the registered action directly, so it applies the action's SITE
+     * AUTHORITY itself, with the actor's real scope (it used to pass none). A restricted operator cannot
+     * create a schedule at a site they do not hold; nothing is written when refused.
+     */
+    const scheduleDeps = {
         supabase,
-        ctx: { orgId: ctx.orgId, userId: ctx.userId, accessScope: null },
+        ctx: { orgId: ctx.orgId, userId: ctx.userId, accessScope: scopeDimensionsFromAccess(access) },
         invocation: {
             actionKey: "schedule.create",
             entityType: "child",
@@ -814,7 +821,15 @@ export async function POST(request: NextRequest) {
             payload: validated.value,
         },
         payload: validated.value,
-    });
+    };
+    const siteFail = await authorizeActionSites(action, scheduleDeps);
+    if (siteFail && !siteFail.ok) {
+        return NextResponse.json(
+            { error: siteFail.error, code: siteFail.blockers?.[0]?.code ?? "site_out_of_scope", correlationId: siteFail.correlationId },
+            { status: siteFail.status }
+        );
+    }
+    const result = await action.execute(scheduleDeps);
 
     if (!result.ok) {
         return NextResponse.json({ error: result.error, correlationId: result.correlationId }, { status: result.status });

@@ -29,6 +29,7 @@ import {
     type AssignmentTimeDayInput,
 } from "@/lib/assignmentTime/setAssignmentTime";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export const ASSIGNMENT_SET_TIME_ACTION_KEY = "assignment.set_time";
 
@@ -56,6 +57,7 @@ function readDays(payload: Record<string, unknown> | undefined): AssignmentTimeD
 
 export const assignmentSetTimeAction: RegisteredAction = {
     actionKey: ASSIGNMENT_SET_TIME_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_SET_TIME_ACTION_KEY),
     defaultLabel: "Set assignment hours",
     description:
         "Record which days an assignment runs and the hours it runs on each of them. The reusable pattern is not changed.",

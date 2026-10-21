@@ -112,6 +112,21 @@ hold several role keys in one org and `permissionKeys` is their **union**. Any s
 
 - List routes: filter by org ∩ allowed departments/sites
 - Mutations: re-assert scope on the target row
+  - **Registered actions (as-built, BP V2 Slice 4A, 2026-10-21).** An action that writes at a site
+    declares `authorizeSites`; `runRegisteredAction` — the one execution runtime every caller reaches
+    (the execute route, the Command Runtime adapter, BOS, automation) — enforces it before eligibility,
+    preview or execute, so a refused invocation runs no handler and writes nothing (403,
+    `site_out_of_scope` / `site_unresolved`). Declared today by every operational-assignment command
+    (`assignment.create`, `change_room`, `set_primary`, `archive`, `promote_proposed`, `delete_proposed`,
+    `set_time`) and `schedule.create`; `app/api/admin/scheduling` POST, which executes `schedule.create`
+    directly, applies the same check with the actor's real scope. Sites are read from authoritative
+    rows (`web/lib/operationalAssignments/assignmentSiteAuthority.ts`): the touched assignment rows, the
+    enrollment agreement for a committed child target (a supplied site is never trusted there), the
+    supplied target for a proposed child or staff row, a staff primary change's live primaries, and a
+    participation draft's enrollment site. Verdict = the Coverage doctrine
+    ([`staff-coverage-authority.md`](staff-coverage-authority.md)): no scope = trusted internal path;
+    unrestricted writes org-wide; restricted must hold EVERY touched site; unresolvable fails closed.
+    Capability policy is unchanged — this enforces scope only.
 - **Absent** access profile: legacy default `all` scopes — a transition default
   (`ABSENT_PROFILE_ENFORCEMENT`), lockout-class to change, waiting on `W-7` / migration `M1`
 - **Failed** access-profile read: **denies** (`restricted`, empty allow-lists) — `W-43`. Absence and

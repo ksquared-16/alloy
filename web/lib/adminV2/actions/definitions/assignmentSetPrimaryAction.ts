@@ -19,11 +19,13 @@ import {
     validateAssignmentSetPrimaryPayload,
     trimmedValue,
 } from "@/lib/operationalAssignments/commands/assignmentSetPrimaryInputs";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export { ASSIGNMENT_SET_PRIMARY_ACTION_KEY };
 
 export const assignmentSetPrimaryAction: RegisteredAction = {
     actionKey: ASSIGNMENT_SET_PRIMARY_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_SET_PRIMARY_ACTION_KEY),
     defaultLabel: "Set primary assignment",
     description:
         "Designate the effective-dated primary (operational home) assignment for a child or staff subject.",

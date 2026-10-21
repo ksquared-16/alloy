@@ -8,6 +8,7 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { archiveOperationalAssignment } from "@/lib/operationalAssignments/archiveOperationalAssignment";
 import { isValidIsoDateString } from "@/lib/childcareOperational/effectiveDating";
+import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
 
 export const ASSIGNMENT_ARCHIVE_ACTION_KEY = "assignment.archive";
 
@@ -17,6 +18,7 @@ function t(v: unknown): string {
 
 export const assignmentArchiveAction: RegisteredAction = {
     actionKey: ASSIGNMENT_ARCHIVE_ACTION_KEY,
+    authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_ARCHIVE_ACTION_KEY),
     defaultLabel: "Archive assignment",
     description: "End a non-primary operational assignment on an effective date.",
     supportedEntityTypes: ["child", "person", "schedule"],
