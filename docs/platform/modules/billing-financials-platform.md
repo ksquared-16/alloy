@@ -265,6 +265,12 @@ history, so nothing existing is invalidated by it.
 
 ### Payment application — money received, applied once (September 2026)
 
+> **W7-F050 (2026-10-21): application is now normally automatic.** Ordinary money is recorded against
+> the household and settled by `settlePayment` — past due first, oldest first, the payer's own share
+> only. Choosing a charge is the explicit exception. The doctrine and the eligibility rule live in
+> `financials-canonical-authorities.md` → "Application policy"; what follows describes the canonical
+> writers that settlement calls, which are unchanged.
+
 Migration `supabase/migrations/20260903190000_payment_application_childcare_spine.sql`.
 
 Posting says what a family owes. Nothing said what they had paid: `buildFinancialsCardVM` returned
