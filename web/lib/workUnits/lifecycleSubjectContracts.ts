@@ -261,7 +261,7 @@ export type QueueRowContext = {
         projection_key: string;
         subject: { type: "child" | "person" | "household"; id: string };
         source: {
-            kind: "schedule_assignment" | "charge" | "enrollment_agreement";
+            kind: "schedule_assignment" | "charge" | "enrollment_agreement" | "collection_attempt";
             id: string;
             count: number;
             status_label: string;

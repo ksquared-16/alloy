@@ -14,7 +14,7 @@ import type { ProcessProjectionDomain } from "@/lib/lifecycle/processModelV1";
 
 const SUBJECT_ROW_TYPE = { child: "child", person: "person", household: "customer" } as const;
 const DRAWER_ENTITY = { child: "customer_members", person: "persons", household: "customers" } as const;
-const SOURCE_LABEL = { schedule_assignment: "Assignment", charge: "Charge", enrollment_agreement: "Enrollment agreement" } as const;
+const SOURCE_LABEL = { schedule_assignment: "Assignment", charge: "Charge", enrollment_agreement: "Enrollment agreement", collection_attempt: "Collection" } as const;
 
 export function domainProjectionQueueRowContext(
     row: DomainProjectionRow,
