@@ -335,6 +335,15 @@ describes staged lifecycles; for a projection view the following is the contract
     that has moved on is said ("has changed since the list was read"), never swapped for another row; an
     agreement source opens no assignment;
   - the **origin** line ("Assignments · Ending soon — Ends Oct 29 · in 9 days").
+  **Billing (BP V2 Slice 6)** keeps the `full` household record and asks the existing Financials card to
+  LEAD it (`leadCard: "financials"`) — a household has no record contexts, so the contextual presentation
+  would render nothing. The record route verifies the row's source against the household
+  (`resolveHouseholdFinancialFocus`: exists in the org, belongs to THIS household through its billable
+  source, actor holds `fin.read`; otherwise only a status, so nothing leaks) and the card starts there
+  (`financialsLeadStart`): a charge opens the card's existing Charge Details (`openCharge`); an unrecorded
+  collection opens its Payment surface with that attempt marked (`openCollection`, Financials' lifecycle
+  words — never a payment); anything stale or foreign shows the account at rest with one sentence. The
+  household grid stays below. Closing the card's surfaces dispatches the same convergence refresh.
   The entry is pinned for the life of the open record. Actions are the card's existing registered
   `assignment.*` commands; a confirmed write (the card fires only after the canonical writer succeeded and
   it re-read) dispatches the existing Work Unit convergence event with no opportunity id, so rows and counts

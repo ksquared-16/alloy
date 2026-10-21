@@ -110,7 +110,11 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   Panel; for Assignments, on the existing Scheduling card at the row's site and source, with the Work View's
   reason on the record — see [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
   No process-specific panel, card or layout exists; a process-scoped published layout for durable records
-  is not yet addressable (Surfaces).
+  is not yet addressable (Surfaces). Billing (Slice 6) opens the household with the existing Financials
+  card leading, started on the row's verified source (charge → Charge Details; unrecorded collection →
+  Payment surface, marked); the card's own commands and refresh are unchanged. Not available in the card
+  (Financials-owned): payment recognition (`payment.recognize` lives in Payments · Needs recognition),
+  subsidy-variance display and `subsidy.resolve_variance` (Subsidy section), and a variance id to target.
 - **Workspace.** A projection is its own catalog entry and tile. Publishing it with Work Views creates its
   host work unit (one per department, key `domain_projection_host_<department>`); its tile then lists its
   own views on that host. Until then its card has `entryHref: null` and states why in the existing CTA
