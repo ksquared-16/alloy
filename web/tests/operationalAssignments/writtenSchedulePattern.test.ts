@@ -49,4 +49,16 @@ describe("resolveWrittenSchedulePattern", () => {
         expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "half_day", days: MF }).scheduleType).toBeNull();
         expect(resolveWrittenSchedulePattern({ patterns: [], chosenScheduleType: null, days: MF }).patternId).toBeNull();
     });
+
+    it("an edited row keeps ITS pattern while its days are unchanged — After Care never becomes Before Care", () => {
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: null, days: MF, chosenPatternId: "after-care" })).toEqual({
+            patternId: "after-care",
+            scheduleType: "weekly",
+            ambiguous: false,
+        });
+        // Days changed away from the pattern: its type still guides, the pattern itself no longer fits.
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: null, days: [2], chosenPatternId: "after-care" }).patternId).toBe("soccer-tue");
+        // An unknown pattern id is ignored, not trusted.
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: null, days: MF, chosenPatternId: "gone" }).ambiguous).toBe(true);
+    });
 });

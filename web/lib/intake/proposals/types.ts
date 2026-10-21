@@ -55,7 +55,21 @@ export type RelatedRecordFieldProposal = {
  *
  * @see docs/platform/core/data/relationship-model.md
  */
-export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "unknown";
+export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "health_fact" | "unknown";
+
+/**
+ * SERVER-DERIVED health fact intent for a row of a `health.*` collection (allergy, condition,
+ * medication). Read from the row by `healthFactFormMembers`; committed only by an operator's
+ * approval, through `healthFactService`, onto the child the submission is about.
+ */
+export type RelatedRecordHealthFactIntent = {
+    fact_kind: "allergy" | "condition" | "medication";
+    /** Exactly the payload `addHealthFact` will receive. */
+    payload: Record<string, unknown>;
+    missing_required: string[];
+    unresolved_member_field_ids: string[];
+    unrecognized_severity: string | null;
+};
 
 /**
  * SERVER-DERIVED relationship intent for a configured relationship collection instance.
@@ -110,6 +124,8 @@ export type RelatedRecordInstanceProposal = {
     execution_kind?: CollectionExecutionKind;
     /** Present only for `configured_relationship` instances. */
     relationship_intent?: RelatedRecordRelationshipIntent;
+    /** Present only for `health_fact` instances. */
+    health_fact_intent?: RelatedRecordHealthFactIntent;
 };
 
 export type RelatedRecordCollectionProposal = {

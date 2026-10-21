@@ -37,6 +37,9 @@ const FORMS_NATIVE_COLLECTION_REFS = ["children", "household_members"] as const;
 export const FORMS_REPEATABLE_COLLECTION_REFS: readonly string[] = [
     ...FORMS_NATIVE_COLLECTION_REFS,
     ...collectableRelationshipDefinitions().map((d) => d.collection_ref),
+    "health_allergies",
+    "health_conditions",
+    "health_medications",
 ];
 
 /** Open by design: a new relationship definition widens this set without a code change. */
@@ -111,6 +114,12 @@ export function buildFormsRelationshipProviderSeeds(): CanonicalDataProvider[] {
     return out;
 }
 
+const HEALTH_FORM_COLLECTIONS: ReadonlyArray<readonly [string, string, string]> = [
+    ["health.allergies", "health_allergies", "Allergies"],
+    ["health.conditions", "health_conditions", "Medical conditions"],
+    ["health.medications", "health_medications", "Medications"],
+];
+
 function wholeCollectionProvider(
     refKey: string,
     collectionRef: FormsRepeatableCollectionRef,
@@ -122,7 +131,7 @@ function wholeCollectionProvider(
         label,
         kind: "collection",
         outputShape: "collection",
-        entityNamespace: iterationEntityType === "customer_member" ? "child" : "customer",
+        entityNamespace: iterationEntityType === "customer_member" || iterationEntityType === "person_health_fact" ? "child" : "customer",
         settingsEntity: iterationEntityType,
         isSystem: true,
         availability: BOTH,
@@ -161,6 +170,11 @@ export function buildFormsCollectionBindingSeeds(): CanonicalDataProvider[] {
         ),
         ...collectableRelationshipDefinitions().map((def) =>
             wholeCollectionProvider(def.provider_ref, def.collection_ref, def.label, def.item_entity_type),
+        ),
+        // The child's own health facts — one row per allergy, condition or medication. Committed
+        // through Health on an operator's approval (healthFactFormMembers → Processing).
+        ...HEALTH_FORM_COLLECTIONS.map(([ref, collectionRef, label]) =>
+            wholeCollectionProvider(ref, collectionRef, label, "person_health_fact"),
         ),
     ];
 }

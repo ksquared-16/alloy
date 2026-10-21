@@ -508,11 +508,9 @@ async function changeRoomTo(page: Page, roomId: string, roomName: string, effect
     await page.locator(`[data-room-option="${roomId}"]`).first().click();
 
     /*
-     * SCHEDULE + START must be supplied, because editing a non-primary assignment SUPERSEDES it:
-     * the form runs in create mode and seeds days/start only for the primary `edit` path, so an
-     * operator re-states them. That is pre-existing behaviour, identical for a child and a staff
-     * subject, and the certification completes the form rather than working around it — a
-     * half-filled form whose Save is disabled would fail here for a reason that is not the claim.
+     * Editing a non-primary assignment SUPERSEDES it (create mode). Since #1538 the editor hydrates the
+     * row's own days, start and pattern; a successor must still start AFTER the row it replaces, so the
+     * certification re-states the pattern and a later start date — the operator's own gestures.
      */
     await page.locator("[data-pattern-shortcut='true']").first().click();
     await expect(page.locator("[data-pattern-list='true']")).toBeVisible({ timeout: SETTLE });

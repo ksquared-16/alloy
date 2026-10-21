@@ -532,6 +532,15 @@ test.describe("Assignment editor V2 — deployed", () => {
             if (await reason.count()) await reason.fill("QA timing — fixture rate");
             return { from: cur, to: await sel.inputValue() };
         };
+        // The tuition views the editor reads (draft and saved), per child — QA families carry siblings: which facts priced it, under which key.
+        const views: Array<{ member: string; draft: boolean; key: unknown; facts: unknown; url: string }> = [];
+        page.on("response", async (res) => {
+            if (!res.url().includes("/api/admin/financial-config/opportunity/")) return;
+            const body = (await res.json().catch(() => null)) as { assignments?: Array<Record<string, unknown>> } | null;
+            for (const a of body?.assignments ?? []) {
+                views.push({ member: String(a.customerMemberId ?? ""), draft: Boolean(a.draft), key: a.resolutionKey, facts: a.facts, url: res.url().split("?")[1] ?? "" });
+            }
+        });
         // Create (only if the child has no assignment yet) — else an unchanged save stands in.
         let ed = await openChild();
         const isCreate = /Create Assignment/.test((await ed.locator('[data-schedule-commit="true"]').textContent()) ?? "");
@@ -555,6 +564,13 @@ test.describe("Assignment editor V2 — deployed", () => {
         }
         if (process.env.AEV2_PERF_CREATE_ONLY) {
             note(`${label} create-only: isCreate=${isCreate}`);
+            const lastDraft = [...views].reverse().find((v) => v.draft);
+            note(`${label} draft view before Save: key=${String(lastDraft?.key)} facts=${JSON.stringify(lastDraft?.facts)} q=${lastDraft?.url}`);
+            ed = await openChild();
+            // THIS child's saved view: an opportunity answers for every sibling, and a sibling's empty
+            // proposal once read here as "the server read blank facts".
+            const saved = [...views].reverse().find((v) => !v.draft && v.member === lastDraft?.member);
+            note(`${label} saved view after Save: key=${String(saved?.key)} facts=${JSON.stringify(saved?.facts)}`);
             fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
             expect(isCreate).toBe(true);
             return;
@@ -593,5 +609,538 @@ test.describe("Assignment editor V2 — deployed", () => {
         fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.json`), JSON.stringify(results, null, 1));
         fs.writeFileSync(path.join(OUT, `perf-matrix-${label}.log`), log.join("\n"));
         expect(blocked).toEqual([]);
+    });
+    /*
+     * ASSIGNMENTS REGRESSION (deployed staging, mounted operator UI) — create correctness, secondary
+     * integrity, tuition matching. QA fixtures only: every child must be a ZZQA record (enforced).
+     *
+     * Select steps with AEV4_STEPS (comma list):
+     *   create   — pre-enrolment create (AEV4_CREATE_CHILD; AEV4_SKIP_PATTERN=1 leaves the pattern unchosen)
+     *   denied   — create refused (simulated 403): editor stays open, nothing committed
+     *   readview — reopen and read THIS child's saved tuition view
+     *   rates    — matched configured rates: program set on the child's own proposal, 3/5 days,
+     *              the 2026-07-27/28 effective-date boundary, override needs a reason, save + reopen
+     *   stale    — a stale preview key is refused (409) and re-resolved (AEV4_SECONDARY_CHILD)
+     *   secondary, replace — create a Before Care secondary; a replacement naming another site's room
+     *              is refused with the prior row intact
+     *   v5sec    — a secondary edit opens hydrated, carries no tuition, an unchanged save writes
+     *              nothing, a moved start writes one replacement and no pricing action
+     *   v5label  — a primary with no named schedule type shows its days
+     * Ids default to the staging QA site (KLA Schools of Hillsboro): patterns, rooms, preschool program.
+     * Writes evidence to certification/evidence/assignment-editor-v2/deployed/v4-<label>.log.
+     */
+    test("assignments regression: create / secondary / stale / invalid room / rates / reopen", async ({ page }) => {
+        test.setTimeout(Number(process.env.CERT_TIMEOUT_MS || 900000));
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const label = process.env.AEV2_TIMING_LABEL || "v4";
+        const CREATE = process.env.AEV4_CREATE_CHILD || "";
+        const SECONDARY = process.env.AEV4_SECONDARY_CHILD || "";
+        const steps = (process.env.AEV4_STEPS || "create,secondary").split(",");
+        for (const c of [CREATE, SECONDARY].filter(Boolean)) expect(c).toMatch(/ZZQA/);
+        const flush = () => fs.writeFileSync(path.join(OUT, `v4-${label}.log`), log.join("\n"));
+        const OTHER_SITE_ROOM = "93c66b6f-bc30-4899-900c-c37aad4c3200"; // Toddler 2 under the OTHER site
+
+        const views: Array<{ member: string; draft: boolean; key: unknown; facts: unknown; q: string; state?: unknown; rec?: unknown; tied?: unknown; accepted?: unknown }> = [];
+        page.on("response", async (res) => {
+            if (!res.url().includes("/api/admin/financial-config/opportunity/")) return;
+            const body = (await res.json().catch(() => null)) as { assignments?: Array<Record<string, unknown>> } | null;
+            for (const a of body?.assignments ?? []) {
+                const amt = (o: unknown) => (o as { amountCents?: number; sourceId?: string } | null) ? `${(o as { amountCents: number }).amountCents}@${String((o as { sourceId: string }).sourceId).slice(0, 8)}` : null;
+                views.push({
+                    member: String(a.customerMemberId ?? ""), draft: Boolean(a.draft), key: a.resolutionKey, facts: a.facts, q: res.url().split("?")[1] ?? "",
+                    state: a.state, rec: amt(a.recommended), tied: ((a.tied as unknown[]) ?? []).map(amt),
+                    accepted: a.accepted ? `${(a.accepted as { state?: string }).state}:${(a.accepted as { amountCents?: number }).amountCents}` : null,
+                });
+            }
+        });
+        const writes: Array<{ u: string; body: string; status?: number; said?: string; ms?: number }> = [];
+        page.on("request", (r) => {
+            const u = r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!;
+            if (r.method() === "POST" && (u === "/api/admin/scheduling" || u === "/api/admin/actions/execute")) writes.push({ u, body: (r.postData() ?? "").slice(0, 700) });
+        });
+        page.on("requestfinished", async (r) => {
+            const u = r.url().replace(/^https?:\/\/[^/]+/, "").split("?")[0]!;
+            const w = [...writes].reverse().find((x) => x.u === u && x.status == null);
+            if (!w) return;
+            const res = await r.response();
+            w.status = res?.status();
+            w.ms = r.timing().responseEnd;
+            if (res && res.status() >= 400) w.said = (await res.text().catch(() => "")).slice(0, 500);
+        });
+
+        const openChild = async (name: string, opts?: { recordOnly?: boolean }) => {
+            const [first] = name.split(" ");
+            await page.goto(PATHNAME);
+            await page.waitForTimeout(4000);
+            const bosClose = page.getByRole("button", { name: "Close", exact: true }).first();
+            if (await bosClose.isVisible().catch(() => false)) await bosClose.click().catch(() => {});
+            for (const tab of [/^Registration/, /^Waitlist/, /^All/]) {
+                await page.getByText(tab).first().click();
+                await page.waitForTimeout(3000);
+                const row = page.getByText(name, { exact: true });
+                if (await row.count()) { await row.first().click(); break; }
+            }
+            await page.waitForTimeout(5000);
+            if (opts?.recordOnly) return;
+            // The child's own schedule link: the linked value inside the row that carries THIS child's name.
+            const links = page.locator('[data-universal-card-key="children"] [data-identity-linked="true"] .identity-field-value__value--linked');
+            const at = await links.evaluateAll((els, full) => {
+                return els.findIndex((el) => {
+                    let n: Element | null = el;
+                    while (n && !(n.textContent ?? "").includes(full)) n = n.parentElement;
+                    return Boolean(n) && n!.querySelectorAll(".identity-field-value__value--linked").length === 1;
+                });
+            }, name);
+            note(`open ${name}: schedule link #${at} (first name ${first})`);
+            await links.nth(Math.max(0, at)).click();
+            await page.waitForTimeout(4000);
+        };
+        const commitTimed = async (what: string, opts?: { dbl?: boolean }) => {
+            const ed = page.locator('[data-schedule-editor="true"]');
+            const commit = ed.locator('[data-schedule-commit="true"]');
+            await expect(commit).toBeEnabled({ timeout: 10000 });
+            const before = writes.length;
+            const t0 = Date.now();
+            if (opts?.dbl) await commit.dblclick(); else await commit.click();
+            const closed = await page.waitForSelector('[data-schedule-editor="true"]', { state: "detached", timeout: 30000 }).then(() => Date.now() - t0).catch(() => null);
+            await page.waitForTimeout(3000);
+            const mine = writes.slice(before);
+            note(`${label} ${what}: closed=${closed}ms writes=${JSON.stringify(mine.map((w) => `${w.u.split("/").pop()} ${w.status}${w.said ? ` ${w.said.slice(0, 160)}` : ""}`))}`);
+            for (const w of mine) note(`     ${w.u} ${w.status} ${w.body.slice(0, 400)}`);
+            const err = await optText(page.locator('[data-schedule-error="true"], [data-assignments-card="true"] p'));
+            if (err) note(`     notice/error: ${err.slice(0, 200)}`);
+            flush();
+            return { closed, mine };
+        };
+        const chooseRoom = async (name: string) => {
+            await page.locator('[data-schedule-editor="true"] [data-room-change="true"]').click();
+            await page.waitForTimeout(1500);
+            const opt = page.locator("[data-room-option]", { hasText: name });
+            if (await opt.count()) await opt.first().click();
+            await page.waitForTimeout(1500);
+        };
+        const choosePattern = async (id: string) => {
+            const ed = page.locator('[data-schedule-editor="true"]');
+            await ed.locator('[data-pattern-shortcut="true"]').click();
+            await page.waitForTimeout(800);
+            const opt = ed.locator(`[data-pattern-option="${id}"]`);
+            if (await opt.count()) await opt.first().click();
+            await page.waitForTimeout(1200);
+        };
+        const chooseAdditionalRate = async () => {
+            const ed = page.locator('[data-schedule-editor="true"]');
+            const sel = ed.locator('[data-assignment-tuition-embed="true"]');
+            if (!(await sel.count())) return null;
+            const more = ed.getByRole("button", { name: /Show additional rates/ });
+            if (await more.count()) { await more.first().click(); await page.waitForTimeout(400); }
+            const vals = await sel.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean));
+            if (vals[0]) await sel.selectOption(vals[0]);
+            await page.waitForTimeout(400);
+            const reason = ed.locator('[data-assignment-override-reason="true"]');
+            if (await reason.count()) await reason.fill("QA V4 — fixture rate");
+            return vals[0] ?? null;
+        };
+        // An element that may not exist on this build: read it only if it is there (a missing one waits the full timeout).
+        const optText = async (l: import("@playwright/test").Locator) => ((await l.count()) ? await l.first().textContent({ timeout: 3000 }).catch(() => null) : null);
+        const lastView = (draft: boolean, member?: string) => [...views].reverse().find((v) => v.draft === draft && (!member || v.member === member));
+
+        if (steps.includes("create") && CREATE) {
+            await openChild(CREATE);
+            const card = page.locator('[data-assignments-card="true"]');
+            const createBtn = card.locator('[data-schedule-create-new="true"]');
+            if (!(await page.locator('[data-schedule-editor="true"]').count()) && (await createBtn.count())) await createBtn.first().click();
+            await page.waitForTimeout(2500);
+            const ed = page.locator('[data-schedule-editor="true"]');
+            const isCreate = /Create Assignment/.test((await optText(ed.locator('[data-schedule-commit="true"]'))) ?? "");
+            note(`${label} create ${CREATE}: isCreate=${isCreate}`);
+            expect(isCreate).toBe(true);
+            for (const i of [1, 2, 3, 4, 5]) {
+                const b = ed.locator(`[data-day="${i}"]`);
+                if ((await b.getAttribute("aria-pressed")) !== "true") await b.click();
+            }
+            await ed.locator('input[type="date"]').first().fill("2026-11-02");
+            const depart = ed.getByLabel("Depart", { exact: true });
+            await depart.fill("5:30 PM");
+            await depart.press("Enter");
+            // Scenario 3: change room before create (Toddler 1, then Toddler 2).
+            await chooseRoom("Toddler 1");
+            await chooseRoom("Toddler 2");
+            await page.waitForTimeout(2500);
+            const unset = await optText(ed.locator('[data-schedule-type-unset="true"]'));
+            const d0 = lastView(true);
+            note(`${label} create: before choosing a pattern — unset-hint="${unset}" draft q=${d0?.q} facts=${JSON.stringify(d0?.facts)}`);
+            await shot(page, `v4-${label}-create-unchosen`);
+            // The operator chooses the schedule (Full Day) — unless this run measures the unchosen case.
+            if (!process.env.AEV4_SKIP_PATTERN) await choosePattern("07a0ac51-82de-467a-8a26-1378884eaadd");
+            await page.waitForTimeout(2500);
+            const d1 = lastView(true);
+            note(`${label} create: after Full Day — draft key=${String(d1?.key)} q=${d1?.q} facts=${JSON.stringify(d1?.facts)}`);
+            const noMatch = await optText(ed.locator('[data-assignment-tuition-no-match="true"]'));
+            note(`${label} create: tuition panel no-match="${noMatch?.slice(0, 160)}"`);
+            note(`${label} create: rate ${await chooseAdditionalRate()}`);
+            // Scenario 9: double-click Save — one write.
+            await commitTimed("create (double-click)", { dbl: true });
+            const member = d1?.member ?? "";
+            // Scenario 6: reopen and read what persisted.
+            await openChild(CREATE);
+            await page.waitForTimeout(3000);
+            const saved = lastView(false, member);
+            note(`${label} create: saved view for this child key=${String(saved?.key)} facts=${JSON.stringify(saved?.facts)} (draft key was ${String(d1?.key)})`);
+            note(`${label} create: card after reopen: ${(await card.innerText({ timeout: 5000 }).catch(() => "")).replace(/\s+/g, " ").slice(0, 400)}`);
+            await shot(page, `v4-${label}-create-reopen`);
+            flush();
+        }
+
+        if (steps.includes("v5sec") && SECONDARY) {
+            // V5 B+C on the mounted editor: a secondary opens hydrated, carries no tuition, an unchanged
+            // Save writes nothing, and a moved start writes ONE replacement and no pricing action.
+            const card = page.locator('[data-assignments-card="true"]');
+            const openSecondary = async () => {
+                await openChild(SECONDARY);
+                const sec = card.getByText("Before Care", { exact: false }).first();
+                if (await sec.count()) { await sec.click(); await page.waitForTimeout(2500); }
+                const edit = card.locator("button", { hasText: /Edit/ }).first();
+                if (await edit.count()) { await edit.click(); await page.waitForTimeout(3500); }
+                return page.locator('[data-schedule-editor="true"]');
+            };
+            let ed = await openSecondary();
+            const days = await ed.locator("[data-day][aria-pressed=\"true\"]").evaluateAll((els) => els.map((e) => e.getAttribute("data-day")));
+            const startVal = await ed.locator('input[type="date"]').first().inputValue().catch(() => null);
+            note(`${label} v5 secondary opens: days=${JSON.stringify(days)} start=${startVal} tuition region=${await ed.locator('[data-assignment-tuition-embed="true"]').count()} commit enabled=${await ed.locator('[data-schedule-commit="true"]').isEnabled().catch(() => null)}`);
+            await shot(page, `v4-${label}-secondary-hydrated`);
+            const unchanged = await commitTimed("v5 secondary unchanged save");
+            note(`${label} v5 unchanged: writes=${unchanged.mine.length}`);
+            ed = await openSecondary();
+            await ed.locator('input[type="date"]').first().fill("2026-11-16");
+            await page.waitForTimeout(800);
+            const moved = await commitTimed("v5 secondary moved start (replacement)");
+            note(`${label} v5 moved: assignment.create=${moved.mine.filter((w) => /assignment\.create/.test(w.body)).map((w) => w.status)} pricing=${moved.mine.filter((w) => /enrollment\.pricing/.test(w.body)).length} quote=${moved.mine.filter((w) => /assignment-quote/.test(w.u)).length}`);
+            await openChild(SECONDARY);
+            note(`${label} v5 after replacement: ${(await card.innerText({ timeout: 5000 }).catch(() => "")).replace(/\s+/g, " ").slice(0, 400)}`);
+            flush();
+        }
+
+        if (steps.includes("v5label") && CREATE) {
+            await openChild(CREATE);
+            const card = page.locator('[data-assignments-card="true"]');
+            const chips = await card.locator("[data-assignment-type-named]").evaluateAll((els) => els.map((e) => `${e.getAttribute("data-assignment-type-named")}:${(e.textContent ?? "").trim()}`));
+            note(`${label} v5 label: chips=${JSON.stringify(chips)} untitled=${(await card.innerText({ timeout: 5000 }).catch(() => "")).includes("Untitled type")}`);
+            await shot(page, `v4-${label}-label`);
+            flush();
+        }
+
+        if (steps.includes("rates") && CREATE) {
+            // TRACK F — matched configured rates. The child's own program is set through the operator
+            // Children card (writes only this child's proposal); no room or program configuration changes.
+            const PROGRAM = process.env.AEV5_PROGRAM_ID || "2147d374-8112-4e88-8342-b49c9b95fc7b"; // preschool @ site
+            await openChild(CREATE, { recordOnly: true });
+            // Focus THIS child in the Children card (its name), where the edit lives.
+            const nameInCard = page.locator('[data-universal-card-key="children"]').getByText(CREATE, { exact: true });
+            if (await nameInCard.count()) { await nameInCard.first().click(); await page.waitForTimeout(2500); }
+            const trigger = page.locator("[data-children-edit-trigger]").first();
+            await shot(page, `v4-${label}-child-focus`);
+            if (await trigger.count()) {
+                await trigger.click();
+                await page.waitForTimeout(1500);
+                const sel = page.locator('[data-testid="child-edit-program_category_id"]');
+                if (await sel.count()) {
+                    await sel.locator("button").first().click();
+                    await page.waitForTimeout(500);
+                    const opt = page.locator(`[data-option-value="${PROGRAM}"]`);
+                    note(`${label} rates: program option present=${await opt.count()}`);
+                    if (await opt.count()) await opt.first().click();
+                    await page.waitForTimeout(500);
+                    const save = page.locator('[data-testid="child-edit-save"]');
+                    if (await save.isEnabled().catch(() => false)) { await save.click(); await page.waitForTimeout(4000); }
+                    note(`${label} rates: program saved phase=${await save.getAttribute("data-save-phase").catch(() => null)}`);
+                } else note(`${label} rates: no program field in the child edit`);
+            } else {
+                /*
+                 * The card offers no child edit to this identity on this record. The fixture's program is
+                 * then set through the SAME canonical route the card's edit uses (POST
+                 * /api/admin/child-participation, enrollment.record.manage), from this page and this
+                 * operator session — the child's own proposal only, no configuration.
+                 */
+                note(`${label} rates: no child edit trigger — setting the program through the card's route`);
+                await openChild(CREATE);
+                const createBtn0 = page.locator('[data-assignments-card="true"] [data-schedule-create-new="true"]');
+                if (!(await page.locator('[data-schedule-editor="true"]').count()) && (await createBtn0.count())) await createBtn0.first().click();
+                await page.waitForTimeout(3000);
+                const ids = await page.evaluate(() => {
+                    const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("draft_customer_member_id=")) ?? "";
+                    const u = new URL(url || "http://x/");
+                    return { opp: u.pathname.split("/").pop() ?? "", member: u.searchParams.get("draft_customer_member_id") ?? "" };
+                });
+                note(`${label} rates: ids ${JSON.stringify(ids)}`);
+                const res = await page.evaluate(async ({ member, program }) => {
+                    const r = await fetch("/api/admin/child-participation", {
+                        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ customer_member_id: member, patch: { program_category_id: program } }),
+                    });
+                    return { status: r.status, body: (await r.text()).slice(0, 300) };
+                }, { member: ids.member, program: PROGRAM });
+                note(`${label} rates: program set via route -> ${res.status} ${res.body}`);
+            }
+            flush();
+            await openChild(CREATE);
+            const card = page.locator('[data-assignments-card="true"]');
+            const createBtn = card.locator('[data-schedule-create-new="true"]');
+            if (!(await page.locator('[data-schedule-editor="true"]').count()) && (await createBtn.count())) await createBtn.first().click();
+            await page.waitForTimeout(2500);
+            const ed = page.locator('[data-schedule-editor="true"]');
+            const sel = ed.locator('[data-assignment-tuition-embed="true"]');
+            const resolved = async (what: string) => {
+                await page.waitForTimeout(2500);
+                const v = lastView(true) ?? lastView(false);
+                const shown = await optText(sel.locator("option:checked"));
+                note(`${label} rates ${what}: state=${String(v?.state)} rec=${String(v?.rec)} tied=${JSON.stringify(v?.tied)} facts=${JSON.stringify(v?.facts)} shown="${shown}"`);
+                flush();
+                return v;
+            };
+            const setDays = async (want: number[]) => {
+                for (const i of [1, 2, 3, 4, 5]) {
+                    const b = ed.locator(`[data-day="${i}"]`);
+                    const on = (await b.getAttribute("aria-pressed")) === "true";
+                    if (on !== want.includes(i)) await b.click();
+                }
+            };
+            await setDays([1, 2, 3, 4, 5]);
+            await ed.locator('input[type="date"]').first().fill("2026-11-02");
+            const depart = ed.getByLabel("Depart", { exact: true });
+            await depart.fill("5:30 PM");
+            await depart.press("Enter");
+            await chooseRoom("Toddler 2");
+            await choosePattern("07a0ac51-82de-467a-8a26-1378884eaadd");
+            await resolved("5 days from 2026-11-02");
+            await setDays([1, 3, 5]);
+            await resolved("3 days (M/W/F) from 2026-11-02");
+            await ed.locator('input[type="date"]').first().fill("2026-07-27");
+            await resolved("3 days from 2026-07-27 (before the day-count rates)");
+            await ed.locator('input[type="date"]').first().fill("2026-07-28");
+            await resolved("3 days from 2026-07-28 (day-count rates effective)");
+            await ed.locator('input[type="date"]').first().fill("2026-11-02");
+            await setDays([1, 2, 3, 4, 5]);
+            const v5 = await resolved("back to 5 days from 2026-11-02");
+            // A non-matching rate is an explicit, reasoned override: Save holds until a reason is given.
+            const more = ed.getByRole("button", { name: /Show additional rates/ });
+            if (await more.count()) { await more.first().click(); await page.waitForTimeout(400); }
+            const vals = await sel.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean));
+            const recId = String(v5?.rec ?? "").split("@")[1] ?? "";
+            const other = vals.find((v) => !v.startsWith(recId));
+            if (other) {
+                await sel.selectOption(other);
+                await page.waitForTimeout(500);
+                note(`${label} rates override: reason field=${await ed.locator('[data-assignment-override-reason="true"]').count()} save enabled=${await ed.locator('[data-schedule-commit="true"]').isEnabled()}`);
+            }
+            const recFull = vals.find((v) => v.startsWith(recId));
+            if (recFull) await sel.selectOption(recFull);
+            await page.waitForTimeout(600);
+            note(`${label} rates: chose recommended ${recFull}; override reason field now=${await ed.locator('[data-assignment-override-reason="true"]').count()}`);
+            await commitTimed("rates create (recommended, 5 days)");
+            await openChild(CREATE);
+            const row = card.getByText("Toddler", { exact: false }).first();
+            if (await row.count()) { await row.click(); await page.waitForTimeout(2500); }
+            const edit = card.locator("button", { hasText: /Edit/ }).first();
+            if (await edit.count()) { await edit.click(); await page.waitForTimeout(5000); }
+            const saved = lastView(false);
+            note(`${label} rates reopen: shown="${await optText(page.locator('[data-assignment-tuition-embed="true"] option:checked'))}" accepted=${String(saved?.accepted)} days=${JSON.stringify(await page.locator('[data-schedule-editor="true"] [data-day][aria-pressed="true"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-day"))))}`);
+            flush();
+        }
+
+        if (steps.includes("denied") && CREATE) {
+            // Scenario 8: the create write is refused (403, simulated — the QA session has one identity).
+            await openChild(CREATE);
+            const card = page.locator('[data-assignments-card="true"]');
+            const createBtn = card.locator('[data-schedule-create-new="true"]');
+            if (!(await page.locator('[data-schedule-editor="true"]').count()) && (await createBtn.count())) await createBtn.first().click();
+            await page.waitForTimeout(2500);
+            const ed = page.locator('[data-schedule-editor="true"]');
+            for (const i of [1, 2, 3, 4, 5]) {
+                const b = ed.locator(`[data-day="${i}"]`);
+                if ((await b.getAttribute("aria-pressed")) !== "true") await b.click();
+            }
+            await ed.locator('input[type="date"]').first().fill("2026-11-02");
+            const depart = ed.getByLabel("Depart", { exact: true });
+            await depart.fill("5:30 PM");
+            await depart.press("Enter");
+            await chooseRoom("Toddler 2");
+            await choosePattern("07a0ac51-82de-467a-8a26-1378884eaadd");
+            await page.route("**/api/admin/scheduling", async (route) => {
+                if (route.request().method() === "POST") return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "You do not have permission to change this schedule." }) });
+                return route.continue();
+            });
+            const r = await commitTimed("denied create");
+            note(`${label} denied: editor still open=${r.closed == null} tuition commits=${r.mine.filter((w) => w.u.endsWith("/execute")).length} error="${await optText(page.locator('[data-schedule-error="true"]'))}"`);
+            await page.unroute("**/api/admin/scheduling");
+            flush();
+        }
+
+        if (steps.includes("readview") && CREATE) {
+            // Read-only: this child's SAVED tuition view, fetched directly (no draft), and every view
+            // the reopened page itself received for this child, with the query that produced it.
+            await openChild(CREATE);
+            const card = page.locator('[data-assignments-card="true"]');
+            const row = card.getByText("Toddler", { exact: false }).first();
+            if (await row.count()) { await row.click(); await page.waitForTimeout(2500); }
+            const edit = card.locator("button", { hasText: /Edit/ }).first();
+            if (await edit.count()) { await edit.click(); await page.waitForTimeout(5000); }
+            const selText = await optText(page.locator('[data-assignment-tuition-embed="true"] option:checked'));
+            note(`${label} readview: editor open=${await page.locator('[data-schedule-editor="true"]').count()} tuition shown="${selText}" days=${JSON.stringify(await page.locator('[data-schedule-editor="true"] [data-day][aria-pressed="true"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-day"))))}`);
+            const seen = views.filter((v) => v.q.includes("draft_customer_member_id") || !v.draft);
+            for (const v of seen.slice(-12)) note(`${label} readview seen: member=${v.member.slice(0, 8)} draft=${v.draft} key=${String(v.key)} q=${v.q.slice(0, 160)} facts=${JSON.stringify(v.facts)}`);
+            const opp = await page.evaluate(() =>
+                performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/api/admin/financial-config/opportunity/")) ?? null,
+            );
+            if (opp) {
+                const base = opp.split("?")[0]!;
+                const direct = await page.evaluate(async (u) => (await fetch(u, { credentials: "include" })).json(), base);
+                for (const a of (direct as { assignments?: Array<Record<string, unknown>> }).assignments ?? []) {
+                    note(`${label} readview direct: member=${String(a.customerMemberId).slice(0, 8)} ocm=${String(a.opportunityCustomerMemberId).slice(0, 8)} key=${String(a.resolutionKey)} facts=${JSON.stringify(a.facts)} accepted=${JSON.stringify(a.accepted ?? null).slice(0, 160)}`);
+                }
+            }
+            flush();
+        }
+
+        if (steps.includes("stale") && SECONDARY) {
+            // Scenario 7: the preview's key is made stale in flight; the server must refuse and Save re-resolve.
+            await openChild(SECONDARY);
+            const row = page.locator('[data-assignments-card="true"]').getByText("Toddler", { exact: false }).first();
+            if (await row.count()) { await row.click(); await page.waitForTimeout(2500); }
+            const edit = page.locator('[data-assignments-card="true"] button', { hasText: /Edit/ }).first();
+            if (await edit.count()) { await edit.click(); await page.waitForTimeout(3500); }
+            await page.route("**/api/admin/actions/execute", async (route) => {
+                const body = route.request().postData() ?? "";
+                if (/enrollment\.pricing\.(accept|override)/.test(body) && /"resolution_key":"(?!stale-)/.test(body) && !(globalThis as { __staled?: boolean }).__staled) {
+                    (globalThis as { __staled?: boolean }).__staled = true;
+                    return route.continue({ postData: body.replace(/"resolution_key":"([^"]*)"/, '"resolution_key":"stale-$1"') });
+                }
+                return route.continue();
+            });
+            note(`${label} stale: rate ${await chooseAdditionalRate()}`);
+            await commitTimed("stale preview");
+            await page.unroute("**/api/admin/actions/execute");
+        }
+
+        if (steps.includes("secondary") && SECONDARY) {
+            // Scenario 2: a secondary (Before Care) beside the primary proposal.
+            await openChild(SECONDARY);
+            const card = page.locator('[data-assignments-card="true"]');
+            await card.locator('[data-schedule-create-new="true"]').first().click();
+            await page.waitForTimeout(2000);
+            const types = await page.locator("[data-assignment-type-option]").evaluateAll((els) => els.map((e) => e.getAttribute("data-assignment-type-option")));
+            note(`${label} secondary: categories offered ${JSON.stringify(types)}`);
+            await page.locator('[data-assignment-type-option="before_care"]').first().click();
+            await page.waitForTimeout(2500);
+            await choosePattern("278fcee2-7aba-464e-96db-3cd0a9e00bcb");
+            await page.locator('[data-schedule-editor="true"] input[type="date"]').first().fill("2026-11-02");
+            await chooseRoom("Toddler 2");
+            const first = await commitTimed("secondary create");
+            const created = first.mine.find((w) => w.u.endsWith("/execute") && /assignment\.create/.test(w.body));
+            note(`${label} secondary: created status=${created?.status}`);
+            flush();
+        }
+
+        if (steps.includes("replace") && SECONDARY) {
+            const card = page.locator('[data-assignments-card="true"]');
+            // Scenarios 10 + 11: replace it with a room at ANOTHER site (request rewritten in flight —
+            // the picker cannot offer it). The server must refuse, and the prior secondary must survive.
+            await openChild(SECONDARY);
+            const sec = card.getByText("Before Care", { exact: false }).first();
+            if (await sec.count()) { await sec.click(); await page.waitForTimeout(2500); }
+            const edit = card.locator("button", { hasText: /Edit/ }).first();
+            if (await edit.count()) { await edit.click(); await page.waitForTimeout(3000); }
+            await page.route("**/api/admin/actions/execute", async (route) => {
+                const body = route.request().postData() ?? "";
+                if (/assignment\.create/.test(body) && /supersedes_assignment_id":"[0-9a-f-]{36}/.test(body)) {
+                    return route.continue({ postData: body.replace(/"room_location_id":("[^"]*"|null)/, `"room_location_id":"${OTHER_SITE_ROOM}"`) });
+                }
+                return route.continue();
+            });
+            const daysShown = await page.locator('[data-schedule-editor="true"] [data-day][aria-pressed="true"]').count();
+            note(`${label} replace: editing the secondary opens with ${daysShown} day(s) selected`);
+            if (!daysShown) await choosePattern("278fcee2-7aba-464e-96db-3cd0a9e00bcb"); // an operator re-applies Before Care
+            await page.locator('[data-schedule-editor="true"] input[type="date"]').first().fill("2026-11-09");
+            const bad = page.locator('[data-schedule-editor="true"] [data-schedule-commit="true"]');
+            if (await bad.count() && (await bad.isEnabled())) {
+                const before = writes.length;
+                await bad.click();
+                await page.waitForTimeout(6000);
+                note(`${label} invalid-room replacement: ${JSON.stringify(writes.slice(before).map((w) => `${w.u.split("/").pop()} ${w.status} ${(w.said ?? "").slice(0, 200)}`))}`);
+                note(`${label} invalid-room replacement: editor still open=${await page.locator('[data-schedule-editor="true"]').count()} error="${await optText(page.locator('[data-schedule-error="true"]'))}"`);
+            }
+            await page.unroute("**/api/admin/actions/execute");
+            await openChild(SECONDARY);
+            note(`${label} secondary after refusal: ${(await card.innerText({ timeout: 5000 }).catch(() => "")).replace(/\s+/g, " ").slice(0, 400)}`);
+            await shot(page, `v4-${label}-secondary-after`);
+            flush();
+        }
+        flush();
+    });
+
+    /*
+     * V5 certification — ROSTER BULK ROOM CHANGE against the database room/site invariant.
+     * Operations → Roster → site → Assignments lens; select one QA secondary line; Bulk Room Change.
+     * Every execute response is captured: the panel reports nothing itself.
+     */
+    test("v5cert: roster bulk room change", async ({ page }) => {
+        test.setTimeout(Number(process.env.CERT_TIMEOUT_MS || 600000));
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const label = process.env.AEV2_TIMING_LABEL || "v5cert";
+        const SUBJECT = process.env.AEV5_ROSTER_SUBJECT || "Ava ZZQA1484F31612";
+        const LINE = process.env.AEV5_ROSTER_LINE || "Before Care";
+        const SITE = process.env.AEV5_ROSTER_SITE || "KLA Schools of Hillsboro";
+        expect(SUBJECT).toMatch(/ZZQA/);
+        const moves = (process.env.AEV5_ROSTER_MOVES || "16b9ec76-d1e6-41b2-b76c-44853543dc18@2026-11-23,93c66b6f-bc30-4899-900c-c37aad4c3200@2026-11-30").split(",");
+        const out: string[] = [];
+        const say = (m: string) => { out.push(m); console.log(`[v5cert] ${m}`); fs.writeFileSync(path.join(OUT, `v5cert-roster-${label}.log`), out.join("\n")); };
+        const responses: string[] = [];
+        page.on("response", async (res) => {
+            if (!res.url().includes("/api/admin/actions/execute") || res.request().method() !== "POST") return;
+            responses.push(`${res.status()} ${(res.request().postData() ?? "").slice(0, 260)} => ${(await res.text().catch(() => "")).slice(0, 260)}`);
+        });
+        const openLens = async () => {
+            await page.goto("/workspace");
+            await page.waitForTimeout(3000);
+            await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').first().click();
+            await page.waitForTimeout(3000);
+            const roster = page.locator("[data-workspace-mode-sections] button", { hasText: "Roster" });
+            if (await roster.count()) await roster.first().click();
+            await page.waitForTimeout(1500);
+            await page.locator('button[aria-label="Site"]').first().click();
+            await page.locator("[role=option]", { hasText: SITE }).first().click();
+            await page.waitForTimeout(2500);
+            await page.locator('[data-roster-lens-option="assignments"]').first().click();
+            await page.waitForTimeout(4000);
+        };
+        const lineState = async () => {
+            const subj = page.locator("[data-assignment-roster-subject]", { hasText: SUBJECT }).first();
+            return (await subj.innerText({ timeout: 5000 }).catch(() => "")).replace(/\s+/g, " ").slice(0, 300);
+        };
+        for (const move of moves) {
+            const [room, date] = move.split("@");
+            await openLens();
+            const subj = page.locator("[data-assignment-roster-subject]", { hasText: SUBJECT }).first();
+            say(`subject present=${await subj.count()} before: ${await lineState()}`);
+            const toggle = subj.locator("[data-assignment-roster-child]").first();
+            if (await toggle.count()) { await toggle.click(); await page.waitForTimeout(1200); }
+            const box = page.getByRole("checkbox", { name: `Select ${LINE}` }).first();
+            say(`line checkbox present=${await box.count()}`);
+            if (!(await box.count())) { await shot(page, `v5cert-roster-${label}-noline`); break; }
+            await box.check();
+            await page.locator("[data-bulk-room-change]").first().click();
+            const panel = page.locator('[data-bulk-room-panel="true"]');
+            await panel.locator('input[type="date"]').fill(date!);
+            await panel.locator('input[placeholder="Choose room"]').fill(room!);
+            const before = responses.length;
+            await panel.getByRole("button", { name: "Apply room change" }).click();
+            await page.waitForTimeout(7000);
+            for (const r of responses.slice(before)) say(`move ${room!.slice(0, 8)}@${date}: ${r}`);
+            if (responses.length === before) say(`move ${room!.slice(0, 8)}@${date}: NO request sent`);
+            const listed = page.locator('[data-bulk-room-result="refused"]');
+            say(`move ${room!.slice(0, 8)}@${date}: panel lists=${(await listed.count()) ? JSON.stringify(await listed.locator("li").allTextContents()) : "none (panel closed: all applied)"}`);
+            await openLens();
+            say(`after ${room!.slice(0, 8)}: ${await lineState()}`);
+            await shot(page, `v5cert-roster-${label}-${room!.slice(0, 8)}`);
+        }
     });
 });

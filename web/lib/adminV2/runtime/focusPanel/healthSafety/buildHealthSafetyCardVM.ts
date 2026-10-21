@@ -19,12 +19,12 @@
  * return health data to a caller who lacks the grant even by mistake. A caller without the grant gets
  * a VM that says so — not an empty one, which would read as "this child has no allergies".
  *
- * ── WHAT IT REFUSES TO SHOW ──
+ * ── WHO CARES FOR THE CHILD ──
  *
- * Physician and dentist are absent. The Relationship platform has no canonical role key for either
- * (only `emergency_contact`), and inventing `physician_name` / `physician_phone` child fields to fill
- * the card would create exactly the duplicate owner this whole vertical exists to prevent. Recorded
- * as a relationship gap, not a health blocker.
+ * Physician and dentist are canonical child relationship ROLES (`relationshipDefinitions`:
+ * `child_physicians`, `child_dentists`), projected here from `person_child_relationship_roles` —
+ * never flat child fields. Emergency contacts are the people holding the `emergency_contact` role;
+ * a relationship is not an emergency contact merely because it exists.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -36,6 +36,7 @@ import {
     type HealthAccessSubject,
 } from "@/lib/health/healthAccess";
 import { resolveActiveHealthFacts } from "@/lib/health/healthFactCollectionResolver";
+import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
 import {
     CRITICAL_SEVERITIES,
     healthFactLabel,
@@ -94,6 +95,15 @@ export type HealthSafetyContact = {
     priority: number | null;
 };
 
+/** A child's physician or dentist — a relationship role, projected; Health never owns it. */
+export type HealthSafetyCareProvider = {
+    personId: string;
+    name: string | null;
+    phone: string | null;
+    role: "physician" | "dentist";
+    roleLabel: string;
+};
+
 export type HealthSafetyCardVM = {
     participant: { customerMemberId: string; displayName: string | null } | null;
     /** Life-threatening and severe facts, most severe first. The card's top region. */
@@ -106,6 +116,8 @@ export type HealthSafetyCardVM = {
     documents: HealthSafetyDocument[];
     requirements: HealthSafetyRequirement[];
     emergencyContacts: HealthSafetyContact[];
+    /** Physician and dentist, from the child's relationship roles. */
+    careProviders: HealthSafetyCareProvider[];
     /** Owners this VM deliberately does not project, and why. */
     gaps: Array<{ concept: string; reason: string }>;
     /** Set when the caller may not see health information, or health is unavailable. */
@@ -172,6 +184,7 @@ function emptyVm(): HealthSafetyCardVM {
         documents: [],
         requirements: [],
         emergencyContacts: [],
+        careProviders: [],
         gaps: [],
         unavailableReason: null,
         permissionDenied: false,
@@ -211,16 +224,6 @@ export async function buildHealthSafetyCardVM(
         };
     }
 
-    // Physician/dentist have no canonical role key yet — stated, never faked.
-    vm.gaps = [
-        {
-            concept: "physician_dentist",
-            reason:
-                "The Relationship platform has no canonical physician or dentist role key yet. Flat "
-                + "child fields would create a duplicate owner, so these are omitted until it does.",
-        },
-    ];
-
     const hClock = healthClock();
     const [factsResult, profileResult, documentsResult, contactsResult] = await Promise.allSettled([
         hClock.time("health_facts_ms", () => resolveActiveHealthFacts(supabase, {
@@ -245,7 +248,7 @@ export async function buildHealthSafetyCardVM(
         hClock.time("health_contacts_ms", () =>
             supabase
                 .from("person_child_relationships")
-                .select("person_id, relationship_type, priority, status")
+                .select("id, person_id, relationship_type, priority, status")
                 .eq("org_id", args.orgId)
                 .eq("customer_member_id", memberId)
                 .eq("status", "active"),
@@ -294,7 +297,8 @@ export async function buildHealthSafetyCardVM(
                 ...baseFact(row),
                 severity: p.severity,
                 effect: p.reaction,
-                instruction: p.treatment ?? p.careInstructions,
+                // Both stay attached to the allergy: what to give, and what staff should do.
+                instruction: [p.treatment, p.careInstructions].filter(Boolean).join(" · ") || null,
             };
             (p.severity && CRITICAL_SEVERITIES.includes(p.severity) ? vm.criticalFacts : vm.careFacts).push(fact);
             continue;
@@ -360,27 +364,59 @@ export async function buildHealthSafetyCardVM(
         const rows = (contactsResult.value.data ?? []) as unknown as Array<Record<string, unknown>>;
         const personIds = [...new Set(rows.map((r) => t(r.person_id)).filter(Boolean))];
         const nameById = new Map<string, { name: string; phone: string | null }>();
+        const rolesByRelationship = new Map<string, Set<string>>();
         if (personIds.length > 0) {
-            const { data: people } = await supabase
-                .from("persons")
-                .select("id, first_name, last_name, phone")
-                .eq("org_id", args.orgId)
-                .in("id", personIds);
+            const [{ data: people }, { data: roleRows }] = await Promise.all([
+                supabase
+                    .from("persons")
+                    .select("id, first_name, last_name, full_name, phone")
+                    .eq("org_id", args.orgId)
+                    .in("id", personIds),
+                supabase
+                    .from("person_child_relationship_roles")
+                    .select("relationship_id, role_key, is_active")
+                    .eq("org_id", args.orgId)
+                    .in("relationship_id", rows.map((r) => t(r.id)).filter(Boolean)),
+            ]);
+            for (const r of (roleRows ?? []) as unknown as Array<Record<string, unknown>>) {
+                if (r.is_active === false) continue;
+                const set = rolesByRelationship.get(t(r.relationship_id)) ?? new Set<string>();
+                set.add(t(r.role_key));
+                rolesByRelationship.set(t(r.relationship_id), set);
+            }
             for (const p of (people ?? []) as unknown as Array<Record<string, unknown>>) {
                 nameById.set(t(p.id), {
-                    name: [t(p.first_name), t(p.last_name)].filter(Boolean).join(" "),
+                    name: t(p.full_name) || [t(p.first_name), t(p.last_name)].filter(Boolean).join(" "),
                     phone: t(p.phone) || null,
                 });
             }
         }
+        // The organization's own word for the relationship ("Grandparent"), never its stored key.
+        const kinshipLabels = new Map(
+            (await loadPersonChildRelationshipOptionSetItems(supabase, args.orgId).catch(() => [])).map((o) => [o.item_key, o.label || o.item_key]),
+        );
+        const holds = (r: Record<string, unknown>, role: string) => rolesByRelationship.get(t(r.id))?.has(role) ?? false;
+        for (const role of ["physician", "dentist"] as const) {
+            for (const r of rows.filter((row) => holds(row, role))) {
+                const person = nameById.get(t(r.person_id));
+                vm.careProviders.push({
+                    personId: t(r.person_id),
+                    name: person?.name || null,
+                    phone: person?.phone ?? null,
+                    role,
+                    roleLabel: role === "physician" ? "Physician" : "Dentist",
+                });
+            }
+        }
         vm.emergencyContacts = rows
+            .filter((r) => holds(r, "emergency_contact"))
             .map((r) => {
                 const person = nameById.get(t(r.person_id));
                 const priorityRaw = Number(r.priority);
                 return {
                     personId: t(r.person_id),
                     name: person?.name || null,
-                    relationship: t(r.relationship_type) || null,
+                    relationship: t(r.relationship_type) ? kinshipLabels.get(t(r.relationship_type)) ?? t(r.relationship_type) : null,
                     // The phone belongs to the CANONICAL person, never copied onto the child.
                     phone: person?.phone ?? null,
                     priority: Number.isFinite(priorityRaw) ? priorityRaw : null,

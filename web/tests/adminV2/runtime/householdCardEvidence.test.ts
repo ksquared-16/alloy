@@ -171,6 +171,52 @@ describe("buildHouseholdCardEvidence", () => {
         expect(additional?.contacts.some((c) => c.name === "Michael Johnson") ?? false).toBe(false);
     });
 
+    it("a child's physician or dentist is never a parent or a household adult (Lil' Sunshine defect)", () => {
+        const record = baseRecord();
+        // Exactly the deployed shape: the participant runtime linked the physician to the household,
+        // and no second parent was on file — so the fallback took "any named adult" as the parent.
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" },
+            { person_id: "p-dr", role_type: "physician", name: "Dr. Lee Park", phone: "503-555-0200" },
+            { person_id: "p-dds", role_type: "dentist", name: "Dr. Ana Molina" },
+            { person_id: "p-gran", role_type: "emergency_contact", name: "Grandma Mary", phone: "555-333-4444" },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.otherParentGuardianCount).toBe(0);
+        const names = JSON.stringify(ev);
+        expect(names).not.toMatch(/Dr\. Lee Park[^}]*Parent/);
+        expect(names).not.toContain("Dr. Lee Park");
+        expect(names).not.toContain("Dr. Ana Molina");
+    });
+
+    it("an emergency contact is not promoted to second parent when no parent is on file", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" },
+            { person_id: "p-gran", role_type: "emergency_contact", name: "Grandma Mary", phone: "555-333-4444" },
+            { person_id: "p-tom", role_type: "authorized_pickup", name: "Uncle Tom" },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.otherParentGuardianCount).toBe(0);
+    });
+
+    it("counts authorized pick-ups from the children's relationships, once per person (ZZQALM234600)", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [{ person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567" }];
+        const dana = (memberId: string, id: string) => ({
+            id, org_id: "org", customer_id: "cust-1", customer_member_id: memberId, person_id: "p-dana", relationship_type: "family_friend",
+            priority: 1, status: "active", operational_roles: ["authorized_pickup"], person: { id: "p-dana", display_name: "Dana Friend", phone: "5035550177" },
+        });
+        record._person_child_relationships_by_member = [
+            { customer_member_id: "c1", customer_id: "cust-1", items: [dana("c1", "r1")] },
+            { customer_member_id: "c2", customer_id: "cust-1", items: [dana("c2", "r2")] },
+        ];
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.authorizedPickupCount).toBe(1);
+        expect(JSON.stringify(ev)).toContain("Dana Friend");
+        expect(ev.otherParentGuardianCount).toBe(0);
+    });
+
     it("does not duplicate the primary person in Other Parent / Guardian", () => {
         const record = baseRecord();
         record._opportunity_persons = [

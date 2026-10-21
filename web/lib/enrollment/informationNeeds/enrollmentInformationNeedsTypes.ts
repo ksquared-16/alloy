@@ -145,6 +145,11 @@ export type EnrollmentInformationNeeds = {
     /** Needs still requiring the participant to supply or confirm — the "3 things remaining" number. */
     readonly needs_requiring_action: number;
     readonly needs: readonly EnrollmentInformationNeed[];
+    /**
+     * `${session_item_id}:${field_id}` of every field hidden by its authored condition for the
+     * answers given so far — so nothing hidden (a question OR an attachment) is owed.
+     */
+    readonly hidden_field_keys?: readonly string[];
 };
 
 /** Counts derived from the rows, never tracked beside them. */

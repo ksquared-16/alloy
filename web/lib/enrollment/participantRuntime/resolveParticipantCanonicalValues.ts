@@ -34,6 +34,7 @@
 
 import { readHouseholdProvisionalAnswers } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveRequestedStart } from "@/lib/enrollment/effectiveDateAuthority";
 
 /** Canonical child fields the platform holds durably, mapped to the keys a need carries. */
 const CHILD_FIELD_ALIASES: ReadonlyArray<{
@@ -104,7 +105,7 @@ export async function resolveParticipantCanonicalContext(
     try {
         const { data: instance } = await supabase
             .from("process_instances")
-            .select("subject_id")
+            .select("subject_id, metadata")
             .eq("org_id", input.orgId)
             .eq("id", input.processInstanceId)
             .maybeSingle();
@@ -126,6 +127,21 @@ export async function resolveParticipantCanonicalContext(
             const value = row[alias.column];
             if (!usable(value)) continue;
             for (const key of alias.keys) out[key] = value;
+        }
+
+        /*
+         * THIS CHILD'S REQUESTED START — from this child's own enrollment, never a clock.
+         *
+         * `resolveRequestedStart` is the date authority: the participation's `start_date` (where the
+         * placement's proposed start lives before enrollment). Absent, nothing is emitted and the
+         * family is asked; the server's today is never offered as a start date.
+         */
+        const requestedStart = resolveRequestedStart({
+            processInstanceMetadata: ((instance as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? null),
+        });
+        if (requestedStart) {
+            out.start_date = requestedStart;
+            out["enrollment:start_date"] = requestedStart;
         }
 
         /**
@@ -198,7 +214,7 @@ async function mergeHouseholdValues(
     out: Record<string, unknown>,
 ): Promise<void> {
     try {
-        const [{ data: customer }, { data: link }] = await Promise.all([
+        const [{ data: customer }, { data: links }] = await Promise.all([
             supabase
                 .from("customers")
                 .select("id, metadata")
@@ -207,13 +223,11 @@ async function mergeHouseholdValues(
                 .maybeSingle(),
             supabase
                 .from("customer_persons")
-                .select("person_id, is_primary, role_type")
+                .select("person_id, is_primary, role_type, status")
                 .eq("org_id", orgId)
-                .eq("customer_id", customerId)
-                .eq("is_primary", true)
-                .limit(1)
-                .maybeSingle(),
+                .eq("customer_id", customerId),
         ]);
+        const link = primaryHouseholdAdult((links ?? []) as HouseholdLink[]);
 
         const metadata = (customer as { metadata?: unknown } | null)?.metadata;
         if (metadata != null && typeof metadata === "object" && !Array.isArray(metadata)) {
@@ -248,6 +262,33 @@ async function mergeHouseholdValues(
     } catch {
         // Nothing merged. Every affected fact simply arrives as a question.
     }
+}
+
+type HouseholdLink = { person_id: string; is_primary?: boolean | null; role_type?: string | null; status?: string | null };
+
+/**
+ * THE HOUSEHOLD'S PRIMARY ADULT — flagged, or named by role, never guessed.
+ *
+ * Only `is_primary = true` was read, and a family that arrived through an inquiry records its adult
+ * as role `primary_contact` without the flag. So the Lil' Sunshine parent whose name, email and phone
+ * were on file from the inquiry was asked for all four again. Rank: the flag, then a primary-contact
+ * role, then a parent/guardian role — and only a UNIQUE best candidate is used. Two equally ranked
+ * parents are ambiguous, and an ambiguous guardian is asked for rather than chosen.
+ */
+export function primaryHouseholdAdult(links: readonly HouseholdLink[]): HouseholdLink | null {
+    const rank = (l: HouseholdLink): number | null => {
+        if ((l.status ?? "active") !== "active") return null;
+        if (l.is_primary === true) return 0;
+        const role = String(l.role_type ?? "").trim().toLowerCase();
+        if (role === "primary_contact" || role === "primary") return 1;
+        if (role === "parent" || role === "guardian" || role === "parent_guardian") return 2;
+        return null;
+    };
+    const ranked = links.map((l) => ({ l, r: rank(l) })).filter((x): x is { l: HouseholdLink; r: number } => x.r !== null);
+    if (ranked.length === 0) return null;
+    const best = Math.min(...ranked.map((x) => x.r));
+    const people = [...new Set(ranked.filter((x) => x.r === best).map((x) => x.l.person_id))];
+    return people.length === 1 ? ranked.find((x) => x.r === best)!.l : null;
 }
 
 /** Values only, for callers that do not render copy. */

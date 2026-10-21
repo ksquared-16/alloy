@@ -1,22 +1,22 @@
 {
- "tag": "after-fix",
- "build": "5cb6b2ed04e6b5fcfd311ad448d873b666467c9c",
+ "tag": "final",
+ "build": "dc2f2e9fee45a0d9933ae89d5f7f56c3898b52db",
  "header": {
   "rollup": {
    "top": 287,
-   "bottom": 455,
+   "bottom": 400,
    "left": 530,
    "right": 1494,
-   "h": 168
+   "h": 113
   },
   "lens": {
-   "top": 460,
-   "bottom": 517,
+   "top": 405,
+   "bottom": 462,
    "left": 530,
    "right": 1494,
    "h": 57
   },
-  "headerToLedgerTop": 173,
+  "headerToLedgerTop": 118,
   "contextRow": false,
   "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
   "sideItems": [
@@ -34,18 +34,18 @@
    "title": "Manage responsibility"
   },
   "managePayments": {
-   "top": 432,
-   "bottom": 449,
+   "top": 376,
+   "bottom": 393,
    "left": 1371,
    "right": 1494,
    "h": 17
   },
   "actions": {
    "top": 287,
-   "bottom": 341,
-   "left": 989,
+   "bottom": 337,
+   "left": 1150,
    "right": 1494,
-   "h": 55
+   "h": 51
   }
  },
  "gearOpens": 1,
@@ -137,19 +137,19 @@
  "focus": {
   "rollup": {
    "top": 373,
-   "bottom": 541,
+   "bottom": 486,
    "left": 550,
    "right": 1506,
-   "h": 168
+   "h": 113
   },
   "lens": {
-   "top": 546,
-   "bottom": 603,
+   "top": 491,
+   "bottom": 548,
    "left": 550,
    "right": 1506,
    "h": 57
   },
-  "headerToLedgerTop": 173,
+  "headerToLedgerTop": 118,
   "contextRow": false,
   "notYetDue": "$225.00 not yet due · next Oct 31, 2026",
   "sideItems": [
@@ -167,18 +167,18 @@
    "title": "Manage responsibility"
   },
   "managePayments": {
-   "top": 518,
-   "bottom": 535,
+   "top": 462,
+   "bottom": 479,
    "left": 1382,
    "right": 1506,
    "h": 17
   },
   "actions": {
    "top": 373,
-   "bottom": 427,
-   "left": 1001,
+   "bottom": 423,
+   "left": 1162,
    "right": 1506,
-   "h": 55
+   "h": 51
   },
   "prepaidDoor": 1
  },

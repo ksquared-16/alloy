@@ -112,6 +112,8 @@ export type EnrollmentConversationCardProps = {
      * answer back — including answers given in words, which `onValueSettled` never sees.
      */
     readonly onDraftValues?: (updates: Readonly<Record<string, Readonly<Record<string, unknown>>>>) => void;
+    /** The person the conversation added is now a row of these drafts' collections — hold the same rows. */
+    readonly onDraftGroups?: (updates: Readonly<Record<string, Readonly<Record<string, unknown[]>>>>) => void;
 };
 
 type TurnResponse = {
@@ -123,6 +125,8 @@ type TurnResponse = {
         clarification?: string;
         /** submission id → field values the server wrote because this turn changed an answer. */
         draft_values?: Record<string, Record<string, unknown>>;
+        /** submission id → group id → rows the server wrote because this turn added a person. */
+        draft_groups?: Record<string, Record<string, unknown[]>>;
         objective: ParticipantObjectiveWire;
     };
     error?: string;
@@ -450,17 +454,21 @@ function StructuredFactEditor({
 function NewPartyForm({
     roleLabel,
     busy,
+    relationshipOptions,
     onSave,
     onCancel,
 }: {
     roleLabel: string;
     busy: boolean;
-    onSave: (identity: { full_name: string; phone?: string; email?: string }) => void;
+    /** The organization's relationship vocabulary; empty when this role does not collect one. */
+    relationshipOptions: readonly { value: string; label: string }[];
+    onSave: (identity: { full_name: string; phone?: string; email?: string; relationship_type?: string }) => void;
     onCancel: () => void;
 }) {
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
+    const [relationship, setRelationship] = useState("");
     // Same rule, same reason: 15px still zooms on iOS. The party editor is a parent-facing input
     // like any other on this surface.
     const field = "w-full min-h-[44px] rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[16px] text-alloy-midnight";
@@ -471,6 +479,17 @@ function NewPartyForm({
                 <span className={caption}>Full name</span>
                 <input className={field} aria-label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
+            {relationshipOptions.length > 0 ? (
+                <label>
+                    <span className={caption}>Relationship to your child</span>
+                    <select className={field} aria-label="Relationship to your child" value={relationship} onChange={(e) => setRelationship(e.target.value)} data-participant-party-relationship="true">
+                        <option value="">Choose…</option>
+                        {relationshipOptions.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                    </select>
+                </label>
+            ) : null}
             <label>
                 <span className={caption}>Phone</span>
                 <input className={field} aria-label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -483,7 +502,7 @@ function NewPartyForm({
                 <button
                     type="button"
                     disabled={busy || name.trim().length === 0}
-                    onClick={() => onSave({ full_name: name.trim(), phone: phone.trim(), email: email.trim() })}
+                    onClick={() => onSave({ full_name: name.trim(), phone: phone.trim(), email: email.trim(), ...(relationship ? { relationship_type: relationship } : {}) })}
                     className="rounded-lg bg-alloy-bend-pine px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
                 >
                     Save
@@ -747,6 +766,7 @@ export function EnrollmentConversationCard({
     artifactRenderable = true,
     onValueSettled,
     onDraftValues,
+    onDraftGroups,
 }: EnrollmentConversationCardProps) {
     const [objective, setObjective] = useState(initialObjective);
     /**
@@ -876,7 +896,7 @@ export function EnrollmentConversationCard({
             /** Correct ONE fact of the card. `ref` is the opaque handle the server issued. */
             editFact?: { ref: string; value: unknown };
             /** Add a person by the role the platform is offering: decline, reuse, or collect. */
-            party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
+            party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string; relationship_type?: string } };
         }) => {
             if (inFlight.current) return;
             inFlight.current = true;
@@ -966,6 +986,7 @@ export function EnrollmentConversationCard({
 
                 setObjective(json.data.objective);
                 if (json.data.draft_values && Object.keys(json.data.draft_values).length > 0) onDraftValues?.(json.data.draft_values);
+                if (json.data.draft_groups && Object.keys(json.data.draft_groups).length > 0) onDraftGroups?.(json.data.draft_groups);
                 setText("");
                 if (payload.editFact) {
                     const ref = payload.editFact.ref;
@@ -1008,7 +1029,7 @@ export function EnrollmentConversationCard({
                 setAwaitingTurn(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, onDraftValues, objective],
+        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, onDraftValues, onDraftGroups, objective],
     );
 
     const turn = objective.next_turn;
@@ -1063,6 +1084,7 @@ export function EnrollmentConversationCard({
                             <NewPartyForm
                                 roleLabel={party.role_label}
                                 busy={busy}
+                                relationshipOptions={party.relationship_options ?? []}
                                 onCancel={() => setAddingParty(false)}
                                 onSave={(identity) =>
                                     void submit({ party: { identity }, settledAs: identity.full_name })

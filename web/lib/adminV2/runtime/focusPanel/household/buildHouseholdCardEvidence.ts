@@ -31,6 +31,7 @@ import {
 } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
 import {
     PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES,
     PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES,
     PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES,
     PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES,
@@ -62,7 +63,8 @@ import {
     formatFocusPanelDate,
     formatFocusPanelDobAgeLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
-import { buildEmergencyContactsEvidence } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/buildEmergencyContactsEvidence";
+import { buildEmergencyContactsEvidence, relationshipBagsFromTruth } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/buildEmergencyContactsEvidence";
+import { buildFocusPanelRelationshipInstanceViewModels } from "@/lib/fields/personChildRelationship/focusPanelPersonChildRelationshipAdapterContract";
 import { buildPersonAddressIndexFromVm } from "@/lib/layout/runtime/resolvePersonAddressFieldValues";
 
 /** Display-format a phone for the card (e.g. "(541) 654-3217"); raw fallback if unparseable. */
@@ -425,6 +427,9 @@ export function buildHouseholdCardEvidence(
             resolveIdentityPhotoUrlFromRaw(row as unknown as Record<string, unknown>),
         );
 
+        // A child's physician or dentist is not a household adult — not a parent, not "additional".
+        if (PERSON_DRAWER_HOUSEHOLD_CHILD_PROVIDER_ROLES.has(normPersonDrawerHouseholdRole(row.role_type))) continue;
+
         const sectionKey = nestedConfig
             ? resolveHouseholdContactSectionKey({
                   config: nestedConfig,
@@ -481,6 +486,38 @@ export function buildHouseholdCardEvidence(
                 imageUrl: resolveIdentityPhotoUrlFromRaw(
                     item.person_fields as unknown as Record<string, unknown>,
                 ),
+            });
+        }
+    }
+
+    /*
+     * AUTHORIZED PICK-UP IS A CHILD RELATIONSHIP, projected the way emergency contacts are.
+     *
+     * The relationship definition gives a pick-up person no household row (write targets: contacts),
+     * so reading household rows showed "0 Authorized pickups" for a family whose pick-up was on both
+     * children (Lil' Sunshine, ZZQALM234600). The canonical bags carry the role; they win when present.
+     */
+    const pickupInstances = relationshipBagsFromTruth(record).flatMap((bag) =>
+        bag.items.filter(
+            (item) => item.status !== "inactive" && item.operational_roles.some((role) => role.trim().toLowerCase() === "authorized_pickup"),
+        ),
+    );
+    if (pickupInstances.length > 0) {
+        pickupRows.length = 0;
+        const seenPickup = new Set<string>();
+        for (const vm of buildFocusPanelRelationshipInstanceViewModels(pickupInstances)) {
+            if (primaryPersonId && vm.person_id === primaryPersonId) continue;
+            if (seenPickup.has(vm.person_id)) continue;
+            seenPickup.add(vm.person_id);
+            pickupRows.push({
+                personId: vm.person_id,
+                name: vm.person_display_name,
+                roleLabel: "Authorized pickup",
+                isPrimary: false,
+                phone: formatPhoneForDisplay(trimOrNull(vm.person_fields.phone)),
+                email: trimOrNull(vm.person_fields.email),
+                initials: personDrawerHouseholdInitials(vm.person_display_name),
+                imageUrl: resolveIdentityPhotoUrlFromRaw(vm.person_fields as unknown as Record<string, unknown>),
             });
         }
     }

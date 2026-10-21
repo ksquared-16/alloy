@@ -105,6 +105,53 @@ function usableValue(raw: unknown): boolean {
     return true;
 }
 
+/**
+ * "Is this field shown, for the answers this family has given?" — for one pinned Form.
+ *
+ * Each field's current answer is read through the same identity and precedence the needs use
+ * (session value over canonical prefill), and the shared Forms rule decides what is shown. Exported
+ * so everything the participant owes — questions AND attachments — follows the one condition the
+ * author wrote.
+ */
+export function fieldShownLookupForForm(
+    form: PinnedRequirementForm,
+    input: Pick<ProjectNeedsInput, "subjectId" | "sharedValues" | "canonicalValues">,
+): (fieldId: string) => boolean {
+    const visibilityControllers = fieldIdsControllingVisibility(form.schema);
+    const valueByFieldId = new Map<string, unknown>();
+    walkScalarFormFields(form.schema, (field) => {
+        const id = resolveEnrollmentNeedIdentity({
+            field,
+            subjectId: input.subjectId,
+            formDefinitionId: form.form_definition_id,
+            insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
+            controlsVisibility: visibilityControllers.has(field.id),
+            inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
+            formDefinitionVersionId: form.form_definition_version_id,
+            sessionItemId: form.session_item_id,
+        });
+        const sessionValue = id.session_value_key ? input.sharedValues[id.session_value_key] : undefined;
+        const canonicalValue = id.shared_value_key ? input.canonicalValues?.[id.shared_value_key] : undefined;
+        const value = usableValue(sessionValue) ? sessionValue : canonicalValue;
+        if (value !== undefined) valueByFieldId.set(field.id, value);
+    });
+    return (fieldId: string) => fieldShownForAnswers(form.schema, fieldId, (id) => valueByFieldId.get(id));
+}
+
+/** `${session_item_id}:${field_id}` for every field hidden by its condition, across the packet. */
+export function hiddenFieldKeysForAnswers(
+    input: Pick<ProjectNeedsInput, "forms" | "subjectId" | "sharedValues" | "canonicalValues">,
+): Set<string> {
+    const out = new Set<string>();
+    for (const form of input.forms) {
+        const shown = fieldShownLookupForForm(form, input);
+        walkScalarFormFields(form.schema, (field) => {
+            if (!shown(field.id)) out.add(`${form.session_item_id}:${field.id}`);
+        });
+    }
+    return out;
+}
+
 type Accumulator = {
     identity: EnrollmentNeedIdentity;
     occurrences: EnrollmentNeedOccurrence[];
@@ -157,24 +204,7 @@ export function projectEnrollmentInformationNeeds(
          * the answer under that key, and the condition it controls never read it.
          */
         const visibilityControllers = fieldIdsControllingVisibility(form.schema);
-        const valueByFieldId = new Map<string, unknown>();
-        walkScalarFormFields(form.schema, (field) => {
-            const id = resolveEnrollmentNeedIdentity({
-                field,
-                subjectId: input.subjectId,
-                formDefinitionId: form.form_definition_id,
-                insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
-                controlsVisibility: visibilityControllers.has(field.id),
-                inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
-                formDefinitionVersionId: form.form_definition_version_id,
-                sessionItemId: form.session_item_id,
-            });
-            const sessionValue = id.session_value_key ? input.sharedValues[id.session_value_key] : undefined;
-            const canonicalValue = id.shared_value_key ? input.canonicalValues?.[id.shared_value_key] : undefined;
-            const value = usableValue(sessionValue) ? sessionValue : canonicalValue;
-            if (value !== undefined) valueByFieldId.set(field.id, value);
-        });
-        const shown = (fieldId: string) => fieldShownForAnswers(form.schema, fieldId, (id) => valueByFieldId.get(id));
+        const shown = fieldShownLookupForForm(form, input);
 
         walkScalarFormFields(form.schema, (field) => {
             // Not a participant need unless the participant is the one who supplies it. Display-only

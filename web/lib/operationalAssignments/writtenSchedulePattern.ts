@@ -35,10 +35,20 @@ export function resolveWrittenSchedulePattern(args: {
     patterns: readonly SchedulePatternLike[];
     chosenScheduleType: string | null | undefined;
     days: readonly number[];
+    /**
+     * The exact pattern already chosen (applied, or the edited row's own). Kept while the selected
+     * days are still its days — two patterns can share days AND type (Before Care, After Care), so
+     * re-deriving by type would silently swap one for the other.
+     */
+    chosenPatternId?: string | null;
 }): WrittenSchedulePattern {
     const key = dayKey(args.days);
     const sameDays = args.patterns.filter((p) => dayKey(p.weekdays) === key);
-    const chosen = (args.chosenScheduleType ?? "").trim();
+    const exact = args.chosenPatternId ? args.patterns.find((p) => p.id === args.chosenPatternId) : undefined;
+    if (exact && exact.scheduleTypeKey && dayKey(exact.weekdays) === key) {
+        return { patternId: exact.id, scheduleType: exact.scheduleTypeKey, ambiguous: false };
+    }
+    const chosen = (args.chosenScheduleType ?? "").trim() || (exact?.scheduleTypeKey ?? "");
     if (chosen) {
         const ofType = args.patterns.filter((p) => p.scheduleTypeKey === chosen);
         const pick = ofType.find((p) => sameDays.includes(p)) ?? ofType[0] ?? null;

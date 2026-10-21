@@ -24,6 +24,11 @@
  * paid. Provider status is not financial truth here; `status = 'posted'` is.
  */
 
+import {
+    isOperatorPaymentMethod,
+    methodNotAcceptedMessage,
+    readDisabledPaymentMethods,
+} from "@/lib/financials/payments/acceptedPaymentMethods";
 import { randomUUID } from "crypto";
 
 import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
@@ -357,6 +362,13 @@ const recordPayment: RegisteredAction = {
         const correlationId = randomUUID();
         if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
             return denied(correlationId, "Recording a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
+        }
+        /* W7-F047: a method the organization turned off takes no new money. History is untouched. */
+        {
+            const method = t(payload.payment_method) || "cash";
+            if (isOperatorPaymentMethod(method) && (await readDisabledPaymentMethods(supabase as SupabaseClient, ctx.orgId)).has(method)) {
+                return { ok: false, correlationId, status: 409, error: methodNotAcceptedMessage(method) };
+            }
         }
         try {
             const result = await recordAndApplyChildcarePayment(supabase as SupabaseClient, {
@@ -837,6 +849,13 @@ const collectCardPayment: RegisteredAction = {
                 PAYMENT_WRITE_PERMISSION,
                 "payment_permission_required",
             );
+        }
+        /* W7-F047: card or bank turned off for the organization takes no new collection. */
+        {
+            const rail = t(payload.rail) === "ach" ? "ach" : "card";
+            if ((await readDisabledPaymentMethods(supabase as SupabaseClient, ctx.orgId)).has(rail)) {
+                return { ok: false, correlationId, status: 409, error: methodNotAcceptedMessage(rail) };
+            }
         }
         try {
             const chargeId = t(payload.charge_id);

@@ -278,11 +278,21 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
 
     // Ledger proposed rows win over participation-metadata draft when present.
     // Proposed still surfaces alongside committed current (planning vs truth).
+    //
+    // EXCEPT FOR THE PRIMARY. Before enrolment the primary proposal lives on the participation draft,
+    // not the ledger; a proposed SECONDARY row (Before Care) is a ledger row. "Ledger wins" used to
+    // drop the draft primary entirely the moment a secondary existed — the card listed only the
+    // secondary and its header "Starts …" named the secondary's date. The draft primary now stays
+    // beside ledger rows unless the ledger carries a proposed primary of its own.
+    const draftPrimary =
+        current == null && proposedAssignments.length > 0 && !proposedAssignments.some((a) => a.isPrimary)
+            ? (input.proposed?.assignments ?? []).filter((a) => a.isPrimary)
+            : [];
     const proposedFromRows =
         proposedAssignments.length > 0
             ? scheduleViewFrom(
                   "current",
-                  [...proposedAssignments].sort((a, b) => {
+                  [...draftPrimary, ...proposedAssignments].sort((a, b) => {
                       if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
                       const at = a.arriveTime ?? "99:99";
                       const bt = b.arriveTime ?? "99:99";
@@ -291,7 +301,10 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
                   false
               )
             : null;
-    const proposed = proposedFromRows ?? (current == null ? input.proposed ?? null : null);
+    const proposed =
+        proposedFromRows && draftPrimary.length > 0
+            ? { ...proposedFromRows, scheduleType: input.proposed?.scheduleType ?? null, scheduleTypeLabel: input.proposed?.scheduleTypeLabel ?? null }
+            : proposedFromRows ?? (current == null ? input.proposed ?? null : null);
 
     const status = resolveStatus(
         input.agreementStatus,
@@ -908,9 +921,9 @@ export async function loadSchedulingProjectionsForChildren(
 
     // ── Hop 2: everything the first hop's rows name. All independent of one another.
     const agreementIds = [...agreementByMember.values()].map((a) => a.id);
-    const proposedMembers = memberIds.filter(
-        (id) => !agreementByMember.has(id) && (assignmentsByMember.get(id)?.length ?? 0) === 0
-    );
+    // Every pre-enrolment child's draft is read — including one that already has proposed ledger rows
+    // (a secondary): its PRIMARY proposal still lives on the draft, and the stitch keeps it listed.
+    const proposedMembers = memberIds.filter((id) => !agreementByMember.has(id));
     const [placementRows, patternRows, typeRows, processRows] = await Promise.all([
         readChunked(agreementIds, async (chunk) => {
             const { data, error } = await supabase
@@ -1157,6 +1170,9 @@ function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): Schedu
         enrollmentAgreementId: p.agreement?.id ?? null,
         assignments,
         asOf: p.todayYmd,
+        // Pre-enrolment: the primary proposal is on the participation draft even when secondaries are
+        // ledger rows (buildChildScheduling keeps it unless the ledger has a proposed primary).
+        proposed: p.agreement ? null : stitchProposedDraft(p, customerMemberId, roomLabel, programLabel),
     });
     return buildSchedulingProjectionForChild(child, p.todayYmd, p.computedAt);
 }

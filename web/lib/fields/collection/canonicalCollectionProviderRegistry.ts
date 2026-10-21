@@ -90,6 +90,17 @@ const HEALTH_IMMUNIZATIONS = healthFactProvider(
     "Immunizations",
 );
 
+/**
+ * The health collections a Form may collect and Processing may commit. Immunizations are not here:
+ * an immunization is a vaccine with ordered doses, which a Form records as the official grid, not as
+ * a repeatable row — that connection is its own decision.
+ */
+export const HEALTH_FACT_FORM_COLLECTABLE_REFS: Readonly<Record<string, true>> = Object.freeze({
+    "health.allergies": true,
+    "health.conditions": true,
+    "health.medications": true,
+});
+
 /** The `fact_kind` each ref filters on — the resolver's only per-ref difference. */
 export const HEALTH_FACT_KIND_BY_PROVIDER_REF: Readonly<Record<string, string>> = Object.freeze({
     "health.allergies": "allergy",
@@ -227,8 +238,10 @@ export function relationshipDefinitionForProvider(refKey: string): RelationshipD
 }
 
 /** Classify a provider: native structural collection vs configured relationship projection. */
-export function classifyCollectionProvider(refKey: string): "native_structural" | "configured_relationship" | "unknown" {
+export function classifyCollectionProvider(refKey: string): "native_structural" | "configured_relationship" | "health_fact" | "unknown" {
     if (RELATIONSHIP_DEFINITIONS.some((d) => d.provider_ref === refKey.trim())) return "configured_relationship";
+    // A Form row of allergies, conditions or medications — committed through Health, not as a person.
+    if (refKey.trim() in HEALTH_FACT_FORM_COLLECTABLE_REFS) return "health_fact";
     if (refKey.trim() === "children" || refKey.trim() === "household.members") return "native_structural";
     return "unknown";
 }

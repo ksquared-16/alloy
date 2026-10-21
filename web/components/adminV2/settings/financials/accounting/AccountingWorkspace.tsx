@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { ConfigChildObjectMasterDetail } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail";
-import AccountingPostingPanels, { GlMappingPanel } from "@/components/adminV2/settings/financials/accounting/AccountingPostingPanels";
+import AccountingPostingPanels from "@/components/adminV2/settings/financials/accounting/AccountingPostingPanels";
 import GlCodesConfigurationPage from "@/components/adminV2/settings/financials/accounting/GlCodesConfigurationPage";
 
 /**
@@ -29,7 +29,7 @@ import GlCodesConfigurationPage from "@/components/adminV2/settings/financials/a
  * were not the problem.
  */
 
-export type AccountingToolKey = "gl_codes" | "payment_methods" | "accounting_calendar";
+export type AccountingToolKey = "gl_codes" | "accounting_calendar";
 
 /**
  * The rail's contents, in order. A literal, because there are two tools and inventing a registry
@@ -37,8 +37,6 @@ export type AccountingToolKey = "gl_codes" | "payment_methods" | "accounting_cal
  */
 export const ACCOUNTING_TOOLS: { key: AccountingToolKey; label: string; summary: string }[] = [
     { key: "gl_codes", label: "GL Codes", summary: "Accounts, mappings, and where each charge posts" },
-    /* W7-F042: payment method → accounting destination, its own tool rather than a row in a list. */
-    { key: "payment_methods", label: "Payment Methods", summary: "Where each payment method's money lands" },
     { key: "accounting_calendar", label: "Accounting Calendar", summary: "Fiscal shape, periods, and closing" },
 ];
 
@@ -97,10 +95,6 @@ export default function AccountingWorkspace({
                     tool === "gl_codes" ? (
                         <div data-testid="financials-accounting-pane-gl-codes">
                             <GlCodesConfigurationPage />
-                        </div>
-                    ) : tool === "payment_methods" ? (
-                        <div className="mt-6" data-testid="financials-accounting-pane-payment-methods">
-                            <GlMappingPanel group="payment" />
                         </div>
                     ) : (
                         <div data-testid="financials-accounting-pane-calendar">

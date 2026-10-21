@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
+import { announceParticipantProgress, onParticipantProgress } from "./participantProgressSignal";
 
 type Line = {
     chargeId: string;
@@ -52,6 +53,15 @@ type PaymentView = {
     unpayableReason: string | null;
 };
 
+/* The participant surface's own card language (EnrollmentConversationCard's IntakeCard). */
+const PANEL = "mt-4 rounded-2xl border border-alloy-midnight/[0.08] bg-white px-5 py-4 shadow-sm";
+const PANEL_TITLE = "mb-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45";
+const PANEL_NOTE = "mt-2 text-[13px] text-alloy-midnight/60";
+const FIELD_LABEL = "mt-3 flex flex-col gap-1 text-[12px] font-medium text-alloy-midnight/70";
+// 16px: anything smaller zooms the page on iOS when focused.
+const FIELD = "min-h-[44px] w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[16px] text-alloy-midnight";
+const PRIMARY = "mt-4 min-h-[44px] w-full rounded-lg bg-alloy-bend-pine px-4 py-2 text-[15px] font-semibold text-white disabled:opacity-50 sm:w-auto";
+
 const money = (cents: number, currency: string | null) =>
     (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
 
@@ -68,7 +78,11 @@ function headline(view: PaymentView): string {
         case "PROCESSING":
             return "Payment processing";
         case "NOT_DUE":
-            return "Enrollment fee — not due yet";
+            // One child paid, a sibling's fee not yet due: the family has paid — never "not due yet"
+            // under a payment it just made.
+            return view.appliedCents > 0
+                ? `${money(view.appliedCents, view.currencyCode)} paid · nothing more is due yet`
+                : "Enrollment fee — not due yet";
         case "ATTENTION_REQUIRED":
             return "Enrollment fee needs attention";
         default:
@@ -137,11 +151,16 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
         setChargeId("");
         setAmount("");
         await load();
+        // The family panel's payment row reads the same truth; tell it money moved.
+        announceParticipantProgress();
     }, [load]);
 
     useEffect(() => {
         void load();
     }, [load]);
+
+    // Paperwork finished elsewhere on the page makes a fee due; re-read rather than keep the first answer.
+    useEffect(() => onParticipantProgress(() => void load()), [load]);
 
     /* Stripe's fields are mounted only for a present payer — never for a saved method, which the
      * server confirms itself. */
@@ -261,23 +280,29 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
         await reloadAfterPayment();
     }, [attemptId, recognize, reloadAfterPayment]);
 
-    if (loading) return <p data-participant-payment="loading">Loading your fee…</p>;
+    if (loading && !view) return <p data-participant-payment="loading" className={PANEL_NOTE}>Loading your fee…</p>;
     if (error && !view) return <p data-participant-payment="error" role="alert">{error}</p>;
     if (!view || view.state === "NOT_APPLICABLE") return null;
 
     const line = view.lines.find((l) => l.chargeId === chargeId) ?? null;
 
     return (
-        <section data-participant-payment="card" data-payment-state={view.state}>
-            <h3>Payment</h3>
-            <p data-participant-payment="headline">{headline(view)}</p>
+        <section data-participant-payment="card" data-payment-state={view.state} className={PANEL}>
+            <h3 className={PANEL_TITLE}>Payment</h3>
+            <p data-participant-payment="headline" className={view.state === "SATISFIED" ? "text-[15px] font-semibold text-alloy-bend-pine" : "text-[15px] font-semibold text-alloy-midnight"}>
+                {headline(view)}
+            </p>
 
             {view.lines.length > 1 ? (
-                <ul data-participant-payment="lines">
+                <ul data-participant-payment="lines" className="mt-2 divide-y divide-alloy-midnight/[0.06] text-[13.5px]">
                     {view.lines.map((l) => (
-                        <li key={l.chargeId || l.label}>
-                            {l.label} — {money(l.collectibleNowCents, view.currencyCode)}
-                            {l.state === "SATISFIED" ? " · paid" : ""}
+                        <li key={l.chargeId || l.label} className="flex items-center justify-between gap-3 py-1.5">
+                            <span className="text-alloy-midnight/80">{l.label}</span>
+                            <span className="sr-only"> — </span>
+                            {/* A paid fee says Paid — never "$0.00", which reads like a fee of nothing. */}
+                            <span className={l.state === "SATISFIED" ? "font-medium text-alloy-bend-pine" : "font-medium text-alloy-midnight"}>
+                                {l.state === "SATISFIED" ? "Paid" : money(l.collectibleNowCents, view.currencyCode)}
+                            </span>
                         </li>
                     ))}
                 </ul>
@@ -286,9 +311,10 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
             {view.payable ? (
                 <>
                     {view.lines.length > 1 ? (
-                        <label>
+                        <label className={FIELD_LABEL}>
                             Paying for
                             <select
+                                className={FIELD}
                                 data-participant-payment="charge"
                                 value={chargeId}
                                 onChange={(e) => {
@@ -308,12 +334,13 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                         </label>
                     ) : null}
 
-                    <p data-participant-payment="payer">Paying as {view.payer?.name}</p>
+                    <p data-participant-payment="payer" className={PANEL_NOTE}>Paying as {view.payer?.name}</p>
 
                     {view.rails.length > 1 ? (
-                        <label>
+                        <label className={FIELD_LABEL}>
                             Pay by
                             <select
+                                className={FIELD}
                                 data-participant-payment="rail"
                                 value={rail}
                                 disabled={Boolean(clientSecret)}
@@ -331,9 +358,10 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                         </label>
                     ) : null}
 
-                    <label>
+                    <label className={FIELD_LABEL}>
                         Payment method
                         <select
+                            className={FIELD}
                             data-participant-payment="method"
                             value={methodId}
                             onChange={(e) => setMethodId(e.target.value)}
@@ -349,9 +377,10 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                         </select>
                     </label>
 
-                    <label>
+                    <label className={FIELD_LABEL}>
                         Amount
                         <input
+                            className={FIELD}
                             data-participant-payment="amount"
                             type="text"
                             inputMode="decimal"
@@ -362,13 +391,13 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
 
                     {clientSecret ? (
                         <>
-                            <div ref={elementHost} data-participant-payment="stripe-element" />
-                            <button type="button" data-participant-payment="confirm" disabled={busy} onClick={confirmCard}>
+                            <div ref={elementHost} data-participant-payment="stripe-element" className="mt-3" />
+                            <button type="button" data-participant-payment="confirm" disabled={busy} onClick={confirmCard} className={PRIMARY}>
                                 {busy ? "Submitting…" : `Pay ${money(Math.round(Number(amount) * 100) || 0, view.currencyCode)}`}
                             </button>
                         </>
                     ) : (
-                        <button type="button" data-participant-payment="pay" disabled={busy} onClick={pay}>
+                        <button type="button" data-participant-payment="pay" disabled={busy} onClick={pay} className={PRIMARY}>
                             {busy
                                 ? "Starting…"
                                 : `${view.state === "PARTIALLY_SATISFIED" ? "Pay remainder · " : "Pay "}${money(Math.round(Number(amount) * 100) || line?.collectibleNowCents || 0, view.currencyCode)}`}
@@ -377,11 +406,11 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                 </>
             ) : (
                 /* No Pay button where paying is impossible, and the server's own sentence for why. */
-                view.unpayableReason ? <p data-participant-payment="unpayable">{view.unpayableReason}</p> : null
+                view.unpayableReason ? <p data-participant-payment="unpayable" className={PANEL_NOTE}>{view.unpayableReason}</p> : null
             )}
 
-            {error ? <p data-participant-payment="error" role="alert">{error}</p> : null}
-            {notice ? <p data-participant-payment="notice" role="status">{notice}</p> : null}
+            {error ? <p data-participant-payment="error" role="alert" className="mt-2 text-[13px] text-rose-700">{error}</p> : null}
+            {notice ? <p data-participant-payment="notice" role="status" className={PANEL_NOTE}>{notice}</p> : null}
         </section>
     );
 }

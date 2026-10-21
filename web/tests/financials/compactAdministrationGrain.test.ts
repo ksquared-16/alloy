@@ -533,13 +533,13 @@ describe("each action sits with the state it acts on", () => {
         expect(gear, "and before the next group begins").toBeLessThan(payment);
     });
 
-    it("Manage payments is grouped with the payment-method state", () => {
+    it("Manage payments is grouped with the payment-method state — W7-F049: it IS the method", () => {
         const detail = code(DETAIL);
         const group = detail.indexOf('data-financials-row-group="payment"');
-        const method = detail.indexOf('data-financials-method-state="true"');
         const door = detail.indexOf('data-financials-manage-payments="open"');
-        expect(method, "the state is in the payment group").toBeGreaterThan(group);
-        expect(door, "and the door follows it").toBeGreaterThan(method);
+        expect(door, "the door is in the payment group").toBeGreaterThan(group);
+        expect(detail.slice(door, door + 200), "and it carries the method state itself").toMatch(/data-financials-method-state=\{only \? "true" : undefined\}/);
+        expect(detail, "no separate text link").not.toMatch(/Manage payments <span aria-hidden>&rarr;<\/span>/);
     });
 
     it("the payment group right-aligns where there is room, and stops when there is not", () => {
@@ -565,7 +565,7 @@ describe("each action sits with the state it acts on", () => {
          * relationship as a whole; with several, each keeps its own and only the door is shared.
          */
         const detail = code(DETAIL);
-        expect(detail).toMatch(/evidence\.payers\.length === 1 \?[\s\S]{0,400}data-financials-method-state/);
+        expect(detail).toMatch(/const only = evidence\.payers\.length === 1 \?[\s\S]{0,900}data-financials-method-state=\{only/);
         expect(detail, "and several payers keep theirs on their own line")
             .toMatch(/evidence\.payers\.length > 1 \?[\s\S]{0,300}payer-method/);
     });

@@ -1,3 +1,4 @@
+import { syncPartyRowsForSubmission } from "@/lib/enrollment/participantRuntime/partyRowsIntoDrafts";
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
@@ -64,7 +65,17 @@ export async function GET(
         return publicErr("Submission is not editable", 409, { code: "NOT_DRAFT" });
     }
 
-    const full = existing as Record<string, unknown>;
+    const full = { ...(existing as Record<string, unknown>) };
+    // A reload shows the child's people the conversation added — as rows, linked to the person.
+    const healed = await syncPartyRowsForSubmission(supabase, {
+        orgId: ctx.orgId,
+        submissionId,
+        customerMemberId: full.customer_member_id as string | null,
+    });
+    if (healed) {
+        const p = (full.payload ?? {}) as Record<string, unknown>;
+        full.payload = { ...p, groups: { ...((p.groups ?? {}) as Record<string, unknown>), ...healed } };
+    }
     const { org_id: _o, ...rest } = full;
     void _o;
     return publicOk(rest);

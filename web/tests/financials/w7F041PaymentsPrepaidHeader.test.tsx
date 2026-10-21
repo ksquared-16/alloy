@@ -248,13 +248,12 @@ describe("F042 · a payment method settles into an ASSET, recorded when the mone
         expect(route).toMatch(/PAYMENT_MAPPING_KEYS\.has\(mappingKey\) && \(account as \{ type\?: string \}\)\.type !== "asset"/);
     });
 
-    it("configured under Organization → Financials → Accounting → Payment Methods, asset accounts only", () => {
+    it("W7-F047: configured with the method under Organization → Financials → Payments, asset accounts only", () => {
         const ws = code("components/adminV2/settings/financials/accounting/AccountingWorkspace.tsx");
-        expect(ws).toMatch(/\{ key: "payment_methods", label: "Payment Methods"/);
-        expect(ws).toMatch(/<GlMappingPanel group="payment" \/>/);
-        const panel = code("components/adminV2/settings/financials/accounting/AccountingPostingPanels.tsx");
-        expect(panel).toMatch(/group === "payment" \? accounts\.filter\(\(a\) => a\.type === "asset"\) : accounts/);
-        expect(panel).toMatch(/\(m\.group \?\? "charge"\) === group/);
+        expect(ws, "no second entry point under Accounting").not.toContain("payment_methods");
+        const settings = code("components/adminV2/settings/financials/PaymentMethodsSettings.tsx");
+        expect(settings).toMatch(/\(gj\.accounts \?\? \[\]\)\.filter\(\(a\) => a\.is_active && a\.type === "asset"\)/);
+        expect(settings).toMatch(/fetch\("\/api\/admin\/financials\/gl-mappings", \{\s*method: "PUT"/);
     });
 });
 

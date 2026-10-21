@@ -34,8 +34,11 @@ describe("POS-FP17 — Forms projection widening", () => {
             expect(provider!.kind).toBe("collection");
             expect(provider!.collectionProjection?.collection_ref).toBe(def.collection_ref);
         }
-        // natives + one per definition, nothing hand-authored beyond the natives
-        expect(seeds.length).toBe(NATIVE_REFS.length + collectableRelationshipDefinitions().length);
+        // natives + one per definition + the child's own health collections (allergies, conditions,
+        // medications — committed through Health on approval). Nothing else hand-authored.
+        const HEALTH_REFS = ["health.allergies", "health.conditions", "health.medications"];
+        expect(seeds.filter((p) => p.refKey.startsWith("health.")).map((p) => p.refKey)).toEqual(HEALTH_REFS);
+        expect(seeds.length).toBe(NATIVE_REFS.length + collectableRelationshipDefinitions().length + HEALTH_REFS.length);
     });
 
     it("emergency contacts and authorized pickups are now bindable and authorable (were stranded)", () => {

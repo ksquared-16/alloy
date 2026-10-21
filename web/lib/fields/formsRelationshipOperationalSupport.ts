@@ -10,6 +10,7 @@ import type { FormsRelationshipRoleKey } from "@/lib/fields/canonicalFormsRelati
 import { formsRelationshipRoleFromProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import { RELATIONSHIP_ROLE_SEMANTICS } from "@/lib/fields/relationship/relationshipSemanticShape";
 import { collectableRelationshipDefinitions } from "@/lib/fields/relationship/relationshipDefinitions";
+import { HEALTH_FACT_FORM_COLLECTABLE_REFS } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 
 export type FormsRelationshipOperationalClass =
     | "authorable_prefill_readonly"
@@ -67,6 +68,8 @@ export function isFormsRelationshipPublishableInP2(provider: CanonicalDataProvid
 export const FORMS_COLLECTION_BINDING_AUTHORING_ENABLED_REFS = new Set<string>([
     "children",
     ...collectableRelationshipDefinitions().map((d) => d.provider_ref),
+    // Allergies, conditions, medications: the child's own facts, committed through Health on approval.
+    ...Object.keys(HEALTH_FACT_FORM_COLLECTABLE_REFS),
 ]);
 
 /** @deprecated Prefer collectionBindingAuthoringEnabledForProvider(refKey). */

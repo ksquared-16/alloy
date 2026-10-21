@@ -23,10 +23,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Banknote, CreditCard, Landmark, RefreshCw } from "lucide-react";
+import { Banknote, RefreshCw } from "lucide-react";
 
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import { executeProviderCommand } from "@/lib/financials/payments/providerCommands";
+import PaymentMethodsSettings from "@/components/adminV2/settings/financials/PaymentMethodsSettings";
 
 type ProviderState = {
     connected: boolean;
@@ -50,11 +51,6 @@ function headline(state: ProviderState | null): { label: string; tone: "neutral"
     }
     if (state.readiness === "restricted") return { label: "Needs attention", tone: "attention" };
     return { label: "Setup in progress", tone: "attention" };
-}
-
-function railLabel(available: boolean, connected: boolean): string {
-    if (!connected) return "Unavailable";
-    return available ? "Available" : "Unavailable";
 }
 
 function when(iso: string | null): string {
@@ -195,7 +191,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
     return (
         <ConfigWorkspaceCard
             title="Payments"
-            description="Connect a payment provider so this organization can accept card and bank payments."
+            description="How this organization takes money: the payment provider for card and bank, which methods staff can use, and the account each one lands in."
             testId="financials-chapter-payments"
         >
             <div className="space-y-4 py-1" data-testid="payments-provider-chapter" data-provider-connected={connected}>
@@ -250,29 +246,19 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     </div>
                 </div>
 
-                {/* ── WHAT CAN WE ACCEPT? ───────────────────────────────────────────────────── */}
-                <div className="grid gap-2 sm:grid-cols-2">
-                    <div
-                        className="rounded-lg border border-alloy-stone/25 px-3 py-2"
-                        data-testid="payments-rail-card"
-                        data-rail-available={Boolean(state?.cardAvailable)}
-                    >
-                        <p className="flex items-center gap-2 text-sm font-medium text-alloy-midnight">
-                            <CreditCard className="h-4 w-4" strokeWidth={1.75} /> Card payments
-                        </p>
-                        <p className="text-sm text-alloy-midnight/65">{railLabel(Boolean(state?.cardAvailable), connected)}</p>
-                    </div>
-                    <div
-                        className="rounded-lg border border-alloy-stone/25 px-3 py-2"
-                        data-testid="payments-rail-bank"
-                        data-rail-available={Boolean(state?.bankAvailable)}
-                    >
-                        <p className="flex items-center gap-2 text-sm font-medium text-alloy-midnight">
-                            <Landmark className="h-4 w-4" strokeWidth={1.75} /> Bank payments
-                        </p>
-                        <p className="text-sm text-alloy-midnight/65">{railLabel(Boolean(state?.bankAvailable), connected)}</p>
-                    </div>
-                </div>
+                {/*
+                  * ── WHAT CAN WE ACCEPT, AND WHERE DOES IT LAND? (W7-F047) ────────────────────
+                  *
+                  * The two rail cards that stood here said only whether card and bank were available.
+                  * The methods table says that for every method — card, bank, cash, check, money
+                  * order, external — beside whether the organization accepts it and the asset
+                  * account it lands in. One place for "how do we take money".
+                  */}
+                <PaymentMethodsSettings
+                    providerConnected={connected}
+                    cardAvailable={Boolean(state?.cardAvailable)}
+                    bankAvailable={Boolean(state?.bankAvailable)}
+                />
 
                 <p className="text-xs text-alloy-midnight/50" data-testid="payments-provider-checked-at">
                     Provider status last checked · {when(state?.readinessCheckedAt ?? null)}

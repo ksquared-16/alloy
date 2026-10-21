@@ -38,7 +38,7 @@
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
-import { detectRelationshipDefinitionForTitle } from "@/lib/fields/relationship/relationshipDefinitions";
+import { detectRelationshipDefinitionForTitle, relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
 
 /** The universal person attributes a slot can ask for. Not packet-specific. */
 export const PARTY_ATTRIBUTES = [
@@ -181,6 +181,15 @@ export function partySlotForField(
      */
     const entity = field.field_source?.entity_type?.trim().toLowerCase() ?? "";
     if (entity && SUBJECT_ENTITIES.has(entity)) return null;
+    /*
+     * THE FAMILY'S OWN GUARDIAN IS A CANONICAL BINDING, NOT A PARTY POSITION.
+     *
+     * A box bound to the registry's `guardian_*` keys is the household's primary guardian, resolved
+     * from the household record. Reading it as "Guardian #1" let the party projection replace the
+     * primary guardian's first and last name with whichever child relationship held the guardian
+     * role — printed as the full name in both boxes on the Lil' Sunshine application.
+     */
+    if (entity === "guardian" && (field.field_source?.field_key ?? "").startsWith("guardian_")) return null;
 
     const ordinalMatch = /#\s*(\d+)/.exec(label);
     const ordinal = ordinalMatch ? Number(ordinalMatch[1]) : 1;
@@ -382,3 +391,50 @@ export function artifactSlotsForProjection(
 ) {
     return groupPartySlots(artifactPartySlots(schema, vocabulary));
 }
+
+/**
+ * A capacity for a declared collection whose author set no maximum. The family decides how many
+ * people exist; this only bounds how many the conversation offers before moving on.
+ */
+const UNBOUNDED_DECLARED_COLLECTION_CAPACITY = 6;
+
+/**
+ * THE ROLES A FORM DECLARES, NOT ONLY THE ROLES ITS LABELS SPELL.
+ *
+ * Label parsing above exists for imported artifacts that print "Emergency Contact #2 Phone" in a box.
+ * A form authored in Studio says the same thing explicitly: a repeating group bound to a relationship
+ * collection (`collection_binding` → a relationship definition) IS that role, with its own capacity
+ * (`repeat.max`) and its own minimum (`repeat.min`). Reading only labels meant an authored
+ * "Emergency contacts" group whose rows ask for "Name" and "Phone" was never offered at all, while a
+ * group whose row happened to say "Physician name" was.
+ *
+ * The minimum is the author's configured requirement — exactly the source `minimumPartiesRequired`
+ * accepts — never a count of printed rows.
+ */
+export function collectionDeclaredPartySlots(schema: Pick<FormSchemaV1, "fields">): {
+    readonly slots: { slot_id: string; role: string; ordinal: number; field_ids: string[] }[];
+    readonly minimums: Readonly<Record<string, number>>;
+} {
+    const slots: { slot_id: string; role: string; ordinal: number; field_ids: string[] }[] = [];
+    const minimums: Record<string, number> = {};
+    const walk = (fields: readonly FormField[]) => {
+        for (const f of fields) {
+            if (f.type !== "group") continue;
+            const ref = f.collection_binding?.collection_provider_ref?.trim();
+            const definition = ref ? relationshipDefinitionForRef(ref) : undefined;
+            if (definition) {
+                const role = definition.operational_role_key;
+                const capacity = Math.max(1, f.repeat?.max ?? UNBOUNDED_DECLARED_COLLECTION_CAPACITY);
+                for (let ordinal = 1; ordinal <= capacity; ordinal += 1) {
+                    slots.push({ slot_id: `${role}#${ordinal}`, role, ordinal, field_ids: [] });
+                }
+                const min = f.repeat?.min ?? 0;
+                if (min > 0) minimums[role] = Math.max(minimums[role] ?? 0, min);
+            }
+            walk(f.fields);
+        }
+    };
+    walk(schema.fields as readonly FormField[]);
+    return { slots, minimums };
+}
+

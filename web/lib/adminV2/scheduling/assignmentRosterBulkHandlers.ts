@@ -30,8 +30,8 @@ import type {
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 
 /** Post one canonical action. Sequential by caller design — see `buildAssignmentRosterBulkHandlers`. */
-async function execute(actionKey: string, entityType: string, entityId: string, payload: unknown) {
-    await fetch("/api/admin/actions/execute", {
+async function execute(actionKey: string, entityType: string, entityId: string, payload: unknown): Promise<Response> {
+    return fetch("/api/admin/actions/execute", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -127,10 +127,18 @@ export function buildAssignmentRosterBulkHandlers(
             // No null guard here, unlike the handler above: these rows declare
             // `customerMemberId: string`, so a guard would be dead code implying a case the type
             // says cannot happen.
+            // Each answer is read: a refused row is reported, never silently dropped.
+            const refused: string[] = [];
             for (const row of rows) {
-                await execute("assignment.create", "child", row.customerMemberId, row.payload);
+                const res = await execute("assignment.create", "child", row.customerMemberId, row.payload);
+                if (!res.ok) {
+                    const body = (await res.json().catch(() => null)) as { error?: { message?: string } | string } | null;
+                    const message = typeof body?.error === "string" ? body.error : body?.error?.message;
+                    refused.push(`${row.subjectName}: ${message || `refused (${res.status})`}`);
+                }
             }
             onRefresh();
+            return refused;
         },
 
         assignmentTypes: input.assignmentTypes,

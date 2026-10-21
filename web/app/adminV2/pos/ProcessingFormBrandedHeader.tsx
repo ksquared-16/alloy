@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
-import { DEFAULT_FORM_ACCENT } from "@/lib/forms/processingFormBranding";
+import { DEFAULT_FORM_ACCENT, brandMonogram } from "@/lib/forms/processingFormBranding";
 
 export default function ProcessingFormBrandedHeader({
     title,
@@ -30,7 +30,7 @@ export default function ProcessingFormBrandedHeader({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={branding.logo_url} alt="" className="h-full w-full rounded-lg object-cover" />
                     ) : (
-                        brandLabel.slice(0, 2)
+                        brandMonogram(branding.brand_name)
                     )}
                 </div>
                 <div className="min-w-0 flex-1">

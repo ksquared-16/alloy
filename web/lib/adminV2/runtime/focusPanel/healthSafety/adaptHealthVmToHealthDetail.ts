@@ -21,10 +21,11 @@
  * EMERGENCY CONTACTS REMAIN RELATIONSHIP-OWNED. They are projected here because an operator caring
  * for a child needs them in one place, and they are never written from here.
  *
- * PHYSICIAN AND DENTIST ARE ABSENT. Their canonical relationship roles do not exist yet, and adding
- * flat fields for them would be inventing medical truth to make a card look complete.
+ * PHYSICIAN AND DENTIST ARE RELATIONSHIP ROLES. They are projected from the child's relationships,
+ * exactly like emergency contacts — never flat fields, never written from here.
  */
 
+import { formatPhoneDisplay } from "@/lib/phone/phonePresentation";
 import type {
     HealthSafetyCardVM,
     HealthSafetyDocument,
@@ -181,7 +182,7 @@ export function adaptHealthVmToHealthDetail(
         .map((c, i) => ({
             name: c.name ?? "Contact",
             relationship: c.relationship ?? "Relationship not recorded",
-            phone: c.phone ?? "No phone on file",
+            phone: c.phone ? formatPhoneDisplay(c.phone) : "No phone on file",
             order: i === 0 ? "First" : `#${i + 1}`,
         }));
 
@@ -206,6 +207,11 @@ export function adaptHealthVmToHealthDetail(
         documents,
         requirements,
         emergencyContacts,
+        careProviders: vm.careProviders.map((c) => ({
+            name: c.name ?? c.roleLabel,
+            role: c.roleLabel,
+            phone: c.phone ? formatPhoneDisplay(c.phone) : "No phone on file",
+        })),
         lastUpdated: shortDate(newestFact) ?? "Not recorded",
     };
 }

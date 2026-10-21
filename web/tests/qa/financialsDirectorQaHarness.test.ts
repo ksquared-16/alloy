@@ -270,7 +270,11 @@ describe("scenario readiness", () => {
          * that a held or Scheduled charge moves nothing); `adjustment_post` asked the Director to post
          * a credit by hand, and a credit now takes effect by itself (22 checks it). No capability lost.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(69);
+        /*
+         * 70 after W7-F047 (catalog 2026-10-20.5): ONE ADDED — `payment_method_acceptance`, because
+         * accepting a method became a setting with an enforced consequence. Nothing replaced.
+         */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(70);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

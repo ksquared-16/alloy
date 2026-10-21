@@ -396,9 +396,16 @@ function deriveScheduleState(p: SubjectProj | null): ScheduleState {
         case "proposed":
             // A child WITH a (planned) schedule reads distinctly from one that still
             // needs a room — blue "has a schedule" vs gold "needs a room".
-            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Proposed — active at enrollment" };
+        {
+            // The child's start is the PRIMARY's — a secondary's later change keeps its own date on its row.
+            const from = p.proposed?.assignments.find((a) => a.isPrimary)?.effectiveFrom || p.proposed?.effectiveFrom;
+            return { label: "Proposed", tone: "blue", sub: from ? `Starts ${formatDate(from)}` : "Proposed — active at enrollment" };
+        }
         case "upcoming-only":
-            return { label: "Future", tone: "blue", sub: p.current?.effectiveFrom ? `Starts ${formatDate(p.current.effectiveFrom)}` : null };
+        {
+            const from = p.current?.assignments.find((a) => a.isPrimary)?.effectiveFrom || p.current?.effectiveFrom;
+            return { label: "Future", tone: "blue", sub: from ? `Starts ${formatDate(from)}` : null };
+        }
         case "ended":
             return { label: "Ended", tone: "muted", sub: null };
         default:
@@ -1825,16 +1832,21 @@ function ScheduleEditor({
     // Operating days constrain which weekday pills can be selected (empty ⇒ all seven).
     const allowedDays = allowedPatternWeekdays(config.operatingDays);
 
-    // Edit model initialized SYNCHRONOUSLY from the prebuilt projection.
-    const [days, setDays] = useState<number[]>(mode === "edit" && ex?.weekdays.length ? [...ex.weekdays] : []);
+    // Edit model initialized SYNCHRONOUSLY from the prebuilt projection — for the primary (mode "edit")
+    // AND for an existing secondary, which is edited under mode "create" (its Save writes a successor).
+    // It used to hydrate only under "edit", so a secondary opened with no days and no start.
+    const editingRow = mode === "edit" || (createAsSecondary && ex != null);
+    const [days, setDays] = useState<number[]>(editingRow && ex?.weekdays.length ? [...ex.weekdays] : []);
     const [arrive, setArrive] = useState(ex?.arriveTime || "");
     const [depart, setDepart] = useState(ex?.departTime || "");
     const [perDayOpen, setPerDayOpen] = useState(false);
     const [perDay, setPerDay] = useState<Record<number, DailyHours>>({});
-    const [start, setStart] = useState(mode === "edit" ? existing?.effectiveFrom || "" : "");
+    const [start, setStart] = useState(editingRow ? existing?.effectiveFrom || "" : "");
     const [end, setEnd] = useState(existing?.effectiveTo || "");
     const [openEnded, setOpenEnded] = useState(existing ? existing.openEnded : true);
-    const [scheduleType, setScheduleType] = useState<string | null>(existing?.scheduleType || null);
+    // A secondary's schedule is its own pattern's, never the primary's schedule type.
+    const [scheduleType, setScheduleType] = useState<string | null>(createAsSecondary ? null : existing?.scheduleType || null);
+    const [chosenPatternId, setChosenPatternId] = useState<string | null>(editingRow ? ex?.patternId ?? null : null);
 
     const [roomId, setRoomId] = useState<string | null>(ex?.room.id ?? null);
     const [roomName, setRoomName] = useState<string | null>(ex?.room.name ?? null);
@@ -2046,10 +2058,11 @@ function ScheduleEditor({
      * What Save WRITES (and so what the draft tuition prices): the chosen schedule type, or the one
      * the selected days imply — never the site's first pattern. See resolveWrittenSchedulePattern.
      */
-    const written = resolveWrittenSchedulePattern({ patterns: patterns ?? [], chosenScheduleType: scheduleType, days });
+    const written = resolveWrittenSchedulePattern({ patterns: patterns ?? [], chosenScheduleType: scheduleType, days, chosenPatternId });
     const writtenScheduleType = written.scheduleType;
     useEffect(() => {
-        if (!opportunityId || child.kind !== "child") return;
+        // A secondary does not price the child's tuition, so it drafts none.
+        if (!opportunityId || child.kind !== "child" || createAsSecondary) return;
         let cancelled = false;
         const params = new URLSearchParams({ draft_customer_member_id: child.id });
         if (programCategoryId) params.set("draft_program_category_id", programCategoryId);
@@ -2076,7 +2089,7 @@ function ScheduleEditor({
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [opportunityId, child.id, child.kind, programCategoryId, draftDaysKey, writtenScheduleType, start, siteId]);
+    }, [opportunityId, child.id, child.kind, createAsSecondary, programCategoryId, draftDaysKey, writtenScheduleType, start, siteId]);
 
     const tuitionChoices = useMemo(
         () => tuitionChoicesFor(displayView, showAdditionalRates),
@@ -2252,6 +2265,7 @@ function ScheduleEditor({
             setDepart(p.defaultHours.depart);
         }
         setScheduleType(p.scheduleTypeKey);
+        setChosenPatternId(p.id);
         setPatternPicking(false);
     }
 
@@ -2304,9 +2318,10 @@ function ScheduleEditor({
         (!arrive || !depart || depart > arrive) &&
         (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
         (!roomRequired || Boolean(roomId)) &&
-        // Save also commits tuition: an override needs its reason, and a custom rate its amount.
-        (!isOverridingSelection || Boolean(overrideReason.trim())) &&
-        (!customRateOn || customRateCents != null);
+        // A primary Save also commits tuition: an override needs its reason, a custom rate its amount.
+        // A secondary commits none, so the child's tuition choices cannot hold its Save.
+        (createAsSecondary || !isOverridingSelection || Boolean(overrideReason.trim())) &&
+        (createAsSecondary || !customRateOn || customRateCents != null);
 
     /**
      * ── THE CANONICAL COMMERCIAL TERM ─────────────────────────────────────────────────────────
@@ -2567,11 +2582,21 @@ function ScheduleEditor({
      * still reported.
      */
     async function finishAfterWrite(): Promise<void> {
+        /*
+         * TUITION IS THE CHILD'S, AND ONLY THE PRIMARY SCHEDULE PRICES IT. A secondary (Before Care,
+         * Enrichment, a service) is an independent commitment: saving one used to re-run the child's
+         * quote snapshot and re-accept the child's tuition against the SECONDARY's days — refused as
+         * stale by the server, then re-accepted from the primary proposal, writing a superseding term
+         * on every secondary save. A secondary's own charge, when it has one, belongs to a commercial
+         * relationship of its own — not to this shared save.
+         */
         const [, , fresh] = await Promise.all([
-            persistAssignmentQuote().catch(() => {
-                /* schedule write succeeded — quote is opportunistic on opportunity */
-            }),
-            settleTuitionAfterSave(),
+            createAsSecondary
+                ? Promise.resolve()
+                : persistAssignmentQuote().catch(() => {
+                      /* schedule write succeeded — quote is opportunistic on opportunity */
+                  }),
+            createAsSecondary ? Promise.resolve() : settleTuitionAfterSave(),
             reloadSaved ? reloadSaved() : Promise.resolve(undefined),
         ]);
         await onSaved(reloadSaved ? { fresh: fresh ?? null } : undefined);
@@ -2583,8 +2608,14 @@ function ScheduleEditor({
         try {
             // The written pattern: chosen or implied by the days — never a default (patterns are warm;
             // the shared load is awaited only if the editor saved before it answered).
-            const pid = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days }).patternId;
+            const pid = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days, chosenPatternId }).patternId;
             if (createAsSecondary && onCreateSecondary) {
+                // An existing secondary saved unchanged is not a change: nothing is written (a successor
+                // must start after the row it replaces, and there is nothing to replace it with).
+                if (ex && pid === ex.patternId && start === (existing?.effectiveFrom ?? "") && (roomId || null) === (ex.room.id ?? null)) {
+                    await onSaved();
+                    return;
+                }
                 if (!pid) {
                     setError("Choose a schedule pattern before saving this assignment.");
                     setBusy(false);
@@ -2690,7 +2721,7 @@ function ScheduleEditor({
                 state={editState}
                 billing={billing}
                 tuitionSelect={
-                    opportunityId ? (
+                    opportunityId && !createAsSecondary ? (
                         <div style={{ display: "grid", gap: 4 }}>
                             <label
                                 htmlFor={`assignment-tuition-embed-${child.id}`}

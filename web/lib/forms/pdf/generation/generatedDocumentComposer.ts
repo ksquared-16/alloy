@@ -212,6 +212,8 @@ export async function composeGeneratedDocument(input: {
     provenance: GeneratedDocumentProvenance;
     /** Field id → the captured signature, when the participant has signed that block. */
     signatures?: Readonly<Record<string, ComposedSignatureMark>>;
+    /** Repeatable group id → its rows (emergency contacts, physicians…), as the payload holds them. */
+    groups?: Readonly<Record<string, ReadonlyArray<{ readonly values?: Readonly<Record<string, unknown>> }>>>;
 }): Promise<ComposedGeneratedDocument> {
     const pdf = await PDFDocument.create();
     const body = await pdf.embedFont(StandardFonts.Helvetica);
@@ -383,6 +385,77 @@ export async function composeGeneratedDocument(input: {
 
             /* A destination whose authored condition is false is not part of this family's record. */
             if (!applies(field.id)) continue;
+
+            /*
+             * A GROUP HAS NO VALUE OF ITS OWN — its lines do.
+             *
+             * The composer printed `values[group.id]`, which never exists, so every address printed
+             * as "—" on the completed Lil' Sunshine application while its street, city, state and
+             * ZIP sat in the record. A structured address prints as an address; a repeatable group
+             * prints one line per row; any other group prints its own lines.
+             */
+            if (field.type === "group") {
+                const lines = field.fields.filter((f) => f.type !== "group" && f.type !== "text_block" && f.type !== "signature" && f.type !== "file_ref");
+                const question = presentableQuestion(field.label);
+                if (field.repeat || field.collection_binding) {
+                    const rows = (input.groups?.[field.id] ?? []).filter((r) =>
+                        lines.some((l) => {
+                            const v = r.values?.[l.id];
+                            return v !== undefined && v !== null && v !== "";
+                        }),
+                    );
+                    reserve(9 * 1.38 + 11 * 1.38 + 8);
+                    draw(question, { font: body, size: 8.5, color: quiet, gap: 1 });
+                    if (rows.length === 0) {
+                        draw("None listed", { font: bold, size: 10.5, gap: 9 });
+                        continue;
+                    }
+                    answeredCount += 1;
+                    rows.forEach((r, i) => {
+                        const parts = lines
+                            .map((l) => {
+                                const v = r.values?.[l.id];
+                                return v === undefined || v === null || v === "" ? null : displayAnswer(l, v);
+                            })
+                            .filter((x): x is string => Boolean(x));
+                        draw(`${rows.length > 1 ? `${i + 1}. ` : ""}${parts.join(" · ")}`, { font: bold, size: 10.5, gap: i === rows.length - 1 ? 9 : 3 });
+                    });
+                    continue;
+                }
+                const answered = lines.filter((l) => {
+                    const v = input.values[l.id];
+                    return v !== undefined && v !== null && v !== "";
+                });
+                if (field.address_binding) {
+                    const v = (suffix: RegExp) => {
+                        const line = lines.find((l) => suffix.test(l.id) || suffix.test(l.field_source?.field_key ?? ""));
+                        const raw = line ? input.values[line.id] : undefined;
+                        return raw === undefined || raw === null ? "" : String(raw).trim();
+                    };
+                    const street = [v(/line1$|address_line1$/), v(/line2$|address_line2$/)].filter(Boolean).join(", ");
+                    const cityLine = [v(/city$/), [v(/state$/), v(/zip$|postal_code$|postal$/)].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+                    const address = [street, cityLine].filter(Boolean).join("\n");
+                    reserve(9 * 1.38 + 2 * 11 * 1.38 + 8);
+                    draw(question, { font: body, size: 8.5, color: quiet, gap: 1 });
+                    if (!address) {
+                        draw("—", { font: bold, size: 10.5, gap: 9 });
+                        continue;
+                    }
+                    answeredCount += 1;
+                    const parts = address.split("\n");
+                    parts.forEach((part, i) => draw(part, { font: bold, size: 10.5, gap: i === parts.length - 1 ? 9 : 1 }));
+                    continue;
+                }
+                if (answered.length === 0) continue;
+                draw(question, { font: bold, size: 9.5, gap: 4 });
+                for (const l of answered) {
+                    answeredCount += 1;
+                    reserve(9 * 1.38 + 11 * 1.38 + 8);
+                    draw(presentableQuestion(l.label), { font: body, size: 8.5, color: quiet, gap: 1 });
+                    draw(displayAnswer(l, input.values[l.id]), { font: bold, size: 10.5, gap: 9 });
+                }
+                continue;
+            }
 
             /*
              * A read-only destination with nothing in it has nothing to say.

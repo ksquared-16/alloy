@@ -264,6 +264,25 @@ export default function HealthDetailCard({
                                 </article>
                             ))}
 
+                            {/* ── G2 · Physician and dentist ──────────────────── */}
+                            {evidence.careProviders && evidence.careProviders.length > 0 ? (
+                                <>
+                                    <SectionHead>Physician and dentist</SectionHead>
+                                    {evidence.careProviders.map((c) => (
+                                        <div key={`${c.role}:${c.name}`} className="alloy-os-household__row alloy-os-cardlab__person" data-health-care-provider={c.role}>
+                                            <CardAvatar name={c.name} size={30} role="contact" />
+                                            <div className="alloy-os-household__row-main">
+                                                <span className="alloy-os-household__row-name">
+                                                    {c.name}
+                                                    <span className="alloy-os-card-pill alloy-os-card-pill--neutral">{c.role}</span>
+                                                </span>
+                                                <span className="alloy-os-household__row-detail">{c.phone}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            ) : null}
+
                             {/* ── H · Emergency contacts ─────────────────────── */}
                             <SectionHead>Emergency contacts</SectionHead>
                             {evidence.emergencyContacts.map((c) => (

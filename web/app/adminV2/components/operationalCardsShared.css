@@ -3995,3 +3995,41 @@
   align-items: flex-end;
   align-self: auto;
 }
+
+/*
+ * W7-F048 — the Payment command's two tabs are one card at one size. The tabbed band holds a floor
+ * height so Refunds never collapses to a sliver beside Payment, and a chosen payment on Refunds
+ * reads as a record (its facts stacked over its refund form) rather than a compressed list row.
+ */
+.alloy-os-financials__band[data-financials-payment-tab] {
+  min-height: 26rem;
+}
+.alloy-os-financials__band[data-financials-payment-tab="refunds"] .alloy-os-financials__payment {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* W7-F049 — the method on file is the control that manages payments: one quiet, clickable chip. */
+.alloy-os-fdetail__methoddoor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+}
+.alloy-os-fdetail__methoddoor:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, transparent);
+}
+.alloy-os-fdetail__methoddoor:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  outline-offset: 2px;
+}
