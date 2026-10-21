@@ -26,7 +26,7 @@ import type { ProcessProjectionDomain } from "@/lib/lifecycle/processModelV1";
 export type DomainProjectionSubjectType = DurableSubjectType;
 
 /** The authoritative domain fact behind a row. Identity only — never a record that opens. */
-export type DomainProjectionSourceKind = "schedule_assignment" | "charge" | "enrollment_agreement";
+export type DomainProjectionSourceKind = "schedule_assignment" | "charge" | "enrollment_agreement" | "collection_attempt";
 
 /** Source-backed facts a director acts on (BP V2 S3). Every field is read, never derived into storage. */
 export type DomainProjectionDetail = {

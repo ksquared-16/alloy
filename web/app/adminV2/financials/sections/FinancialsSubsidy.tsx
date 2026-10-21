@@ -34,15 +34,10 @@ import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountD
 import { moneyExact, signedMoney } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import type { FinancialPositionCohort, FinancialPositionRow } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { financialSubsidyReason } from "@/lib/financials/subsidy/subsidyReason";
 
-/** Why this charge is on the subsidy surface at all — stated per row, never inferred by the reader. */
-function subsidyReason(row: FinancialPositionRow): string | null {
-    const p = row.position;
-    if (p.unresolvedVarianceCents !== 0) return "variance";
-    if (p.submittedClaimSuppressionCents > 0) return "claimed";
-    if (p.expectedSubsidyCents > 0) return "expected";
-    return null;
-}
+/** Why this charge is on the subsidy surface at all — one rule, shared with the Billing Work View. */
+const subsidyReason = (row: FinancialPositionRow): string | null => financialSubsidyReason(row);
 
 const REASON_LABEL: Record<string, string> = {
     variance: "Agency paid something else",

@@ -20,6 +20,7 @@ import {
     SCHEDULE_GAPS_PROJECTION,
 } from "@/lib/businessProcesses/projections/assignmentsProjections";
 import { CHARGES_NEEDING_REVIEW_PROJECTION } from "@/lib/businessProcesses/projections/chargesNeedingReviewProjection";
+import { FUNDING_VARIANCES_PROJECTION, PAYMENT_EXCEPTIONS_PROJECTION } from "@/lib/businessProcesses/projections/billingProjections";
 import type {
     DomainProjectionCohort,
     DomainProjectionDefinition,
@@ -35,7 +36,7 @@ export const DOMAIN_PROJECTIONS: Readonly<Record<ProcessProjectionDomain, readon
         SCHEDULE_GAPS_PROJECTION,
         ASSIGNMENTS_PROPOSED_INCOMPLETE_PROJECTION,
     ],
-    billing: [CHARGES_NEEDING_REVIEW_PROJECTION],
+    billing: [CHARGES_NEEDING_REVIEW_PROJECTION, PAYMENT_EXCEPTIONS_PROJECTION, FUNDING_VARIANCES_PROJECTION],
 };
 
 export function resolveDomainProjection(

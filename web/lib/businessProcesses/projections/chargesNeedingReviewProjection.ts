@@ -80,6 +80,16 @@ export async function loadChargesNeedingReview(
             (x, y) => String(x.serviceDate ?? "").localeCompare(String(y.serviceDate ?? "")) || x.chargeId.localeCompare(y.chargeId),
         );
         const rep = ordered[0]!;
+        // BP V2 S5 — the reason names Financials' OWN distinction (`awaiting.key`): a failed post is not
+        // a review. Counts per key; no new state is invented, and the label for one charge is Financials'.
+        const failed = ordered.filter((r) => r.awaiting.key === "post_failed").length;
+        const other = ordered.length - failed;
+        const reason =
+            ordered.length === 1
+                ? rep.awaiting.label
+                : [failed ? `${failed} failed to post` : null, other ? `${other} need${other === 1 ? "s" : ""} review` : null]
+                      .filter(Boolean)
+                      .join(" · ");
         rows.push({
             subject: { type: "household", id: g.customerId },
             label: g.name?.trim() || "Household",
@@ -87,9 +97,11 @@ export async function loadChargesNeedingReview(
                 kind: "charge",
                 id: rep.chargeId,
                 count: ordered.length,
-                statusLabel: rep.awaiting.label,
+                statusLabel: reason,
             },
             siteLocationId: rep.siteLocationId,
+            sortKey: String(rep.serviceDate ?? ""),
+            detail: { reason, siteLocationId: rep.siteLocationId, startDate: rep.serviceDate ?? null },
         });
     }
     return { ok: true, rows, truncated: queue.readLimitReached === true };
