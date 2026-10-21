@@ -21,11 +21,15 @@ export type CollectionAwaitingMembers = {
 };
 
 function memberCount(control: CompiledArtifactControl): { complete: number; needed: number } | null {
-    const v = control.value as { complete?: unknown; needed?: unknown } | null;
+    const v = control.value as { complete?: unknown; needed?: unknown; started?: unknown } | null;
     if (!v || typeof v !== "object") return null;
     const complete = typeof v.complete === "number" ? v.complete : null;
     const needed = typeof v.needed === "number" ? v.needed : null;
-    return complete == null || needed == null ? null : { complete, needed };
+    const started = typeof v.started === "number" ? v.started : complete;
+    if (complete == null || needed == null) return null;
+    // A member someone started (a guardian with no relationship yet) must be finished: submit
+    // refuses it whether or not the group is required, so it is awaited like a missing one.
+    return { complete, needed: Math.max(needed, started ?? 0) };
 }
 
 /** Shown, required collections with fewer complete members than they need, in document order. */
@@ -35,7 +39,7 @@ export function collectionsAwaitingMembers(artifact: CompiledArtifact | null): C
     const seen = new Set<string>();
     for (const section of artifact.sections) {
         for (const control of section.controls) {
-            if (control.input_type !== "group" || !control.required || seen.has(control.field_id)) continue;
+            if (control.input_type !== "group" || seen.has(control.field_id)) continue;
             const count = memberCount(control);
             if (!count || count.complete >= count.needed) continue;
             seen.add(control.field_id);

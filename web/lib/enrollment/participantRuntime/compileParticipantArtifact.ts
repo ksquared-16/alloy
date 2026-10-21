@@ -44,7 +44,7 @@ import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/partic
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { fieldIdsControllingVisibility, fieldShownForAnswers } from "@/lib/forms/submissionSemantics";
-import { completeGroupMemberCount } from "@/lib/forms/groupMembers";
+import { completeGroupMemberCount, groupMemberState } from "@/lib/forms/groupMembers";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 
 export type CompiledControlKind =
@@ -259,7 +259,12 @@ export function compileParticipantArtifact(
                     const complete = groups
                         ? completeGroupMemberCount(field as FormField & { type: "group" }, groups[g.id], schema as FormSchemaV1, [values as Record<string, unknown>])
                         : null;
-                    if (complete != null && complete >= needed) groupSatisfied.add(g.id);
+                    // Members the family started but did not finish. Submit refuses them even in an
+                    // optional group, so the collections step must be able to show them.
+                    const started = groups
+                        ? (groups[g.id] ?? []).filter((r) => groupMemberState(field as FormField & { type: "group" }, r, schema as FormSchemaV1, [values as Record<string, unknown>]).state !== "blank").length
+                        : null;
+                    if (complete != null && complete >= needed && (started == null || started <= complete)) groupSatisfied.add(g.id);
                     controls.push({
                         field_id: g.id,
                         label: g.label ?? "",
@@ -270,7 +275,7 @@ export function compileParticipantArtifact(
                         required: needed > 0,
                         // How many COMPLETE members it has against how many it needs, so the minimum
                         // stays visible beside the group rather than appearing first as a refusal.
-                        value: complete == null ? null : { complete, needed },
+                        value: complete == null ? null : started != null && started > complete ? { complete, needed, started } : { complete, needed },
                         content: null,
                         shared_key: null,
                     });
