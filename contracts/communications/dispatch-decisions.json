@@ -49,7 +49,8 @@
     "IDENTITY_WRONG_ORG",
     "IDENTITY_CHANNEL_UNSUPPORTED",
     "STRUCTURAL_INVALID",
-    "INTERNAL_TO_PROVIDER"
+    "INTERNAL_TO_PROVIDER",
+    "QA_ORG_OUTBOUND_REFUSED"
   ],
   "defer_reasons": ["QUIET_HOURS"],
   "$preference_mapping_note": "Which stored preference governs a (category, channel) pair. Declared here rather than asserted by string-matching either implementation, because both build these keys programmatically. Each runtime has a parity test that drives its own mapping function through this table.",

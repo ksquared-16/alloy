@@ -1,0 +1,52 @@
+{
+  "schema": "alloy.shared_qa_activation_safety_handoff.v1",
+  "objective": "SHARED QA ACTIVATION SAFETY REPAIR",
+  "b2_contract_base": "28ad0a31f884",
+  "b2_handoff": "certification/qa-shared/b2-toolkit-reconciliation-handoff.json",
+  "handoff_sha256_note": "recompute after final commit; Vacilando pins content at merge sha",
+  "no_send_surfaces": [
+    "web/lib/communications/deliverQueuedEmailHtml.ts → refuseQaOrgOutbound before Resend",
+    "backend/app/services/dispatch_eligibility.py → QA_ORG_OUTBOUND_REFUSED for email/sms",
+    "web/app/api/admin/users/route.ts POST → refuse before inviteUserByEmail",
+    "web/app/api/admin/send-password-reset/route.ts → refuse before resetPasswordForEmail"
+  ],
+  "frozen_qa_org_ids": [
+    "4acc9386-c485-486f-aa1f-05d83499d142",
+    "ad53fee2-2570-460f-9300-f0e106c473b6"
+  ],
+  "censuses": {
+    "documents_zero_residue": {
+      "path": "certification/qa-shared/documents-zero-residue-census.sql",
+      "sha256": "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561",
+      "checks_added": ["doc_zr_pool_access", "doc_zr_zero_sent"]
+    },
+    "bp_quiesced_retained": {
+      "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
+      "sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
+      "bp_qr_pool_access": "excludes only qa-shared-actor@example.com (not every admin role)",
+      "checks_added": ["bp_qr_zero_sent"]
+    }
+  },
+  "ensure_shared_qa_tenant": {
+    "recover_admin": "existing org with zero members (or actor without admin) → createMembershipWithAccessProfile first-member path",
+    "refuse": "foreign_members when any member email is not the frozen actor"
+  },
+  "toolkit_re_pin": {
+    "qa_plan_registry_residue_census_hashes": {
+      "authz_q1": "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561",
+      "bp_v2": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef"
+    },
+    "residue_census_checks": {
+      "authz_q1": ["doc_zr_vendors", "doc_zr_qa_role_grants", "doc_zr_pool_access", "doc_zr_zero_sent"],
+      "bp_v2": ["bp_qr_pool_access", "bp_qr_zero_sent"]
+    },
+    "hosted_activation_evidence_key": "staging_email_fallback_cannot_send_from_qa_activity",
+    "evidence_statement_template": "Alloy PR #<n> @ <merge_sha>: refuseQaOrgOutbound at deliverQueuedEmailHtml, invite, password-reset; QA_ORG_OUTBOUND_REFUSED in dispatch_eligibility; census hashes above; ensureSharedQaTenant recover_admin / foreign_members."
+  },
+  "do_not": [
+    "create QA organizations during this repair",
+    "provision identities",
+    "send test messages",
+    "open hosted QA runs"
+  ]
+}

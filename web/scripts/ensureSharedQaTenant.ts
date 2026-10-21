@@ -1,22 +1,30 @@
 /**
- * B2 — ensure the frozen QA Shared and QA Secondary organizations (and structure).
+ * B2 + Activation Safety — ensure the frozen QA Shared and QA Secondary organizations
+ * (and structure).
  *
- * Uses createOrgAndAssignAdmin with frozen ids. Defaults to dry-run.
+ * Uses createOrgAndAssignAdmin with frozen ids for create. Defaults to dry-run.
  * Hosted apply requires CERT_QA_ENSURE_APPLY=1 and DRY_RUN=0.
  *
- * B2 must NOT execute the apply path against staging — org creation is a separately
- * approved one-time action.
+ * Activation Safety recovery:
+ *   - Existing org with ZERO members → assign the frozen actor via the audited
+ *     first-member path (create_membership_with_access_profile).
+ *   - Existing org with any member whose email is not the frozen actor → refuse.
+ *
+ * Do not execute the apply path against staging until the one-time org ensure is
+ * separately approved. This script never creates pool identities or opens QA runs.
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { createOrgAndAssignAdmin } from "@/lib/dev/createOrgAndAssignAdmin";
+import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 import {
   FORBIDDEN_QA_ORG_IDS,
   QA_HOSTED_PROJECT_REF,
   QA_ORGS,
   QA_PRODUCTION_PROJECT_REF,
   QA_STRUCTURE,
+  type QaOrgKey,
 } from "@/lib/qa/sharedQaRegistry";
 import { refuseProductionProject } from "@/lib/qa/sharedQaSafety";
 
@@ -38,13 +46,63 @@ const fail = (code: string, detail: string): never => {
   throw new Error("unreachable");
 };
 
+type PlanAction = "already_present" | "create" | "would_create" | "recover_admin" | "would_recover_admin";
+
 type PlanStep = {
   key: string;
-  action: "already_present" | "create" | "would_create";
+  action: PlanAction;
   org_id: string;
   name?: string;
   slug?: string;
 };
+
+function actorEnvKey(orgKey: QaOrgKey): string {
+  return orgKey === "qa_shared" ? "QA_SHARED_ACTOR_USER_ID" : "QA_SECONDARY_ACTOR_USER_ID";
+}
+
+function actorEmailFor(orgKey: QaOrgKey): string {
+  return QA_ORGS[orgKey].actor_email;
+}
+
+type ExistingOrgClass =
+  | { ok: true; action: "already_present" | "recover_admin" }
+  | { ok: false; code: string; detail: string };
+
+async function classifyExistingOrg(
+  supabase: SupabaseClient,
+  orgKey: QaOrgKey,
+  orgId: string,
+): Promise<ExistingOrgClass> {
+  const { data: roles, error } = await supabase
+    .from("user_roles")
+    .select("user_id, role")
+    .eq("org_id", orgId);
+  if (error) return { ok: false, code: "membership_probe_failed", detail: error.message };
+
+  const rows = (roles ?? []) as Array<{ user_id: string; role: string }>;
+  if (rows.length === 0) {
+    return { ok: true, action: "recover_admin" };
+  }
+
+  const expectedEmail = actorEmailFor(orgKey).toLowerCase();
+  const uniqueUserIds = [...new Set(rows.map((r) => r.user_id))];
+  for (const userId of uniqueUserIds) {
+    const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(userId);
+    if (authErr) return { ok: false, code: "membership_email_probe_failed", detail: authErr.message };
+    const email = String(authUser?.user?.email || "").trim().toLowerCase();
+    if (!email || email !== expectedEmail) {
+      return {
+        ok: false,
+        code: "foreign_members",
+        detail: `organization ${orgId} has a member that is not the frozen actor ${expectedEmail}`,
+      };
+    }
+  }
+
+  const actorHasAdmin = rows.some((r) => r.role === "admin");
+  if (!actorHasAdmin) return { ok: true, action: "recover_admin" };
+  return { ok: true, action: "already_present" };
+}
 
 function registryWouldCreatePlan(): PlanStep[] {
   return Object.entries(QA_ORGS).map(([key, org]) => ({
@@ -79,14 +137,23 @@ async function main() {
       }
       const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
       plan = [];
-      for (const [orgKey, org] of Object.entries(QA_ORGS)) {
+      for (const [orgKey, org] of Object.entries(QA_ORGS) as Array<[QaOrgKey, (typeof QA_ORGS)[QaOrgKey]]>) {
         const { data: existing, error } = await supabase.from("orgs").select("id,name,slug").eq("id", org.id).maybeSingle();
         if (error) fail("org_probe_failed", error.message);
         if (existing) {
           if ((existing as { name: string }).name !== org.name) {
             fail("org_identity_mismatch", `${org.id} is named ${JSON.stringify((existing as { name: string }).name)}`);
           }
-          plan.push({ key: orgKey, action: "already_present", org_id: org.id });
+          const classified = await classifyExistingOrg(supabase, orgKey, org.id);
+          if (!classified.ok) {
+            fail(classified.code, classified.detail);
+          } else {
+            plan.push({
+              key: orgKey,
+              action: classified.action === "recover_admin" ? "would_recover_admin" : "already_present",
+              org_id: org.id,
+            });
+          }
         } else {
           plan.push({
             key: orgKey,
@@ -111,7 +178,7 @@ async function main() {
           departments: Object.values(QA_STRUCTURE.departments).map((d) => ({ id: d.id, name: d.name })),
           sites: Object.values(QA_STRUCTURE.sites).map((s) => ({ id: s.id, name: s.name })),
         },
-        note: "B2 ships this runner; do not apply against staging until the one-time org ensure is separately approved.",
+        note: "Dry-run only; do not apply against staging until the one-time org ensure is separately approved.",
         started_at: started.toISOString(),
         finished_at: new Date().toISOString(),
       })}\n`,
@@ -130,14 +197,19 @@ async function main() {
   const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
   const plan: PlanStep[] = [];
-  for (const [orgKey, org] of Object.entries(QA_ORGS)) {
+  for (const [orgKey, org] of Object.entries(QA_ORGS) as Array<[QaOrgKey, (typeof QA_ORGS)[QaOrgKey]]>) {
     const { data: existing, error } = await supabase.from("orgs").select("id,name,slug").eq("id", org.id).maybeSingle();
     if (error) fail("org_probe_failed", error.message);
     if (existing) {
       if ((existing as { name: string }).name !== org.name) {
         fail("org_identity_mismatch", `${org.id} is named ${JSON.stringify((existing as { name: string }).name)}`);
       }
-      plan.push({ key: orgKey, action: "already_present", org_id: org.id });
+      const classified = await classifyExistingOrg(supabase, orgKey, org.id);
+      if (!classified.ok) {
+        fail(classified.code, classified.detail);
+      } else {
+        plan.push({ key: orgKey, action: classified.action, org_id: org.id });
+      }
     } else {
       plan.push({
         key: orgKey,
@@ -150,23 +222,40 @@ async function main() {
   }
 
   const created: string[] = [];
+  const recovered: string[] = [];
   for (const step of plan) {
-    if (step.action !== "create") continue;
-    const org = QA_ORGS[step.key as keyof typeof QA_ORGS];
-    const envKey = step.key === "qa_shared" ? "QA_SHARED_ACTOR_USER_ID" : "QA_SECONDARY_ACTOR_USER_ID";
+    const org = QA_ORGS[step.key as QaOrgKey];
+    const envKey = actorEnvKey(step.key as QaOrgKey);
     const adminUserId = String(process.env[envKey] || "").trim();
-    if (!adminUserId) fail("actor_user_missing", `${envKey} is required to assign the permanent admin`);
-    const result = await createOrgAndAssignAdmin(supabase, {
-      name: org.name,
-      slug: org.slug,
-      org_id: org.id,
-      industry_key: "childcare",
-      admin_user_id: adminUserId,
-    });
-    if (!result.ok) fail("org_create_failed", `${step.key}: ${result.error}`);
-    const createdOrgId = result.ok ? result.org_id : "";
-    if (createdOrgId !== org.id) fail("org_id_mismatch", `created ${createdOrgId}, expected ${org.id}`);
-    created.push(step.key);
+
+    if (step.action === "create") {
+      if (!adminUserId) fail("actor_user_missing", `${envKey} is required to assign the permanent admin`);
+      const result = await createOrgAndAssignAdmin(supabase, {
+        name: org.name,
+        slug: org.slug,
+        org_id: org.id,
+        industry_key: "childcare",
+        admin_user_id: adminUserId,
+      });
+      if (!result.ok) fail("org_create_failed", `${step.key}: ${result.error}`);
+      const createdOrgId = result.ok ? result.org_id : "";
+      if (createdOrgId !== org.id) fail("org_id_mismatch", `created ${createdOrgId}, expected ${org.id}`);
+      created.push(step.key);
+      continue;
+    }
+
+    if (step.action === "recover_admin") {
+      if (!adminUserId) fail("actor_user_missing", `${envKey} is required to recover the permanent admin`);
+      // First-member path: create_membership_with_access_profile with null actor when the org
+      // has no members; when the actor already exists without admin, the same audited RPC assigns it.
+      const membership = await createMembershipWithAccessProfile(supabase, {
+        userId: adminUserId,
+        orgId: org.id,
+        role: "admin",
+      });
+      if (!membership.ok) fail("admin_recover_failed", `${step.key}: ${membership.error}`);
+      recovered.push(step.key);
+    }
   }
 
   const sharedId = QA_ORGS.qa_shared.id;
@@ -211,6 +300,7 @@ async function main() {
       dry_run: false,
       reconciliation_key: "ensure_shared_qa_tenant",
       created,
+      recovered,
       plan,
       started_at: started.toISOString(),
       finished_at: new Date().toISOString(),

@@ -36,15 +36,17 @@
   "censuses": {
     "documents_zero_residue": {
       "path": "certification/qa-shared/documents-zero-residue-census.sql",
-      "sha256": "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f",
+      "sha256": "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561",
       "plan": "authz_q1",
-      "cleanup": "zero_residue"
+      "cleanup": "zero_residue",
+      "note": "Activation Safety: doc_zr_pool_access + doc_zr_zero_sent (see activation-safety-reconciliation-handoff.json)"
     },
     "bp_quiesced_retained": {
       "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
-      "sha256": "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083",
+      "sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
       "plan": "bp_v2",
-      "cleanup": "quiesced_retained"
+      "cleanup": "quiesced_retained",
+      "note": "Activation Safety: bp_qr_pool_access excludes actor email only; bp_qr_zero_sent added"
     },
     "phase_a_preflight": {
       "path": "certification/qa-shared/b2-phase-a-preflight-census.sql",
@@ -106,21 +108,21 @@
   "plan_residue_census_registration": {
     "authz_q1": {
       "residue_census": "certification/qa-shared/documents-zero-residue-census.sql",
-      "residue_census_sha256": "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f"
+      "residue_census_sha256": "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561"
     },
     "bp_v2": {
       "residue_census": "certification/qa-shared/bp-quiesced-retained-census.sql",
-      "residue_census_sha256": "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083"
+      "residue_census_sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef"
     }
   },
   "hosted_activation_gates_remaining": [
-    "b2_runners_and_censuses_merged",
     "documents_revised_plan_contract_approved",
     "staging_email_fallback_cannot_send_from_qa_activity",
     "bp_financial_quiescence_proven",
     "staging_project_identity_and_integration_defaults_verified",
     "one_time_org_ensure_separately_approved"
   ],
+  "activation_safety_handoff": "certification/qa-shared/activation-safety-reconciliation-handoff.json",
   "do_not": [
     "create QA organizations during B2",
     "open hosted QA runs",

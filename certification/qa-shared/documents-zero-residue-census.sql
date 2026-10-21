@@ -1,6 +1,7 @@
--- Documents authz_q1 — ZERO_RESIDUE census (B2, read-only).
+-- Documents authz_q1 — ZERO_RESIDUE census (B2 + Activation Safety, read-only).
 -- After qa_run_close + fixture reset:
---   ZERO: alloy_qa_fixture / aa000000- vendors in QA orgs; qa_* custom role grants.
+--   ZERO: alloy_qa_fixture / aa000000- vendors in QA orgs; qa_* custom role grants;
+--         non-actor memberships in either QA org; provider-sent communication_messages.
 --   RETAINED BY DESIGN: access audit history (mutation_events) — reported as data, never as residue.
 -- Persistent orgs/users/actors are retained.
 select question_id, kind, payload
@@ -43,6 +44,50 @@ from (
               ), 'true'),
            '02'
     union all
+    -- Pool-access equivalent: exclude only each org's frozen provisioning administrator.
+    select 'doc_zr_pool_access', 'check',
+           'user_roles ~ qa_orgs_non_actor ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.user_roles ur
+                where ur.org_id in (
+                        '4acc9386-c485-486f-aa1f-05d83499d142'::uuid,
+                        'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
+                      )
+                  and not (
+                    (
+                      ur.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                      and exists (
+                        select 1 from auth.users u
+                        where u.id = ur.user_id
+                          and lower(u.email) = lower('qa-shared-actor@example.com')
+                      )
+                    )
+                    or (
+                      ur.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
+                      and exists (
+                        select 1 from auth.users u
+                        where u.id = ur.user_id
+                          and lower(u.email) = lower('qa-secondary-admin@example.com')
+                      )
+                    )
+                  )
+              ), 'false'),
+           '03'
+    union all
+    select 'doc_zr_zero_sent', 'check',
+           'communication_messages ~ status_sent ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.communication_messages cm
+                where cm.org_id in (
+                        '4acc9386-c485-486f-aa1f-05d83499d142'::uuid,
+                        'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
+                      )
+                  and cm.status = 'sent'
+              ), 'false'),
+           '04'
+    union all
     select 'doc_zr_retained_audit', 'data',
            json_build_object(
                'artifact', 'access audit history (mutation_events)',
@@ -54,6 +99,6 @@ from (
                  where me.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
                ), 0)
            )::text,
-           '03'
+           '05'
 ) q
 order by sort_key;

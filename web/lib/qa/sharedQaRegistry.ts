@@ -121,8 +121,8 @@ export const QA_CENSUS_PATHS = Object.freeze({
 } as const);
 
 export const QA_CENSUS_SHA256 = Object.freeze({
-  documents_zero_residue: "7fb1daa82aa1fe49192ff16b8c22bb18cf05841d16a52119cd4f041102e4064f",
-  bp_quiesced_retained: "32a5e73b4469869ac45c2fcc36a1ea9071d695f3cc7d683e93ee8f856e375083",
+  documents_zero_residue: "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561",
+  bp_quiesced_retained: "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
   phase_a_preflight: "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
 } as const);
 
