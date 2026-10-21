@@ -10,17 +10,17 @@ migration certification), **DB-TEST** (live suite on the cert database), **UNIT*
 
 | ID | Item | Canonical owner | Status | Evidence |
 |---|---|---|---|---|
-| FI-01 | Medical data access security | Medical + Access (DB grants/RLS) | REPAIRED & DEPLOYED (person_health_facts) · DIRECTOR DECISION (E1–E5 wider exposure) | DEPLOYED + S9 + DB-TEST |
-| FI-02 | Drawn-signature signer identity | Forms (signature authority) | IMPLEMENTED IN BRANCH | DB-TEST (real drawn shape) + UNIT |
-| FI-03 | Consent withdrawal operator UI | Medical | IMPLEMENTED IN BRANCH | DB-TEST (service) + UNIT (control) |
-| FI-04 | Child-specific payment default | Enrollment participant runtime (Financials projection read-only) | IMPLEMENTED IN BRANCH | UNIT |
-| FI-05 | Charge child attribution | Financials | NO CONTRACT DEFECT · read-side gaps reported (Billing lane) | code census |
-| FI-06 | Guardian employment / work details | CRM person facts | IMPLEMENTED IN BRANCH · config pending | DB-TEST + UNIT |
-| FI-07 | Home / work / mobile phone semantics | CRM person / contact | IMPLEMENTED IN BRANCH · config pending | DB-TEST + UNIT |
-| FI-08 | Tdap immunization coverage | Medical (vaccine catalog) | IMPLEMENTED IN BRANCH (catalog) · config pending | UNIT |
-| FI-09 | Document-backed health requirements | Documents + Business Process | OPEN — DOCUMENTS DEPENDENCY | code census |
-| FI-10 | Immunization verification / exemptions | Medical + Documents (exemption deferred by Director) | OPEN — DEFERRED (exemption) + DOCUMENTS DEPENDENCY (verification) | code census |
-| FI-11 | Integrated certification | All | OPEN | — |
+| FI-01 | Medical data access security | Medical + Access | **DEPLOYED** (5a0046fc) · Documents app routes still need doc-type check (Documents-owned) | DEPLOYED + S9 + DB-TEST |
+| FI-02 | Drawn-signature signer identity | Forms | **DEPLOYED** (66d6ee27) · per-signer authority contract missing (refused, reported) | DEPLOYED + DB-TEST |
+| FI-03 | Consent withdrawal operator UI | Medical | **DEPLOYED** · unauthorized refusal DB-TEST only | DEPLOYED + DB-TEST |
+| FI-04 | Child-specific payment default | Enrollment runtime | **DEPLOYED** | DEPLOYED (UI + ledger census) + UNIT |
+| FI-05 | Charge child attribution | Financials | NO CONTRACT DEFECT · read-side gaps → Billing lane | code census |
+| FI-06 | Guardian employment / work details | CRM person facts | **DEPLOYED** (66d6ee27) | DEPLOYED + DB-TEST |
+| FI-07 | Home / work / mobile phone semantics | CRM person | **DEPLOYED** (66d6ee27) | DEPLOYED + DB-TEST |
+| FI-08 | Tdap immunization coverage | Medical | **DEPLOYED** | DEPLOYED + UNIT |
+| FI-09 | Document-backed health requirements | Documents + BP | **BLOCKED — Documents contract** | code census |
+| FI-10 | Immunization verification / exemptions | Medical + Documents | **DEFERRED** (exemption, Director) + **BLOCKED** (verification, Documents) | code census |
+| FI-11 | Integrated certification | All | PARTIAL — see final certification | — |
 
 ## Item detail
 
@@ -236,3 +236,63 @@ dependency · acceptance criteria · status · evidence. Filled as the milestone
 - Disposable family: FI-02 drawn signature with printed name → `metadata.signer`, consent granted
   by; FI-03 withdraw on the Medical card; FI-04 second child's session defaults to its own fee;
   FI-06/07 reviewed commit → Person facts → sibling prefill.
+
+## Final certification — continuation (2026-10-21)
+
+Deployed staging: **`5a0046fcdfc3`** (#1560), on top of `66d6ee27` (#1559) and `8f096171` (#1556).
+Migrations on the deployed ledger: `20261203090000`, `20261204090000`.
+
+### FI-06/07 — deployed (family ZZQAFI120104, build 66d6ee27)
+- Approved through the operator commit route (`person.contact_facts`); repeat → `alreadyDone`.
+- Census `fi06-deployed-parent-facts-census.sql`: 5 facts (home 5035550199, work 5035550101, work
+  hours, work address, employer) on person `4f913a59` = the link recipient, a `customer_persons`
+  member of the household; one parent person (no duplicate); `persons.phone` (mobile) unchanged and
+  distinct; case ledger `applied · 5 written` on that person.
+- Ben (sibling): guardian identity `confirm_known_value`; home/work phone, employer, work hours and
+  address not asked again; Ben's own allergies / immunizations asked fresh (no child Medical reuse);
+  paperwork submitted.
+
+### FI-02 — second signer (family ZZQASG142512, build 66d6ee27)
+- "Jordan ZZQASG142512" drew and printed his name on the Medical Records Release ("Authorization to
+  Disclose and Receive Medical Records"); signature row `b5ae5376`: drawn asset present,
+  `printed_name` Jordan, `printed_name_matches_recipient=false`, recipient `f158d762` (the parent).
+- Proposal shows "Signed by = Jordan …"; operator commit → **409 `signer_not_authorized`** (twice);
+  Medical card: no consent. No substitution of the recipient.
+- **Missing contract:** a per-signer authority for an adult other than the link recipient (their
+  own link, or verified identity + guardianship authority). Until it exists, such a signature is
+  evidence on the submission, never a consent.
+- All 10 ZZQAFI120104 drawn signatures: printed name, `matches_recipient=true`, recipient `4f913a59`.
+
+### FI-04 — deployed
+- Ben's page: lines list Ava's fee first; default = Ben's fee (API `defaultChargeId` and rendered
+  select); Ava's page defaults to Ava's; the other child's fee stays selectable; payer "Parent".
+- Stripe **test mode** (`pk_test_`) payment from Ben's page → "Payment received"; Ben Paid, $75 due
+  (Ava). Census `fi04-deployed-payment-census.sql`: 2 charges (subject Ava / Ben), 1 payment
+  `23fe1bcf` $75 inbound posted, payer person `4f913a59`, Stripe `pi_…`, 1 allocation → Ben's
+  charge. No duplicate charge, payment or application; ledger and UI agree.
+
+### FI-01 — Medical visibility (Director policy), #1560
+- Census of exposures and legitimate readers: see PR #1560. No care / classroom / attendance surface
+  receives medical data; no scoped care-access capability exists.
+- Repaired: child API (read `health.view`, write `health.manage`), shared profile loader (access
+  required), drawer / durable record, Processing case evidence and existing-child commit, Forms
+  submission list/detail, intake source, packet review rollup, p076; DB restrictive policies.
+- **S9 (cert):** before the migration an ops browser session read an immunization document, a
+  medical form submission and its signature; after → refused; `health.view` admin still reads;
+  ops non-medical access unchanged; no-role user reads nothing (25/25 incl. prior suites).
+- **Deployed:** census `fi01-deployed-medical-rls-census.sql` — 11 RESTRICTIVE policies, 4 security
+  definer functions, anon cannot execute. Authorized path on 5a0046fc (QA admin, health.view):
+  PostgREST reads 5 medical submissions and 3 immunization documents; child API returns medical
+  fields; case evidence carries health proposals. Unauthorized path deployed: **not exercised** — no
+  non-Medical QA identity exists on staging; evidence is S9 + identical deployed policies.
+- **Remaining confirmed exposure (Documents-owned):** `/api/admin/documents/**`, signed URLs,
+  `entity/documents/[id]`, `related/*` documents authorize on `documents.read` or role with no
+  health doc-type check (service role, so RLS does not apply). Needs a Documents-owned health
+  doc-type gate.
+
+### Validation
+- typecheck, typecheck:tests, prebuild, production build pass on each PR head.
+- #1559 covering suites 153/153; #1560 affected suites 752 pass, the 32 failures byte-identical by
+  name to the untouched base (none new).
+- Historical immutability: no form version edited (TA-806 v4 published beside v3); no signature,
+  consent or health fact backfilled or rewritten.
