@@ -50,7 +50,7 @@ describe("runRegisteredAction enforces the declared site authority before the ha
             ...getRegisteredAction("assignment.archive")!,
             validatePayload: (p: Record<string, unknown> | undefined) => ({ ok: true as const, value: p ?? {} }),
             resolveEligibility, buildPreview, execute, authorizeSites,
-        } as RegisteredAction;
+        } as unknown as RegisteredAction;
         return { action, execute, resolveEligibility, buildPreview, authorizeSites };
     };
 
