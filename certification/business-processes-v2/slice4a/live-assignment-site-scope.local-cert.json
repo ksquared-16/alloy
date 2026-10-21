@@ -1,0 +1,281 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-21T12:52:31.451Z",
+  "cases": [
+    {
+      "name": "archive · ALL · R row",
+      "actionKey": "assignment.archive",
+      "scope": "all",
+      "ok": true,
+      "refusal": null,
+      "changed": true,
+      "error": null
+    },
+    {
+      "name": "archive · R-actor · R row",
+      "actionKey": "assignment.archive",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": true,
+      "refusal": null,
+      "changed": true,
+      "error": null
+    },
+    {
+      "name": "archive · R-actor · L row",
+      "actionKey": "assignment.archive",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "archive · R-actor · L row named under an R child",
+      "actionKey": "assignment.archive",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "archive · L-actor · R row",
+      "actionKey": "assignment.archive",
+      "scope": [
+        "00000000-0000-4000-8000-000000000011"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "create · R-actor · L agreement with site=R supplied",
+      "actionKey": "assignment.create",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "create (proposed) · R-actor · R",
+      "actionKey": "assignment.create",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": true,
+      "refusal": null,
+      "changed": true,
+      "error": null
+    },
+    {
+      "name": "create (proposed) · R-actor · site L",
+      "actionKey": "assignment.create",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "change_room (staff) · R-actor · R→R",
+      "actionKey": "assignment.change_room",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": true,
+      "refusal": null,
+      "changed": true,
+      "error": null
+    },
+    {
+      "name": "change_room (staff) · R-actor · R→L destination",
+      "actionKey": "assignment.change_room",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "change_room (staff) · L-actor · R source→L",
+      "actionKey": "assignment.change_room",
+      "scope": [
+        "00000000-0000-4000-8000-000000000011"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "set_time · L-actor · R staff row",
+      "actionKey": "assignment.set_time",
+      "scope": [
+        "00000000-0000-4000-8000-000000000011"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "set_primary (child) · R-actor · L agreement",
+      "actionKey": "assignment.set_primary",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "set_primary (staff) · R-actor · target L",
+      "actionKey": "assignment.set_primary",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "set_primary (staff) · R-actor · promote R row",
+      "actionKey": "assignment.set_primary",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": true,
+      "refusal": null,
+      "changed": true,
+      "error": null
+    },
+    {
+      "name": "set_primary (staff) · L-actor · target L would close the R primary",
+      "actionKey": "assignment.set_primary",
+      "scope": [
+        "00000000-0000-4000-8000-000000000011"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "promote_proposed · R-actor · L row onto L agreement",
+      "actionKey": "assignment.promote_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "delete_proposed · R-actor · L row",
+      "actionKey": "assignment.delete_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_out_of_scope",
+      "unchanged": true
+    },
+    {
+      "name": "delete_proposed · R-actor · L child's participation draft",
+      "actionKey": "assignment.delete_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "ok": false,
+      "refusal": "site_unresolved",
+      "unchanged": true
+    },
+    {
+      "name": "delete_proposed · R-actor · R row (admission)",
+      "actionKey": "assignment.delete_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "promote_proposed · R-actor · R row onto R agreement (admission)",
+      "actionKey": "assignment.promote_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "set_primary (child) · R-actor · R agreement (admission)",
+      "actionKey": "assignment.set_primary",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "delete_proposed · R-actor · R child's draft (admission)",
+      "actionKey": "assignment.delete_proposed",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "set_time · R-actor · R staff row (admission)",
+      "actionKey": "assignment.set_time",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "schedule.create · R-actor · R agreement (admission)",
+      "actionKey": "schedule.create",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": true,
+      "refusal": null
+    },
+    {
+      "name": "schedule.create · R-actor · L agreement",
+      "actionKey": "schedule.create",
+      "scope": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "admitted": false,
+      "refusal": "site_out_of_scope"
+    },
+    {
+      "name": "schedule.create · ALL · L agreement (admission)",
+      "actionKey": "schedule.create",
+      "scope": "all",
+      "admitted": true,
+      "refusal": null
+    }
+  ],
+  "today": "2026-10-21",
+  "fixtures": {
+    "childR1": "21fed5a2-f954-434c-a0eb-17d496c9a685",
+    "childR2": "2e3cea0f-92ae-433f-87c0-bd1e3ed7b243",
+    "childL": "c9467790-9f23-4d54-997b-705fb34056b7",
+    "staffR1": "6c46a823-b7d2-433d-a836-bae79db53cdc",
+    "staffR2": "5b6916a8-3ce1-4e42-8f81-e37e7fc5094e",
+    "staffR3": "a0806876-32fc-40e9-b3e0-5f4fc8d43464",
+    "patternL": "66b3f6af-5244-4664-89cc-8c51c6474a6b"
+  },
+  "fixtures_remaining": 0,
+  "pattern_fixture_remaining": 0
+}
