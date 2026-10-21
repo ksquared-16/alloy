@@ -227,7 +227,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const composed = await composeDurableChildSubject(supabase, ctx.orgId, subjectId, dimensions);
+        const composed = await composeDurableChildSubject(supabase, ctx.orgId, subjectId, dimensions, { permissionKeys: ctx.permissionKeys });
         if (!composed.ok) {
             return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
         }

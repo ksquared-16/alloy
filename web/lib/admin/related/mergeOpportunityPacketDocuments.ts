@@ -1,4 +1,4 @@
-import { resolveHealthAccessForSignedInActor } from "@/lib/health/healthAccessForSignedInActor";
+import type { HealthAccessSubject } from "@/lib/health/healthAccess";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
@@ -144,12 +144,13 @@ export async function loadPacketSubmissionDocumentRowsForOpportunity(
 export async function loadPacketDocumentsIndexForOpportunity(
     supabase: SupabaseClient,
     orgId: string,
-    opportunityId: string
+    opportunityId: string,
+    health: HealthAccessSubject,
 ): Promise<PacketReviewDocumentIndexEntryV1[]> {
     const sessionIds = await listOpportunityPacketSessionIds(supabase, orgId, opportunityId);
     const entries: PacketReviewDocumentIndexEntryV1[] = [];
     for (const sessionId of sessionIds) {
-        const built = await buildPacketReviewRollupV1(supabase, orgId, sessionId, await resolveHealthAccessForSignedInActor(supabase, orgId));
+        const built = await buildPacketReviewRollupV1(supabase, orgId, sessionId, health);
         if (built.ok) entries.push(...built.rollup.documents_index);
     }
     return entries;
@@ -212,11 +213,13 @@ export async function mergeOpportunityPacketDocumentsForRelated(
     orgId: string,
     opportunityId: string,
     opportunityUploadRows: Record<string, unknown>[] | null | undefined,
-    limit: number
+    limit: number,
+    /** Whose view this is: a medical upload referenced only by a medical answer needs health.view. */
+    health: HealthAccessSubject,
 ): Promise<NormalizedDocumentRow[]> {
     const [packetPdfRows, indexEntries] = await Promise.all([
         loadPacketSubmissionDocumentRowsForOpportunity(supabase, orgId, opportunityId),
-        loadPacketDocumentsIndexForOpportunity(supabase, orgId, opportunityId),
+        loadPacketDocumentsIndexForOpportunity(supabase, orgId, opportunityId, health),
     ]);
     return mergeOpportunityPacketDocumentRows(opportunityUploadRows, packetPdfRows, indexEntries, limit);
 }
