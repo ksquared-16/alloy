@@ -45,8 +45,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const isNewChild = context.proposal.origin === "proposed_new_record" && context.proposal.collection_provider_ref === "children";
     const isRelationship = context.proposal.execution_kind === "configured_relationship";
     const isHealthFact = context.proposal.execution_kind === "health_fact" || context.proposal.execution_kind === "medical_consent";
-    if (!isNewChild && !isRelationship && !isHealthFact) {
-        return jsonError("Only a proposed new child, relationship or health fact can be rejected here", 403);
+    const isPersonFacts = context.proposal.execution_kind === "person_contact_facts";
+    if (!isNewChild && !isRelationship && !isHealthFact && !isPersonFacts) {
+        return jsonError("Only a proposed new child, relationship, health fact or parent details can be rejected here", 403);
     }
 
     const outcome = await rejectNewChildProposal(supabase, {
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         metadata: ((caseRow as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>,
         reason,
         request: context.participantChildRequest ?? null,
-        commitKind: isNewChild ? "new_child" : isHealthFact ? "health_fact" : "relationship",
+        commitKind: isNewChild ? "new_child" : isHealthFact ? "health_fact" : isPersonFacts ? "person_contact_facts" : "relationship",
     });
     if (!outcome.ok) return jsonError(outcome.error, outcome.status);
     return jsonData({ caseId, proposalId, rejected: true, alreadyDone: outcome.alreadyDone });

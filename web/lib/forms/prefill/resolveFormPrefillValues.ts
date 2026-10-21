@@ -1,3 +1,4 @@
+import { isPersonContactFactKey, readPersonContactFacts } from "@/lib/fields/personContactFacts/personContactFacts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import {
@@ -166,6 +167,15 @@ export async function resolveFormPrefillValues(
                 .maybeSingle();
             if (error) throw new Error(error.message);
             personRow = (data as Record<string, unknown>) ?? null;
+            // The adult's work and contact facts live as person field values, not columns. Read only
+            // when the form asks for one, and only for the adult already resolved above.
+            const wantsFacts = Object.values(map).some((path) => {
+                const col = path.match(PREFILL_SOURCE_PATH_RE)?.[2];
+                return path.startsWith("person.") && col !== undefined && isPersonContactFactKey(col);
+            });
+            if (personRow && wantsFacts) {
+                personRow = { ...(await readPersonContactFacts(supabase, { orgId, personId })), ...personRow };
+            }
         }
     }
 

@@ -195,15 +195,15 @@ describe("a held concept whose source already asks the question", () => {
     });
 
     it("never lets a guardian fact become a child field", () => {
-        // Once held; now settled as process-scoped. The invariant that survives both is that party
-        // grain is never flattened onto the child.
+        // Once held, then process-scoped, now the responding parent's own Person fact (FI-06). The
+        // invariant that survives all three: party grain is never flattened onto the child.
         const p = projectParticipantRole({
             concept: concept("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"),
             proposal: proposal("held_unknown_owner"),
         });
-        expect(p.role).toBe("process_scoped");
-        expect(p.role).not.toBe("prefill_confirm");
-        expect(p.sharedValueKey).toBeUndefined();
+        expect(p.role).toBe("prefill_confirm");
+        expect(p.canonicalBinding).toEqual({ entity_type: "guardian", field_key: "employer" });
+        expect(p.sharedValueKey).toBe("guardian_employer");
     });
 });
 
@@ -235,17 +235,24 @@ describe("the four settled decisions", () => {
         // "Parent/Guardian #1 Employer Address:" arrived under the key `guardian.address`. Keyed only
         // on the concept, the employer's address was filed as a guardian fact and hidden — while its
         // own sibling, "Parent/Guardian #1 Employer:", was asked.
+        // It is the parent's WORK address — never their home address.
         const p = projectParticipantRole({ ...held("Mailing Address or Secondary Parent Address", "guardian.address"), facetLabel: "Parent/Guardian #1 Employer Address:" });
-        expect(p.role).toBe("process_scoped");
+        expect(p.role).toBe("prefill_confirm");
+        expect(p.canonicalBinding).toEqual({ entity_type: "guardian", field_key: "work_address" });
         expect(p.label).toBe("Parent/Guardian #1 Employer Address");
     });
 
-    it("keeps guardian employment askable but never durable", () => {
-        // No canonical external-person employment owner exists, and this slice does not invent one.
-        const p = projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"));
-        expect(p.role).toBe("process_scoped");
-        expect(p.label).toBe("Parent/Guardian #1 Employer");
-        expect(p.basis).toMatch(/never stored durably/);
+    it("the responding parent's employer has a home on Person; a SECOND guardian's stays asked and unstored", () => {
+        // FI-06: employer is a Person fact (`personContactFacts`). A second guardian's is not folded
+        // into it — the household-scoped need would make it the first guardian's, the wrong person.
+        const first = projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"));
+        expect(first.role).toBe("prefill_confirm");
+        expect(first.label).toBe("Parent/Guardian #1 Employer");
+        expect(first.basis).toMatch(/person\.employer/);
+        const second = projectParticipantRole(held("Parent/Guardian #2 Employer:", "guardian.parent_guardian_2_employer"));
+        expect(second.role).toBe("process_scoped");
+        expect(second.sharedValueKey).toBeUndefined();
+        expect(second.basis).toMatch(/never stored durably/);
     });
 
     it("checks grain BEFORE label shape", () => {
@@ -255,7 +262,7 @@ describe("the four settled decisions", () => {
          * school asks. Grain is a semantic fact; punctuation is typography.
          */
         expect(looksLikeHeading("Parent/Guardian #1 Employer:")).toBe(true);
-        expect(projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer")).role).toBe("process_scoped");
+        expect(projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer")).role).toBe("prefill_confirm");
     });
 
     it("keeps the exemption controls with the artifact that owns them", () => {

@@ -406,11 +406,30 @@ function applyDirectorDecisions(input: {
          * inconsistency.
          */
         if (/employer/i.test(key) || /\bemployer\b/i.test(label)) {
+            /*
+             * The RESPONDING parent's employer and employer address now have a canonical home on
+             * their Person (`personContactFacts`, FI-06): asked when unknown, prefilled when known,
+             * written only on an operator's approval. A SECOND guardian's employer does not: the
+             * household-scoped need would fold it into the first guardian's answer, which is the
+             * wrong person's fact — so it stays asked and unstored.
+             */
+            const secondGuardian = /#\s*2|\bsecond\b|\bother\b|\bco-?parent\b/i.test(label);
+            if (!secondGuardian) {
+                const leaf = /\baddress\b/i.test(label) || /address/i.test(key) ? "work_address" : "employer";
+                return {
+                    role: "prefill_confirm",
+                    label: label.replace(/:$/, "").trim(),
+                    semanticType: semanticTypeFor(leaf, input.readerType),
+                    sharedValueKey: `guardian_${leaf}`,
+                    canonicalBinding: { entity_type: "guardian", field_key: leaf },
+                    basis: `the responding parent's ${leaf === "employer" ? "employer" : "work address"}, read from Person via ${canonicalPrefillPathForBinding("guardian", leaf, { aliasOnly: true })}; asked only when unknown`,
+                };
+            }
             return {
                 role: "process_scoped",
                 label: label.replace(/:$/, "").trim(),
                 semanticType: semanticTypeFor(key, input.readerType),
-                basis: "no canonical external-person employment owner exists; asked, never stored durably",
+                basis: "a second guardian's employment — no per-guardian identity in the household-scoped need; asked, never stored durably",
             };
         }
 
