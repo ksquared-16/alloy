@@ -117,7 +117,19 @@ export function isCollectibleOffsetRow(row: Pick<FinancialsLedgerRow, "categoryK
 }
 
 /** Statuses that count toward what is owed. `draft` is not yet owed; `void` never was. */
-const OWED_STATUSES = new Set(["posted", "partially_paid", "paid"]);
+/*
+ * BP V2 S6A — Past due / Not yet due and the owed-status set live in the Financials account domain
+ * (`lib/financials/account/accountDueClassification`), moved there UNCHANGED so the card and every
+ * cross-household reader classify one way. Re-exported here for existing importers.
+ */
+import {
+    OWED_STATUSES,
+    notYetDueFor,
+    pastDueFor,
+    type FinancialsNotYetDue,
+    type FinancialsPastDue,
+} from "@/lib/financials/account/accountDueClassification";
+export { notYetDueFor, pastDueFor, type FinancialsNotYetDue, type FinancialsPastDue };
 
 /** One payment on the account, as the card reads it. */
 export type FinancialsPaymentRow = {
@@ -351,11 +363,6 @@ export type FinancialsReconciliation = {
     draftCents: number;
 };
 
-export type FinancialsPastDue = {
-    amountCents: number;
-    oldestDueDate: string;
-    agingDays: number;
-};
 
 /**
  * W7-F018: drafts on the account — visible, not posted, and so not balance, Due, Past due or
@@ -376,14 +383,6 @@ export function upcomingFor(rows: readonly AccountChargeLedgerRow[]): Financials
     return { amountCents: drafts.reduce((sum, r) => sum + r.amountCents, 0), count: drafts.length };
 }
 
-/**
- * W7-F013: posted money whose due date is still ahead — collectible (it may be paid early), not due.
- * The mirror of past due: same rows, same residual, the other side of today.
- */
-export type FinancialsNotYetDue = {
-    amountCents: number;
-    nextDueDate: string;
-};
 
 export type FinancialsPeriodGroup = {
     period: BillingPeriod;
@@ -2512,87 +2511,3 @@ export function reconcileRows(
     return out;
 }
 
-/**
- * Past due over owed rows whose due date has passed and which are STILL OWED.
- *
- * A REVERSED CHARGE IS NOT PAST DUE, and neither is the reversal that undid it. A correction copies
- * the source's `due_date`, so the pair would otherwise both qualify and report an overdue balance of
- * zero — announcing a collections problem for money nobody owes. Credits and replacements are kept:
- * they are partial and legitimately reduce what is still overdue.
- *
- * ── PAST DUE IS THE RESIDUAL, NOT THE FACE AMOUNT ──
- *
- * A charge that has been paid is not overdue, and one that has been HALF paid is overdue for the
- * half. Subtracting what was applied is why `charges.status` is never advanced to `partially_paid` /
- * `paid` when money is applied: a stored status would be a second answer to "how much is left", and
- * the first time an application was reversed the two would disagree. The applications are the
- * record; how much is outstanding is read from them.
- */
-/**
- * W7-F013 — WHAT IS OWED BUT NOT YET DUE.
- *
- * A charge added after its period's payment date is due at the NEXT payment event; until then it
- * is collectible and may be paid early, but it is not due and must not be presented as due. Same
- * owed rows and the same residual as `pastDueFor`, on the other side of today.
- */
-export function notYetDueFor(
-    rows: readonly AccountChargeLedgerRow[],
-    today: string,
-    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
-): FinancialsNotYetDue | null {
-    const outstanding = (r: AccountChargeLedgerRow): number =>
-        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
-    const ahead = rows.filter(
-        (r) =>
-            OWED_STATUSES.has(r.status)
-            && r.status !== "paid"
-            && r.lifecycleStatus !== "reversed"
-            && r.correctionKind !== "reversal"
-            && r.dueDate != null
-            && r.dueDate > today
-            && r.amountCents > 0
-            && outstanding(r) > 0,
-    );
-    if (ahead.length === 0) return null;
-    const next = ahead.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
-    return {
-        amountCents: ahead.reduce((sum, r) => sum + outstanding(r), 0),
-        nextDueDate: next.dueDate as string,
-    };
-}
-
-export function pastDueFor(
-    rows: readonly AccountChargeLedgerRow[],
-    today: string,
-    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
-): FinancialsPastDue | null {
-    const outstanding = (r: AccountChargeLedgerRow): number =>
-        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
-    const overdue = rows.filter(
-        (r) =>
-            OWED_STATUSES.has(r.status)
-            && r.status !== "paid"
-            && r.lifecycleStatus !== "reversed"
-            && r.correctionKind !== "reversal"
-            && r.dueDate != null
-            && r.dueDate < today
-            /*
-             * A POSITIVE obligation that has been paid in full is no longer overdue. A NEGATIVE row
-             * — a credit — is kept whatever its outstanding reads, because it is what reduces the
-             * overdue total rather than something that can itself be settled. Dropping it would put
-             * the credit's own amount back onto what the family owes.
-             */
-            && !(r.amountCents > 0 && outstanding(r) <= 0),
-    );
-    if (overdue.length === 0) return null;
-    const oldest = overdue.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
-    const oldestDueDate = oldest.dueDate as string;
-    return {
-        amountCents: overdue.reduce((sum, r) => sum + outstanding(r), 0),
-        oldestDueDate,
-        agingDays: Math.max(
-            0,
-            Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${oldestDueDate}T00:00:00Z`)) / 86_400_000),
-        ),
-    };
-}

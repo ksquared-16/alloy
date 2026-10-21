@@ -23,6 +23,8 @@ import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissi
 import { readUnrecognizedCollections, type UnrecognizedCollection } from "@/lib/financials/payments/collectionRecognition";
 import { resolveCollectiblePositionsForCharges } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { readAccountDuePositions } from "@/lib/financials/account/accountDuePositions";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 import { financialSubsidyReason } from "@/lib/financials/subsidy/subsidyReason";
 import { isFinancialWorkVisible, resolveFinancialWorkLocation } from "@/lib/financials/workspace/financialWorkLocation";
 import {
@@ -272,6 +274,101 @@ export async function loadFundingVariances(supabase: SupabaseClient, ctx: Domain
         return { ok: false, code: "projection_unavailable", message: e instanceof Error ? e.message : String(e) };
     }
 }
+
+/** BP V2 S6A — the Payments due window: today and the next six calendar days. */
+export const PAYMENTS_DUE_WINDOW_DAYS = 7;
+
+const shortDate = (ymd: string) => {
+    const d = new Date(`${ymd}T00:00:00Z`);
+    return Number.isNaN(d.getTime()) ? ymd : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+};
+const addDaysYmd = (ymd: string, n: number) => {
+    const d = new Date(`${ymd}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Payments due and Overdue payments — the Financials card's own Due / Past due classification across
+ * households (`readAccountDuePositions`: the card's ledger, applied-money rule, `pastDueFor` /
+ * `dueWithinFor`). Amounts are Financials'; this only formats them. One read serves both views.
+ */
+async function loadDueCohort(
+    supabase: SupabaseClient,
+    ctx: DomainProjectionContext,
+    kind: "due" | "overdue",
+    deps: Deps & { readDue?: typeof readAccountDuePositions; businessDate?: typeof fetchOrgBusinessDate },
+): Promise<Loaded> {
+    const gate = await financialScope(supabase, ctx, deps);
+    if (!gate.ok) return { ok: false, code: "projection_forbidden", message: gate.message };
+    if (!gate.scope) return { ok: true, rows: [], truncated: false };
+    let today: string;
+    try {
+        // The card's business date. A failed read is unavailable here — a guessed date would move charges between Due and Past due.
+        today = await (deps.businessDate ?? fetchOrgBusinessDate)(supabase, ctx.orgId);
+    } catch (e) {
+        return { ok: false, code: "projection_unavailable", message: e instanceof Error ? e.message : String(e) };
+    }
+    const windowEnd = addDaysYmd(today, PAYMENTS_DUE_WINDOW_DAYS - 1);
+    const read = await (deps.readDue ?? readAccountDuePositions)(supabase, { orgId: ctx.orgId, today, windowEnd, ...gate.scope });
+    if (read.state !== "ok") return { ok: false, code: "projection_unavailable", message: read.reason };
+    const rows: DomainProjectionRow[] = [];
+    for (const a of read.accounts) {
+        if (kind === "overdue") {
+            // The card shows Past due only when it is positive; so does this view.
+            if (!a.pastDue || a.pastDue.amountCents <= 0 || a.pastDueChargeIds.length === 0) continue;
+            const reason = `${money(a.pastDue.amountCents)} past due · since ${shortDate(a.pastDue.oldestDueDate)} · ${plural(a.pastDue.agingDays, "day")}`;
+            rows.push({
+                subject: { type: "household", id: a.customerId },
+                label: a.householdName ?? "Household",
+                source: { kind: "charge", id: a.pastDueChargeIds[0]!, count: a.pastDueChargeIds.length, statusLabel: reason },
+                siteLocationId: a.siteLocationId,
+                sortKey: a.pastDue.oldestDueDate,
+                detail: { reason, siteLocationId: a.siteLocationId, endDate: a.pastDue.oldestDueDate, daysUntil: -a.pastDue.agingDays },
+            });
+        } else {
+            if (!a.dueWithin || a.dueWithin.amountCents <= 0) continue;
+            const span = a.dueWithin.nextDueDate === a.dueWithin.lastDueDate ? "" : ` · through ${shortDate(a.dueWithin.lastDueDate)}`;
+            const when = a.dueWithin.nextDueDate === today ? "today" : shortDate(a.dueWithin.nextDueDate);
+            const reason = `${money(a.dueWithin.amountCents)} due ${when}${span}`;
+            rows.push({
+                subject: { type: "household", id: a.customerId },
+                label: a.householdName ?? "Household",
+                source: { kind: "charge", id: a.dueWithin.chargeIds[0]!, count: a.dueWithin.chargeIds.length, statusLabel: reason },
+                siteLocationId: a.siteLocationId,
+                sortKey: a.dueWithin.nextDueDate,
+                detail: { reason, siteLocationId: a.siteLocationId, startDate: a.dueWithin.nextDueDate, endDate: a.dueWithin.lastDueDate },
+            });
+        }
+    }
+    return { ok: true, rows, truncated: read.truncated };
+}
+
+/** Presentation of a Financials-decided amount (cents → "$12.50"); no arithmetic beyond the unit. */
+function money(cents: number): string {
+    return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+export const loadPaymentsDue = (supabase: SupabaseClient, ctx: DomainProjectionContext, deps: Parameters<typeof loadDueCohort>[3] = {}) =>
+    loadDueCohort(supabase, ctx, "due", deps);
+export const loadOverduePayments = (supabase: SupabaseClient, ctx: DomainProjectionContext, deps: Parameters<typeof loadDueCohort>[3] = {}) =>
+    loadDueCohort(supabase, ctx, "overdue", deps);
+
+export const PAYMENTS_DUE_PROJECTION: DomainProjectionDefinition = {
+    key: "payments_due",
+    domain: "billing",
+    label: "Payments due",
+    subjectTypes: ["household"],
+    load: (supabase, ctx) => loadPaymentsDue(supabase, ctx),
+};
+
+export const OVERDUE_PAYMENTS_PROJECTION: DomainProjectionDefinition = {
+    key: "overdue_payments",
+    domain: "billing",
+    label: "Overdue payments",
+    subjectTypes: ["household"],
+    load: (supabase, ctx) => loadOverduePayments(supabase, ctx),
+};
 
 export const PAYMENT_EXCEPTIONS_PROJECTION: DomainProjectionDefinition = {
     key: "payment_exceptions",
