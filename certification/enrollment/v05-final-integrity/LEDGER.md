@@ -198,6 +198,37 @@ dependency · acceptance criteria · status · evidence. Filled as the milestone
   `POST /api/admin/field-definitions` — `home_phone` (phone), `work_phone` (phone), `work_hours`,
   `work_address` (text), section `contact`. 201 each.
 
+### Post-deploy configuration (Lil' Sunshine, authoring APIs only)
+
+- Person field definitions `home_phone`, `work_phone`, `work_hours`, `work_address` (above).
+- **TA-806 v4** published (draft → publish; v3 untouched, snapshot kept): `occ_guardian_home_phone`
+  / `_work_phone` / `_work_hours` / `_work_address` bound to `person.*`. Same 95 fields.
+- **Oregon CIS**: `health_capture.immunization_grid` gains `tdap` (`imm_tdap_dose_1..5`) — the form
+  already had Tdap rows that were silently dropped. Every other metadata key preserved.
+- **FI-02 config**: every consent signature already had `require_typed_name: true` — no change.
+
+### Deployed acceptance — disposable family ZZQAFI120104 (Ava, Ben), build 8f096171
+
+- **FI-02 DEPLOYED** — Ava's Enrollment Application, drawn signature: row `typed_full_name` empty,
+  drawn asset present, `metadata.signer` = drawn · printed_name "Parent ZZQAFI120104" ·
+  `printed_name_with_drawn_mark` · public link · ack time (census `gar_0b519812602e29`). Her
+  medical records release (drawn) proposed **"Signed by = Parent ZZQAFI120104"** (ZZQAV5082106
+  showed "the family"); committed → consent `cfcc7453` `grantedByName` "Parent ZZQAFI120104".
+- **FI-08 DEPLOYED** — CIS Tdap dose 1 → its own `health.immunizations:tdap` proposal (DTaP
+  separate) → committed 200; retry `alreadyDone: true`.
+- **FI-03 DEPLOYED** — Medical card (Registration view → Ava → View health details): "Record
+  withdrawal…" on the active consent; confirm disabled until a reason; confirm →
+  `medical_consent.withdraw` 200 `withdrawn` (19:28:37Z); control gone after refresh; card shows
+  status withdrawn, reason, withdrawn-at, granted-by and evidence document retained. Repeat →
+  409 "Only an active authorization can be withdrawn." Unauthorized refusal: DB-TEST only (the
+  deployed QA identity is an admin).
+- **FI-06/07 DEPLOYED — DEFECT FOUND**: the operator case carried the `person.contact_facts`
+  proposal (home 5035550199 and work 5035550101 distinct; cell not included), but commit refused
+  `missing_person_anchor`: **packet submissions carry no `form_submissions.person_id`**. Also the
+  household check did not consult `customer_persons`, the canonical household membership. Fixed
+  in a follow-up (anchor = `person_id` else the link's `recipient_person_id`; membership via
+  `customer_persons` first); DB-TEST reproduces the deployed shape.
+
 ### Remaining deployed acceptance
 
 - TA-806 new version binding `occ_guardian_home_phone` / `_work_phone` / `_work_hours` /
