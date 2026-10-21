@@ -10,7 +10,7 @@ migration certification), **DB-TEST** (live suite on the cert database), **UNIT*
 
 | ID | Item | Canonical owner | Status | Evidence |
 |---|---|---|---|---|
-| FI-01 | Medical data access security | Medical + Access (DB grants/RLS) | REPAIRED IN BRANCH (person_health_facts) · DIRECTOR DECISION (E1–E5 wider exposure) | DB-TEST red→ pending S9 |
+| FI-01 | Medical data access security | Medical + Access (DB grants/RLS) | REPAIRED & DEPLOYED (person_health_facts) · DIRECTOR DECISION (E1–E5 wider exposure) | DEPLOYED + S9 + DB-TEST |
 | FI-02 | Drawn-signature signer identity | Forms (signature authority) | IMPLEMENTED IN BRANCH | DB-TEST (real drawn shape) + UNIT |
 | FI-03 | Consent withdrawal operator UI | Medical | IMPLEMENTED IN BRANCH | DB-TEST (service) + UNIT (control) |
 | FI-04 | Child-specific payment default | Enrollment participant runtime (Financials projection read-only) | IMPLEMENTED IN BRANCH | UNIT |
@@ -175,3 +175,33 @@ dependency · acceptance criteria · status · evidence. Filled as the milestone
   engine in Medical would duplicate Documents — not built. Reported to the Documents lane.
 - Exemption lifecycle: deferred by the Director. Immunizations stay "reported", never
   auto-verified; the BP "requirement does not apply" exception is not used for exemptions.
+
+## Promotion and deployed evidence (2026-10-21)
+
+- **PR #1556** merged → staging `8f0961717b2b` (first approved merge `gar_69febebce79cdc` failed
+  `base_integration_in_progress` while #1557 merged; refiled `gar_7d55d6dbaec5d6`, merged clean).
+- **Migration 20261203090000:** certification `gar_8e0fdf14fd8caf` complete; staging applied by the
+  Supabase integration on merge (direct apply `gar_a41a01387908e5` correctly refused
+  `migration_owned_by_pending_merge`); on the deployed ledger (identity census `gar_de5d2cc7c8c674`).
+- **S9 (cert DB, migrated):** `healthRecordsBrowserAccess.live` 5/5 (red before the migration),
+  `medicalCompleteness.live` 7/7 incl. FI-02 real drawn shape.
+- **FI-01 DEPLOYED:**
+  - catalog census `gar_640372d1c5e32c` on `alloy_deployed_primary`: `authenticated` and `anon`
+    hold no SELECT/INSERT/UPDATE/DELETE on `person_health_facts`; `service_role` holds all; one
+    policy (`person_health_facts_service_role_all`, service_role); RLS enabled + forced.
+  - live: the deployed QA operator's own signed-in Supabase browser token (role `authenticated`),
+    sent straight to staging PostgREST → `person_health_facts` **403 42501 permission denied**;
+    `person_medical_consents` **403 42501**. (Session restored `gar_122d1fb0ce98aa`, state mtime
+    18:55Z.)
+- **Deployed SHA:** `/api/build-info` = `8f0961717b2b` at 18:57Z.
+- **Post-deploy config (authoring API, Lil' Sunshine):** person field definitions created via
+  `POST /api/admin/field-definitions` — `home_phone` (phone), `work_phone` (phone), `work_hours`,
+  `work_address` (text), section `contact`. 201 each.
+
+### Remaining deployed acceptance
+
+- TA-806 new version binding `occ_guardian_home_phone` / `_work_phone` / `_work_hours` /
+  `_work_address`; `require_typed_name` on consent signature fields; Tdap rows where a form has them.
+- Disposable family: FI-02 drawn signature with printed name → `metadata.signer`, consent granted
+  by; FI-03 withdraw on the Medical card; FI-04 second child's session defaults to its own fee;
+  FI-06/07 reviewed commit → Person facts → sibling prefill.
