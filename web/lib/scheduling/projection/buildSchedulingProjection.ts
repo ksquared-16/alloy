@@ -921,9 +921,9 @@ export async function loadSchedulingProjectionsForChildren(
 
     // ── Hop 2: everything the first hop's rows name. All independent of one another.
     const agreementIds = [...agreementByMember.values()].map((a) => a.id);
-    const proposedMembers = memberIds.filter(
-        (id) => !agreementByMember.has(id) && (assignmentsByMember.get(id)?.length ?? 0) === 0
-    );
+    // Every pre-enrolment child's draft is read — including one that already has proposed ledger rows
+    // (a secondary): its PRIMARY proposal still lives on the draft, and the stitch keeps it listed.
+    const proposedMembers = memberIds.filter((id) => !agreementByMember.has(id));
     const [placementRows, patternRows, typeRows, processRows] = await Promise.all([
         readChunked(agreementIds, async (chunk) => {
             const { data, error } = await supabase

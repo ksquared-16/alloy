@@ -256,3 +256,34 @@ describe("truth equivalence with the single-child owner", () => {
         expect(projection!.children).toHaveLength(1);
     });
 });
+
+describe("pre-enrolment child with a proposed secondary", () => {
+    // Staging (8e7836698): Ava ZZQA1484F31612 — draft primary from 2026-11-02, proposed Before Care
+    // from 2026-11-16. The draft was read only for children with NO ledger rows, so the card listed
+    // only the secondary and "Starts" named its date. Proven through the real read path.
+    it("projects the draft primary beside the ledger secondary, primary first, with the primary's start", async () => {
+        const t = base();
+        t.schedule_assignments = [{
+            id: "before-care", org_id: ORG, customer_member_id: "child-0", subject_type: "child", enrollment_agreement_id: null,
+            commitment_kind: "proposed", is_primary: false, status: "planned", schedule_pattern_id: "p-bc",
+            start_date: "2026-11-16", end_date: null, room_location_id: "room-1", assignment_kind: "base",
+        }];
+        t.schedule_patterns = [
+            { id: "p-bc", org_id: ORG, weekdays: [1, 2, 3, 4, 5], label: "Before Care", metadata: null },
+            { id: "p-fd", org_id: ORG, site_location_id: SITE, schedule_type_key: "full_day", key: "full_day", weekdays: [1, 2, 3, 4, 5], label: "Full Day", metadata: null },
+        ];
+        t.process_instances = [{
+            org_id: ORG, process_key: "enrollment", subject_id: "child-0", created_at: "2026-10-01T00:00:00Z",
+            metadata: { schedule_type: "full_day", weekdays: [1, 2, 3, 4, 5], start_date: "2026-11-02", location_id: SITE, program_room_cohort_key: "room-1" },
+        }];
+        t.locations = [{ id: "room-1", org_id: ORG, label: "Toddler 2" }];
+        const { client } = fakeSupabase(t);
+        const result = await loadSchedulingProjectionsForChildren(client as never, ORG, {
+            children: [{ customerMemberId: "child-0", subjectName: "Ava" }],
+            siteLocationId: SITE, todayYmd: "2026-10-21", computedAt: "2026-10-21T00:00:00.000Z", siteName: "KLA",
+        });
+        const proposed = result.get("child-0")!.children[0]!.proposed!;
+        expect(proposed.assignments.map((a) => [a.isPrimary, a.effectiveFrom])).toEqual([[true, "2026-11-02"], [false, "2026-11-16"]]);
+        expect(proposed.assignments.find((a) => a.isPrimary)?.effectiveFrom).toBe("2026-11-02");
+    });
+});
