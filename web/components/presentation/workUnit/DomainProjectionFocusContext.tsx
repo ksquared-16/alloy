@@ -43,6 +43,10 @@ export function preferredDurableContextKey(domain: DomainProjectionFocusFrame["d
  * object, the record's own views stay one click away, and the full card grid is not rendered underneath.
  * That is the presentation Operations and Create Assignment already land on; nothing new is composed.
  * A domain without one keeps the full record (`full`), exactly as Slice 2 opened it.
+ *
+ * BP V2 S6 — Billing keeps the full household record and asks the existing Financials card to LEAD it
+ * (`leadCard`), started on the row's verified source. A household has no record contexts, so the
+ * contextual presentation would render nothing for it; the lead card is the household equivalent.
  */
 export function durableRecordEntryFor(frame: DomainProjectionFocusFrame): {
     presentation: "full" | "contextual";
@@ -50,6 +54,7 @@ export function durableRecordEntryFor(frame: DomainProjectionFocusFrame): {
     contextSiteId: string | null;
     focusSource: { kind: string; id: string; reason: string | null } | null;
     origin: { label: string; reason: string | null } | null;
+    leadCard: "financials" | null;
 } {
     const contextKey = preferredDurableContextKey(frame.domain);
     const source = frame.selectedSource ?? null;
@@ -60,6 +65,7 @@ export function durableRecordEntryFor(frame: DomainProjectionFocusFrame): {
         contextSiteId: contextKey ? source?.siteLocationId ?? null : null,
         focusSource: source ? { kind: source.kind, id: source.id, reason: source.reason } : null,
         origin: label ? { label, reason: source?.reason ?? null } : null,
+        leadCard: frame.domain === "billing" ? "financials" : null,
     };
 }
 

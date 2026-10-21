@@ -76,6 +76,7 @@ describe("durableRecordEntryFor — the existing durable surface, configured by 
             contextSiteId: "site-r",
             focusSource: { kind: "schedule_assignment", id: "sa-1", reason: "Ends Oct 29 · in 9 days" },
             origin: { label: "Assignments · Ending soon", reason: "Ends Oct 29 · in 9 days" },
+            leadCard: null,
         });
     });
 
@@ -85,6 +86,8 @@ describe("durableRecordEntryFor — the existing durable surface, configured by 
         expect(billing.contextKey).toBeNull();
         expect(billing.contextSiteId).toBeNull();
         expect(billing.origin).toEqual({ label: "Billing · Needs review", reason: "Draft" });
+        expect(billing.leadCard).toBe("financials"); // BP V2 S6
+        expect(billing.focusSource).toEqual({ kind: "financial_charge", id: "c-1", reason: "Draft" });
     });
 
     it("no labels → no origin line; no selection → no source", () => {

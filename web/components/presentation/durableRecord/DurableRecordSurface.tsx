@@ -37,6 +37,9 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
 import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
+import DurableRecordFinancialsLead from "@/components/presentation/durableRecord/DurableRecordFinancialsLead";
+import type { DurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableHouseholdSubjectModel";
+import type { HouseholdFinancialFocus } from "@/lib/runtime/focus/householdFinancialFocusSource";
 import FocusPanelSubjectIdentityBlock from "@/components/admin/focusPanel/FocusPanelSubjectIdentityBlock";
 import {
     resolveInitialContextOption,
@@ -82,6 +85,10 @@ type LoadState =
            * record so the Schedule card reveals WITH the panel rather than opening its own gate.
            */
           schedulingProjection: SchedulingProjectionFirstPaint | null;
+          /** BP V2 S6 — the composed household, when the record is one; the lead card's subject. */
+          householdSubject: DurableHouseholdSubject | null;
+          /** BP V2 S6 — the entry's financial source as the record route verified it. */
+          financialFocus: HouseholdFinancialFocus | null;
       }
     | { status: "not_found" }
     | { status: "error"; message: string };
@@ -107,6 +114,7 @@ export default function DurableRecordSurface({
     contextSiteId,
     focusSource,
     origin,
+    leadCard,
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
@@ -130,8 +138,16 @@ export default function DurableRecordSurface({
     focusSource?: DurableRecordFocusSource | null;
     /** BP V2 S4 — why the entry opened this record ("Assignments · Ending soon — Ends Oct 29"). Read-only. */
     origin?: { label: string; reason: string | null } | null;
+    /**
+     * BP V2 S6 — an existing operational card that should LEAD this record (above the grid), e.g. the
+     * Financials card for a household opened from Billing. The record and its grid are unchanged.
+     */
+    leadCard?: "financials" | null;
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
+    // BP V2 S6 — the financial source as plain values, so the load identity is stable per source.
+    const focusKind = focusSource?.kind ?? null;
+    const focusId = focusSource?.id ?? null;
     const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
     /** Whether the initial context has been chosen for THIS record. See `load` below. */
     const selectionInitializedRef = useRef(false);
@@ -147,7 +163,11 @@ export default function DurableRecordSurface({
         if (!quiet) setState({ status: "loading" });
         try {
             const site = (contextSiteId ?? "").trim();
-            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}${site ? `&context_site_id=${encodeURIComponent(site)}` : ""}`;
+            const focus =
+                leadCard === "financials" && focusId
+                    ? `&focus_kind=${encodeURIComponent(focusKind ?? "")}&focus_id=${encodeURIComponent(focusId)}`
+                    : "";
+            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}${site ? `&context_site_id=${encodeURIComponent(site)}` : ""}${focus}`;
             /*
              * WARM ON OPEN, FRESH AFTER A WRITE.
              *
@@ -174,6 +194,8 @@ export default function DurableRecordSurface({
                       childSubject?: DurableChildSubject | null;
                       personSubject?: DurablePersonSubject | null;
                       schedulingProjection?: SchedulingProjectionFirstPaint | null;
+                      householdSubject?: DurableHouseholdSubject | null;
+                      financialFocus?: HouseholdFinancialFocus | null;
                       message?: string;
                   }
                 | null;
@@ -194,6 +216,8 @@ export default function DurableRecordSurface({
                     : null,
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
+                householdSubject: (json.householdSubject ?? null) as DurableHouseholdSubject | null,
+                financialFocus: (json.financialFocus ?? null) as HouseholdFinancialFocus | null,
             });
             /*
              * WHICH CONTEXT OPENS FIRST.
@@ -281,7 +305,7 @@ export default function DurableRecordSurface({
                 message: e instanceof Error ? e.message : "Could not open this record.",
             });
         }
-    }, [subjectType, subjectId, contextKey, presentation, contextSiteId]);
+    }, [subjectType, subjectId, contextKey, presentation, contextSiteId, leadCard, focusKind, focusId]);
 
     useEffect(() => {
         // A different subject is a different record, and its initial context must be chosen afresh.
@@ -498,6 +522,16 @@ export default function DurableRecordSurface({
                   * convergence removed. The grid stays available for record-first runtimes where the
                   * record genuinely IS the destination.
                   */}
+                {presentation === "full" && leadCard === "financials" && state.householdSubject ? (
+                    <FocusPanelRenderErrorBoundary scope="card" label="durable-record-financials-lead">
+                        <DurableRecordFinancialsLead
+                            household={state.householdSubject}
+                            focus={state.financialFocus}
+                            onChanged={() => onRecordChanged?.()}
+                        />
+                    </FocusPanelRenderErrorBoundary>
+                ) : null}
+
                 {presentation === "full" ? (
                     // Same floor as the queue-hosted panel: one bad published composition
                     // degrades this grid, never the whole durable record.
