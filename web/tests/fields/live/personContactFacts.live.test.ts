@@ -38,7 +38,7 @@ const env = certEnv();
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RUN = Date.now();
 let db: SupabaseClient;
-const ids = { customer: "", otherCustomer: "", pat: "", stranger: "", ava: "", ben: "", def: "", ver: "", subs: [] as string[], cases: [] as string[] };
+const ids = { customer: "", otherCustomer: "", pat: "", robin: "", link: "", stranger: "", ava: "", ben: "", def: "", ver: "", subs: [] as string[], cases: [] as string[] };
 
 const G = (field_key: string) => ({ entity_type: "guardian", field_key, shared_value_key: field_key });
 const P = (field_key: string) => ({ entity_type: "person", field_key });
@@ -68,8 +68,8 @@ async function ok<T>(p: PromiseLike<{ data: T; error: { message: string } | null
     return data;
 }
 
-async function submit(personId: string, customerId: string, childId: string, payload: FormPayload): Promise<{ sub: string; caseId: string }> {
-    const s = (await ok(db.from("form_submissions").insert({ org_id: ORG, form_definition_id: ids.def, form_definition_version_id: ids.ver, status: "submitted", submitted_at: new Date().toISOString(), payload, customer_id: customerId, customer_member_id: childId, person_id: personId }).select("id").single())) as { id: string };
+async function submit(personId: string | null, customerId: string, childId: string, payload: FormPayload, linkId: string | null = null): Promise<{ sub: string; caseId: string }> {
+    const s = (await ok(db.from("form_submissions").insert({ org_id: ORG, form_definition_id: ids.def, form_definition_version_id: ids.ver, status: "submitted", submitted_at: new Date().toISOString(), payload, customer_id: customerId, customer_member_id: childId, person_id: personId, created_via_public_link_id: linkId }).select("id").single())) as { id: string };
     ids.subs.push(s.id);
     const c = (await ok(db.from("processing_cases").insert({ org_id: ORG, status: "needs_review", metadata: {} }).select("id").single())) as { id: string };
     ids.cases.push(c.id);
@@ -109,6 +109,13 @@ describe.skipIf(!env)("parent work and contact facts (cert DB)", () => {
         ids.def = d.id;
         const v = (await ok(db.from("form_definition_versions").insert({ org_id: ORG, form_definition_id: ids.def, version_number: 1, status: "published", published_at: new Date().toISOString(), schema_json: SCHEMA }).select("id").single())) as { id: string };
         ids.ver = v.id;
+        // The deployed packet shape: a household member known only through customer_persons, and the
+        // packet link sent to them. Packet submissions carry no person_id (staging, ZZQAFI120104).
+        const robin = (await ok(db.from("persons").insert({ org_id: ORG, first_name: "Robin", last_name: `Packet${RUN}` }).select("id").single())) as { id: string };
+        ids.robin = robin.id;
+        await ok(db.from("customer_persons").insert({ org_id: ORG, customer_id: ids.customer, person_id: ids.robin, role_type: "parent" }).select("id"));
+        const link = (await ok(db.from("form_public_links").insert({ org_id: ORG, form_definition_id: ids.def, token_hash: `zz-fi06-${RUN}`, metadata: { recipient_person_id: ids.robin } }).select("id").single())) as { id: string };
+        ids.link = link.id;
     });
 
     afterAll(async () => {
@@ -119,6 +126,7 @@ describe.skipIf(!env)("parent work and contact facts (cert DB)", () => {
         }
         if (ids.subs.length) await db.from("form_submissions").delete().in("id", ids.subs);
         if (ids.ver) await db.from("form_definition_versions").delete().eq("id", ids.ver);
+        if (ids.link) await db.from("form_public_links").delete().eq("id", ids.link);
         if (ids.def) await db.from("form_definitions").delete().eq("id", ids.def);
     });
 
@@ -155,6 +163,15 @@ describe.skipIf(!env)("parent work and contact facts (cert DB)", () => {
         expect(out.ok).toBe(true);
         if (out.ok) expect(out.record.written).toEqual([{ key: "employer", previous: "Acme Clinic", value: "Hillsboro Medical" }]);
         expect(await readPersonContactFacts(db, { orgId: ORG, personId: ids.pat })).toMatchObject({ home_phone: "503-555-0202", work_phone: "503-555-0303", employer: "Hillsboro Medical" });
+    });
+
+    it("a PACKET submission (no person_id) is attributed to its link's recipient, a customer_persons member", async () => {
+        const p = answers({ first: "Robin", last: `Packet${RUN}`, work: "971-555-4444", home: "971-555-5555" });
+        const { sub, caseId } = await submit(null, ids.customer, ids.ava, p, ids.link);
+        expect(await commit(sub, caseId, p)).toMatchObject({ ok: true, already_applied: false });
+        expect(await readPersonContactFacts(db, { orgId: ORG, personId: ids.robin })).toMatchObject({ work_phone: "971-555-4444", home_phone: "971-555-5555" });
+        // Nothing landed on the other parent.
+        expect((await readPersonContactFacts(db, { orgId: ORG, personId: ids.pat })).work_phone).not.toBe("971-555-4444");
     });
 
     it("answers naming a DIFFERENT adult are refused and recorded on no one", async () => {

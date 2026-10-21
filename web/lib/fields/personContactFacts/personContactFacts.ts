@@ -157,13 +157,23 @@ export async function writePersonContactFacts(
 }
 
 /**
- * Is this adult one of this household's adults — its contact, or related to one of its children?
- * A parent's facts are written only onto an adult the family's own records name.
+ * Is this adult one of this household's adults? `customer_persons` is the household's membership
+ * (the same check the participant payer passes); a household contact or a relationship to one of
+ * its children also counts. A parent's facts are written only onto an adult the family names.
  */
 export async function personBelongsToHousehold(
     supabase: SupabaseClient,
     input: { orgId: string; personId: string; customerId: string },
 ): Promise<boolean> {
+    const { data: member, error: memberError } = await supabase
+        .from("customer_persons")
+        .select("person_id")
+        .eq("org_id", input.orgId)
+        .eq("customer_id", input.customerId)
+        .eq("person_id", input.personId)
+        .limit(1);
+    if (memberError) throw new Error(memberError.message);
+    if ((member ?? []).length > 0) return true;
     const { data: contact, error } = await supabase
         .from("contacts")
         .select("id")

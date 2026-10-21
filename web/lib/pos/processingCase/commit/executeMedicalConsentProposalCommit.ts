@@ -100,12 +100,25 @@ export async function executeMedicalConsentProposalCommit(args: {
         // The signature record carries who signed (`metadata.signer`, FI-02) and when they acknowledged.
         args.supabase.from("form_submission_signatures").select("field_id, typed_full_name, signer_acknowledged_at, metadata").eq("org_id", args.orgId).eq("form_submission_id", submissionId).in("field_id", intent.signature_field_ids),
     ]);
-    const firstSig = ((sigRows ?? []) as { field_id: string; typed_full_name: string | null; signer_acknowledged_at: string | null; metadata: { signer?: { printed_name?: string | null } } | null }[])
+    const firstSig = ((sigRows ?? []) as { field_id: string; typed_full_name: string | null; signer_acknowledged_at: string | null; metadata: { signer?: { printed_name?: string | null; printed_name_matches_recipient?: boolean | null; channel?: string | null } } | null }[])
         .find((r) => r.field_id === intent.signature_field_ids[0]);
     // The grantor is who the signer said they are — never the link's recipient, never inferred.
     const grantedByName = intent.signed_by_name?.trim() || firstSig?.metadata?.signer?.printed_name?.trim() || firstSig?.typed_full_name?.trim() || null;
     if (!grantedByName) {
         return fail(409, "signer_unknown", "The signature does not say who signed, so the authorization cannot be recorded. Ask the family to sign again with their printed name.");
+    }
+    /*
+     * SIGNER AUTHORITY. The only adult whose authority Alloy has established is the one the link
+     * was sent to (validated at mint). A different adult who signed on that link is RECORDED as
+     * themselves, but nothing has verified that they may authorize this child's medical care — so
+     * their signature does not become a consent. Never substituted with the recipient either.
+     */
+    if (firstSig?.metadata?.signer?.printed_name_matches_recipient === false) {
+        return fail(
+            409,
+            "signer_not_authorized",
+            `This authorization was signed by ${grantedByName}, not the parent the paperwork was sent to. Alloy cannot confirm their authority to consent, so it was not recorded. Send the paperwork to that adult, or ask the parent to sign.`,
+        );
     }
     const parsed = safeParseFormSchema((version as { schema_json?: unknown } | null)?.schema_json ?? null);
     const textSha = parsed.success ? consentTextSha256(parsed.data.fields, intent.text_field_ids) : null;
