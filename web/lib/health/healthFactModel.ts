@@ -19,7 +19,9 @@
  * documents that justify it.
  */
 
-export const HEALTH_FACT_KINDS = ["allergy", "condition", "medication", "immunization"] as const;
+import { immunizationVaccineLabel } from "@/lib/health/immunizationVaccines";
+
+export const HEALTH_FACT_KINDS = ["allergy", "condition", "medication", "immunization", "insurance"] as const;
 export type HealthFactKind = (typeof HEALTH_FACT_KINDS)[number];
 
 export const HEALTH_FACT_STATUSES = ["active", "ended", "superseded"] as const;
@@ -183,6 +185,35 @@ export function readImmunizationPayload(payload: Record<string, unknown>): Immun
     };
 }
 
+/**
+ * A child's health insurance AS REPORTED. Alloy records what the family or an operator stated —
+ * it does not verify eligibility or coverage, and nothing here may be read as if it did.
+ */
+export type InsurancePayload = {
+    provider: string | null;
+    planName: string | null;
+    policyNumber: string | null;
+    groupNumber: string | null;
+    memberId: string | null;
+    /** The person who holds the coverage (usually a parent), as named. */
+    subscriberName: string | null;
+    subscriberRelationship: string | null;
+    phone: string | null;
+};
+
+export function readInsurancePayload(payload: Record<string, unknown>): InsurancePayload {
+    return {
+        provider: str(payload.provider),
+        planName: str(payload.plan_name),
+        policyNumber: str(payload.policy_number),
+        groupNumber: str(payload.group_number),
+        memberId: str(payload.member_id),
+        subscriberName: str(payload.subscriber_name),
+        subscriberRelationship: str(payload.subscriber_relationship),
+        phone: str(payload.phone),
+    };
+}
+
 /** A one-line operator-facing label for any kind, without exposing storage taxonomy. */
 export function healthFactLabel(row: Pick<PersonHealthFactRow, "fact_kind" | "payload">): string {
     switch (row.fact_kind) {
@@ -193,6 +224,8 @@ export function healthFactLabel(row: Pick<PersonHealthFactRow, "fact_kind" | "pa
         case "medication":
             return readMedicationPayload(row.payload).medication ?? "Medication";
         case "immunization":
-            return readImmunizationPayload(row.payload).vaccineKey ?? "Immunization";
+            return immunizationVaccineLabel(readImmunizationPayload(row.payload).vaccineKey);
+        case "insurance":
+            return readInsurancePayload(row.payload).provider ?? "Health insurance";
     }
 }

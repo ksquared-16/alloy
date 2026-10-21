@@ -138,6 +138,10 @@ export type HealthCareProvider = {
     phone: string;
 };
 
+export type HealthInsuranceDetail = { provider: string; lines: string[]; assurance: string };
+export type HealthImmunizationDetail = { vaccine: string; doses: string; assurance: string };
+export type HealthConsentDetail = { label: string; state: string; detail: string };
+
 export type HealthProfileFact = { label: string; value: string };
 
 export type HealthDetailEvidence = {
@@ -152,6 +156,12 @@ export type HealthDetailEvidence = {
     emergencyContacts: HealthEmergencyContact[];
     /** Physician and dentist. Optional so specimens that predate the roles still type. */
     careProviders?: HealthCareProvider[];
+    /** Health insurance as reported (never verified coverage). */
+    insurance?: HealthInsuranceDetail[];
+    /** Immunizations by vaccine, with reported / verified assurance. */
+    immunizations?: HealthImmunizationDetail[];
+    /** Medical authorizations and their current state. */
+    consents?: HealthConsentDetail[];
     lastUpdated: string;
 };
 

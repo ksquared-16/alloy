@@ -382,7 +382,7 @@ export function recordProducerSpans(
  * approximately the slowest of them. Which one decides whether a request-time first-order
  * architecture is viable at all, so it is measured rather than assumed.
  */
-export type HealthSpanName = "health_facts_ms" | "health_profile_ms" | "health_documents_ms" | "health_contacts_ms";
+export type HealthSpanName = "health_facts_ms" | "health_profile_ms" | "health_documents_ms" | "health_contacts_ms" | "health_consents_ms";
 
 export function healthClock(): {
     time: <T>(name: HealthSpanName, run: () => PromiseLike<T>) => Promise<T>;

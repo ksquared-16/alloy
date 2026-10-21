@@ -115,6 +115,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
+    "medical_consent.withdraw",
 ] as const;
 
 function def(
@@ -338,6 +339,21 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         registeredActionKey: "health_fact.end",
         implementationStatus: "production",
         reason: "Closes a fact with an end date. Never a deletion — the record says when it stopped applying.",
+    }),
+    def({
+        capabilityKey: "medical_consent.withdraw",
+        canonicalCommandKey: "medical_consent.withdraw",
+        operatorLabel: "Withdraw medical authorization",
+        family: "health",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "medical_consent.withdraw",
+        implementationStatus: "production",
+        reason: "Records the family's withdrawal of a medical authorization, with a reason. Never a deletion.",
     }),
     // ── Enrollment pricing ─────────────────────────────────────────────────
     // The operator's decision about tuition, over the resolution Commercial Execution produced.

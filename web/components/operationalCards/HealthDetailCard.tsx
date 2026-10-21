@@ -264,6 +264,40 @@ export default function HealthDetailCard({
                                 </article>
                             ))}
 
+                            {/* ── G1 · Immunizations, insurance, authorizations — each with its assurance ── */}
+                            {evidence.immunizations && evidence.immunizations.length > 0 ? (
+                                <>
+                                    <SectionHead>Immunizations</SectionHead>
+                                    {evidence.immunizations.map((m) => (
+                                        <p key={m.vaccine} className="alloy-os-healthdetail__why" data-health-immunization={m.vaccine}>
+                                            <strong>{m.vaccine}</strong> — {m.doses}
+                                            <span className="alloy-os-card-pill alloy-os-card-pill--neutral">{m.assurance}</span>
+                                        </p>
+                                    ))}
+                                </>
+                            ) : null}
+                            {evidence.insurance && evidence.insurance.length > 0 ? (
+                                <>
+                                    <SectionHead>Health insurance</SectionHead>
+                                    {evidence.insurance.map((i) => (
+                                        <p key={`${i.provider}:${i.lines.join("|")}`} className="alloy-os-healthdetail__why" data-health-insurance={i.provider}>
+                                            <strong>{i.provider}</strong>{i.lines.length ? ` — ${i.lines.join(" · ")}` : ""}
+                                            <span className="alloy-os-card-pill alloy-os-card-pill--neutral">{i.assurance}</span>
+                                        </p>
+                                    ))}
+                                </>
+                            ) : null}
+                            {evidence.consents && evidence.consents.length > 0 ? (
+                                <>
+                                    <SectionHead>Medical authorizations</SectionHead>
+                                    {evidence.consents.map((c, idx) => (
+                                        <p key={`${c.label}:${idx}`} className="alloy-os-healthdetail__why" data-health-consent={c.state}>
+                                            <strong>{c.label}</strong> — {c.state}. {c.detail}
+                                        </p>
+                                    ))}
+                                </>
+                            ) : null}
+
                             {/* ── G2 · Physician and dentist ──────────────────── */}
                             {evidence.careProviders && evidence.careProviders.length > 0 ? (
                                 <>

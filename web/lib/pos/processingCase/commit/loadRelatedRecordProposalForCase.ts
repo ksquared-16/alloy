@@ -6,6 +6,8 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
+import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
+import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
 import {
     adaptParticipantChildRequestToRelatedRecordProposals,
     loadParticipantChildRequests,
@@ -114,6 +116,14 @@ export async function loadRelatedRecordProposalForCase(args: {
                 accessibleExistingItemIds: accessibleIds,
             },
         );
+        if (subRow.form_definition_version_id) {
+            const capture = (await loadHealthCaptureDeclarations(args.supabase, args.orgId, [subRow.form_definition_version_id])).get(subRow.form_definition_version_id);
+            if (capture) {
+                bundle.collections.push(
+                    ...adaptHealthCaptureToProposals(schemaParsed.data, payload, capture, { formSubmissionId: subRow.id, formDefinitionVersionId: subRow.form_definition_version_id }),
+                );
+            }
+        }
         for (const collection of bundle.collections) {
             const proposal = collection.instances.find((inst) => inst.proposal_id === args.proposalId);
             if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, source };

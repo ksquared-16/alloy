@@ -58,7 +58,7 @@ function memberFieldValue(record: Record<string, unknown>, fieldKey: string): st
     return null;
 }
 
-function nestedScalarPrefillValue(
+export function nestedScalarPrefillValue(
     field: FormField,
     itemRecord: Record<string, unknown>,
     binding: NonNullable<FormField & { type: "group" }>["collection_binding"],
@@ -91,9 +91,29 @@ function nestedScalarPrefillValue(
         // Role comes from the bound collection, never a hardcoded "parents": emergency contacts and
         // authorized pickups are person-grain collections too, and would otherwise prefill through
         // the guardian manifest. Unmapped collections resolve generically, which is correct.
+        /*
+         * EACH MEMBER ITS OWN LEAF — never "the name" by default.
+         *
+         * Everything that was not email or phone resolved to the person's name, so a member bound to
+         * first_name, last_name or the relationship type was prefilled with the full name. A member
+         * with no known leaf now stays blank for the family to answer.
+         */
+        const key = (source.field_key ?? "").trim().toLowerCase();
+        if (key === "relationship_type" || key === "relationship") {
+            const kin = itemRecord.relationship_type ?? itemRecord.relationship_type_label;
+            return typeof kin === "string" && kin.trim() ? kin.trim() : undefined;
+        }
+        const leafKey =
+            key.includes("email") ? "email"
+            : key.includes("phone") ? "phone"
+            : key === "first_name" ? "first_name"
+            : key === "last_name" ? "last_name"
+            : key === "full_name" || key === "name" || key === "display_name" ? "name"
+            : null;
+        if (!leafKey) return undefined;
         const raw = resolveRelationshipLeafFromPersonRow(itemRecord, {
             role: FORMS_LEGACY_ROLE_BY_COLLECTION_PROVIDER_REF[binding.collection_provider_ref],
-            leafKey: source.field_key?.includes("email") ? "email" : source.field_key?.includes("phone") ? "phone" : "name",
+            leafKey,
             leafProviderRefKey: source.relationship?.leaf_provider_ref_key,
         });
         if (!raw) return undefined;

@@ -55,7 +55,7 @@ export type RelatedRecordFieldProposal = {
  *
  * @see docs/platform/core/data/relationship-model.md
  */
-export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "health_fact" | "unknown";
+export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "health_fact" | "medical_consent" | "unknown";
 
 /**
  * SERVER-DERIVED health fact intent for a row of a `health.*` collection (allergy, condition,
@@ -63,7 +63,7 @@ export type CollectionExecutionKind = "native_structural" | "configured_relation
  * approval, through `healthFactService`, onto the child the submission is about.
  */
 export type RelatedRecordHealthFactIntent = {
-    fact_kind: "allergy" | "condition" | "medication";
+    fact_kind: "allergy" | "condition" | "medication" | "insurance" | "immunization";
     /** Exactly the payload `addHealthFact` will receive. */
     payload: Record<string, unknown>;
     missing_required: string[];
@@ -109,6 +109,23 @@ export type RelatedRecordRelationshipIntent = {
     unresolved_member_field_ids?: string[];
 };
 
+/**
+ * SERVER-DERIVED medical consent intent — a signed release or treatment authorization declared by
+ * the form (`metadata.health_capture.medical_consent`). Recorded as a consent STATE by Medical only
+ * on an operator's approval; the signed artifact stays with Forms/Documents.
+ */
+export type RelatedRecordMedicalConsentIntent = {
+    consent_kind: "medical_records_release" | "emergency_medical_treatment";
+    form_definition_version_id: string | null;
+    text_field_ids: string[];
+    signature_field_ids: string[];
+    /** The typed name on the first signature, as signed. */
+    signed_by_name: string | null;
+    signed_at: string | null;
+    /** Every declared signature is present. */
+    signed: boolean;
+};
+
 export type RelatedRecordInstanceProposal = {
     proposal_id: string;
     collection_provider_ref: string;
@@ -126,6 +143,8 @@ export type RelatedRecordInstanceProposal = {
     relationship_intent?: RelatedRecordRelationshipIntent;
     /** Present only for `health_fact` instances. */
     health_fact_intent?: RelatedRecordHealthFactIntent;
+    /** Present only for `medical_consent` instances. */
+    medical_consent_intent?: RelatedRecordMedicalConsentIntent;
 };
 
 export type RelatedRecordCollectionProposal = {

@@ -461,3 +461,31 @@ export async function removePersonChildRelationshipRole(
     if (error) return { ok: false, error: error.message };
     return { ok: true };
 }
+
+/**
+ * Fill an EMPTY relationship type on a person's edges with an organization relationship type the
+ * family named (matched by key or label). Unknown words are left alone — kept on the submission as
+ * evidence, never coerced — and an edge that already says something is never overwritten.
+ */
+export async function fillEmptyRelationshipTypeFromStatedKinship(
+    supabase: SupabaseClient,
+    orgId: string,
+    personId: string,
+    customerMemberIds: readonly string[],
+    stated: string,
+): Promise<void> {
+    const options = await loadPersonChildRelationshipOptionSetItems(supabase, orgId);
+    const want = stated.trim().toLowerCase();
+    const match = options.find((o) => o.item_key.trim().toLowerCase() === want || (o.label ?? "").trim().toLowerCase() === want);
+    if (!match || customerMemberIds.length === 0) return;
+    const { data: edges } = await supabase
+        .from("person_child_relationships")
+        .select("id, relationship_type")
+        .eq("org_id", orgId)
+        .eq("person_id", personId)
+        .in("customer_member_id", [...customerMemberIds]);
+    for (const edge of (edges ?? []) as { id: string; relationship_type: string | null }[]) {
+        if ((edge.relationship_type ?? "").trim()) continue;
+        await updatePersonChildRelationship(supabase, orgId, edge.id, { relationship_type: match.item_key });
+    }
+}

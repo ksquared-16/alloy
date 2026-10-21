@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!context) return proposalNotFound({ supabase, orgId: ctx.orgId, caseId, proposalId });
     const isNewChild = context.proposal.origin === "proposed_new_record" && context.proposal.collection_provider_ref === "children";
     const isRelationship = context.proposal.execution_kind === "configured_relationship";
-    const isHealthFact = context.proposal.execution_kind === "health_fact";
+    const isHealthFact = context.proposal.execution_kind === "health_fact" || context.proposal.execution_kind === "medical_consent";
     if (!isNewChild && !isRelationship && !isHealthFact) {
         return jsonError("Only a proposed new child, relationship or health fact can be rejected here", 403);
     }

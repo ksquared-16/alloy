@@ -23,6 +23,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
+import { fillEmptyRelationshipTypeFromStatedKinship } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import {
     verifyRelationshipCommitAuthorization,
     type RelationshipCommitRequest,
@@ -465,6 +466,20 @@ export async function executeRelationshipProposalCommit(args: {
         resolution_revision: household.revision,
         resolved_customer_id: anchorCustomerId,
     };
+
+    /*
+     * THE RELATIONSHIP THE FAMILY STATED REACHES THE EDGE.
+     *
+     * The command runtime takes no kinship, so "Grandparent" typed on the form was dropped at commit.
+     * It is written through the canonical relationship service, only onto edges that have none, and
+     * only when it is one of the organization's own relationship types (matched by key or label).
+     * Anything else stays on the submission as evidence — never coerced.
+     */
+    const statedKinship = (auth.proposal.relationship_intent?.proposed_person_facts ?? [])
+        .find((f) => f.field_key === "relationship_type" && typeof f.value === "string" && f.value.trim())?.value as string | undefined;
+    if (statedKinship && record.person_id && record.affected_member_ids.length > 0) {
+        await fillEmptyRelationshipTypeFromStatedKinship(args.supabase, args.orgId, record.person_id, record.affected_member_ids, statedKinship).catch(() => null);
+    }
 
     // Persist the structured result on the case so retries and audit can read it.
     const ledger = { ...ledgerFrom(args.metadata), [key]: record };

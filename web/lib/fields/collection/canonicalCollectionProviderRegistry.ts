@@ -84,6 +84,7 @@ function healthFactProvider(
 const HEALTH_ALLERGIES = healthFactProvider("health.allergies", "health_allergies", "Allergies");
 const HEALTH_CONDITIONS = healthFactProvider("health.conditions", "health_conditions", "Conditions");
 const HEALTH_MEDICATIONS = healthFactProvider("health.medications", "health_medications", "Medications");
+const HEALTH_INSURANCE = healthFactProvider("health.insurance", "health_insurance", "Health insurance");
 const HEALTH_IMMUNIZATIONS = healthFactProvider(
     "health.immunizations",
     "health_immunizations",
@@ -99,6 +100,7 @@ export const HEALTH_FACT_FORM_COLLECTABLE_REFS: Readonly<Record<string, true>> =
     "health.allergies": true,
     "health.conditions": true,
     "health.medications": true,
+    "health.insurance": true,
 });
 
 /** The `fact_kind` each ref filters on — the resolver's only per-ref difference. */
@@ -107,6 +109,7 @@ export const HEALTH_FACT_KIND_BY_PROVIDER_REF: Readonly<Record<string, string>> 
     "health.conditions": "condition",
     "health.medications": "medication",
     "health.immunizations": "immunization",
+    "health.insurance": "insurance",
 });
 
 const CHILDREN: CanonicalCollectionProviderDefinition = {
@@ -165,6 +168,7 @@ const NATIVE_PROVIDERS: readonly CanonicalCollectionProviderDefinition[] = [
     HEALTH_CONDITIONS,
     HEALTH_MEDICATIONS,
     HEALTH_IMMUNIZATIONS,
+    HEALTH_INSURANCE,
 ];
 
 /**
