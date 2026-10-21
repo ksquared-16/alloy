@@ -23,10 +23,11 @@ const POSITION = "lib/financials/subsidy/collectiblePosition.ts";
  * reported itself completed and simply collected less than the family owed.
  */
 describe("Autopay asks for what may be collected, not what is owed", () => {
-    it("requests the collectible ceiling for each due charge", () => {
-        const src = code(COLLECTIBLE);
-        expect(src).toMatch(/resolveFamilyCollectible\(supabase, \{ orgId, chargeId \}\)/);
-        expect(src).toMatch(/currentlyCollectibleCents/);
+    it("requests the collectible ceiling for each due charge — W7-F051: through the settlement authority", () => {
+        expect(code(COLLECTIBLE)).toMatch(/totalCents: plan\.eligibleCents/);
+        const settlement = code("lib/financials/settlement/automaticSettlement.ts");
+        expect(settlement).toMatch(/resolveFamilyCollectible\(supabase, \{ orgId, chargeId: t\(x\.c\.id\) \}\)/);
+        expect(settlement).toMatch(/Math\.min\(out, Math\.max\(0, n\(position\.currentlyCollectibleCents\)\)\)/);
     });
 
     it("no longer requests the raw outstanding balance", () => {
@@ -39,8 +40,8 @@ describe("Autopay asks for what may be collected, not what is owed", () => {
     });
 
     it("skips a charge with nothing collectible rather than requesting zero", () => {
-        const src = code(COLLECTIBLE);
-        expect(src).toMatch(/collectibleCents <= 0\) continue/);
+        /* W7-F051: the planner drops a charge whose collectible is zero before any line is made. */
+        expect(code("lib/financials/settlement/automaticSettlement.ts")).toMatch(/c\.amountCents > 0 && c\.collectibleCents > 0\)/);
     });
 
     it("the engine still refuses an over-ask — the guard is not weakened", () => {

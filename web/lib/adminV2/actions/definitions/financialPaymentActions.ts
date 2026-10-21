@@ -24,6 +24,10 @@
  * paid. Provider status is not financial truth here; `status = 'posted'` is.
  */
 
+import { planSettlement } from "@/lib/financials/settlement/automaticSettlement";
+import { settlePayment } from "@/lib/financials/settlement/settlePayment";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import { humanDay } from "@/lib/financials/dates/humanDates";
 import {
     isOperatorPaymentMethod,
     methodNotAcceptedMessage,
@@ -40,6 +44,7 @@ import {
     isChildcarePaymentMethod,
     readChargeBalance,
     readPaymentUnappliedCents,
+    recordChildcarePayment,
     recordAndApplyChildcarePayment,
     refundChildcarePayment,
     reversePaymentApplication,
@@ -164,7 +169,7 @@ function idempotencyKeyFor(payload: Record<string, unknown>, prefix: string): st
     const day = t(payload.received_at).slice(0, 10) || new Date().toISOString().slice(0, 10);
     return [
         prefix,
-        t(payload.charge_id) || t(payload.payment_id),
+        t(payload.charge_id) || t(payload.payment_id) || (t(payload.customer_id) ? `account-${t(payload.customer_id)}` : ""),
         t(payload.amount_cents),
         t(payload.payment_method),
         day,
@@ -190,7 +195,7 @@ function idempotencyKeyFor(payload: Record<string, unknown>, prefix: string): st
 const recordPayment: RegisteredAction = {
     actionKey: PAYMENT_RECORD_ACTION_KEY,
     defaultLabel: "Record payment",
-    description: "Record money received against a posted charge and apply it to the balance.",
+    description: "Record money received and settle the payer's eligible outstanding responsibility automatically (or, by exception, apply it to one named charge).",
     supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     // Same as `charge.post`: the subject of a payment is the charge it settles, not a child.
@@ -201,10 +206,15 @@ const recordPayment: RegisteredAction = {
 
     validatePayload(payload) {
         const src = payload ?? {};
-        if (!t(src.charge_id)) {
+        /*
+         * W7-F050: ORDINARY MONEY NAMES THE ACCOUNT, NOT A CHARGE. With `customer_id` and no
+         * `charge_id` the payment is recorded to the household and settled automatically
+         * (`settlePayment`). A `charge_id` is the explicit-allocation exception.
+         */
+        if (!t(src.charge_id) && !t(src.customer_id)) {
             return {
                 ok: false,
-                blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }],
+                blockers: [{ code: "missing_account", message: "Name the account (or, by exception, the charge) this payment is for.", field: "customer_id" }],
             };
         }
         const amount = Number(src.amount_cents);
@@ -250,12 +260,19 @@ const recordPayment: RegisteredAction = {
         }
         const chargeId = t(payload?.charge_id);
         if (!chargeId) {
-            return {
-                eligible: false,
-                blockers: [{ code: "missing_charge", message: "A charge is required." }],
-                availableTransitions: [],
-                requiredInputs: [],
-            };
+            /* W7-F050: the automatic path needs only an account of this organization. */
+            const customerId = t(payload?.customer_id);
+            const { data: customer } = customerId
+                ? await (supabase as SupabaseClient).from("customers").select("id").eq("org_id", ctx.orgId).eq("id", customerId).maybeSingle()
+                : { data: null };
+            return customer
+                ? { eligible: true, blockers: [], availableTransitions: [], requiredInputs: [] }
+                : {
+                      eligible: false,
+                      blockers: [{ code: "account_not_found", message: "That account is not in this organization." }],
+                      availableTransitions: [],
+                      requiredInputs: [],
+                  };
         }
         try {
             const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
@@ -337,6 +354,53 @@ const recordPayment: RegisteredAction = {
     async buildPreview({ supabase, ctx, payload }) {
         const chargeId = t(payload?.charge_id);
         const amount = Number(payload?.amount_cents ?? 0);
+        if (!chargeId) {
+            /*
+             * W7-F050: THE AUTOMATIC SETTLEMENT, CALCULATED — the same `planSettlement` the write
+             * reruns at Confirm. Lines are "Will apply · <charge> · <date> · <amount>", then the total,
+             * then whatever stays unapplied and why.
+             */
+            try {
+                const payer = t(payload?.payer_entity_type) === "person" ? t(payload?.payer_entity_id) || null : null;
+                const asOf = await fetchOrgBusinessDate(supabase as SupabaseClient, ctx.orgId);
+                const plan = await planSettlement(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    householdId: t(payload?.customer_id),
+                    asOf,
+                    amountCents: amount,
+                    payerPersonId: payer,
+                });
+                return {
+                    summary: plan.appliedCents > 0
+                        ? `${money(plan.appliedCents)} will be applied automatically`
+                        : "Nothing is due to settle — the payment will be recorded as unapplied",
+                    changes: [
+                        ...plan.lines.map((l) => `Will apply · ${l.label} · ${humanDay(l.effectiveDueOn)}${l.dueClass === "past_due" ? " · past due" : ""} · ${money(l.applyCents)}`),
+                        `Total applied · ${money(plan.appliedCents)}`,
+                        plan.unappliedCents > 0
+                            ? `Stays unapplied · ${money(plan.unappliedCents)}${plan.heldForPayerCents > 0 && !payer ? " — named people owe the rest; choose who paid to settle their share" : " — kept as prepaid on this payment"}`
+                            : null,
+                    ].filter((v): v is string => Boolean(v)),
+                    /* Machine-readable for the form: the same plan, so it never re-derives it. */
+                    after: {
+                        applied_cents: plan.appliedCents,
+                        unapplied_cents: plan.unappliedCents,
+                        eligible_cents: plan.eligibleCents,
+                        held_for_payer_cents: plan.heldForPayerCents,
+                        as_of: plan.asOf,
+                        lines: plan.lines.map((l) => ({
+                            charge_id: l.chargeId,
+                            label: l.label,
+                            due_on: l.effectiveDueOn,
+                            past_due: l.dueClass === "past_due",
+                            cents: l.applyCents,
+                        })),
+                    },
+                };
+            } catch (err) {
+                return { summary: err instanceof Error ? err.message : "This payment cannot be previewed.", changes: [] };
+            }
+        }
         try {
             const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
             const applied = Math.min(amount, charge.outstandingCents);
@@ -368,6 +432,61 @@ const recordPayment: RegisteredAction = {
             const method = t(payload.payment_method) || "cash";
             if (isOperatorPaymentMethod(method) && (await readDisabledPaymentMethods(supabase as SupabaseClient, ctx.orgId)).has(method)) {
                 return { ok: false, correlationId, status: 409, error: methodNotAcceptedMessage(method) };
+            }
+        }
+        if (!t(payload.charge_id)) {
+            /*
+             * W7-F050: RECORD TO THE HOUSEHOLD, THEN SETTLE AUTOMATICALLY. The settlement is
+             * recomputed here from current state — never the preview the operator saw. When the
+             * committed total differs from `expected_applied_cents` (the account moved in between),
+             * the result says so; the still-valid canonical result is what is written.
+             */
+            try {
+                const recorded = await recordChildcarePayment(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    billableSourceType: "customer",
+                    billableSourceId: t(payload.customer_id),
+                    customerId: t(payload.customer_id),
+                    amountCents: Number(payload.amount_cents),
+                    paymentMethod: (t(payload.payment_method) || "cash") as ChildcarePaymentMethod,
+                    status: t(payload.status) === "pending" ? "pending" : "posted",
+                    receivedAt: t(payload.received_at) || null,
+                    referenceNumber: t(payload.reference_number) || null,
+                    payerEntityType: t(payload.payer_entity_type) || null,
+                    payerEntityId: t(payload.payer_entity_id) || null,
+                    notes: t(payload.notes) || null,
+                    idempotencyKey: idempotencyKeyFor(payload, "payment.record"),
+                    actorUserId: ctx.userId ?? null,
+                    metadata: { settlement: "automatic" },
+                });
+                const settled = await settlePayment(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    paymentId: recorded.payment.id,
+                    actorUserId: ctx.userId ?? null,
+                });
+                const expected = payload.expected_applied_cents == null ? null : Number(payload.expected_applied_cents);
+                return {
+                    ok: true,
+                    correlationId,
+                    result: {
+                        actionKey: PAYMENT_RECORD_ACTION_KEY,
+                        entityType: invocation.entityType,
+                        entityId: t(invocation.entityId),
+                        affectedId: recorded.payment.id,
+                        detail: {
+                            payment_id: recorded.payment.id,
+                            payment_status: recorded.payment.status,
+                            already_recorded: recorded.alreadyRecorded,
+                            settlement: "automatic",
+                            applied_cents: settled.appliedCents,
+                            unapplied_cents: settled.unappliedCents,
+                            applications: settled.applications,
+                            settlement_changed_since_preview: expected != null && Number.isFinite(expected) && expected !== settled.appliedCents,
+                        },
+                    },
+                };
+            } catch (err) {
+                return mapError(err, correlationId);
             }
         }
         try {
@@ -764,10 +883,11 @@ const collectCardPayment: RegisteredAction = {
 
     validatePayload(payload) {
         const src = payload ?? {};
-        if (!t(src.charge_id)) {
+        /* W7-F050/F051: the account (ordinary) or one charge (exception). */
+        if (!t(src.charge_id) && !t(src.customer_id)) {
             return {
                 ok: false,
-                blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }],
+                blockers: [{ code: "missing_account", message: "Name the account (or, by exception, the charge) to collect for.", field: "customer_id" }],
             };
         }
         if (src.amount_cents != null) {
@@ -803,10 +923,10 @@ const collectCardPayment: RegisteredAction = {
             };
         }
         const chargeId = t(payload?.charge_id);
-        if (!chargeId) {
+        if (!chargeId && !t(payload?.customer_id)) {
             return {
                 eligible: false,
-                blockers: [{ code: "missing_charge", message: "A charge is required." }],
+                blockers: [{ code: "missing_account", message: "Name the account to collect for." }],
                 availableTransitions: [],
                 requiredInputs: [],
             };
@@ -825,6 +945,28 @@ const collectCardPayment: RegisteredAction = {
 
     async buildPreview({ supabase, ctx, payload }) {
         const chargeId = t(payload?.charge_id);
+        if (!chargeId) {
+            /* W7-F050/F051: the payer's eligible responsibility, by the settlement authority. */
+            try {
+                const asOf = await fetchOrgBusinessDate(supabase as SupabaseClient, ctx.orgId);
+                const plan = await planSettlement(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    householdId: t(payload?.customer_id),
+                    asOf,
+                    amountCents: payload?.amount_cents == null ? Number.MAX_SAFE_INTEGER : Number(payload.amount_cents),
+                    payerPersonId: t(payload?.payer_person_id) || null,
+                });
+                return {
+                    summary: `Collect ${money(plan.appliedCents)} — applied automatically when the provider confirms it.`,
+                    changes: [
+                        ...plan.lines.map((l) => `Will apply · ${l.label} · ${humanDay(l.effectiveDueOn)}${l.dueClass === "past_due" ? " · past due" : ""} · ${money(l.applyCents)}`),
+                        `Total applied · ${money(plan.appliedCents)}`,
+                    ],
+                };
+            } catch (err) {
+                return { summary: err instanceof Error ? err.message : "This collection cannot be previewed.", changes: [] };
+            }
+        }
         try {
             const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
             const amount = payload?.amount_cents == null ? charge.outstandingCents : Number(payload.amount_cents);
@@ -858,17 +1000,28 @@ const collectCardPayment: RegisteredAction = {
             }
         }
         try {
-            const chargeId = t(payload.charge_id);
+            const chargeId = t(payload.charge_id) || null;
+            const customerId = t(payload.customer_id) || null;
             // The amount is the SERVER's, always. An omitted amount means "whatever is collectible",
             // and a supplied one is measured against canonical truth inside the service.
-            const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
-            const requested = payload.amount_cents == null
-                ? charge.outstandingCents
-                : Number(payload.amount_cents);
+            let requested: number;
+            if (payload.amount_cents != null) requested = Number(payload.amount_cents);
+            else if (chargeId) requested = (await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId)).outstandingCents;
+            else {
+                const plan = await planSettlement(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    householdId: customerId ?? "",
+                    asOf: await fetchOrgBusinessDate(supabase as SupabaseClient, ctx.orgId),
+                    amountCents: Number.MAX_SAFE_INTEGER,
+                    payerPersonId: t(payload.payer_person_id) || null,
+                });
+                requested = plan.eligibleCents;
+            }
 
             const created = await createCardCollection(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 chargeId,
+                customerId,
                 requestedAmountCents: requested,
                 actorUserId: ctx.userId ?? null,
                 payerPersonId: t(payload.payer_person_id) || null,

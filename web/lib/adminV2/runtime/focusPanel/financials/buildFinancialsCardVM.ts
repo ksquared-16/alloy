@@ -196,6 +196,8 @@ export type FinancialsPaymentRow = {
     glMappingKey?: string | null;
     /** W7-F042: why the account reads as it does — recorded, none configured then, or pre-stamping history. */
     glState?: FinancialsPaymentGlState;
+    /** W7-F050: the payment was settled automatically (no charge was chosen). */
+    settledAutomatically?: boolean;
     /**
      * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
      * is doing something; this says WHICH obligations, and which were undone — the difference between
@@ -2134,6 +2136,7 @@ async function buildFinancialsCardVMInner(
                     payerName: facts?.payerName ?? null,
                     payerKind: facts?.payerKind ?? null,
                     methodDisplay: facts?.methodDisplay ?? null,
+                    settledAutomatically: facts?.settlement === "automatic",
                     glMappingKey,
                     glCode: stamp?.gl_account_id ? stamp.code : null,
                     glAccountName: stamp?.gl_account_id ? stamp.name : null,

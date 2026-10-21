@@ -19,7 +19,7 @@ supersedes: []
 | **Responsibility** | Who is financially responsible for an obligation? | `responsibility/arrangementService`, surfaced as `vm.responsibility.parties` |
 | **Payer** | Who actually supplied money? | `payments.payer_entity_type` / `payer_entity_id` |
 | **Payment method** | How can a payer supply it? | `payments.payment_method` for what was used; `customer_payment_methods` for what is stored |
-| **Autopay** | What authorises a method to be used automatically? | **Nothing. Does not exist.** |
+| **Autopay** | What authorises a method to be used automatically? | `payment_autopay_arrangements` (Payments V1). Collects the arrangement payer's eligible responsibility and settles it automatically (W7-F051). |
 | **Payment** | Money received from an actual payer | `payments` |
 | **Application** | How received money settles obligations | `payment_allocations` |
 

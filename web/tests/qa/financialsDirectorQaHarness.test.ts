@@ -274,7 +274,8 @@ describe("scenario readiness", () => {
          * 70 after W7-F047 (catalog 2026-10-20.5): ONE ADDED — `payment_method_acceptance`, because
          * accepting a method became a setting with an enforced consequence. Nothing replaced.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(70);
+        /* 71 after W7-F050 (catalog 2026-10-21.1): `automatic_settlement_split` added. Nothing replaced. */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(71);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

@@ -176,6 +176,13 @@ stored payment methods, autopay, held deposits and settlement reconciliation.
 
 ## 6. What Payments closes that Core deliberately left open
 
+> **Automatic settlement (W7-F050 / W7-F051, 2026-10-21).** Payments closes one more Core opening:
+> money that arrives — manually recorded, collected by card or bank, or by Autopay — is settled
+> automatically against the payer's eligible outstanding responsibility by one authority
+> (`web/lib/financials/settlement/`). Autopay collects that eligible amount for its payer (after
+> their own unapplied money settles), once per run, not once per charge. See
+> `financials-canonical-authorities.md` → "Application policy".
+
 Three Core deferrals are recorded in the Director QA catalog (`CORE_DEFERRALS`). Two of the three are
 Payments work:
 

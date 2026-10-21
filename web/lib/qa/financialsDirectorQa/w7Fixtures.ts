@@ -174,6 +174,7 @@ export const SCENARIO_FIXTURE: Readonly<Record<string, ScenarioFixtureKey>> = Ob
     organization_financial_configuration: "organization",
     provider_readiness: "organization",
     payment_method_acceptance: "organization",
+    automatic_settlement_split: "w7_split",
     subsidy_processing: "organization",
 
     // The standard monthly account — the main charge → post → pay chain.

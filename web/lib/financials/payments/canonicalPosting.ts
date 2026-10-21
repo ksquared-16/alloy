@@ -23,7 +23,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { recordAndApplyChildcarePayment } from "@/lib/financials/childcarePaymentService";
+import { recordAndApplyChildcarePayment, recordChildcarePayment } from "@/lib/financials/childcarePaymentService";
+import { settlePayment } from "@/lib/financials/settlement/settlePayment";
 
 export type PostingOutcome =
     | { posted: true; paymentId: string; alreadyRecorded: boolean; appliedCents: number }
@@ -46,6 +47,9 @@ export type AttemptForPosting = {
      * Thread 8C predates the column, and all of those were card — the only rail that existed.
      */
     rail: string | null;
+    /** W7-F051: an account-level collection names the household here and no charge. */
+    billable_source_type?: string | null;
+    billable_source_id?: string | null;
 };
 
 /**
@@ -88,10 +92,16 @@ export async function postProviderConfirmedCollection(
         return { posted: false, reason: "already_posted", paymentId: attempt.canonical_payment_id };
     }
 
-    if (!attempt.charge_id) {
-        return { posted: false, reason: "posting_failed", detail: "attempt names no obligation to apply to" };
+    /*
+     * W7-F050/F051: AN ACCOUNT-LEVEL COLLECTION. The attempt names the household and no charge; the
+     * receipt is recorded against the household and settled by the same automatic authority a manual
+     * payment uses (`settlePayment`) — past due first, the payer's own responsibility only.
+     */
+    const accountId = !attempt.charge_id && attempt.billable_source_type === "customer" ? (attempt.billable_source_id ?? null) : null;
+    if (!attempt.charge_id && !accountId) {
+        return { posted: false, reason: "posting_failed", detail: "attempt names no obligation or account to apply to" };
     }
-    const chargeId: string = attempt.charge_id;
+    const chargeId: string | null = attempt.charge_id;
 
     // ── F5. Neither side wins a disagreement; the disagreement itself is the finding. ────────────
     if (provider.amountCents != null && provider.amountCents !== attempt.requested_amount_cents) {
@@ -121,7 +131,30 @@ export async function postProviderConfirmedCollection(
      * rather than writing another, re-reads what is outstanding NOW, and applies the smaller of the
      * two. Only the over-payment refusal is retried; anything else is a real refusal and is kept.
      */
-    const post = () => recordAndApplyChildcarePayment(supabase, {
+    const postAccountLevel = async () => {
+        const recorded = await recordChildcarePayment(supabase, {
+            orgId: attempt.org_id,
+            billableSourceType: "customer",
+            billableSourceId: accountId!,
+            customerId: accountId!,
+            amountCents: attempt.requested_amount_cents,
+            paymentMethod: railPaymentMethod(attempt.rail),
+            processor: "stripe",
+            processorTransactionId: attempt.provider_transaction_id,
+            payerEntityType: attempt.payer_person_id ? "person" : null,
+            payerEntityId: attempt.payer_person_id,
+            idempotencyKey: postingIdempotencyKey(attempt.id),
+            actorUserId: null,
+            metadata: { settlement: "automatic" },
+        });
+        const settled = await settlePayment(supabase, { orgId: attempt.org_id, paymentId: recorded.payment.id, actorUserId: null });
+        return {
+            payment: recorded.payment,
+            alreadyRecorded: recorded.alreadyRecorded,
+            allocation: settled.appliedCents > 0 ? { allocated_amount_cents: settled.appliedCents } : null,
+        };
+    };
+    const post = () => chargeId === null ? postAccountLevel() : recordAndApplyChildcarePayment(supabase, {
         orgId: attempt.org_id,
         chargeId,
         amountCents: attempt.requested_amount_cents,
