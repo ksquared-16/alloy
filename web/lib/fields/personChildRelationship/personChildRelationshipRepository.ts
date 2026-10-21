@@ -44,6 +44,22 @@ export async function loadRelationshipsForCustomerMember(
     return (data ?? []) as PersonChildRelationshipRecord[];
 }
 
+/** Every relationship of several children in ONE read — the batched form of the per-child loader. */
+export async function loadRelationshipsForCustomerMembers(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerMemberIds: readonly string[],
+): Promise<PersonChildRelationshipRecord[]> {
+    if (customerMemberIds.length === 0) return [];
+    const { data, error } = await supabase
+        .from("person_child_relationships")
+        .select("*")
+        .eq("org_id", orgId)
+        .in("customer_member_id", [...customerMemberIds]);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as PersonChildRelationshipRecord[];
+}
+
 export async function loadRoleAssignmentsForRelationships(
     supabase: SupabaseClient,
     orgId: string,
