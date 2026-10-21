@@ -142,6 +142,16 @@ Three Surfaces-configurable workspace layouts on `entity_layouts` (`surface="wor
   derived from the calculation's KPI `status` (`signalStateFromKpiStatus`). Semantic Alloy tokens
   only; no filled pill background. If a process configures no primary signal, the status reads
   "No signal" — it is never fabricated from counts.
+- **Work items line (BP V2 Slice 7)** — one supporting-text line between the context line and Today's
+  Work: explicit `operational_tasks` attributed to the process by `metadata.department_id`, "N open work
+  items · M overdue" (overdue = open with `due_at` before now, the Work Items product's rule; a SUBSET of
+  open). Counted by `GET /api/admin/operational-tasks?scope=workspace&summary=by_department` under the
+  server-resolved department and site scope (`resolveTaskSummaryScope`; unlinked tasks only at org scope),
+  loaded beside the rollups in one request (`lib/admin/landingWorkItems`). States, never a false zero:
+  counted (0 = "No open work items"), shared department (two processes share it — not attributable),
+  unavailable (read failed / timed out), absent (not counted / not in the actor's access). Informational:
+  the Work Items surface has no process filter to link to. It is not Work View population, not domain
+  attention, and excludes virtual (Communications / Processing) rows, which carry no due commitment.
 - **Today's Work** — runtime-generated from the configured work views with live counts; behavior
   (visible / max rows / sort / show counts) is the only other authored setting. Each row leads with
   the Work View's configured glyph (fallback glyph when unassigned), optional mission description,

@@ -54,6 +54,7 @@ import {
     WS_PROCESS_TILE_CHROME,
     WS_PROCESS_TILE_CHROME_HOVER,
 } from "@/components/workspace/workspaceTokens";
+import { landingWorkItemsText } from "@/lib/admin/landingWorkItems";
 
 /** Display word for each state — localization of the canonical enum, not a classification. */
 const STATE_WORD: Record<SignalState, string> = {
@@ -352,6 +353,29 @@ export function ProcessSummaryCard({
                 {signal && (signal.supportingContext || signal.trend) ? (
                     <p className="-mt-2 text-[12px] leading-relaxed text-alloy-midnight/38" data-process-context>
                         {[signal.trend, signal.supportingContext].filter(Boolean).join(" · ")}
+                    </p>
+                ) : null}
+
+                {/*
+                  * BP V2 S7 — explicit Work Items attributed to this process (open · overdue), in the
+                  * supporting-text style. Informational: the Work Items surface takes no process filter, so
+                  * there is nothing accurate to link to. Absent until counted; never a placeholder zero.
+                  */}
+                {process.workItems ? (
+                    <p
+                        className="-mt-2 text-[12px] leading-relaxed text-alloy-midnight/38"
+                        data-process-work-items={process.workItems.state}
+                        data-process-work-items-open={process.workItems.state === "ok" ? process.workItems.open : undefined}
+                        data-process-work-items-overdue={process.workItems.state === "ok" ? process.workItems.overdue : undefined}
+                    >
+                        {process.workItems.state === "ok" && process.workItems.overdue > 0 ? (
+                            <>
+                                {landingWorkItemsText({ ...process.workItems, overdue: 0 })} ·{" "}
+                                <span className="font-medium text-alloy-ember/80">{process.workItems.overdue} overdue</span>
+                            </>
+                        ) : (
+                            landingWorkItemsText(process.workItems)
+                        )}
                     </p>
                 ) : null}
 

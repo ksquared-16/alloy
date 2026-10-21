@@ -108,6 +108,12 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
 - **Same publication chain.** One department per process; draft → validate → publish → department
   projection, unchanged. The publish RPC is content-agnostic; the gate is `validateBusinessProcessForPublish`.
+- **Workspace tile (BP V2 Slice 7).** Each process tile adds one line of explicit Work Items attributed to
+  the process (open · overdue) — see [`presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md).
+  Only lifecycle stage work stamps `metadata.department_id`, so manual, Task Assist, definition-instantiated
+  and virtual items are unattributed and appear on no tile; Assignments and Billing have no Work Item
+  producer and truthfully show none. A process-level unique Needs Attention count does not exist (per-view
+  counts overlap; the NA rollup is department grain) and is not rendered; view-level attention stays as it is.
 - **Focus Panel (BP V2 Slice 4).** A projection row opens the existing durable record in the existing Focus
   Panel; for Assignments, on the existing Scheduling card at the row's site and source, with the Work View's
   reason on the record — see [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).

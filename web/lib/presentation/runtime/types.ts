@@ -39,6 +39,7 @@ import { grainCountUnitLabel } from "@/lib/lifecycle/stageGrainV1";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import type { LandingWorkItems } from "@/lib/admin/landingWorkItems";
 
 /**
  * One operational answer — a governed calculation's resolved, formatted value plus its
@@ -121,6 +122,8 @@ export type ProcessTileModel = {
     destination?: DestinationId | null;
     activeRecordCount: number | null;
     needsAttentionCount: number | null;
+    /** BP V2 S7 — explicit Work Items attributed to this process; null = no line (see lib/admin/landingWorkItems). */
+    workItems?: LandingWorkItems | null;
     workViews: WorkViewLinkModel[];
     /**
      * The one configured Primary Signal for this process — a resolved Operational Calculation
@@ -542,6 +545,7 @@ export function processTileModelFromLandingCard(
         destination: workViews[0]?.destination ?? null,
         activeRecordCount: card.activeRecordCount,
         needsAttentionCount: card.needsAttentionCount,
+        workItems: card.workItems ?? null,
         workViews,
         primarySignal: args?.primarySignal ?? null,
         supportingSignal: args?.supportingSignal ?? null,
