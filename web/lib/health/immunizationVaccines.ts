@@ -15,6 +15,9 @@ export type ImmunizationVaccine = {
 
 export const IMMUNIZATION_VACCINES: readonly ImmunizationVaccine[] = [
     { key: "dtap", label: "DTaP (diphtheria, tetanus, pertussis)" },
+    // The adolescent / booster formulation is a DIFFERENT vaccine from DTaP, and the Oregon CIS has
+    // its own row for it — never folded into DTaP doses.
+    { key: "tdap", label: "Tdap (tetanus, diphtheria, pertussis booster)" },
     { key: "ipv", label: "Polio (IPV)" },
     { key: "varicella", label: "Varicella (chickenpox)" },
     { key: "mmr", label: "MMR (measles, mumps, rubella)" },
