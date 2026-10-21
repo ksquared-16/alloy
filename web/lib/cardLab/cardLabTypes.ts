@@ -131,6 +131,13 @@ export type HealthEmergencyContact = {
     order: string;
 };
 
+/** Physician or dentist — a child relationship role, projected. */
+export type HealthCareProvider = {
+    name: string;
+    role: string;
+    phone: string;
+};
+
 export type HealthProfileFact = { label: string; value: string };
 
 export type HealthDetailEvidence = {
@@ -143,6 +150,8 @@ export type HealthDetailEvidence = {
     documents: HealthDocumentRow[];
     requirements: HealthRequirementRow[];
     emergencyContacts: HealthEmergencyContact[];
+    /** Physician and dentist. Optional so specimens that predate the roles still type. */
+    careProviders?: HealthCareProvider[];
     lastUpdated: string;
 };
 

@@ -499,6 +499,22 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                             </p>
                         ) : null}
 
+                        {/* 5 · WHO CARES FOR THE CHILD — physician and dentist, relationship roles. */}
+                        {(vm.careProviders ?? []).length > 0 ? (
+                            <p className="alloy-os-health__contacts" data-health-region="care-providers">
+                                {(vm.careProviders ?? []).map((c) => (
+                                    <span
+                                        key={`${c.role}:${c.personId}`}
+                                        className="alloy-os-health__contact"
+                                        data-health-care-provider={c.role}
+                                    >
+                                        {c.roleLabel}: {c.name ?? "Name not recorded"}
+                                        {c.phone ? ` · ${formatCanonicalPhone(c.phone)}` : ""}
+                                    </span>
+                                ))}
+                            </p>
+                        ) : null}
+
                         {/* ── EXPANDED DETAIL: documents and provenance, on request ── */}
                         {expanded ? (
                             <section className="alloy-os-health__detail" data-health-region="detail">

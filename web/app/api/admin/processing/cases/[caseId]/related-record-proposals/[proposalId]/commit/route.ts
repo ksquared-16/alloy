@@ -14,6 +14,8 @@ import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decis
 import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { executeExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
+import { executeHealthFactProposalCommit } from "@/lib/pos/processingCase/commit/executeHealthFactProposalCommit";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 import {
     isProcessingCaseSubjectRemoved,
@@ -173,6 +175,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 audit_event_id: outcome.audit_event_id,
                 participant_child_request: settled,
             });
+        }
+
+        // A child's allergy, condition or medication: committed through Health, which requires
+        // `health.manage` on top of Processing. A failed grant read denies (permissionKeys null).
+        if (proposalContext?.proposal.execution_kind === "health_fact") {
+            const access = await getAdminAccessContextCached();
+            const outcome = await executeHealthFactProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                access: { permissionKeys: access.ok ? access.permissionKeys : null },
+                caseId,
+                proposalId,
+                metadata,
+            });
+            return outcome.ok
+                ? jsonData({ caseId, proposalId, alreadyDone: outcome.already_applied, ...outcome.record })
+                : NextResponse.json({ error: outcome.error, code: outcome.code }, { status: outcome.status });
         }
 
         if (proposalContext?.proposal.execution_kind === "configured_relationship") {
