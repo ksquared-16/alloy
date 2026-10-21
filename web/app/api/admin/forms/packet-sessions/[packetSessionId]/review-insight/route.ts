@@ -29,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const built = await buildPacketReviewRollupV1(supabase, ctx.orgId, id);
+    const built = await buildPacketReviewRollupV1(supabase, ctx.orgId, id, { permissionKeys: ctx.permissionKeys });
     if (!built.ok) {
         return NextResponse.json({ error: built.error }, { status: built.httpStatus });
     }

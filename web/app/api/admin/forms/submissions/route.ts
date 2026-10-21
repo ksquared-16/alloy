@@ -1,3 +1,4 @@
+import { withholdMedicalAnswersFromSubmissions } from "@/lib/health/withholdMedicalSubmissionAnswers";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -81,7 +82,9 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data, error } = await dbListSubmissions(supabase, ctx.orgId, filters);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const response = jsonData(data ?? []);
+    // A child's medical answers only for a caller with Medical access (FI-01 visibility).
+    const rows = await withholdMedicalAnswersFromSubmissions(supabase, ctx.orgId, (data ?? []) as { payload?: unknown; form_definition_version_id?: string | null }[], { permissionKeys: ctx.permissionKeys });
+    const response = jsonData(rows);
     response.headers.set("X-Admin-Org-Id", ctx.orgId);
     return response;
 }

@@ -22,6 +22,9 @@ const baseProposal: RelatedRecordInstanceProposal = {
     status: "valid",
 };
 
+const MEDICAL = { permissionKeys: ["health.view", "health.manage"] };
+const PROCESSING_ONLY = { permissionKeys: ["processing.operate"] };
+
 const record = {
     id: "cm-1",
     org_id: "org-1",
@@ -30,7 +33,7 @@ const record = {
 };
 
 function plan(proposal: RelatedRecordInstanceProposal, decision: RelatedRecordProposalDecision = { proposal_id: "rrp:child-1", field_decisions: [{ provider_ref: "child.child_first_name", decision: "approve" }] }) {
-    return buildExistingChildCommitPlan({ proposal, decision, currentRecord: record, orgId: "org-1", expectedCustomerId: "cust-1" });
+    return buildExistingChildCommitPlan({ proposal, decision, currentRecord: record, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: MEDICAL });
 }
 
 describe("existing Child proposal commit planning", () => {
@@ -59,8 +62,8 @@ describe("existing Child proposal commit planning", () => {
         expect(plan({ ...baseProposal, collection_provider_ref: "person.contact_role.parents", item_entity_type: "person" }).skipped_changes[0]?.outcome).toBe("unsupported");
         expect(plan({ ...baseProposal, collection_provider_ref: "household.members" }).skipped_changes[0]?.outcome).toBe("unsupported");
         expect(plan({ ...baseProposal, item_entity_type: "person" }).skipped_changes[0]?.outcome).toBe("unsupported");
-        expect(buildExistingChildCommitPlan({ proposal: baseProposal, decision: { proposal_id: "rrp:child-1", instance_decision: "approve", field_decisions: [] }, currentRecord: { ...record, org_id: "other" }, orgId: "org-1", expectedCustomerId: "cust-1" }).skipped_changes[0]?.outcome).toBe("unauthorized");
-        expect(buildExistingChildCommitPlan({ proposal: baseProposal, decision: { proposal_id: "rrp:child-1", instance_decision: "approve", field_decisions: [] }, currentRecord: { ...record, customer_id: "other" }, orgId: "org-1", expectedCustomerId: "cust-1" }).skipped_changes[0]?.outcome).toBe("unauthorized");
+        expect(buildExistingChildCommitPlan({ proposal: baseProposal, decision: { proposal_id: "rrp:child-1", instance_decision: "approve", field_decisions: [] }, currentRecord: { ...record, org_id: "other" }, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: MEDICAL }).skipped_changes[0]?.outcome).toBe("unauthorized");
+        expect(buildExistingChildCommitPlan({ proposal: baseProposal, decision: { proposal_id: "rrp:child-1", instance_decision: "approve", field_decisions: [] }, currentRecord: { ...record, customer_id: "other" }, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: MEDICAL }).skipped_changes[0]?.outcome).toBe("unauthorized");
     });
 
     it("omits unchanged values and blocks stale conflicts per field", () => {
@@ -77,5 +80,33 @@ describe("existing Child proposal commit planning", () => {
             expect(cap?.writable).toBe(true);
         }
         expect(resolveMutationCapability("child.preferred_language")).toBeNull();
+    });
+});
+
+describe("a child's medical fields are a Medical write (FI-01 visibility census)", () => {
+    const medical: RelatedRecordInstanceProposal = {
+        ...baseProposal,
+        field_proposals: [
+            { provider_ref: "child.child_first_name", submitted_value: "Sam", observed_value: "Samuel", label: "First" },
+            { provider_ref: "child.allergies", submitted_value: "Peanuts", label: "Allergies" },
+        ],
+    };
+    const approveAll = { proposal_id: "rrp:child-1", instance_decision: "approve" as const, field_decisions: [] };
+
+    it("without health.manage the allergy change is skipped as unauthorized; the name change still applies", () => {
+        expect(resolveMutationCapability("child.allergies")?.field_key).toBe("allergies");
+        const result = buildExistingChildCommitPlan({ proposal: medical, decision: approveAll, currentRecord: record, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: PROCESSING_ONLY });
+        expect(result.approved_changes.map((c) => c.canonical_ref.field_key)).toEqual(["first_name"]);
+        expect(result.skipped_changes.find((s) => s.provider_ref === "child.allergies")).toMatchObject({ outcome: "unauthorized" });
+    });
+
+    it("a failed grant read (null) denies the medical write too", () => {
+        const result = buildExistingChildCommitPlan({ proposal: medical, decision: approveAll, currentRecord: record, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: { permissionKeys: null } });
+        expect(result.approved_changes.some((c) => c.canonical_ref.field_key === "allergies")).toBe(false);
+    });
+
+    it("with health.manage it is approved like any other field", () => {
+        const result = buildExistingChildCommitPlan({ proposal: medical, decision: approveAll, currentRecord: record, orgId: "org-1", expectedCustomerId: "cust-1", healthAccess: MEDICAL });
+        expect(result.approved_changes.map((c) => c.canonical_ref.field_key)).toEqual(expect.arrayContaining(["first_name", "allergies"]));
     });
 });

@@ -202,7 +202,8 @@ async function getRelatedImpl(
                 ctx.orgId,
                 id,
                 documentsRes.data,
-                OPPORTUNITY_DOC_MERGE_LIMIT
+                OPPORTUNITY_DOC_MERGE_LIMIT,
+                { permissionKeys: ctx.permissionKeys },
             );
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];

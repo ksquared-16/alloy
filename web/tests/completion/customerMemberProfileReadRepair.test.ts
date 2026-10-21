@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
 
+const HEALTH_VIEWER = { permissionKeys: ["health.view"] };
+
 /**
  * THE PROFILE READ REPAIR PRESERVES SEMANTICS (P0-7.6 · A′ Slice 1 item B).
  *
@@ -48,7 +50,7 @@ describe("customer_member profile read repair", () => {
             members: [{ id: "m1", person_id: "p1", first_name: "Emma", last_name: "J", dob: "2020-01-02" }],
             values: [value("m1", "gender", "female", "select"), value("m1", "allergies", "peanut")],
         }, captured);
-        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"]);
+        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"], HEALTH_VIEWER);
         expect(out.get("m1")).toEqual({
             person_id: "p1", first_name: "Emma", last_name: "J", dob: "2020-01-02",
             gender: "female", allergies: "peanut",
@@ -59,7 +61,7 @@ describe("customer_member profile read repair", () => {
         // A repair that widens scope returns more rows and still passes a happy-path fixture.
         const captured: Captured[] = [];
         const sb = fakeSupabase({ members: [], values: [] }, captured);
-        return loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"]).then(() => {
+        return loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"], HEALTH_VIEWER).then(() => {
             const values = captured.find((c) => c.table === "field_values")!;
             expect(values.filters.org_id).toBe("org-1");
             expect(values.filters.entity_type).toBe("customer_member");
@@ -74,7 +76,7 @@ describe("customer_member profile read repair", () => {
     it("THE DEPENDENCY IS GONE: field_definitions is no longer read as its own round trip", async () => {
         const captured: Captured[] = [];
         const sb = fakeSupabase({ members: [], values: [] }, captured);
-        await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"]);
+        await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"], HEALTH_VIEWER);
         expect(captured.map((c) => c.table).sort()).toEqual(["customer_members", "field_values"]);
         expect(captured.some((c) => c.table === "field_definitions")).toBe(false);
     });
@@ -85,7 +87,7 @@ describe("customer_member profile read repair", () => {
             members: [{ id: "m1", person_id: null, first_name: null, last_name: null, dob: null }],
             values: [value("m1", "gender", "female"), value("m-other", "gender", "male")],
         }, captured);
-        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"]);
+        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"], HEALTH_VIEWER);
         expect(out.has("m-other")).toBe(false);
         expect(out.size).toBe(1);
     });
@@ -93,7 +95,7 @@ describe("customer_member profile read repair", () => {
     it("no members means no queries and an empty map", async () => {
         const captured: Captured[] = [];
         const sb = fakeSupabase({ members: [], values: [] }, captured);
-        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", []);
+        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", [], HEALTH_VIEWER);
         expect(out.size).toBe(0);
         expect(captured).toHaveLength(0);
     });
@@ -105,7 +107,7 @@ describe("customer_member profile read repair", () => {
             members: [{ id: "m1", person_id: "p1", first_name: "Liam", last_name: null, dob: null }],
             values: [],
         }, captured);
-        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"]);
+        const out = await loadCustomerMemberProfileFieldsByMemberId(sb, "org-1", ["m1"], HEALTH_VIEWER);
         expect(out.get("m1")).toEqual({ person_id: "p1", first_name: "Liam", last_name: null, dob: null });
     });
 });

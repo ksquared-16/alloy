@@ -1,3 +1,4 @@
+import type { HealthAccessSubject } from "@/lib/health/healthAccess";
 import type { RelatedRecordFieldDecisionKind } from "@/lib/intake/proposals/decisions";
 import { decisionForProvider } from "@/lib/intake/proposals/decisions";
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
@@ -79,6 +80,7 @@ export function buildExistingChildCommitPreview(args: {
     currentRecord: ExistingChildRecordSnapshot | null;
     orgId: string;
     expectedCustomerId: string | null;
+    healthAccess: HealthAccessSubject;
     storedDecision?: StoredProposalDecision | null;
     storedResult?: StoredProposalCommitResult | null;
 }): ExistingChildCommitPreview {
@@ -88,6 +90,7 @@ export function buildExistingChildCommitPreview(args: {
         currentRecord: args.currentRecord,
         orgId: args.orgId,
         expectedCustomerId: args.expectedCustomerId,
+        healthAccess: args.healthAccess,
     });
     const eligibleBase = !plan.skipped_changes.some((s) => s.provider_ref === "*");
     const review_state = deriveRelatedRecordProposalReviewState({

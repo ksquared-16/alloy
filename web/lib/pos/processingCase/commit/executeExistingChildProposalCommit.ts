@@ -1,3 +1,4 @@
+import type { HealthAccessSubject } from "@/lib/health/healthAccess";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { computeCommitIdempotencyKey, computeDecisionVersion } from "@/lib/intake/proposals/decisionVersion";
@@ -27,6 +28,8 @@ export type ExistingChildProposalRequestBase = {
     proposalId: string;
     decision: RelatedRecordProposalDecision;
     metadata: Record<string, unknown>;
+    /** The operator's Medical grants — a child's medical fields are written only with health.manage. */
+    healthAccess: HealthAccessSubject;
 };
 
 export type ExistingChildProposalPreviewRequest = ExistingChildProposalRequestBase;
@@ -107,6 +110,7 @@ export async function previewExistingChildProposalCommit(
         currentRecord: auth.currentRecord,
         orgId: args.orgId,
         expectedCustomerId: auth.context.expectedCustomerId,
+        healthAccess: args.healthAccess,
         storedDecision: meta.decisions?.[args.proposalId] ?? null,
         storedResult: stored,
     });

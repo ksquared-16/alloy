@@ -68,7 +68,9 @@ describe("customerMemberFieldRegistry", () => {
         const health = CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST.filter((r) => r.sensitivity === "health").map(
             (r) => r.field_key,
         );
-        expect(health).toEqual(["allergies", "medical_notes", "special_diet"]);
+        // special_instructions joined in FI-01: it sits in the medical section and the Health card
+        // already shows it beside allergies and medical notes — unclassified, it escaped health access.
+        expect(health).toEqual(["allergies", "medical_notes", "special_instructions", "special_diet"]);
         // A food a child dislikes is a preference. Calling it health data would put ordinary
         // profile text behind health access rules and make the classification meaningless.
         expect(health).not.toContain("foods_refused");

@@ -79,7 +79,7 @@ describe("GET /api/admin/forms/packet-sessions/[packetSessionId]/review-rollup",
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body).toMatchObject({ ok: true, rollup: { packet_session_id: SESS, contract_version: 1 } });
-        expect(buildRollupMock).toHaveBeenCalledWith(expect.anything(), ORG, SESS);
+        expect(buildRollupMock).toHaveBeenCalledWith(expect.anything(), ORG, SESS, expect.any(Object));
         expect(updateSpy).not.toHaveBeenCalled();
     });
 
