@@ -46,10 +46,15 @@ export type PartyArtifactFill = {
  * An attribute the canonical person does not carry yields nothing rather than a guess — an
  * employer's address is not something a `persons` row knows, and a blank there is honest.
  */
-function attributeValue(party: ChildParty, attribute: PartyAttribute, role: string): unknown {
+function attributeValue(party: ChildParty, attribute: PartyAttribute, role: string, label = ""): unknown {
     switch (attribute) {
-        case "name":
+        case "name": {
+            // A box that asks for a first or a last name gets that part — never the full name twice.
+            const [first, ...rest] = (party.full_name ?? "").trim().split(/\s+/);
+            if (/\bfirst\s+name\b|\bgiven\s+name\b/i.test(label)) return first || undefined;
+            if (/\blast\s+name\b|\bsurname\b|\bfamily\s+name\b/i.test(label)) return rest.join(" ") || undefined;
             return party.full_name || undefined;
+        }
         case "phone":
             return party.phone ?? undefined;
         case "email":
@@ -97,7 +102,7 @@ export function projectPartyArtifactValues(
         if (!partyId) continue;
         const party = partyById.get(partyId);
         if (!party) continue;
-        const value = attributeValue(party, destination.attribute, destination.role);
+        const value = attributeValue(party, destination.attribute, destination.role, destination.label);
         if (value !== undefined && value !== "") values[destination.field_id] = value;
     }
 

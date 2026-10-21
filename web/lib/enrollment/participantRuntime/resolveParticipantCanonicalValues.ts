@@ -34,6 +34,7 @@
 
 import { readHouseholdProvisionalAnswers } from "@/lib/enrollment/family/householdProvisionalAnswers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveRequestedStart } from "@/lib/enrollment/effectiveDateAuthority";
 
 /** Canonical child fields the platform holds durably, mapped to the keys a need carries. */
 const CHILD_FIELD_ALIASES: ReadonlyArray<{
@@ -104,7 +105,7 @@ export async function resolveParticipantCanonicalContext(
     try {
         const { data: instance } = await supabase
             .from("process_instances")
-            .select("subject_id")
+            .select("subject_id, metadata")
             .eq("org_id", input.orgId)
             .eq("id", input.processInstanceId)
             .maybeSingle();
@@ -126,6 +127,21 @@ export async function resolveParticipantCanonicalContext(
             const value = row[alias.column];
             if (!usable(value)) continue;
             for (const key of alias.keys) out[key] = value;
+        }
+
+        /*
+         * THIS CHILD'S REQUESTED START — from this child's own enrollment, never a clock.
+         *
+         * `resolveRequestedStart` is the date authority: the participation's `start_date` (where the
+         * placement's proposed start lives before enrollment). Absent, nothing is emitted and the
+         * family is asked; the server's today is never offered as a start date.
+         */
+        const requestedStart = resolveRequestedStart({
+            processInstanceMetadata: ((instance as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? null),
+        });
+        if (requestedStart) {
+            out.start_date = requestedStart;
+            out["enrollment:start_date"] = requestedStart;
         }
 
         /**

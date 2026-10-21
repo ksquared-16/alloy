@@ -270,7 +270,7 @@ export async function renderParticipantEnrollmentDocument(
         resolvePartiesForSession(supabase, input.orgId, sessionRow as { process_instance_id?: string | null }),
     ]);
     const payload = (draftResult.data as {
-        payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown> };
+        payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown>; groups?: Record<string, Array<{ values?: Record<string, unknown> }>> };
     } | null)?.payload;
     const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
     /*
@@ -327,6 +327,7 @@ export async function renderParticipantEnrollmentDocument(
             schema,
             values,
             signatures,
+            groups: payload?.groups ?? {},
             provenance: {
                 form_definition_id: artifact.formDefinitionId,
                 form_definition_version_id: artifact.versionId ?? "",

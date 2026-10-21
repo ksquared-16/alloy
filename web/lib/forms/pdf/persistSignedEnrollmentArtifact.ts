@@ -354,6 +354,7 @@ async function persistComposedSignedArtifact(
         schema,
         // The SUBMITTED values, exactly — the stored copy must correspond to what was signed.
         values: (input.sub.payload?.values ?? {}) as Record<string, unknown>,
+        groups: ((input.sub.payload as { groups?: unknown } | null | undefined)?.groups ?? {}) as Record<string, Array<{ values?: Record<string, unknown> }>>,
         provenance: {
             form_definition_id: input.formDefinitionId,
             form_definition_version_id: input.sub.form_definition_version_id,

@@ -14,6 +14,7 @@ import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspec
 import { useFormStudioAuthoring } from "./useFormStudioAuthoring";
 import type { ProcessingFormRow, ProcessingFormPublicLinkRow } from "./useProcessingFormApi";
 import { useProcessingFormApi } from "./useProcessingFormApi";
+import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { DEFAULT_FORM_ACCENT, parseFormBranding, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
 import { FormOperationalIntentPicker } from "@/components/forms/admin/FormOperationalIntentPicker";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
@@ -54,6 +55,7 @@ export default function ProcessingFormBuilder({
         mintProcessingPublicLink,
         unpublishProcessingPublicLinks,
     } = useProcessingFormApi();
+    const { folders } = useProcessingFolders();
     const [schema, setSchema] = useState<FormSchemaV1 | null>(null);
     const [editVersionId, setEditVersionId] = useState<string | null>(null);
     const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -326,10 +328,11 @@ export default function ProcessingFormBuilder({
         ? `Published · ${links.length} link${links.length === 1 ? "" : "s"}`
         : "Draft — not published";
     const queueFolderRaw = (formMetaSnapshot as Record<string, unknown> | null | undefined)?.admin_category;
-    const queueFolderSummary =
-        typeof queueFolderRaw === "string" && queueFolderRaw.trim()
-            ? queueFolderRaw.trim().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
-            : "Match by keyword";
+    // The folder's own name, as the organization saved it — never its id with underscores removed.
+    const queueFolderId = typeof queueFolderRaw === "string" ? queueFolderRaw.trim() : "";
+    const queueFolderSummary = queueFolderId
+        ? folders.find((f) => f.id === queueFolderId)?.label ?? "Folder"
+        : "Match by keyword";
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone" data-testid="processing-form-builder">

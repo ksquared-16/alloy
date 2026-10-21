@@ -181,6 +181,15 @@ export function partySlotForField(
      */
     const entity = field.field_source?.entity_type?.trim().toLowerCase() ?? "";
     if (entity && SUBJECT_ENTITIES.has(entity)) return null;
+    /*
+     * THE FAMILY'S OWN GUARDIAN IS A CANONICAL BINDING, NOT A PARTY POSITION.
+     *
+     * A box bound to the registry's `guardian_*` keys is the household's primary guardian, resolved
+     * from the household record. Reading it as "Guardian #1" let the party projection replace the
+     * primary guardian's first and last name with whichever child relationship held the guardian
+     * role — printed as the full name in both boxes on the Lil' Sunshine application.
+     */
+    if (entity === "guardian" && (field.field_source?.field_key ?? "").startsWith("guardian_")) return null;
 
     const ordinalMatch = /#\s*(\d+)/.exec(label);
     const ordinal = ordinalMatch ? Number(ordinalMatch[1]) : 1;
