@@ -1,0 +1,81 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-21T13:38:48.863Z",
+  "views": {
+    "charges_needing_review": {
+      "households": 0,
+      "facts": 0,
+      "parity_with_financials_reader": true,
+      "draft_charges_in_org": 1,
+      "without_fin_read": "projection_forbidden"
+    },
+    "payment_exceptions": {
+      "unrecognized_collections_in_org": 86,
+      "all": {
+        "households": 1,
+        "facts": 86,
+        "truncated": false
+      },
+      "restricted_R": {
+        "households": 0
+      },
+      "selected_L": {
+        "households": 0
+      },
+      "sample": [
+        {
+          "household": "fc500000-0000-4000-8000-0000000c0001",
+          "source": {
+            "kind": "collection_attempt",
+            "id": "e1c73dd8-7af0-4fcf-929a-c38470bdbdac",
+            "count": 86,
+            "statusLabel": "Collected by the provider, not yet recorded · 86 collections"
+          },
+          "reason": "Collected by the provider, not yet recorded · 86 collections"
+        }
+      ],
+      "without_fin_read": "projection_forbidden"
+    },
+    "funding_variances": {
+      "all": {
+        "00000000-0000-4000-8000-10000000003b": 1,
+        "00000000-0000-4000-8000-000050000001": 1
+      },
+      "restricted_R": {
+        "00000000-0000-4000-8000-000050000001": 1
+      },
+      "selected_L": {
+        "00000000-0000-4000-8000-10000000003b": 1
+      },
+      "sample": [
+        {
+          "household": "00000000-0000-4000-8000-10000000003b",
+          "source": {
+            "kind": "charge",
+            "id": "8698e7de-8357-44c9-b6a8-4feccc4fe497",
+            "count": 1,
+            "statusLabel": "Agency paid something else · overpaid"
+          },
+          "reason": "Agency paid something else · overpaid"
+        },
+        {
+          "household": "00000000-0000-4000-8000-000050000001",
+          "source": {
+            "kind": "charge",
+            "id": "e286942c-d12d-40f0-93c3-722b0ca7c5c7",
+            "count": 1,
+            "statusLabel": "Agency paid something else · short paid"
+          },
+          "reason": "Agency paid something else · short paid"
+        }
+      ],
+      "excluded": {
+        "resolved": "607b7866-7d58-4bc3-941a-4a47307b3967",
+        "matched_zero": "36e5005b-c40c-4567-bbc5-65686cb3506b"
+      },
+      "without_fin_read": "projection_forbidden"
+    }
+  },
+  "money_tables_unchanged_by_reads": true,
+  "fixtures_remaining": 0
+}

@@ -1,5 +1,5 @@
 /**
- * An in-memory PostgREST subset for projection tests: applies eq / lte / gte / gt / in / not-in /
+ * An in-memory PostgREST subset for projection tests: applies eq / lte / gte / gt / in / is / not-in /
  * or(end_date null-or-gte) / order / range exactly as the database would, and records every read and
  * every write attempt (none is allowed from a projection).
  */
@@ -28,6 +28,7 @@ export function projectionTableStub(tables: Record<string, Row[]>) {
                 gte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) >= v), b),
                 gt: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) > v), b),
                 in: (c: string, vs: unknown[]) => (preds.push((r) => vs.includes(r[c])), b),
+                is: (c: string, v: unknown) => (preds.push((r) => (v === null ? r[c] == null : r[c] === v)), b),
                 not: (c: string, _op: string, list: string) => {
                     const vals = list.replace(/[()]/g, "").split(",");
                     preds.push((r) => !vals.includes(String(r[c])));

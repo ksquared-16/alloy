@@ -289,6 +289,12 @@ export type UnrecognizedCollection = {
     attemptId: string;
     orgId: string;
     customerId: string | null;
+    /**
+     * The attempt's own billable source, carried unchanged (BP V2 S5) so a cross-household reader can
+     * resolve household and site through Financials' location rule instead of guessing. Additive.
+     */
+    billableSourceType: string | null;
+    billableSourceId: string | null;
     chargeId: string | null;
     amountCents: number;
     currency: string;
@@ -314,7 +320,7 @@ export type UnrecognizedCollection = {
  */
 export async function readUnrecognizedCollections(
     supabase: SupabaseClient,
-    args: { orgId: string; limit?: number },
+    args: { orgId: string; limit?: number; failClosed?: boolean },
 ): Promise<UnrecognizedCollection[]> {
     const orgId = String(args.orgId ?? "").trim();
     if (!orgId) return [];
@@ -332,7 +338,11 @@ export async function readUnrecognizedCollections(
         .order("processor_state_at", { ascending: true })
         .limit(Math.min(Math.max(args.limit ?? 100, 1), 200));
 
-    if (error || !data) return [];
+    if (error || !data) {
+        // BP V2 S5 — a cross-household reader must not turn a failed read into "nothing to recognize".
+        if (args.failClosed) throw new Error(error?.message ?? "unrecognized collections could not be read");
+        return [];
+    }
     const rows = data as unknown as Array<Record<string, unknown>>;
     if (!rows.length) return [];
 
@@ -365,6 +375,8 @@ export async function readUnrecognizedCollections(
             orgId: String(r.org_id),
             /* The ACCOUNT, when the obligation is billed to one directly. */
             customerId: r.billable_source_type === "customer" ? String(r.billable_source_id) : null,
+            billableSourceType: r.billable_source_type ? String(r.billable_source_type) : null,
+            billableSourceId: r.billable_source_id ? String(r.billable_source_id) : null,
             chargeId: r.charge_id ? String(r.charge_id) : null,
             amountCents: Number(r.requested_amount_cents) || 0,
             currency: String(r.currency ?? "USD"),

@@ -21,7 +21,11 @@ export const DOMAIN_PROJECTION_CATALOG: Readonly<Record<ProcessProjectionDomain,
         { key: "schedule_gaps", label: "Schedule gaps", subjectTypes: ["child"] },
         { key: "assignments_proposed_incomplete", label: "Proposed / incomplete", subjectTypes: ["child", "person"] },
     ],
-    billing: [{ key: "charges_needing_review", label: "Charges needing review", subjectTypes: ["household"] }],
+    billing: [
+        { key: "charges_needing_review", label: "Charges needing review", subjectTypes: ["household"] },
+        { key: "payment_exceptions", label: "Payment exceptions", subjectTypes: ["household"] },
+        { key: "funding_variances", label: "Funding variances", subjectTypes: ["household"] },
+    ],
 };
 
 export function domainProjectionKeys(domain: ProcessProjectionDomain): string[] {
