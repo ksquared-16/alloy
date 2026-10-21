@@ -83,6 +83,8 @@ describe("family Decision work completes when every child has a path", () => {
         expect(complete).toHaveBeenCalledTimes(1);
         expect(complete.mock.calls[0]![0]).toMatchObject({ workId: "family-work", outcomeKey: "paths_chosen", subject: { journey_segment: "family", opportunity_id: "opp" } });
         expect(complete.mock.calls[0]![0].idempotencyKey).toContain("family-work:paths_chosen");
+        // The runtime's completion is not an operator action: no Activity event of its own.
+        expect(complete.mock.calls[0]![0].runtimeRecorded).toBe(true);
     });
 
     it("does nothing while a child is undecided", async () => {
