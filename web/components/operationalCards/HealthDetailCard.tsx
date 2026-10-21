@@ -387,7 +387,7 @@ function Prov({
  * to change health information is told so). The host re-reads the record afterwards; the original
  * authorization and its signed copy remain, now marked withdrawn.
  */
-function ConsentWithdrawControl({
+export function ConsentWithdrawControl({
     consentId,
     label,
     withdraw,
