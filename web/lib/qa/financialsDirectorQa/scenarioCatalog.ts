@@ -183,7 +183,20 @@
  *   KEPT      26, 27, 41, 42, 64, 87, 91, 92, 94 — navigation words only; their checks and any
  *             prior acceptances stand.
  */
-export const CATALOG_VERSION = "2026-10-20.5";
+/*
+ * 2026-10-21.1 — W7-F050 / W7-F051: ordinary payments settle AUTOMATICALLY. The Payment command no
+ * longer asks for a charge: Application reads Automatic with the calculated Will apply (past due
+ * first, then currently due, oldest first; the payer's own share and what the account owes as a
+ * whole; never a not-yet-due obligation); Confirm payment reruns the same rule; Payment details reads
+ * Applied automatically, with any excess as Prepaid remaining. Change allocation is the exception.
+ * Autopay collects one amount per run for its payer, after their own prepaid settles.
+ *   REWRITTEN 26, 28, 74 — what is entered or expected changed; earlier results do not count.
+ *   NEW       97 automatic_settlement_split.
+ *   KEPT      27, 41, 42 — navigation words only (no charge is chosen); their checks stand.
+ *             29, 30, 32, 61, 83 — unchanged: applying unapplied money, Reallocate and refunds are
+ *             the governed exception path and still work as accepted.
+ */
+export const CATALOG_VERSION = "2026-10-21.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -1004,12 +1017,17 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "The receipt is the historical fact: this much money arrived, this way, from this person. Everything downstream is a decision about where to put it, and none of those decisions may change the receipt.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" }],
-        navigate: ["From the account pane: Payment → Apply toward → a posted obligation."],
-        doThis: ["Method → Check, and enter a Check number you will recognise.", "Enter more than is owed — the outstanding plus a margin.", "Who paid: already filled when the household has one adult; otherwise choose who paid.", "Confirm."],
+        navigate: ["From the account pane: Payment. No charge is chosen — Application reads Automatic."],
+        doThis: [
+            "Method → Check, and enter a Check number you will recognise.",
+            "Who paid: already filled when the household has one adult; otherwise choose who paid.",
+            "Amount: more than the Will apply total — the calculated amount plus a margin. Read Will apply and \"Stays unapplied\".",
+            "Confirm payment.",
+        ],
         expectChanges: [
             "A Payment row appears in the ledger's current period: the amount, Status Received (Part applied / Unapplied while money still answers nothing), the PAYER in the Party column, and “Check #<your number>” in Description.",
             "Its GL account is the destination Check payments settled into WHEN IT WAS RECEIVED (Organization → Financials → Payments → Payment methods → Check → Destination account), or Unmapped when none was configured then — never the revenue account of the charge it paid. Receipts recorded before destinations were tracked stay Unmapped; changing the mapping later does not relabel them.",
-            "Opening the row (Payment details) shows the date, payer, amount, method and which charges it was applied to.",
+            "Opening the row (Payment details) shows the date, payer, amount, method, \"Applied automatically\" with the charges it settled (past due first, oldest first) — matching Will apply — and the margin as Prepaid remaining.",
         ],
         expectUnchanged: ["Gross charges posted."],
         invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
@@ -1027,7 +1045,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             { kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" },
             { kind: "scenario_passed", scenarioKey: "manage_responsibility" },
         ],
-        navigate: ["From the account pane: Payment → Apply toward → a posted obligation.", "Open the Who paid chooser."],
+        navigate: ["From the account pane: Payment (Application reads Automatic — no charge is chosen).", "Open the Who paid chooser."],
         doThis: [
             "Read the chooser: every current household adult appears, not only the responsible one, plus “Not known — record to the household”. With several adults nothing is pre-selected and the record button stays disabled until you choose; with exactly one adult it is already filled.",
             "Choose an adult who is NOT marked also responsible.",
@@ -1050,18 +1068,36 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "apply_payment",
         order: 28,
-        title: "What is owed falls by what was applied",
+        title: "A payment settles what is due automatically — past due first, oldest first",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Confirm the obligation is settled and the balance fell by the applied amount, not the receipt.",
+        purpose:
+            "Prove ordinary money settles the account's eligible outstanding responsibility by the allocation rule, with no charge chosen, and that what is owed falls by exactly what was applied.",
         whyItMatters:
-            "Overpaying one bill does not pay the others. The balance may only move by the part of the money that actually settled something.",
+            "Choosing a charge for every payment is clerical work that produces inconsistent books. One deterministic rule — past due first, then currently due, oldest due date first — settles the same way for every operator and every tender, and a not-yet-due obligation is never paid early.",
         requires: [{ kind: "scenario_passed", scenarioKey: "payment_receipt" }],
-        navigate: ["Read the obligation you paid, then the account totals."],
-        doThis: ["Compare the obligation before and after.", "Compare what is owed before and after."],
-        expectChanges: ["The obligation is settled.", "What is owed falls by the applied amount."],
-        expectUnchanged: ["The receipt amount.", "The payer."],
+        navigate: ["From the account pane: Payment."],
+        doThis: [
+            "Note Due now and, in the ledger, the oldest open obligations.",
+            "Amount: LESS than the calculated amount (a partial payment). Method: Cash or Money order.",
+            "Read Will apply: the oldest past-due obligations first, then current ones; nothing that is not yet due.",
+            "Confirm payment, then open the new Payment row (Payment details).",
+        ],
+        expectChanges: [
+            "Payment details reads \"Applied automatically\" with exactly the lines Will apply showed.",
+            "Those obligations' outstanding falls by what was applied; Due now falls by the amount.",
+        ],
+        expectUnchanged: [
+            "The receipt amount and the payer.",
+            "Any not-yet-due or Scheduled obligation — untouched.",
+            "Every charge's GL account and amount — settlement never re-books revenue.",
+        ],
         invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
-        failSymptoms: ["The balance falls by the full receipt.", "The receipt amount changes."],
+        failSymptoms: [
+            "The form asks you to choose a charge.",
+            "A newer obligation settled before an older past-due one.",
+            "A not-yet-due charge settled.",
+            "Payment details differs from Will apply on an unchanged account.",
+        ],
     }),
     S({
         key: "partial_unapplied",
@@ -1322,13 +1358,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Confirm the organization has a connected provider: Organization → Financials → Payments must read Ready, and the Card row's Processor must read Stripe · ready.",
             "Open the family in the Focus Panel.",
             "Open the Financials card, then Details.",
-            "Use the Payment control on an obligation the family actually owes.",
+            "Payment — Application reads Automatic; no obligation is chosen.",
         ],
         doThis: [
             "Method: choose the family's card on file (“Visa •••• 4242 · <payer>”) and press Confirm payment to charge it — or New card, press Continue to card details, and enter a Stripe TEST card in the provider's own fields.",
             "Complete the collection.",
-            "Read the receipt, and read what the obligation now says.",
-            "Attempt the same collection a second time on the same obligation.",
+            "Read the receipt, its Payment details (Applied automatically), and what the obligations now say.",
+            "Attempt the same collection a second time.",
         ],
         expectChanges: [
             "A receipt exists for the amount the provider confirmed.",
@@ -1358,7 +1394,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         navigate: [
             "Confirm Organization → Financials → Payments → Payment methods shows Bank transfer's Processor as Stripe · ready, not only Card's.",
             "Open the family, then Financials -> Details.",
-            "Use the Payment control on an obligation with nothing already covering it.",
+            "Payment — Method: the bank account on file; Application reads Automatic.",
         ],
         doThis: [
             "Choose the bank rail and a bank method that is on file and ready.",
@@ -2085,7 +2121,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Read the receipt: payer, method, rail and amount.",
         ],
         expectChanges: [
-            "Exactly one collection attempt, for the amount due and no more.",
+            "Exactly ONE collection attempt for the authorized payer's eligible amount — their share and what the account owes as a whole, due now — not one per charge.",
+            "When the provider confirms, Payment details reads Applied automatically, past due first, oldest first.",
             "The receipt carries the authorized payer and the authorized method.",
         ],
         expectUnchanged: [
@@ -2094,8 +2131,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         ],
         invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
         failSymptoms: [
-            "Two attempts for one obligation.",
-            "An amount that is not what was due.",
+            "Two attempts for one obligation, or one attempt per charge.",
+            "An amount that includes another person's share or a not-yet-due charge.",
             "A receipt with no payer, or a different payer from the one authorized.",
         ],
     }),
@@ -2766,6 +2803,39 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         ],
     }),
     S({
+        key: "automatic_settlement_split",
+        order: 97,
+        title: "A payer's money settles their own share — never someone else's",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove automatic settlement respects responsibility: Dana's payment settles Dana's share of a split obligation and leaves Rosa's share owed.",
+        whyItMatters:
+            "Responsibility is not display metadata. If Dana's money quietly settled Rosa's older share, the ledger would chase Dana for Rosa's debt and tell Rosa she owes nothing.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "manage_responsibility" }],
+        navigate: ["Financials → Accounts → W7 QA · Split Family → Payment."],
+        doThis: [
+            "Who paid: Dana Split. Method: Money order. Amount: less than Dana's share of the Registration fee.",
+            "Read Will apply — the Registration fee, for no more than Dana's remaining share.",
+            "Confirm payment. Open the charge's Charge details → Responsibility, and the new Payment row's Payment details.",
+            "Then Payment again with Who paid: Not known — read Stays unapplied: named people owe the rest.",
+        ],
+        expectChanges: [
+            "Dana's remaining responsibility falls by exactly what was applied.",
+            "Payment details reads Applied automatically → Registration fee.",
+        ],
+        expectUnchanged: [
+            "Rosa's remaining responsibility.",
+            "The charge's amount, GL account and responsibility split.",
+            "A payment with no payer named does not settle either person's share — it stays unapplied.",
+        ],
+        invariant: MONEY_INVARIANTS.RESPONSIBILITY_MOVES_NO_CASH,
+        failSymptoms: [
+            "Rosa's remaining share falls because Dana paid.",
+            "More than Dana's share applied from Dana's payment.",
+            "A household (no payer) payment settles a named person's share.",
+        ],
+    }),
+    S({
         key: "payment_method_acceptance",
         order: 96,
         title: "Which ways of paying are accepted, and where each one lands",
@@ -2925,6 +2995,7 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     financial_activity_language: "CORE_RUNNABLE",
     provider_readiness: "CORE_RUNNABLE",
     payment_method_acceptance: "CORE_RUNNABLE",
+    automatic_settlement_split: "CORE_RUNNABLE",
 
     /*
      * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"
@@ -3013,6 +3084,7 @@ export const SCENARIO_EVIDENCE: Readonly<Record<string, readonly EvidenceClass[]
     provider_return: ["DEFERRED_PROVIDER_DEPENDENT", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
     provider_readiness: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
     payment_method_acceptance: ["HUMAN_WALKTHROUGH"],
+    automatic_settlement_split: ["HUMAN_WALKTHROUGH"],
 
     bank_setup_request: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
     bank_setup_payer_authorization: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
