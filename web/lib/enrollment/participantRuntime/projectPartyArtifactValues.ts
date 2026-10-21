@@ -22,6 +22,7 @@
  * Pure. No I/O.
  */
 
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
     artifactSlotsForProjection,
@@ -70,6 +71,9 @@ function attributeValue(party: ChildParty, attribute: PartyAttribute, role: stri
              */
             return party.roles.includes("authorized_pickup") ? party.full_name || undefined : undefined;
         case "relationship":
+            // The kinship the family stated, kept on the relationship edge ("grandparent" →
+            // "Grandparent"). Blank when none was given — never inferred from the role.
+            return party.relationship_type ? humanizeOperatorSlug(party.relationship_type) : undefined;
         case "address":
         case "employer":
         case "employer_address":

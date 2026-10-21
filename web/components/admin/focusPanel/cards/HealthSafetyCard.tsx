@@ -499,6 +499,22 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                             </p>
                         ) : null}
 
+                        {/* 4b · AUTHORIZATION + INSURANCE — states, never implied verification. */}
+                        {(vm.consents ?? []).some((c) => c.status === "active") || (vm.insurance ?? []).length > 0 ? (
+                            <p className="alloy-os-health__contacts" data-health-region="authorizations">
+                                {(vm.consents ?? []).filter((c) => c.status === "active").map((c) => (
+                                    <span key={c.consentId} className="alloy-os-health__contact" data-health-consent="active">
+                                        {c.label}: authorized
+                                    </span>
+                                ))}
+                                {(vm.insurance ?? []).map((i) => (
+                                    <span key={i.factId} className="alloy-os-health__contact" data-health-insurance="reported">
+                                        Insurance: {i.provider ?? "on file"} (reported)
+                                    </span>
+                                ))}
+                            </p>
+                        ) : null}
+
                         {/* 5 · WHO CARES FOR THE CHILD — physician and dentist, relationship roles. */}
                         {(vm.careProviders ?? []).length > 0 ? (
                             <p className="alloy-os-health__contacts" data-health-region="care-providers">

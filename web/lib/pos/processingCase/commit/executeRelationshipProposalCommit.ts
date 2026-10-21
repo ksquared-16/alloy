@@ -23,6 +23,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
+import { loadPersonChildRelationshipOptionSetItems } from "@/lib/fields/personChildRelationship/personChildRelationshipRepository";
+import { updatePersonChildRelationship } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import {
     verifyRelationshipCommitAuthorization,
     type RelationshipCommitRequest,
@@ -466,6 +468,20 @@ export async function executeRelationshipProposalCommit(args: {
         resolved_customer_id: anchorCustomerId,
     };
 
+    /*
+     * THE RELATIONSHIP THE FAMILY STATED REACHES THE EDGE.
+     *
+     * The command runtime takes no kinship, so "Grandparent" typed on the form was dropped at commit.
+     * It is written through the canonical relationship service, only onto edges that have none, and
+     * only when it is one of the organization's own relationship types (matched by key or label).
+     * Anything else stays on the submission as evidence — never coerced.
+     */
+    const statedKinship = (auth.proposal.relationship_intent?.proposed_person_facts ?? [])
+        .find((f) => f.field_key === "relationship_type" && typeof f.value === "string" && f.value.trim())?.value as string | undefined;
+    if (statedKinship && record.person_id && record.affected_member_ids.length > 0) {
+        await applyStatedKinship(args.supabase, args.orgId, record.person_id, record.affected_member_ids, statedKinship).catch(() => null);
+    }
+
     // Persist the structured result on the case so retries and audit can read it.
     const ledger = { ...ledgerFrom(args.metadata), [key]: record };
     await args.supabase
@@ -475,4 +491,28 @@ export async function executeRelationshipProposalCommit(args: {
         .eq("id", args.caseId);
 
     return { ok: true, status: 200, record };
+}
+
+/** Fill an EMPTY relationship type on the person's edges with an org relationship type the family named. */
+export async function applyStatedKinship(
+    supabase: SupabaseClient,
+    orgId: string,
+    personId: string,
+    memberIds: readonly string[],
+    stated: string,
+): Promise<void> {
+    const options = await loadPersonChildRelationshipOptionSetItems(supabase, orgId);
+    const want = stated.trim().toLowerCase();
+    const match = options.find((o) => o.item_key.trim().toLowerCase() === want || (o.label ?? "").trim().toLowerCase() === want);
+    if (!match) return;
+    const { data: edges } = await supabase
+        .from("person_child_relationships")
+        .select("id, relationship_type")
+        .eq("org_id", orgId)
+        .eq("person_id", personId)
+        .in("customer_member_id", [...memberIds]);
+    for (const edge of (edges ?? []) as { id: string; relationship_type: string | null }[]) {
+        if ((edge.relationship_type ?? "").trim()) continue;
+        await updatePersonChildRelationship(supabase, orgId, edge.id, { relationship_type: match.item_key });
+    }
 }

@@ -159,9 +159,11 @@ export async function rejectNewChildProposal(
         return { ok: false, status: 409, error: "This relationship has already been committed, so the proposal cannot be rejected." };
     }
     {
-        const healthLedger = (input.metadata as Record<string, unknown>).health_fact_commits;
-        if (healthLedger && typeof healthLedger === "object" && (healthLedger as Record<string, unknown>)[input.proposalId]) {
-            return { ok: false, status: 409, error: "This health fact has already been recorded, so the proposal cannot be rejected." };
+        for (const key of ["health_fact_commits", "medical_consent_commits"]) {
+            const ledger = (input.metadata as Record<string, unknown>)[key];
+            if (ledger && typeof ledger === "object" && (ledger as Record<string, unknown>)[input.proposalId]) {
+                return { ok: false, status: 409, error: "This has already been recorded on the child's Medical record, so the proposal cannot be rejected." };
+            }
         }
     }
     const already = stored.decisions?.[input.proposalId]?.instance_decision === "reject";

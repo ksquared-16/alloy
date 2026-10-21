@@ -13,7 +13,15 @@ export function collectionDisplayKind(providerRef: string): CollectionInstanceDi
     return "generic";
 }
 
+const MEDICAL_GROUP_TITLES: Readonly<Record<string, string>> = {
+    "health.immunizations": "Immunizations (reported by the family)",
+    "health.insurance": "Health insurance",
+    "medical.consents": "Medical authorization",
+};
+
 export function collectionGroupTitle(providerRef: string, fallbackLabel: string): string {
+    const medical = MEDICAL_GROUP_TITLES[providerRef.trim()];
+    if (medical) return medical;
     const kind = collectionDisplayKind(providerRef);
     if (kind === "children") return "Children";
     if (kind === "parents_guardians") return "Parents / Guardians";

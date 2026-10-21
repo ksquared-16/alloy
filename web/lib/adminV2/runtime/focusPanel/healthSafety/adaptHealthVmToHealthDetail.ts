@@ -207,6 +207,33 @@ export function adaptHealthVmToHealthDetail(
         documents,
         requirements,
         emergencyContacts,
+        insurance: (vm.insurance ?? []).map((i) => ({
+            provider: i.provider ?? "Insurance",
+            lines: [
+                i.planName ? `Plan ${i.planName}` : null,
+                i.policyNumber ? `Policy ${i.policyNumber}` : null,
+                i.groupNumber ? `Group ${i.groupNumber}` : null,
+                i.memberId ? `Member ID ${i.memberId}` : null,
+                i.subscriberName ? `Coverage holder ${i.subscriberName}${i.subscriberRelationship ? ` (${i.subscriberRelationship})` : ""}` : null,
+                i.phone ? formatPhoneDisplay(i.phone) : null,
+            ].filter((x): x is string => Boolean(x)),
+            assurance: i.assurance === "verified" ? "Verified" : "Reported by the family — coverage not verified",
+        })),
+        immunizations: (vm.immunizations ?? []).map((m) => ({
+            vaccine: m.label,
+            doses: [
+                ...m.doses.map((d) => `#${d.doseNumber ?? "?"} ${shortDate(d.administeredOn) ?? d.administeredOn ?? ""}`.trim()),
+                ...(m.historyState === "had_disease" ? ["Had the disease (reported)"] : []),
+            ].join(" · ") || "No dose dates",
+            assurance: m.assurance === "verified" ? "Verified" : "Reported by the family — not verified",
+        })),
+        consents: (vm.consents ?? []).map((c) => ({
+            label: c.label,
+            state: c.status === "active" ? "Authorized" : c.status === "withdrawn" ? "Withdrawn" : "Superseded",
+            detail: c.status === "withdrawn"
+                ? `Withdrawn ${shortDate(c.withdrawnAt) ?? ""}${c.withdrawalReason ? ` — ${c.withdrawalReason}` : ""}`
+                : `Signed by ${c.grantedByName ?? "the family"} · ${shortDate(c.grantedAt) ?? ""}${c.evidenceDocumentId ? " · signed copy on file" : ""}`,
+        })),
         careProviders: vm.careProviders.map((c) => ({
             name: c.name ?? c.roleLabel,
             role: c.roleLabel,

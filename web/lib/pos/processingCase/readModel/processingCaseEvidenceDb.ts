@@ -11,6 +11,8 @@ import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { ProposedValue, SourceEvidenceLoader, SourceEvidenceRaw, SourceEvidenceRegistry } from "./resolveSourceEvidence";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
+import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
+import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
@@ -83,6 +85,9 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
             }
         }
 
+        // What each form declares it captures for Medical (immunization grid, consent).
+        const healthCapture = await loadHealthCaptureDeclarations(supabase, orgId, versionIds);
+
         for (const s of subRows) {
             const schemaParsed = s.form_definition_version_id ? safeParseFormSchema(schemaByVersion.get(s.form_definition_version_id)) : null;
             const schema = schemaParsed?.success ? schemaParsed.data : null;
@@ -102,6 +107,12 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
                       },
                   )
                 : null;
+            const capture = s.form_definition_version_id ? healthCapture.get(s.form_definition_version_id) : undefined;
+            if (proposalBundle && schema && capture) {
+                proposalBundle.collections.push(
+                    ...adaptHealthCaptureToProposals(schema, payload, capture, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
+                );
+            }
             const collectionEvidence = proposalBundle
                 ? projectRelatedRecordProposalsToEvidence(proposalBundle, { processingCaseId: null })
                 : undefined;
