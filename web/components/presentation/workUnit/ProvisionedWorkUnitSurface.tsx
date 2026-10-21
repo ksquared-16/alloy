@@ -465,7 +465,7 @@ export function ProvisionedWorkUnitSurface() {
                                                     id: src.id,
                                                     reason: row?.context?.domain_projection?.detail?.reason ?? src.status_label,
                                                     // BP V2 S4 — the site the row's commitment or agreement is at.
-                                                    siteLocationId: row?.context?.domain_projection?.detail?.siteLocationId ?? null,
+                                                    siteLocationId: row?.context?.domain_projection?.site_location_id ?? null,
                                                 }
                                               : null;
                                       })(),
