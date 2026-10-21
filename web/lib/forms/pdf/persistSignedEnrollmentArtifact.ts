@@ -96,7 +96,7 @@ export async function persistSignedEnrollmentArtifact(
 
     const { data: sigRows } = await supabase
         .from("form_submission_signatures")
-        .select("field_id, typed_full_name, drawn_asset_document_id, signer_acknowledged_at, signer_ip_hash")
+        .select("field_id, typed_full_name, drawn_asset_document_id, signer_acknowledged_at, signer_ip_hash, metadata")
         .eq("org_id", input.orgId)
         .eq("form_submission_id", input.submissionId);
     const signatures = (sigRows ?? []) as Array<{
@@ -105,6 +105,7 @@ export async function persistSignedEnrollmentArtifact(
         drawn_asset_document_id: string | null;
         signer_acknowledged_at: string | null;
         signer_ip_hash: string | null;
+        metadata: { signer?: { printed_name?: string | null } } | null;
     }>;
     const byFieldId: Record<string, { typed_full_name: string | null; drawnPng?: Uint8Array | null }> = {};
     for (const row of signatures) {
@@ -202,7 +203,9 @@ export async function persistSignedEnrollmentArtifact(
         ),
         signatures: marks,
         evidence: {
-            signerName: firstSigner?.typed_full_name ?? "",
+            // Who signed, as the signer typed it: the typed signature, or the printed name beside a
+            // drawn mark (FI-02). Blank when it was never captured — never the link's recipient.
+            signerName: firstSigner?.typed_full_name ?? firstSigner?.metadata?.signer?.printed_name ?? "",
             intentAcknowledged: true,
             acknowledgedAt: firstSigner?.signer_acknowledged_at ?? input.nowIso,
             signerIpHash: firstSigner?.signer_ip_hash ?? null,

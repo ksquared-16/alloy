@@ -115,11 +115,16 @@ export function adaptHealthCaptureToProposals(
         const required = sigs.filter((s, i) => i === 0 || s.sig);
         const signed = required.length > 0 && required.every((s) => Boolean(s.sig));
         const first = sigs[0]?.sig ?? null;
+        // WHO signed is only what the signer typed — the typed signature, or the printed name beside
+        // a drawn mark (FI-02). Never the link's recipient. A consent with no named signer is not
+        // recordable: the grantor of a medical authorization is part of what was authorized.
+        const signerName = first?.typed_full_name?.trim() || first?.signer_printed_name?.trim() || null;
+        const recordable = signed && signerName !== null;
         const key = consent.consent_kind;
         collections.push({
             collection_key: "medical_consent",
             collection_provider_ref: MEDICAL_CONSENT_PROVIDER_REF,
-            status: signed ? "valid" : "incomplete",
+            status: recordable ? "valid" : "incomplete",
             diagnostics: [],
             instances: [{
                 proposal_id: stableRelatedRecordProposalId({ source_kind: SOURCE_KIND, source_record_id: ctx.formSubmissionId, collection_provider_ref: MEDICAL_CONSENT_PROVIDER_REF, instance_key: key }),
@@ -129,7 +134,7 @@ export function adaptHealthCaptureToProposals(
                 origin: "proposed_new_record",
                 field_proposals: [
                     { provider_ref: "consent.kind", submitted_value: key === "medical_records_release" ? "Medical records release" : "Emergency medical treatment", label: "Authorization" },
-                    { provider_ref: "consent.signed_by", submitted_value: first?.typed_full_name ?? null, label: "Signed by" },
+                    { provider_ref: "consent.signed_by", submitted_value: signerName, label: "Signed by" },
                 ],
                 execution_kind: "medical_consent",
                 medical_consent_intent: {
@@ -137,13 +142,17 @@ export function adaptHealthCaptureToProposals(
                     form_definition_version_id: ctx.formDefinitionVersionId,
                     text_field_ids: [...consent.text_field_ids],
                     signature_field_ids: [...consent.signature_field_ids],
-                    signed_by_name: first?.typed_full_name?.trim() || null,
+                    signed_by_name: signerName,
                     signed_at: first?.acknowledged_at ?? null,
                     signed,
                 },
                 source_lineage: lineage(key, "medical_consent"),
-                diagnostics: signed ? [] : [{ code: "missing_field_binding", message: "The authorization is not signed, so it cannot be recorded." }],
-                status: signed ? "valid" : "incomplete",
+                diagnostics: !signed
+                    ? [{ code: "missing_field_binding", message: "The authorization is not signed, so it cannot be recorded." }]
+                    : !signerName
+                      ? [{ code: "missing_field_binding", message: "The signature does not say who signed, so the authorization cannot be recorded. Ask the family to sign again with their printed name." }]
+                      : [],
+                status: recordable ? "valid" : "incomplete",
             }],
         });
     }

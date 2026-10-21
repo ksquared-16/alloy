@@ -1213,9 +1213,12 @@ export function FormEmbedClient({
     const showDocument = artifactModel != null && !documentUnavailable;
     /** The document-first participant progression applies; otherwise the semantic fallback. */
     const documentFlow = enrollmentReview && compiled != null && showDocument;
-    const allowTypedSignature =
-        (schema.fields.find((f) => f.type === "signature") as { signature?: { require_drawn_asset?: boolean } } | undefined)
-            ?.signature?.require_drawn_asset !== true;
+    const signaturePolicy = (
+        schema.fields.find((f) => f.type === "signature") as { signature?: { require_drawn_asset?: boolean; require_typed_name?: boolean } } | undefined
+    )?.signature;
+    const allowTypedSignature = signaturePolicy?.require_drawn_asset !== true;
+    /** The policy requires the signer's own typed name — beside a drawn mark too (FI-02). */
+    const requireSignerName = signaturePolicy?.require_typed_name === true;
 
     /**
      * An edit at review writes THROUGH the shared-value mechanism, never into one artifact.
@@ -1308,7 +1311,13 @@ export function FormEmbedClient({
                 });
                 const json = (await res.json()) as { ok?: boolean; data?: { document_id?: string } };
                 if (!json.ok || !json.data?.document_id) throw new Error("asset refused");
-                entry = { kind: "drawn", drawn_document_id: json.data.document_id, acknowledged_at: acknowledgedAt };
+                entry = {
+                    kind: "drawn",
+                    drawn_document_id: json.data.document_id,
+                    acknowledged_at: acknowledgedAt,
+                    // Who drew it, as the signer typed it. Never filled in from the link's recipient.
+                    ...(captured.signerPrintedName ? { signer_printed_name: captured.signerPrintedName } : {}),
+                };
                 setCapturedSignature({ drawnDataUrl: `data:image/png;base64,${captured.pngBase64}` });
             } catch {
                 setMessage("Your signature didn't save — please try again.");
@@ -2064,6 +2073,7 @@ export function FormEmbedClient({
             {signatureDialogOpen ? (
                 <SignatureCaptureDialog
                     allowTyped={allowTypedSignature}
+                    requireSignerName={requireSignerName}
                     onDone={(captured) => void handleSignatureCaptured(captured)}
                     onCancel={() => setSignatureDialogOpen(false)}
                 />
