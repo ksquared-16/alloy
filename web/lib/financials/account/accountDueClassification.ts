@@ -48,13 +48,29 @@ export type FinancialsDueWithin = {
  * The open, owed, positive rows with a residual whose due date satisfies `onDue` — the ONE predicate
  * Not-yet-due and Due-within share (previously inline in `notYetDueFor`, unchanged).
  */
+/*
+ * W7-F053: WHAT A ROW STILL OWES = amount − its discount reductions − money applied. The same
+ * rule the collectible authority uses (`computeCollectiblePosition`: gross + reductions − applied).
+ * Certhouse's Sep 11 tuition ($1,450, −$145 sibling discount, $1,305 paid) read $145 past due
+ * because reductions were not subtracted here, while settlement correctly found nothing owed.
+ * `reductionByChargeId` holds each charge's reductions as POSITIVE cents; absent means none.
+ */
+const NO_REDUCTIONS: ReadonlyMap<string, number> = new Map();
+function owedOf(
+    r: AccountChargeLedgerRow,
+    appliedByChargeId: ReadonlyMap<string, number>,
+    reductionByChargeId: ReadonlyMap<string, number>,
+): number {
+    return r.amountCents - (reductionByChargeId.get(r.chargeId) ?? 0) - (appliedByChargeId.get(r.chargeId) ?? 0);
+}
+
 function openOwedRowsDue(
     rows: readonly AccountChargeLedgerRow[],
     appliedByChargeId: ReadonlyMap<string, number>,
     onDue: (dueDate: string) => boolean,
+    reductionByChargeId: ReadonlyMap<string, number> = NO_REDUCTIONS,
 ): AccountChargeLedgerRow[] {
-    const outstanding = (r: AccountChargeLedgerRow): number =>
-        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
+    const outstanding = (r: AccountChargeLedgerRow): number => owedOf(r, appliedByChargeId, reductionByChargeId);
     return rows.filter(
         (r) =>
             OWED_STATUSES.has(r.status)
@@ -95,10 +111,10 @@ export function notYetDueFor(
     rows: readonly AccountChargeLedgerRow[],
     today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+    reductionByChargeId: ReadonlyMap<string, number> = NO_REDUCTIONS,
 ): FinancialsNotYetDue | null {
-    const outstanding = (r: AccountChargeLedgerRow): number =>
-        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
-    const ahead = openOwedRowsDue(rows, appliedByChargeId, (due) => due > today);
+    const outstanding = (r: AccountChargeLedgerRow): number => owedOf(r, appliedByChargeId, reductionByChargeId);
+    const ahead = openOwedRowsDue(rows, appliedByChargeId, (due) => due > today, reductionByChargeId);
     if (ahead.length === 0) return null;
     const next = ahead.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
     return {
@@ -111,9 +127,9 @@ export function pastDueFor(
     rows: readonly AccountChargeLedgerRow[],
     today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+    reductionByChargeId: ReadonlyMap<string, number> = NO_REDUCTIONS,
 ): FinancialsPastDue | null {
-    const outstanding = (r: AccountChargeLedgerRow): number =>
-        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
+    const outstanding = (r: AccountChargeLedgerRow): number => owedOf(r, appliedByChargeId, reductionByChargeId);
     const overdue = rows.filter(
         (r) =>
             OWED_STATUSES.has(r.status)
@@ -149,12 +165,13 @@ export function dueWithinFor(
     from: string,
     to: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+    reductionByChargeId: ReadonlyMap<string, number> = NO_REDUCTIONS,
 ): FinancialsDueWithin | null {
-    const inWindow = openOwedRowsDue(rows, appliedByChargeId, (due) => due >= from && due <= to);
+    const inWindow = openOwedRowsDue(rows, appliedByChargeId, (due) => due >= from && due <= to, reductionByChargeId);
     if (inWindow.length === 0) return null;
     const sorted = [...inWindow].sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) || a.chargeId.localeCompare(b.chargeId));
     return {
-        amountCents: inWindow.reduce((sum, r) => sum + (r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0)), 0),
+        amountCents: inWindow.reduce((sum, r) => sum + owedOf(r, appliedByChargeId, reductionByChargeId), 0),
         nextDueDate: sorted[0]!.dueDate as string,
         lastDueDate: sorted[sorted.length - 1]!.dueDate as string,
         chargeIds: sorted.map((r) => r.chargeId),
@@ -166,8 +183,9 @@ export function pastDueChargeIds(
     rows: readonly AccountChargeLedgerRow[],
     today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+    reductionByChargeId: ReadonlyMap<string, number> = NO_REDUCTIONS,
 ): string[] {
-    const outstanding = (r: AccountChargeLedgerRow): number => r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
+    const outstanding = (r: AccountChargeLedgerRow): number => owedOf(r, appliedByChargeId, reductionByChargeId);
     return rows
         .filter(
             (r) =>

@@ -368,6 +368,14 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 pastDueNote: input.pastDue && input.pastDue.amountCents > 0
                     ? `${money(input.pastDue.amountCents, currency)} past due`
                         + (input.pastDue.amountCents > dueNowCents ? " · includes earlier periods" : "")
+                        /*
+                         * W7-F053: Past due is the obligation; a submitted subsidy claim makes part of
+                         * it collectible from the funder, not the family. Said here, in canonical terms,
+                         * so the Payment form's lower family amount is never a mystery.
+                         */
+                        + ((vm.collectible?.submittedClaimSuppressionCents ?? 0) > 0
+                            ? ` · ${money(vm.collectible.submittedClaimSuppressionCents, currency)} expected from funding`
+                            : "")
                     : null,
                 pastDueBeyondDue: Boolean(input.pastDue && input.pastDue.amountCents > dueNowCents),
                 balance: money(reconciliation.balanceCents, currency),

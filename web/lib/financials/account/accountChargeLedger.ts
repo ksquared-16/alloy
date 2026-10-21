@@ -321,3 +321,41 @@ export async function readAppliedByChargeId(
     }
     return { state: "ok", appliedByChargeId };
 }
+
+/**
+ * W7-F053: each charge's discount reductions (`financial_reduction_applications.source_charge_id`),
+ * as POSITIVE cents — the amount the due classification subtracts from a row's gross before money
+ * applied, so a fully paid discounted charge is not reported as owing its discount.
+ */
+export async function readReductionsByChargeId(
+    supabase: SupabaseClient,
+    args: { orgId: string; chargeIds: readonly string[] },
+): Promise<{ state: "ok"; reductionByChargeId: Map<string, number> } | { state: "unavailable"; reason: string }> {
+    const chargeIds = [...new Set(args.chargeIds.map((c) => t(c)).filter(Boolean))];
+    if (!chargeIds.length) return { state: "ok", reductionByChargeId: new Map() };
+    try {
+        const rows = await readInBatches<Record<string, unknown>>(
+            "discount reductions on these charges",
+            chargeIds,
+            (batch) => supabase
+                .from("financial_reduction_applications")
+                .select("source_charge_id, amount_cents")
+                .eq("org_id", args.orgId)
+                .in("source_charge_id", batch) as never,
+        );
+        return { state: "ok", reductionByChargeId: reductionMapFrom(rows) };
+    } catch (e: unknown) {
+        return { state: "unavailable", reason: `discount reductions unavailable: ${e instanceof Error ? e.message : String(e)}` };
+    }
+}
+
+/** Reduction rows (negative `amount_cents` keyed by `source_charge_id`) → positive cents per charge. */
+export function reductionMapFrom(rows: ReadonlyArray<Record<string, unknown>>): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const r of rows) {
+        const id = t(r.source_charge_id);
+        if (!id) continue;
+        out.set(id, (out.get(id) ?? 0) + Math.abs(Number(r.amount_cents) || 0));
+    }
+    return out;
+}

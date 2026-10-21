@@ -1,0 +1,16 @@
+{
+ "build": "8f0961717b2ba23a81ee690ee895675fb4c72f99",
+ "strip": "DUE NOW | $1,980.00 | $1,980.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,051.00 | $2,116.00 charged · $65.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+ "oneTimeRows": [
+  "Oct 1, 2026 | One-time charge | Certa Certhouse | 4090 · Other Income | $40.00 | Posted | Not allocated | Field trip",
+  "Oct 1, 2026 | One-time charge | Certb Certhouse | 4090 · Other Income | $40.00 | Posted | Not allocated | Field trip",
+  "Oct 1, 2026 | Tuition | Certb Certhouse | 4000 · Tuition Revenue | $1,450.00 | Posted | Not allocated | Monthly tuition"
+ ],
+ "paymentRows": [
+  "Oct 21, 2026 | Payment | — | 5000 · Payments | −$5.00 | Received | Certt Certhouse | Visa •••• 4242",
+  "Oct 21, 2026 | Payment | — | 5000 · Payments | −$20.00 | Received | Certt Certhouse | Cash",
+  "Oct 20, 2026 | Refund | — | Unmapped | $40.00 | Refunded | — | Cash",
+  "Oct 20, 2026 | Payment | — | Unmapped | −$40.00 | Unapplied | Certt Certhouse | Cash"
+ ],
+ "details": []
+}

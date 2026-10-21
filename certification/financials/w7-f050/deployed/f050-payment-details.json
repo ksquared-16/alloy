@@ -1,0 +1,23 @@
+{
+ "build": "8f0961717b2ba23a81ee690ee895675fb4c72f99",
+ "strip": "DUE NOW | $1,980.00 | $1,980.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,051.00 | $2,116.00 charged · $65.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+ "oneTimeRows": [],
+ "paymentRows": [
+  "Oct 21, 2026 | Payment | — | 5000 · Payments | −$5.00 | Received | Certt Certhouse | Visa •••• 4242",
+  "Oct 21, 2026 | Payment | — | 5000 · Payments | −$20.00 | Received | Certt Certhouse | Cash",
+  "Oct 20, 2026 | Refund | — | Unmapped | $40.00 | Refunded | — | Cash",
+  "Oct 20, 2026 | Payment | — | Unmapped | −$40.00 | Unapplied | Certt Certhouse | Cash"
+ ],
+ "details": [
+  {
+   "text": "PAYMENT DETAILS | RECEIVED | Oct 21, 2026 | PAYER | Certt Certhouse | REMAINING UNAPPLIED | $0.00 | $5.00 | Received · Card | $5.00 applied | Refund | APPLIED AUTOMATICALLY | One-time charge | $5.00 | Applied Oct 21, 2026 | Reallocate | Close",
+   "settlement": "automatic",
+   "reallocate": 1
+  },
+  {
+   "text": "PAYMENT DETAILS | RECEIVED | Oct 21, 2026 | PAYER | Certt Certhouse | REMAINING UNAPPLIED | $0.00 | $20.00 | Received · Cash | $20.00 applied | Refund | APPLIED AUTOMATICALLY | One-time charge | $20.00 | Applied Oct 21, 2026 | Reallocate | Close",
+   "settlement": "automatic",
+   "reallocate": 1
+  }
+ ]
+}

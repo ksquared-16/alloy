@@ -83,6 +83,8 @@ export type SettlementCandidate = {
     amountCents: number;
     /** Outstanding, already capped at what is collectible. */
     collectibleCents: number;
+    /** W7-F053: outstanding a submitted subsidy claim suppresses — expected from funding, not the family. */
+    fundingPendingCents?: number;
     dueDate: string | null;
     billableOn: string | null;
     status: string;
@@ -114,6 +116,10 @@ export type SettlementPlan = {
     heldForPayerCents: number;
     /** Every cent this payer could settle today (the autopay amount). */
     eligibleCents: number;
+    /** W7-F053: due outstanding expected from funding (a submitted claim) — never collected from the family. */
+    fundingPendingCents: number;
+    /** W7-F053: due outstanding that OTHER named people owe — never settled by this payer. */
+    othersShareCents: number;
     outcome: "settled" | "partial_left_unapplied" | "nothing_eligible";
 };
 
@@ -161,9 +167,16 @@ export function planSettlementFrom(input: {
     let left = Math.max(0, n(input.amountCents));
     let eligible = 0;
     let heldForPayer = 0;
+    let fundingPending = 0;
+    let othersShare = 0;
     const lines: SettlementLine[] = [];
     for (const r of rows) {
         heldForPayer += r.heldForPayer;
+        fundingPending += Math.max(0, r.c.fundingPendingCents ?? 0);
+        if (payer) {
+            const others = r.c.shares.filter((s) => s.partyId && s.partyId !== payer).reduce((a, s) => a + Math.max(0, s.remainingCents), 0);
+            othersShare += Math.min(others, r.c.collectibleCents);
+        }
         let chargeRoom = r.c.collectibleCents;
         const shareParts: SettlementLine["shareParts"] = [];
         for (const s of r.own) {
@@ -204,6 +217,8 @@ export function planSettlementFrom(input: {
         unappliedCents: Math.max(0, n(input.amountCents) - applied),
         heldForPayerCents: heldForPayer,
         eligibleCents: eligible,
+        fundingPendingCents: fundingPending,
+        othersShareCents: othersShare,
         outcome: applied === 0 ? "nothing_eligible" : applied < n(input.amountCents) ? "partial_left_unapplied" : "settled",
     };
 }
@@ -280,12 +295,14 @@ export async function readSettlementCandidates(
         const position = collectibles[i];
         /* A failed collectible read is not "collectible": settle nothing on that charge. */
         const collectible = position ? Math.min(out, Math.max(0, n(position.currentlyCollectibleCents))) : 0;
+        const fundingPending = position ? Math.max(0, n(position.submittedClaimSuppressionCents)) : 0;
         return {
             chargeId: t(c.id),
             label: chargeDisplayLabel(t(c.description) || null, t(c.charge_category) || null),
             categoryKey: t(c.charge_category) || null,
             amountCents: n(c.amount_cents),
             collectibleCents: collectible,
+            fundingPendingCents: fundingPending,
             dueDate: t(c.due_date) || null,
             billableOn: t(c.billable_on) || null,
             status: t(c.status),
