@@ -186,7 +186,9 @@ describe("nothing is collected unless every authority still says yes", () => {
         // The attempt is an ORDINARY collection: the payer, the canonical method and the rail all
         // travel with it. No autopay-specific writer, no autopay-specific provider path.
         const call = (collect as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![1] as Record<string, unknown>;
-        expect(call.chargeId).toBe("chg-1");
+        /* W7-F051: ONE account-level collection for the payer's eligible responsibility, not one per charge. */
+        expect(call.chargeId).toBeUndefined();
+        expect(call.customerId).toBeTruthy();
         expect(call.requestedAmountCents).toBe(50_000);
         expect(call.paymentMethodId).toBe(METHOD);
         expect(call.payerPersonId).toBe(PAYER);

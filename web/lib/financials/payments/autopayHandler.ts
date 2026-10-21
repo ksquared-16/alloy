@@ -24,6 +24,7 @@
  * every authority is re-resolved here, immediately before collection, and the collectible is read
  * last of all.
  */
+import { settlePayersAvailableReceipts } from "@/lib/financials/settlement/settlePayment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -139,6 +140,12 @@ export type AutopayHandlerDeps = {
      * that figure is derived. Neither stands in for the other.
      */
     resolveCollectible?: typeof resolveAutopayCollectible;
+    /**
+     * W7-F051: the payer's own unapplied money settles before any card or bank is asked. Injectable
+     * like the resolver; best effort — a failure here only means the full amount is collected, which
+     * is what Autopay did before.
+     */
+    applyOwnPrepaid?: typeof settlePayersAvailableReceipts;
 };
 
 /**
@@ -245,13 +252,28 @@ export async function evaluateAutopayOccurrence(
         return noCollection(retry.reason, { failure_count: arrangement.failureCount });
     }
 
-    // ── 6. FINAL ADMISSION: WHAT IS CURRENTLY OWED, READ LAST ──
+    // ── 6a. W7-F051: THE PAYER'S OWN PREPAID SETTLES FIRST ──
+    if (arrangement.payerEntityId) {
+        try {
+            await (deps.applyOwnPrepaid ?? settlePayersAvailableReceipts)(supabase, {
+                orgId,
+                householdId: arrangement.customerId,
+                payerPersonId: arrangement.payerEntityId,
+                asOf,
+            });
+        } catch {
+            /* Best effort: unsettled prepaid only means the full eligible amount is collected. */
+        }
+    }
+
+    // ── 6. FINAL ADMISSION: WHAT IS CURRENTLY OWED BY THIS PAYER, READ LAST ──
     const resolveCollectible = deps.resolveCollectible ?? resolveAutopayCollectible;
     const collectible = await resolveCollectible(supabase, {
         orgId,
         customerId: arrangement.customerId,
         timingOffsetDays: arrangement.timingOffsetDays,
         asOf,
+        payerPersonId: arrangement.payerEntityId,
     });
 
     if (collectible.totalCents <= 0) {
@@ -287,24 +309,29 @@ export async function evaluateAutopayOccurrence(
     const collected: Array<{ chargeId: string; attemptId: string; amountCents: number; reused: boolean }> = [];
     const refused: Array<{ chargeId: string; reason: string }> = [];
 
-    for (const charge of collectible.charges) {
+    /*
+     * W7-F051: ONE COLLECTION FOR THE PAYER'S ELIGIBLE RESPONSIBILITY — not one per charge. The
+     * attempt names the account; when the provider confirms, the money is settled by the same
+     * automatic authority a manual payment uses (past due first, oldest first, this payer's share).
+     */
+    {
         const result = await collect(supabase, {
             orgId,
-            chargeId: charge.chargeId,
-            requestedAmountCents: charge.outstandingCents,
+            customerId: arrangement.customerId,
+            requestedAmountCents: collectible.totalCents,
             payerPersonId: arrangement.payerEntityId,
             rail,
             paymentMethodId: arrangement.paymentMethodId,
         });
         if (result.ok) {
             collected.push({
-                chargeId: charge.chargeId,
+                chargeId: "account",
                 attemptId: result.attemptId,
                 amountCents: result.amountCents,
                 reused: result.reused,
             });
         } else {
-            refused.push({ chargeId: charge.chargeId, reason: result.reason });
+            refused.push({ chargeId: "account", reason: result.reason });
         }
     }
 

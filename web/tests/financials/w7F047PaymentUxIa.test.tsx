@@ -137,8 +137,8 @@ describe("F047 · which methods are accepted — policy over future intake only"
 describe("F048 · the Payment command is one form", () => {
     const card = code(CARD);
 
-    it("Apply toward is the form's first field; the standalone menu renders only outside the command", () => {
-        expect(card).toMatch(/<p className="alloy-os-financials__fieldlabel">Apply toward<\/p>\s*<AlloySelect\s*value=\{payTarget\.chargeId\}/);
+    it("W7-F050 supersedes Apply toward: no charge is chosen for ordinary money; the list is the exception", () => {
+        expect(card).toMatch(/\{payAllocation === "charge" \? \(/);
         expect(card).toContain('testId="financials-payment-apply-toward"');
         expect(card).toMatch(/\{payableRows\.length && !tabbed \? \(\s*<DropdownMenu>/);
         expect(card).toMatch(/\+ \(r\.date \? ` · \$\{humanDay\(r\.date\)\}` : ""\)\s*\+ ` · \$\{money\(r\.outstandingCents, r\.currencyCode\)\} outstanding`/);

@@ -23,7 +23,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
-import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import { planSettlement } from "@/lib/financials/settlement/automaticSettlement";
 
 export type AutopayDueCharge = {
     chargeId: string;
@@ -61,8 +61,12 @@ export async function resolveAutopayCollectible(
         orgId: string;
         customerId: string;
         timingOffsetDays: number;
-        /** The evaluation date, so a handler and its tests agree on "today". */
         asOf: string;
+        /**
+         * W7-F051: WHOSE responsibility this Autopay collects. Only the payer's own shares and what
+         * the account owes as a whole — never another person's share.
+         */
+        payerPersonId?: string | null;
     },
 ): Promise<AutopayCollectible> {
     const orgId = t(args.orgId);
@@ -71,87 +75,42 @@ export async function resolveAutopayCollectible(
     if (!orgId || !customerId) return empty;
 
     /*
-     * THE ACCOUNT'S BILLABLE SOURCES, RESOLVED FIRST.
-     *
-     * The first version read every posted charge in the organisation and filtered afterwards. That
-     * is wrong in a way that costs money rather than time: PostgREST caps a read at 1000 rows, so
-     * an organisation past that silently lost charges — and a charge Autopay cannot see is money it
-     * does not collect, with no error anywhere.
-     *
-     * A charge settles against this account either directly (`customer`) or through one of its
-     * enrolment agreements. Both are enumerable, so the charge read is bounded to this family.
+     * W7-F051: THE SETTLEMENT AUTHORITY DECIDES WHAT IS COLLECTIBLE. A charge is actionable once
+     * its effective due date plus the arrangement's offset has arrived — i.e. its due date is on or
+     * before `asOf − offset` — so the plan is asked as of that shifted day. The figure is exactly
+     * what `settlePayment` will place when the collected money posts.
      */
+    const shifted = actionableOnOrAfter(args.asOf, -args.timingOffsetDays);
+    const plan = await planSettlement(supabase, {
+        orgId,
+        householdId: customerId,
+        asOf: shifted,
+        amountCents: Number.MAX_SAFE_INTEGER,
+        payerPersonId: t(args.payerPersonId) || null,
+    });
+
+    /* When to look again: the soonest posted obligation not yet actionable. */
     const { data: agreementRows } = await supabase
         .from("child_enrollment_agreements")
         .select("id")
         .eq("org_id", orgId)
         .eq("customer_id", customerId);
-
-    const sourceIds = [
-        customerId,
-        ...((agreementRows ?? []) as Array<{ id?: unknown }>).map((r) => t(r.id)).filter(Boolean),
-    ];
-
-    const { data, error } = await supabase
+    const sourceIds = [customerId, ...((agreementRows ?? []) as Array<{ id?: unknown }>).map((r) => t(r.id)).filter(Boolean)];
+    const { data: upcoming } = await supabase
         .from("charges")
-        .select("id, billable_source_type, billable_source_id, due_date, status")
+        .select("due_date")
         .eq("org_id", orgId)
         .eq("status", "posted")
         .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-        .in("billable_source_id", sourceIds);
-    if (error) return empty;
+        .in("billable_source_id", sourceIds)
+        .gt("due_date", shifted)
+        .order("due_date", { ascending: true })
+        .limit(1);
+    const nextDue = t(((upcoming ?? []) as Array<{ due_date?: unknown }>)[0]?.due_date);
 
-    type Row = { id?: unknown; billable_source_type?: unknown; billable_source_id?: unknown; due_date?: unknown };
-    const rows = (data ?? []) as Row[];
-
-    const due: AutopayDueCharge[] = [];
-    let nextDueDate: string | null = null;
-
-    for (const row of rows) {
-        const chargeId = t(row.id);
-        const dueDate = t(row.due_date);
-        if (!chargeId) continue;
-        /*
-         * A charge with no due date has no `on_due_date` moment, so this policy cannot say it has
-         * come due. Collecting it anyway would be Autopay inventing a due date Financials declined
-         * to state.
-         */
-        if (!dueDate) continue;
-
-        const actionableFrom = actionableOnOrAfter(dueDate, args.timingOffsetDays);
-        if (actionableFrom > args.asOf) {
-            // Not yet ours to collect. Remember the soonest, so the schedule can return then.
-            if (!nextDueDate || actionableFrom < nextDueDate) nextDueDate = actionableFrom;
-            continue;
-        }
-
-        /*
-         * ── ASK FOR WHAT MAY BE COLLECTED, NOT WHAT IS OWED ────────────────────────────────
-         *
-         * These are different numbers whenever a subsidy claim has been submitted against the
-         * charge: `currentlyCollectibleCents = outstanding - submittedClaimSuppressionCents`.
-         *
-         * Autopay used to request the raw outstanding, and `createCardCollection` measures the
-         * request against the collectible ceiling and REFUSES anything above it — deliberately,
-         * because clamping would silently take a different amount than was authorized. So a
-         * subsidised charge was refused `amount_exceeds_collectible` on every single daily wake
-         * and could never be collected by Autopay at all. Certified on the real clock at
-         * 2026-09-29T21:00Z: two charges collected, one refused for exactly this reason.
-         *
-         * Collecting the collectible portion is what "amount due" already means here — the
-         * family owes their share now and the subsidy is expected from somebody else. This
-         * narrows what Autopay asks for; it can never broaden it.
-         */
-        const position = await resolveFamilyCollectible(supabase, { orgId, chargeId });
-        const collectibleCents = Math.max(0, position.currentlyCollectibleCents);
-        if (collectibleCents <= 0) continue;
-        due.push({ chargeId, dueDate, outstandingCents: collectibleCents });
-    }
-
-    due.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.chargeId.localeCompare(b.chargeId));
     return {
-        charges: due,
-        totalCents: due.reduce((sum, c) => sum + c.outstandingCents, 0),
-        nextDueDate,
+        charges: plan.lines.map((l) => ({ chargeId: l.chargeId, dueDate: l.effectiveDueOn, outstandingCents: l.applyCents })),
+        totalCents: plan.eligibleCents,
+        nextDueDate: nextDue ? actionableOnOrAfter(nextDue, args.timingOffsetDays) : null,
     };
 }

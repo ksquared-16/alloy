@@ -890,6 +890,26 @@ export default function FinancialsCard({
     }, [disabledMethods, payMethod]);
     /* W7-F045: the Payment command takes money; refunds are its secondary tab, chosen one at a time. */
     const [paymentTab, setPaymentTab] = useState<"payment" | "refunds">("payment");
+    /*
+     * W7-F050: APPLICATION IS AUTOMATIC. Ordinary money settles the payer's eligible outstanding
+     * responsibility by the organization's rule (`planSettlement`); "charge" is the explicit
+     * exception — Change allocation — for a payer who directs money to one obligation.
+     */
+    const [payAllocation, setPayAllocation] = useState<"automatic" | "charge">("automatic");
+    const [chargeFilter, setChargeFilter] = useState<string>("");
+    const [payAmountTouched, setPayAmountTouched] = useState(false);
+    /* One command identity per opened form: two identical cash payments on one day are two payments. */
+    const [payIdemKey, setPayIdemKey] = useState<string>("");
+    const [settlePreview, setSettlePreview] = useState<{
+        summary: string;
+        appliedCents: number;
+        unappliedCents: number;
+        eligibleCents: number;
+        heldForPayerCents: number;
+        lines: Array<{ chargeId: string; label: string; dueOn: string; pastDue: boolean; cents: number }>;
+        unappliedNote: string | null;
+    } | null>(null);
+    const [settlePreviewState, setSettlePreviewState] = useState<"idle" | "loading" | "error">("idle");
     const [refundPickId, setRefundPickId] = useState<string>("");
 
     /*
@@ -929,6 +949,80 @@ export default function FinancialsCard({
     useEffect(() => {
         if (onlyPayerId && !payPayerPersonId) setPayPayerPersonId(onlyPayerId);
     }, [onlyPayerId, payPayerPersonId]);
+    /*
+     * W7-F050: WHAT WILL BE APPLIED, CALCULATED AS THE OPERATOR TYPES. The action's own preview runs
+     * `planSettlement` — the authority Confirm reruns — so nothing here re-derives an allocation.
+     * Until the operator edits the amount, it is the payer's eligible amount (what they owe now).
+     */
+    const settleAccountId = vm?.account?.customerId ?? null;
+    useEffect(() => {
+        if (surface?.kind !== "payment" || payAllocation !== "automatic" || !settleAccountId) return;
+        if (payerCandidateCount > 0 && !payPayerPersonId) {
+            setSettlePreview(null);
+            return;
+        }
+        const typed = Math.round(Number(payAmount) * 100);
+        const amountCents = payAmountTouched ? typed : 1_000_000_000;
+        if (payAmountTouched && (!Number.isInteger(typed) || typed <= 0)) {
+            setSettlePreview(null);
+            return;
+        }
+        let live = true;
+        setSettlePreviewState("loading");
+        const timer = window.setTimeout(() => {
+            void fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "payment.record",
+                    entity_type: "customer",
+                    entity_id: settleAccountId,
+                    mode: "preview",
+                    payload: {
+                        customer_id: settleAccountId,
+                        amount_cents: amountCents,
+                        payment_method: payMethod,
+                        ...(namedPayerId ? { payer_entity_type: "person", payer_entity_id: namedPayerId } : {}),
+                    },
+                }),
+            })
+                .then((r) => r.json())
+                .then((json: { ok?: boolean; data?: { execution_result?: { preview?: { summary?: string; changes?: string[]; after?: Record<string, unknown> } } } }) => {
+                    if (!live) return;
+                    const pv = json?.data?.execution_result?.preview;
+                    const after = (pv?.after ?? null) as Record<string, unknown> | null;
+                    if (!json?.ok || !pv || !after) {
+                        setSettlePreviewState("error");
+                        return;
+                    }
+                    const eligible = Number(after.eligible_cents) || 0;
+                    const applied = Number(after.applied_cents) || 0;
+                    if (!payAmountTouched) setPayAmount(eligible > 0 ? (eligible / 100).toFixed(2) : "");
+                    setSettlePreview({
+                        summary: String(pv.summary ?? ""),
+                        appliedCents: applied,
+                        unappliedCents: payAmountTouched ? Number(after.unapplied_cents) || 0 : 0,
+                        eligibleCents: eligible,
+                        heldForPayerCents: Number(after.held_for_payer_cents) || 0,
+                        lines: ((after.lines ?? []) as Array<Record<string, unknown>>).map((l) => ({
+                            chargeId: String(l.charge_id),
+                            label: String(l.label),
+                            dueOn: String(l.due_on),
+                            pastDue: Boolean(l.past_due),
+                            cents: Number(l.cents) || 0,
+                        })),
+                        unappliedNote: (pv.changes ?? []).find((c) => c.startsWith("Stays unapplied")) ?? null,
+                    });
+                    setSettlePreviewState("idle");
+                })
+                .catch(() => live && setSettlePreviewState("error"));
+        }, 350);
+        return () => {
+            live = false;
+            window.clearTimeout(timer);
+        };
+    }, [surface?.kind, payAllocation, settleAccountId, payAmount, payAmountTouched, payPayerPersonId, namedPayerId, payMethod, payerCandidateCount]);
     /**
      * THE REFUND THE OPERATOR IS COMPOSING.
      *
@@ -2456,6 +2550,11 @@ export default function FinancialsCard({
                 setPaymentTab("payment");
                 setRefundPickId("");
                 setPayReference("");
+                setPayAllocation("automatic");
+                setChargeFilter("");
+                setPayAmountTouched(false);
+                setSettlePreview(null);
+                setPayIdemKey(`pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
                 push({ kind: "payment" });
             };
         },
@@ -4649,42 +4748,68 @@ export default function FinancialsCard({
                         {tabbed ? (
                             <>
                                 {/*
-                                  * ── W7-F048: APPLY TOWARD — THE FIRST QUESTION OF THE FORM ─────────
+                                  * ── W7-F050: NO CHARGE TO CHOOSE ───────────────────────────────────
                                   *
-                                  * The obligation this money settles was chosen from a standalone
-                                  * "Take or record payment →" menu above the form, then named three
-                                  * more times inside it (heading, outstanding, "Applies to"). It is
-                                  * now the form's first field, carrying its date and what is still
-                                  * outstanding; choosing another resets the amount to that one's
-                                  * outstanding, as the menu did. One charge per payment, still —
-                                  * the collection and record actions settle exactly one.
+                                  * Ordinary money settles the payer's eligible outstanding
+                                  * responsibility automatically (Application, below). Choosing one
+                                  * obligation is the EXCEPTION — Change allocation — for a payer who
+                                  * directs money to a particular charge. Only then does a list appear,
+                                  * filterable by charge, child, date or amount: a 33-row dropdown is
+                                  * exception tooling, never the way money is taken.
                                   */}
-                                <p className="alloy-os-financials__fieldlabel">Apply toward</p>
-                                <AlloySelect
-                                    value={payTarget.chargeId}
-                                    aria-label="Apply toward"
-                                    testId="financials-payment-apply-toward"
-                                    allowEmpty={false}
-                                    options={payableRows.map((r) => ({
-                                        value: r.chargeId,
-                                        label:
-                                            chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel)
-                                            + (r.date ? ` · ${humanDay(r.date)}` : "")
-                                            + ` · ${money(r.outstandingCents, r.currencyCode)} outstanding`,
-                                    }))}
-                                    onChange={(next) => {
-                                        const r = payableRows.find((x) => x.chargeId === next);
-                                        if (!r) return;
-                                        setCommandError(null);
-                                        setPayTarget({
-                                            chargeId: r.chargeId,
-                                            label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
-                                            outstandingCents: r.outstandingCents,
-                                            subjectMemberId: r.subjectMemberId,
-                                        });
-                                        setPayAmount((r.outstandingCents / 100).toFixed(2));
-                                    }}
-                                />
+                                {payAllocation === "charge" ? (
+                                    <>
+                                        <p className="alloy-os-financials__fieldlabel">Apply to one charge</p>
+                                        <input
+                                            type="search"
+                                            value={chargeFilter}
+                                            placeholder="Filter by charge, child, date or amount"
+                                            aria-label="Filter charges"
+                                            data-financials-payment-charge-filter="true"
+                                            onChange={(e) => setChargeFilter(e.target.value)}
+                                        />
+                                        <AlloySelect
+                                            value={payTarget.chargeId}
+                                            aria-label="Apply to one charge"
+                                            testId="financials-payment-apply-toward"
+                                            allowEmpty={false}
+                                            options={payableRows
+                                                .map((r) => ({
+                                                    value: r.chargeId,
+                                                    label:
+                                                        chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel)
+                                                        + (r.subjectName ? ` · ${r.subjectName}` : "")
+                                                        + (r.date ? ` · ${humanDay(r.date)}` : "")
+                                                        + ` · ${money(r.outstandingCents, r.currencyCode)} outstanding`,
+                                                }))
+                                                .filter((o) => o.value === payTarget.chargeId || !chargeFilter.trim() || o.label.toLowerCase().includes(chargeFilter.trim().toLowerCase()))}
+                                            onChange={(next) => {
+                                                const r = payableRows.find((x) => x.chargeId === next);
+                                                if (!r) return;
+                                                setCommandError(null);
+                                                setPayTarget({
+                                                    chargeId: r.chargeId,
+                                                    label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
+                                                    outstandingCents: r.outstandingCents,
+                                                    subjectMemberId: r.subjectMemberId,
+                                                });
+                                                setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                                setPayAmountTouched(true);
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="alloy-os-financials__linkaction"
+                                            data-financials-payment-allocation="automatic"
+                                            onClick={() => {
+                                                setPayAllocation("automatic");
+                                                setPayAmountTouched(false);
+                                            }}
+                                        >
+                                            Use automatic application
+                                        </button>
+                                    </>
+                                ) : null}
                                 {vm.responsibility?.parties?.length ? (
                                     <p className="alloy-os-financials__note" data-financials-payment-responsible="true">
                                         Responsible: {vm.responsibility.parties.map((p) => p.name).join(", ")}
@@ -4746,7 +4871,10 @@ export default function FinancialsCard({
                             value={payAmount}
                             aria-label="Payment amount"
                             data-financials-payment-amount="true"
-                            onChange={(e) => setPayAmount(e.target.value)}
+                            onChange={(e) => {
+                                setPayAmount(e.target.value);
+                                setPayAmountTouched(true);
+                            }}
                         />
                         <p className="alloy-os-financials__fieldlabel">Method</p>
                         {/*
@@ -4865,6 +4993,61 @@ export default function FinancialsCard({
                                 No payer is on file for this household — the payment is recorded to the household.
                             </p>
                         )}
+                        {tabbed && payAllocation === "automatic" ? (
+                            <div className="alloy-os-financials__settlement" data-financials-payment-application="automatic">
+                                <p className="alloy-os-financials__fieldlabel">Application</p>
+                                <p className="alloy-os-financials__settlement-mode">Automatic</p>
+                                <p className="alloy-os-financials__note">
+                                    Applies to {namedPayerId
+                                        ? `${vm.payerCandidates.find((c) => c.personId === namedPayerId)?.name ?? "this payer"}'s`
+                                        : "the household's"} eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.
+                                </p>
+                                {settlePreview ? (
+                                    <div data-financials-payment-settlement-preview="true">
+                                        {settlePreview.lines.length ? (
+                                            <>
+                                                <p className="alloy-os-financials__fieldlabel">Will apply</p>
+                                                <ul className="alloy-os-financials__settlement-lines">
+                                                    {settlePreview.lines.map((l) => (
+                                                        <li key={l.chargeId} data-financials-settlement-line={l.chargeId}>
+                                                            <span>{l.label} · {humanDay(l.dueOn)}{l.pastDue ? " · past due" : ""}</span>
+                                                            <span>{money(l.cents, currency)}</span>
+                                                        </li>
+                                                    ))}
+                                                    <li className="alloy-os-financials__settlement-total" data-financials-settlement-total="true">
+                                                        <span>Total applied</span>
+                                                        <span>{money(settlePreview.appliedCents, currency)}</span>
+                                                    </li>
+                                                </ul>
+                                            </>
+                                        ) : (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-nothing="true">
+                                                Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).
+                                            </p>
+                                        )}
+                                        {settlePreview.unappliedCents > 0 && settlePreview.unappliedNote ? (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-unapplied="true">
+                                                {settlePreview.unappliedNote.replace(/^Stays unapplied · /, "Stays unapplied: ")}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                ) : settlePreviewState === "loading" ? (
+                                    <p className="alloy-os-financials__note">Calculating…</p>
+                                ) : settlePreviewState === "error" ? (
+                                    <p className="alloy-os-financials__note">The application could not be calculated; Confirm still applies it by the same rules.</p>
+                                ) : null}
+                                {payableRows.length ? (
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__linkaction"
+                                        data-financials-payment-allocation="change"
+                                        onClick={() => setPayAllocation("charge")}
+                                    >
+                                        Change allocation
+                                    </button>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <span className="alloy-os-financials__preview-actions">
                             <button
                                 type="button"
@@ -4891,14 +5074,24 @@ export default function FinancialsCard({
                                      * seconds, so the lie would last longer.
                                      */
                                     const collects = payMethod === "card" || payMethod === "ach";
+                                    const automatic = tabbed && payAllocation === "automatic" && Boolean(settleAccountId);
                                     if (!collects) {
                                         void runPaymentAction(
                                             "payment.record",
                                             {
-                                                charge_id: payTarget.chargeId,
+                                                /*
+                                                 * W7-F050: the ACCOUNT, settled automatically — or,
+                                                 * by exception, the one charge the operator chose.
+                                                 */
+                                                ...(automatic
+                                                    ? {
+                                                          customer_id: settleAccountId,
+                                                          idempotency_key: payIdemKey || undefined,
+                                                          ...(settlePreview ? { expected_applied_cents: settlePreview.appliedCents } : {}),
+                                                      }
+                                                    : { charge_id: payTarget.chargeId, charge_label: payTarget.label }),
                                                 amount_cents: cents,
                                                 payment_method: payMethod,
-                                                charge_label: payTarget.label,
                                                 /* Identity of the payer. Omitted entirely when the
                                                    operator said it is not known — never defaulted to
                                                    whoever happens to be responsible. */
@@ -4928,9 +5121,10 @@ export default function FinancialsCard({
                                         const outcome = await runPaymentAction(
                                             "payment.collect_card",
                                             {
-                                                charge_id: payTarget.chargeId,
+                                                ...(automatic
+                                                    ? { customer_id: settleAccountId }
+                                                    : { charge_id: payTarget.chargeId, charge_label: payTarget.label }),
                                                 amount_cents: cents,
-                                                charge_label: payTarget.label,
                                                 // Intent only. The server resolves the merchant, its
                                                 // capability for this rail, and what may be taken.
                                                 rail: payMethod,
@@ -5583,6 +5777,13 @@ export default function FinancialsCard({
                                         /* W7-F032: the payment's own payer — the same rule as the row's Party — the household only when none is named. */
                                         { label: "Payer", value: receipt.payerName ?? receipt.payerLabel ?? "Not named", testId: "payer" },
                                         ...(receipt.reference ? [{ label: "Reference", value: receipt.reference, testId: "reference" }] : []),
+                                        ...(receipt.direction === "inbound"
+                                            ? [{
+                                                  label: (receipt.unappliedCents - (receipt.heldCents ?? 0)) > 0 && receipt.status === "posted" ? "Prepaid remaining" : "Remaining unapplied",
+                                                  value: money(Math.max(0, receipt.unappliedCents - (receipt.heldCents ?? 0)), cur),
+                                                  testId: "remaining-unapplied",
+                                              }]
+                                            : []),
                                     ].map((f) => (
                                         <span key={f.testId} className="flex min-w-0 flex-col" data-financials-payment-detail-line={f.testId}>
                                             <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{f.label}</span>
@@ -5592,8 +5793,15 @@ export default function FinancialsCard({
                                 </span>
                                 {paymentBandFor(false, surface.paymentId)}
                                 {receipt.direction === "inbound" ? (
-                                    <section className="alloy-os-financials__band" data-financials-payment-applications="true">
-                                        <p className="alloy-os-financials__band-label">Applied to</p>
+                                    <section
+                                        className="alloy-os-financials__band"
+                                        data-financials-payment-applications="true"
+                                        data-financials-payment-settlement={receipt.settledAutomatically ? "automatic" : "explicit"}
+                                    >
+                                        {/* W7-F050: what Alloy did, as audit evidence — not a decision screen. */}
+                                        <p className="alloy-os-financials__band-label">
+                                            {receipt.settledAutomatically ? "Applied automatically" : "Applied to"}
+                                        </p>
                                         {receipt.applications.length ? (
                                             <ul className="alloy-os-financials__payments">
                                                 {receipt.applications.map((a) => (
