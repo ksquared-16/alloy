@@ -33,6 +33,7 @@ import {
     appendWorkspaceSiteToUrl,
     workspaceViewCacheFingerprint,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { applyLandingWorkItems, fetchLandingWorkItems } from "@/lib/admin/landingWorkItems";
 
 /** Cap matches the queue rows API head limit (`parseLimitOffset` max 100). */
 const PROJECTION_BASE_ROWS_LIMIT = 100;
@@ -324,10 +325,15 @@ export async function loadOperatorLifecycleLandingCards(options?: {
             // never a gate: sidebar/workspace NAV renders from the base cards, so a slow/hung
             // summaries endpoint must not wedge navigation. Bounded; on timeout the signal-enriched
             // cards above are preserved.
-            const enriched = await withBudget(
-                fetchLifecycleRollupsForCards(cards, workUnits, departments, init, selectedSiteId),
-            );
+            // BP V2 S7 — the Work Items line runs beside the rollups (one request for every tile), under
+            // the same budget; a timeout is "unavailable", never a zero.
+            const [enriched, withWorkItems] = await Promise.all([
+                withBudget(fetchLifecycleRollupsForCards(cards, workUnits, departments, init, selectedSiteId)),
+                withBudget(fetchLandingWorkItems(cards, init, selectedSiteId)),
+            ]);
             if (enriched) cards = enriched;
+            const workItemsById = new Map((withWorkItems ?? applyLandingWorkItems(cards, null)).map((c) => [c.id, c.workItems ?? null] as const));
+            cards = cards.map((c) => ({ ...c, workItems: workItemsById.get(c.id) ?? null }));
 
             // Never cache a partial signal pass — a timed-out enrichment left tiles without
             // attention/overdue badges until a full reload. Retry on the next load instead.

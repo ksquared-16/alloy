@@ -53,6 +53,7 @@ import {
     buildEnrollmentOperationalSurfaceFields,
     isEnrollmentLifecycleCard,
 } from "@/lib/admin/enrollmentOperationalSurfaceLanding";
+import type { LandingWorkItems } from "@/lib/admin/landingWorkItems";
 
 /** Default operator queue when configured on the enrollment pipeline. */
 export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
@@ -114,6 +115,8 @@ export type OperatorLifecycleLandingCard = {
     activeRecordCount: number | null;
     /** Populated when needs-attention lane summaries are available; otherwise null (UI shows —). */
     needsAttentionCount: number | null;
+    /** BP V2 S7 — explicit Work Items attributed to this process (see `lib/admin/landingWorkItems`). */
+    workItems?: LandingWorkItems | null;
     /** Optional OIP performance preview — server-resolved formatted values. */
     performanceMetrics?: readonly {
         label: string;
