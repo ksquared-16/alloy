@@ -987,7 +987,7 @@ export function FormEmbedClient({
     const artifactRenderable = schema != null && schema.fields.length > 0;
     const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
-    const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
+    const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors, schema) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
     /**
      * The guided WIZARD is for packets the participant fills from scratch.
