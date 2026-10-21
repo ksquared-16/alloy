@@ -92,12 +92,14 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   `funding_variances` (posted childcare charges with an open, non-zero subsidy variance — Financials'
   positions via `resolveCollectiblePositionsForCharges` under the Subsidy section's rule
   `financialSubsidyReason`; a variance never changes what a family owes). No Billing projection computes
-  money. **Not offered (blocked by Financials prerequisites, so never a zero-count queue):** payment
-  exceptions for failed attempts, failed autopay and disputes (no org-wide Financials reader;
-  `autopayPresentation` is unexported; disputes have no "needs action" rule); Payments due and Overdue (no
-  cross-household due/past-due reader — `pastDueFor`/`notYetDueFor` live in the single-account card model,
-  ignore submitted-claim suppression, and the "Due" figure is composed in a presentation adapter; Due / Past
-  due human acceptance is pending); Billing-period variances (no period-over-period comparison exists —
+  money. `payments_due` (owed money due today through the next six days) and `overdue_payments` (a
+  positive Past due) are the Financials card's own classification across households (BP V2 Slice 6A —
+  `readAccountDuePositions` + `accountDueClassification`, see
+  [`financials-canonical-authorities.md` § 8](../modules/financials-canonical-authorities.md)); like the card's
+  Past due they are not subsidy-suppressed. **Not offered (blocked by Financials prerequisites, so never a
+  zero-count queue):** payment exceptions for failed attempts, failed autopay and disputes (no org-wide
+  Financials reader; `autopayPresentation` is unexported; disputes have no "needs action" rule);
+  Billing-period variances (no period-over-period comparison exists —
   comparable-period rule, per-period billed amount at household grain, threshold policy and a cross-household
   reader are all missing).
   Publication refuses an unregistered key and refuses `filters_v1`, sorts, `compat_queue_key` and

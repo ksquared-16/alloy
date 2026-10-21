@@ -196,11 +196,12 @@ describe("charges_needing_review — Financials' own post-failed vs review disti
 });
 
 describe("only implemented Billing views are offered or resolvable", () => {
-    it("catalog = registry = the three implemented keys; due / overdue / period variances are not configurable", () => {
+    it("catalog = registry = the implemented keys; billing-period variances are not configurable", () => {
         const keys = DOMAIN_PROJECTION_CATALOG.billing.map((p) => p.key).sort();
-        expect(keys).toEqual(["charges_needing_review", "funding_variances", "payment_exceptions"]);
+        // BP V2 S6A — payments_due / overdue_payments now ship (the card's own Due / Past due).
+        expect(keys).toEqual(["charges_needing_review", "funding_variances", "overdue_payments", "payment_exceptions", "payments_due"]);
         for (const k of keys) expect(getDomainProjection("billing", k)).not.toBeNull();
-        for (const blocked of ["payments_due", "overdue_payments", "billing_period_variances"]) {
+        for (const blocked of ["billing_period_variances"]) {
             expect(getDomainProjection("billing", blocked)).toBeNull();
         }
     });

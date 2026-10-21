@@ -29,8 +29,12 @@ export function projectionTableStub(tables: Record<string, Row[]>) {
                 gt: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) > v), b),
                 in: (c: string, vs: unknown[]) => (preds.push((r) => vs.includes(r[c])), b),
                 is: (c: string, v: unknown) => (preds.push((r) => (v === null ? r[c] == null : r[c] === v)), b),
-                not: (c: string, _op: string, list: string) => {
-                    const vals = list.replace(/[()]/g, "").split(",");
+                not: (c: string, op: string, list: string | null) => {
+                    if (op === "is" && list === null) {
+                        preds.push((r) => r[c] != null);
+                        return b;
+                    }
+                    const vals = String(list).replace(/[()]/g, "").split(",");
                     preds.push((r) => !vals.includes(String(r[c])));
                     return b;
                 },

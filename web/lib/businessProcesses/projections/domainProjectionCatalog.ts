@@ -25,6 +25,8 @@ export const DOMAIN_PROJECTION_CATALOG: Readonly<Record<ProcessProjectionDomain,
         { key: "charges_needing_review", label: "Charges needing review", subjectTypes: ["household"] },
         { key: "payment_exceptions", label: "Payment exceptions", subjectTypes: ["household"] },
         { key: "funding_variances", label: "Funding variances", subjectTypes: ["household"] },
+        { key: "payments_due", label: "Payments due", subjectTypes: ["household"] },
+        { key: "overdue_payments", label: "Overdue payments", subjectTypes: ["household"] },
     ],
 };
 

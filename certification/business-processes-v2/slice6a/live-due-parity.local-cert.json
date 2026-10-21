@@ -1,0 +1,111 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-21T16:26:44.632Z",
+  "today": "2026-10-21",
+  "window_end": "2026-10-27",
+  "reader": {
+    "accounts": 2,
+    "candidate_charges": 171,
+    "truncated": false
+  },
+  "card_parity": {
+    "accounts_compared": 2,
+    "mismatches": 0,
+    "sample": [
+      {
+        "household": "fc500000-0000-4000-8000-0000000c0001",
+        "card_past_due": 5856000,
+        "reader_past_due": 5856000,
+        "card_due_within": null,
+        "reader_due_within": null
+      },
+      {
+        "household": "00000000-0000-4000-8000-10000000003b",
+        "card_past_due": 130000,
+        "reader_past_due": 130000,
+        "card_due_within": 260000,
+        "reader_due_within": 260000
+      }
+    ]
+  },
+  "non_qualifying_checked": {
+    "households": 12,
+    "card_shows_neither": true
+  },
+  "work_views": {
+    "overdue_households": 2,
+    "overdue_facts": 86,
+    "due_households": 1,
+    "due_facts": 2,
+    "overdue_sample": [
+      {
+        "household": "fc500000-0000-4000-8000-0000000c0001",
+        "source": {
+          "kind": "charge",
+          "id": "b62cc5e1-ef72-4223-8d39-9e5dbdff660b",
+          "count": 85,
+          "statusLabel": "$58,560.00 past due · since Aug 15 · 67 days"
+        },
+        "reason": "$58,560.00 past due · since Aug 15 · 67 days"
+      },
+      {
+        "household": "00000000-0000-4000-8000-10000000003b",
+        "source": {
+          "kind": "charge",
+          "id": "c9a0813a-cf49-49db-b0aa-99a9218464c5",
+          "count": 1,
+          "statusLabel": "$1,300.00 past due · since Oct 20 · 1 day"
+        },
+        "reason": "$1,300.00 past due · since Oct 20 · 1 day"
+      }
+    ],
+    "due_sample": [
+      {
+        "household": "00000000-0000-4000-8000-10000000003b",
+        "source": {
+          "kind": "charge",
+          "id": "a997112c-513e-4288-bb92-c139f454558f",
+          "count": 2,
+          "statusLabel": "$2,600.00 due today · through Oct 27"
+        },
+        "reason": "$2,600.00 due today · through Oct 27"
+      }
+    ]
+  },
+  "boundaries": {
+    "household": "00000000-0000-4000-8000-10000000003b",
+    "past_due_charges": [
+      "c9a0813a-cf49-49db-b0aa-99a9218464c5"
+    ],
+    "due_within_charges": [
+      "a997112c-513e-4288-bb92-c139f454558f",
+      "d8e2af0a-6c98-4dde-983a-2371c8302584"
+    ],
+    "excluded_plus7": "ab165116-7492-49b6-86cc-4744c29349ae",
+    "due_row": {
+      "source": {
+        "kind": "charge",
+        "id": "a997112c-513e-4288-bb92-c139f454558f",
+        "count": 2,
+        "statusLabel": "$2,600.00 due today · through Oct 27"
+      },
+      "reason": "$2,600.00 due today · through Oct 27"
+    },
+    "overdue_row": "$1,300.00 past due · since Oct 20 · 1 day"
+  },
+  "scope": {
+    "overdue_R_only_has_lakeside": false,
+    "due_selected_L_has_lakeside": true,
+    "without_fin_read": "refused"
+  },
+  "suppression": {
+    "charge": "c9a0813a-cf49-49db-b0aa-99a9218464c5",
+    "past_due_before_claim": 130000,
+    "past_due_after_claim": 130000,
+    "card_past_due_after_claim": 130000,
+    "submitted_claim_suppression_cents": 0,
+    "currently_collectible_cents": 130000,
+    "reading": "Past due is the applied-money residual (the card's definition); a submitted claim suppresses COLLECTIBILITY, not the obligation, and is visible beside it."
+  },
+  "fixtures_remaining": 0
+}
