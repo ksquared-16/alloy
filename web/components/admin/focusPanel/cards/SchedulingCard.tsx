@@ -396,9 +396,16 @@ function deriveScheduleState(p: SubjectProj | null): ScheduleState {
         case "proposed":
             // A child WITH a (planned) schedule reads distinctly from one that still
             // needs a room — blue "has a schedule" vs gold "needs a room".
-            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Proposed — active at enrollment" };
+        {
+            // The child's start is the PRIMARY's — a secondary's later change keeps its own date on its row.
+            const from = p.proposed?.assignments.find((a) => a.isPrimary)?.effectiveFrom || p.proposed?.effectiveFrom;
+            return { label: "Proposed", tone: "blue", sub: from ? `Starts ${formatDate(from)}` : "Proposed — active at enrollment" };
+        }
         case "upcoming-only":
-            return { label: "Future", tone: "blue", sub: p.current?.effectiveFrom ? `Starts ${formatDate(p.current.effectiveFrom)}` : null };
+        {
+            const from = p.current?.assignments.find((a) => a.isPrimary)?.effectiveFrom || p.current?.effectiveFrom;
+            return { label: "Future", tone: "blue", sub: from ? `Starts ${formatDate(from)}` : null };
+        }
         case "ended":
             return { label: "Ended", tone: "muted", sub: null };
         default:

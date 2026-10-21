@@ -289,3 +289,66 @@ describe("buildSchedulingProjectionForChild", () => {
         expect(projection.calculationMeta.partialReasons).toContain("room unresolved");
     });
 });
+
+describe("pre-enrolment: the draft primary stays beside proposed ledger secondaries", () => {
+    // V5 staging: once a proposed Before Care row existed, "ledger wins" dropped the draft primary —
+    // the card listed only the secondary and its header "Starts …" named the secondary's date.
+    const draftPrimary = {
+        id: "proposed-draft:child-ethan",
+        subjectId: CHILD_ID,
+        subjectType: "child" as const,
+        childId: CHILD_ID,
+        room: ROOM,
+        weekdays: MON_FRI,
+        arriveTime: "08:30",
+        departTime: "15:00",
+        effectiveFrom: "2026-11-02",
+        effectiveTo: null,
+        openEnded: true,
+        kind: "base" as const,
+        status: "proposed",
+        isPrimary: true,
+        commitmentKind: "proposed" as const,
+        assignmentType: { ...PRIMARY_TYPE, id: null as unknown as string, key: "full_day", label: "Full Day" },
+        patternId: null,
+        patternLabel: "Full Day",
+        billing: { kind: "none" } as never,
+    };
+    const draftView = {
+        bucket: "current" as const,
+        effectiveFrom: "2026-11-02",
+        effectiveTo: null,
+        openEnded: true,
+        temporary: false,
+        assignments: [draftPrimary],
+        scheduleType: "full_day",
+        scheduleTypeLabel: "Full Day",
+        rate: "pending" as const,
+        projectedTuition: null,
+    };
+    const secondary = ai(
+        assignmentRow({ id: "before-care", enrollment_agreement_id: null, commitment_kind: "proposed", status: "planned", start_date: "2026-11-16" }),
+        MON_FRI,
+    );
+
+    it("lists the primary and the secondary, primary first, keeping the draft's schedule type", () => {
+        const child = buildChildScheduling({ ...input([secondary], null), proposed: draftView as never });
+        expect(child.proposed?.assignments.map((a) => a.id)).toEqual(["proposed-draft:child-ethan", "before-care"]);
+        expect(child.proposed?.assignments.find((a) => a.isPrimary)?.effectiveFrom).toBe("2026-11-02");
+        expect(child.proposed?.scheduleType).toBe("full_day");
+    });
+
+    it("a ledger proposed PRIMARY still wins over the draft", () => {
+        const ledgerPrimary = ai(
+            assignmentRow({ id: "ledger-primary", enrollment_agreement_id: null, commitment_kind: "proposed", status: "planned", is_primary: true, start_date: "2026-11-09" }),
+            MON_FRI,
+        );
+        const child = buildChildScheduling({ ...input([ledgerPrimary, secondary], null), proposed: draftView as never });
+        expect(child.proposed?.assignments.map((a) => a.id)).toEqual(["ledger-primary", "before-care"]);
+    });
+
+    it("with no ledger rows the draft is the proposal, exactly as before", () => {
+        const child = buildChildScheduling({ ...input([], null), proposed: draftView as never });
+        expect(child.proposed).toBe(draftView);
+    });
+});
