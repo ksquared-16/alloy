@@ -221,6 +221,18 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         expect(after.consents.find((c) => c.consentId === active.consentId)).toMatchObject({ status: "withdrawn", withdrawalReason: "Family revoked by phone" });
     });
 
+    it("a DRAWN signature's signer comes from its signature record (ZZQAV5082106 showed 'the family')", async () => {
+        const p = { ...avaPayload(), signatures: { mr_signature: { kind: "drawn" } } } as FormPayload;
+        const { sub, caseId } = await submit(ids.ben, p);
+        await ok(db.from("form_submission_signatures").insert({ org_id: ORG, form_submission_id: sub, field_id: "mr_signature", signature_kind: "drawn", typed_full_name: "Jordan Rivers", signer_acknowledged_at: "2026-10-21T16:00:00Z" }));
+        const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
+        const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
+        expect(out.ok).toBe(true);
+        const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        expect(ben.consents[0]).toMatchObject({ status: "active", grantedByName: "Jordan Rivers", grantedAt: expect.stringMatching(/^2026-10-21T16:00/) });
+        await db.from("form_submission_signatures").delete().eq("form_submission_id", sub);
+    });
+
     it("signed-in database users cannot read consents directly; only the server can", async () => {
         const anonKey = readFileSync(resolve(__dirname, "../../../.env.certification.local"), "utf8").split("\n").find((l) => l.startsWith("NEXT_PUBLIC_SUPABASE_ANON_KEY="))?.split("=").slice(1).join("=").trim() ?? "";
         expect(anonKey.length).toBeGreaterThan(20);

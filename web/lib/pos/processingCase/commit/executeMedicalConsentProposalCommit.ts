@@ -91,16 +91,20 @@ export async function executeMedicalConsentProposalCommit(args: {
     }
 
     const submissionId = context.proposal.source_lineage.source_record_id;
-    const [{ data: version }, { data: sub }, { data: docs }] = await Promise.all([
+    const [{ data: version }, { data: sub }, { data: docs }, { data: sigRows }] = await Promise.all([
         intent.form_definition_version_id
             ? args.supabase.from("form_definition_versions").select("schema_json").eq("org_id", args.orgId).eq("id", intent.form_definition_version_id).maybeSingle()
             : Promise.resolve({ data: null }),
         args.supabase.from("form_submissions").select("submitted_at").eq("org_id", args.orgId).eq("id", submissionId).maybeSingle(),
         args.supabase.from("form_submission_documents").select("document_id, role, created_at").eq("form_submission_id", submissionId).eq("role", "generated_pdf").order("created_at", { ascending: false }).limit(1),
+        // A drawn signature carries the signer's typed name on its signature record, not the payload.
+        args.supabase.from("form_submission_signatures").select("field_id, typed_full_name, signer_acknowledged_at").eq("org_id", args.orgId).eq("form_submission_id", submissionId).in("field_id", intent.signature_field_ids),
     ]);
+    const firstSig = ((sigRows ?? []) as { field_id: string; typed_full_name: string | null; signer_acknowledged_at: string | null }[])
+        .find((r) => r.field_id === intent.signature_field_ids[0]);
     const parsed = safeParseFormSchema((version as { schema_json?: unknown } | null)?.schema_json ?? null);
     const textSha = parsed.success ? consentTextSha256(parsed.data.fields, intent.text_field_ids) : null;
-    const grantedAt = intent.signed_at || (sub as { submitted_at?: string | null } | null)?.submitted_at || new Date().toISOString();
+    const grantedAt = intent.signed_at || firstSig?.signer_acknowledged_at || (sub as { submitted_at?: string | null } | null)?.submitted_at || new Date().toISOString();
 
     let result: Awaited<ReturnType<typeof recordMedicalConsent>>;
     try {
@@ -112,7 +116,7 @@ export async function executeMedicalConsentProposalCommit(args: {
             textFormDefinitionVersionId: intent.form_definition_version_id,
             textFieldIds: intent.text_field_ids,
             textSha256: textSha,
-            grantedByName: intent.signed_by_name,
+            grantedByName: intent.signed_by_name || firstSig?.typed_full_name?.trim() || null,
             grantedAt,
             sourceKind: "form_submission",
             sourceRef: `form_submission:${submissionId}`,
