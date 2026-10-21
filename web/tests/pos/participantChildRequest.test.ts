@@ -170,7 +170,7 @@ describe("the same canonical proposal the Processing new-child commit consumes",
 
     it("the operator's case view shows what the family sent and the reviewable proposal", async () => {
         tables.processing_participant_child_requests = [pendingRow()];
-        const loader = makeDefaultSourceEvidenceRegistry(fakeDb(tables) as never, ORG).get("participant_child_request")!;
+        const loader = makeDefaultSourceEvidenceRegistry(fakeDb(tables) as never, ORG, { permissionKeys: ["health.view"] }).get("participant_child_request")!;
         const ev = (await loader(["req-1"])).get("req-1")!;
         expect(ev.proposedValues.map((v) => `${v.label}=${v.value}`)).toEqual(["First name=Dex", "Last name=Example", "Date of birth=2021-05-01", "Request=pending"]);
         const inst = ev.collectionEvidence!.groups[0]!.instances[0]!;

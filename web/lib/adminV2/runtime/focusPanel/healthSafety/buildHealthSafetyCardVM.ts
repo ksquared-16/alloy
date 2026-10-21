@@ -288,7 +288,7 @@ export async function buildHealthSafetyCardVM(
         })),
         hClock.time("health_profile_ms", () =>
             import("@/lib/completion/loadCustomerMemberProfileFields").then((m) =>
-                m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId]),
+                m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId], args.access),
             ),
         ),
         hClock.time("health_documents_ms", () =>

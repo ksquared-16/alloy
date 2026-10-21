@@ -23,7 +23,8 @@ import { POST as manualLink } from "@/app/api/admin/forms/submissions/[submissio
  * made the `ops` cases pass for the wrong reason: they were refused because the mock held NO
  * capability, not because ops lacks `forms.author`.
  */
-const ADMIN_FORMS_KEYS = ["forms.author", "forms.submissions", "forms.submissions.confirm"];
+/** The default admin also holds Medical's health.view (a child's medical answers are visible to it). */
+const ADMIN_FORMS_KEYS = ["forms.author", "forms.submissions", "forms.submissions.confirm", "health.view"];
 /** ops holds exactly one Forms write — confirming a linkage the system proposed. */
 const OPS_FORMS_KEYS = ["forms.submissions.confirm"];
 

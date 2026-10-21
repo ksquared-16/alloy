@@ -288,6 +288,7 @@ supabase,
             proposalId,
             decision,
             metadata,
+            healthAccess: { permissionKeys: ctx.permissionKeys },
         });
         if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
 

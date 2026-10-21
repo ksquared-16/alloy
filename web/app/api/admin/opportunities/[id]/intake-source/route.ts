@@ -1,3 +1,4 @@
+import { withholdMedicalAnswersFromSubmissions } from "@/lib/health/withholdMedicalSubmissionAnswers";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { buildOpportunityIntakeSourceViewModel } from "@/lib/forms/opportunityIntakeSourcePresentation";
@@ -22,7 +23,7 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: submission, error: subErr } = await supabase
         .from("form_submissions")
-        .select("id, status, submitted_at, form_definition_id, payload")
+        .select("id, status, submitted_at, form_definition_id, form_definition_version_id, payload")
         .eq("org_id", ctx.orgId)
         .eq("opportunity_id", opportunityId)
         .eq("status", "submitted")
@@ -42,13 +43,14 @@ export async function GET(
         .eq("id", submission.form_definition_id)
         .maybeSingle();
 
+    const [visible] = await withholdMedicalAnswersFromSubmissions(supabase, ctx.orgId, [submission], { permissionKeys: ctx.permissionKeys });
     const vm = buildOpportunityIntakeSourceViewModel({
         submission_id: submission.id,
         form_definition_id: submission.form_definition_id,
         form_name: form?.name ?? "Form",
         submitted_at: submission.submitted_at,
         status: submission.status,
-        payload: submission.payload,
+        payload: visible!.payload as typeof submission.payload,
     });
 
     return NextResponse.json({ data: vm });

@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
         const rows: Array<Record<string, unknown>> = [];
         for (const id of candidates.slice(0, 5)) {
             const [oldShape, newShape] = await Promise.all([
-                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]),
+                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id], { permissionKeys: access.permissionKeys }),
                 supabase.from("field_values")
                     .select("entity_id, field_definition_id, value_text, value_number, value_date, value_json, field_definitions!inner(field_key, entity_type, is_active)")
                     .eq("org_id", orgId).eq("entity_type", "customer_member").in("entity_id", [id])
@@ -505,7 +505,11 @@ export async function GET(req: NextRequest) {
                 }),
                 // Request-time decisions, resolved by this route's own gate. The composer never
                 // decides authorization itself.
-                authority: { financialsRead: true, healthView: true },
+                authority: {
+                    financialsRead: access.permissionKeys.includes("fin.read"),
+                    // The caller's real grant — this prototype once hardcoded `true` (FI-01, E5).
+                    healthView: access.permissionKeys.includes("health.view"),
+                },
                 /*
                  * THE SAME CALLER-OWNED INPUTS PRODUCTION RESOLVES, FROM THE SAME OWNERS.
                  *

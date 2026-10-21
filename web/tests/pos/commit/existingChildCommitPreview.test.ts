@@ -38,7 +38,7 @@ describe("buildExistingChildCommitPreview", () => {
             },
             currentRecord: record,
             orgId: "org-1",
-            expectedCustomerId: "cust-1",
+            expectedCustomerId: "cust-1", healthAccess: { permissionKeys: ["health.view", "health.manage"] },
         });
         expect(preview.can_commit).toBe(true);
         expect(preview.fields.find((f) => f.provider_ref === "child.child_first_name")).toMatchObject({ action: "update", current_value: "Samuel", canonical_field_key: "first_name" });
@@ -54,7 +54,7 @@ describe("buildExistingChildCommitPreview", () => {
             decision: { proposal_id: "rrp:child-1", instance_decision: "approve", field_decisions: [] },
             currentRecord: record,
             orgId: "org-1",
-            expectedCustomerId: "cust-1",
+            expectedCustomerId: "cust-1", healthAccess: { permissionKeys: ["health.view", "health.manage"] },
         });
         expect(preview.can_commit).toBe(false);
         expect(preview.fields[0]?.action).toBe("block");

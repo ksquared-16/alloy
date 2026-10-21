@@ -1,3 +1,4 @@
+import { resolveHealthAccessForSignedInActor } from "@/lib/health/healthAccessForSignedInActor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
@@ -148,7 +149,7 @@ export async function loadPacketDocumentsIndexForOpportunity(
     const sessionIds = await listOpportunityPacketSessionIds(supabase, orgId, opportunityId);
     const entries: PacketReviewDocumentIndexEntryV1[] = [];
     for (const sessionId of sessionIds) {
-        const built = await buildPacketReviewRollupV1(supabase, orgId, sessionId);
+        const built = await buildPacketReviewRollupV1(supabase, orgId, sessionId, await resolveHealthAccessForSignedInActor(supabase, orgId));
         if (built.ok) entries.push(...built.rollup.documents_index);
     }
     return entries;

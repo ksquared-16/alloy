@@ -12,6 +12,8 @@ import type { ProposedValue, SourceEvidenceLoader, SourceEvidenceRaw, SourceEvid
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
+import { canViewHealth, type HealthAccessSubject } from "@/lib/health/healthAccess";
+import { isMedicalCollectionProvider, medicalFormFieldIds } from "@/lib/health/medicalFormAnswers";
 import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
 import { adaptPersonContactFactsToProposals } from "@/lib/fields/personContactFacts/personContactFactProposals";
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
@@ -34,7 +36,7 @@ function stringifyValue(v: unknown): string | null {
 }
 
 /** Label a submission's top-level answers from its versioned schema. Collection nested values are resolved separately (P5A). */
-function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unknown> | null): ProposedValue[] {
+function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unknown> | null, withheld: ReadonlySet<string> = new Set()): ProposedValue[] {
     const parsed = safeParseFormSchema(schemaJson);
     if (!parsed.success) return [];
     const valuesRaw = payload?.values;
@@ -46,6 +48,7 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     for (const field of parsed.data.fields) {
         if (field.type === "group") continue;
         if (!Object.prototype.hasOwnProperty.call(values, field.id)) continue;
+        if (withheld.has(field.id)) continue;
         out.push({
             label: field.label,
             value: stringifyValue(values[field.id]),
@@ -56,7 +59,11 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     return out;
 }
 
-function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
+/** Shown in place of a child's medical answers to an operator without Medical access. */
+export const MEDICAL_ANSWERS_WITHHELD_LABEL = "Medical answers — visible with Medical access";
+
+function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceLoader {
+    const mayReadHealth = canViewHealth(health);
     return async (ids) => {
         const out = new Map<string, SourceEvidenceRaw>();
         if (ids.length === 0) return out;
@@ -109,7 +116,7 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
                   )
                 : null;
             const capture = s.form_definition_version_id ? healthCapture.get(s.form_definition_version_id) : undefined;
-            if (proposalBundle && schema && capture) {
+            if (proposalBundle && schema && capture && mayReadHealth) {
                 proposalBundle.collections.push(
                     ...adaptHealthCaptureToProposals(schema, payload, capture, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
                 );
@@ -119,11 +126,24 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
                     ...adaptPersonContactFactsToProposals(schema, payload, { formSubmissionId: s.id, formDefinitionVersionId: s.form_definition_version_id }),
                 );
             }
+            // A child's medical proposals (allergies, conditions, medications, insurance, immunizations,
+            // consents) are Medical's to show: withheld from an operator without health.view.
+            if (proposalBundle && !mayReadHealth) {
+                proposalBundle.collections = proposalBundle.collections.filter((c) => !isMedicalCollectionProvider(c.collection_provider_ref));
+            }
             const collectionEvidence = proposalBundle
                 ? projectRelatedRecordProposalsToEvidence(proposalBundle, { processingCaseId: null })
                 : undefined;
+            const withheld = schema && !mayReadHealth ? medicalFormFieldIds(schema, capture) : new Set<string>();
+            const answered = (s.payload?.values ?? {}) as Record<string, unknown>;
+            const anyWithheld = [...withheld].some((id) => answered[id] !== undefined && answered[id] !== null && answered[id] !== "");
             out.set(s.id, {
-                proposedValues: schema ? labelSubmissionValues(schema, s.payload) : [],
+                proposedValues: schema
+                    ? [
+                          ...labelSubmissionValues(schema, s.payload, withheld),
+                          ...(anyWithheld ? [{ label: MEDICAL_ANSWERS_WITHHELD_LABEL, value: null, entityType: null }] : []),
+                      ]
+                    : [],
                 documentId: null,
                 collectionEvidence,
             });
@@ -132,8 +152,8 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
     };
 }
 
-function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
-    const submissionLoader = makeFormSubmissionEvidenceLoader(supabase, orgId);
+function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceLoader {
+    const submissionLoader = makeFormSubmissionEvidenceLoader(supabase, orgId, health);
     return async (sessionIds) => {
         const out = new Map<string, SourceEvidenceRaw>();
         if (sessionIds.length === 0) return out;
@@ -207,10 +227,11 @@ function makeParticipantChildRequestEvidenceLoader(supabase: SupabaseClient, org
     };
 }
 
-export function makeDefaultSourceEvidenceRegistry(supabase: SupabaseClient, orgId: string): SourceEvidenceRegistry {
+/** `health` is whose evidence this is: a child's medical answers and proposals need health.view. */
+export function makeDefaultSourceEvidenceRegistry(supabase: SupabaseClient, orgId: string, health: HealthAccessSubject): SourceEvidenceRegistry {
     return new Map([
-        ["form_submission", makeFormSubmissionEvidenceLoader(supabase, orgId)],
-        ["form_packet_session", makePacketEvidenceLoader(supabase, orgId)],
+        ["form_submission", makeFormSubmissionEvidenceLoader(supabase, orgId, health)],
+        ["form_packet_session", makePacketEvidenceLoader(supabase, orgId, health)],
         ["document", makeDocumentEvidenceLoader()],
         ["participant_child_request", makeParticipantChildRequestEvidenceLoader(supabase, orgId)],
     ]);

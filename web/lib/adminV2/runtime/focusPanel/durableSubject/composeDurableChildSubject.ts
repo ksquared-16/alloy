@@ -1,3 +1,4 @@
+import { resolveHealthAccessForSignedInActor } from "@/lib/health/healthAccessForSignedInActor";
 import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import "server-only";
 
@@ -142,7 +143,7 @@ export async function composeDurableChildSubject(
      * mistake in a new place.
      */
     const profile =
-        (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]).catch(() => null))?.get(id)
+        (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id], await resolveHealthAccessForSignedInActor(supabase, orgId)).catch(() => null))?.get(id)
         ?? null;
 
     /*

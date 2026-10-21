@@ -34,7 +34,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     try {
         const detail = await getProcessingCaseDetail(deps, displayRegistry, { orgId: ctx.orgId, id: caseId });
         if (!detail) return jsonError("Not found", 404);
-        const evidenceRegistry = makeDefaultSourceEvidenceRegistry(supabase, ctx.orgId);
+        const evidenceRegistry = makeDefaultSourceEvidenceRegistry(supabase, ctx.orgId, { permissionKeys: ctx.permissionKeys });
         const result = await resolveSourceEvidence(detail, evidenceRegistry);
         return jsonData(result);
     } catch (e) {

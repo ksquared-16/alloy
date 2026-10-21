@@ -119,6 +119,8 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
         field_type: "text",
         label: "Special instructions",
         section_key: "medical",
+        // Medical section: care instructions for THIS child are health data (FI-01 census, E4).
+        sensitivity: "health",
         sort_order: 90,
     },
     {

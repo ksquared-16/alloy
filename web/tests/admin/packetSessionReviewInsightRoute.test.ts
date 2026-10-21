@@ -124,7 +124,7 @@ describe("GET /api/admin/forms/packet-sessions/[packetSessionId]/review-insight"
         expect(body.insight.readiness_state).toBe("needs_attention");
         expect(body.insight.summary_bullets.length).toBeGreaterThan(0);
         expect(body.insight.human_authority_note).toContain("nothing applies automatically");
-        expect(buildRollupMock).toHaveBeenCalledWith(expect.anything(), ORG, SESS);
+        expect(buildRollupMock).toHaveBeenCalledWith(expect.anything(), ORG, SESS, expect.any(Object));
         expect(updateSpy).not.toHaveBeenCalled();
     });
 

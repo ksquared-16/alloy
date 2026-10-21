@@ -1,3 +1,4 @@
+import { resolveHealthAccessForSignedInActor } from "@/lib/health/healthAccessForSignedInActor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     loadCustomerMemberProfileFieldsByMemberId,
@@ -71,7 +72,9 @@ export async function attachCustomerMemberProfileToInquiryChildren<T extends Inq
     ];
     if (!memberIds.length) return rows;
 
-    const profileByMemberId = await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, memberIds);
+    // Medical fields only for an operator who holds health.view (FI-01, E3).
+    const health = await resolveHealthAccessForSignedInActor(supabase, orgId);
+    const profileByMemberId = await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, memberIds, health);
 
     return rows.map((row) => {
         const memberId = trimMemberId(row.customer_member_id);

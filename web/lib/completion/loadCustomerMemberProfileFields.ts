@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 import { CUSTOMER_MEMBER_CONFIG_FIELD_KEYS, CUSTOMER_MEMBER_ENTITY_TYPE } from "@/lib/fields/customerMemberFieldRegistry";
+import { canViewHealth, type HealthAccessSubject } from "@/lib/health/healthAccess";
+import { isChildHealthProfileFieldKey } from "@/lib/health/childHealthProfileFields";
 
 export type CustomerMemberProfileFieldsRow = {
     person_id?: string | null;
@@ -37,14 +39,22 @@ export type CustomerMemberProfileFieldsRow = {
  * A FAILED READ IS NOT AN EMPTY PROFILE. Both halves are awaited together and a rejection
  * propagates, exactly as before — this must never degrade to "no configured fields", which a
  * caller cannot distinguish from a child who genuinely has none.
+ *
+ * MEDICAL FIELDS NEED MEDICAL ACCESS. `health` is required: the caller states whose access the
+ * read is for. Without `health.view` the health-classified keys (allergies, medical notes, special
+ * diet, special instructions) are not even queried — CRM, Enrollment or Processing access alone
+ * never returns them (Director policy, FI-01 / E2–E3).
  */
 export async function loadCustomerMemberProfileFieldsByMemberId(
     supabase: SupabaseClient,
     orgId: string,
-    memberIds: string[]
+    memberIds: string[],
+    health: HealthAccessSubject,
 ): Promise<Map<string, CustomerMemberProfileFieldsRow>> {
     const out = new Map<string, CustomerMemberProfileFieldsRow>();
     if (!memberIds.length) return out;
+    const mayReadHealth = canViewHealth(health);
+    const keys = CUSTOMER_MEMBER_CONFIG_FIELD_KEYS.filter((k) => mayReadHealth || !isChildHealthProfileFieldKey(k));
 
     const [membersResult, valuesResult] = await Promise.all([
         supabase
@@ -62,7 +72,7 @@ export async function loadCustomerMemberProfileFieldsByMemberId(
             .eq("entity_type", CUSTOMER_MEMBER_ENTITY_TYPE)
             .in("entity_id", memberIds)
             .eq("field_definitions.is_active", true)
-            .in("field_definitions.field_key", [...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS]),
+            .in("field_definitions.field_key", [...keys]),
     ]);
 
     for (const m of membersResult.data ?? []) {
@@ -95,6 +105,8 @@ export async function loadCustomerMemberProfileFieldsByMemberId(
         // child this caller was never given.
         const existing = out.get(memberId);
         if (!existing) continue;
+        // Belt and braces: a health key never leaves this function without health access.
+        if (!mayReadHealth && isChildHealthProfileFieldKey(def.field_key)) continue;
         const key = def.field_key as keyof CustomerMemberProfileFieldsRow;
         (existing as Record<string, unknown>)[key] = displayFromFieldValueRow(
             def.field_type ?? "text",
