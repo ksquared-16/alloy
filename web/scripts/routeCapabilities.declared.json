@@ -2413,6 +2413,18 @@
         "helper": "assertFinancialsWriteAllowed"
       }
     },
+    "app/api/admin/financials/accepted-payment-methods/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed"
+      }
+    },
     "app/api/admin/financials/job/[id]/route.ts": {
       "GET": {
         "status": "declared",

@@ -172,7 +172,18 @@
  *   REWRITTEN 26, 27, 61 — what is entered or read changed; earlier results do not count.
  *   KEPT      18, 19, 20, 21, 32, 41, 85 — navigation words only; the checks are unchanged.
  */
-export const CATALOG_VERSION = "2026-10-20.4";
+/*
+ * 2026-10-20.5 — W7-F047..F049: payment methods are one table under Organization → Financials →
+ * Payments (Accepted · Processor · Destination account); Accounting no longer carries a Payment
+ * Methods tool. The Payment command is one form — Apply toward is its first field, the commit reads
+ * Confirm payment (Continue to card / bank details for a NEW instrument), Cancel closes it — and
+ * Refunds opens the chosen payment's refund form at the same card size. The method on file on the
+ * account row is the door to Payments (no "Manage payments →" link).
+ *   NEW       96 payment_method_acceptance.
+ *   KEPT      26, 27, 41, 42, 64, 87, 91, 92, 94 — navigation words only; their checks and any
+ *             prior acceptances stand.
+ */
+export const CATALOG_VERSION = "2026-10-20.5";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -993,11 +1004,11 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "The receipt is the historical fact: this much money arrived, this way, from this person. Everything downstream is a decision about where to put it, and none of those decisions may change the receipt.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" }],
-        navigate: ["From the account pane, record a payment against a posted obligation."],
+        navigate: ["From the account pane: Payment → Apply toward → a posted obligation."],
         doThis: ["Method → Check, and enter a Check number you will recognise.", "Enter more than is owed — the outstanding plus a margin.", "Who paid: already filled when the household has one adult; otherwise choose who paid.", "Confirm."],
         expectChanges: [
             "A Payment row appears in the ledger's current period: the amount, Status Received (Part applied / Unapplied while money still answers nothing), the PAYER in the Party column, and “Check #<your number>” in Description.",
-            "Its GL account is the destination Check payments settled into WHEN IT WAS RECEIVED (Organization → Financials → Accounting → Payment Methods → Check), or Unmapped when none was configured then — never the revenue account of the charge it paid. Receipts recorded before destinations were tracked stay Unmapped; changing the mapping later does not relabel them.",
+            "Its GL account is the destination Check payments settled into WHEN IT WAS RECEIVED (Organization → Financials → Payments → Payment methods → Check → Destination account), or Unmapped when none was configured then — never the revenue account of the charge it paid. Receipts recorded before destinations were tracked stay Unmapped; changing the mapping later does not relabel them.",
             "Opening the row (Payment details) shows the date, payer, amount, method and which charges it was applied to.",
         ],
         expectUnchanged: ["Gross charges posted."],
@@ -1016,7 +1027,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             { kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" },
             { kind: "scenario_passed", scenarioKey: "manage_responsibility" },
         ],
-        navigate: ["From the account pane, record a payment against a posted obligation.", "Open the Who paid? chooser."],
+        navigate: ["From the account pane: Payment → Apply toward → a posted obligation.", "Open the Who paid chooser."],
         doThis: [
             "Read the chooser: every current household adult appears, not only the responsible one, plus “Not known — record to the household”. With several adults nothing is pre-selected and the record button stays disabled until you choose; with exactly one adult it is already filled.",
             "Choose an adult who is NOT marked also responsible.",
@@ -1308,13 +1319,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure. An attempt is not money: the receipt appears when the provider says it settled, not when the operator pressed the button.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "something owed to collect against" }],
         navigate: [
-            "Confirm the organization has a connected provider: Settings -> Financials -> Payments must read Ready.",
+            "Confirm the organization has a connected provider: Organization → Financials → Payments must read Ready, and the Card row's Processor must read Stripe · ready.",
             "Open the family in the Focus Panel.",
             "Open the Financials card, then Details.",
             "Use the Payment control on an obligation the family actually owes.",
         ],
         doThis: [
-            "Method: choose the family's card on file (“Visa •••• 4242 · <payer>”) to charge it, or New card and enter a Stripe TEST card in the provider's own fields.",
+            "Method: choose the family's card on file (“Visa •••• 4242 · <payer>”) and press Confirm payment to charge it — or New card, press Continue to card details, and enter a Stripe TEST card in the provider's own fields.",
             "Complete the collection.",
             "Read the receipt, and read what the obligation now says.",
             "Attempt the same collection a second time on the same obligation.",
@@ -1345,7 +1356,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation the family has NOT already covered" }],
         navigate: [
-            "Confirm Settings -> Financials -> Payments reports the bank rail ready, not only the card rail.",
+            "Confirm Organization → Financials → Payments → Payment methods shows Bank transfer's Processor as Stripe · ready, not only Card's.",
             "Open the family, then Financials -> Details.",
             "Use the Payment control on an obligation with nothing already covering it.",
         ],
@@ -1423,10 +1434,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
          */
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "the family owes something to collect against" }],
         navigate: [
-            "Confirm this organization has a connected provider first: Settings -> Financials -> Payments must read Ready.",
+            "Confirm this organization has a connected provider first: Organization → Financials → Payments must read Ready.",
             "Open the family in the Focus Panel.",
             "Open the Financials card, then Details.",
-            "Find the Payment methods section beneath the ledger.",
+            "On the account row, click the payment-method chip (“visa •••• 4242 ›”, or “Payment methods ›” when there is none to show) to open Payments.",
         ],
         doThis: [
             "Choose Add card and complete the provider's own fields with a test card.",
@@ -2376,7 +2387,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the account to resolve" }],
         navigate: [
             "Open the family in the Focus Panel.",
-            "Open the Financials card, then Details, then Manage payments.",
+            "Open the Financials card, then Details, then the payment-method chip on the account row (it opens Payments).",
             "Find the Payment methods section.",
         ],
         doThis: [
@@ -2442,7 +2453,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "An operator needs to answer \"which account are we debiting?\" on the phone. They do not need, and must never be shown, the numbers that would let them move that family's money anywhere else.",
         requires: [{ kind: "scenario_passed", scenarioKey: "bank_setup_payer_authorization" }],
-        navigate: ["Focus Panel -> Financials -> Details -> Manage payments."],
+        navigate: ["Focus Panel -> Financials -> Details -> the payment-method chip on the account row (opens Payments)."],
         doThis: [
             "Read the bank account row in full.",
             "Read its state in whatever words the product uses.",
@@ -2631,7 +2642,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         dispositionReason:
             "CARRIED BOUNDARY. The cash rail is certified end to end on deployed staging. The provider rail is certified in code and unit proof only, because the controlled fixture's held deposits are cash-rail and this programme gave it a BANK method rather than a card. Proving it needs a provider-backed receipt with a held lot raised from it. Walk it if you are willing to build that fixture; otherwise leave it DEFERRED.",
         requires: [],
-        navigate: ["Collect by card on a disposable fixture, hold part of that receipt, then refund the hold."],
+        navigate: ["Take a card payment on a disposable fixture (Payment → Method: New card → Continue to card details), hold part of that receipt, then refund the hold."],
         doThis: ["Follow the same reading as the cash-rail deposit refund."],
         expectChanges: ["The hold is discharged and the provider records the refund."],
         expectUnchanged: [
@@ -2737,10 +2748,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "An operator whose collection just failed needs to know whether the organisation is connected, waiting on the provider, or not set up — and what to do about it. A provider status string tells them to go and argue with a vendor they have no relationship with.",
         requires: [],
-        navigate: ["Settings -> Financials -> Payments."],
+        navigate: ["Organization → Financials → Payments."],
         doThis: [
             "Read the connection state and what it says is needed.",
-            "Read the card rail's readiness and the bank rail's readiness separately.",
+            "In Payment methods, read the Processor column for Card and for Bank transfer separately.",
         ],
         expectChanges: [],
         expectUnchanged: [
@@ -2752,6 +2763,37 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         failSymptoms: [
             "A raw provider state presented as the organisation's status.",
             "One readiness figure standing for both rails.",
+        ],
+    }),
+    S({
+        key: "payment_method_acceptance",
+        order: 96,
+        title: "Which ways of paying are accepted, and where each one lands",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove one settings table states, per payment method, whether it is accepted, whether a processor collects it, and the asset account it lands in — and that turning a method off changes future intake only.",
+        whyItMatters:
+            "A front desk that can record a money order the organization does not take, or a cash receipt that lands in a revenue account, produces reconciliation work nobody sees until month end. Turning a method off must never rewrite the payments already taken that way.",
+        requires: [],
+        navigate: ["Organization → Financials → Payments → Payment methods."],
+        doThis: [
+            "Read each row: Method, Accepted (On/Off), Processor (Card and Bank transfer read Stripe · …; Cash, Check, Money order, External payment and Other read Recorded by staff), Destination account.",
+            "Open a Destination account chooser and confirm it offers only asset accounts (or says none exist yet).",
+            "Turn Money order Off. Open any account → Payment → Method, and confirm Money order is not offered. Turn it back On.",
+            "Read an existing money-order or check payment in an account's ledger before and after — its GL account cell does not change.",
+        ],
+        expectChanges: ["Money order disappears from the Payment command's Method chooser while Off, and returns when On."],
+        expectUnchanged: [
+            "Payments already received keep their recorded destination (or Unmapped) — nothing is relabelled.",
+            "No revenue account is ever offered as a payment destination.",
+            "Accounting → GL Codes still lists the accounts; it carries no second payment-methods screen.",
+        ],
+        invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
+        failSymptoms: [
+            "A turned-off method still offered or still accepted when submitted.",
+            "A revenue account offered as a destination.",
+            "Past payments relabelled after a destination or acceptance change.",
+            "Payment-method settings in two places.",
         ],
     }),
 ]);
@@ -2882,6 +2924,7 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     ach_uncovered_obligation: "CORE_RUNNABLE",
     financial_activity_language: "CORE_RUNNABLE",
     provider_readiness: "CORE_RUNNABLE",
+    payment_method_acceptance: "CORE_RUNNABLE",
 
     /*
      * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"
@@ -2969,6 +3012,7 @@ export const SCENARIO_EVIDENCE: Readonly<Record<string, readonly EvidenceClass[]
     ach_uncovered_obligation: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE"],
     provider_return: ["DEFERRED_PROVIDER_DEPENDENT", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
     provider_readiness: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
+    payment_method_acceptance: ["HUMAN_WALKTHROUGH"],
 
     bank_setup_request: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
     bank_setup_payer_authorization: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],

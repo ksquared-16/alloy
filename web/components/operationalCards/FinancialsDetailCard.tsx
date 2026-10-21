@@ -1,7 +1,7 @@
 "use client";
 
 import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
-import { Settings2 } from "lucide-react";
+import { ChevronRight, CreditCard, Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -697,28 +697,40 @@ export default function FinancialsDetailCard({
                         {/* HOW THEY CAN PAY, and the door that changes that — one thought, one group. */}
                         {administration ? (
                             <span className="alloy-os-fdetail__rowgroup alloy-os-fdetail__rowgroup--end" data-financials-row-group="payment">
-                                {evidence.payers.length === 1 ? (
-                                    <span className="alloy-os-billing__payer-method" data-financials-method-state="true">
-                                        {evidence.payers[0]!.method}
-                                        {evidence.payers[0]!.methodIssue ? (
-                                            <span className="alloy-os-billing__method-issue"> · {evidence.payers[0]!.methodIssue}</span>
-                                        ) : null}
-                                    </span>
-                                ) : null}
                                 {/*
-                                  * W7-F041: ONE DOOR TO RESPONSIBILITY. The labelled link that stood here
-                                  * (W7-F037) duplicated the gear beside "Anyone responsible"; the Director
-                                  * chose the gear, named by its tooltip and accessible name. This row
-                                  * keeps one door — the one about how they pay.
+                                  * ── W7-F049: THE METHOD IS THE DOOR ─────────────────────────────────
+                                  *
+                                  * "visa •••• 4242" sat beside a "Manage payments →" link, two pieces
+                                  * of text for one thing. The method on file is now itself the control
+                                  * that opens payment administration (methods and autopay): one
+                                  * element, named by what it shows, with the management intent in its
+                                  * accessible name and a quiet chevron. With no single payer's method
+                                  * to show — several payers, each carrying their own on the row — the
+                                  * same control reads "Payment methods". Its issue (expired,
+                                  * unverified) stays visible on it.
                                   */}
-                                <button
-                                    type="button"
-                                    onClick={administration.onManagePayments}
-                                    data-financials-manage-payments="open"
-                                    className="alloy-os-fdetail__payeraction"
-                                >
-                                    Manage payments <span aria-hidden>&rarr;</span>
-                                </button>
+                                {(() => {
+                                    const only = evidence.payers.length === 1 ? evidence.payers[0]! : null;
+                                    const label = only?.method || "Payment methods";
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={administration.onManagePayments}
+                                            data-financials-manage-payments="open"
+                                            data-financials-method-state={only ? "true" : undefined}
+                                            className="alloy-os-fdetail__methoddoor"
+                                            aria-label={`Manage payments — ${label}${only?.methodIssue ? `, ${only.methodIssue}` : ""}`}
+                                            title="Manage payment methods and autopay"
+                                        >
+                                            <CreditCard aria-hidden className="h-3 w-3" strokeWidth={1.9} />
+                                            <span className="alloy-os-billing__payer-method">{label}</span>
+                                            {only?.methodIssue ? (
+                                                <span className="alloy-os-billing__method-issue">· {only.methodIssue}</span>
+                                            ) : null}
+                                            <ChevronRight aria-hidden className="h-3 w-3 opacity-60" strokeWidth={1.9} />
+                                        </button>
+                                    );
+                                })()}
                             </span>
                         ) : null}
                     </div>
