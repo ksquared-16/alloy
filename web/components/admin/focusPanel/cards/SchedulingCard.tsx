@@ -8,6 +8,7 @@ import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financi
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { pricingRefusalCode } from "@/lib/enrollment/pricing/pricingRefusal";
+import { resolveWrittenSchedulePattern } from "@/lib/operationalAssignments/writtenSchedulePattern";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -1972,13 +1973,19 @@ function ScheduleEditor({
      * so changing any of them re-prices immediately — and saving prices identically.
      */
     const draftDaysKey = [...days].sort((x, y) => x - y).join(",");
+    /*
+     * What Save WRITES (and so what the draft tuition prices): the chosen schedule type, or the one
+     * the selected days imply — never the site's first pattern. See resolveWrittenSchedulePattern.
+     */
+    const written = resolveWrittenSchedulePattern({ patterns: patterns ?? [], chosenScheduleType: scheduleType, days });
+    const writtenScheduleType = written.scheduleType;
     useEffect(() => {
         if (!opportunityId || child.kind !== "child") return;
         let cancelled = false;
         const params = new URLSearchParams({ draft_customer_member_id: child.id });
         if (programCategoryId) params.set("draft_program_category_id", programCategoryId);
         if (draftDaysKey) params.set("draft_days_per_week", String(new Set(draftDaysKey.split(",")).size));
-        if (scheduleType) params.set("draft_schedule_type", scheduleType);
+        if (writtenScheduleType) params.set("draft_schedule_type", writtenScheduleType);
         if (start) params.set("draft_start_date", start);
         if (siteId) params.set("draft_location_id", siteId);
         const timer = window.setTimeout(() => {
@@ -2000,7 +2007,7 @@ function ScheduleEditor({
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [opportunityId, child.id, child.kind, programCategoryId, draftDaysKey, scheduleType, start, siteId]);
+    }, [opportunityId, child.id, child.kind, programCategoryId, draftDaysKey, writtenScheduleType, start, siteId]);
 
     const tuitionChoices = useMemo(
         () => tuitionChoicesFor(displayView, showAdditionalRates),
@@ -2179,11 +2186,8 @@ function ScheduleEditor({
         setPatternPicking(false);
     }
 
-    function resolvePatternId(): string | null {
-        if (!patterns) return null;
-        return patterns.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? patterns[0]?.id ?? null;
-    }
-    const patternId = resolvePatternId();
+    /* Room-fit scoring only (a pattern is required to score rooms); nothing is written from it. */
+    const patternId = written.patternId ?? patterns?.[0]?.id ?? null;
     /*
      * Fit is judged against the CHILD's program. Once a room is picked the editor's program becomes
      * that room's program, and re-scoring against it would call every other room "different
@@ -2508,12 +2512,9 @@ function ScheduleEditor({
         setBusy(true);
         setError(null);
         try {
-            let pid = patternId;
-            if (!pid) {
-                // Patterns weren't opened — resolve the id lazily now (single shared load).
-                const ps = await ensurePatterns();
-                pid = ps.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? ps[0]?.id ?? null;
-            }
+            // The written pattern: chosen or implied by the days — never a default (patterns are warm;
+            // the shared load is awaited only if the editor saved before it answered).
+            const pid = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days }).patternId;
             if (createAsSecondary && onCreateSecondary) {
                 if (!pid) {
                     setError("Choose a schedule pattern before saving this assignment.");
@@ -3087,6 +3088,14 @@ function ScheduleEditor({
                         <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
                             {patternPicking ? "Hide patterns" : "Use a pattern"}
                         </button>
+                        {!patternPicking && patterns && days.length > 0 && !written.scheduleType ? (
+                            // Said, not guessed: Save records no schedule type until one is chosen.
+                            <span data-schedule-type-unset="true" style={{ fontSize: 11, color: T.muted }}>
+                                {written.ambiguous
+                                    ? "These days match more than one schedule type — use a pattern to choose."
+                                    : "No pattern matches these days — use a pattern to set the schedule type."}
+                            </span>
+                        ) : null}
                         {patternPicking &&
                             (patterns == null ? (
                                 // Loading is NOT the list — the picker only exists once patterns resolve.
