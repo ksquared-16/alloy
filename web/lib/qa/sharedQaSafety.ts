@@ -98,3 +98,23 @@ export function auditQaAuthzFixtureSql(sql: string): { ok: boolean; failures: st
 export function registeredQaOrgIds(): string[] {
   return Object.values(QA_ORGS).map((o) => o.id);
 }
+
+/**
+ * Shared QA Activation Safety — refuse outbound email/SMS (and invite / password-reset
+ * provider calls) for the frozen QA organizations, regardless of provider bindings or
+ * deployment-wide fallback credentials (e.g. RESEND_API_KEY).
+ *
+ * Firefly and every non-QA organization are unchanged: this returns ok.
+ */
+export function refuseQaOrgOutbound(orgId: string | null | undefined): SafetyRefusal | SafetyOk {
+  const id = String(orgId || "").trim();
+  if (!id) return { ok: true };
+  if (isRegisteredQaOrgId(id)) {
+    return {
+      ok: false,
+      code: "qa_org_outbound_refused",
+      detail: "Shared QA organizations cannot send email, SMS, invites, or password resets",
+    };
+  }
+  return { ok: true };
+}

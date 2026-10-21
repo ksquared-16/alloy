@@ -16,6 +16,7 @@ import {
     type ThreadHeaderHistoryRow,
 } from "@/lib/communications/email/outboundEmailHeaders";
 import { resolveVisibleReplyIdentity } from "@/lib/communications/identity/visibleEmailIdentity";
+import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 type DeliverResult =
     | { ok: true; providerMessageId: string | null }
@@ -66,9 +67,6 @@ export async function deliverQueuedEmailHtml(params: {
     messageId: string;
     resendApiKey?: string | null;
 }): Promise<DeliverResult> {
-    const apiKey = String(params.resendApiKey ?? process.env.RESEND_API_KEY ?? "").trim();
-    if (!apiKey) return { ok: false, reason: "resend_api_key_missing" };
-
     const { data: row, error } = await params.supabase
         .from("communication_messages")
         .select("id, org_id, thread_id, status, channel, subject, body, to_address, from_address, rendered_snapshot, communication_provider_binding_id")
@@ -77,6 +75,13 @@ export async function deliverQueuedEmailHtml(params: {
     if (error || !row) return { ok: false, reason: "message_not_found" };
     if (String(row.channel ?? "").toLowerCase() !== "email") return { ok: false, reason: "not_email" };
     if (String(row.status ?? "") === "sent") return { ok: true, providerMessageId: null };
+
+    // Shared QA Activation Safety: refuse before Resend, even when RESEND_API_KEY / bindings exist.
+    const qaGate = refuseQaOrgOutbound(String(row.org_id ?? ""));
+    if (!qaGate.ok) return { ok: false, reason: qaGate.code };
+
+    const apiKey = String(params.resendApiKey ?? process.env.RESEND_API_KEY ?? "").trim();
+    if (!apiKey) return { ok: false, reason: "resend_api_key_missing" };
 
     const html = htmlFromSnapshot(row.rendered_snapshot);
     if (!html || !/\shref\s*=/i.test(html)) return { ok: false, reason: "snapshot_html_missing_href" };

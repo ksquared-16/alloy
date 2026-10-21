@@ -23,6 +23,7 @@ import {
   auditQaAuthzFixtureSql,
   refuseForbiddenOrg,
   refuseProductionProject,
+  refuseQaOrgOutbound,
   requireQaRunId,
 } from "@/lib/qa/sharedQaSafety";
 
@@ -199,13 +200,29 @@ describe("shared QA B2 fixture SQL safety + hashes", () => {
     expect(docs).toMatch(/retained_by_design/);
     expect(docs).toMatch(/mutation_events/);
     expect(docs).toMatch(/doc_zr_vendors[\s\S]*zero/);
+    expect(docs).toMatch(/doc_zr_pool_access/);
+    expect(docs).toMatch(/doc_zr_zero_sent/);
+    expect(docs).toMatch(/qa-shared-actor@example\.com/);
+    expect(docs).toMatch(/qa-secondary-admin@example\.com/);
+    expect(docs).toMatch(/status = 'sent'/);
     const bp = readFileSync(join(ROOT, QA_CENSUS_PATHS.bp_quiesced_retained), "utf8");
     expect(bp).toMatch(/quiesced_retained/);
     expect(bp).toMatch(/posted financial records/);
     expect(bp).toMatch(/configuration_publications/);
     expect(bp).toMatch(/not_residue/);
+    // Activation Safety: exclude only the frozen actor email — not every admin role.
+    expect(bp).toMatch(/qa-shared-actor@example\.com/);
+    expect(bp).not.toMatch(/ur\.role\s*<>\s*'admin'/);
+    expect(bp).toMatch(/bp_qr_zero_sent/);
+    expect(bp).toMatch(/status = 'sent'/);
     // Retained financial rows are reported as data, never asserted to zero.
     expect(bp).not.toMatch(/charges ~ zero/);
+  });
+
+  it("refuses QA outbound via refuseQaOrgOutbound (activation safety)", () => {
+    expect(refuseQaOrgOutbound(QA_SHARED).ok).toBe(false);
+    expect(refuseQaOrgOutbound(QA_ORGS.qa_secondary.id).ok).toBe(false);
+    expect(refuseQaOrgOutbound(FIREFLY).ok).toBe(true);
   });
 
   it("refuses a fixture that deletes by organization alone", () => {
@@ -406,5 +423,14 @@ describe("shared QA B2 package scripts + createOrg frozen id support", () => {
     expect(src).toMatch(/org_id\?:/);
     expect(src).toMatch(/slug\?:/);
     expect(src).toMatch(/insertRow\.id = requestedOrgId/);
+  });
+
+  it("ensureSharedQaTenant recovers missing admin and refuses foreign members", () => {
+    const src = readFileSync(TENANT_RUNNER, "utf8");
+    expect(src).toMatch(/createMembershipWithAccessProfile/);
+    expect(src).toMatch(/foreign_members/);
+    expect(src).toMatch(/recover_admin/);
+    expect(src).toMatch(/would_recover_admin/);
+    expect(src).toMatch(/classifyExistingOrg/);
   });
 });

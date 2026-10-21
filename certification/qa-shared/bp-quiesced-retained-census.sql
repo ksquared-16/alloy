@@ -1,7 +1,8 @@
--- Business Processes bp_v2 — QUIESCED_RETAINED census (B2, read-only).
--- Access must be clean (non-actor memberships gone). Posted financial rows,
--- published process configuration, and access audit history are RETAINED BY DESIGN
--- and reported as data — never asserted to zero.
+-- Business Processes bp_v2 — QUIESCED_RETAINED census (B2 + Activation Safety, read-only).
+-- Access must be clean: only the frozen provisioning administrator may retain membership.
+-- Posted financial rows, published process configuration, and access audit history are
+-- RETAINED BY DESIGN and reported as data — never asserted to zero.
+-- Activation Safety also asserts zero provider-sent communication_messages.
 select question_id, kind, payload
 from (
     select 'bp_qr_00'::text as question_id, 'data'::text as kind,
@@ -16,21 +17,38 @@ from (
            )::text as payload,
            '00'::text as sort_key
     union all
+    -- Exclude ONLY the frozen provisioning administrator (by email), not every admin role.
+    -- A pool identity that retained admin (or any role) fails this check.
     select 'bp_qr_pool_access', 'check',
            'user_roles ~ qa_shared_non_actor ~ zero ~ '
            || coalesce((
                 select (count(*) = 0)::text
                 from public.user_roles ur
                 where ur.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
-                  and ur.role <> 'admin'
+                  and not exists (
+                    select 1
+                    from auth.users u
+                    where u.id = ur.user_id
+                      and lower(u.email) = lower('qa-shared-actor@example.com')
+                  )
               ), 'false'),
            '01'
+    union all
+    select 'bp_qr_zero_sent', 'check',
+           'communication_messages ~ status_sent ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.communication_messages cm
+                where cm.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                  and cm.status = 'sent'
+              ), 'false'),
+           '02'
     union all
     select 'bp_qr_org_present', 'data',
            json_build_object(
                'qa_shared_present', (select exists(select 1 from public.orgs where id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid))
            )::text,
-           '02'
+           '03'
     union all
     select 'bp_qr_retained_financial', 'data',
            json_build_object(
@@ -43,7 +61,7 @@ from (
                  where c.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
                ), 0)
            )::text,
-           '03'
+           '04'
     union all
     select 'bp_qr_retained_process_config', 'data',
            json_build_object(
@@ -56,7 +74,7 @@ from (
                  where cp.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
                ), 0)
            )::text,
-           '04'
+           '05'
     union all
     select 'bp_qr_retained_audit', 'data',
            json_build_object(
@@ -69,6 +87,6 @@ from (
                  where me.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
                ), 0)
            )::text,
-           '05'
+           '06'
 ) q
 order by sort_key;
