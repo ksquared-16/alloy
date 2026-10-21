@@ -44,6 +44,9 @@ export type AssignmentRosterRow = {
     isPrimary: boolean;
     roleLabel: "Primary" | "Secondary";
     assignmentTypeLabel: string | null;
+    /** The row's own category and pattern — a room change supersedes with these, changing only the room. */
+    assignmentTypeId: string | null;
+    schedulePatternId: string | null;
     roomName: string | null;
     weekdaysLabel: string;
     effectiveFrom: string;
@@ -516,6 +519,8 @@ export async function buildAssignmentRosterReadModel(
             isPrimary: row.is_primary === true,
             roleLabel: row.is_primary ? "Primary" : "Secondary",
             assignmentTypeLabel: type?.label ?? null,
+            assignmentTypeId: row.operational_assignment_type_id ?? null,
+            schedulePatternId: row.schedule_pattern_id,
             roomName: row.room_location_id ? roomLabels.get(row.room_location_id) ?? null : null,
             weekdaysLabel: weekdays.length ? formatWeekdays(weekdays) : "—",
             effectiveFrom: row.start_date,
