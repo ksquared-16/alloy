@@ -57,8 +57,15 @@ Measured 2026-09-30, three tables carry exactly that shape:
 | `child_placements` | Placement | `lib/childcareOperational/childPlacementService.ts` |
 | `schedule_assignments` (child, agreement-scoped) | Scheduling | `lib/childcareOperational/scheduleAssignmentService.ts` |
 | `schedule_assignments` (primary switch, child **and** staff) | Scheduling | `lib/operationalAssignments/setPrimaryOperationalAssignment.ts` |
+| `schedule_assignments` (secondary replacement, child proposed/committed **and** staff) | Scheduling | `lib/operationalAssignments/operationalAssignmentService.ts` → `replace_secondary_schedule_assignment` |
 | `employments` | Employment | `employment` domain services |
 
+> **Corrected 2026-10-21.** `operationalAssignmentService.ts` also REPLACES secondary assignments
+> (`assignment.create` / `assignment.change_room` with a predecessor), committed and proposed, child and
+> staff. Since #1538 that replacement is one transaction — `replace_secondary_schedule_assignment`
+> (`20261201090000`), the sibling of the primitive below for `is_primary = false` rows. The 2026-09-30
+> note that follows is accurate for creation, promotion and deletion of proposed rows only.
+>
 > **Corrected 2026-09-30.** This table previously named
 > `lib/operationalAssignments/operationalAssignmentService.ts` as the `schedule_assignments` invariant
 > owner. Measured, that service creates, promotes and deletes **proposed** assignments — rows that are
@@ -183,6 +190,16 @@ synchronised an assignment learns about the change through that event and nothin
 **An in-place write that skips the event is worse than a write that fails** — the failure is visible,
 the silent divergence is not. Integration-visible mutation semantics must be identical regardless of
 which Alloy surface initiated the change.
+
+> **Open, measured 2026-10-21 — not yet ruled.** Only the child agreement-scoped paths emit
+> (`schedule_assignment_changed` via `operationalEnrollmentEvents.ts`; `setPrimaryOperationalAssignment`
+> emits for child subjects only). Secondary replacement and staff primary switches have never emitted a
+> domain change event — before or after #1538 — and the emitter's payload requires an enrollment
+> agreement, so it cannot describe proposed or staff rows. Nothing consumes these events today: partners
+> read `/api/v1/schedule-assignments`, which pages child rows (secondaries included) by `updated_at`, and
+> both supersession writers move `updated_at` on the closed row and insert the successor. Whether
+> secondary and staff changes owe an event is a Director decision; until it is made, this paragraph's
+> obligation is stated for the child agreement-scoped paths.
 
 ---
 
