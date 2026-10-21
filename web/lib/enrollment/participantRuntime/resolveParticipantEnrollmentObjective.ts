@@ -37,7 +37,7 @@ import {
     outstandingRequiredEvidence,
     type ParticipantEvidenceObligation,
 } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
-import { artifactSlotsForProjection } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
+import { artifactSlotsForProjection, collectionDeclaredPartySlots } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
@@ -92,7 +92,7 @@ function buildParticipantObjective(
      * chooses between. Absent a context the list is empty, which selects exactly as it always did.
      */
     const outstanding_evidence = context
-        ? outstandingRequiredEvidence(context.forms, context.evidenceOnFile)
+        ? outstandingRequiredEvidence(context.forms, context.evidenceOnFile, new Set(needs.hidden_field_keys ?? []))
         : [];
 
     /*
@@ -102,9 +102,21 @@ function buildParticipantObjective(
      * evidence. No configured requirements exist today, so every offer is optional and declinable.
      */
     const parties = context?.parties ?? [];
-    const partySlots = (context?.forms ?? []).flatMap((f) => artifactSlotsForProjection(f.schema, []));
+    const labelSlots = (context?.forms ?? []).flatMap((f) => artifactSlotsForProjection(f.schema, []));
+    // Roles the forms DECLARE (collection-bound groups), with the author's minimums. Added only where
+    // the labels did not already describe that role and position.
+    const declared = (context?.forms ?? []).map((f) => collectionDeclaredPartySlots(f.schema));
+    const seen = new Set(labelSlots.map((s) => s.slot_id));
+    const declaredSlots = declared.flatMap((d) => d.slots).filter((s) => (seen.has(s.slot_id) ? false : (seen.add(s.slot_id), true)));
+    const partySlots = [...labelSlots, ...declaredSlots];
+    const partyRequirements: Record<string, { required: boolean; minimum: number }> = {};
+    for (const d of declared) {
+        for (const [role, minimum] of Object.entries(d.minimums)) {
+            partyRequirements[role] = { required: true, minimum: Math.max(partyRequirements[role]?.minimum ?? 0, minimum) };
+        }
+    }
     const partyOffer: PartyOffer | null = context
-        ? nextPartyOffer({ parties, slots: partySlots, declines: context.partyDeclines ?? {} })
+        ? nextPartyOffer({ parties, slots: partySlots, declines: context.partyDeclines ?? {}, requirements: partyRequirements })
         : null;
 
     return {

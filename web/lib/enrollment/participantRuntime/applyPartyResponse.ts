@@ -10,7 +10,8 @@
  *
  * ## Declining is settlement
  *
- * There are no configured party minimums today, so every offer is declinable and a decline is
+ * An offer is declinable unless the form declares a minimum for the role (a collection group's
+ * `repeat.min`); a decline below it is refused. Otherwise a decline is
  * recorded beside the other interaction facts in the session's metadata. It settles that role for
  * this journey — the conversation moves on and does not ask again.
  */
@@ -52,6 +53,11 @@ export async function applyPartyResponse(
     if (!offer) return { ok: false, error: "There is nobody to add right now." };
 
     if (input.response.decline === true) {
+        // An authored minimum ("at least one emergency contact") is a requirement, not an offer.
+        if (offer.existing.length < offer.minimum) {
+            const still = offer.minimum - offer.existing.length;
+            return { ok: false, error: `Please add ${still === 1 ? "one more" : `${still} more`} — this enrollment needs at least ${offer.minimum}.` };
+        }
         const metadata = buildPartyOfferDeclinePatch({
             metadata: input.sessionMetadata,
             role: offer.role,
