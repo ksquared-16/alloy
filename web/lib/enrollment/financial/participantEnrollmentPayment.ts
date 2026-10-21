@@ -81,7 +81,30 @@ export type ParticipantPaymentView = {
     readonly rails: readonly ("card" | "ach")[];
     /** Present when the participant cannot pay and deserves to know why. */
     readonly unpayableReason: string | null;
+    /** The child this session is about (from the session itself, never the query string). */
+    readonly focusedCustomerMemberId: string | null;
+    /** The line offered first: this child's payable fee, else the first payable fee, else none. */
+    readonly defaultChargeId: string | null;
 };
+
+/**
+ * WHICH FEE IS OFFERED FIRST (FI-04).
+ *
+ * A parent paying on Ben's application is offered Ben's fee — not whichever sibling's fee the
+ * projection happened to list first (ZZQAV5082106 defaulted to Ava's). Only lines that can be paid
+ * now qualify; a child whose fee is not due, already paid or processing falls through to the first
+ * payable line, so the parent is never handed a dead default. Every other payable fee stays
+ * selectable — this chooses a default, it restricts nothing. A household fee (no subject) is never
+ * "the child's".
+ */
+export function defaultParticipantPaymentChargeId(
+    lines: readonly Pick<ParticipantPaymentLine, "chargeId" | "subjectCustomerMemberId" | "collectibleNowCents">[],
+    focusedCustomerMemberId: string | null,
+): string | null {
+    const payable = lines.filter((l) => l.chargeId && l.collectibleNowCents > 0);
+    const own = focusedCustomerMemberId ? payable.find((l) => l.subjectCustomerMemberId === focusedCustomerMemberId) : undefined;
+    return (own ?? payable[0])?.chargeId || null;
+}
 
 /**
  * WHO THE PARTICIPANT IS, PROVEN — not inferred from a name or an email address.
@@ -165,6 +188,8 @@ export function buildParticipantPaymentView(input: {
     readonly merchant: { readonly readiness?: string | null; readonly achReadiness?: string | null } | null;
     readonly childNames: ReadonlyMap<string, string>;
     readonly label?: string;
+    /** The session's child — `family.value.focusedCustomerMemberId`, resolved from the session. */
+    readonly focusedCustomerMemberId?: string | null;
 }): ParticipantPaymentView {
     const { projection, payer } = input;
     const rails = (["card", "ach"] as const).filter((r) => railCollectionAvailable(input.merchant, r));
@@ -226,6 +251,8 @@ export function buildParticipantPaymentView(input: {
         methods: payer ? input.methods.map(methodView) : [],
         rails,
         unpayableReason,
+        focusedCustomerMemberId: input.focusedCustomerMemberId ?? null,
+        defaultChargeId: defaultParticipantPaymentChargeId(lines, input.focusedCustomerMemberId ?? null),
     };
 }
 
