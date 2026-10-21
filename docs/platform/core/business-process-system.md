@@ -84,8 +84,22 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   records, BP V2 Slice 3): `current_assignments`, `assignments_ending_soon` (ends within 30 days, today
   included), `assignments_upcoming_changes` (starts within the next 30 days), `schedule_gaps` (operational
   child agreements with no committed schedule in effect or ahead), `assignments_proposed_incomplete`
-  (proposed awaiting disposition; committed missing its assignment type). Billing: `charges_needing_review`
-  (household records, `fin.read`).
+  (proposed awaiting disposition; committed missing its assignment type). Billing (household records, `fin.read`,
+  actor sites ∩ selection through Financials' own location rule; BP V2 Slice 5): `charges_needing_review`
+  (Financials' charge-index "attention" — a configured review or a failed post, named apart in the reason),
+  `payment_exceptions` (V1: collections the provider confirmed that Financials has not recognized as money —
+  `readUnrecognizedCollections`; provider telemetry is shown as the exception, never as a payment),
+  `funding_variances` (posted childcare charges with an open, non-zero subsidy variance — Financials'
+  positions via `resolveCollectiblePositionsForCharges` under the Subsidy section's rule
+  `financialSubsidyReason`; a variance never changes what a family owes). No Billing projection computes
+  money. **Not offered (blocked by Financials prerequisites, so never a zero-count queue):** payment
+  exceptions for failed attempts, failed autopay and disputes (no org-wide Financials reader;
+  `autopayPresentation` is unexported; disputes have no "needs action" rule); Payments due and Overdue (no
+  cross-household due/past-due reader — `pastDueFor`/`notYetDueFor` live in the single-account card model,
+  ignore submitted-claim suppression, and the "Due" figure is composed in a presentation adapter; Due / Past
+  due human acceptance is pending); Billing-period variances (no period-over-period comparison exists —
+  comparable-period rule, per-period billed amount at household grain, threshold policy and a cross-household
+  reader are all missing).
   Publication refuses an unregistered key and refuses `filters_v1`, sorts, `compat_queue_key` and
   `row_grain_v1` on such a view (`projection_work_view_invalid`) — the projection is its membership and
   order. `projection_key` on a staged lifecycle is refused. The runtime contract is
