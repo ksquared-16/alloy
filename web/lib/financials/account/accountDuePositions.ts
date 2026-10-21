@@ -29,6 +29,7 @@ import {
     ACCOUNT_CHARGE_SELECT,
     deriveAccountChargeLedgerRows,
     readAppliedByChargeId,
+    readReductionsByChargeId,
 } from "@/lib/financials/account/accountChargeLedger";
 import {
     OWED_STATUSES,
@@ -145,6 +146,9 @@ export async function readAccountDuePositions(
         // 4. Applied money.
         const applied = await readAppliedByChargeId(supabase, { orgId: args.orgId, chargeIds: charges.map((c) => t(c.id)) });
         if (applied.state !== "ok") return { state: "unavailable", reason: applied.reason };
+        /* W7-F053: a discounted charge owes its net, not its gross. */
+        const reductions = await readReductionsByChargeId(supabase, { orgId: args.orgId, chargeIds: charges.map((c) => t(c.id)) });
+        if (reductions.state !== "ok") return { state: "unavailable", reason: reductions.reason };
 
         // 5. Scope, per charge, by Financials' location rule; group by account.
         const byHousehold = new Map<string, { raw: Record<string, unknown>[]; sites: Set<string | null> }>();
@@ -174,15 +178,15 @@ export async function readAccountDuePositions(
         const accounts: AccountDuePosition[] = [];
         for (const [customerId, g] of byHousehold) {
             const rows = deriveAccountChargeLedgerRows(g.raw, args.today);
-            const pastDue = pastDueFor(rows, args.today, applied.appliedByChargeId);
-            const dueWithin = dueWithinFor(rows, args.today, args.windowEnd, applied.appliedByChargeId);
+            const pastDue = pastDueFor(rows, args.today, applied.appliedByChargeId, reductions.reductionByChargeId);
+            const dueWithin = dueWithinFor(rows, args.today, args.windowEnd, applied.appliedByChargeId, reductions.reductionByChargeId);
             if (!pastDue && !dueWithin) continue;
             accounts.push({
                 customerId,
                 householdName: names.get(customerId) ?? null,
                 siteLocationId: g.sites.size === 1 ? [...g.sites][0] ?? null : null,
                 pastDue,
-                pastDueChargeIds: pastDue ? pastDueChargeIds(rows, args.today, applied.appliedByChargeId) : [],
+                pastDueChargeIds: pastDue ? pastDueChargeIds(rows, args.today, applied.appliedByChargeId, reductions.reductionByChargeId) : [],
                 dueWithin,
             });
         }

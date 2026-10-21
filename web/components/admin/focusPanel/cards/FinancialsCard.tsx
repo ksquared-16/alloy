@@ -906,6 +906,9 @@ export default function FinancialsCard({
         unappliedCents: number;
         eligibleCents: number;
         heldForPayerCents: number;
+        /* W7-F053: why this payer's amount can be lower than the account's past due. */
+        fundingPendingCents: number;
+        othersShareCents: number;
         lines: Array<{ chargeId: string; label: string; dueOn: string; pastDue: boolean; cents: number }>;
         unappliedNote: string | null;
     } | null>(null);
@@ -1005,6 +1008,8 @@ export default function FinancialsCard({
                         unappliedCents: payAmountTouched ? Number(after.unapplied_cents) || 0 : 0,
                         eligibleCents: eligible,
                         heldForPayerCents: Number(after.held_for_payer_cents) || 0,
+                        fundingPendingCents: Number(after.funding_pending_cents) || 0,
+                        othersShareCents: Number(after.others_share_cents) || 0,
                         lines: ((after.lines ?? []) as Array<Record<string, unknown>>).map((l) => ({
                             chargeId: String(l.charge_id),
                             label: String(l.label),
@@ -5025,6 +5030,27 @@ export default function FinancialsCard({
                                                 Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).
                                             </p>
                                         )}
+                                        {/*
+                                          * W7-F053: NO OPERATOR REVERSE-ENGINEERS AN EXCLUSION. When the
+                                          * account owes more than this payer can settle, the form says
+                                          * which part is someone else's and which is expected from funding.
+                                          */}
+                                        {settlePreview.othersShareCents > 0 || settlePreview.fundingPendingCents > 0 || (!namedPayerId && settlePreview.heldForPayerCents > 0) ? (
+                                            <p className="alloy-os-financials__note" data-financials-settlement-excluded="true">
+                                                Not included:{" "}
+                                                {[
+                                                    namedPayerId && settlePreview.othersShareCents > 0
+                                                        ? `${money(settlePreview.othersShareCents, currency)} owed by other responsible people`
+                                                        : null,
+                                                    !namedPayerId && settlePreview.heldForPayerCents > 0
+                                                        ? `${money(settlePreview.heldForPayerCents, currency)} owed by named responsible people — choose who paid`
+                                                        : null,
+                                                    settlePreview.fundingPendingCents > 0
+                                                        ? `${money(settlePreview.fundingPendingCents, currency)} expected from funding (submitted claim)`
+                                                        : null,
+                                                ].filter(Boolean).join("; ")}.
+                                            </p>
+                                        ) : null}
                                         {settlePreview.unappliedCents > 0 && settlePreview.unappliedNote ? (
                                             <p className="alloy-os-financials__note" data-financials-settlement-unapplied="true">
                                                 {settlePreview.unappliedNote.replace(/^Stays unapplied · /, "Stays unapplied: ")}

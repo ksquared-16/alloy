@@ -926,6 +926,22 @@ Reallocate (`payment.reverse_application` + `payment.apply_to_charge`) and Apply
 money remain governed, explicit acts. History is never rewritten by the policy: allocations made
 before it stand.
 
+**Aging and settlement reconcile (W7-F053, 2026-10-21).** Both read a charge's NET owed: gross −
+discount reductions (`financial_reduction_applications`) − active applications of posted payments.
+- **Past due** (`accountDueClassification.pastDueFor`) = Σ over owed, dated, not-reversed rows due
+  before today of that net residual (dated credits net it). It is the OBLIGATION and is not reduced by
+  subsidy: where a submitted claim covers part of it, the summary says "· $X expected from funding".
+- **Settlement eligibility** (`planSettlement`) = the same due rows, each capped at
+  `currentlyCollectibleCents` (net outstanding − submitted-claim suppression), then split by
+  responsibility: a named payer's own share plus what the account owes as a whole; a household payment
+  only the latter. The Payment form states what it leaves out ("owed by other responsible people",
+  "expected from funding (submitted claim)").
+- With no subsidy claim and one payer owning everything, Past due = that payer's eligible amount. The
+  Certhouse defect that broke this ($2,005 vs $1,860) was Past due subtracting money applied from the
+  GROSS of a −$145 discounted tuition that was fully paid; every due reader now nets reductions.
+- A denied or reduced claim stops suppressing through the subsidy claim state (W7-F052's
+  reconciliation); settlement never decides funding.
+
 **Subsidy is different (W7-F052, carried).** An agency remittance is reconciled against expected
 funding (`subsidy.reconcile_remittance` / `subsidy.resolve_variance`), never auto-settled as family
 money; a $35 shortfall on an $800 expectation is classified by reconciliation, not treated as a

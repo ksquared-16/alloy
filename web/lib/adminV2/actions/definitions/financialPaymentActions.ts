@@ -387,6 +387,8 @@ const recordPayment: RegisteredAction = {
                         unapplied_cents: plan.unappliedCents,
                         eligible_cents: plan.eligibleCents,
                         held_for_payer_cents: plan.heldForPayerCents,
+                        funding_pending_cents: plan.fundingPendingCents,
+                        others_share_cents: plan.othersShareCents,
                         as_of: plan.asOf,
                         lines: plan.lines.map((l) => ({
                             charge_id: l.chargeId,

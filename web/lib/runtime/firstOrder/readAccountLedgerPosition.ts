@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { billingPeriodForDate } from "@/lib/financials/billingPeriod";
 import {
-    readAccountChargeLedger, readAppliedByChargeId,
+    readAccountChargeLedger, readAppliedByChargeId, readReductionsByChargeId,
 } from "@/lib/financials/account/accountChargeLedger";
 import {
     pastDueFor, reconcileRows,
@@ -57,6 +57,10 @@ export async function readAccountLedgerPosition(
         orgId: args.orgId, chargeIds: ledger.rows.map((r) => r.chargeId),
     });
     if (applied.state !== "ok") return { state: "unavailable", reason: applied.reason };
+    /* W7-F053: a discounted charge owes its net, not its gross. */
+    const reductions = await readReductionsByChargeId(supabase, {
+        orgId: args.orgId, chargeIds: ledger.rows.map((r) => r.chargeId),
+    });
 
     return {
         state: "ok",
@@ -65,6 +69,6 @@ export async function readAccountLedgerPosition(
         // Past due is account-wide, not period-scoped: an obligation overdue from March is still
         // overdue in September, and scoping it to the current period would report zero every time
         // a family fell behind and then stopped being charged.
-        pastDue: pastDueFor(ledger.rows, today, applied.appliedByChargeId),
+        pastDue: pastDueFor(ledger.rows, today, applied.appliedByChargeId, reductions.state === "ok" ? reductions.reductionByChargeId : undefined),
     };
 }
