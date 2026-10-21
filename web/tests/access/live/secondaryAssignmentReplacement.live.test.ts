@@ -264,4 +264,37 @@ describe.skipIf(!env)("secondary assignment replacement, against a live database
         expect(r.error?.message ?? "").toMatch(/primary_not_supported/);
         expect(await rows(m)).toHaveLength(1);
     });
+
+    it("the consistency trigger refuses a room outside the assignment's site for ANY writer, and never re-judges a status-only close", async () => {
+        const m = await member();
+        const { data: units } = await db.from("locations").select("id").eq("org_id", a.orgId).eq("location_type", "unit").limit(200);
+        const ids = ((units ?? []) as Array<{ id: string }>).map((u) => u.id);
+        const siteOf = async (id: string) => (await db.rpc("location_site_id", { p_location_id: id })).data as string | null;
+        let inside: string | null = null;
+        let outside: string | null = null;
+        for (const id of ids) {
+            const s = await siteOf(id);
+            if (!inside && s === a.siteId) inside = id;
+            if (!outside && s && s !== a.siteId) outside = id;
+            if (inside && outside) break;
+        }
+        const base = {
+            org_id: a.orgId, subject_type: "child", customer_member_id: m, site_location_id: a.siteId,
+            commitment_kind: "proposed", is_primary: false, schedule_pattern_id: a.patternId,
+            operational_assignment_type_id: a.typeId, start_date: "2026-11-02", status: "planned",
+            assignment_kind: "base", source_key: "live-test",
+        };
+        if (outside) {
+            // A direct insert — no service in front of it: the database itself refuses.
+            const bad = await db.from("schedule_assignments").insert({ ...base, room_location_id: outside }).select("id");
+            expect(bad.error?.message ?? "").toMatch(/Room must resolve to the assignment site/);
+        }
+        if (inside) {
+            const ok = await db.from("schedule_assignments").insert({ ...base, room_location_id: inside }).select("id").single();
+            expect(ok.error).toBeNull();
+            const close = await db.from("schedule_assignments").update({ status: "canceled" }).eq("id", (ok.data as { id: string }).id).select("status").single();
+            expect(close.error).toBeNull();
+        }
+        expect(Boolean(inside) || Boolean(outside), "no unit found to exercise the room rule").toBe(true);
+    });
 });
