@@ -24,6 +24,7 @@ import { createOperationalAssignment } from "@/lib/operationalAssignments/operat
 const FN = "replace_secondary_schedule_assignment";
 const LIVE = ["planned", "active", "ending"];
 const ACTOR = "7a1d2c3e-0000-4000-8000-00000000a11e";
+const TODAY = "2026-10-21";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     try {
@@ -108,6 +109,7 @@ describe.skipIf(!env)("secondary assignment replacement, against a live database
             assignmentTypeId: a.typeId,
             isPrimary: false,
             actorUserId: ACTOR,
+            todayYmd: TODAY,
         });
     }
     const rows = async (memberId: string) =>
@@ -149,6 +151,7 @@ describe.skipIf(!env)("secondary assignment replacement, against a live database
             isPrimary: false,
             supersedesAssignmentId: prior.id,
             actorUserId: ACTOR,
+            todayYmd: TODAY,
         });
         const rs = await rows(m);
         const p = rs.find((r) => r.id === prior.id)!;
@@ -203,6 +206,7 @@ describe.skipIf(!env)("secondary assignment replacement, against a live database
             isPrimary: false,
             supersedesAssignmentId: prior.id,
             actorUserId: ACTOR,
+            todayYmd: TODAY,
         };
         const one = await createOperationalAssignment(db, input);
         const two = await createOperationalAssignment(db, input);
@@ -259,6 +263,7 @@ describe.skipIf(!env)("secondary assignment replacement, against a live database
             startDate: "2026-11-02",
             isPrimary: true,
             actorUserId: ACTOR,
+            todayYmd: TODAY,
         });
         const r = await db.rpc(FN, rpcArgs(m, primary.id, "k-p"));
         expect(r.error?.message ?? "").toMatch(/primary_not_supported/);
