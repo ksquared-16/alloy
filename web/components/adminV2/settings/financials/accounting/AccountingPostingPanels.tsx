@@ -175,6 +175,7 @@ export function GlMappingPanel({ group = "charge" }: { group?: "charge" | "payme
                             <h3 className="text-[15px] font-semibold text-alloy-midnight">Where each charge category posts</h3>
                             <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
                                 Charge categories are fixed by the platform. Choose the GL account each one posts to.
+                                Where each payment method&apos;s money lands is set with the method, under Payments.
                             </p>
                         </>
                     )}

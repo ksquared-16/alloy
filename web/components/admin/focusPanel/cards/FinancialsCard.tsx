@@ -847,6 +847,35 @@ export default function FinancialsCard({
     const namedPayerId = payPayerPersonId && payPayerPersonId !== HOUSEHOLD_PAYER ? payPayerPersonId : "";
     /* W7-F045: the check number or reference the tender carries — `payments.reference_number`. */
     const [payReference, setPayReference] = useState<string>("");
+    /*
+     * W7-F047: THE METHODS THIS ORGANIZATION ACCEPTS, read when the Payment command opens. A method
+     * turned off in Organization → Financials → Payments is not offered; the record and collect
+     * actions refuse it too, so this is a courtesy, not the guard. Unread means everything offered.
+     */
+    const [disabledMethods, setDisabledMethods] = useState<ReadonlySet<string>>(new Set());
+    useEffect(() => {
+        if (surface?.kind !== "payment") return;
+        let live = true;
+        void fetch("/api/admin/financials/accepted-payment-methods", { credentials: "include", cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { methods?: Array<{ method: string; accepted: boolean }> } | null) => {
+                if (!live || !j?.methods) return;
+                setDisabledMethods(new Set(j.methods.filter((m) => !m.accepted).map((m) => m.method)));
+            })
+            .catch(() => {});
+        return () => {
+            live = false;
+        };
+    }, [surface?.kind]);
+    /* A method turned off while selected falls back to the first one still accepted. */
+    useEffect(() => {
+        if (!disabledMethods.has(payMethod)) return;
+        const next = ["cash", "check", "money_order", "manual", "other", "card", "ach"].find((m) => !disabledMethods.has(m));
+        if (next) {
+            setPayStoredMethodId("");
+            setPayMethod(next);
+        }
+    }, [disabledMethods, payMethod]);
     /* W7-F045: the Payment command takes money; refunds are its secondary tab, chosen one at a time. */
     const [paymentTab, setPaymentTab] = useState<"payment" | "refunds">("payment");
     const [refundPickId, setRefundPickId] = useState<string>("");
@@ -863,9 +892,10 @@ export default function FinancialsCard({
     const storedMethodsOnFile = useMemo(
         () =>
             (vm?.paymentCapabilities?.methodsOnFile ?? []).filter(
-                (m) => m.usabilityState === "usable" && (m.rail === "card" || (m.rail === "ach" && vm?.achAvailable)),
+                (m) => m.usabilityState === "usable" && (m.rail === "card" || (m.rail === "ach" && vm?.achAvailable))
+                    && !disabledMethods.has(m.rail),
             ),
-        [vm?.paymentCapabilities?.methodsOnFile, vm?.achAvailable],
+        [vm?.paymentCapabilities?.methodsOnFile, vm?.achAvailable, disabledMethods],
     );
     /* A stored method that no longer belongs to the payer now named is dropped, never sent. */
     useEffect(() => {
@@ -3221,6 +3251,15 @@ export default function FinancialsCard({
                     setPayReference("");
                 }
                 /*
+                 * W7-F048: A RECORDED PAYMENT CLOSES THE PAYMENT COMMAND. The form is the command's
+                 * whole body now, so clearing it would leave an empty tab; the reloaded ledger row is
+                 * the confirmation, as it is for every other money-moving layer. Only the Payment
+                 * command closes — a refund composed elsewhere is not affected.
+                 */
+                if (actionKey === "payment.record") {
+                    setStack((st) => (st.length && st[st.length - 1]!.kind === "payment" ? st.slice(0, -1) : st));
+                }
+                /*
                  * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
                  *
                  * `/api/admin/actions/execute` answers `data.execution_result: { client_secret,
@@ -4030,7 +4069,27 @@ export default function FinancialsCard({
                                 })}
                                 onChange={(next) => {
                                     setRefundPickId(next);
-                                    setRefundTarget(null);
+                                    setRefundError(null);
+                                    /*
+                                     * W7-F048: choosing the payment IS choosing to refund it — the
+                                     * composer opens at once, at the full refundable amount, exactly
+                                     * as the row's Refund button opens it. One more click on a
+                                     * compressed row was the tab's whole body.
+                                     */
+                                    const p = eligible.find((x) => x.paymentId === next);
+                                    if (!p) {
+                                        setRefundTarget(null);
+                                        return;
+                                    }
+                                    setRefundTarget({
+                                        paymentId: p.paymentId,
+                                        label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                        receivedCents: p.receivedCents,
+                                        refundedCents: p.refundedCents,
+                                        refundableCents: p.refundableCents,
+                                        currencyCode: p.currencyCode,
+                                    });
+                                    setRefundAmount((p.refundableCents / 100).toFixed(2));
                                 }}
                             />
                         </>
@@ -4052,7 +4111,7 @@ export default function FinancialsCard({
                     canonical payment state exists, the region stays neutral and
                     says nothing rather than explaining our architecture.
                 */}
-                {vm.paymentSetup ? (
+                {vm.paymentSetup && !tabbed ? (
                     <p className="alloy-os-financials__note" data-financials-payment="state">
                         {vm.paymentSetup}
                     </p>
@@ -4522,7 +4581,11 @@ export default function FinancialsCard({
                     already arrived. A single "Record payment" made provider collection sound like
                     bookkeeping. The command key stays `payment.record` — that is the canonical
                     action, not the operator's word for it. */}
-                {payableRows.length ? (
+                {/*
+                  * W7-F048: in the Payment command the charge is chosen INSIDE the form ("Apply
+                  * toward"), so this standalone menu renders only on the compact summary band.
+                  */}
+                {payableRows.length && !tabbed ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button
@@ -4569,6 +4632,53 @@ export default function FinancialsCard({
                         className="alloy-os-financials__preview"
                         data-financials-payment-form="true"
                     >
+                        {tabbed ? (
+                            <>
+                                {/*
+                                  * ── W7-F048: APPLY TOWARD — THE FIRST QUESTION OF THE FORM ─────────
+                                  *
+                                  * The obligation this money settles was chosen from a standalone
+                                  * "Take or record payment →" menu above the form, then named three
+                                  * more times inside it (heading, outstanding, "Applies to"). It is
+                                  * now the form's first field, carrying its date and what is still
+                                  * outstanding; choosing another resets the amount to that one's
+                                  * outstanding, as the menu did. One charge per payment, still —
+                                  * the collection and record actions settle exactly one.
+                                  */}
+                                <p className="alloy-os-financials__fieldlabel">Apply toward</p>
+                                <AlloySelect
+                                    value={payTarget.chargeId}
+                                    aria-label="Apply toward"
+                                    testId="financials-payment-apply-toward"
+                                    allowEmpty={false}
+                                    options={payableRows.map((r) => ({
+                                        value: r.chargeId,
+                                        label:
+                                            chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel)
+                                            + (r.date ? ` · ${humanDay(r.date)}` : "")
+                                            + ` · ${money(r.outstandingCents, r.currencyCode)} outstanding`,
+                                    }))}
+                                    onChange={(next) => {
+                                        const r = payableRows.find((x) => x.chargeId === next);
+                                        if (!r) return;
+                                        setCommandError(null);
+                                        setPayTarget({
+                                            chargeId: r.chargeId,
+                                            label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
+                                            outstandingCents: r.outstandingCents,
+                                            subjectMemberId: r.subjectMemberId,
+                                        });
+                                        setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                    }}
+                                />
+                                {vm.responsibility?.parties?.length ? (
+                                    <p className="alloy-os-financials__note" data-financials-payment-responsible="true">
+                                        Responsible: {vm.responsibility.parties.map((p) => p.name).join(", ")}
+                                    </p>
+                                ) : null}
+                            </>
+                        ) : (
+                            <>
                         <p className="alloy-os-financials__preview-summary">
                             {payTarget.label}
                         </p>
@@ -4606,6 +4716,8 @@ export default function FinancialsCard({
                         >
                             Applies to: {payTarget.label}
                         </p>
+                            </>
+                        )}
                         {/*
                          * LABELLED, like every other Alloy command field. This was three bare
                          * controls in a column — an amount, a method and a payer with nothing
@@ -4658,7 +4770,7 @@ export default function FinancialsCard({
                                 { value: "money_order", label: "Money order" },
                                 { value: "manual", label: "External payment (taken outside Alloy)" },
                                 { value: "other", label: "Other" },
-                            ]}
+                            ].filter((o) => o.value.startsWith("stored:") || !disabledMethods.has(o.value))}
                             onChange={(next) => {
                                 if (next.startsWith("stored:")) {
                                     const m = storedMethodsOnFile.find((x) => x.id === next.slice("stored:".length));
@@ -4848,6 +4960,8 @@ export default function FinancialsCard({
                                             setCardStage("idle");
                                             setPayTarget(null);
                                             await load();
+                                            /* W7-F048: charged on file — the command is done. */
+                                            if (tabbed) pop();
                                             return;
                                         }
                                         setCardCollection({
@@ -4867,18 +4981,27 @@ export default function FinancialsCard({
                                   * payment" made the two sound interchangeable — which is the
                                   * ambiguity human QA reported.
                                   */}
-                                {payMethod === "card"
-                                    ? "Collect by card"
-                                    : payMethod === "ach"
-                                        ? "Collect by bank account"
-                                        : "Record manual payment"}
+                                {/*
+                                  * W7-F048: ONE VERB FOR THE ACT — Confirm payment — whether the money
+                                  * is recorded (cash, check, money order, external) or charged to a
+                                  * method on file. Only a NEW card or bank account says what happens
+                                  * next, because pressing it opens the provider's own entry fields
+                                  * rather than taking money.
+                                  */}
+                                {(payMethod === "card" || payMethod === "ach") && !payStoredMethodId
+                                    ? payMethod === "ach" ? "Continue to bank details" : "Continue to card details"
+                                    : "Confirm payment"}
                             </button>
                             <button
                                 type="button"
                                 className="alloy-os-financials__action"
                                 data-financials-payment-cancel="true"
                                 disabled={running}
-                                onClick={() => setPayTarget(null)}
+                                onClick={() => {
+                                    setPayTarget(null);
+                                    /* W7-F048: the form IS the command now, so Cancel closes it. */
+                                    if (tabbed) pop();
+                                }}
                             >
                                 Cancel
                             </button>

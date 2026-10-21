@@ -110,9 +110,9 @@ describe("this is a configuration surface, not an integration debugger", () => {
     });
 
     it("still answers the questions an operator actually arrives with", () => {
-        for (const probe of ["payments-provider-status", "payments-rail-card", "payments-rail-bank"]) {
-            expect(code).toContain(probe);
-        }
+        expect(code).toContain("payments-provider-status");
+        /* W7-F047: card and bank availability is stated per method, in the methods table. */
+        expect(code).toMatch(/<PaymentMethodsSettings\s+providerConnected=\{connected\}\s+cardAvailable=\{Boolean\(state\?\.cardAvailable\)\}\s+bankAvailable=\{Boolean\(state\?\.bankAvailable\)\}/);
     });
 });
 
