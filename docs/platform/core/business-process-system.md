@@ -92,6 +92,11 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
 - **Same publication chain.** One department per process; draft → validate → publish → department
   projection, unchanged. The publish RPC is content-agnostic; the gate is `validateBusinessProcessForPublish`.
+- **Focus Panel (BP V2 Slice 4).** A projection row opens the existing durable record in the existing Focus
+  Panel; for Assignments, on the existing Scheduling card at the row's site and source, with the Work View's
+  reason on the record — see [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
+  No process-specific panel, card or layout exists; a process-scoped published layout for durable records
+  is not yet addressable (Surfaces).
 - **Workspace.** A projection is its own catalog entry and tile. Publishing it with Work Views creates its
   host work unit (one per department, key `domain_projection_host_<department>`); its tile then lists its
   own views on that host. Until then its card has `entryHref: null` and states why in the existing CTA

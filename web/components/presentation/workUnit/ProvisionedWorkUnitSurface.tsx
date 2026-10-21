@@ -454,11 +454,19 @@ export function ProvisionedWorkUnitSurface() {
                                       workViewId: projectionSnap.activeWorkView.id,
                                       domain: projectionSnap.projection.domain,
                                       projectionKey: projectionSnap.projection.projectionKey,
+                                      processLabel: projectionSnap.businessProcess.name,
+                                      workViewLabel: projectionSnap.activeWorkView.label,
                                       selectedSource: (() => {
                                           const row = effectiveModel.queue.rows.find((r) => r.entityId === selectedSubjectId);
                                           const src = row?.context?.domain_projection?.source;
                                           return src
-                                              ? { kind: src.kind, id: src.id, reason: row?.context?.domain_projection?.detail?.reason ?? src.status_label }
+                                              ? {
+                                                    kind: src.kind,
+                                                    id: src.id,
+                                                    reason: row?.context?.domain_projection?.detail?.reason ?? src.status_label,
+                                                    // BP V2 S4 — the site the row's commitment or agreement is at.
+                                                    siteLocationId: row?.context?.domain_projection?.site_location_id ?? null,
+                                                }
                                               : null;
                                       })(),
                                   }

@@ -1,0 +1,179 @@
+{
+  "console_errors": [
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace"
+    },
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace"
+    },
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace/work-unit/new"
+    },
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace/work-unit/all"
+    },
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace/work-unit/all"
+    },
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8"
+    }
+  ],
+  "page_errors": [],
+  "http_errors": [],
+  "blocked_non_get": [
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queue-view-totals",
+    "POST /api/admin/queues/stage-membership-ack"
+  ],
+  "views": {
+    "new": {
+      "url": "/workspace/work-unit/new",
+      "terminal": "operational",
+      "active_view": "new_leads",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 27,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision11",
+        "Registration19",
+        "Waitlist19",
+        "Tours0",
+        "All67",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "all": {
+      "url": "/workspace/work-unit/all",
+      "terminal": "operational",
+      "active_view": "new_work_view_6",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 67,
+      "durable_rows": 0,
+      "pills": [
+        "New28",
+        "Decision0",
+        "Registration0",
+        "Waitlist1",
+        "Tours0",
+        "All36",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "after_pill": {
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8",
+      "terminal": "operational",
+      "active_view": "new_work_view_8",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 10,
+      "durable_rows": 0,
+      "pills": [
+        "New28",
+        "Decision0",
+        "Registration0",
+        "Waitlist1",
+        "Tours0",
+        "All36",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "after_row": {
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8&subject_id=9fce29ff-ded9-4587-8575-61149d2029f2",
+      "terminal": "operational",
+      "active_view": "new_work_view_8",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 10,
+      "durable_rows": 0,
+      "pills": [
+        "New28",
+        "Decision0",
+        "Registration0",
+        "Waitlist1",
+        "Tours0",
+        "All36",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    }
+  },
+  "build": "747ad20dff47b9744bf77f7c70b66b774127e232",
+  "tiles": [
+    {
+      "title": "Enrollment",
+      "answer": "45Family Leads46Children",
+      "unavailable": null
+    }
+  ],
+  "catalog": [
+    {
+      "key": "enrollment",
+      "model": {
+        "kind": "staged_lifecycle"
+      },
+      "dept": "lead_management"
+    }
+  ],
+  "selected_row": {
+    "type": "opportunity",
+    "id": "9fce29ff-ded9-4587-8575-61149d2029f2"
+  },
+  "site_filter_enrollment": {
+    "plain": {
+      "status": 200,
+      "terminal": "operational",
+      "rows": 27
+    },
+    "with_site": {
+      "status": 200,
+      "terminal": "operational",
+      "rows": 27
+    },
+    "identical_rows": true
+  },
+  "bundle_keys": {
+    "current_assignments": false,
+    "assignments_ending_soon": false,
+    "assignments_upcoming_changes": false,
+    "schedule_gaps": false,
+    "assignments_proposed_incomplete": false,
+    "charges_needing_review": false
+  },
+  "scripts_scanned": 90
+}

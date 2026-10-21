@@ -321,6 +321,25 @@ describes staged lifecycles; for a projection view the following is the contract
   (opportunity drawer warming, stage work, primary actions) skips it by construction. Selecting a row opens
   the existing `DurableRecordSurface` inside the existing Focus Panel boundary; no default subject is
   committed and nothing opportunity-shaped is prepared for a projection row.
+- **Opening the record (BP V2 Slice 4).** The projection's domain decides HOW the existing
+  `DurableRecordSurface` opens (`durableRecordEntryFor`); nothing else is composed. Assignments open in the
+  surface's existing `contextual` presentation on the record's **Assignment** context — the existing
+  Scheduling card is the primary object, the record's own views and in-place contexts stay one click away.
+  Billing keeps the `full` record. The entry carries, read-only:
+  - the row's **site** (`context_site_id` on the record route) — honoured only inside the actor's scope and
+    only where the subject holds a live assignment, or (child) an operational agreement still to be placed,
+    at that site; otherwise ignored, never invented. A Schedule Gaps child therefore opens on an Assignment
+    context that says "Not yet assigned" at the agreement's site;
+  - the row's **source** as a focus request — the card resolves it against its OWN fresh projection, by id
+    only (`resolveSchedulingFocus`): a current, proposed or upcoming assignment opens its detail; a source
+    that has moved on is said ("has changed since the list was read"), never swapped for another row; an
+    agreement source opens no assignment;
+  - the **origin** line ("Assignments · Ending soon — Ends Oct 29 · in 9 days").
+  The entry is pinned for the life of the open record. Actions are the card's existing registered
+  `assignment.*` commands; a confirmed write (the card fires only after the canonical writer succeeded and
+  it re-read) dispatches the existing Work Unit convergence event with no opportunity id, so rows and counts
+  re-read. Process-scoped card ORDER for a durable record is not configurable yet: the published Focus Panel
+  summary is addressed to opportunities only.
 - **Scope.** Rows and counts are read under the request's access scope (site restrictions enforced;
   `fin.read` for Billing) **intersected with the `/workspace` site selection** (BP V2 Slice 3). The
   selection is part of the answer's identity (`workspace_site_id` on the provisioning-answer URL) and of the
