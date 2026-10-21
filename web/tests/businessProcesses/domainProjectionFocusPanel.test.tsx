@@ -104,6 +104,22 @@ describe("Focus Panel on a domain-projection surface", () => {
         expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-presentation")).toBe("full");
     });
 
+    it("S6: a Billing row asks the record for the existing Financials card as its lead, with the row's source", () => {
+        durableProps.length = 0;
+        render(surface(`household:${PERSON}`, { ...frame, domain: "billing", projectionKey: "payment_exceptions", processLabel: "Billing", workViewLabel: "Payment exceptions", selectedSource: { kind: "collection_attempt", id: "a-1", reason: "Collected by the provider, not yet recorded" } }));
+        const props = durableProps.at(-1)!;
+        expect(props.leadCard).toBe("financials");
+        expect(props.presentation).toBe("full");
+        expect(props.focusSource).toEqual({ kind: "collection_attempt", id: "a-1", reason: "Collected by the provider, not yet recorded" });
+        expect(props.origin).toEqual({ label: "Billing · Payment exceptions", reason: "Collected by the provider, not yet recorded" });
+    });
+
+    it("S6: Assignments rows never request the Financials lead", () => {
+        durableProps.length = 0;
+        render(surface(`person:${PERSON}`, { ...frame, selectedSource: { kind: "schedule_assignment", id: "sa-1", reason: null } }));
+        expect(durableProps.at(-1)!.leadCard).toBeNull();
+    });
+
     it("opens the durable person record with the originating process and view on the boundary", () => {
         const el = render(surface(`person:${PERSON}`, frame));
         expect(el.querySelector("[data-durable-surface]")?.getAttribute("data-durable-surface")).toBe(`person:${PERSON}`);

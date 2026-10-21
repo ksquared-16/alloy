@@ -1,0 +1,131 @@
+{
+  "org": "00000000-0000-4000-8000-000000000001",
+  "at": "2026-10-21T15:05:51.217Z",
+  "scenarios": {
+    "charges_needing_review": {
+      "household": "00000000-0000-4000-8000-000050000001",
+      "source": {
+        "kind": "charge",
+        "id": "70b62d97-cb52-4b19-ab9d-c6c459e1b869",
+        "count": 2,
+        "statusLabel": "1 failed to post · 1 needs review"
+      },
+      "reason": "1 failed to post · 1 needs review",
+      "failed": {
+        "kind": "charge",
+        "id": "70b62d97-cb52-4b19-ab9d-c6c459e1b869",
+        "status": "ok",
+        "label": "vacation credit",
+        "chargeStatus": "draft"
+      },
+      "review_required": {
+        "kind": "charge",
+        "id": "277649cb-2e9f-4c3e-8571-976f6b0ee1ba",
+        "status": "ok",
+        "label": "vacation credit",
+        "chargeStatus": "draft"
+      },
+      "starts": [
+        {
+          "openCharge": {
+            "chargeId": "70b62d97-cb52-4b19-ab9d-c6c459e1b869",
+            "label": "vacation credit"
+          },
+          "openCollection": null,
+          "notice": null,
+          "status": "charge"
+        },
+        {
+          "openCharge": {
+            "chargeId": "277649cb-2e9f-4c3e-8571-976f6b0ee1ba",
+            "label": "vacation credit"
+          },
+          "openCollection": null,
+          "notice": null,
+          "status": "charge"
+        }
+      ]
+    },
+    "payment_exceptions": {
+      "household": "fc500000-0000-4000-8000-0000000c0001",
+      "source": {
+        "kind": "collection_attempt",
+        "id": "e1c73dd8-7af0-4fcf-929a-c38470bdbdac",
+        "count": 86,
+        "statusLabel": "Collected by the provider, not yet recorded · 86 collections"
+      },
+      "focus": {
+        "kind": "collection_attempt",
+        "id": "e1c73dd8-7af0-4fcf-929a-c38470bdbdac",
+        "status": "ok",
+        "recognized": false,
+        "processorState": "succeeded"
+      },
+      "start": {
+        "openCharge": null,
+        "openCollection": {
+          "attemptId": "e1c73dd8-7af0-4fcf-929a-c38470bdbdac"
+        },
+        "notice": null,
+        "status": "collection"
+      }
+    },
+    "funding_variances": {
+      "household": "00000000-0000-4000-8000-000050000001",
+      "source": {
+        "kind": "charge",
+        "id": "e286942c-d12d-40f0-93c3-722b0ca7c5c7",
+        "count": 1,
+        "statusLabel": "Agency paid something else · short paid"
+      },
+      "reason": "Agency paid something else · short paid",
+      "focus": {
+        "kind": "charge",
+        "id": "e286942c-d12d-40f0-93c3-722b0ca7c5c7",
+        "status": "ok",
+        "label": "vacation credit",
+        "chargeStatus": "posted"
+      }
+    },
+    "refusals": {
+      "foreign_charge": {
+        "kind": "charge",
+        "id": "8698e7de-8357-44c9-b6a8-4feccc4fe497",
+        "status": "other_household"
+      },
+      "foreign_collection": {
+        "kind": "collection_attempt",
+        "id": "e1c73dd8-7af0-4fcf-929a-c38470bdbdac",
+        "status": "other_household"
+      },
+      "missing": "not_found",
+      "without_fin_read": {
+        "kind": "charge",
+        "id": "70b62d97-cb52-4b19-ab9d-c6c459e1b869",
+        "status": "forbidden"
+      }
+    },
+    "refused_command": {
+      "command": "charge.post",
+      "actor": "front desk (no fin.write)",
+      "ok": false,
+      "status": "blocked",
+      "refusal": "{\"ok\":false,\"status\":\"blocked\",\"canonicalCapabilityKey\":\"charge.post\",\"executionOwner\":\"registered_action\",\"invocationId\":\"ebba5953-bf89-456f-8c94-dd6363215e61\",\"error\":{\"code\":\"charge_permission_required\",\"operatorMessage\":\"Posting a charge requires fin.write.\"},\"actionResult\":{\"ok\":false,\"correlationId\":\"0e75e91e-c2e8-42bc-9fdb-3bc6b863e462\",\"status\":400,\"error\":\"Posting a charge requires fin.wr"
+    },
+    "stale": {
+      "focus": {
+        "kind": "charge",
+        "id": "277649cb-2e9f-4c3e-8571-976f6b0ee1ba",
+        "status": "not_found"
+      },
+      "start": {
+        "openCharge": null,
+        "openCollection": null,
+        "notice": "The financial item this view pointed to is no longer on this household's account. Showing the account.",
+        "status": "not_found"
+      }
+    }
+  },
+  "money_tables_unchanged_by_reads_and_refusal": true,
+  "fixtures_remaining": 0
+}
