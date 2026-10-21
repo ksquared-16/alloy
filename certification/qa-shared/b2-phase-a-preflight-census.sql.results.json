@@ -1,0 +1,97 @@
+{
+  "trusted_host_action_id": "tha_1eb91cf432b7e0",
+  "query_hash": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-21T21:18:19.399Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1eb91cf432b7e0",
+    "query_hash": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
+    "authorization_id": "grnt_a13bdd7e86534349",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-21T21:18:28.438Z",
+    "question_ids": [
+      "b2a00_identity",
+      "b2a01_audited_functions",
+      "b2a02_seed_rbac",
+      "b2a03_qa_orgs",
+      "b2a04_payment_structure"
+    ],
+    "questions": {
+      "b2a00_identity": {
+        "question_id": "b2a00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_head": "20261203090000",
+            "ledger_rows": 537,
+            "current_database": "postgres",
+            "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit"
+          }
+        ]
+      },
+      "b2a01_audited_functions": {
+        "question_id": "b2a01_audited_functions",
+        "row_count": null,
+        "rows": [
+          "create_role_definition_audited ~ installed ~ true",
+          "replace_role_permission_grants ~ installed ~ true",
+          "assign_member_role_audited ~ installed ~ true",
+          "replace_member_access_scope_audited ~ installed ~ true",
+          "remove_member_access_audited ~ installed ~ true",
+          "assign_member_role_audited ~ bounded ~ calls_assert_assignment_delegation_ceiling ~ true",
+          "replace_member_access_scope_audited ~ args ~ department_and_site ~ true"
+        ]
+      },
+      "b2a02_seed_rbac": {
+        "question_id": "b2a02_seed_rbac",
+        "row_count": null,
+        "rows": [
+          "orgs ~ trigger ~ orgs_seed_default_rbac ~ true",
+          "orgs_seed_default_rbac ~ calls_seed_default_rbac ~ true",
+          "seed_default_rbac ~ installed ~ true",
+          "seed_default_role_definitions ~ installed ~ true",
+          "seed_default_role_definitions ~ names_seeded_roles ~ true",
+          "seed_default_rbac ~ calls_seed_default_role_definitions ~ true"
+        ]
+      },
+      "b2a03_qa_orgs": {
+        "question_id": "b2a03_qa_orgs",
+        "row_count": null,
+        "rows": [
+          {
+            "qa_shared_id": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "qa_shared_present": false,
+            "qa_shared_name": null,
+            "qa_secondary_id": "ad53fee2-2570-460f-9300-f0e106c473b6",
+            "qa_secondary_present": false,
+            "qa_secondary_name": null,
+            "firefly_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "firefly_present": true,
+            "firefly_name": "Firefly Early Learning"
+          }
+        ]
+      },
+      "b2a04_payment_structure": {
+        "question_id": "b2a04_payment_structure",
+        "row_count": null,
+        "rows": [
+          "customers ~ column ~ stripe_customer_id ~ true",
+          "customer_payment_methods ~ column ~ stripe_payment_method_id ~ false",
+          "org_settings ~ table ~ present ~ true",
+          {
+            "org_settings_rows": 2,
+            "note": "Stripe/Resend secret material is deployment-env only; not readable here"
+          }
+        ]
+      }
+    },
+    "row_count": 19
+  }
+}
