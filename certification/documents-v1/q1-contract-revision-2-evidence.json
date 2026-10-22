@@ -8,7 +8,7 @@
     "path": "docs/platform/governance/authorization-qa-personas.md",
     "revision_1_sha256": "734a502fd6a8815773465b9fe4d41781cec6720404ba0499ce83fb48bc2c51f9",
     "revision_1_verified_at": "Alloy remote staging 841becb4428e (refs/remotes/origin/staging; = deployed) and installed authz_q1 pin",
-    "revision_2_sha256": "9aee089768884acc98bf3df8a30b0b0a1914c68494f5020a5e6232a540ac7477"
+    "revision_2_sha256": "a1ad543a242748ecbca8a0e932fc61fde91756f259be5ecf66eb21a7eccff162"
   },
   "dependency_artifact": {
     "path": "/Users/vacilando/Code/alloy-worktrees/documents/psess_claude_13dd9d293b80/q1-toolkit-dependency.json",
@@ -43,7 +43,7 @@
     },
     {
       "id": "G2",
-      "item": "Registered residue census 713325aa\u2026 checks vendors, qa_ grants, non-actor memberships and sent messages only; it does not prove zero documents rows, storage objects under QA org prefixes, Processing cases, or the G1 subjects, so a ZERO_RESIDUE verdict would not cover the run's product-API fixtures",
+      "item": "Registered residue census 713325aa\u2026 checks vendors, qa_ grants, non-actor memberships and sent messages only; it does not prove zero for the run's documents rows and storage objects (tag qa-authz-, or attached to aa000000- subjects/vendors) or dangling Processing-case sources in QA Shared, nor all documents/objects/cases in QA Secondary \u2014 so a ZERO_RESIDUE verdict would not cover the run's product-API fixtures",
       "owner": "Alloy census extension (Documents lane), then toolkit re-pin (Backend lane)"
     },
     {
@@ -58,5 +58,6 @@
     }
   ],
   "unchanged_requirements": "Every refusal requirement, persona grants and scope, department scope, cross-organization isolation, storage-object authorization and removal, and proven (not claimed) cleanup.",
-  "note_on_refs": "A stale local branch named origin/staging (refs/heads/origin/staging @66d6ee27, not created by this lane) shadows the remote-tracking ref in this shared repository; all hashes here were verified against refs/remotes/origin/staging @841becb4."
+  "note_on_refs": "A stale local branch named origin/staging (refs/heads/origin/staging @66d6ee27, not created by this lane) shadows the remote-tracking ref in this shared repository; all hashes here were verified against refs/remotes/origin/staging @841becb4.",
+  "design_note": "QA Shared is shared with bp_v2, which retains artifacts by design; Documents residue checks there are tag/namespace-scoped so they neither count nor delete another plan's artifacts. QA Secondary is authz_q1-only and is checked org-wide."
 }

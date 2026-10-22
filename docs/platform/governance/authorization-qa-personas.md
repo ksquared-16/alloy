@@ -85,10 +85,11 @@ leased identity out everywhere and deletes the run's session directory.
 
 ## 5. Fixtures
 
-**Isolation is by QA-run identity.** Every fixture row carries the run's `qa_run_id`. Registered SQL fixtures carry it in
-`metadata.qa_run_id`, with `external_source = "alloy_qa_fixture"` and ids in the `aa000000-` namespace. Fixtures
-created through product APIs carry it in their title. A run never touches another run's fixtures. Anything a run creates
-in QA Shared or QA Secondary is a fixture: neither org holds non-QA data.
+**Isolation is by QA-run identity.** Every fixture carries the run's `qa_run_id`:
+- **Registered SQL fixtures** carry it in `metadata.qa_run_id`, with `external_source = "alloy_qa_fixture"` and ids in the `aa000000-` namespace.
+- **Product-API uploads** carry the tag `qa-authz-<qa_run_id>` in both their `title` and their file name. The file name is part of the stored object path, so the tag reaches the storage object too.
+
+A run never touches another run's fixtures, nor another plan's artifacts. **QA Shared is shared with other plans** (for example `bp_v2`, which retains artifacts by design), so in QA Shared the Documents fixtures are identified by tag and namespace. **QA Secondary is used only by `authz_q1`**, so everything in it is a Documents fixture.
 
 | Fixture | Org | Created by | Removed by |
 |---|---|---|---|
@@ -103,7 +104,7 @@ Product-API fixtures exercise the real upload path. Synthetic data only; custome
 
 ## 6. Lifecycle and cleanup
 
-1. **Pre-run recovery.** Close any abandoned `authz_q1` run (`qa_run_close` is idempotent and is the recovery), then run the registered resets. Recovery deletes product-API fixtures by their `qa_run_id` title tag.
+1. **Pre-run recovery.** Close any abandoned `authz_q1` run (`qa_run_close` is idempotent and is the recovery), then run the registered resets. Recovery deletes leftover product-API documents tagged `qa-authz-`, through the audited POS delete as `fixture_admin` / `cross_org_admin`.
 2. **Open.** `environment.qa_run_open {plan: authz_q1, target: alloy_staging_web}` leases the pool. Through the audited functions it grants each persona exactly its registered roles and scope, then mints one verified session per persona.
 3. **Fixtures.** The registered ensures run, then product-API uploads as `fixture_admin` and `cross_org_admin`.
 4. **Certify.** Real HTTP requests from each persona's own session. The hosted driver reads only those sessions.
@@ -112,10 +113,12 @@ Product-API fixtures exercise the real upload path. Synthetic data only; custome
    - `aa000000-` / `alloy_qa_fixture` vendors and subjects;
    - `qa_*` role grants;
    - non-actor memberships in either QA org;
-   - `documents` rows in either QA org;
-   - storage objects under either QA org's `<org_id>/` prefix;
-   - Processing cases in either QA org;
-   - sent messages.
+   - sent messages;
+   - in **QA Shared**: `documents` rows and storage objects tagged `qa-authz-`, and documents attached to any `aa000000-` subject or vendor;
+   - in **QA Shared**: Processing-case sources whose source document no longer exists. A case left behind by a deleted fixture is caught here without guessing at its content.
+   - in **QA Secondary** (Documents-only): all `documents` rows, all storage objects under its `<org_id>/` prefix, and all Processing cases.
+
+   None of these checks may count another plan's retained artifacts, and none may be weakened to tolerate them.
 
    A verdict short of that is `ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED` and is not certification.
 
@@ -157,7 +160,7 @@ has no override flag. Hosted fixtures exist only as governed reconciliations.
 | QA-run open/close, per-persona sessions, sign-out on close, abandoned-run recovery | yes | **matches** |
 | Vendor fixture ensure/reset (pins verified against staging: SQL `09271ccd…`/`35b38ce6…`, runners `8c34b643…`/`cc547008…`) | yes | **matches** |
 | Department-linked subject fixtures (`WU1`/`WU2`, opportunities) in QA Shared, plus the QA Secondary subject | no | **missing.** An Alloy fixture plus a toolkit registration. |
-| Residue census covering documents, storage objects and Processing cases | census `713325aa…` checks vendors, `qa_` grants, pool access and zero sent only | **insufficient.** Alloy census extension plus a toolkit re-pin. |
+| Residue census covering the run's documents, storage objects and Processing-case residue (tag-scoped in QA Shared, org-wide in QA Secondary) | census `713325aa…` checks vendors, `qa_` grants, pool access and zero sent only | **insufficient.** Alloy census extension plus a toolkit re-pin. |
 | Vendor reset ordering: no document can remain bound to a deleted vendor | reset deletes vendors only | covered by §6 teardown ordering, and proven by the extended census |
 | Run-stage activation: `run` scope, no-send guard evidence, `documents_revised_plan_contract_approved` | gate open for `provisioning` and `org_ensure` only | **not opened** |
 | Contract pin | `734a502f…` (Revision 1) | **re-pin to Revision 2 after approval** |
@@ -168,7 +171,7 @@ has no override flag. Hosted fixtures exist only as governed reconciliations.
 2. Identities: seven persistent per-persona `qa-authz-*` accounts become **five reusable pooled identities**, leased per run, plus **two dedicated organization administrators** as provisioning actors (§3).
 3. D1/D2 become **permanent reusable QA structure** (§2), no longer per-run fixtures.
 4. Fixtures are **isolated by QA-run identity**, not by a dedicated tenant (§5).
-5. Zero-residue certification is **scoped to the run's fixtures, grants, sessions and registered cleanup obligations**, with the full fixture class list kept (§6).
+5. Zero-residue certification is **scoped to the run's fixtures, grants, sessions and registered cleanup obligations**, with the full fixture class list kept. In shared QA Shared, Documents fixtures are identified by tag and namespace, so another plan's retained artifacts are neither counted nor deleted. QA Secondary stays org-wide (§5, §6).
 6. Immutable audit history is **retained by design** and reported as data (§6).
 7. Lifecycle steps are mapped to the installed governed actions (§6); session storage to the per-run path (§4).
 8. **Unchanged:** every refusal requirement (§3), every persona's grants and scope, department scope, cross-organization isolation, storage-object authorization and removal, and the requirement that cleanup be *proven* rather than claimed.
