@@ -62,6 +62,23 @@ const DAY = "2027-03-15";
 const CAP1 = { start: `${DAY}T09:00:00.000Z`, end: `${DAY}T10:00:00.000Z` };
 const CAP2 = { start: `${DAY}T11:00:00.000Z`, end: `${DAY}T12:00:00.000Z` };
 
+/**
+ * The sends this suite made opened communication threads that reference the location; with
+ * the opportunities gone, nulling `location_id` would collide on the thread identity key,
+ * so the run's own messages and threads go first.
+ */
+async function removeCertLocation(db: SupabaseClient, locationId: string): Promise<void> {
+    const { data: threads } = await db.from("communication_threads").select("id").eq("location_id", locationId);
+    const threadIds = (threads ?? []).map((t) => (t as { id: string }).id);
+    if (threadIds.length) {
+        await db.from("communication_messages").delete().in("thread_id", threadIds);
+        await db.from("communication_threads").delete().in("id", threadIds);
+    }
+    await db.from("tour_availability_rules").delete().eq("location_id", locationId);
+    const { error } = await db.from("locations").delete().eq("id", locationId);
+    if (error) throw new Error(`cert location ${locationId} not removed: ${error.message}`);
+}
+
 describeLive("S1 tour booking & communication safety — live certification database", () => {
     const db = (env
         ? createClient(env.url, env.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
@@ -208,8 +225,7 @@ describeLive("S1 tour booking & communication safety — live certification data
         }
         if (personIds.length) await db.from("persons").delete().in("id", personIds);
         if (locationId) {
-            await db.from("tour_availability_rules").delete().eq("location_id", locationId);
-            await db.from("locations").delete().eq("id", locationId);
+            await removeCertLocation(db, locationId);
         }
     });
 
