@@ -51,6 +51,7 @@ function slot(over: Partial<AvailableTourSlot> = {}): AvailableTourSlot {
         endAt: "2026-08-10T17:00:00.000Z",
         timezone: "America/Los_Angeles",
         remainingCapacity: 3,
+        capacity: 3,
         ruleId: RULE,
         locationId: LOC,
         userId: null,

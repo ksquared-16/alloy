@@ -1411,7 +1411,22 @@ async function enrichVendorPayload(supabase: SupabaseClient, payload: WorkflowEv
 export type ExecuteWorkflowRunOptions = {
     event_id?: string | null;
     org_id?: string | null;
+    /**
+     * Set by an event emitter whose domain has REFUSED outbound communication for the
+     * entity this event is about (e.g. a tour booking still awaiting approval). Every
+     * action that sends a message is skipped and recorded with this reason; every other
+     * action — logging, assignments, work, entity updates — still runs, so operator work
+     * keyed on the event is preserved.
+     */
+    outboundMessagingRefusedReason?: string | null;
 };
+
+/** Workflow action types that put a message in front of a recipient. */
+export const WORKFLOW_OUTBOUND_MESSAGE_ACTION_TYPES: ReadonlySet<string> = new Set([
+    "create_message",
+    "send_message",
+    "send_communication_template",
+]);
 
 /** Canonical entity type for matching (plural form used in workflow_events). */
 const ENTITY_TYPE_ALIASES: Record<string, string> = {
@@ -1716,8 +1731,13 @@ export async function executeWorkflowRun(
             let skipReason = "";
             let actionOutputs: Record<string, unknown> = {};
 
+            const outboundRefusal = String(options?.outboundMessagingRefusedReason ?? "").trim();
             try {
-                switch (action.action_type) {
+                if (outboundRefusal && WORKFLOW_OUTBOUND_MESSAGE_ACTION_TYPES.has(String(action.action_type ?? ""))) {
+                    logs.push(`${action.action_type}: outbound refused (${outboundRefusal})`);
+                    actionSkipped = true;
+                    skipReason = `outbound_refused:${outboundRefusal}`;
+                } else switch (action.action_type) {
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const triggerProcess = pl.trigger_messages_process !== false;

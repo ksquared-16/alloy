@@ -39,10 +39,13 @@ export const INITIAL_ACTION_KINDS: readonly TourActionKind[] = [
  * `cancel_tour` is deliberately ABSENT: cancellation is consequential, so its
  * credential is minted only when the recipient explicitly enters the bounded
  * cancellation-confirmation flow.
+ *
+ * `confirm_tour` is ABSENT too: it let a family approve its own approval-required
+ * booking. Approval belongs to staff. The family's own "I'll be there" is
+ * `confirm_attendance`, which never changes booking status.
  */
 export const POST_BOOKING_ACTION_KINDS: readonly TourActionKind[] = [
     "view_tour_details",
-    "confirm_tour",
     "reschedule_tour",
     "confirm_attendance",
 ] as const;

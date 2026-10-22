@@ -15,6 +15,7 @@ const rescheduleMock = vi.fn();
 const cancelMock = vi.fn();
 const eventMock = vi.fn();
 const mintMock = vi.fn();
+const attendanceMock = vi.fn();
 
 vi.mock("@/lib/tours/bookings/tourBookingService", () => ({
     confirmTourBooking: (...a: unknown[]) => confirmMock(...a),
@@ -22,13 +23,16 @@ vi.mock("@/lib/tours/bookings/tourBookingService", () => ({
     cancelTourBooking: (...a: unknown[]) => cancelMock(...a),
     createTourBooking: vi.fn(),
 }));
+vi.mock("@/lib/tours/bookings/confirmTourAttendance", () => ({
+    confirmTourAttendance: (...a: unknown[]) => attendanceMock(...a),
+}));
 vi.mock("@/lib/tours/events/recordTourEvent", () => ({
     recordTourEvent: (...a: unknown[]) => eventMock(...a),
     TOUR_EVENTS: [],
 }));
 vi.mock("@/lib/tours/invitation/mintTourInvitation", () => ({
     mintActionsFor: (...a: unknown[]) => mintMock(...a),
-    POST_BOOKING_ACTION_KINDS: ["view_tour_details", "confirm_tour", "reschedule_tour"],
+    POST_BOOKING_ACTION_KINDS: ["view_tour_details", "reschedule_tour", "confirm_attendance"],
 }));
 vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
     computeAvailableTourSlots: async () => availableSlots,
@@ -56,6 +60,7 @@ function slot(over: Partial<AvailableTourSlot> = {}): AvailableTourSlot {
         endAt: "2026-08-10T16:30:00.000Z",
         timezone: "America/New_York",
         remainingCapacity: 3,
+        capacity: 3,
         ruleId: "rule-1",
         locationId: LOC,
         userId: null,
@@ -159,7 +164,7 @@ async function call(handler: (r: never, c: { params: Promise<{ token: string }> 
 }
 
 beforeEach(() => {
-    [confirmMock, rescheduleMock, cancelMock, eventMock, mintMock].forEach((m) => m.mockReset());
+    [confirmMock, rescheduleMock, cancelMock, eventMock, mintMock, attendanceMock].forEach((m) => m.mockReset());
     eventMock.mockResolvedValue({ recorded: true });
     mintMock.mockResolvedValue({ ok: true, actions: [] });
     confirmMock.mockResolvedValue(booking({ status_key: "confirmed" }));
@@ -225,19 +230,36 @@ describe("decline", () => {
 });
 
 // ---------------------------------------------------------------- confirm ---
-describe("confirm", () => {
-    beforeEach(() => { state.link = link({ action_kind: "confirm_tour", booking_id: BOOKING }); });
+// `confirm_tour` is a LEGACY credential: no longer minted, still in old inboxes. It must
+// never approve a booking — a family cannot be the authority that approves its own visit.
+describe("confirm (legacy credential)", () => {
+    beforeEach(() => {
+        state.link = link({ action_kind: "confirm_tour", booking_id: BOOKING });
+        state.booking = booking({ status_key: "pending_approval" });
+        attendanceMock.mockImplementation(async (_sb: unknown, input: { bookingId: string }) => ({
+            booking: booking({ id: input.bookingId, status_key: "pending_approval" }),
+            alreadyConfirmed: false,
+        }));
+    });
 
-    it("confirms via the canonical service exactly once", async () => {
+    it("NEVER approves a pending booking — the staff confirm service is not called", async () => {
         const r = await call(confirmPOST);
         expect(r.status).toBe(200);
-        expect(confirmMock).toHaveBeenCalledTimes(1);
-        expect(confirmMock.mock.calls[0][2]).toBe(BOOKING);
+        expect(confirmMock).not.toHaveBeenCalled();
+        expect(r.json.awaiting_approval).toBe(true);
+        // Public vocabulary: "held", never "confirmed".
+        expect((r.json.booking as Record<string, unknown>).state).toBe("held");
+    });
+
+    it("records the family's reply as an attendance acknowledgement, once", async () => {
+        await call(confirmPOST);
+        expect(attendanceMock).toHaveBeenCalledTimes(1);
+        expect(attendanceMock.mock.calls[0][1]).toMatchObject({ bookingId: BOOKING, confirmedByPersonId: PERSON });
     });
 
     it("takes the booking id from the CREDENTIAL, ignoring the body", async () => {
         await call(confirmPOST, { booking_id: "attacker-supplied", id: "also-ignored" });
-        expect(confirmMock.mock.calls[0][2]).toBe(BOOKING);
+        expect(attendanceMock.mock.calls[0][1].bookingId).toBe(BOOKING);
     });
 
     it("does not patch booking status directly", async () => {
@@ -250,19 +272,20 @@ describe("confirm", () => {
         const r = await call(confirmPOST);
         expect(r.json.idempotent_replay).toBe(true);
         expect(confirmMock).not.toHaveBeenCalled();
+        expect(attendanceMock).not.toHaveBeenCalled();
     });
 
-    it("leaves the action RETRYABLE when the lifecycle fails", async () => {
-        confirmMock.mockRejectedValue(new Error("db down"));
+    it("leaves the action RETRYABLE when recording fails", async () => {
+        attendanceMock.mockRejectedValue(new Error("db down"));
         const r = await call(confirmPOST);
         expect(r.status).toBe(400);
         expect(state.updates.some((u) => u.patch.consumed_at)).toBe(false);
     });
 
     it("refuses a booking belonging to another recipient", async () => {
-        state.booking = booking({ primary_person_id: OTHER_PERSON });
+        state.booking = booking({ primary_person_id: OTHER_PERSON, status_key: "pending_approval" });
         expect((await call(confirmPOST)).status).toBe(404);
-        expect(confirmMock).not.toHaveBeenCalled();
+        expect(attendanceMock).not.toHaveBeenCalled();
     });
 
     it("refuses when no booking is bound to the action", async () => {
@@ -274,11 +297,12 @@ describe("confirm", () => {
         state.link = link({ action_kind: kind, booking_id: BOOKING });
         expect((await call(confirmPOST)).status).toBe(404);
         expect(confirmMock).not.toHaveBeenCalled();
+        expect(attendanceMock).not.toHaveBeenCalled();
     });
 
-    it("emits tour_confirmed once", async () => {
+    it("emits no tour_confirmed event — nothing was confirmed", async () => {
         await call(confirmPOST);
-        expect(eventMock.mock.calls.filter((c) => c[1].event === "tour_confirmed")).toHaveLength(1);
+        expect(eventMock.mock.calls.filter((c) => c[1].event === "tour_confirmed")).toHaveLength(0);
     });
 });
 

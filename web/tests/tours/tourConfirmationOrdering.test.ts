@@ -7,13 +7,15 @@
  * reschedule/cancel credentials, which can only exist AFTER the booking commits —
  * sending inside the transaction produced a confirmation with nothing in it.
  *
- * These cases pin the corrected sequence, the parent-safe action model, and the
- * date/time parity between what the parent sees on the page and in the message.
+ * These cases pin the corrected sequence, the parent-safe action model — which carries no
+ * way for a family to approve its own booking — and the date/time parity between what the
+ * parent sees on the page and in the message.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { buildTourParentActionModel } from "@/lib/tours/invitation/tourParentActionModel";
+import { POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
 import { formatTourCommsDateTimeLabels } from "@/lib/tours/comms/tourCommsTemplateContext";
 import { formatParentTourTime, tourSlotDayKey, formatParentTimeOnly } from "@/lib/tours/public/tourParentView";
 
@@ -32,22 +34,41 @@ describe("the parent-safe action model", () => {
         expect(m.manageUrl).toBe(`${BASE}/tour-booking/TOK_MANAGE`);
     });
 
-    it("does NOT offer confirm on an already-confirmed booking", () => {
-        // An action is not offered merely because a route exists for it.
-        const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: "confirmed" });
-        expect(m.confirmUrl).toBeNull();
+    // S1-C. A family link can never approve a booking. "Approval required" used to mean a
+    // family double opt-in: the confirmation message carried a `confirm_tour` URL and the
+    // public route called the staff confirm service with no actor. Approval is now staff-only.
+    it.each(["pending_approval", "requested", "confirmed", "rescheduled"])(
+        "offers no booking-confirm URL for a %s booking — approval is not a family action",
+        (bookingStatusKey) => {
+            const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey });
+            expect(m).not.toHaveProperty("confirmUrl");
+            expect(Object.values(m)).not.toContain(`${BASE}/tour-booking/TOK_CONFIRM`);
+        }
+    );
+
+    it("still offers the family's own acknowledgement — attendance — once the booking is approved", () => {
+        const withAttendance = [...actions, { id: "4", actionKind: "confirm_attendance" as const, rawToken: "TOK_ATTEND" }];
+        expect(
+            buildTourParentActionModel({ actions: withAttendance, baseUrl: BASE, bookingStatusKey: "confirmed" })
+                .confirmAttendanceUrl
+        ).toBe(`${BASE}/tour-booking/TOK_ATTEND`);
+        // Not while the school has yet to approve the visit.
+        expect(
+            buildTourParentActionModel({ actions: withAttendance, baseUrl: BASE, bookingStatusKey: "pending_approval" })
+                .confirmAttendanceUrl
+        ).toBeNull();
     });
 
-    it("offers confirm only while confirmation is still a required step", () => {
-        const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: "pending_approval" });
-        expect(m.confirmUrl).toBe(`${BASE}/tour-booking/TOK_CONFIRM`);
+    it("never mints a confirm_tour credential for a new booking", () => {
+        expect(POST_BOOKING_ACTION_KINDS).not.toContain("confirm_tour");
+        expect(POST_BOOKING_ACTION_KINDS).toContain("confirm_attendance");
     });
 
     it.each(["cancelled", "canceled", "completed", "no_show"])(
         "offers nothing once the booking is %s",
         (statusKey) => {
             const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: statusKey });
-            expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null });
+            expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmAttendanceUrl: null });
         }
     );
 
@@ -61,7 +82,7 @@ describe("the parent-safe action model", () => {
 
     it("degrades to no actions rather than emitting a broken origin", () => {
         const m = buildTourParentActionModel({ actions, baseUrl: "  ", bookingStatusKey: "confirmed" });
-        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null });
+        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmAttendanceUrl: null });
     });
 });
 

@@ -119,7 +119,7 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "225e5896c2e3663dd899a8d2e3ee04f65b91dc85",
+      "blob_sha": "9ad17adf70fc08aeadced0f3d8f01aafba6cadda",
       "exists": true
     },
     {
@@ -233,7 +233,7 @@
     {
       "path": "docs/platform/modules/actions-and-workflows.md",
       "tier": 3,
-      "blob_sha": "94cc81cd8c8dc080f7fb037da9554cf02a8f723d",
+      "blob_sha": "07cd9304af516132b6840f47d1d2eec92c77a482",
       "exists": true
     },
     {

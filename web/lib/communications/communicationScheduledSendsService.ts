@@ -7,6 +7,8 @@ import {
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
+import { TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE } from "@/lib/tours/comms/tourCommsConfig";
+import { revalidateTourReminderForDispatch } from "@/lib/tours/comms/tourSchedulingScheduledSends";
 import { buildCommunicationScheduledSendProcessMetadataAugment } from "@/lib/communications/communicationScheduledSendProcessMetadata";
 
 export type CommunicationScheduledSendRow = {
@@ -643,6 +645,44 @@ export async function processDueCommunicationScheduledSends(params: {
         if (fresh.status !== "claimed" || !fresh.claim_token || fresh.claim_token !== row.claim_token) {
             out.skipped += 1;
             continue;
+        }
+
+        // A tour reminder is re-decided against the booking NOW, not trusted from when it
+        // was scheduled. Withdrawn rows are canceled (never retried); an unreadable booking
+        // fails the row visibly instead of sending blind.
+        if (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE) {
+            const verdict = await revalidateTourReminderForDispatch({
+                supabase: params.supabase,
+                row: fresh,
+                now: params.now,
+            });
+            if (verdict.kind !== "dispatch") {
+                const suppressed = verdict.kind === "suppress";
+                await params.supabase
+                    .from("communication_scheduled_sends")
+                    .update({
+                        status: suppressed ? "canceled" : "failed",
+                        metadata: mergeMetadata(
+                            fresh.metadata,
+                            suppressed
+                                ? { dispatch_revalidation: { at: params.now.toISOString(), outcome: "suppressed", reason: verdict.reason } }
+                                : {
+                                      last_process_error: {
+                                          at: params.now.toISOString(),
+                                          error: "TOUR_REMINDER_REVALIDATION_FAILED",
+                                          message: verdict.message,
+                                      },
+                                  }
+                        ),
+                    })
+                    .eq("id", fresh.id)
+                    .eq("status", "claimed")
+                    .eq("claim_token", fresh.claim_token)
+                    .is("communication_message_id", null);
+                if (suppressed) out.skipped += 1;
+                else out.failed += 1;
+                continue;
+            }
         }
 
         const exec = await executeLegacyCommunicationsSendAdapter({

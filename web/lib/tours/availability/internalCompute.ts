@@ -161,6 +161,7 @@ export function computeSlotsFromRulesAndBookings(
                         endAt: slotEnd.toISOString(),
                         timezone: tz,
                         remainingCapacity: remaining,
+                        capacity: maxPer,
                         ruleId: rule.id,
                         locationId: slotLoc,
                         userId: rule.user_id != null && String(rule.user_id).trim() !== "" ? String(rule.user_id) : null,
@@ -190,4 +191,28 @@ export function isSlotOffered(
             String(s.locationId) === String(candidate.locationId) &&
             s.remainingCapacity >= minRemaining
     );
+}
+
+/**
+ * Capacity of the offered slot a write lands in, or `null` when the slot is not offered
+ * with room left. Overlapping rules can offer the same slot; their bookings share one
+ * count, so the most generous rule is the limit (matching {@link isSlotOffered}).
+ */
+export function offeredSlotCapacity(
+    slots: AvailableTourSlot[],
+    candidate: { startAt: string; endAt: string; locationId: string },
+    minRemaining = 1
+): number | null {
+    let capacity: number | null = null;
+    for (const s of slots) {
+        if (
+            s.startAt === candidate.startAt &&
+            s.endAt === candidate.endAt &&
+            String(s.locationId) === String(candidate.locationId) &&
+            s.remainingCapacity >= minRemaining
+        ) {
+            capacity = Math.max(capacity ?? 0, s.capacity);
+        }
+    }
+    return capacity;
 }

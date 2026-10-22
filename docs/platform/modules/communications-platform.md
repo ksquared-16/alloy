@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-10-09
+last_reviewed: 2026-10-22
 supersedes: []
 ---
 
@@ -130,6 +130,35 @@ Workspace Inbox owns only the operational queue and surrounding context controls
 Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.ts` (`fetchCommunicationTemplateCurrentVersion`, `communicationTemplateDraftSeedFromPreview`).
 
 **Next increment (not shipped):** optional `communication_template_id` on workflow communication actions with runtime resolve of `current_version`; keep inline body as override during migration.
+
+---
+
+## Tour communications authority (S1, 2026-10-22)
+
+Tour booking semantics have **no certified lane** (D0, 2026-10-21); this section records only the
+communications boundary Tours now relies on. Evidence: `certification/tours-calendar-forms/s1/`.
+
+- **One policy decides whether a booking may be talked about:** `mayCommunicateForTour(intent, state)`
+  (`web/lib/tours/comms/tourCommsEligibility.ts`), evaluated against the booking **re-read from the
+  database** at decision time — never the triggering event's name and never the caller's row.
+  Confirmation, reschedule notice, reminder and the staff calendar invite require an approved booking
+  (`confirmed` / `rescheduled`) whose opportunity exists in the org (the lead approval boundary: a public
+  lead has no opportunity until Processing **Approve**). A cancellation notice requires that the booking
+  was confirmed before it was canceled — rejecting a pending request is not "your tour was canceled".
+- **Every tour outbound path asks it:** `orchestrateTourCommsForBooking` (immediate sends, reminder
+  scheduling, internal ICS), `processDueCommunicationScheduledSends` for `source = tour_scheduling`
+  (a due reminder is re-decided at dispatch; an ineligible one is set `canceled` with
+  `metadata.dispatch_revalidation`, an unreadable booking fails the row), and org workflows on tour
+  events (messaging actions refused; see `actions-and-workflows.md` § Rules).
+- **It is not recipient eligibility.** Opt-out, suppression, STOP holds and channel usability stay with
+  canonical enqueue eligibility, which still runs after the tour policy and is never bypassed by it.
+  Scheduled sends now carry the resolved `recipientPersonId` into canonical enqueue
+  (`executeLegacyCommunicationsSendAdapter`); before 2026-10-22 every due scheduled send — tour reminders
+  included — was blocked `RECIPIENT_UNRESOLVED`.
+- **Classification (open, for C-D0):** every tour intent is transactional by nature
+  (`TOUR_COMMS_MESSAGE_CLASS`), but tour sends do not yet pass a `category`; canonical enqueue records
+  the `operational` fallback, so an operational opt-out blocks tour confirmations and reminders. Passing
+  `transactional` would bypass operational opt-outs and is deliberately left to the consent discovery.
 
 ---
 

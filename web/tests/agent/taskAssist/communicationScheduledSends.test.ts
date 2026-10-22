@@ -15,6 +15,18 @@ vi.mock("@/lib/communications/executeLegacyCommunicationsSendAdapter", () => ({
     executeLegacyCommunicationsSendAdapter: vi.fn(),
 }));
 
+// The tour revalidation is certified on its own (tests/tours/tourReminderDispatchRevalidation.test.ts);
+// here it is a seam, so the dispatcher's handling of each verdict can be pinned.
+const revalidateMock = vi.fn();
+vi.mock("@/lib/tours/comms/tourSchedulingScheduledSends", () => ({
+    revalidateTourReminderForDispatch: (...a: unknown[]) => revalidateMock(...a),
+}));
+
+beforeEach(() => {
+    revalidateMock.mockReset();
+    revalidateMock.mockResolvedValue({ kind: "dispatch" });
+});
+
 const orgId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
 const oppId = "33333333-3333-4333-8333-333333333333";
@@ -340,6 +352,91 @@ describe("processDueCommunicationScheduledSends", () => {
             unknown
         >;
         expect(augment?.task_assist_scheduled_send).toBeUndefined();
+    });
+
+    function tourDueRowHarness() {
+        const row = baseRow({
+            source: "tour_scheduling",
+            channel: "email",
+            metadata: { tour_booking_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", event_key: "tour_reminder" },
+        });
+        const updates: Array<Record<string, unknown>> = [];
+        const supabase = {
+            rpc: vi.fn().mockResolvedValue({ data: [row], error: null }),
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }) })) })),
+                update: vi.fn((patch: Record<string, unknown>) => {
+                    updates.push(patch);
+                    const chain: Record<string, unknown> = {};
+                    chain.eq = vi.fn(() => chain);
+                    chain.is = vi.fn(() => Promise.resolve({ data: null, error: null }));
+                    return chain;
+                }),
+            })),
+        } as never;
+        return { row, supabase, updates };
+    }
+
+    it("a due tour reminder whose booking is no longer eligible is WITHDRAWN, never sent", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockClear();
+        revalidateMock.mockResolvedValue({ kind: "suppress", reason: "booking_canceled" });
+        const { supabase, updates } = tourDueRowHarness();
+        const res = await processDueCommunicationScheduledSends({
+            supabase,
+            limit: 5,
+            now: new Date("2026-12-02T00:00:00.000Z"),
+            orgIdFilter: null,
+        });
+        expect(res.ok && res.result).toMatchObject({ claimed: 1, skipped: 1, succeeded: 0, failed: 0 });
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
+        expect(updates).toHaveLength(1);
+        expect(updates[0].status).toBe("canceled");
+        expect((updates[0].metadata as Record<string, unknown>).dispatch_revalidation).toMatchObject({
+            outcome: "suppressed",
+            reason: "booking_canceled",
+        });
+    });
+
+    it("a due tour reminder whose booking cannot be read FAILS visibly instead of sending blind", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockClear();
+        revalidateMock.mockResolvedValue({ kind: "error", message: "db down" });
+        const { supabase, updates } = tourDueRowHarness();
+        const res = await processDueCommunicationScheduledSends({
+            supabase,
+            limit: 5,
+            now: new Date("2026-12-02T00:00:00.000Z"),
+            orgIdFilter: null,
+        });
+        expect(res.ok && res.result).toMatchObject({ failed: 1, succeeded: 0 });
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
+        expect(updates[0].status).toBe("failed");
+    });
+
+    it("non-tour scheduled sends are not revalidated against any booking", async () => {
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
+            ok: false,
+            status: 500,
+            error: "x",
+        });
+        const { supabase } = (() => {
+            const row = baseRow({ source: "task_assist" });
+            return {
+                supabase: {
+                    rpc: vi.fn().mockResolvedValue({ data: [row], error: null }),
+                    from: vi.fn(() => ({
+                        select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }) })) })),
+                        update: vi.fn(() => {
+                            const chain: Record<string, unknown> = {};
+                            chain.eq = vi.fn(() => chain);
+                            chain.is = vi.fn(() => Promise.resolve({ data: null, error: null }));
+                            return chain;
+                        }),
+                    })),
+                } as never,
+            };
+        })();
+        await processDueCommunicationScheduledSends({ supabase, limit: 5, now: new Date(), orgIdFilter: null });
+        expect(revalidateMock).not.toHaveBeenCalled();
     });
 
     it("skips enqueue when communication_message_id already set", async () => {
