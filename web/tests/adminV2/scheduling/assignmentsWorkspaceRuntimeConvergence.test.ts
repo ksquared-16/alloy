@@ -163,3 +163,17 @@ describe("Roster report future seam", () => {
         expect(panel).toContain("AssignmentRosterSubject");
     });
 });
+
+describe("Roster bulk pickers offer configured rooms and patterns", () => {
+    it("never asks the operator to type a room or pattern id", () => {
+        const panel = read("components/adminV2/scheduling/screens/AssignmentRosterPanel.tsx");
+        // The same sources the Assignment editor and Create Assignment modal read.
+        expect(panel).toContain("view=studio_config");
+        expect(panel).toContain("/api/admin/schedule-patterns");
+        expect(panel).toContain("roomsForEveryCategory");
+        expect(panel).toContain('testId="bulk-room-change-room"');
+        // No free-text input feeds a room or a pattern id.
+        expect(panel).not.toMatch(/onChange=\{\(e\) => setBulkRoomId\(e\.target\.value\)\}/);
+        expect(panel).not.toMatch(/onChange=\{\(e\) => setBulkPatternId\(e\.target\.value\)\}/);
+    });
+});

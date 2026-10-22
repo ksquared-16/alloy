@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-22
 supersedes: []
 ---
 
@@ -234,12 +234,35 @@ The invariant now has one owner and one enforcer:
   closes the prior interval and inserts a successor.
 - **enforcer:** `web/tests/access/participationTemporalWriterCensus.test.ts` classifies every production
   writer of the two tables and fails on an unclassified one, mounted routes included. Routes may read
-  those tables; they may not write them.
+  those tables; they may not write them. **SQL functions are writers too**: since 2026-10-22 the census
+  also reads every function the migrations leave defined and classifies the two that write these
+  tables — `apply_participation_operational_change` and `replace_secondary_schedule_assignment` — and
+  every TypeScript file that calls one. Before that it scanned only TypeScript `.from()` writes, so the
+  secondary replacement primitive (20261201090000) was invisible to it.
 
 Proven behaviourally, not by inspection: `participationOperationalChange.live.test.ts` (11 scenarios,
 the database primitive) and `participationWiringApplication.live.test.ts` (10 scenarios, the wiring —
 rollback of a half-written combined change, retry replay, stale-row conflict, and events read back from
 `workflow_events` rather than spied on).
+
+### Recertification after 20261201090000 / 20261201100000 (`ops.temporal-table-migration`)
+
+**Measured 2026-10-22, local certification stack (`alloy-cert`), not staging.** Both V5 migrations touch
+`schedule_assignments`, so the trigger requires full recertification of this lane.
+
+| Check | Result |
+|---|---|
+| Writer census (TypeScript and SQL functions) | PASS — 2 SQL writers classified from their definitions; the secondary primitive's lock, close-not-edit, lineage, key replay, invoker rights and service-role-only grant asserted from its own body |
+| Live catalog | the stack's `pg_proc` holds exactly those 2 functions writing either table |
+| `temporalCardinalityAsymmetry.test.ts` | PASS — neither migration adds or removes a uniqueness index |
+| Atomicity, rollback, concurrency, retry (`secondaryAssignmentReplacement.live.test.ts`) | PASS |
+| Primary primitive and wiring (`participationOperationalChange` / `participationWiringApplication` live) | PASS |
+| Room under site, staff room is a classroom (`staffPrimaryRoomInvariant.live.test.ts`) | PASS |
+
+**Not recertified by the above:** the events half. Secondary replacement and staff primary switches
+still emit no change event (see [Events](#events)); that is open for a Director ruling, so this lane is
+recertified for its writers and invariants, not for event parity. The deployed database's copy of both
+migrations was last measured 2026-10-21 (function present, trigger checks site).
 
 ### Open, and deliberately not closed here
 

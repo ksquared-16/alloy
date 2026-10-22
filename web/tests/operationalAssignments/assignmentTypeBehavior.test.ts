@@ -4,6 +4,7 @@ import {
     defaultVisualToneForAssignmentTypeLabel,
     filterRoomsForPurposeBehavior,
     readAssignmentTypeBehavior,
+    roomsForEveryCategory,
     writeAssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 
@@ -67,5 +68,24 @@ describe("assignmentTypeBehavior", () => {
         );
         expect(defaultVisualToneForAssignmentTypeLabel("Unrecognized Category")).toBeNull();
         expect(Object.keys(ASSIGNMENT_CATEGORY_DEFAULT_TONE_BY_LABEL)).toHaveLength(7);
+    });
+
+    it("roomsForEveryCategory offers active rooms every selected Category would offer — the Roster's bulk pickers", () => {
+        const rooms = [
+            { roomId: "toddler", roomName: "Toddler A", active: true },
+            { roomId: "infant", roomName: "Infant B", active: true },
+            { roomId: "closed", roomName: "Closed C", active: false },
+        ];
+        // No Category narrows nothing, but an inactive room is never offered.
+        expect(roomsForEveryCategory(rooms, []).map((r) => r.roomId)).toEqual(["toddler", "infant"]);
+        // One Category with an explicit allow-list offers only its rooms.
+        const toddlerOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["toddler"] };
+        expect(roomsForEveryCategory(rooms, [toddlerOnly]).map((r) => r.roomId)).toEqual(["toddler"]);
+        // Two selected rows: a room must suit BOTH Categories.
+        const infantOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["infant"] };
+        expect(roomsForEveryCategory(rooms, [toddlerOnly, infantOnly])).toEqual([]);
+        expect(roomsForEveryCategory(rooms, [toddlerOnly, {}]).map((r) => r.roomId)).toEqual(["toddler"]);
+        // A Category that uses no room offers none.
+        expect(roomsForEveryCategory(rooms, [{ roomRequirement: "not_used" as const }])).toEqual([]);
     });
 });
