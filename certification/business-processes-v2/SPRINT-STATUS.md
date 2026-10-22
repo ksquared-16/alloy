@@ -169,3 +169,24 @@ Evidence: `slice8a/hosted/`.
   - a Billing-period close view;
   - a third domain projection, for example Staff;
   - a recorded, versioned Enrollment Work-View template so QA organizations and new tenants get certified views without hand authoring.
+
+## Update 2026-10-22T21:50Z: first real hosted run (toolkit `23626b9e6b87`, staging `8bb731eadbf3`)
+
+**Recovery.**
+- `qar_17c26a706ca7` closed clean on `gar_91685f8fc8e135`, sweeping 5 access rows.
+- Census v2 `gar_afd84a85847332` passed 13/13 and was bound by `gar_621aa80f36736d`. Verdict **`QUIESCED_RETAINED`**. Lease released.
+
+**Fresh run `qar_2765465b1e2b`.**
+- Opened by `gar_01416471c73ee5`. All four sessions verified as their exact identities (`qa-pool-01` to `qa-pool-04@example.com`).
+- **Configured and published:**
+  - **Assignments:** revision 1 `1e1f598f…`, 5 views, host work unit created.
+  - **Billing:** revision 1 `b2dea6e2…`, 5 views, host work unit created.
+- **Walkthrough, read-only, all four personas:** both tiles render. All 10 views open their own projection, with tab count = rows (0 = 0). No page errors, HTTP errors or blocked writes.
+- Closed clean by `gar_3f0e59b2923e2d` (1, 2, 2 and 1 roles removed; 0 profiles; all signed out). No QA run is open.
+
+**New product-specific blockers.**
+1. **The Enrollment template cannot be applied.** `apply_enrollment_v2_template` returns 422 `dangling_stage_reference`: the template's family stage is `closed` (`enrollmentProcessTemplate.ts:38`), but its default operating plans move to `closed_lost` (`defaultEnrollmentStageOperatingPlans.ts:39-41,198-200,321-323`). No new tenant can configure the certified Enrollment process. Because `create_lead` is the only household writer, **no Enrollment, Assignments or Billing fixture can be created.** Owner: Enrollment / Business Process configuration.
+2. **The No-Finance persona is not finance-less.** In the current default seed, `ops` holds `fin.read` and `fin.write`, so the `fin.read` refusal cannot be exercised. Owner: the BP plan contract and the Vacilando registry. Fix: a plan custom role (the `authz_q1` mechanism) with no `fin.*`.
+3. **Census binding for `qar_2765465b1e2b`.** The census filed after close was deduplicated onto this lane run's earlier same-hash census, which ran before the close. Next step: file census v2 in a new lane run, then `qa_run_close {qaRunId, residueCensusRequestId}`.
+
+**Left in QA Shared** (published process configuration, kept by design): Assignments and Billing, both published. The Enrollment department holds an unpublished draft process with no stages.

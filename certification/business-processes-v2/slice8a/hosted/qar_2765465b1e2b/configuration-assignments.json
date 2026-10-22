@@ -1,0 +1,21 @@
+{
+  "assignments": {
+    "department_id": "f76244aa-f239-4810-bd3e-6402ad21edda",
+    "process_id": "5b999ae2-d568-4e29-9323-5fcadfe5e59a",
+    "published": {
+      "department_id": "f76244aa-f239-4810-bd3e-6402ad21edda",
+      "revision_id": "1e1f598f-267b-454e-b15b-3f4e1bc99018",
+      "revision_number": 1,
+      "publication_id": "c3f3cad3-e79f-4250-846d-6695222a7322",
+      "published_at": "2026-10-22T21:31:03.988754+00:00",
+      "already_published": false
+    },
+    "projection_hosts": [
+      {
+        "processKey": "assignments",
+        "ok": true,
+        "created": true
+      }
+    ]
+  }
+}
