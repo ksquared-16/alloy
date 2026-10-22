@@ -1,196 +1,72 @@
 /**
- * WHAT AUTOPAY MAY COLLECT — the timing decision, and the refusal to invent one.
+ * WHAT AUTOPAY MAY COLLECT — W7-F051: the payer's eligible responsibility, by the settlement authority.
  *
- * The handler's own suite proves what it DOES with a collectible. This proves how that figure is
- * derived, and the two never stand in for each other.
- *
- * The risk here is narrow and specific: `on_due_date` is a Payments decision, and getting it wrong
- * in either direction is a real harm. Too early charges a family before the money is owed. Too late
- * is a missed collection nobody notices because the surface still says Autopay is on.
+ * Which charges are owed, due, outstanding and collectible — and whose share they are — is decided
+ * by `planSettlement` (its matrix is `w7F050AutomaticSettlement.test.ts`). This suite proves what
+ * the Autopay resolver still owns: the timing offset (a charge is actionable once due + offset has
+ * arrived), that the arrangement's PAYER is passed through, that the total is the payer's eligible
+ * amount, and when to look again.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const planSettlement = vi.fn();
+vi.mock("@/lib/financials/settlement/automaticSettlement", () => ({ planSettlement: (...a: unknown[]) => planSettlement(...a) }));
 
 import { actionableOnOrAfter, resolveAutopayCollectible } from "@/lib/financials/payments/autopayCollectible";
 
-const ORG = "org-1";
-const CUSTOMER = "cust-1";
-
-/*
- * THE COLLECTIBLE CEILING IS CANONICAL MONEY ARITHMETIC OWNED ELSEWHERE, and this suite is about
- * WHICH charges have come due — so it is mocked, exactly as `readChargeBalance` was before it.
- *
- * Autopay now asks `resolveFamilyCollectible` rather than for the raw outstanding, because the
- * collection engine measures a request against the collectible ceiling and refuses anything above
- * it. Real-clock certification caught a subsidised charge being refused on every wake for that
- * reason. With no suppression the two numbers are equal, which is why every expectation in this
- * file is unchanged.
- */
-vi.mock("@/lib/financials/subsidy/resolveFamilyCollectible", () => ({
-    resolveFamilyCollectible: vi.fn(async (_s: unknown, args: { chargeId: string }) => ({
-        currentlyCollectibleCents: Number(args.chargeId.split("-").pop()) || 0,
-    })),
-}));
-
-type Row = Record<string, unknown>;
-
-/**
- * Charges keyed so the mocked balance above reads the amount out of the id: `chg-<cents>`.
- *
- * The store HONOURS the `billable_source_id` filter, because that filter is the fix for a real
- * defect: the reader used to scan every posted charge in the organisation and filter in memory,
- * which silently lost charges past PostgREST's 1000-row cap. A fake that ignored the filter would
- * let that regression back in unnoticed.
- */
-function store(charges: Row[], agreements: Row[] = []) {
-    return {
-        from(table: string) {
-            const filters: Array<(r: Row) => boolean> = [];
-            const self: Record<string, unknown> = {};
-            self.select = () => self;
-            self.eq = () => self;
-            self.in = (col: string, values: unknown[]) => {
-                filters.push((r) => values.includes(r[col]));
-                return self;
-            };
-            const source = () => (table === "child_enrollment_agreements" ? agreements : charges);
-            self.then = (res: (v: unknown) => unknown) =>
-                Promise.resolve({ data: source().filter((r) => filters.every((f) => f(r))), error: null }).then(res);
-            return self;
+const db = (nextDue: string | null) =>
+    ({
+        from: (table: string) => {
+            const chain: Record<string, unknown> = {};
+            for (const m of ["select", "eq", "in", "gt", "order"]) chain[m] = () => chain;
+            chain.limit = async () => ({ data: nextDue ? [{ due_date: nextDue }] : [], error: null });
+            chain.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: table === "child_enrollment_agreements" ? [{ id: "agr-1" }] : [], error: null }).then(ok);
+            return chain;
         },
-    } as never;
-}
+    }) as never;
 
-const charge = (cents: number, dueDate: string | null, account = CUSTOMER): Row => ({
-    id: `chg-${cents}`,
-    billable_source_type: "customer",
-    billable_source_id: account,
-    due_date: dueDate,
-    status: "posted",
+beforeEach(() => {
+    planSettlement.mockReset();
+    planSettlement.mockResolvedValue({
+        lines: [
+            { chargeId: "c-old", effectiveDueOn: "2026-10-01", applyCents: 400_00 },
+            { chargeId: "c-new", effectiveDueOn: "2026-10-15", applyCents: 100_00 },
+        ],
+        eligibleCents: 500_00,
+    });
 });
 
-describe("the due date decides, and the offset moves it", () => {
-    it("collects a charge due today", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, "2026-10-01")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(50_000);
-        expect(out.charges).toHaveLength(1);
+describe("the offset moves the day the plan is asked about", () => {
+    it("asks as of today when the offset is zero, for the arrangement's payer", async () => {
+        const out = await resolveAutopayCollectible(db(null), { orgId: "o", customerId: "h", timingOffsetDays: 0, asOf: "2026-10-21", payerPersonId: "dana" });
+        expect(planSettlement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ householdId: "h", asOf: "2026-10-21", payerPersonId: "dana" }));
+        expect(out.totalCents).toBe(500_00);
+        expect(out.charges.map((c) => c.chargeId)).toEqual(["c-old", "c-new"]);
     });
 
-    it("does not collect a charge that is not due yet, and reports when it will be", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, "2026-10-05")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(0);
-        expect(out.nextDueDate).toBe("2026-10-05");
+    it("a positive offset waits: the plan is asked as of today minus the offset", async () => {
+        await resolveAutopayCollectible(db(null), { orgId: "o", customerId: "h", timingOffsetDays: 3, asOf: "2026-10-21", payerPersonId: "dana" });
+        expect(planSettlement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ asOf: "2026-10-18" }));
     });
 
-    it("still collects a charge that fell due in the past", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, "2026-09-01")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(50_000);
+    it("a negative offset collects ahead of the due date", async () => {
+        await resolveAutopayCollectible(db(null), { orgId: "o", customerId: "h", timingOffsetDays: -2, asOf: "2026-10-21", payerPersonId: null });
+        expect(planSettlement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ asOf: "2026-10-23", payerPersonId: null }));
     });
 
-    /* A positive offset collects AFTER the due date — the grace period an organisation may want. */
-    it("honours a positive offset by waiting that many days past the due date", async () => {
-        const args = { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 3, asOf: "2026-10-02" };
-        const early = await resolveAutopayCollectible(store([charge(50_000, "2026-10-01")]), args);
-        expect(early.totalCents, "one day after due, but the offset says wait three").toBe(0);
-
-        const onTime = await resolveAutopayCollectible(store([charge(50_000, "2026-10-01")]), {
-            ...args, asOf: "2026-10-04",
-        });
-        expect(onTime.totalCents).toBe(50_000);
+    it("reports when the next not-yet-actionable obligation becomes collectible", async () => {
+        const out = await resolveAutopayCollectible(db("2026-11-01"), { orgId: "o", customerId: "h", timingOffsetDays: 2, asOf: "2026-10-21", payerPersonId: "dana" });
+        expect(out.nextDueDate).toBe("2026-11-03");
     });
 
-    /* A negative offset collects BEFORE the due date, for an organisation that bills in advance. */
-    it("honours a negative offset by collecting ahead of the due date", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, "2026-10-05")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: -4, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(50_000);
+    it("nothing for an empty account id", async () => {
+        const out = await resolveAutopayCollectible(db(null), { orgId: "o", customerId: "", timingOffsetDays: 0, asOf: "2026-10-21" });
+        expect(out).toEqual({ charges: [], totalCents: 0, nextDueDate: null });
+        expect(planSettlement).not.toHaveBeenCalled();
     });
 
-    it("computes the actionable date from the due date and the offset", () => {
-        expect(actionableOnOrAfter("2026-10-01", 0)).toBe("2026-10-01");
-        expect(actionableOnOrAfter("2026-10-01", 3)).toBe("2026-10-04");
+    it("actionableOnOrAfter adds the offset in calendar days", () => {
+        expect(actionableOnOrAfter("2026-10-30", 3)).toBe("2026-11-02");
         expect(actionableOnOrAfter("2026-10-01", -1)).toBe("2026-09-30");
-        /* Month boundaries are real dates, not string arithmetic. */
-        expect(actionableOnOrAfter("2026-10-31", 1)).toBe("2026-11-01");
-    });
-});
-
-describe("what is deliberately never collected", () => {
-    /*
-     * A CHARGE WITH NO DUE DATE HAS NO `on_due_date` MOMENT. Collecting it anyway would be Autopay
-     * inventing a due date that Financials declined to state.
-     */
-    it("never collects a charge that has no due date", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, null)]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(0);
-        expect(out.charges).toEqual([]);
-    });
-
-    it("never collects another account's charge", async () => {
-        const out = await resolveAutopayCollectible(store([charge(50_000, "2026-10-01", "cust-OTHER")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.totalCents).toBe(0);
-    });
-
-    /* A settled charge is history. Including it would put a $0 collection in front of the provider. */
-    it("omits a charge with nothing outstanding", async () => {
-        const out = await resolveAutopayCollectible(store([charge(0, "2026-10-01")]), {
-            orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
-        });
-        expect(out.charges).toEqual([]);
-    });
-});
-
-describe("the account's charges are found through both billable sources", () => {
-    /*
-     * Tuition is billed to an ENROLMENT AGREEMENT, not to the customer. If the reader only looked
-     * for charges whose source is the customer, Autopay would silently never collect tuition —
-     * which is most of what a family owes.
-     */
-    it("collects a charge billed to one of the account's enrolment agreements", async () => {
-        const out = await resolveAutopayCollectible(
-            store(
-                [{ id: "chg-40000", billable_source_type: "enrollment_agreement", billable_source_id: "ea-1", due_date: "2026-10-01", status: "posted" }],
-                [{ id: "ea-1" }],
-            ),
-            { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01" },
-        );
-        expect(out.totalCents).toBe(40_000);
-    });
-
-    it("never collects a charge billed to another family's agreement", async () => {
-        const out = await resolveAutopayCollectible(
-            store(
-                [{ id: "chg-40000", billable_source_type: "enrollment_agreement", billable_source_id: "ea-OTHER", due_date: "2026-10-01", status: "posted" }],
-                [{ id: "ea-1" }],
-            ),
-            { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01" },
-        );
-        expect(out.totalCents).toBe(0);
-    });
-});
-
-describe("several charges", () => {
-    it("sums only the charges that have come due, oldest first", async () => {
-        const out = await resolveAutopayCollectible(
-            store([
-                charge(30_000, "2026-10-01"),
-                charge(20_000, "2026-09-15"),
-                charge(90_000, "2026-11-01"),
-            ]),
-            { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01" },
-        );
-        expect(out.totalCents, "the November charge is not due").toBe(50_000);
-        expect(out.charges.map((c) => c.dueDate)).toEqual(["2026-09-15", "2026-10-01"]);
-        expect(out.nextDueDate).toBe("2026-11-01");
     });
 });

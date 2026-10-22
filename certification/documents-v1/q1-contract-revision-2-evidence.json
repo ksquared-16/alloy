@@ -1,0 +1,63 @@
+{
+  "schema": "documents_q1_contract_revision_evidence.v1",
+  "prepared_at": "2026-10-22",
+  "prepared_by_lane": "lane_aa660dc9554d (Documents)",
+  "approval_item": "documents_revised_plan_contract_approved",
+  "approval_status": "PENDING_DIRECTOR_APPROVAL \u2014 a file change does not satisfy this item",
+  "contract": {
+    "path": "docs/platform/governance/authorization-qa-personas.md",
+    "revision_1_sha256": "734a502fd6a8815773465b9fe4d41781cec6720404ba0499ce83fb48bc2c51f9",
+    "revision_1_verified_at": "Alloy remote staging 841becb4428e (refs/remotes/origin/staging; = deployed) and installed authz_q1 pin",
+    "revision_2_sha256": "a1ad543a242748ecbca8a0e932fc61fde91756f259be5ecf66eb21a7eccff162"
+  },
+  "dependency_artifact": {
+    "path": "/Users/vacilando/Code/alloy-worktrees/documents/psess_claude_13dd9d293b80/q1-toolkit-dependency.json",
+    "sha256": "f4abafb868ceb8285f11089376048819e5f1e85fb4dc387355e695b941d9e283",
+    "recomputed_at": "2026-10-22",
+    "unchanged_since": "2026-10-20T14:47:37 local (2863 bytes)"
+  },
+  "installed_toolkit": {
+    "source_commit": "95f887719db0e22cd30e5b14c2792b9ecd2ddfc4",
+    "artifact_version": "20261022-95f887719db0",
+    "artifact_sha256": "183e5773e448dce77951a3519b86134837b9a0b83b78dd26b1b35584c00d38ab"
+  },
+  "authz_q1_registry_compatibility": {
+    "orgs": "qa_shared 4acc9386-c485-486f-aa1f-05d83499d142, qa_secondary ad53fee2-2570-460f-9300-f0e106c473b6 \u2014 matches Rev 2 \u00a72",
+    "custom_roles_and_grants": "qa_doc_reader, qa_no_docs, qa_processing_only, qa_ocr, qa_scoped_ops with exactly Rev 1/Rev 2 grants \u2014 matches",
+    "personas": "fixture_admin(qa_shared_actor), cross_org_admin(qa_secondary_admin), doc_reader, no_docs, processing_only, ocr, scoped_ops(D1 restricted) \u2014 matches Rev 2 \u00a73",
+    "refusals": "RESERVED_ROLE_KEYS superset of contract list; qa_ prefix; caller org/identity/role/scope/url/key/path refused (FORBIDDEN_QA_RUN_INPUTS); Firefly and DEV_QUEUE_ORG_ID refused \u2014 matches",
+    "sessions": "per-run per-persona storage; close signs out everywhere and deletes run session dir \u2014 matches Rev 2 \u00a74",
+    "registered_fixture_pins_verified_on_staging_841becb4": {
+      "certification/fixtures/qa-authz-vendors-ensure.sql": "09271ccd102dbb72\u2026",
+      "certification/fixtures/qa-authz-vendors-reset.sql": "35b38ce6d196f38b\u2026",
+      "web/scripts/qaAuthzFixtureEnsure.mjs": "8c34b64312436fd4\u2026",
+      "web/scripts/qaAuthzFixtureReset.mjs": "cc5470085f0d87bf\u2026",
+      "certification/qa-shared/documents-zero-residue-census.sql": "713325aae00cac5a\u2026"
+    }
+  },
+  "gaps_against_revision_2": [
+    {
+      "id": "G1",
+      "item": "Department-linked subject fixtures (WU1 in D1, WU2 in D2, one opportunity each) in QA Shared, and the QA Secondary subject, have no registered reconciliation",
+      "owner": "Alloy fixture SQL + runner (Documents lane), then toolkit registration and pin (Backend lane)"
+    },
+    {
+      "id": "G2",
+      "item": "Registered residue census 713325aa\u2026 checks vendors, qa_ grants, non-actor memberships and sent messages only; it does not prove zero for the run's documents rows and storage objects (tag qa-authz-, or attached to aa000000- subjects/vendors) or dangling Processing-case sources in QA Shared, nor all documents/objects/cases in QA Secondary \u2014 so a ZERO_RESIDUE verdict would not cover the run's product-API fixtures",
+      "owner": "Alloy census extension (Documents lane), then toolkit re-pin (Backend lane)"
+    },
+    {
+      "id": "G3",
+      "item": "Hosted activation gate opened for provisioning and org_ensure only; run scope and authz_q1 plan preflight not opened",
+      "owner": "Backend lane, after Director approval and current no-send evidence"
+    },
+    {
+      "id": "G4",
+      "item": "authz_q1 contract pin is Revision 1; re-pin to Revision 2 on approval",
+      "owner": "Backend lane"
+    }
+  ],
+  "unchanged_requirements": "Every refusal requirement, persona grants and scope, department scope, cross-organization isolation, storage-object authorization and removal, and proven (not claimed) cleanup.",
+  "note_on_refs": "A stale local branch named origin/staging (refs/heads/origin/staging @66d6ee27, not created by this lane) shadows the remote-tracking ref in this shared repository; all hashes here were verified against refs/remotes/origin/staging @841becb4.",
+  "design_note": "QA Shared is shared with bp_v2, which retains artifacts by design; Documents residue checks there are tag/namespace-scoped so they neither count nor delete another plan's artifacts. QA Secondary is authz_q1-only and is checked org-wide."
+}

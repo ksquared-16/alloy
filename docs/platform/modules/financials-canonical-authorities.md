@@ -858,12 +858,94 @@ already configurable: `financial_policies` type `deposit` carries `amount_cents`
 A refundable held deposit and an account credit balance are the same unapplied money under different
 policy; building two ledgers for that difference would be duplication.
 
-### Application policy
+### Application policy — allocation is canonical but normally AUTOMATIC (W7-F050 / W7-F051, 2026-10-21)
 
-Application is **manual / governed** today. There is no automatic oldest-obligation sweep, and one
-must not be added implicitly — automatic application is a policy decision, and the safe V1 is that
-money moves only when someone decides it moves. The seam for a future policy is
-`financial_policies`, alongside `deposit` and `proration`.
+This section used to say application was manual and that an automatic sweep was a policy decision
+not yet taken. **The Director took it.** Ordinary family money settles the payer's eligible outstanding
+responsibility automatically; choosing a charge by hand is the exception.
+
+**Four facts, never collapsed.**
+
+| Fact | Authority | What it decides |
+|---|---|---|
+| Charge | `charges` | the obligation and its revenue classification (GL via its category mapping) |
+| Responsibility | `financial_responsibility_allocations` | who owes what share of the charge |
+| Payment | `payments` | money received, who paid, by what tender, and the ASSET account it landed in (stamped at receipt) |
+| Allocation | `payment_allocations` (+ `payment_responsibility_attributions`) | which obligation — and whose share — the money settles |
+
+**Allocation never recognises revenue.** Applying money writes `payment_allocations` and a
+`payment_applied` journal line (an obligation delta in the non-GL subledger). It never writes the
+charge, its GL account or its revenue: Tuition stays 4000, Materials stays 4030, and the cash side is
+the payment's own stamped destination.
+
+**The one authority:** `web/lib/financials/settlement/automaticSettlement.ts` (`planSettlementFrom`,
+pure; `planSettlement` reads and plans) and `settlement/settlePayment.ts` (`settlePayment`, the
+writer, through `applyPaymentToCharge` and `attributePaymentToResponsibility`).
+
+**Eligible obligation:** stored status posted/partially_paid/paid (never a draft — a Scheduled charge
+awaiting its period is a draft — never void); not reversed and not itself a reversal or credit;
+outstanding (amount − linked corrections − active applications of posted payments) > 0; capped at
+`currentlyCollectibleCents` (a submitted subsidy claim suppresses); `due_date` on or before the
+settlement date — the same predicate as the canonical Due / Past due classification (§8). A charge
+with no due date is not "due" and is not settled automatically; it waits for explicit allocation.
+Not-yet-due money is never taken.
+
+**Whose outstanding:** each charge's outstanding splits into what NAMED people still owe (their share
+minus attributions on still-active applications) and what the ACCOUNT owes as a whole (no arrangement,
+unassigned, or unexplained cents).
+- A **named payer** settles their own share first, then the account-owned part — never another
+  person's share (Dana paying settles Dana's 75%, never Rosa's 25%, however old Rosa's charge is). The
+  part that settled their share is written as an attribution, so their remaining responsibility falls.
+- A **household payment** (no payer named) settles only account-owned outstanding. Where named
+  people owe, the money stays **unapplied** for an operator to resolve — Alloy does not guess whose
+  debt it was.
+
+**Order:** past due first, then currently due; oldest effective due date first; then oldest invoice
+date; then charge id. One canonical deterministic default (`SETTLEMENT_POLICY_LABEL`); no rules
+engine — a second strategy is added only when an operator need exists.
+
+**Partial / exact / over.** Partial: the plan applies what it can in order; the rest of the
+obligations stay outstanding. Exact: every eligible obligation settles. Over: the eligible amount
+settles; the remainder stays unapplied on the payment — the prepaid authority (§6.1), traceable to
+that payment. Nothing is invented to consume it. No eligible obligation: the whole payment is
+unapplied; receiving legitimate money is never blocked.
+
+**Every tender, every path.** Card, bank, cash, check, money order and external payments use the same
+authority once money is recorded: the Payment command's Confirm payment (`payment.record` with
+`customer_id`), a card/bank collection (`payment.collect_card` with `customer_id`; the attempt names
+the household and its ceiling is the payer's eligible amount), provider posting
+(`canonicalPosting` → `settlePayment`) and Autopay (one collection per run for the arrangement's payer:
+their own prepaid settles first, then the remaining eligible amount is collected).
+
+**Preview / commit parity.** The Payment command shows the calculated settlement (the action's own
+preview runs `planSettlement`). Confirm recomputes from current state; if the account moved, the
+still-valid canonical result is written and reported (`settlement_changed_since_preview`).
+
+**Exceptions.** Change allocation (`payment.record` / `payment.collect_card` with `charge_id`),
+Reallocate (`payment.reverse_application` + `payment.apply_to_charge`) and Apply payment on unapplied
+money remain governed, explicit acts. History is never rewritten by the policy: allocations made
+before it stand.
+
+**Aging and settlement reconcile (W7-F053, 2026-10-21).** Both read a charge's NET owed: gross −
+discount reductions (`financial_reduction_applications`) − active applications of posted payments.
+- **Past due** (`accountDueClassification.pastDueFor`) = Σ over owed, dated, not-reversed rows due
+  before today of that net residual (dated credits net it). It is the OBLIGATION and is not reduced by
+  subsidy: where a submitted claim covers part of it, the summary says "· $X expected from funding".
+- **Settlement eligibility** (`planSettlement`) = the same due rows, each capped at
+  `currentlyCollectibleCents` (net outstanding − submitted-claim suppression), then split by
+  responsibility: a named payer's own share plus what the account owes as a whole; a household payment
+  only the latter. The Payment form states what it leaves out ("owed by other responsible people",
+  "expected from funding (submitted claim)").
+- With no subsidy claim and one payer owning everything, Past due = that payer's eligible amount. The
+  Certhouse defect that broke this ($2,005 vs $1,860) was Past due subtracting money applied from the
+  GROSS of a −$145 discounted tuition that was fully paid; every due reader now nets reductions.
+- A denied or reduced claim stops suppressing through the subsidy claim state (W7-F052's
+  reconciliation); settlement never decides funding.
+
+**Subsidy is different (W7-F052, carried).** An agency remittance is reconciled against expected
+funding (`subsidy.reconcile_remittance` / `subsidy.resolve_variance`), never auto-settled as family
+money; a $35 shortfall on an $800 expectation is classified by reconciliation, not treated as a
+partial payment.
 
 ---
 

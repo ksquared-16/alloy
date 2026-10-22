@@ -8,6 +8,24 @@ import {
     CRM_CUSTOMERS_READ,
     CRM_CUSTOMERS_WRITE,
 } from "@/lib/access/crmPeopleAuthority";
+import { canManageHealth, canViewHealth } from "@/lib/health/healthAccess";
+import { isChildHealthProfileFieldKey } from "@/lib/health/childHealthProfileFields";
+
+/**
+ * A child's medical profile fields, only for a caller who holds `health.view`. Without it they are
+ * absent — not `null`, which would read as "none recorded" — and the response says so.
+ */
+function medicalProfileFields(
+    profile: { allergies?: string | null; medical_notes?: string | null; special_instructions?: string | null },
+    permissionKeys: readonly string[] | null,
+): Record<string, unknown> {
+    if (!canViewHealth({ permissionKeys })) return { health_fields_withheld: true };
+    return {
+        allergies: profile.allergies ?? null,
+        medical_notes: profile.medical_notes ?? null,
+        special_instructions: profile.special_instructions ?? null,
+    };
+}
 
 const CUSTOMER_MEMBER_SELECT =
     "id, org_id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, metadata, created_at, updated_at";
@@ -47,16 +65,14 @@ export async function GET(
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]);
+    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id], { permissionKeys: ctx.permissionKeys });
     const profile = profileByMember.get(id) ?? {};
 
     const out: Record<string, unknown> = {
         ...(row as Record<string, unknown>),
         preferred_name: profile.preferred_name ?? null,
         gender: profile.gender ?? null,
-        allergies: profile.allergies ?? null,
-        medical_notes: profile.medical_notes ?? null,
-        special_instructions: profile.special_instructions ?? null,
+        ...medicalProfileFields(profile, ctx.permissionKeys),
     };
 
     const customerId = (row as { customer_id: string | null }).customer_id;
@@ -95,6 +111,15 @@ export async function PATCH(
         body = (await request.json()) as Record<string, unknown>;
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    // Writing a child's medical fields is a Medical write: health.manage, not CRM write alone.
+    const medicalKeys = Object.keys(body).filter((k) => isChildHealthProfileFieldKey(k));
+    if (medicalKeys.length > 0 && !canManageHealth({ permissionKeys: ctx.permissionKeys })) {
+        return NextResponse.json(
+            { error: "Changing a child's medical information requires Medical access.", code: "health_manage_required", fields: medicalKeys },
+            { status: 403 },
+        );
     }
 
     const supabase = createAdminClient();
@@ -145,7 +170,7 @@ export async function PATCH(
 
     const tRead = Date.now();
     const [profileByMember, rowRes] = await Promise.all([
-        loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]),
+        loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id], { permissionKeys: ctx.permissionKeys }),
         supabase
             .from("customer_members")
             .select(CUSTOMER_MEMBER_SELECT)
@@ -163,9 +188,7 @@ export async function PATCH(
             ...(row ?? { id }),
             preferred_name: profile.preferred_name ?? null,
             gender: profile.gender ?? null,
-            allergies: profile.allergies ?? null,
-            medical_notes: profile.medical_notes ?? null,
-            special_instructions: profile.special_instructions ?? null,
+            ...medicalProfileFields(profile, ctx.permissionKeys),
         },
         { headers: { "x-alloy-patch-spans": JSON.stringify(spans) } }
     );

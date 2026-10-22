@@ -1,3 +1,4 @@
+import type { HealthAccessSubject } from "@/lib/health/healthAccess";
 import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import "server-only";
 
@@ -68,7 +69,9 @@ export async function composeDurableChildSubject(
     supabase: SupabaseClient,
     orgId: string,
     memberId: string,
-    dimensions?: AdminAccessScopeDimensions | null,
+    dimensions: AdminAccessScopeDimensions | null | undefined,
+    /** Whose read this is: the child's medical profile fields need health.view. */
+    health: HealthAccessSubject,
 ): Promise<ComposeDurableChildSubjectResult> {
     const id = memberId.trim();
     if (!id) return { ok: false, reason: "not_found" };
@@ -142,7 +145,7 @@ export async function composeDurableChildSubject(
      * mistake in a new place.
      */
     const profile =
-        (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]).catch(() => null))?.get(id)
+        (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id], health).catch(() => null))?.get(id)
         ?? null;
 
     /*

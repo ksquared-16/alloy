@@ -145,7 +145,7 @@ function activeEnrollmentStore(): Store {
 
 async function compose(store: Store, memberId = "member-ada", orgId = ORG) {
     const { supabase, reads, writes } = mockSupabase(store);
-    const result = await composeDurableChildSubject(supabase, orgId, memberId);
+    const result = await composeDurableChildSubject(supabase, orgId, memberId, null, { permissionKeys: ["health.view"] });
     return { result, reads, writes };
 }
 

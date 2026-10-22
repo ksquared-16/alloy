@@ -9,6 +9,11 @@
  * TYPED name, exclusively — never both on one signature — plus the electronic-signature
  * acknowledgment the field's policy requires.
  *
+ * WHO SIGNED. A drawn mark does not say whose it is, so a drawn signature carries the signer's
+ * PRINTED NAME beside it, typed by the person signing — required when the field's policy requires
+ * the signer's typed name, offered otherwise. The person signing may not be the adult the link was
+ * sent to; the server records what was typed and never fills it in from the recipient.
+ *
  * Drawing uses pointer events, which unify mouse, touch and stylus — an iPhone finger and a desktop
  * mouse hit the same handlers. `touch-action: none` keeps the page from scrolling mid-stroke.
  */
@@ -16,7 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type CapturedSignature =
-    | { readonly kind: "drawn"; readonly pngBase64: string; readonly acknowledged: boolean }
+    | { readonly kind: "drawn"; readonly pngBase64: string; readonly signerPrintedName: string | null; readonly acknowledged: boolean }
     | { readonly kind: "typed"; readonly typedName: string; readonly acknowledged: boolean };
 
 const PAD_WIDTH = 460;
@@ -25,6 +30,7 @@ const PAD_HEIGHT = 160;
 export function SignatureCaptureDialog({
     signerNameHint,
     allowTyped,
+    requireSignerName = false,
     onDone,
     onCancel,
 }: {
@@ -32,6 +38,8 @@ export function SignatureCaptureDialog({
     signerNameHint?: string | null;
     /** The field's policy permits a typed signature (it always permits drawing). */
     allowTyped: boolean;
+    /** The field's policy requires the signer's typed name — beside a drawn mark, too. */
+    requireSignerName?: boolean;
     onDone: (captured: CapturedSignature) => void;
     onCancel: () => void;
 }) {
@@ -40,6 +48,7 @@ export function SignatureCaptureDialog({
     const [hasInk, setHasInk] = useState(false);
     const [mode, setMode] = useState<"draw" | "type">("draw");
     const [typedName, setTypedName] = useState(signerNameHint ?? "");
+    const [printedName, setPrintedName] = useState(signerNameHint ?? "");
     const [acknowledged, setAcknowledged] = useState(false);
 
     useEffect(() => {
@@ -99,7 +108,9 @@ export function SignatureCaptureDialog({
         setHasInk(false);
     }, []);
 
-    const ready = acknowledged && (mode === "draw" ? hasInk : typedName.trim().length > 1);
+    const ready =
+        acknowledged &&
+        (mode === "draw" ? hasInk && (!requireSignerName || printedName.trim().length > 1) : typedName.trim().length > 1);
 
     const done = useCallback(() => {
         if (!ready) return;
@@ -107,11 +118,12 @@ export function SignatureCaptureDialog({
             const canvas = canvasRef.current;
             if (!canvas) return;
             const pngBase64 = canvas.toDataURL("image/png").split(",")[1] ?? "";
-            onDone({ kind: "drawn", pngBase64, acknowledged });
+            const name = printedName.trim();
+            onDone({ kind: "drawn", pngBase64, signerPrintedName: name.length > 1 ? name : null, acknowledged });
             return;
         }
         onDone({ kind: "typed", typedName: typedName.trim(), acknowledged });
-    }, [ready, mode, typedName, acknowledged, onDone]);
+    }, [ready, mode, typedName, printedName, acknowledged, onDone]);
 
     return (
         <div
@@ -140,7 +152,22 @@ export function SignatureCaptureDialog({
                         onPointerUp={onPointerUp}
                         onPointerLeave={onPointerUp}
                     />
-                ) : (
+                ) : null}
+                {mode === "draw" ? (
+                    <label className="mt-3 block text-[13px] text-alloy-midnight/70">
+                        <span>Your full legal name (the person signing){requireSignerName ? "" : " — optional"}</span>
+                        <input
+                            type="text"
+                            value={printedName}
+                            onChange={(e) => setPrintedName(e.target.value)}
+                            placeholder="Type your full name"
+                            autoComplete="name"
+                            className="mt-1 w-full rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[16px]"
+                            data-signature-printed-name="true"
+                        />
+                    </label>
+                ) : null}
+                {mode === "draw" ? null : (
                     <input
                         type="text"
                         value={typedName}

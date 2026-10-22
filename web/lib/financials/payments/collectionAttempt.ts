@@ -8,6 +8,8 @@
  * Nothing in this module creates a payment. A PaymentIntent is a REQUEST; a receipt is Thread 8's,
  * and only the Slice F posting authority may write one.
  */
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import { planSettlement } from "@/lib/financials/settlement/automaticSettlement";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
@@ -22,8 +24,15 @@ import {
 export type CreateCardCollectionInput = {
     /** From the authenticated session. The only tenancy input; never from the request body. */
     orgId: string;
-    /** The obligation being settled. Its billable source becomes the collection's account. */
-    chargeId: string;
+    /**
+     * ONE named obligation — the explicit-allocation EXCEPTION. Its billable source becomes the
+     * collection's account. Omit it and name `customerId` for the ordinary case (W7-F050/F051): the
+     * money is collected against the payer's eligible outstanding responsibility on the account, and
+     * settled automatically when it posts.
+     */
+    chargeId?: string | null;
+    /** The account (household) an account-level collection is for. Required when `chargeId` is absent. */
+    customerId?: string | null;
     /** The operator's INTENDED amount. Validated against canonical truth, never trusted. */
     requestedAmountCents: number;
     actorUserId?: string | null;
@@ -518,38 +527,59 @@ export async function createCardCollection(
      * which is what makes obligation and household substitution unreachable rather than merely
      * checked.
      */
-    let collectible;
-    try {
-        collectible = await resolveFamilyCollectible(supabase, {
-            orgId: input.orgId,
-            chargeId: input.chargeId,
-        });
-    } catch {
-        return {
-            ok: false,
-            reason: "charge_not_found",
-            message: "That obligation could not be resolved for this organization.",
-        };
+    const chargeId = t(input.chargeId) || null;
+    const accountId = t(input.customerId) || null;
+    if (!chargeId && !accountId) {
+        return { ok: false, reason: "charge_not_found", message: "Name the account (or one obligation) this collection is for." };
     }
-
-    if (collectible.currentlyCollectibleCents <= 0) {
-        return {
-            ok: false,
-            reason: "charge_not_collectible",
-            message:
-                "Nothing is currently collectible on this obligation — it may be settled, or covered by a submitted subsidy claim.",
-        };
-    }
-
-    // The ceiling is the canonical answer, and the operator's intent is measured against it. Asking
-    // for more is refused rather than silently clamped: a clamp would take a different amount than
-    // the operator authorised and tell nobody.
-    if (input.requestedAmountCents > collectible.currentlyCollectibleCents) {
-        return {
-            ok: false,
-            reason: "amount_exceeds_collectible",
-            message: `The most that can be collected on this obligation right now is ${collectible.currentlyCollectibleCents} cents.`,
-        };
+    let collectible: { currentlyCollectibleCents: number; currencyCode?: string | null } = { currentlyCollectibleCents: 0, currencyCode: "USD" };
+    let source: { billable_source_type: string; billable_source_id: string } | null = null;
+    if (chargeId) {
+        /* THE EXCEPTION PATH — one named obligation, its own ceiling, exactly as before. */
+        try {
+            collectible = await resolveFamilyCollectible(supabase, { orgId: input.orgId, chargeId });
+        } catch {
+            return { ok: false, reason: "charge_not_found", message: "That obligation could not be resolved for this organization." };
+        }
+        if (collectible.currentlyCollectibleCents <= 0) {
+            return {
+                ok: false,
+                reason: "charge_not_collectible",
+                message: "Nothing is currently collectible on this obligation — it may be settled, or covered by a submitted subsidy claim.",
+            };
+        }
+        // The ceiling is the canonical answer, and the operator's intent is measured against it. Asking
+        // for more is refused rather than silently clamped: a clamp would take a different amount than
+        // the operator authorised and tell nobody.
+        if (input.requestedAmountCents > collectible.currentlyCollectibleCents) {
+            return {
+                ok: false,
+                reason: "amount_exceeds_collectible",
+                message: `The most that can be collected on this obligation right now is ${collectible.currentlyCollectibleCents} cents.`,
+            };
+        }
+        // ── 3. THE CANONICAL ACCOUNT THE MONEY IS RECEIVED AGAINST ───────────────────────────────
+        const { data: chargeRow } = await supabase
+            .from("charges")
+            .select("billable_source_type, billable_source_id")
+            .eq("org_id", input.orgId)
+            .eq("id", chargeId)
+            .maybeSingle();
+        source = chargeRow as { billable_source_type: string; billable_source_id: string } | null;
+        if (!source) {
+            return { ok: false, reason: "charge_not_found", message: "That obligation could not be resolved for this organization." };
+        }
+    } else {
+        /*
+         * W7-F050/F051: THE ORDINARY PATH — the account. The ceiling is the PAYER's eligible
+         * outstanding responsibility, checked below once the payer is known; the money is received
+         * against the household and settled automatically when it posts.
+         */
+        const { data: account } = await supabase.from("customers").select("id").eq("org_id", input.orgId).eq("id", accountId!).maybeSingle();
+        if (!account) {
+            return { ok: false, reason: "charge_not_found", message: "That account could not be resolved for this organization." };
+        }
+        source = { billable_source_type: "customer", billable_source_id: accountId! };
     }
 
     // Currency comes from the obligation, never from the caller. Stripe would happily charge 5000 of
@@ -560,22 +590,6 @@ export async function createCardCollection(
             ok: false,
             reason: "currency_mismatch",
             message: `This collection path supports USD only; the obligation is denominated in ${currency}.`,
-        };
-    }
-
-    // ── 3. THE CANONICAL ACCOUNT THE MONEY IS RECEIVED AGAINST ───────────────────────────────────
-    const { data: chargeRow } = await supabase
-        .from("charges")
-        .select("billable_source_type, billable_source_id")
-        .eq("org_id", input.orgId)
-        .eq("id", input.chargeId)
-        .maybeSingle();
-    const source = chargeRow as { billable_source_type: string; billable_source_id: string } | null;
-    if (!source) {
-        return {
-            ok: false,
-            reason: "charge_not_found",
-            message: "That obligation could not be resolved for this organization.",
         };
     }
 
@@ -702,7 +716,7 @@ export async function createCardCollection(
     const payerKey = attemptPayerKey({ payerPersonId, actorUserId });
     const keyFor = (generation: number) =>
         deriveIntentKey({
-            chargeId: input.chargeId,
+            chargeId: chargeId ?? `account:${accountId}`,
             amountCents: input.requestedAmountCents,
             rail,
             payerKey,
@@ -711,6 +725,40 @@ export async function createCardCollection(
             commandKey,
         });
     const baseKey = keyFor(0);
+
+    /*
+     * W7-F050/F051: THE ACCOUNT-LEVEL CEILING — the payer's eligible outstanding responsibility,
+     * from the same `planSettlement` that settles the money when it posts. A named payer is asked
+     * only for what THEY owe (their share and what the account owes as a whole), never someone
+     * else's share; nothing is collected for an obligation that is not yet due.
+     */
+    if (!chargeId) {
+        const asOf = await fetchOrgBusinessDate(supabase, input.orgId);
+        const plan = await planSettlement(supabase, {
+            orgId: input.orgId,
+            householdId: accountId!,
+            asOf,
+            amountCents: Number.MAX_SAFE_INTEGER,
+            payerPersonId,
+        });
+        collectible = { currentlyCollectibleCents: plan.eligibleCents, currencyCode: collectible.currencyCode };
+        if (plan.eligibleCents <= 0) {
+            return {
+                ok: false,
+                reason: "charge_not_collectible",
+                message: payerPersonId
+                    ? "Nothing this payer owes is due right now."
+                    : "Nothing the account owes as a whole is due right now — name the payer to collect their share.",
+            };
+        }
+        if (input.requestedAmountCents > plan.eligibleCents) {
+            return {
+                ok: false,
+                reason: "amount_exceeds_collectible",
+                message: `The most that can be collected from this payer right now is ${plan.eligibleCents} cents.`,
+            };
+        }
+    }
     /* This request's own attempts: its key, and the retry generations after a decline. */
     const isOwnAttemptKey = (key: string) =>
         key === baseKey
@@ -729,11 +777,13 @@ export async function createCardCollection(
      * request's own earlier attempts (same payer, same intent) are excluded, so a genuine retry is
      * still a retry rather than a refusal.
      */
-    const { data: inFlightRows } = await supabase
+    const inFlightQuery = supabase
         .from("payment_collection_attempts")
         .select("intent_key, processor_state, canonical_payment_id, requested_amount_cents")
-        .eq("org_id", input.orgId)
-        .eq("charge_id", input.chargeId)
+        .eq("org_id", input.orgId);
+    const { data: inFlightRows } = await (chargeId
+        ? inFlightQuery.eq("charge_id", chargeId)
+        : inFlightQuery.eq("billable_source_type", "customer").eq("billable_source_id", accountId!).is("charge_id", null))
         .in("processor_state", ["processing", "succeeded"])
         .is("canonical_payment_id", null);
     const inFlightCents = ((inFlightRows ?? []) as Array<{ intent_key: string; requested_amount_cents: number }>)
@@ -797,7 +847,7 @@ export async function createCardCollection(
                 rail,
                 billable_source_type: source.billable_source_type,
                 billable_source_id: source.billable_source_id,
-                charge_id: input.chargeId,
+                charge_id: chargeId,
                 payer_person_id: payerPersonId,
                 currency,
                 requested_amount_cents: input.requestedAmountCents,
@@ -970,7 +1020,8 @@ export async function createCardCollection(
             // payment_provider_merchants; metadata is never read as authority.
             "metadata[alloy_attempt_id]": attemptId,
             "metadata[alloy_org_id]": input.orgId,
-            "metadata[alloy_charge_id]": input.chargeId,
+            "metadata[alloy_charge_id]": chargeId ?? "",
+            "metadata[alloy_customer_id]": accountId ?? "",
         },
         {
             "Stripe-Account": merchant.providerAccountRef,

@@ -70,7 +70,8 @@ const defaultIntentRead: ProviderIntentRead = async (providerTransactionId, conn
 const ATTEMPT_COLUMNS =
     "id, org_id, charge_id, currency, requested_amount_cents, payer_person_id, "
     + "provider_transaction_id, processor_state, canonical_payment_id, rail, "
-    + "provider_account_ref, merchant_id, payment_method_id, expected_settlement_on";
+    + "provider_account_ref, merchant_id, payment_method_id, expected_settlement_on, "
+    + "billable_source_type, billable_source_id";
 
 /**
  * Repair one unrecognised collection, at most once.

@@ -94,6 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         schema: validated.schema,
         payload: validated.payload as FormPayload,
         signerIpHash: null,
+        channel: { kind: "operator", userId: ctx.userId ?? null },
     });
     if ("error" in sigRes) {
         return NextResponse.json({ error: sigRes.error, code: "SIGNATURE_PERSIST" }, { status: 500 });

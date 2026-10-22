@@ -1045,7 +1045,7 @@ export async function attachOpportunityInquiryChildrenShell(
    */
   const tShellTail0 = Date.now();
   const [profiledChildren, photographedChildren] = await Promise.all([
-    attachCustomerMemberProfileToInquiryChildren(supabase, orgId, inquiryChildrenOut),
+    attachCustomerMemberProfileToInquiryChildren(supabase, orgId, inquiryChildrenOut, documentActor?.userId),
     projectResolvedProfilePhotosOntoRows({
       supabase,
       orgId,
@@ -2710,6 +2710,7 @@ export async function respondOpportunityEntityGet(
     supabase,
     orgId,
     inquiryChildrenOut,
+    documentActor?.userId,
   );
   inquiryChildrenOut = await projectResolvedProfilePhotosOntoRows({
     supabase,

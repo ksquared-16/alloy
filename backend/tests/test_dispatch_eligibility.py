@@ -115,6 +115,10 @@ def decide(row=None, *, now=OUTSIDE_QUIET, **fake_kwargs):
         return revalidate_for_dispatch(row if row is not None else message(), now=now)
 
 
+QA_SHARED = "4acc9386-c485-486f-aa1f-05d83499d142"
+QA_SECONDARY = "ad53fee2-2570-460f-9300-f0e106c473b6"
+
+
 class TestValidDispatch(unittest.TestCase):
     def test_eligible_sms_dispatches(self):
         self.assertEqual(decide().outcome, "send_now")
@@ -123,6 +127,32 @@ class TestValidDispatch(unittest.TestCase):
         row = message(channel="email", to_address="p@example.invalid",
                       eligibility_snapshot=snapshot(recipient={"personId": PERSON, "channel": "email"}))
         self.assertEqual(decide(row).outcome, "send_now")
+
+
+class TestQaOrgOutboundRefused(unittest.TestCase):
+    """Shared QA Activation Safety — refuse before any provider path."""
+
+    def test_qa_shared_sms_refused(self):
+        d = decide(message(org_id=QA_SHARED, channel="sms"))
+        self.assertEqual(d.outcome, "blocked")
+        self.assertEqual(d.reason, "QA_ORG_OUTBOUND_REFUSED")
+
+    def test_qa_secondary_email_refused(self):
+        row = message(
+            org_id=QA_SECONDARY,
+            channel="email",
+            to_address="p@example.invalid",
+            eligibility_snapshot=snapshot(recipient={"personId": PERSON, "channel": "email"}),
+        )
+        d = decide(row)
+        self.assertEqual(d.outcome, "blocked")
+        self.assertEqual(d.reason, "QA_ORG_OUTBOUND_REFUSED")
+
+    def test_non_qa_org_unchanged(self):
+        self.assertEqual(decide(message(org_id=ORG)).outcome, "send_now")
+
+    def test_qa_reason_is_in_contract(self):
+        self.assertIn("QA_ORG_OUTBOUND_REFUSED", CONTRACT["block_reasons"])
 
 
 class TestSnapshotIntegrity(unittest.TestCase):

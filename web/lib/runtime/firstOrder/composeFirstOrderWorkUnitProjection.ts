@@ -269,7 +269,9 @@ export async function composeFirstOrderWorkUnitProjection(
                 trace: attendanceTrace,
             })),
             maybe("health_profile", () =>
-                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!])),
+                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!], {
+                    permissionKeys: input.authority.healthView ? ["health.view"] : [],
+                })),
             maybe("health_supplements", () =>
                 readHealthFirstOrderSupplements({ supabase, orgId, customerMemberId: input.customerMemberId! })),
             processConfigPromise,

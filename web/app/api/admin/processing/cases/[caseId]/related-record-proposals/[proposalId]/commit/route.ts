@@ -16,6 +16,7 @@ import { executeExistingChildProposalCommit } from "@/lib/pos/processingCase/com
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
 import { executeHealthFactProposalCommit } from "@/lib/pos/processingCase/commit/executeHealthFactProposalCommit";
 import { executeMedicalConsentProposalCommit } from "@/lib/pos/processingCase/commit/executeMedicalConsentProposalCommit";
+import { executePersonContactFactsProposalCommit } from "@/lib/pos/processingCase/commit/executePersonContactFactsProposalCommit";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 import {
@@ -178,6 +179,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             });
         }
 
+        // The responding parent's own work and contact details: recorded on THAT adult's Person record.
+        if (proposalContext?.proposal.execution_kind === "person_contact_facts") {
+            const outcome = await executePersonContactFactsProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                caseId,
+                proposalId,
+                metadata,
+            });
+            return outcome.ok
+                ? jsonData({ caseId, proposalId, alreadyDone: outcome.already_applied, ...outcome.record })
+                : NextResponse.json({ error: outcome.error, code: outcome.code }, { status: outcome.status });
+        }
+
         // A signed medical authorization: recorded as the child's consent STATE through Medical.
         if (proposalContext?.proposal.execution_kind === "medical_consent") {
             const access = await getAdminAccessContextCached();
@@ -272,6 +288,7 @@ supabase,
             proposalId,
             decision,
             metadata,
+            healthAccess: { permissionKeys: ctx.permissionKeys },
         });
         if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
 

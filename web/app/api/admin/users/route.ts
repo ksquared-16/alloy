@@ -6,6 +6,7 @@ import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/ad
 import { createMembershipWithAccessProfile, createMembershipWithAccessScope } from "@/lib/admin/membershipWithProfile";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
+import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 export type AdminUserRow = {
     user_id: string;
@@ -124,6 +125,12 @@ export async function POST(request: Request) {
     const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
+
+    // Shared QA Activation Safety: refuse before inviteUserByEmail (auth provider send).
+    const qaGate = refuseQaOrgOutbound(access.orgId);
+    if (!qaGate.ok) {
+        return NextResponse.json({ error: qaGate.detail, code: qaGate.code }, { status: 403 });
+    }
 
     let body: { email?: string; role?: string; first_name?: string; last_name?: string; site_scope?: unknown; site_location_ids?: unknown } = {};
     try {

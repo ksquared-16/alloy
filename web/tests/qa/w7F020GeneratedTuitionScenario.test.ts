@@ -64,7 +64,7 @@ describe("Scenario 9 names only what the deployed product renders", () => {
     });
 
     it("the catalog version moved, so earlier Scenario 9 results do not count", () => {
-        expect(CATALOG_VERSION).toBe("2026-10-20.5");
+        expect(CATALOG_VERSION).toBe("2026-10-21.1");
     });
 });
 

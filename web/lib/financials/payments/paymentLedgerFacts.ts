@@ -89,6 +89,8 @@ export type PaymentLedgerFacts = {
      * configured when it arrived.
      */
     receiptAccount?: ReceiptAccountStamp;
+    /** W7-F050: "automatic" when the payment was settled by the settlement authority, not by a chosen charge. */
+    settlement?: "automatic" | null;
 };
 
 /**
@@ -194,6 +196,7 @@ export async function readPaymentLedgerFacts(
                     : text(p.payment_method) === "check" && text(p.reference_number) ? `Check #${text(p.reference_number).replace(/^#/, "")}`
                     : null,
                 receiptAccount: readStamp(p.metadata),
+                settlement: p.metadata && typeof p.metadata === "object" && (p.metadata as Record<string, unknown>).settlement === "automatic" ? "automatic" : undefined,
             });
         }
     } catch {

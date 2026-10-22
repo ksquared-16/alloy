@@ -70,6 +70,32 @@ const COLUMN_ALIASES: Record<PrefillRoot, Record<string, string>> = {
         parent_email: "email",
         phone: "phone",
         parent_phone: "phone",
+        // The registered guardian keys were missing, so they fell through to `person.guardian_email`
+        // / `person.guardian_phone` — columns that do not exist (FI-07 census).
+        guardian_email: "email",
+        guardian_phone: "phone",
+        // A mobile / cell number IS the adult's primary `phone`. Home and work numbers are NOT: they
+        // are their own facts and are never folded into it (FI-07).
+        mobile_phone: "phone",
+        cell_phone: "phone",
+        guardian_mobile_phone: "phone",
+        guardian_cell_phone: "phone",
+        // Work and contact facts on the adult (person field values — `personContactFacts`).
+        home_phone: "home_phone",
+        guardian_home_phone: "home_phone",
+        work_phone: "work_phone",
+        guardian_work_phone: "work_phone",
+        employer: "employer",
+        guardian_employer: "employer",
+        work_hours: "work_hours",
+        guardian_work_hours: "work_hours",
+        work_address: "work_address",
+        employer_address: "work_address",
+        guardian_work_address: "work_address",
+        guardian_employer_address: "work_address",
+        communication_preference: "communication_preference",
+        preferred_contact_method: "communication_preference",
+        guardian_preferred_contact_method: "communication_preference",
     },
     customer: { household_name: "family_notes", family_notes: "family_notes" },
     opportunity: { status: "status_key", status_key: "status_key" },

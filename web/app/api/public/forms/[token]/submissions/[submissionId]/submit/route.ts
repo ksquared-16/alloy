@@ -439,12 +439,33 @@ export async function POST(
     const signerIpHash =
         typeof meta?.client_ip_hash === "string" && meta.client_ip_hash.trim() ? meta.client_ip_hash.trim() : ipHash;
 
+    // The adult this link was sent to — the CONTEXT a signer is recorded against, never the signer.
+    const recipientPersonId =
+        typeof metaRecord?.recipient_person_id === "string" && metaRecord.recipient_person_id.trim() ? metaRecord.recipient_person_id.trim() : null;
+    let recipientName: string | null = null;
+    if (recipientPersonId) {
+        const { data: recipient } = await supabase
+            .from("persons")
+            .select("first_name, last_name")
+            .eq("org_id", ctx.orgId)
+            .eq("id", recipientPersonId)
+            .maybeSingle();
+        const r = recipient as { first_name?: string | null; last_name?: string | null } | null;
+        recipientName = [r?.first_name, r?.last_name].filter((x) => typeof x === "string" && x.trim()).join(" ") || null;
+    }
     const sigRes = await persistFormSubmissionSignatures(supabase, {
         orgId: ctx.orgId,
         formSubmissionId: submissionId,
         schema: validated.schema,
         payload: finalPayload,
         signerIpHash,
+        channel: {
+            kind: "public_link",
+            linkId: ctx.linkId,
+            packetSessionId: ctx.packet?.packet_session_id ?? null,
+            recipientPersonId,
+            recipientName,
+        },
     });
     if ("error" in sigRes) {
         return publicErr(sigRes.error, 500, { code: "SIGNATURE_PERSIST" });

@@ -55,7 +55,7 @@ export type RelatedRecordFieldProposal = {
  *
  * @see docs/platform/core/data/relationship-model.md
  */
-export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "health_fact" | "medical_consent" | "unknown";
+export type CollectionExecutionKind = "native_structural" | "configured_relationship" | "health_fact" | "medical_consent" | "person_contact_facts" | "unknown";
 
 /**
  * SERVER-DERIVED health fact intent for a row of a `health.*` collection (allergy, condition,
@@ -126,6 +126,19 @@ export type RelatedRecordMedicalConsentIntent = {
     signed: boolean;
 };
 
+/**
+ * SERVER-DERIVED work and contact facts the RESPONDING ADULT gave about themselves (home / work
+ * phone, employer, work hours, work address, preferred contact method). Written onto the
+ * submission's own adult only on an operator's approval (`personContactFacts`), and refused when
+ * the stated name is a different adult's.
+ */
+export type RelatedRecordPersonContactFactsIntent = {
+    facts: Partial<Record<"home_phone" | "work_phone" | "employer" | "work_hours" | "work_address" | "communication_preference", string>>;
+    source_field_ids: Partial<Record<string, string>>;
+    stated_first_name: string | null;
+    stated_last_name: string | null;
+};
+
 export type RelatedRecordInstanceProposal = {
     proposal_id: string;
     collection_provider_ref: string;
@@ -145,6 +158,8 @@ export type RelatedRecordInstanceProposal = {
     health_fact_intent?: RelatedRecordHealthFactIntent;
     /** Present only for `medical_consent` instances. */
     medical_consent_intent?: RelatedRecordMedicalConsentIntent;
+    /** Present only for `person_contact_facts` instances. */
+    person_contact_facts_intent?: RelatedRecordPersonContactFactsIntent;
 };
 
 export type RelatedRecordCollectionProposal = {

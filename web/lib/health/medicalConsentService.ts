@@ -145,18 +145,29 @@ export async function recordMedicalConsent(
 
 export async function withdrawMedicalConsent(
     supabase: SupabaseClient,
-    input: { orgId: string; access: HealthAccessSubject; consentId: string; reason: string; actorUserId: string | null; withdrawnAt?: string },
+    input: {
+        orgId: string;
+        access: HealthAccessSubject;
+        consentId: string;
+        reason: string;
+        actorUserId: string | null;
+        withdrawnAt?: string;
+        /** The child the operator is acting on — a consent of another child is refused, never touched. */
+        customerMemberId?: string | null;
+    },
 ): Promise<MedicalConsentRow> {
     assertHealthAccess(input.access, HEALTH_MANAGE_PERMISSION);
     const reason = input.reason.trim();
     if (!reason) throw new MedicalConsentError("invalid_input", "a withdrawal needs a reason");
     const at = input.withdrawnAt ?? new Date().toISOString();
-    const { data, error } = await supabase
+    let q = supabase
         .from(MEDICAL_CONSENTS_TABLE)
         .update({ status: "withdrawn", withdrawn_at: at, withdrawn_by: input.actorUserId, withdrawal_reason: reason, effective_to: ymd(at) })
         .eq("org_id", input.orgId)
         .eq("id", input.consentId)
-        .eq("status", "active")
+        .eq("status", "active");
+    if (input.customerMemberId) q = q.eq("subject_entity_id", input.customerMemberId);
+    const { data, error } = await q
         .select(MEDICAL_CONSENT_SELECT)
         .maybeSingle();
     if (error) throw new MedicalConsentError("db_error", error.message);

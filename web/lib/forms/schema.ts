@@ -36,7 +36,7 @@ export const formRepeatRulesSchema = z
 
 export const formSignatureConfigSchema = z
     .object({
-        /** When true, submit requires `typed_full_name` for typed signatures. */
+        /** When true, every signature carries the signer's typed name: `typed_full_name` for a typed signature, `signer_printed_name` beside a drawn mark. */
         require_typed_name: z.boolean().optional(),
         /** When true, submit requires `drawn_document_id` for drawn signatures. */
         require_drawn_asset: z.boolean().optional(),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
+import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
 
 /**
  * POST — start a member's password reset.
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest) {
     const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
+
+    // Shared QA Activation Safety: refuse before the auth provider call.
+    const qaGate = refuseQaOrgOutbound(orgId);
+    if (!qaGate.ok) {
+        return NextResponse.json({ error: qaGate.detail, code: qaGate.code }, { status: 403 });
+    }
 
     const body = (await request.json().catch(() => ({}))) as { user_id?: unknown };
     const userId = typeof body.user_id === "string" ? body.user_id.trim() : "";

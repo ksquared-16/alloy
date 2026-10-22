@@ -333,6 +333,7 @@ const withdrawConsent: RegisteredAction = {
                 consentId: t(payload.consent_id),
                 reason: t(payload.reason),
                 actorUserId: ctx.userId ?? null,
+                customerMemberId: childIdFrom(payload, invocation.entityId) || null,
             });
             return {
                 ok: true,

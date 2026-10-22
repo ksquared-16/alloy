@@ -131,7 +131,15 @@ async function load(token: string, rail: "card" | "ach"): Promise<
             orgId: access.value.orgId,
             linkId: access.value.linkId,
             customerId,
-            view: buildParticipantPaymentView({ projection, payer, methods, merchant, childNames }),
+            view: buildParticipantPaymentView({
+                projection,
+                payer,
+                methods,
+                merchant,
+                childNames,
+                // The session's own child, validated against the household by the resolver.
+                focusedCustomerMemberId: family.value.focusedCustomerMemberId ?? null,
+            }),
             payable: payableChargeIds(projection),
             recognizable: recognizableChargeIds(projection),
             payerPersonId: payer?.personId ?? null,

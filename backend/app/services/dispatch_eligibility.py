@@ -60,6 +60,14 @@ SUPPRESSION_EXEMPT: List[str] = CONTRACT["suppression_exempt_categories"]
 SUPPRESSING_EVENTS: List[str] = CONTRACT["suppressing_delivery_events"]
 VALID_CATEGORIES = ["transactional", "operational", "marketing", "emergency"]
 
+# Shared QA Activation Safety — frozen registry ids (Alloy web/lib/qa/sharedQaRegistry.ts).
+# Email/SMS from these orgs must never reach a provider, regardless of bindings or
+# deployment-wide fallback credentials.
+REGISTERED_QA_ORG_IDS = frozenset({
+    "4acc9386-c485-486f-aa1f-05d83499d142",  # ZZ Alloy QA
+    "ad53fee2-2570-460f-9300-f0e106c473b6",  # ZZ Alloy QA — Cross-Org
+})
+
 
 class DispatchDecision:
     """send_now | defer_until | blocked, with a deterministic machine reason."""
@@ -316,6 +324,15 @@ def revalidate_for_dispatch(
     """
     now = now or datetime.now(timezone.utc)
 
+    # Shared QA Activation Safety — refuse email/SMS before any live-state read or provider path.
+    early_channel = str(message.get("channel") or "").lower()
+    early_org_id = str(message.get("org_id") or "")
+    if early_org_id in REGISTERED_QA_ORG_IDS and early_channel in ("email", "sms"):
+        return _blocked(
+            "QA_ORG_OUTBOUND_REFUSED",
+            "Shared QA organizations cannot send email or SMS.",
+        )
+
     snapshot, block = validate_snapshot(message.get("eligibility_snapshot"))
     if block:
         return block
@@ -325,6 +342,13 @@ def revalidate_for_dispatch(
     category = snapshot["category"]
     channel = (message.get("channel") or snapshot.get("recipient", {}).get("channel") or "").lower()
     org_id = str(message.get("org_id") or "")
+
+    # Channel may resolve from the snapshot when the row omitted it — refuse again.
+    if org_id in REGISTERED_QA_ORG_IDS and channel in ("email", "sms"):
+        return _blocked(
+            "QA_ORG_OUTBOUND_REFUSED",
+            "Shared QA organizations cannot send email or SMS.",
+        )
 
     # Internal audience: not a communication to a data subject. It must not
     # reach a provider at all, and external consent rules do not apply.

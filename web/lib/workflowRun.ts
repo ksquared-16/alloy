@@ -23,6 +23,7 @@ import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveSt
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { executeInstantiateWorkWorkflowAction } from "@/lib/admin/operationalWork/workflowInstantiateWork/executeInstantiateWorkWorkflowAction";
 import { executeSendCommunicationTemplateWorkflowAction } from "@/lib/workflows/actions/executeSendCommunicationTemplateWorkflowAction";
+import { refuseQaOrgSmsQueueInsert } from "@/lib/qa/sharedQaSafety";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -1720,6 +1721,16 @@ export async function executeWorkflowRun(
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const triggerProcess = pl.trigger_messages_process !== false;
+                    if (channel.toLowerCase() === "sms") {
+                        const smsOrgId =
+                            (run?.org_id != null ? String(run.org_id).trim() : "") ||
+                            (payload.org_id != null ? String(payload.org_id).trim() : "") ||
+                            (options?.org_id != null ? String(options.org_id).trim() : "");
+                        const smsGate = refuseQaOrgSmsQueueInsert(smsOrgId || null);
+                        if (!smsGate.ok) {
+                            throw new Error(`create_message: ${smsGate.code}: ${smsGate.detail}`);
+                        }
+                    }
                     const tplPayload = bridgeContactFromPersonForTemplates(payload as Record<string, unknown>);
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
                     const bodyRaw = pl.body != null ? String(pl.body) : "";
@@ -2029,6 +2040,15 @@ export async function executeWorkflowRun(
 
                         const bodyPreviewRow = (bodyForRecipient ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
                         if (isSms && toPhone) {
+                            const smsOrgId =
+                                (run?.org_id != null ? String(run.org_id).trim() : "") ||
+                                (payload.org_id != null ? String(payload.org_id).trim() : "") ||
+                                (options?.org_id != null ? String(options.org_id).trim() : "") ||
+                                (linkOrgIdForVendorOffer != null ? String(linkOrgIdForVendorOffer).trim() : "");
+                            const smsGate = refuseQaOrgSmsQueueInsert(smsOrgId || null);
+                            if (!smsGate.ok) {
+                                throw new Error(`send_message: ${smsGate.code}: ${smsGate.detail}`);
+                            }
                             const msgRow = buildPublicMessagesInsertForSendMessageSms(payload as Record<string, unknown>, {
                                 workflowId,
                                 runId,

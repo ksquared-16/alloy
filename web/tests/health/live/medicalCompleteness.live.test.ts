@@ -20,6 +20,7 @@ import { parseHealthCaptureDeclaration } from "@/lib/health/healthCaptureDeclara
 import { executeHealthFactProposalCommit } from "@/lib/pos/processingCase/commit/executeHealthFactProposalCommit";
 import { executeMedicalConsentProposalCommit } from "@/lib/pos/processingCase/commit/executeMedicalConsentProposalCommit";
 import { withdrawMedicalConsent } from "@/lib/health/medicalConsentService";
+import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { buildHealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -205,7 +206,9 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         const active = vm.consents.find((c) => c.status === "active")!;
         await expect(withdrawMedicalConsent(db, { orgId: ORG, access: VIEWER, consentId: active.consentId, reason: "family request", actorUserId: null })).rejects.toThrow();
         await expect(withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "  ", actorUserId: null })).rejects.toThrow(/reason/);
-        const w = await withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "Family revoked by phone", actorUserId: null });
+        // FI-03: acting from Ben's card cannot withdraw Ava's consent — refused, and untouched.
+        await expect(withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "wrong child", actorUserId: null, customerMemberId: ids.ben })).rejects.toThrow(/active/);
+        const w = await withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "Family revoked by phone", actorUserId: null, customerMemberId: ids.ava });
         expect(w).toMatchObject({ status: "withdrawn", withdrawal_reason: "Family revoked by phone" });
         await expect(withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "again", actorUserId: null })).rejects.toThrow(/active/);
 
@@ -221,16 +224,66 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         expect(after.consents.find((c) => c.consentId === active.consentId)).toMatchObject({ status: "withdrawn", withdrawalReason: "Family revoked by phone" });
     });
 
-    it("a DRAWN signature's signer comes from its signature record (ZZQAV5082106 showed 'the family')", async () => {
-        const p = { ...avaPayload(), signatures: { mr_signature: { kind: "drawn" } } } as FormPayload;
+    /** A drawn asset exactly as `enrollment-signature-asset` creates one (no bytes needed here). */
+    async function drawnAsset(childId: string): Promise<string> {
+        const d = (await ok(db.from("documents").insert({ org_id: ORG, entity_type: "customer_member", entity_id: childId, doc_type: "signature_asset", title: "Participant signature", original_filename: "signature.png", mime_type: "image/png", byte_size: 1, bucket: "documents", storage_path: `zz-cert/${RUN}/${childId}.png`, status: "uploaded" }).select("id").single())) as { id: string };
+        return d.id;
+    }
+
+    it("FI-02: a DRAWN signature's signer is the printed name the signer typed — the real persisted shape", async () => {
+        const docId = await drawnAsset(ids.ben);
+        // Exactly what the embed client sends: a drawn mark, its asset, the acknowledgment, and the
+        // printed name typed by the signer — here the adult the link was sent to.
+        const p = { ...avaPayload(), signatures: { mr_signature: { kind: "drawn", drawn_document_id: docId, acknowledged_at: "2026-10-21T16:00:00.000Z", signer_printed_name: "Pat Rivers" } } } as FormPayload;
         const { sub, caseId } = await submit(ids.ben, p);
-        await ok(db.from("form_submission_signatures").insert({ org_id: ORG, form_submission_id: sub, field_id: "mr_signature", signature_kind: "drawn", typed_full_name: "Jordan Rivers", signer_acknowledged_at: "2026-10-21T16:00:00Z" }));
+        const persisted = await persistFormSubmissionSignatures(db, { orgId: ORG, formSubmissionId: sub, schema: SCHEMA, payload: p, signerIpHash: null, channel: { kind: "public_link", linkId: `zz-link-${RUN}`, packetSessionId: null, recipientPersonId: null, recipientName: "Pat Rivers" } });
+        expect(persisted).toEqual({ inserted: 1 });
+
+        const row = (await ok(db.from("form_submission_signatures").select("signature_kind, typed_full_name, drawn_asset_document_id, metadata").eq("form_submission_id", sub).single())) as { signature_kind: string; typed_full_name: string | null; drawn_asset_document_id: string; metadata: { signer: Record<string, unknown> } };
+        // The real drawn shape: no typed_full_name on the row; who signed lives in metadata.signer.
+        expect(row).toMatchObject({ signature_kind: "drawn", typed_full_name: null, drawn_asset_document_id: docId });
+        expect(row.metadata.signer).toMatchObject({ method: "drawn", printed_name: "Pat Rivers", identity_basis: "printed_name_with_drawn_mark", channel: "public_link", printed_name_matches_recipient: true });
+
         const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
+        expect(consent.status).toBe("valid");
         const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
         expect(out.ok).toBe(true);
         const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
-        expect(ben.consents[0]).toMatchObject({ status: "active", grantedByName: "Jordan Rivers", grantedAt: expect.stringMatching(/^2026-10-21T16:00/) });
-        await db.from("form_submission_signatures").delete().eq("form_submission_id", sub);
+        expect(ben.consents[0]).toMatchObject({ status: "active", grantedByName: "Pat Rivers", grantedAt: expect.stringMatching(/^2026-10-21T16:00/) });
+    });
+
+    it("FI-02: a DIFFERENT adult signing on the parent's link is recorded as themselves — and their consent is refused, never re-attributed", async () => {
+        const docId = await drawnAsset(ids.ben);
+        const p = { ...avaPayload(), signatures: { mr_signature: { kind: "drawn", drawn_document_id: docId, acknowledged_at: "2026-10-21T18:00:00.000Z", signer_printed_name: "Jordan Rivers" } } } as FormPayload;
+        const { sub, caseId } = await submit(ids.ben, p);
+        await persistFormSubmissionSignatures(db, { orgId: ORG, formSubmissionId: sub, schema: SCHEMA, payload: p, signerIpHash: null, channel: { kind: "public_link", linkId: `zz-link-${RUN}`, packetSessionId: null, recipientPersonId: null, recipientName: "Pat Rivers" } });
+        const row = (await ok(db.from("form_submission_signatures").select("metadata").eq("form_submission_id", sub).single())) as { metadata: { signer: Record<string, unknown> } };
+        expect(row.metadata.signer).toMatchObject({ printed_name: "Jordan Rivers", printed_name_matches_recipient: false });
+        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
+        const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
+        expect(out).toMatchObject({ ok: false, code: "signer_not_authorized" });
+        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        expect(after.consents).toEqual(before.consents);
+        expect(JSON.stringify(after.consents)).not.toContain("Jordan Rivers");
+    });
+
+    it("FI-02: a drawn mark with NO printed name is refused, never recorded under the recipient's name", async () => {
+        const docId = await drawnAsset(ids.ava);
+        const p = { ...avaPayload(), signatures: { mr_signature: { kind: "drawn", drawn_document_id: docId, acknowledged_at: "2026-10-21T17:00:00.000Z" } } } as FormPayload;
+        const { sub, caseId } = await submit(ids.ava, p);
+        await persistFormSubmissionSignatures(db, { orgId: ORG, formSubmissionId: sub, schema: SCHEMA, payload: p, signerIpHash: null, channel: { kind: "public_link", linkId: `zz-link-${RUN}`, packetSessionId: null, recipientPersonId: null, recipientName: "Pat Rivers" } });
+        const row = (await ok(db.from("form_submission_signatures").select("metadata").eq("form_submission_id", sub).single())) as { metadata: { signer: Record<string, unknown> } };
+        expect(row.metadata.signer).toMatchObject({ printed_name: null, identity_basis: "not_captured" });
+
+        const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
+        expect(consent.status).toBe("incomplete");
+        expect(JSON.stringify(consent.diagnostics)).toMatch(/does not say who signed/);
+        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
+        expect(out).toMatchObject({ ok: false });
+        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        expect(after.consents).toHaveLength(before.consents.length);
     });
 
     it("signed-in database users cannot read consents directly; only the server can", async () => {

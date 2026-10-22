@@ -191,6 +191,35 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
         [factRunning, load, memberId],
     );
 
+    /** The family withdrew an authorization: the registered command records it; the card re-reads. */
+    const withdrawConsent = useCallback(
+        async (consentId: string, reason: string): Promise<string | null> => {
+            if (!memberId) return "No child in scope.";
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: "medical_consent.withdraw",
+                        entity_type: "child",
+                        entity_id: memberId,
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: { customer_member_id: memberId, consent_id: consentId, reason },
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string };
+                if (!json?.ok) return json?.error || "The withdrawal could not be recorded.";
+                await load();
+                return null;
+            } catch {
+                return "The withdrawal could not be recorded.";
+            }
+        },
+        [load, memberId],
+    );
+
     const name = scope?.displayName ?? null;
     const criticalCount = vm?.criticalFacts.length ?? 0;
 
@@ -270,6 +299,7 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                          * writer for data it does not own. The card names the gap instead of
                          * rendering a control that does nothing.
                          */
+                        withdrawConsent: withdrawConsent,
                         editProfile: null,
                         uploadDocument: null,
                         unavailableReason: (key) =>

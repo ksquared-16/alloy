@@ -1,3 +1,5 @@
+import { canManageHealth, type HealthAccessSubject } from "@/lib/health/healthAccess";
+import { isChildHealthProfileFieldKey } from "@/lib/health/childHealthProfileFields";
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { decisionForProvider } from "@/lib/intake/proposals/decisions";
@@ -39,6 +41,8 @@ export function buildExistingChildCommitPlan(args: {
     currentRecord: ExistingChildRecordSnapshot | null;
     orgId: string;
     expectedCustomerId: string | null;
+    /** A child's medical fields are a Medical write: health.manage, not Processing alone. */
+    healthAccess: HealthAccessSubject;
 }): ExistingChildCommitPlan {
     const skipped: ExistingChildSkippedChange[] = [];
     const proposal = args.proposal;
@@ -83,6 +87,10 @@ export function buildExistingChildCommitPlan(args: {
         const capability = resolveMutationCapability(field.provider_ref);
         if (!capability) {
             skipped.push(skip(field.provider_ref, "Field is not writable through the canonical mutation platform.", "unsupported"));
+            continue;
+        }
+        if (isChildHealthProfileFieldKey(capability.field_key) && !canManageHealth(args.healthAccess)) {
+            skipped.push(skip(field.provider_ref, "Changing a child's medical information requires Medical access (health.manage).", "unauthorized"));
             continue;
         }
         const normalized = validateMutationValue(capability, field.submitted_value);

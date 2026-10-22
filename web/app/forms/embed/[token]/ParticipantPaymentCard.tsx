@@ -28,6 +28,7 @@ import { announceParticipantProgress, onParticipantProgress } from "./participan
 
 type Line = {
     chargeId: string;
+    subjectCustomerMemberId: string | null;
     subjectName: string | null;
     label: string;
     collectibleNowCents: number;
@@ -51,6 +52,7 @@ type PaymentView = {
     methods: Method[];
     rails: ("card" | "ach")[];
     unpayableReason: string | null;
+    defaultChargeId: string | null;
 };
 
 /* The participant surface's own card language (EnrollmentConversationCard's IntakeCard). */
@@ -128,9 +130,11 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
             if (!res.ok || !json.ok || !json.data) throw new Error(json.error ?? "We could not load your fee.");
             setView(json.data.payment);
             setPublishableKey(json.data.publishableKey);
-            // Default to the first payable line and its full amount — the server's figure, not a
-            // computed one. A parent who wants to pay less edits it and the server re-checks.
-            const first = json.data.payment.lines.find((l) => l.chargeId && l.collectibleNowCents > 0);
+            // Default to THIS child's payable fee (the server's choice, FI-04) and its full amount —
+            // the server's figure, not a computed one. Other fees stay selectable; a parent who wants
+            // to pay less edits the amount and the server re-checks.
+            const payableLines = json.data.payment.lines.filter((l) => l.chargeId && l.collectibleNowCents > 0);
+            const first = payableLines.find((l) => l.chargeId === json.data!.payment.defaultChargeId) ?? payableLines[0];
             setChargeId((prev) => prev || first?.chargeId || "");
             setAmount((prev) => prev || (first ? String((first.collectibleNowCents / 100).toFixed(2)) : ""));
             const methods = json.data.payment.methods.filter((m) => m.rail === rail);

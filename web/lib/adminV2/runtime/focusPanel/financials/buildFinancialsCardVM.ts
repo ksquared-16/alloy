@@ -39,6 +39,7 @@ import { selectOpenCollections } from "@/lib/adminV2/runtime/focusPanel/financia
 import {
     deriveAccountChargeLedgerRows, reversalBySourceChargeId,
     type AccountChargeLedgerRow,
+    reductionMapFrom,
 } from "@/lib/financials/account/accountChargeLedger";
 import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
@@ -196,6 +197,8 @@ export type FinancialsPaymentRow = {
     glMappingKey?: string | null;
     /** W7-F042: why the account reads as it does — recorded, none configured then, or pre-stamping history. */
     glState?: FinancialsPaymentGlState;
+    /** W7-F050: the payment was settled automatically (no charge was chosen). */
+    settledAutomatically?: boolean;
     /**
      * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
      * is doing something; this says WHICH obligations, and which were undone — the difference between
@@ -2134,6 +2137,7 @@ async function buildFinancialsCardVMInner(
                     payerName: facts?.payerName ?? null,
                     payerKind: facts?.payerKind ?? null,
                     methodDisplay: facts?.methodDisplay ?? null,
+                    settledAutomatically: facts?.settlement === "automatic",
                     glMappingKey,
                     glCode: stamp?.gl_account_id ? stamp.code : null,
                     glAccountName: stamp?.gl_account_id ? stamp.name : null,
@@ -2215,9 +2219,16 @@ async function buildFinancialsCardVMInner(
      * defaulting `offersPayment` to true, would put a Record-payment control on a card that has just
      * admitted it cannot say what has been paid.
      */
+    /*
+     * W7-F053: a discounted charge owes its NET — gross minus its discount reductions — and only
+     * then minus money applied. Reductions come from the bundle already read (no new wave). Without
+     * this, a fully paid $1,450 tuition with a −$145 sibling discount read "$145 outstanding" and $145
+     * past due, while the collectible authority (and settlement) correctly found nothing owed.
+     */
+    const reductionByChargeId = reductionMapFrom(bundle.reductionsByCharge as unknown as Array<Record<string, unknown>>);
     for (const row of rows) {
         row.appliedCents = appliedByChargeId.get(row.chargeId) ?? 0;
-        row.outstandingCents = row.amountCents - row.appliedCents;
+        row.outstandingCents = row.amountCents - (reductionByChargeId.get(row.chargeId) ?? 0) - row.appliedCents;
         row.offersPayment = offersPaymentTransition({
             status: row.status,
             correctsChargeId: row.correctsChargeId,
@@ -2239,13 +2250,13 @@ async function buildFinancialsCardVMInner(
     );
 
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
-    vm.pastDue = pastDueFor(rows, today, appliedByChargeId);
-    vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId);
+    vm.pastDue = pastDueFor(rows, today, appliedByChargeId, reductionByChargeId);
+    vm.notYetDue = notYetDueFor(rows, today, appliedByChargeId, reductionByChargeId);
     vm.upcoming = upcomingFor(rows);
     vm.pastDueBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,
-            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today, appliedByChargeId),
+            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today, appliedByChargeId, reductionByChargeId),
         ]),
     );
 

@@ -4033,3 +4033,44 @@
   outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
   outline-offset: 2px;
 }
+
+/* W7-F050 — Application: Automatic, with the calculated settlement beneath it. */
+.alloy-os-financials__settlement {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-financials__settlement-mode {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-financials__settlement-lines {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0;
+  font-size: 0.76rem;
+}
+.alloy-os-financials__settlement-lines > li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-financials__settlement-total {
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+  font-weight: 600;
+}
+.alloy-os-financials__linkaction {
+  padding: 0;
+  margin-top: 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
+}
+.alloy-os-financials__linkaction:hover { text-decoration: underline; }

@@ -8,6 +8,7 @@ import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
 import { loadHealthCaptureDeclarations } from "@/lib/health/healthCaptureDeclaration";
 import { adaptHealthCaptureToProposals } from "@/lib/health/healthCaptureProposals";
+import { adaptPersonContactFactsToProposals } from "@/lib/fields/personContactFacts/personContactFactProposals";
 import {
     adaptParticipantChildRequestToRelatedRecordProposals,
     loadParticipantChildRequests,
@@ -23,6 +24,12 @@ export type RelatedRecordProposalCaseContext = {
      * not inference: a child-scoped relationship from Ben's paperwork is Ben's.
      */
     expectedCustomerMemberId?: string | null;
+    /**
+     * The adult the SOURCE is attributed to: the submission's own `person_id`, else the adult the
+     * link it was submitted through was sent to (`form_public_links.metadata.recipient_person_id`,
+     * validated at mint). Packet submissions carry only the latter.
+     */
+    expectedPersonId?: string | null;
     source: { source_kind: string; source_id: string };
     /** Present when the source is a family's new-child statement. */
     participantChildRequest?: ParticipantChildRequestRow;
@@ -81,12 +88,12 @@ export async function loadRelatedRecordProposalForCase(args: {
         if (source.source_kind !== "form_submission") continue;
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_id, customer_member_id")
+            .select("id, payload, form_definition_version_id, customer_id, customer_member_id, person_id, created_via_public_link_id")
             .eq("org_id", args.orgId)
             .eq("id", source.source_id)
             .maybeSingle();
         if (subError) throw new Error(subError.message);
-        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null; customer_member_id?: string | null } | null;
+        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null; customer_member_id?: string | null; person_id?: string | null; created_via_public_link_id?: string | null } | null;
         if (!subRow) continue;
 
         let schemaJson: unknown = null;
@@ -124,9 +131,26 @@ export async function loadRelatedRecordProposalForCase(args: {
                 );
             }
         }
+        bundle.collections.push(
+            ...adaptPersonContactFactsToProposals(schemaParsed.data, payload, { formSubmissionId: subRow.id, formDefinitionVersionId: subRow.form_definition_version_id }),
+        );
         for (const collection of bundle.collections) {
             const proposal = collection.instances.find((inst) => inst.proposal_id === args.proposalId);
-            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, source };
+            if (proposal) {
+                let expectedPersonId = subRow.person_id ?? null;
+                if (!expectedPersonId && subRow.created_via_public_link_id && proposal.execution_kind === "person_contact_facts") {
+                    const { data: link, error: linkError } = await args.supabase
+                        .from("form_public_links")
+                        .select("metadata")
+                        .eq("org_id", args.orgId)
+                        .eq("id", subRow.created_via_public_link_id)
+                        .maybeSingle();
+                    if (linkError) throw new Error(linkError.message);
+                    const rp = ((link as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}).recipient_person_id;
+                    expectedPersonId = typeof rp === "string" && rp.trim() ? rp.trim() : null;
+                }
+                return { proposal, expectedCustomerId: subRow.customer_id, expectedCustomerMemberId: subRow.customer_member_id ?? null, expectedPersonId, source };
+            }
         }
     }
     return null;

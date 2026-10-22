@@ -1,0 +1,290 @@
+{
+ "build": "8f0961717b2ba23a81ee690ee895675fb4c72f99",
+ "split": {
+  "strip": "DUE NOW | $0.00 | $75.00 not yet due · next Nov 6, 2026 | BALANCE · OCTOBER 2026 | $75.00 | $75.00 charged · $0.00 paid",
+  "payerOptions": [
+   "Dana Split · parent · also responsible",
+   "Gale Split · guardian",
+   "Rosa Split · parent · also responsible",
+   "Not known — record to the household"
+  ],
+  "danaEligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Change allocation",
+   "amount": "",
+   "lines": [],
+   "total": null,
+   "unapplied": null,
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "dana20": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $20.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "20.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $20.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "dana100": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Dana Split's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $100.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "100.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $100.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "household10": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to the household's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).Stays unapplied: $10.00 — kept as prepaid on this paymentChange allocation",
+   "amount": "10.00",
+   "lines": [],
+   "total": null,
+   "unapplied": "Stays unapplied: $10.00 — kept as prepaid on this payment",
+   "nothing": "Nothing is due to settle right now — the payment will be recorded as unapplied (prepaid on this payment).",
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  }
+ },
+ "monthly": {
+  "stripBefore": "DUE NOW | $2,005.00 | $2,005.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,076.00 | $2,116.00 charged · $40.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+  "ledgerBefore": [
+   "Dec 1, 2026One-time chargeCertb Certhouse4090 · Other Income$40.00Legacy draftNot allocatedField trip",
+   "Dec 1, 2026One-time chargeHousehold4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 19, 2026TuitionCertb Certhouse4000 · Tuition Revenue$1,450.00ScheduledNot allocatedMonthly tuition",
+   "Oct 20, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedCertt CerthouseMonthly tuition",
+   "Oct 20, 2026Refund—Unmapped$40.00Refunded—Cash",
+   "Oct 20, 2026Payment—Unmapped−$40.00UnappliedCertt CerthouseCash",
+   "Oct 17, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedCertt CerthouseMonthly tuition",
+   "Oct 6, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedNot allocatedMonthly tuition",
+   "Oct 6, 2026Payment—Unmapped−$75.00ReceivedCertt CerthouseVisa •••• 4242",
+   "Oct 5, 2026Payment—Unmapped−$18.00Received—Card",
+   "Oct 2, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Oct 2, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedCertt CerthouseMaterials",
+   "Oct 1, 2026One-time chargeCerta Certhouse4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 1, 2026One-time chargeCertb Certhouse4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 1, 2026TuitionCertb Certhouse4000 · Tuition Revenue$1,450.00PostedNot allocatedMonthly tuition",
+   "—AdjustmentCerta Certhouse4030 · Supply Fees-$5.00PostedNot allocatedOne-time · test",
+   "Sep 30, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Sep 30, 2026FeeCerta Certhouse4010 · Registration Fees$75.00PostedCertt CerthouseRegistration fee",
+   "Sep 30, 2026Payment—Unmapped−$1,305.00Received—Card",
+   "Sep 29, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 29, 2026Payment—Unmapped−$18.00Received—Card",
+   "Sep 29, 2026Payment—Unmapped−$75.00Received—Card",
+   "Sep 28, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Sep 26, 2026FeeHousehold4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 25, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 25, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 25, 2026FeeHousehold4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 22, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 18, 2026FeeHousehold4010 · Registration Fees$75.00PostedCertt Certhouse · $57.00 unassignedRegistration fee",
+   "Sep 18, 2026Late pickupCerta Certhouse4040 · Late Pickup Fees$25.00ReversedNot allocatedLate pickup",
+   "Sep 18, 2026FeeCerta Certhouse4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 18, 2026FeeCertb Certhouse4010 · Registration Fees$75.00PostedCertt Certhouse · $57.00 unassignedRegistration fee",
+   "Sep 18, 2026Payment—Unmapped−$240.00Part applied—Cash",
+   "Sep 15, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 14, 2026Late pickupCerta Certhouse4040 · Late Pickup Fees$25.00PostedNot allocatedLate pickup",
+   "Sep 13, 2026Payment—Unmapped−$25.00Received—Check",
+   "Sep 8, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 2, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 2, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedUnassignedMaterials",
+   "Sep 1, 2026TuitionCertb Certhouse4000 · Tuition Revenue$1,450.00PostedNot allocatedMonthly tuition"
+  ],
+  "eligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyOne-time charge · Oct 11, 2026 · past due$40.00Tuition · Oct 11, 2026 · past due$1,450.00Tuition · Oct 16, 2026 · past due$185.00Tuition · Oct 17, 2026 · past due$185.00Total applied$1,860.00Change allocation",
+   "amount": "1860.00",
+   "lines": [
+    "One-time charge · Oct 11, 2026 · past due$40.00",
+    "Tuition · Oct 11, 2026 · past due$1,450.00",
+    "Tuition · Oct 16, 2026 · past due$185.00",
+    "Tuition · Oct 17, 2026 · past due$185.00"
+   ],
+   "total": "Total applied$1,860.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "over": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyOne-time charge · Oct 11, 2026 · past due$40.00Tuition · Oct 11, 2026 · past due$1,450.00Tuition · Oct 16, 2026 · past due$185.00Tuition · Oct 17, 2026 · past due$185.00Total applied$1,860.00Stays unapplied: $10.00 — kept as ",
+   "amount": "1870.00",
+   "lines": [
+    "One-time charge · Oct 11, 2026 · past due$40.00",
+    "Tuition · Oct 11, 2026 · past due$1,450.00",
+    "Tuition · Oct 16, 2026 · past due$185.00",
+    "Tuition · Oct 17, 2026 · past due$185.00"
+   ],
+   "total": "Total applied$1,860.00",
+   "unapplied": "Stays unapplied: $10.00 — kept as prepaid on this payment",
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "partialPreview": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyOne-time charge · Oct 11, 2026 · past due$20.00Total applied$20.00Change allocation",
+   "amount": "20.00",
+   "lines": [
+    "One-time charge · Oct 11, 2026 · past due$20.00"
+   ],
+   "total": "Total applied$20.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "commandClosed": true,
+  "recordResult": null,
+  "stripAfter": "DUE NOW | $1,985.00 | $1,985.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,056.00 | $2,116.00 charged · $60.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+  "ledgerAfter": [
+   "Dec 1, 2026One-time chargeCertb Certhouse4090 · Other Income$40.00Legacy draftNot allocatedField trip",
+   "Dec 1, 2026One-time chargeHousehold4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 19, 2026TuitionCertb Certhouse4000 · Tuition Revenue$1,450.00ScheduledNot allocatedMonthly tuition",
+   "Oct 21, 2026Payment—5000 · Payments−$20.00ReceivedCertt CerthouseCash",
+   "Oct 20, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedCertt CerthouseMonthly tuition",
+   "Oct 20, 2026Refund—Unmapped$40.00Refunded—Cash",
+   "Oct 20, 2026Payment—Unmapped−$40.00UnappliedCertt CerthouseCash",
+   "Oct 17, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedCertt CerthouseMonthly tuition",
+   "Oct 6, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00PostedNot allocatedMonthly tuition",
+   "Oct 6, 2026Payment—Unmapped−$75.00ReceivedCertt CerthouseVisa •••• 4242",
+   "Oct 5, 2026Payment—Unmapped−$18.00Received—Card",
+   "Oct 2, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Oct 2, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedCertt CerthouseMaterials",
+   "Oct 1, 2026One-time chargeCerta Certhouse4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 1, 2026One-time chargeCertb Certhouse4090 · Other Income$40.00PostedNot allocatedField trip",
+   "Oct 1, 2026TuitionCertb Certhouse4000 · Tuition Revenue$1,450.00PostedNot allocatedMonthly tuition",
+   "—AdjustmentCerta Certhouse4030 · Supply Fees-$5.00PostedNot allocatedOne-time · test",
+   "Sep 30, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Sep 30, 2026FeeCerta Certhouse4010 · Registration Fees$75.00PostedCertt CerthouseRegistration fee",
+   "Sep 30, 2026Payment—Unmapped−$1,305.00Received—Card",
+   "Sep 29, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 29, 2026Payment—Unmapped−$18.00Received—Card",
+   "Sep 29, 2026Payment—Unmapped−$75.00Received—Card",
+   "Sep 28, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00ReversedNot allocatedMaterials",
+   "Sep 26, 2026FeeHousehold4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 25, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 25, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 25, 2026FeeHousehold4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 22, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 18, 2026FeeHousehold4010 · Registration Fees$75.00PostedCertt Certhouse · $57.00 unassignedRegistration fee",
+   "Sep 18, 2026Late pickupCerta Certhouse4040 · Late Pickup Fees$25.00ReversedNot allocatedLate pickup",
+   "Sep 18, 2026FeeCerta Certhouse4010 · Registration Fees$75.00PostedNot allocatedRegistration fee",
+   "Sep 18, 2026FeeCertb Certhouse4010 · Registration Fees$75.00PostedCertt Certhouse · $57.00 unassignedRegistration fee",
+   "Sep 18, 2026Payment—Unmapped−$240.00Part applied—Cash",
+   "Sep 15, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 14, 2026Late pickupCerta Certhouse4040 · Late Pickup Fees$25.00PostedNot allocatedLate pickup",
+   "Sep 13, 2026Payment—Unmapped−$25.00Received—Check",
+   "Sep 8, 2026TuitionCerta Certhouse4000 · Tuition Revenue$185.00Legacy draftNot allocatedMonthly tuition",
+   "Sep 2, 2026Consumable feeCertb Certhouse4030 · Supply Fees$18.00PostedNot allocatedMaterials",
+   "Sep 2, 2026Consumable feeCerta Certhouse4030 · Supply Fees$18.00PostedUnassignedMaterials"
+  ]
+ },
+ "certhouse": {
+  "stripBefore": "DUE NOW | $1,985.00 | $1,985.00 past due | $225.00 not yet due · next Oct 31, 2026 | BALANCE · OCTOBER 2026 | $2,056.00 | $2,116.00 charged · $60.00 paid | SCHEDULED | $2,440.00 | activates with its period",
+  "eligible": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyOne-time charge · Oct 11, 2026 · past due$20.00Tuition · Oct 11, 2026 · past due$1,450.00Tuition · Oct 16, 2026 · past due$185.00Tuition · Oct 17, 2026 · past due$185.00Total applied$1,840.00Change allocation",
+   "amount": "1840.00",
+   "lines": [
+    "One-time charge · Oct 11, 2026 · past due$20.00",
+    "Tuition · Oct 11, 2026 · past due$1,450.00",
+    "Tuition · Oct 16, 2026 · past due$185.00",
+    "Tuition · Oct 17, 2026 · past due$185.00"
+   ],
+   "total": "Total applied$1,840.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "card5": {
+   "applyTowardVisible": false,
+   "application": "automatic",
+   "applicationText": "ApplicationAutomaticApplies to Certt Certhouse's eligible outstanding balance using your payment allocation rules — past due first, then currently due, oldest first.Will applyOne-time charge · Oct 11, 2026 · past due$5.00Total applied$5.00Change allocation",
+   "amount": "5.00",
+   "lines": [
+    "One-time charge · Oct 11, 2026 · past due$5.00"
+   ],
+   "total": "Total applied$5.00",
+   "unapplied": null,
+   "nothing": null,
+   "commit": "Confirm payment",
+   "changeAllocation": true
+  },
+  "collectResult": null,
+  "commandClosed": true
+ },
+ "writes": [
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":2000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":10000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"fd000000-0000-4000-8000-0000007b0006\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":10000,\"payment_method\":\"cash\"}",
+  "payment.record:preview {\"customer_id\":\"fd000000-0000-4000-8000-0000007c0005\",\"amount_cents\":1000,\"payment_method\":\"cash\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":187000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":2000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:execute {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"idempotency_key\":\"pay-mvih6ob8-r5wjn8y5\",\"expected_applied_cents\":2000,\"amount_cents\":2000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f0",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"cash\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":1000000000,\"payment_method\":\"card\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.record:preview {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":500,\"payment_method\":\"card\",\"payer_entity_type\":\"person\",\"payer_entity_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}",
+  "payment.collect_card:execute {\"customer_id\":\"29944d3e-8267-45b7-8dcb-7405060e2573\",\"amount_cents\":500,\"rail\":\"card\",\"payment_method_id\":\"dda1bc19-73d4-46e6-b617-9653593861cf\",\"payer_person_id\":\"f06b6750-3db4-4968-824f-6aa6290efda0\"}"
+ ],
+ "responses": [
+  {
+   "action": "payment.record",
+   "body": {
+    "payment_id": "620b6cd5-0f55-427b-ba5f-5739e7740347",
+    "payment_status": "posted",
+    "already_recorded": false,
+    "settlement": "automatic",
+    "applied_cents": 2000,
+    "unapplied_cents": 0,
+    "applications": [
+     {
+      "chargeId": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+      "label": "One-time charge",
+      "cents": 2000,
+      "allocationId": "8a593a0a-a3a2-4a1a-bc67-33576a8729fa",
+      "attributedCents": 0,
+      "error": null
+     }
+    ],
+    "settlement_changed_since_preview": false
+   }
+  },
+  {
+   "action": "payment.collect_card",
+   "body": {
+    "collection_attempt_id": "013264a8-7bb8-4997-baba-fc922704b643",
+    "amount_cents": 500,
+    "currency": "USD",
+    "client_secret": "pi_3UT4jgAN1Xn62hhm2d2ZEPRg_secret_WJiX24Vh32hx0MZVGinm5Eu55",
+    "connected_account": "acct_1UIV5GAN1Xn62hhm",
+    "provider_transaction_id": "pi_3UT4jgAN1Xn62hhm2d2ZEPRg",
+    "reused": false,
+    "payment_method_id": "dda1bc19-73d4-46e6-b617-9653593861cf",
+    "recognized": false
+   }
+  }
+ ]
+}
