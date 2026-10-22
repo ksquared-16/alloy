@@ -61,7 +61,7 @@ Each fixture is created with the product's own commands, as the QA Admin, and ev
 | Billing | a draft charge flagged for review; a charge with a failed post; an unrecognized collection; a submitted subsidy claim with expected funding and an open short-paid variance; a charge due today; a charge due in 4 days; a past-due charge; a fully paid charge (must not appear) | Financials commands (`charge.add`, posting, `payment.record`); subsidy claim and remittance; **no live provider collection**. The unrecognized collection must come from the provider sandbox or a test-mode attempt. If none exists, report that row as not seeded. |
 | Work Items | none for Assignments or Billing | Neither process has a Work Item producer, so their tiles must read "No open work items". |
 
-**Financial safety.** Posted charges are immutable. The QA org is disposable, so nothing is ever deleted: at the end the org is **retired**, not cleaned row by row. No real collections, refunds, emails or SMS are sent. Payment-provider and messaging integrations stay unconfigured in the QA org.
+**Financial safety.** *Superseded 2026-10-22.* The shared QA organization is permanent, so it is never retired. A run's financial records are **retained and quiesced**: drafts are cancelled, posted charges reversed or fully paid, and variances resolved, all through product commands, before the run closes. Census v2 then proves it. The definition, run contract and proof are in [`FINANCIAL-QUIESCENCE.md`](FINANCIAL-QUIESCENCE.md). Nothing is deleted, and no trigger is bypassed. No real collections, refunds, emails or SMS are sent. QA Shared has no merchant or payment method, and the no-send guards serve it.
 
 ---
 

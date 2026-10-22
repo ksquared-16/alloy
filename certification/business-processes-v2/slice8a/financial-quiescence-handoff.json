@@ -1,0 +1,47 @@
+{
+  "schema": "alloy.bp_v2.financial_quiescence_handoff.v1",
+  "gate": "bp_financial_quiescence_proven",
+  "plan": "bp_v2",
+  "from_lane": "lane_581d120e4e41",
+  "contract": "certification/business-processes-v2/slice8a/FINANCIAL-QUIESCENCE.md",
+  "residue_census_repin": {
+    "replaces": {
+      "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
+      "query_sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
+      "checks": ["bp_qr_pool_access", "bp_qr_zero_sent"],
+      "defect": "asserts nothing financial: a run could close QUIESCED_RETAINED with a bound merchant, an owed charge, an open variance or live periodic billing"
+    },
+    "path": "certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql",
+    "query_sha256": "bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c",
+    "checks": [
+      "bp_qr_pool_access",
+      "bp_qr_zero_sent",
+      "bp_qr_org_exists",
+      "bp_qr_fin_no_merchant",
+      "bp_qr_fin_no_usable_method",
+      "bp_qr_fin_no_autopay",
+      "bp_qr_fin_no_provider_activity",
+      "bp_qr_fin_no_active_schedule",
+      "bp_qr_fin_no_draft",
+      "bp_qr_fin_no_open_balance",
+      "bp_qr_fin_no_open_variance",
+      "bp_qr_fin_no_unapplied_money",
+      "bp_qr_fin_attributed"
+    ],
+    "data_rows": ["bp_qr_00", "bp_qr_org_present", "bp_qr_retained_financial", "bp_qr_retained_financial_actors", "bp_qr_retained_process_config", "bp_qr_retained_audit"],
+    "retained_by_design": ["posted financial records (immutable), neutralized and attributed by run", "published process configuration", "access audit history (mutation_events)"]
+  },
+  "local_proof": {
+    "suite": "web/tests/businessProcesses/financialQuiescence.live.test.ts",
+    "green_on": ["lane agent/business-processes b087fe7ae (+ this commit's suite)", "Alloy staging 841becb44 (git archive)"],
+    "evidence": [
+      "certification/business-processes-v2/slice8a/quiescence-live.lane-b087fe7ae.local-cert.json",
+      "certification/business-processes-v2/slice8a/quiescence-live.staging-841becb44.local-cert.json"
+    ],
+    "positive": "7 committed product commands (charge.cancel_draft x2, payment.record, subsidy.resolve_variance, charge.reverse x3) take a live org (census failing no_draft/no_open_balance/no_open_variance; 4 Billing views non-empty) to all 13 checks true and all 5 Billing views 0; 0 rows removed; posted rows byte-identical; drafts retained void",
+    "negative": "12 defects each flip exactly their own check (org_exists, pool_access, merchant, usable_method, autopay, provider_activity, periodic billing via ensurePeriodicBillingSchedule, draft, open_balance, unapplied money via payment.record + payment.reverse_application, open_variance, attributed)"
+  },
+  "deployed_baseline_census": { "status": "filed, pending operator approval", "request_id": null },
+  "do_not": "record bp_financial_quiescence_proven against the v1 census pin",
+  "non_blocking_financials_handoff": "certification/business-processes-v2/slice8a/financials-quiescence-handoff.md"
+}

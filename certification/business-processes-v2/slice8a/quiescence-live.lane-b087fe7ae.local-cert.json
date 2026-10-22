@@ -1,0 +1,213 @@
+{
+  "run": "818f14432f54",
+  "at": "2026-10-22T13:48:15.121Z",
+  "positive": {
+    "org": "a0574cf9-a2f5-4ec4-ab09-8daf99fe2ee3",
+    "actor": "qa-bpq-actor-818f14432f54@example.com",
+    "actor_fin_grants": [
+      "fin.adjust",
+      "fin.provider",
+      "fin.read",
+      "fin.responsibility",
+      "fin.subsidy",
+      "fin.write"
+    ]
+  },
+  "positive_live": {
+    "census_failing": [
+      "bp_qr_fin_no_draft",
+      "bp_qr_fin_no_open_balance",
+      "bp_qr_fin_no_open_variance"
+    ],
+    "views": {
+      "charges_needing_review": 1,
+      "payment_exceptions": 0,
+      "funding_variances": 1,
+      "payments_due": 1,
+      "overdue_payments": 1
+    }
+  },
+  "positive_commands": [
+    {
+      "key": "charge.cancel_draft",
+      "target": "d3c8090e-3240-484f-90e1-4d2f56f7096b",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"cf4e2559-5c5f-4e8e-8030-ee69"
+    },
+    {
+      "key": "charge.cancel_draft",
+      "target": "1e64e45a-a6d7-420a-9f31-dc6f8509b3b7",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"1ca4b91f-301b-49eb-8abf-3690"
+    },
+    {
+      "key": "payment.record",
+      "target": "a23e386f-aa89-4c96-9114-f4651376cc5e",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"payment.record\",\"executionOwner\":\"registered_action\",\"invocationId\":\"51be3c52-974f-4cf1-8cd2-696b8a038"
+    },
+    {
+      "key": "subsidy.resolve_variance",
+      "target": "85b03620-56e4-4d38-b7e1-19f6ba716d4c",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"subsidy.resolve_variance\",\"executionOwner\":\"registered_action\",\"invocationId\":\"2b367ce4-7fe6-4447-8d66"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "dfd2877e-c4f8-491e-a0d6-5c9b94359ead",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"be225988-d7d5-488b-8831-06e93bc42"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "88c19a46-f2f4-41fe-9870-9124bfedc67a",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"3c8411ea-29dd-46d1-b4e9-a9607494c"
+    },
+    {
+      "key": "charge.reverse",
+      "target": "d1d756d0-78a1-44da-a0cf-db00bddcb2c9",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"c05a43bc-af30-489c-9abd-07f0b6701"
+    }
+  ],
+  "positive_quiesced": {
+    "census": {
+      "bp_qr_00": {
+        "qa_shared": "a0574cf9-a2f5-4ec4-ab09-8daf99fe2ee3",
+        "cleanup": "quiesced_retained",
+        "census_version": 2,
+        "retained_by_design": [
+          "posted financial records (immutable), neutralized and attributed by run",
+          "published process configuration",
+          "access audit history (mutation_events)"
+        ]
+      },
+      "bp_qr_pool_access": true,
+      "bp_qr_zero_sent": true,
+      "bp_qr_org_present": {
+        "qa_shared_present": true
+      },
+      "bp_qr_org_exists": true,
+      "bp_qr_fin_no_merchant": true,
+      "bp_qr_fin_no_usable_method": true,
+      "bp_qr_fin_no_autopay": true,
+      "bp_qr_fin_no_provider_activity": true,
+      "bp_qr_fin_no_active_schedule": true,
+      "bp_qr_fin_no_draft": true,
+      "bp_qr_fin_no_open_balance": true,
+      "bp_qr_fin_no_open_variance": true,
+      "bp_qr_fin_no_unapplied_money": true,
+      "bp_qr_fin_attributed": true,
+      "bp_qr_retained_financial": {
+        "artifact": "posted financial records (immutable)",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_charge_rows": 9,
+        "by_status": {
+          "posted": 7,
+          "void": 2
+        },
+        "reversal_rows": 3,
+        "payment_rows": 1,
+        "variance_rows": 1
+      },
+      "bp_qr_retained_financial_actors": [
+        {
+          "email": "qa-bpq-actor-818f14432f54@example.com",
+          "day": "2026-10-22",
+          "rows": 11
+        }
+      ],
+      "bp_qr_retained_process_config": {
+        "artifact": "published process configuration",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_configuration_publication_rows": 0
+      },
+      "bp_qr_retained_audit": {
+        "artifact": "access audit history (mutation_events)",
+        "status": "retained_by_design",
+        "not_residue": true,
+        "qa_shared_mutation_event_rows": 0
+      }
+    },
+    "views": {
+      "charges_needing_review": 0,
+      "payment_exceptions": 0,
+      "funding_variances": 0,
+      "payments_due": 0,
+      "overdue_payments": 0
+    }
+  },
+  "positive_history": {
+    "rows_before": 7,
+    "rows_after": 12,
+    "removed": 0,
+    "reversal_rows": 3
+  },
+  "negative": {
+    "org": "6c8e23d2-bd0e-4578-ba20-66cd8bc8ad96",
+    "steps": [
+      {
+        "defect": "a pool persona still holds a role",
+        "newly_failing": [
+          "bp_qr_pool_access"
+        ]
+      },
+      {
+        "defect": "a provider merchant is bound",
+        "newly_failing": [
+          "bp_qr_fin_no_merchant"
+        ]
+      },
+      {
+        "defect": "a usable stored payment method",
+        "newly_failing": [
+          "bp_qr_fin_no_usable_method"
+        ]
+      },
+      {
+        "defect": "an active autopay authorization",
+        "newly_failing": [
+          "bp_qr_fin_no_autopay"
+        ]
+      },
+      {
+        "defect": "a provider collection attempt",
+        "newly_failing": [
+          "bp_qr_fin_no_provider_activity"
+        ]
+      },
+      {
+        "defect": "periodic billing activated (no command deactivates it)",
+        "newly_failing": [
+          "bp_qr_fin_no_active_schedule"
+        ]
+      },
+      {
+        "defect": "a draft left awaiting a decision",
+        "newly_failing": [
+          "bp_qr_fin_no_draft"
+        ]
+      },
+      {
+        "defect": "a posted charge still owed (due later, not yet in a view)",
+        "newly_failing": [
+          "bp_qr_fin_no_open_balance"
+        ]
+      },
+      {
+        "defect": "an inbound payment left unapplied (its application reversed)",
+        "newly_failing": [
+          "bp_qr_fin_no_unapplied_money"
+        ]
+      },
+      {
+        "defect": "an unresolved subsidy variance",
+        "newly_failing": [
+          "bp_qr_fin_no_open_variance"
+        ]
+      },
+      {
+        "defect": "a financial row written by no identity (a job, a webhook, a public link)",
+        "newly_failing": [
+          "bp_qr_fin_attributed"
+        ]
+      }
+    ]
+  }
+}
