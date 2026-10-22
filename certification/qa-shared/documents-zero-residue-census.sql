@@ -97,7 +97,7 @@ from (
     select 'doc_zr_subjects', 'check',
            'opportunities_work_units_departments ~ aa000000_fixture ~ zero ~ '
            || coalesce((
-                select ((select count(*) from public.opportunities o
+                select (((select count(*) from public.opportunities o
                           where o.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid) and o.id::text like 'aa000000-%')
                       + (select count(*) from public.work_units w
                           where w.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid) and w.id::text like 'aa000000-%')
