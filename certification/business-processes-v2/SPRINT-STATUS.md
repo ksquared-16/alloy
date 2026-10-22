@@ -1,11 +1,11 @@
 # Business Processes V2: sprint status
 
-**As of:** 2026-10-22T18:00Z
+**As of:** 2026-10-22T19:30Z
 **Lane:** `lane_581d120e4e41` (`agent/business-processes`)
-**Deployed staging:** `9d96c7e88` (`/api/build-info`). It contains every BP V2 merge below.
-**Vacilando:** toolkit `7414457452d7`.
+**Deployed staging:** `f12d000d21c1` (`/api/build-info`). It contains every BP V2 merge below.
+**Vacilando:** toolkit `1d35ef4690f2`.
 
-**Overall: PARTIAL.** Everything planned for V2 is merged and deployed. The only open acceptance gate is the **hosted three-process certification (Slice 8A)**. It is **BLOCKED by a Vacilando QA-runner defect** (§4): the QA run fails before granting any access. No product change is needed to unblock it.
+**Overall: PARTIAL.** Everything planned for V2 is merged and deployed. The only open acceptance gate is the **hosted three-process certification (Slice 8A)**. It is **BLOCKED** (§4). The first attempt failed on the runner's audit origin, which Vacilando fixed in `1d35ef4690f2`. The second attempt granted access, but then **cannot be closed clean**: Alloy's audited removal deletes roles and leaves the access profile. Run `qar_17c26a706ca7` is held in CLOSING (`NOT_CLEAN`), and it holds QA Shared.
 
 ## 1. Scope
 
@@ -44,7 +44,7 @@ The lane owns every slice.
 | 7 | Tile Work Items line (open / overdue) | COMPLETE | #1554 → `ed5abbcd1` | `live-tile-work-items.local-cert.json` | `slice7/hosted/` (read-only, deployed `ed5abbcd1`; Enrollment 111 open · 89 overdue, matching the server summary) |
 | 8A-R | Hosted QA readiness, Decision classification, Director walkthrough | COMPLETE | #1567 → `a12b8808d` | — | — |
 | 8A-Q | Financial quiescence: contract, census v2 (`c1b6c335…b05648`, 13 checks), handoffs | COMPLETE | #1567 → `a12b8808d` | `financialQuiescence.live.test.ts` (3 tests) on lane and staging | Deployed baselines `gar_f04e0a9aaae37e` and `gar_51efecdc15c6a5`: 13/13 |
-| 8A-H | **Hosted three-process certification** (configure, fixtures, walkthrough per persona, quiesce, census) | **BLOCKED** | — | — | Run `qar_f9a9275db057` failed while opening; recovered `QUIESCED_RETAINED` (§4) |
+| 8A-H | **Hosted three-process certification** (configure, fixtures, walkthrough per persona, quiesce, census) | **BLOCKED** | — | — | Attempt 1, `qar_f9a9275db057`: origin defect; recovered `QUIESCED_RETAINED`. Attempt 2, `qar_17c26a706ca7`: session verification failed at open (transient); recovery close `NOT_CLEAN` (profiles remain); census 12/13 (§4) |
 
 **What "hosted" means in this table.** Every hosted pass before 8A was a **read-only** check of a deployed build in Firefly, where only Enrollment is configured. Assignments and Billing have **never been exercised with real rows on a hosted deployment**. That is exactly what 8A-H is for.
 
@@ -66,7 +66,20 @@ The lane owns every slice.
 
 ## 4. QA and reliability
 
-**Hosted attempt, Slice 8A.**
+**Hosted attempt 2, Slice 8A** (toolkit `1d35ef4690f2`, staging `f12d000d21c1`).
+- `gar_260e6ab8aed8e5` opened `qar_17c26a706ca7`, and the grants succeeded. The admin session then failed verification at open.
+- That same stored session verified PASS as `qa-pool-01@example.com` with the toolkit's own `agent-verify.mjs` minutes later, so the open-time failure was transient.
+- **The blocker is the recovery close.** `gar_4a6bc40d2b76e8` removed every role (1, 2, 2 and 1) and signed out every session, but left **one `user_access_profiles` row per pool identity**. `gar_f2b7947ee45fa7` repeated it with the identical result.
+- Census v2 `gar_6c59b57eb1d7d1`: **12/13**. Only `bp_qr_pool_access` fails. Financial checks all true, 0 sends, 11 audit rows.
+- **Root cause:** `remove_member_access_audited` (`supabase/migrations/20260911240000_d2_removal_records_prior_scope_ids.sql`) deletes only `user_roles`, and no audited function deletes the profile. The runner requires 0 profiles (`qa-run-db.mjs:209`), as census v2 does.
+- **Owner:** Alloy Access & Identity, with Vacilando Backend.
+- **Smallest fix:** the audited removal also deletes the user's access profile for the org once its last role goes. Site and department scope rows cascade, and the event already records the prior scopes. Then re-close `qar_17c26a706ca7`, run census v2, and bind it.
+- Accepting a role-less profile as clean is **not** recommended: it keeps scope, for example `qa_pool_03`'s QA North restriction, which a later grant would re-activate.
+- Until this is fixed, QA Shared is held by this run, which also blocks Documents.
+
+Evidence: `slice8a/hosted/qa-run-qar_17c26a706ca7.hosted.json`.
+
+**Hosted attempt 1, Slice 8A.**
 - `environment.qa_run_open` (`gar_5d90847cba7444`; plan `bp_v2`, target `alloy_staging_web`) created run `qar_f9a9275db057`.
 - Personas: admin = `qa_pool_01`, director = `qa_pool_02`, restricted operator = `qa_pool_03` (QA North only), no-finance operator = `qa_pool_04`.
 - The run failed **before any grant** with `qa_audited_function_failed: assign_member_role_audited — mutation_events_origin_check`.
@@ -112,13 +125,14 @@ Evidence: `slice8a/hosted/`.
 **Not ready for final acceptance.** The V2 acceptance requires Assignments and Billing to work with real rows, per persona, on a hosted deployment. That hasn't happened yet.
 
 **Critical path.**
-1. Vacilando fixes the origin and reinstalls the toolkit.
-2. Open `bp_v2` (re-measure the no-send revisions and the Documents run first).
-3. Configure the three processes.
-4. Create fixtures under the `qar_` id.
-5. Walkthrough per persona.
-6. Quiesce through product commands.
-7. Close, run the census, bind it.
+1. ~~Vacilando fixes the origin~~ (done, `1d35ef4690f2`).
+2. Access & Identity: the audited removal deletes the access profile. Then re-close `qar_17c26a706ca7`, run census v2 (13/13), and bind it.
+3. Open `bp_v2` (re-measure the no-send revisions and the Documents run first).
+4. Configure the three processes.
+5. Create fixtures under the `qar_` id.
+6. Walkthrough per persona.
+7. Quiesce through product commands.
+8. Close, run the census, bind it.
 
 **Independent work.**
 - Financials: claim-line id exposure; QA-org provider refusal; a periodic-billing stop.
