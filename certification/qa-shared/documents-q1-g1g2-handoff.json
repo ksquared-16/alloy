@@ -1,6 +1,6 @@
 {
   "schema": "documents_q1_g1g2_toolkit_handoff.v1",
-  "status": "UNTESTED \u2014 static checks only (toolkit read-only guard; hosted-fixture-safety qa_authz_vendors verdict ok on all four fixtures). Not for registration until isolated certification passes; hashes below will be re-issued if testing changes bytes.",
+  "status": "CERTIFIED IN ISOLATION \u2014 database.run_rollback_invariant_test PASSED for G1 (gar_2dbee88cb9692a) and G2 (gar_02fa166bd0d353) at candidate c4548541 against certenv-f9443d0194 (ALLOY_LOCAL_CERTIFICATION, built from staging 6cf46b66, retired gar_7df3480dcea227). Fixture bytes are exercised statement-for-statement (binding test web/tests/certification/qaAuthzFixtureInvariantBinding.test.ts); psql \\if/\\gset guard flow is not executable in that harness and is proven by the binding test's dollar-quote check and the guards' predicates.",
   "contract_repin": {
     "path": "docs/platform/governance/authorization-qa-personas.md",
     "sha256": "a1ad543a242748ecbca8a0e932fc61fde91756f259be5ecf66eb21a7eccff162",
@@ -81,7 +81,7 @@
   ],
   "residue_census_repin": {
     "path": "certification/qa-shared/documents-zero-residue-census.sql",
-    "query_sha256": "240e11b17367d4d2b52c533402a6536a2ba04629aa0aa4c831cc692103d22c49",
+    "query_sha256": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
     "checks": [
       "doc_zr_vendors",
       "doc_zr_qa_role_grants",
@@ -101,5 +101,166 @@
       "D1a document audit (workflow_events)"
     ]
   },
-  "run_order_note": "fixture ensures: vendors (qa_shared), subjects (qa_shared), subjects_secondary; teardown: audited POS deletes of every uploaded document, then subject resets and vendor reset (each refuses while documents remain), then qa_run_close, then census, then close with census id."
+  "run_order_note": "fixture ensures: vendors (qa_shared), subjects (qa_shared), subjects_secondary; teardown: audited POS deletes of every uploaded document, then subject resets and vendor reset (each refuses while documents remain), then qa_run_close, then census, then close with census id.",
+  "isolated_certification": {
+    "environment": {
+      "id": "certenv-f9443d0194",
+      "build": "gar_1c0d13d7cd8248",
+      "base_sha": "6cf46b66523085fe1d7f6a37c9561d07dbe12225",
+      "migrations": 538,
+      "migration_manifest_sha256": "5a68eb7d168d986dfc74e0d720afe197ae5a9d97ab5aef0775e69643e32911de",
+      "lease_holder": "lane_aa660dc9554d",
+      "retired": "gar_7df3480dcea227 at 2026-10-22T15:15:31Z"
+    },
+    "candidate_sha": "c4548541e88fcd13e4212e99d29068748029cc37",
+    "runs": {
+      "gar_0956c81ce88e02": {
+        "test_path": "certification/invariants/documents-q1-g1-subject-fixtures.sql",
+        "expected_sha": "8f013a809eb8123ddd5fa7989121f6374cbcb816",
+        "expected_hash": "81d372d02cd8bc7b0eed7c561734635f5b49e95b14cbd97e16b9ce7a0dd9f46f",
+        "target_id": "certenv-f9443d0194@127.0.0.1:56101",
+        "env_id": "ALLOY_LOCAL_CERTIFICATION",
+        "outcome": "PASSED",
+        "reached_end": true,
+        "rollback_verified": true,
+        "changed": [],
+        "sequences_changed": [],
+        "compared": [
+          "catalog",
+          "ledger",
+          "table|public.departments",
+          "table|public.documents",
+          "table|public.opportunities",
+          "table|public.orgs",
+          "table|public.vendor_statuses",
+          "table|public.vendors",
+          "table|public.work_units"
+        ],
+        "started_at": "2026-10-22T15:09:43.572Z",
+        "finished_at": "2026-10-22T15:09:55.313Z",
+        "notices": [
+          "SETUP QA orgs and permanent structure present",
+          "CASE 1 PASS QA Shared subjects: WU1/OPP1 in QA D1, WU2/OPP2 in QA D2, idempotent over two ensures, structure intact",
+          "CASE 2 PASS QA Secondary subject: department, work unit and opportunity in QA Secondary only, idempotent",
+          "CASE 3 PASS cross-organization subject binding refused by the work-unit integrity trigger",
+          "CASE 4 PASS subject reset guard: true while a document is attached (reset refuses), false once it is deleted",
+          "CASE 5 PASS subject reset: zero aa000000- subjects in both orgs; QA D1/D2 retained",
+          "CASE 6 PASS vendors: ensure creates V1/V2; reset guard true while a document is attached; reset leaves zero"
+        ],
+        "errors": []
+      },
+      "gar_6054dfb41b2adb": {
+        "test_path": "certification/invariants/documents-q1-g2-residue-census.sql",
+        "expected_sha": "8f013a809eb8123ddd5fa7989121f6374cbcb816",
+        "expected_hash": "d0d919efca811f47e590ab8f3a8bdf1fbf60b5cac0a1ee70cf1495b7ef4bbd69",
+        "target_id": "certenv-f9443d0194@127.0.0.1:56101",
+        "env_id": "ALLOY_LOCAL_CERTIFICATION",
+        "outcome": "ASSERTION_FAILED",
+        "reached_end": false,
+        "rollback_verified": true,
+        "changed": [],
+        "sequences_changed": [],
+        "compared": [
+          "catalog",
+          "ledger",
+          "table|auth.sessions",
+          "table|auth.users",
+          "table|public.departments",
+          "table|public.documents",
+          "table|public.orgs",
+          "table|public.processing_case_sources",
+          "table|public.processing_cases",
+          "table|public.work_units",
+          "table|storage.buckets",
+          "table|storage.objects"
+        ],
+        "started_at": "2026-10-22T15:10:45.408Z",
+        "finished_at": "2026-10-22T15:10:58.426Z",
+        "notices": [
+          "SETUP QA orgs, QA D1 and the org_documents bucket present"
+        ],
+        "errors": [
+          "syntax error at or near \"'06'\""
+        ]
+      },
+      "gar_02fa166bd0d353": {
+        "test_path": "certification/invariants/documents-q1-g2-residue-census.sql",
+        "expected_sha": "c4548541e88fcd13e4212e99d29068748029cc37",
+        "expected_hash": "6298294652e3e7f109e711d0de8907ac209885e351a86f31abaf092e2f327a73",
+        "target_id": "certenv-f9443d0194@127.0.0.1:56101",
+        "env_id": "ALLOY_LOCAL_CERTIFICATION",
+        "outcome": "PASSED",
+        "reached_end": true,
+        "rollback_verified": true,
+        "changed": [],
+        "sequences_changed": [],
+        "compared": [
+          "catalog",
+          "ledger",
+          "table|auth.sessions",
+          "table|auth.users",
+          "table|public.departments",
+          "table|public.documents",
+          "table|public.orgs",
+          "table|public.processing_case_sources",
+          "table|public.processing_cases",
+          "table|public.work_units",
+          "table|storage.buckets",
+          "table|storage.objects"
+        ],
+        "started_at": "2026-10-22T15:13:25.205Z",
+        "finished_at": "2026-10-22T15:13:37.397Z",
+        "notices": [
+          "SETUP QA orgs, QA D1 and the org_documents bucket present",
+          "CASE 1 PASS baseline: 12 checks, all true",
+          "CASE 2 PASS residue secondary_case detected by doc_zr_secondary_cases alone",
+          "CASE 2 PASS residue secondary_document detected by doc_zr_secondary_documents alone",
+          "CASE 2 PASS residue secondary_object detected by doc_zr_secondary_objects alone",
+          "CASE 2 PASS residue session detected by doc_zr_qa_sessions alone",
+          "CASE 2 PASS residue shared_dangling detected by doc_zr_shared_dangling_case_sources alone",
+          "CASE 2 PASS residue shared_document detected by doc_zr_shared_documents alone",
+          "CASE 2 PASS residue shared_object detected by doc_zr_shared_objects alone",
+          "CASE 2 PASS residue subject detected by doc_zr_subjects alone",
+          "CASE 3 PASS another plan's untagged document, object and live case source in QA Shared are not counted"
+        ],
+        "errors": []
+      },
+      "gar_2dbee88cb9692a": {
+        "test_path": "certification/invariants/documents-q1-g1-subject-fixtures.sql",
+        "expected_sha": "c4548541e88fcd13e4212e99d29068748029cc37",
+        "expected_hash": "81d372d02cd8bc7b0eed7c561734635f5b49e95b14cbd97e16b9ce7a0dd9f46f",
+        "target_id": "certenv-f9443d0194@127.0.0.1:56101",
+        "env_id": "ALLOY_LOCAL_CERTIFICATION",
+        "outcome": "PASSED",
+        "reached_end": true,
+        "rollback_verified": true,
+        "changed": [],
+        "sequences_changed": [],
+        "compared": [
+          "catalog",
+          "ledger",
+          "table|public.departments",
+          "table|public.documents",
+          "table|public.opportunities",
+          "table|public.orgs",
+          "table|public.vendor_statuses",
+          "table|public.vendors",
+          "table|public.work_units"
+        ],
+        "started_at": "2026-10-22T15:14:05.705Z",
+        "finished_at": "2026-10-22T15:14:18.681Z",
+        "notices": [
+          "SETUP QA orgs and permanent structure present",
+          "CASE 1 PASS QA Shared subjects: WU1/OPP1 in QA D1, WU2/OPP2 in QA D2, idempotent over two ensures, structure intact",
+          "CASE 2 PASS QA Secondary subject: department, work unit and opportunity in QA Secondary only, idempotent",
+          "CASE 3 PASS cross-organization subject binding refused by the work-unit integrity trigger",
+          "CASE 4 PASS subject reset guard: true while a document is attached (reset refuses), false once it is deleted",
+          "CASE 5 PASS subject reset: zero aa000000- subjects in both orgs; QA D1/D2 retained",
+          "CASE 6 PASS vendors: ensure creates V1/V2; reset guard true while a document is attached; reset leaves zero"
+        ],
+        "errors": []
+      }
+    },
+    "defect_found": "gar_6054dfb41b2adb at 8f013a80: census syntax error at doc_zr_subjects (unbalanced parenthesis) \u2014 fixed in c4548541; re-run PASSED"
+  }
 }
