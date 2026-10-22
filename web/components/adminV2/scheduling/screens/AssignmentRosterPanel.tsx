@@ -12,7 +12,9 @@ import { AlloySelect } from "@/components/workspace/AlloySelect";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { CREATE_ASSIGNMENT_LABEL } from "@/components/adminV2/scheduling/AssignmentSubjectPicker";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
+import { roomsForEveryCategory, type AssignmentTypeBehavior } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
+import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 
 export type AssignmentRosterSubject = {
     subjectKey: string;
@@ -260,6 +262,77 @@ export default function AssignmentRosterPanel({
         });
     }, [bulkMode, selectedSubjects, bulkTypeId, bulkPatternId, bulkRoomId, bulkStartDate, bulk?.assignmentTypes]);
 
+    /*
+     * THE SITE'S CONFIGURED ROOMS AND PATTERNS — the same sources the Assignment editor offers.
+     *
+     * Both bulk panels took a room and a pattern as typed text, so an operator had to paste a UUID.
+     * Rooms come from `?view=studio_config` (`assignableClassrooms(loadSiteOperationalRooms)`, the
+     * Assignments card's own set) and patterns from `/api/admin/schedule-patterns`, as the Create
+     * Assignment modal reads them. The ids stay what the server receives; the server still validates
+     * the room against the site.
+     */
+    const siteId = bulk?.siteId ?? "";
+    const [siteRooms, setSiteRooms] = useState<SiteOperationalRoom[]>([]);
+    const [sitePatterns, setSitePatterns] = useState<{ id: string; label: string }[]>([]);
+    useEffect(() => {
+        setSiteRooms([]);
+        setSitePatterns([]);
+        if (!bulkMode || !siteId) return;
+        let cancelled = false;
+        const site = encodeURIComponent(siteId);
+        void fetch(`/api/admin/scheduling?view=studio_config&site_location_id=${site}`)
+            .then((r) => r.json())
+            .then((body) => {
+                if (!cancelled) setSiteRooms(((body?.config?.operationalRooms ?? []) as SiteOperationalRoom[]).filter((r) => r?.roomId));
+            })
+            .catch(() => {});
+        void fetch(`/api/admin/schedule-patterns?site_location_id=${site}`)
+            .then((r) => r.json())
+            .then((body) => {
+                if (cancelled) return;
+                setSitePatterns(
+                    ((body?.patterns ?? []) as Record<string, unknown>[]).map((row) => ({
+                        id: String(row.id),
+                        label: String(row.label ?? "Pattern"),
+                    })),
+                );
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [bulkMode, siteId]);
+
+    const behaviorOf = (typeId: string | null | undefined) =>
+        bulk?.assignmentTypes?.find((t) => t.id === typeId)?.behavior;
+    const roomChoices = (behaviors: Array<AssignmentTypeBehavior | undefined>) =>
+        roomsForEveryCategory(siteRooms, behaviors.filter((b): b is AssignmentTypeBehavior => Boolean(b))).map((r) => ({
+            value: r.roomId,
+            label: r.roomName?.trim() || "Unnamed room",
+        }));
+    /** Room change: rooms every selected secondary's own Category would offer in the editor. */
+    const roomChangeOptions = useMemo(() => {
+        const behaviors = selectedAssignments
+            .filter((r) => !r.isPrimary)
+            .map((r) => {
+                const subject = subjects.find((s) => s.subjectKey === r.subjectKey);
+                return behaviorOf(subject?.assignments.find((a) => a.assignmentId === r.assignmentId)?.assignmentTypeId);
+            });
+        return roomChoices(behaviors);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [siteRooms, selectedAssignments, subjects, bulk?.assignmentTypes]);
+    /** Bulk assignment: rooms the chosen Category offers. */
+    const bulkAssignmentRoomOptions = useMemo(
+        () => roomChoices([behaviorOf(bulkTypeId)]),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [siteRooms, bulkTypeId, bulk?.assignmentTypes],
+    );
+    // A room the current choices no longer offer is not kept silently.
+    const offeredRooms = bulkMode === "room" ? roomChangeOptions : bulkMode === "assignment" ? bulkAssignmentRoomOptions : null;
+    useEffect(() => {
+        if (offeredRooms && bulkRoomId && !offeredRooms.some((o) => o.value === bulkRoomId)) setBulkRoomId("");
+    }, [offeredRooms, bulkRoomId]);
+
     if (loading && subjects.length === 0) {
         return <p className="px-1 text-[12px] text-alloy-slate">Loading assignment roster…</p>;
     }
@@ -416,20 +489,23 @@ export default function AssignmentRosterPanel({
                             }))}
                             aria-label="Bulk Assignment Category"
                         />
-                        <input
-                            type="text"
+                        <AlloySelect
                             value={bulkPatternId}
-                            onChange={(e) => setBulkPatternId(e.target.value)}
+                            onChange={setBulkPatternId}
                             placeholder="Schedule Pattern"
-                            className="rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
+                            options={sitePatterns.map((p) => ({ value: p.id, label: p.label }))}
+                            aria-label="Bulk Schedule Pattern"
+                            testId="bulk-assignment-pattern"
+                        />
+                        <AlloySelect
+                            value={bulkRoomId}
+                            onChange={setBulkRoomId}
+                            placeholder="Choose room"
+                            options={bulkAssignmentRoomOptions}
+                            aria-label="Bulk Assignment Room"
+                            testId="bulk-assignment-room"
                         />
                         <input
-                            type="text"
-                            value={bulkRoomId}
-                            onChange={(e) => setBulkRoomId(e.target.value)}
-                            placeholder="Choose room"
-                            className="rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
-                        />                        <input
                             type="date"
                             value={bulkStartDate}
                             onChange={(e) => setBulkStartDate(e.target.value)}
@@ -489,12 +565,14 @@ export default function AssignmentRosterPanel({
                             onChange={(e) => setBulkStartDate(e.target.value)}
                             className="rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
                         />
-                        <input
-                            type="text"
+                        <AlloySelect
                             value={bulkRoomId}
-                            onChange={(e) => setBulkRoomId(e.target.value)}
+                            onChange={setBulkRoomId}
                             placeholder="Choose room"
-                            className="min-w-[200px] flex-1 rounded-lg border border-alloy-stone/25 px-2 py-1.5 text-[12px]"
+                            options={roomChangeOptions}
+                            aria-label="New room"
+                            testId="bulk-room-change-room"
+                            className="min-w-[200px] flex-1"
                         />
                         <button
                             type="button"
