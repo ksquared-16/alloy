@@ -1,0 +1,188 @@
+{
+  "console_errors": [
+    {
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8"
+    }
+  ],
+  "page_errors": [],
+  "http_errors": [],
+  "blocked_non_get": [
+    "POST /api/admin/queues/stage-membership-ack"
+  ],
+  "views": {
+    "new": {
+      "url": "/workspace/work-unit/new",
+      "terminal": "operational",
+      "active_view": "new_leads",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 27,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration27",
+        "Waitlist21",
+        "Tours0",
+        "All73",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "all": {
+      "url": "/workspace/work-unit/all",
+      "terminal": "operational",
+      "active_view": "new_work_view_6",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 73,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration27",
+        "Waitlist21",
+        "Tours0",
+        "All73",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "after_pill": {
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8",
+      "terminal": "operational",
+      "active_view": "new_work_view_8",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 11,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration27",
+        "Waitlist21",
+        "Tours0",
+        "All73",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    },
+    "after_row": {
+      "url": "/workspace/work-unit/all?work_view_id=new_work_view_8&subject_id=dcec87b1-0a51-4a54-bc15-0d8223d245c9",
+      "terminal": "operational",
+      "active_view": "new_work_view_8",
+      "row_grain": "family",
+      "projection_domain": null,
+      "rows": 11,
+      "durable_rows": 0,
+      "pills": [
+        "New27",
+        "Decision12",
+        "Registration27",
+        "Waitlist21",
+        "Tours0",
+        "All73",
+        "Enrolled children4",
+        "Work",
+        "Activity"
+      ],
+      "focus_panel_state": "record",
+      "focus_panel_projection": null,
+      "durable_surface": false,
+      "opportunity_panel": true
+    }
+  },
+  "build": "ed5abbcd1617cbefebb47de195e489b9d6f110c6",
+  "tiles": [
+    {
+      "title": "Enrollment",
+      "answer": "55Family Leads56Children",
+      "unavailable": null
+    }
+  ],
+  "work_items_line": [
+    {
+      "process": "3933ac47-077a-4de8-aaac-8aed48d80413:42be9074-443f-4047-bece-d68cd1d22788",
+      "state": "ok",
+      "open": "111",
+      "overdue": "89",
+      "text": "111 open work items · 89 overdue"
+    }
+  ],
+  "catalog": [
+    {
+      "key": "enrollment",
+      "model": {
+        "kind": "staged_lifecycle"
+      },
+      "dept": "lead_management"
+    }
+  ],
+  "server_summary": {
+    "status": 200,
+    "by_department": {
+      "3933ac47-077a-4de8-aaac-8aed48d80413": {
+        "open": 111,
+        "overdue": 89
+      }
+    },
+    "site_scoped": false,
+    "has_unattributed": true
+  },
+  "selected_row": {
+    "type": "opportunity",
+    "id": "dcec87b1-0a51-4a54-bc15-0d8223d245c9"
+  },
+  "site_filter_enrollment": {
+    "plain": {
+      "status": 200,
+      "terminal": "operational",
+      "rows": 27
+    },
+    "with_site": {
+      "status": 200,
+      "terminal": "operational",
+      "rows": 27
+    },
+    "identical_rows": true
+  },
+  "settings": {
+    "path": "/settings/business-processes",
+    "status": 200,
+    "final": "/organization/processes"
+  },
+  "bundle_keys": {
+    "current_assignments": true,
+    "assignments_ending_soon": true,
+    "assignments_upcoming_changes": true,
+    "schedule_gaps": true,
+    "assignments_proposed_incomplete": true,
+    "charges_needing_review": true,
+    "payment_exceptions": true,
+    "funding_variances": true,
+    "payments_due": true,
+    "overdue_payments": true
+  },
+  "s4_bundle_markers": {
+    "domain_projection_record_changed": true,
+    "has changed since the list was read": true,
+    "data-scheduling-focus-notice": true
+  },
+  "scripts_scanned": 95
+}
