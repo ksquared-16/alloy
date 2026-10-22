@@ -50,6 +50,9 @@ function seed(opts: { rules?: Array<Record<string, unknown>> } = {}): Operationa
         schedule_assignments: [
             {
                 org_id: ORG,
+                // The enrollment's schedule is its primary child row — what the resolver bills from.
+                subject_type: "child",
+                is_primary: true,
                 enrollment_agreement_id: AGREEMENT,
                 schedule_pattern_id: "pattern-1",
                 customer_member_id: MEMBER,
