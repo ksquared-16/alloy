@@ -306,6 +306,54 @@ describe.skipIf(!live)("live — S8A: bp_v2 financial quiescence (QUIESCED_RETAI
         step("a financial row written by no identity (a job, a webhook, a public link)", "bp_qr_fin_attributed");
 
         evidence.negative = { org: N, steps };
-        if (process.env.BPV2_LIVE_EVIDENCE) writeFileSync(process.env.BPV2_LIVE_EVIDENCE, JSON.stringify(evidence, null, 2));
     }, 180_000);
+
+    /*
+     * Census v2 corrections. Each defect gets its OWN fresh org, so "fails its own check and no other" is
+     * exact. A send is DURABLE EVIDENCE, not a status: a message that went out and then moved on to
+     * `delivered` or `bounced` (or was later marked `failed`) still left the building. Persona access is
+     * EFFECTIVE access: a removed role that leaves its access profile (and the scope rows hung on it) is
+     * residue, because re-granting any role re-activates that scope.
+     */
+    it("NEGATIVE (v2 corrections): sends past `sent` and access beyond `user_roles` are detected", async () => {
+        supabase = createClient(URL_!, KEY!, { auth: { persistSession: false } });
+        const actor = await qaUser("cactor");
+        const pool = await qaUser("cpool");
+        const cases: Array<{ defect: string; org: string; failing: string[] }> = [];
+        const isolated = async (defect: string, mutate: (org: string) => void, expected: string[]) => {
+            const org = await freshOrg(`c${cases.length}`, actor.id);
+            expect(failing(census(org, actor.email))).toEqual([]);
+            mutate(org);
+            const now = failing(census(org, actor.email));
+            cases.push({ defect, org, failing: now });
+            expect({ defect, now }).toEqual({ defect, now: expected });
+        };
+        const message = (org: string, cols: { direction: string; status: string; sent_at?: boolean; delivered_at?: boolean; provider_message_id?: boolean }) => {
+            const thread = randomUUID();
+            psql(`insert into communication_threads (id, org_id, primary_entity_type, primary_entity_id, channel) values ('${thread}', '${org}', 'customer', '${randomUUID()}', 'email');
+                  insert into communication_messages (org_id, thread_id, channel, direction, status, sent_at, delivered_at, provider_message_id)
+                  values ('${org}', '${thread}', 'email', '${cols.direction}', '${cols.status}', ${cols.sent_at ? "now() - interval '1 hour'" : "null"},
+                          ${cols.delivered_at ? "now()" : "null"}, ${cols.provider_message_id ? `'fixture-${randomUUID()}'` : "null"});`);
+        };
+
+        // Controls: an outbound message never sent (queued) and an inbound one are not sends.
+        await isolated("controls: queued outbound, received inbound", (org) => {
+            message(org, { direction: "outbound", status: "queued" });
+            message(org, { direction: "inbound", status: "received", provider_message_id: true });
+        }, []);
+        await isolated("sent, then transitioned to delivered", (org) => message(org, { direction: "outbound", status: "delivered", sent_at: true, delivered_at: true, provider_message_id: true }), ["bp_qr_zero_sent"]);
+        await isolated("sent, then bounced", (org) => message(org, { direction: "outbound", status: "bounced", sent_at: true, provider_message_id: true }), ["bp_qr_zero_sent"]);
+        await isolated("sent_at recorded, status later failed", (org) => message(org, { direction: "outbound", status: "failed", sent_at: true }), ["bp_qr_zero_sent"]);
+        await isolated("accepted by the provider, no sent_at yet", (org) => message(org, { direction: "outbound", status: "queued", provider_message_id: true }), ["bp_qr_zero_sent"]);
+
+        // Access: the role is gone but the access profile (and its site scope) stayed.
+        await isolated("role removed, access profile left behind", (org) => {
+            psql(`insert into user_access_profiles (user_id, org_id, department_scope, site_scope) values ('${pool.id}', '${org}', 'all', 'restricted');`);
+        }, ["bp_qr_pool_access"]);
+        // The provisioning administrator's own role and profile are not residue.
+        await isolated("the frozen actor's own role and profile (control)", () => undefined, []);
+
+        evidence.negative_v2_corrections = cases;
+        if (process.env.BPV2_LIVE_EVIDENCE) writeFileSync(process.env.BPV2_LIVE_EVIDENCE, JSON.stringify(evidence, null, 2));
+    }, 240_000);
 });

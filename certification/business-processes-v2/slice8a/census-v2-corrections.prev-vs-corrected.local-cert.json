@@ -1,0 +1,54 @@
+[
+  {
+    "defect": "controls: queued outbound, received inbound",
+    "org": "8b1ce074-f11c-4bbe-8adc-6dc14ccff529",
+    "previous_census_failing": [],
+    "corrected_census_failing": []
+  },
+  {
+    "defect": "sent, then transitioned to delivered",
+    "org": "918d6f6b-54c6-4b63-9d3c-b3b735c3c959",
+    "previous_census_failing": [],
+    "corrected_census_failing": [
+      "bp_qr_zero_sent"
+    ]
+  },
+  {
+    "defect": "sent, then bounced",
+    "org": "4495eb46-a1da-473c-b3fe-8889beb4ac00",
+    "previous_census_failing": [],
+    "corrected_census_failing": [
+      "bp_qr_zero_sent"
+    ]
+  },
+  {
+    "defect": "sent_at recorded, status later failed",
+    "org": "6f7cde39-3755-4b1e-a097-9aa9c30624ee",
+    "previous_census_failing": [],
+    "corrected_census_failing": [
+      "bp_qr_zero_sent"
+    ]
+  },
+  {
+    "defect": "accepted by the provider, no sent_at yet",
+    "org": "40426d74-1c73-473b-95c6-59c5a09e092e",
+    "previous_census_failing": [],
+    "corrected_census_failing": [
+      "bp_qr_zero_sent"
+    ]
+  },
+  {
+    "defect": "role removed, access profile left behind",
+    "org": "d951e8fe-4aec-4328-b73c-c639fc5be808",
+    "previous_census_failing": [],
+    "corrected_census_failing": [
+      "bp_qr_pool_access"
+    ]
+  },
+  {
+    "defect": "the frozen actor's own role and profile (control)",
+    "org": "ee74ba79-d71b-472d-b6d2-6cc56b1069d9",
+    "previous_census_failing": [],
+    "corrected_census_failing": []
+  }
+]

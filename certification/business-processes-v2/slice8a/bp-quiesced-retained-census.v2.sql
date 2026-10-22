@@ -24,26 +24,47 @@ from (
            )::text as payload,
            '00'::text as sort_key
     union all
-    -- Exclude ONLY the frozen provisioning administrator (by email), not every admin role.
+    -- EFFECTIVE persona access, not only memberships: a role, an access profile, or the site and
+    -- department scope rows hung on a profile. A removed role that leaves its profile behind is residue
+    -- (re-granting any role re-activates that scope). Excludes ONLY QA Shared's registered provisioning
+    -- administrator (qa_shared_actor, by email) — not every admin, and not QA Secondary's administrator,
+    -- who must never hold anything in QA Shared.
     select 'bp_qr_pool_access', 'check',
-           'user_roles ~ qa_shared_non_actor ~ zero ~ '
+           'user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ '
            || coalesce((
                 select (count(*) = 0)::text
-                from public.user_roles ur
-                where ur.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
-                  and not exists (
+                from (
+                    select ur.user_id from public.user_roles ur where ur.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                    union all
+                    select ap.user_id from public.user_access_profiles ap where ap.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                    union all
+                    select sa.user_id from public.user_site_access sa where sa.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                    union all
+                    select da.user_id from public.user_department_access da where da.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                ) access
+                where not exists (
                     select 1 from auth.users u
-                    where u.id = ur.user_id and lower(u.email) = lower('qa-shared-actor@example.com')
-                  )
+                    where u.id = access.user_id and lower(u.email) = lower('qa-shared-actor@example.com')
+                )
               ), 'false'),
            '01'
     union all
+    -- DURABLE send evidence, not the current status: a message that went out stays sent after it moves
+    -- on to delivered, bounced, opened or failed. Outbound only — an inbound message is not a send.
     select 'bp_qr_zero_sent', 'check',
-           'communication_messages ~ status_sent ~ zero ~ '
+           'communication_messages ~ outbound_send_evidence ~ zero ~ '
            || coalesce((
                 select (count(*) = 0)::text
                 from public.communication_messages cm
-                where cm.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid and cm.status = 'sent'
+                where cm.org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
+                  and cm.direction = 'outbound'
+                  and (cm.sent_at is not null
+                       or cm.delivered_at is not null
+                       or cm.opened_at is not null
+                       or cm.clicked_at is not null
+                       or cm.replied_at is not null
+                       or cm.provider_message_id is not null
+                       or cm.status in ('sent', 'delivered', 'bounced', 'opened', 'clicked', 'complained'))
               ), 'false'),
            '02'
     union all

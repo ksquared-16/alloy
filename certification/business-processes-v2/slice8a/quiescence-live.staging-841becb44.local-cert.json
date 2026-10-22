@@ -1,9 +1,9 @@
 {
-  "run": "93baa50f29f6",
-  "at": "2026-10-22T13:49:00.617Z",
+  "run": "c2d50e817a83",
+  "at": "2026-10-22T14:58:15.284Z",
   "positive": {
-    "org": "174c6c65-3662-4f15-ad81-1f062d08b184",
-    "actor": "qa-bpq-actor-93baa50f29f6@example.com",
+    "org": "576cc6b6-dbac-4f59-8521-173cb8e7ee58",
+    "actor": "qa-bpq-actor-c2d50e817a83@example.com",
     "actor_fin_grants": [
       "fin.adjust",
       "fin.provider",
@@ -30,44 +30,44 @@
   "positive_commands": [
     {
       "key": "charge.cancel_draft",
-      "target": "19b2f513-d97c-4eed-b200-b611bf14f866",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"35c86899-b58a-48e7-821e-4491"
+      "target": "73c6d937-77c0-49ab-8c49-57bbbb718da8",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"7a61d4e8-5292-4d7b-8a4f-cd6e"
     },
     {
       "key": "charge.cancel_draft",
-      "target": "05810631-c614-4da3-b4d9-c08c9eada3f1",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"c71eb922-e0f1-43ac-be59-8c60"
+      "target": "8006c666-7db9-4260-9769-57c14295af2d",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.cancel_draft\",\"executionOwner\":\"registered_action\",\"invocationId\":\"395e1454-2028-4306-83ee-900a"
     },
     {
       "key": "payment.record",
-      "target": "69159012-6682-4407-93ff-3ff8eef8b556",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"payment.record\",\"executionOwner\":\"registered_action\",\"invocationId\":\"bfed3fae-f6c4-48b5-b2fa-bfa138db3"
+      "target": "8f911443-dbc2-4e98-ad64-68a910e9153c",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"payment.record\",\"executionOwner\":\"registered_action\",\"invocationId\":\"9e04a133-c02e-45a9-81fb-8b9177789"
     },
     {
       "key": "subsidy.resolve_variance",
-      "target": "0369d725-cdec-415c-bf5f-2bc49260221b",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"subsidy.resolve_variance\",\"executionOwner\":\"registered_action\",\"invocationId\":\"af310f42-f3be-4799-9302"
+      "target": "0d989cb4-66ce-4773-ac60-b7fcb9ae09f9",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"subsidy.resolve_variance\",\"executionOwner\":\"registered_action\",\"invocationId\":\"c73bbcce-328e-46b5-a449"
     },
     {
       "key": "charge.reverse",
-      "target": "dce97e38-6640-47fe-ae7b-81198996ea27",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"607e274b-e7c2-40ce-9405-3ed3fcb1f"
+      "target": "37c63ae5-f908-43a3-802e-e52f29020b21",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"f49d2464-8fec-45aa-8ec5-cee1c3a9a"
     },
     {
       "key": "charge.reverse",
-      "target": "423c2470-044a-4948-a8bf-6e5f85899b6d",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"e85ba7db-be27-477d-a5b2-f841ca22e"
+      "target": "b7f8c7ed-7357-4c6b-bf4d-2666dda9f410",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"ffadcc10-5921-484e-8c62-dfa88bfe8"
     },
     {
       "key": "charge.reverse",
-      "target": "2760d87e-9861-4420-b9be-ac2ab4ebfab6",
-      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"79e497f9-60c6-4ff5-9809-c98afce4a"
+      "target": "eed789c1-f057-4a36-87e1-21ee67729170",
+      "result": "{\"ok\":true,\"status\":\"committed\",\"canonicalCapabilityKey\":\"charge.reverse\",\"executionOwner\":\"registered_action\",\"invocationId\":\"1bc2a506-ab12-4384-a57f-854ff3ca6"
     }
   ],
   "positive_quiesced": {
     "census": {
       "bp_qr_00": {
-        "qa_shared": "174c6c65-3662-4f15-ad81-1f062d08b184",
+        "qa_shared": "576cc6b6-dbac-4f59-8521-173cb8e7ee58",
         "cleanup": "quiesced_retained",
         "census_version": 2,
         "retained_by_design": [
@@ -107,7 +107,7 @@
       },
       "bp_qr_retained_financial_actors": [
         {
-          "email": "qa-bpq-actor-93baa50f29f6@example.com",
+          "email": "qa-bpq-actor-c2d50e817a83@example.com",
           "day": "2026-10-22",
           "rows": 11
         }
@@ -140,7 +140,7 @@
     "reversal_rows": 3
   },
   "negative": {
-    "org": "7da33df1-b85a-4f45-8005-b3a390e1de12",
+    "org": "436ede82-83f3-4069-87e9-8f16e2f8ec43",
     "steps": [
       {
         "defect": "a pool persona still holds a role",
@@ -209,5 +209,52 @@
         ]
       }
     ]
-  }
+  },
+  "negative_v2_corrections": [
+    {
+      "defect": "controls: queued outbound, received inbound",
+      "org": "f8400e12-285d-47ca-8c0a-02ada10ab2b2",
+      "failing": []
+    },
+    {
+      "defect": "sent, then transitioned to delivered",
+      "org": "ab5ea98f-6c17-455f-9acb-9cb57d456bc5",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "sent, then bounced",
+      "org": "71b0f11a-332c-4408-add9-79274d31c4d3",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "sent_at recorded, status later failed",
+      "org": "fbc8913f-326e-407a-a6cd-fd8a3d089794",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "accepted by the provider, no sent_at yet",
+      "org": "5df250f0-54e7-4823-a650-bbba24eb6bce",
+      "failing": [
+        "bp_qr_zero_sent"
+      ]
+    },
+    {
+      "defect": "role removed, access profile left behind",
+      "org": "2f2dd474-c248-46d2-8d88-0ef732266dfe",
+      "failing": [
+        "bp_qr_pool_access"
+      ]
+    },
+    {
+      "defect": "the frozen actor's own role and profile (control)",
+      "org": "5a3cbdbc-2be3-4c7c-9806-baa28c39784d",
+      "failing": []
+    }
+  ]
 }

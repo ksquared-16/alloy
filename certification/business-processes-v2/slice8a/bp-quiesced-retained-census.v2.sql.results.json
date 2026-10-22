@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_84f1147c2ab3c3",
-  "query_hash": "bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c",
+  "trusted_host_action_id": "tha_930f45aa5a9147",
+  "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-22T13:53:06.214Z",
+    "executed_at": "2026-10-22T14:59:56.979Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_84f1147c2ab3c3",
-    "query_hash": "bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c",
-    "authorization_id": "grnt_fd02655faf4d4d3f",
+    "trusted_host_action_id": "tha_930f45aa5a9147",
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "authorization_id": "grnt_9ad8c5103396433a",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-22T13:53:12.719Z",
+    "census_run_at": "2026-10-22T15:00:03.694Z",
     "question_ids": [
       "bp_qr_00",
       "bp_qr_pool_access",
@@ -58,14 +58,14 @@
         "question_id": "bp_qr_pool_access",
         "row_count": null,
         "rows": [
-          "user_roles ~ qa_shared_non_actor ~ zero ~ true"
+          "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true"
         ]
       },
       "bp_qr_zero_sent": {
         "question_id": "bp_qr_zero_sent",
         "row_count": null,
         "rows": [
-          "communication_messages ~ status_sent ~ zero ~ true"
+          "communication_messages ~ outbound_send_evidence ~ zero ~ true"
         ]
       },
       "bp_qr_org_present": {

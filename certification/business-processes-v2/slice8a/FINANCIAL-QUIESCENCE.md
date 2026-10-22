@@ -2,8 +2,8 @@
 
 **Gate:** `bp_financial_quiescence_proven` (`qa-plan-registry.mjs` `plan_preflight.bp_v2`)
 **Plan cleanup mode:** `QUIESCED_RETAINED` in the permanent QA Shared organization (`4acc9386-…d142`)
-**Code measured:** lane `agent/business-processes` at `b087fe7ae`, and Alloy staging `841becb44` (read-only `git archive`). Both pass the same suite.
-**Census:** `bp-quiesced-retained-census.v2.sql`, sha256 `bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c`
+**Code measured:** lane `agent/business-processes`, and Alloy staging `841becb44` (read-only `git archive`). Both pass the same suite.
+**Census:** `bp-quiesced-retained-census.v2.sql`, sha256 `c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648`. This is the corrected census; the first draft `bb99a1a1…477d9c` is superseded (§E).
 
 ---
 
@@ -15,8 +15,8 @@ A bp_v2 run is **financially quiescent** when every condition below holds, measu
 
 | # | Condition | Why | Census check |
 |---|---|---|---|
-| Q1 | No QA pool identity keeps a role. Only the frozen actor keeps one. | No persona can act after close | `bp_qr_pool_access` |
-| Q2 | Nothing was sent | No family-facing effect | `bp_qr_zero_sent` |
+| Q1 | No identity other than QA Shared's registered provisioning administrator keeps **effective access**: a role (`user_roles`), an access profile (`user_access_profiles`), or site or department scope (`user_site_access`, `user_department_access`) | No persona can act after close. A profile left behind by a removed role comes back to life on the next grant. | `bp_qr_pool_access` |
+| Q2 | No outbound message carries **durable send evidence**: `sent_at`, `delivered_at`, `opened_at`, `clicked_at`, `replied_at` or `provider_message_id` set, or a status of `sent`, `delivered`, `bounced`, `opened`, `clicked` or `complained` | No family-facing effect. A send stays a send after its status moves on. | `bp_qr_zero_sent` |
 | Q3 | No provider merchant binding exists | Every real collection path (card/ACH collect, autopay, public enrollment payment) needs an active, ready merchant | `bp_qr_fin_no_merchant` |
 | Q4 | No usable stored payment method exists | Autopay and stored-method charges need one | `bp_qr_fin_no_usable_method` |
 | Q5 | No active or paused autopay authorization exists | Autopay is the only automatic collector | `bp_qr_fin_no_autopay` |
@@ -74,8 +74,8 @@ File references are to staging `841becb44`, under `web/` unless they are migrati
 
 Suite: `web/tests/businessProcesses/financialQuiescence.live.test.ts`. It is env-gated and skips without `BPV2_LIVE_*`.
 
-It ran green on the lane tree (`b087fe7ae`) **and** on an archive of staging `841becb44`:
-- evidence: `quiescence-live.lane-b087fe7ae.local-cert.json` and `quiescence-live.staging-841becb44.local-cert.json`;
+It ran green on the lane tree **and** on an archive of staging `841becb44`, three tests each:
+- evidence: `quiescence-live.lane.local-cert.json` and `quiescence-live.staging-841becb44.local-cert.json`;
 - the local stack is shared, and its migration ledger trails staging;
 - the suite runs the census v2 file **verbatim**, substituting only the org id and the actor email.
 
@@ -111,6 +111,27 @@ It ran green on the lane tree (`b087fe7ae`) **and** on an archive of staging `84
 | Payment recorded, then its application reversed (`payment.record` → `payment.reverse_application`) | `bp_qr_fin_no_unapplied_money` |
 | Unresolved variance | `bp_qr_fin_no_open_variance` |
 | A financial row with no actor | `bp_qr_fin_attributed` |
+
+**Corrections (2026-10-22 review): failing tests first.** Each defect gets its own fresh org.
+- Against the first-draft census, the new test failed at its first defect: a message sent and then delivered read as `zero_sent ~ true`.
+- `census-v2-corrections.prev-vs-corrected.local-cert.json` runs both census texts against the same orgs. The first draft passed **all five** defects as clean.
+
+| Defect (own org) | First draft | Corrected |
+|---|---|---|
+| Control: outbound `queued`, inbound `received` with a provider id | clean | clean |
+| Sent, then `delivered` | **clean (missed)** | `bp_qr_zero_sent` |
+| Sent, then `bounced` | **clean (missed)** | `bp_qr_zero_sent` |
+| `sent_at` recorded, status later `failed` | **clean (missed)** | `bp_qr_zero_sent` |
+| Accepted by the provider (`provider_message_id`), no `sent_at` yet | **clean (missed)** | `bp_qr_zero_sent` |
+| Pool identity's role removed, its access profile left behind | **clean (missed)** | `bp_qr_pool_access` |
+| Control: the provisioning administrator's own role and profile | clean | clean |
+
+**Read-only and scoped** (`census-v2-scope-audit.local-cert.json`):
+- One statement, with no write keyword, and it executes inside `BEGIN TRANSACTION READ ONLY`.
+- The only UUID literal is QA Shared; Firefly's id is absent; the only email literals are `qa-shared-actor@example.com` and the `qa-%@example.com` pattern.
+- Every `public` relation read is filtered by QA Shared's id, or correlated to a row that is: `payment_allocations`, refund `payments` and reversal `charges` hang off a scoped row; `orgs` is read by `id`.
+- `auth.users` is read only to resolve an already-scoped row's actor.
+- A fresh, empty org reads all-clean while the busy local orgs next to it hold merchants, sends and drafts, so nothing leaks in from other orgs.
 
 **Reproduce:** from `web/`, run:
 ```
@@ -151,14 +172,16 @@ The registered `certification/qa-shared/bp-quiesced-retained-census.sql` (sha `d
 Census v2 keeps every v1 question and adds `bp_qr_org_exists` plus the ten `bp_qr_fin_*` checks:
 - it is one statement, catalog-safe, and emits `question_id|kind|payload`;
 - every table it reads exists in staging migrations, the newest being `20261004120000`;
-- deployed baseline: `gar_59095c7294014e`, all 13 checks true (§G).
+- deployed baseline of the corrected census: `gar_f04e0a9aaae37e`, all 13 checks true (§G).
+
+**Superseded first draft.** `bb99a1a1…477d9c` (deployed baseline `gar_59095c7294014e`) under-measured two v1 checks. Its zero-sent check read only `status = 'sent'`, and its pool-access check read only `user_roles`. It must not be registered.
 
 **Vacilando handoff** (`financial-quiescence-handoff.json`). Re-pin `QA_PLANS.bp_v2.residue_census` to:
 - `path`: `certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql`
-- `query_sha256`: `bb99a1a1…477d9c`
+- `query_sha256`: `c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648`
 - `checks`: all 13 check ids.
 
-**Do not record `bp_financial_quiescence_proven` against the v1 pin.**
+**Do not record `bp_financial_quiescence_proven` against the v1 pin or the superseded `bb99a1a1…` draft.** Register the census at the path and hash on **merged staging**; the merge commit is reported with the PR.
 
 ---
 
@@ -186,9 +209,9 @@ Census v2 keeps every v1 question and adds `bp_qr_org_exists` plus the ten `bp_q
 |---|---|
 | Definition (A) and capability map (B) | Done |
 | Local proof, positive and negative, on lane and staging code (C) | Done, green |
-| Census v2 committed with a pinned hash (E) | Done (lane commit) |
-| Census v2 executes on the deployed schema (baseline; QA Shared clean before any run) | **Done**: `gar_59095c7294014e` (`tha_84f1147c2ab3c3`, `alloy_deployed_primary`, 2026-10-22T13:53Z). QA Shared present; all 13 checks `~ true`; 0 retained financial rows. Results: `bp-quiesced-retained-census.v2.sql.results.json` |
+| Corrected census v2 with a pinned hash (E), with the corrections' failing-first tests | Done |
+| Corrected census v2 executes on the deployed schema (baseline; QA Shared clean before any run) | **Done**: `gar_f04e0a9aaae37e` (`tha_930f45aa5a9147`, `alloy_deployed_primary`, 2026-10-22T15:00Z, hash `c1b6c335…b05648`). QA Shared present; all 13 checks `~ true`; 0 retained financial rows. Results: `bp-quiesced-retained-census.v2.sql.results.json` |
 | Census v2 registered as bp_v2's residue census | **Vacilando Backend** (handoff JSON) |
 | Financials hardening (D) | Handed off; not blocking |
 
-**Proposed evidence ref:** "Alloy lane `agent/business-processes` commit `f7226cf1a` and the deployed-baseline commit after it. Census v2 sha256 `bb99a1a1…477d9c`. Local quiescence proof `financialQuiescence.live.test.ts` green on lane `b087fe7ae` and staging `841becb44` (evidence JSON in `slice8a/`). Deployed v2 baseline census `gar_59095c7294014e` (all 13 checks true)."
+**Proposed evidence ref:** "Alloy staging `<merge commit>` (this PR). Census v2 `certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql`, sha256 `c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648`, 13 checks. Local quiescence proof `financialQuiescence.live.test.ts` (3 tests) green on lane and staging `841becb44`; evidence JSON in `slice8a/`. Deployed corrected baseline `gar_f04e0a9aaae37e`, all 13 checks true."
