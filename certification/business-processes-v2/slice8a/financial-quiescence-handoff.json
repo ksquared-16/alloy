@@ -8,7 +8,10 @@
     "replaces": {
       "path": "certification/qa-shared/bp-quiesced-retained-census.sql",
       "query_sha256": "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
-      "checks": ["bp_qr_pool_access", "bp_qr_zero_sent"],
+      "checks": [
+        "bp_qr_pool_access",
+        "bp_qr_zero_sent"
+      ],
       "defect": "asserts nothing financial: a run could close QUIESCED_RETAINED with a bound merchant, an owed charge, an open variance or live periodic billing"
     },
     "path": "certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql",
@@ -28,12 +31,26 @@
       "bp_qr_fin_no_unapplied_money",
       "bp_qr_fin_attributed"
     ],
-    "data_rows": ["bp_qr_00", "bp_qr_org_present", "bp_qr_retained_financial", "bp_qr_retained_financial_actors", "bp_qr_retained_process_config", "bp_qr_retained_audit"],
-    "retained_by_design": ["posted financial records (immutable), neutralized and attributed by run", "published process configuration", "access audit history (mutation_events)"]
+    "data_rows": [
+      "bp_qr_00",
+      "bp_qr_org_present",
+      "bp_qr_retained_financial",
+      "bp_qr_retained_financial_actors",
+      "bp_qr_retained_process_config",
+      "bp_qr_retained_audit"
+    ],
+    "retained_by_design": [
+      "posted financial records (immutable), neutralized and attributed by run",
+      "published process configuration",
+      "access audit history (mutation_events)"
+    ]
   },
   "local_proof": {
     "suite": "web/tests/businessProcesses/financialQuiescence.live.test.ts",
-    "green_on": ["lane agent/business-processes b087fe7ae (+ this commit's suite)", "Alloy staging 841becb44 (git archive)"],
+    "green_on": [
+      "lane agent/business-processes b087fe7ae (+ this commit's suite)",
+      "Alloy staging 841becb44 (git archive)"
+    ],
     "evidence": [
       "certification/business-processes-v2/slice8a/quiescence-live.lane-b087fe7ae.local-cert.json",
       "certification/business-processes-v2/slice8a/quiescence-live.staging-841becb44.local-cert.json"
@@ -41,7 +58,16 @@
     "positive": "7 committed product commands (charge.cancel_draft x2, payment.record, subsidy.resolve_variance, charge.reverse x3) take a live org (census failing no_draft/no_open_balance/no_open_variance; 4 Billing views non-empty) to all 13 checks true and all 5 Billing views 0; 0 rows removed; posted rows byte-identical; drafts retained void",
     "negative": "12 defects each flip exactly their own check (org_exists, pool_access, merchant, usable_method, autopay, provider_activity, periodic billing via ensurePeriodicBillingSchedule, draft, open_balance, unapplied money via payment.record + payment.reverse_application, open_variance, attributed)"
   },
-  "deployed_baseline_census": { "status": "filed, pending operator approval", "request_id": null },
+  "deployed_baseline_census": {
+    "status": "complete",
+    "request_id": "gar_59095c7294014e",
+    "trusted_host_action_id": "tha_84f1147c2ab3c3",
+    "database_target": "alloy_deployed_primary",
+    "census_run_at": "2026-10-22T13:53:12.719Z",
+    "query_sha256": "bb99a1a18abfe7a54a5e2960039cbe554116a3967e00a6e4980b9e0de0477d9c",
+    "result": "QA Shared present; all 13 checks ~ true; 0 retained charge/payment/variance rows (no bp_v2 run yet)",
+    "results_file": "certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql.results.json"
+  },
   "do_not": "record bp_financial_quiescence_proven against the v1 census pin",
   "non_blocking_financials_handoff": "certification/business-processes-v2/slice8a/financials-quiescence-handoff.md"
 }

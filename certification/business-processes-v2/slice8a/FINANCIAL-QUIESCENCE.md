@@ -151,7 +151,7 @@ The registered `certification/qa-shared/bp-quiesced-retained-census.sql` (sha `d
 Census v2 keeps every v1 question and adds `bp_qr_org_exists` plus the ten `bp_qr_fin_*` checks:
 - it is one statement, catalog-safe, and emits `question_id|kind|payload`;
 - every table it reads exists in staging migrations, the newest being `20261004120000`;
-- deployed baseline: see §G.
+- deployed baseline: `gar_59095c7294014e`, all 13 checks true (§G).
 
 **Vacilando handoff** (`financial-quiescence-handoff.json`). Re-pin `QA_PLANS.bp_v2.residue_census` to:
 - `path`: `certification/business-processes-v2/slice8a/bp-quiesced-retained-census.v2.sql`
@@ -187,8 +187,8 @@ Census v2 keeps every v1 question and adds `bp_qr_org_exists` plus the ten `bp_q
 | Definition (A) and capability map (B) | Done |
 | Local proof, positive and negative, on lane and staging code (C) | Done, green |
 | Census v2 committed with a pinned hash (E) | Done (lane commit) |
-| Census v2 executes on the deployed schema (baseline; QA Shared clean before any run) | **Filed as a governed read-only census, pending operator approval** (§I) |
+| Census v2 executes on the deployed schema (baseline; QA Shared clean before any run) | **Done**: `gar_59095c7294014e` (`tha_84f1147c2ab3c3`, `alloy_deployed_primary`, 2026-10-22T13:53Z). QA Shared present; all 13 checks `~ true`; 0 retained financial rows. Results: `bp-quiesced-retained-census.v2.sql.results.json` |
 | Census v2 registered as bp_v2's residue census | **Vacilando Backend** (handoff JSON) |
 | Financials hardening (D) | Handed off; not blocking |
 
-**Proposed evidence ref:** "Alloy lane `agent/business-processes` commit `<this commit>`. Census v2 sha256 `bb99a1a1…477d9c`. Local quiescence proof `financialQuiescence.live.test.ts` green on lane `b087fe7ae` and staging `841becb44` (evidence JSON in `slice8a/`). Deployed v2 baseline census `<gar id>`."
+**Proposed evidence ref:** "Alloy lane `agent/business-processes` commit `f7226cf1a` and the deployed-baseline commit after it. Census v2 sha256 `bb99a1a1…477d9c`. Local quiescence proof `financialQuiescence.live.test.ts` green on lane `b087fe7ae` and staging `841becb44` (evidence JSON in `slice8a/`). Deployed v2 baseline census `gar_59095c7294014e` (all 13 checks true)."
