@@ -1,17 +1,22 @@
 """
 Consume queued rows from public.messages and send via Twilio.
 Uses Supabase (service role) for read/update and integrations.twilio_client for send.
+
+Shared QA Activation Safety — before any Twilio call, resolve the originating
+organization through workflow_runs ownership and refuse frozen QA orgs (and fail
+closed when ownership cannot be established).
 """
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 from ..supabase_client import _get_base_url, _get_headers
 from ..integrations.twilio_client import send_sms
 from .activity_workflow_events import emit_message_lifecycle_event
+from .dispatch_eligibility import REGISTERED_QA_ORG_IDS
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -21,6 +26,44 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.I,
 )
+
+
+def _resolve_org_id_via_workflow_run(
+    base_url: str,
+    headers: Dict[str, str],
+    workflow_run_id: Optional[str],
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Authoritative org for a legacy public.messages row: workflow_runs.org_id.
+
+    Returns (org_id, refusal_reason). refusal_reason is set when org cannot be
+    established safely or the run is a frozen QA organization.
+    """
+    wr = (workflow_run_id or "").strip()
+    if not wr or not _UUID_RE.match(wr):
+        return None, "QA_ORG_OUTBOUND_ORG_UNRESOLVABLE"
+    try:
+        resp = requests.get(
+            f"{base_url}/workflow_runs",
+            headers=headers,
+            params={"id": f"eq.{wr}", "select": "id,org_id", "limit": "1"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+    except Exception as e:
+        logger.warning("MESSAGE_SENDER_ORG_LOOKUP_FAIL workflow_run_id=%s err=%s", wr, e)
+        return None, "QA_ORG_OUTBOUND_ORG_UNRESOLVABLE"
+
+    if not isinstance(rows, list) or not rows:
+        return None, "QA_ORG_OUTBOUND_ORG_UNRESOLVABLE"
+
+    org_id = str((rows[0] or {}).get("org_id") or "").strip()
+    if not org_id or not _UUID_RE.match(org_id):
+        return None, "QA_ORG_OUTBOUND_ORG_UNRESOLVABLE"
+    if org_id in REGISTERED_QA_ORG_IDS:
+        return org_id, "QA_ORG_OUTBOUND_REFUSED"
+    return org_id, None
 
 
 def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = None) -> Dict[str, Any]:
@@ -37,7 +80,8 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
     On failure: status=failed, error=str(exception) truncated to 500 chars.
 
     Returns:
-        { "processed": N, "sent": S, "failed": F, "message_ids": [...], "errors": [...] }
+        { "processed": N, "sent": S, "failed": F, "message_ids": [...], "errors": [...],
+          "refused": R }
     """
     base_url = _get_base_url()
     headers = _get_headers()
@@ -67,17 +111,26 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
             "processed": 0,
             "sent": 0,
             "failed": 0,
+            "refused": 0,
             "message_ids": [],
             "errors": [str(e)[:ERROR_TRUNCATE]],
         }
 
     if not rows:
-        return {"processed": 0, "sent": 0, "failed": 0, "message_ids": [], "errors": []}
+        return {
+            "processed": 0,
+            "sent": 0,
+            "failed": 0,
+            "refused": 0,
+            "message_ids": [],
+            "errors": [],
+        }
 
     message_ids: List[str] = []
     errors: List[str] = []
     sent = 0
     failed = 0
+    refused = 0
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for row in rows:
@@ -86,6 +139,25 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
         body = (row.get("body") or "").strip()
 
         logger.info("MESSAGE_SEND_ATTEMPT id=%s to=%s", msg_id, to_value[:12] + "..." if len(to_value) > 12 else to_value)
+
+        _org_id, refusal = _resolve_org_id_via_workflow_run(
+            base_url, headers, row.get("workflow_run_id")
+        )
+        if refusal:
+            err_msg = refusal[:ERROR_TRUNCATE]
+            logger.warning(
+                "MESSAGE_SEND_QA_REFUSED id=%s workflow_run_id=%s reason=%s",
+                msg_id,
+                row.get("workflow_run_id"),
+                refusal,
+            )
+            patch = {"status": "failed", "error": err_msg}
+            _update_message(base_url, headers, msg_id, patch)
+            message_ids.append(str(msg_id))
+            errors.append(err_msg)
+            refused += 1
+            failed += 1
+            continue
 
         try:
             result = send_sms(to_value, body)
@@ -127,6 +199,7 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
         "processed": len(rows),
         "sent": sent,
         "failed": failed,
+        "refused": refused,
         "message_ids": message_ids,
         "errors": errors,
     }

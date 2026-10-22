@@ -118,3 +118,20 @@ export function refuseQaOrgOutbound(orgId: string | null | undefined): SafetyRef
   }
   return { ok: true };
 }
+
+/**
+ * Legacy workflow SMS → public.messages insert gate.
+ * Refuses frozen QA orgs; fails closed when organization cannot be established
+ * (backend dispatch also fails closed — do not leave orphan queued SMS).
+ */
+export function refuseQaOrgSmsQueueInsert(orgId: string | null | undefined): SafetyRefusal | SafetyOk {
+  const id = String(orgId || "").trim();
+  if (!id) {
+    return {
+      ok: false,
+      code: "qa_org_outbound_org_unresolvable",
+      detail: "SMS cannot be queued without an authoritative organization id",
+    };
+  }
+  return refuseQaOrgOutbound(id);
+}

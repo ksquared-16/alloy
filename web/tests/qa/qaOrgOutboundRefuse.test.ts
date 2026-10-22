@@ -9,7 +9,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QA_ORGS } from "@/lib/qa/sharedQaRegistry";
-import { refuseQaOrgOutbound } from "@/lib/qa/sharedQaSafety";
+import { refuseQaOrgOutbound, refuseQaOrgSmsQueueInsert } from "@/lib/qa/sharedQaSafety";
 
 const ROOT = join(__dirname, "../../..");
 const WEB = join(ROOT, "web");
@@ -134,5 +134,44 @@ describe("invite and password-reset routes — QA gate before provider", () => {
     const reset = src.indexOf("supabase.auth.resetPasswordForEmail");
     expect(gate).toBeGreaterThan(-1);
     expect(reset).toBeGreaterThan(gate);
+  });
+});
+
+describe("refuseQaOrgSmsQueueInsert — legacy workflow SMS", () => {
+  it("refuses both frozen QA organizations", () => {
+    expect(refuseQaOrgSmsQueueInsert(QA_SHARED).ok).toBe(false);
+    expect(refuseQaOrgSmsQueueInsert(QA_SECONDARY).ok).toBe(false);
+  });
+
+  it("fails closed when organization is unresolvable", () => {
+    expect(refuseQaOrgSmsQueueInsert(null)).toEqual(
+      expect.objectContaining({ ok: false, code: "qa_org_outbound_org_unresolvable" }),
+    );
+    expect(refuseQaOrgSmsQueueInsert("")).toEqual(
+      expect.objectContaining({ ok: false, code: "qa_org_outbound_org_unresolvable" }),
+    );
+  });
+
+  it("allows non-QA organizations", () => {
+    expect(refuseQaOrgSmsQueueInsert(NON_QA).ok).toBe(true);
+  });
+});
+
+describe("workflowRun — legacy SMS insert gates before public.messages", () => {
+  it("create_message and send_message call refuseQaOrgSmsQueueInsert before insert", () => {
+    const src = readFileSync(join(WEB, "lib/workflowRun.ts"), "utf8");
+    expect(src).toContain("refuseQaOrgSmsQueueInsert");
+    const createCase = src.indexOf('case "create_message"');
+    const createRefuse = src.indexOf("refuseQaOrgSmsQueueInsert", createCase);
+    const createMsgInsert = src.indexOf('.from("messages")', createRefuse);
+    expect(createCase).toBeGreaterThan(-1);
+    expect(createRefuse).toBeGreaterThan(createCase);
+    expect(createMsgInsert).toBeGreaterThan(createRefuse);
+
+    const sendCase = src.indexOf('case "send_message"');
+    const sendRefuse = src.indexOf("refuseQaOrgSmsQueueInsert", sendCase);
+    const sendInsert = src.indexOf('.from("messages").insert(msgRow)', sendRefuse);
+    expect(sendRefuse).toBeGreaterThan(sendCase);
+    expect(sendInsert).toBeGreaterThan(sendRefuse);
   });
 });
