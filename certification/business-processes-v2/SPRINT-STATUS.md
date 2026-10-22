@@ -76,6 +76,7 @@ The lane owns every slice.
 - **Smallest fix:** the audited removal also deletes the user's access profile for the org once its last role goes. Site and department scope rows cascade, and the event already records the prior scopes. Then re-close `qar_17c26a706ca7`, run census v2, and bind it.
 - Accepting a role-less profile as clean is **not** recommended: it keeps scope, for example `qa_pool_03`'s QA North restriction, which a later grant would re-activate.
 - Until this is fixed, QA Shared is held by this run, which also blocks Documents.
+- **Update 2026-10-22, after the Alloy repair.** PR #1571 at `50b067cd1` makes the audited removal clear profiles: migration `20261205090000`, ledger census `gar_6221411a0a43d4`, function census `gar_8a22d14363804c` 5/5. The retried close `gar_98543f0123f2bc` was **still `NOT_CLEAN`**. The runner's `closeQaRun` (`qa-run-db.mjs`) calls removal only for orgs where the identity still has **roles**, so role-less profiles are never reached. **Owner:** Vacilando Backend. **Fix:** also call removal for QA orgs where only a profile remains.
 
 Evidence: `slice8a/hosted/qa-run-qar_17c26a706ca7.hosted.json`.
 

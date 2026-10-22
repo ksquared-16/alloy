@@ -93,8 +93,8 @@
       "detail": "access or sessions remain; close again to recover"
     },
     "close": {
-      "request_id": "gar_f2b7947ee45fa7",
-      "started_at": "2026-10-22T19:22:42.551Z",
+      "request_id": "gar_98543f0123f2bc",
+      "started_at": "2026-10-22T20:00:18.176Z",
       "recovery": true,
       "closed_at": null,
       "verdict": "NOT_CLEAN",
@@ -156,7 +156,7 @@
         "access audit history (mutation_events)"
       ]
     },
-    "updated_at": "2026-10-22T19:22:42.551Z",
+    "updated_at": "2026-10-22T20:00:18.176Z",
     "history": [
       {
         "at": "2026-10-22T19:19:12.188Z",
@@ -184,6 +184,16 @@
       },
       {
         "at": "2026-10-22T19:22:42.551Z",
+        "event": "close_incomplete",
+        "detail": "NOT_CLEAN"
+      },
+      {
+        "at": "2026-10-22T20:00:18.176Z",
+        "event": "closing",
+        "detail": "abandoned"
+      },
+      {
+        "at": "2026-10-22T20:00:18.176Z",
         "event": "close_incomplete",
         "detail": "NOT_CLEAN"
       }
@@ -263,5 +273,18 @@
     "owner": "Alloy Access & Identity (audited removal) + Vacilando Backend (runner uses it)",
     "smallest_fix": "remove_member_access_audited deletes the user's user_access_profiles row for the org after the last role (user_site_access / user_department_access cascade), recorded in the same access.user.removed event (before_* scopes are already captured); then re-close qar_17c26a706ca7, census v2, bind",
     "not_recommended": "accepting a role-less profile as clean: it keeps the previous site/department scope, which a later grant re-activates (qa_pool_03 holds QA North restriction)"
+  },
+  "recovery_after_access_repair": {
+    "alloy_repair": {
+      "pr": 1571,
+      "merge": "50b067cd1",
+      "migration": "20261205090000_remove_member_access_clears_profile",
+      "ledger_census": "gar_6221411a0a43d4 (head 20261205090000)",
+      "function_census": "gar_8a22d14363804c 5/5 (deletes_user_access_profiles true; profile-only retry deletes without a second event)"
+    },
+    "close": "gar_98543f0123f2bc (toolkit 1d35ef4690f2, run erun2_d5e0013965934e0e): failed qa_run_not_clean \u2014 removed 0, remaining_roles 0, remaining_profiles 1 for qa_pool_01..04; sessions signed out",
+    "root_cause": "toolkit lib/qa-run-db.mjs closeQaRun iterates only the orgs in which the identity still has ROLES (roles.map(r => r.org_id)); the first close removed every role, so retries never call remove_member_access_audited and the role-less profiles can never be removed by any close",
+    "owner": "Vacilando Backend (QA-run runner)",
+    "smallest_fix": "call remove_member_access_audited for every QA org where the identity has a role OR an access profile (the repaired function is idempotent and deletes a residual profile with no second audit event); add a test: a pool identity with 0 roles and 1 QA profile is cleaned by close"
   }
 }
