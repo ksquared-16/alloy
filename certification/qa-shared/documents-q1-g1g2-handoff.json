@@ -1,0 +1,105 @@
+{
+  "schema": "documents_q1_g1g2_toolkit_handoff.v1",
+  "status": "UNTESTED \u2014 static checks only (toolkit read-only guard; hosted-fixture-safety qa_authz_vendors verdict ok on all four fixtures). Not for registration until isolated certification passes; hashes below will be re-issued if testing changes bytes.",
+  "contract_repin": {
+    "path": "docs/platform/governance/authorization-qa-personas.md",
+    "sha256": "a1ad543a242748ecbca8a0e932fc61fde91756f259be5ecf66eb21a7eccff162",
+    "revision": 2,
+    "merged": "PR #1566 merge 6cf46b66523085fe1d7f6a37c9561d07dbe12225",
+    "approval": "Director approval 2026-10-22 (explicit 'Approve' on Revision 2 a1ad543a\u2026)",
+    "evidence_item": "documents_revised_plan_contract_approved"
+  },
+  "repins_existing": {
+    "qa_authz_fixture_ensure": {
+      "fixture_sha256": "9d23cc63f92f8df373aa5ff29ac6ae1254632157fe9588cbf7bcb559cdb5b199",
+      "runner_sha256": "8c34b64312436fd40d6dcd90cc9d3a85e4d4bc1581b94a6efec34eaa1f855660",
+      "why": "QA-org whitelist moved out of dollar quotes (psql does not interpolate :'org' inside do $$ \u2026 $$; with ON_ERROR_STOP the registered bytes fail on first execution)"
+    },
+    "qa_authz_fixture_reset": {
+      "fixture_sha256": "8c34f50479ed612010e3dc049f9ed419ff02778fa66a171c75eaefc6932d0dad",
+      "runner_sha256": "cc5470085f0d87bfae055478092b3315e99ec4c788c0f4ccba876201d08732a4",
+      "why": "same whitelist defect; plus refuses while documents remain attached to aa000000- vendors (storage objects would be orphaned)"
+    }
+  },
+  "new_reconciliations": [
+    {
+      "key": "qa_authz_subject_fixture_ensure",
+      "org": "qa_shared",
+      "frozen_context": {
+        "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+      },
+      "runner": "dev:qa:authz-subject-fixture-ensure",
+      "runner_path": "web/scripts/qaAuthzSubjectFixtureEnsure.mjs",
+      "runner_sha256": "2e1ea5e3bb7011de6744322f378eebda4374bb2b930931e896de0e4dd249d10d",
+      "fixture_path": "certification/fixtures/qa-authz-subjects-ensure.sql",
+      "fixture_sha256": "60c41d9b4f813e8f51e38790b20fa9654f7f42dae4dcd583956b8898f8d844ff",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1"
+    },
+    {
+      "key": "qa_authz_subject_fixture_ensure_secondary",
+      "org": "qa_secondary",
+      "frozen_context": {
+        "ORG_ID": "ad53fee2-2570-460f-9300-f0e106c473b6"
+      },
+      "runner": "dev:qa:authz-subject-fixture-ensure",
+      "runner_path": "web/scripts/qaAuthzSubjectFixtureEnsure.mjs",
+      "runner_sha256": "2e1ea5e3bb7011de6744322f378eebda4374bb2b930931e896de0e4dd249d10d",
+      "fixture_path": "certification/fixtures/qa-authz-subjects-ensure.sql",
+      "fixture_sha256": "60c41d9b4f813e8f51e38790b20fa9654f7f42dae4dcd583956b8898f8d844ff",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1"
+    },
+    {
+      "key": "qa_authz_subject_fixture_reset",
+      "org": "qa_shared",
+      "frozen_context": {
+        "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+      },
+      "runner": "dev:qa:authz-subject-fixture-reset",
+      "runner_path": "web/scripts/qaAuthzSubjectFixtureReset.mjs",
+      "runner_sha256": "d5eeca032667bcf99c43855397e2434d07e24f502b2e0044aa820fb73b1b0192",
+      "fixture_path": "certification/fixtures/qa-authz-subjects-reset.sql",
+      "fixture_sha256": "7aff2e3837d869a442d70d99dd9472dbb1175499f71be3365e5c276ed7d60e25",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1"
+    },
+    {
+      "key": "qa_authz_subject_fixture_reset_secondary",
+      "org": "qa_secondary",
+      "frozen_context": {
+        "ORG_ID": "ad53fee2-2570-460f-9300-f0e106c473b6"
+      },
+      "runner": "dev:qa:authz-subject-fixture-reset",
+      "runner_path": "web/scripts/qaAuthzSubjectFixtureReset.mjs",
+      "runner_sha256": "d5eeca032667bcf99c43855397e2434d07e24f502b2e0044aa820fb73b1b0192",
+      "fixture_path": "certification/fixtures/qa-authz-subjects-reset.sql",
+      "fixture_sha256": "7aff2e3837d869a442d70d99dd9472dbb1175499f71be3365e5c276ed7d60e25",
+      "fixture_safety": "qa_authz_vendors",
+      "qa_plan": "authz_q1"
+    }
+  ],
+  "residue_census_repin": {
+    "path": "certification/qa-shared/documents-zero-residue-census.sql",
+    "query_sha256": "240e11b17367d4d2b52c533402a6536a2ba04629aa0aa4c831cc692103d22c49",
+    "checks": [
+      "doc_zr_vendors",
+      "doc_zr_qa_role_grants",
+      "doc_zr_pool_access",
+      "doc_zr_zero_sent",
+      "doc_zr_subjects",
+      "doc_zr_shared_documents",
+      "doc_zr_shared_objects",
+      "doc_zr_shared_dangling_case_sources",
+      "doc_zr_secondary_documents",
+      "doc_zr_secondary_objects",
+      "doc_zr_secondary_cases",
+      "doc_zr_qa_sessions"
+    ],
+    "retained_by_design": [
+      "access audit history (mutation_events)",
+      "D1a document audit (workflow_events)"
+    ]
+  },
+  "run_order_note": "fixture ensures: vendors (qa_shared), subjects (qa_shared), subjects_secondary; teardown: audited POS deletes of every uploaded document, then subject resets and vendor reset (each refuses while documents remain), then qa_run_close, then census, then close with census id."
+}

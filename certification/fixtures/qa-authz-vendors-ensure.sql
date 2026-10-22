@@ -17,18 +17,25 @@ end $$;
 \endif
 
 -- Whitelist registered QA orgs only (Firefly and every other tenant are absent from this list).
-do $$
-begin
-  if :'org'::uuid not in (
-    '4acc9386-c485-486f-aa1f-05d83499d142'::uuid,
-    'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
-  ) then
-    raise exception 'organization % is not a registered QA org', :'org';
-  end if;
-  if not exists (select 1 from public.vendor_statuses where key = 'active') then
-    raise exception 'vendor_statuses has no active row; fixture cannot invent a status id';
-  end if;
+-- Evaluated OUTSIDE dollar quotes: psql never interpolates the org variable inside a dollar-quoted DO body, so a
+-- whitelist written there reaches the server as the literal variable text and fails with a syntax error.
+select (:'org' in (
+    '4acc9386-c485-486f-aa1f-05d83499d142',
+    'ad53fee2-2570-460f-9300-f0e106c473b6'
+  )) as qa_org_registered \gset
+\if :qa_org_registered
+\else
+do $$ begin
+  raise exception 'organization is not a registered QA org';
 end $$;
+\endif
+select exists (select 1 from public.vendor_statuses where key = 'active') as vendor_status_active \gset
+\if :vendor_status_active
+\else
+do $$ begin
+  raise exception 'vendor_statuses has no active row; fixture cannot invent a status id';
+end $$;
+\endif
 
 \set vendor_1 'aa000000-0000-4000-8000-000000000001'
 \set vendor_2 'aa000000-0000-4000-8000-000000000002'
