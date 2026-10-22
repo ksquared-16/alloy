@@ -53,7 +53,8 @@ export async function POST(
 
     // D2 — removal moved to a transaction owner so the revocation and the record of WHAT was revoked
     // commit together. The event preserves the roles held and the scope applied, because an audit
-    // that records only an absence loses the fact worth keeping.
+    // that records only an absence loses the fact worth keeping. The RPC also deletes the
+    // user_access_profiles row (junctions cascade) so a role-less residual profile cannot remain.
     const audit = accessMutationAudit(auth.access);
     const { error } = await supabase.rpc("remove_member_access_audited", {
         p_org_id: orgId,

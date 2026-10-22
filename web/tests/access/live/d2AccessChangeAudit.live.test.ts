@@ -578,6 +578,7 @@ describeLive("D2 access change audit — live", () => {
             before_site_scope?: string | null;
             before_site_location_ids?: string[];
             before_department_scope?: string | null;
+            access_profile_removed?: boolean;
         };
         // The canonical Person is not a membership. Removing access must not read as deleting them.
         expect(ctx.person_deleted).toBe(false);
@@ -586,9 +587,18 @@ describeLive("D2 access change audit — live", () => {
         expect(ctx.before_site_scope).toBe("restricted");
         expect(ctx.before_site_location_ids, "their location access must be recoverable from history")
             .toEqual(priorSites);
+        expect(ctx.access_profile_removed).toBe(true);
 
         const { data: stillMember } = await supabase.from("user_roles").select("role").eq("user_id", P.subject).eq("org_id", ORG);
         expect(stillMember ?? []).toHaveLength(0);
+        // Membership end clears the access profile and its junctions — a role-less residual
+        // profile is reusable scope and fails BP pool-access census.
+        const { data: residualProfile } = await supabase.from("user_access_profiles").select("user_id").eq("user_id", P.subject).eq("org_id", ORG);
+        expect(residualProfile ?? [], "access profile must not survive complete member-access removal").toHaveLength(0);
+        const { data: residualSites } = await supabase.from("user_site_access").select("location_id").eq("user_id", P.subject).eq("org_id", ORG);
+        expect(residualSites ?? []).toHaveLength(0);
+        const { data: residualDepts } = await supabase.from("user_department_access").select("department_id").eq("user_id", P.subject).eq("org_id", ORG);
+        expect(residualDepts ?? []).toHaveLength(0);
 
         // REPEATING IT IS NOT A SECOND REMOVAL.
         const repeat = `d2-remove-again-${crypto.randomUUID()}`;
@@ -600,6 +610,23 @@ describeLive("D2 access change audit — live", () => {
         expect(again.error).toBeNull();
         expect(await eventsFor(repeat)).toHaveLength(0);
         expect(await countAccessEvents()).toBe(total);
+
+        // A role-less residual profile cannot survive a retry of complete removal.
+        await supabase.from("user_access_profiles").upsert(
+            { user_id: P.subject, org_id: ORG, department_scope: "all", site_scope: "all" },
+            { onConflict: "user_id,org_id" },
+        );
+        const residualCleanup = `d2-remove-residual-${crypto.randomUUID()}`;
+        const afterResidualSeed = await countAccessEvents();
+        const cleaned = await supabase.rpc("remove_member_access_audited", {
+            p_org_id: ORG, p_user_id: P.subject,
+            p_actor_user_id: ACTOR, p_origin: "operator", p_correlation_id: residualCleanup,
+        });
+        expect(cleaned.error).toBeNull();
+        expect(await eventsFor(residualCleanup)).toHaveLength(0);
+        expect(await countAccessEvents()).toBe(afterResidualSeed);
+        const { data: residualGone } = await supabase.from("user_access_profiles").select("user_id").eq("user_id", P.subject).eq("org_id", ORG);
+        expect(residualGone ?? [], "role-less residual profile must not survive complete removal").toHaveLength(0);
 
         // And the event remains legible now that the membership is gone.
         const presented = presentAccessEvent(event!, await names(), catalog);
