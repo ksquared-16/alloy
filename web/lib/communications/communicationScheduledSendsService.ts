@@ -685,11 +685,30 @@ export async function processDueCommunicationScheduledSends(params: {
             }
         }
 
+        const scheduledMeta =
+            fresh.metadata && typeof fresh.metadata === "object" && !Array.isArray(fresh.metadata)
+                ? (fresh.metadata as Record<string, unknown>)
+                : {};
+        // Category is an authoring fact frozen on the scheduled row. Announcements are
+        // marketing; tour reminders are transactional; anything else without an explicit
+        // category is refused at the adapter rather than silently remapped.
+        const frozenCategory =
+            typeof scheduledMeta.message_category === "string" ? scheduledMeta.message_category.trim() : "";
+        const resolvedCategory =
+            frozenCategory ||
+            (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE
+                ? "transactional"
+                : fresh.source === "announcement"
+                  ? "marketing"
+                  : "");
+        const frozenPurpose =
+            typeof scheduledMeta.purpose === "string" ? scheduledMeta.purpose.trim() : null;
+
         const exec = await executeLegacyCommunicationsSendAdapter({
             supabase: params.supabase,
             orgId: fresh.org_id,
             quickMessage: false,
-            primaryEntityType: "opportunities",
+            primaryEntityType: fresh.entity_type || "opportunities",
             primaryEntityId: fresh.entity_id,
             channel: fresh.channel,
             textRaw: fresh.body_snapshot,
@@ -697,6 +716,10 @@ export async function processDueCommunicationScheduledSends(params: {
             bindingIdOpt: fresh.communication_provider_binding_id ?? "",
             recipientPersonIdRaw: fresh.recipient_person_id,
             toRawInput: "",
+            category: resolvedCategory || null,
+            audience: "external",
+            purpose: frozenPurpose || (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE ? "tour_coordination" : null),
+            callSite: `processDueCommunicationScheduledSends:${fresh.source || "unknown"}`,
             sendMetadataAugment: buildCommunicationScheduledSendProcessMetadataAugment(fresh),
         });
 
