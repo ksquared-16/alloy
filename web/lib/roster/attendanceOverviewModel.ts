@@ -22,6 +22,8 @@
  * fold's answer, resolved upstream in `buildCombinedRoster`.
  */
 
+import { presentChildRoom } from "@/lib/roster/dailyOperatingState";
+
 /** The subset of a roster child this model reads. */
 export type OverviewChild = {
     customerMemberId: string;
@@ -136,12 +138,11 @@ export function buildAttendanceOverviewModel(
                     counts.notArrived += 1;
             }
 
-            if (child.actual.state !== "present") continue;
-
             // A present child with no resolved location is counted where she is
             // placed — the fold could not say otherwise, and dropping her would
             // make the room totals quietly disagree with the header count.
-            const at = child.actual.actualRoomLocationId ?? cell.roomLocationId;
+            const at = presentChildRoom(child.actual, cell.roomLocationId);
+            if (!at) continue;
             hereNowByRoom.set(at, (hereNowByRoom.get(at) ?? 0) + 1);
 
             if (at !== cell.roomLocationId) {
