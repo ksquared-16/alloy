@@ -1,0 +1,145 @@
+{
+  "trusted_host_action_id": "tha_a6e6d4d5473b7b",
+  "query_hash": "1b65c852cda9ed2a13760e2549789721701a9630df62544782b624def7af44f9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T03:36:54.830Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a6e6d4d5473b7b",
+    "query_hash": "1b65c852cda9ed2a13760e2549789721701a9630df62544782b624def7af44f9",
+    "authorization_id": "grnt_bf1d860deb664754",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T03:37:01.980Z",
+    "question_ids": [
+      "c01_row",
+      "c02_privilege",
+      "c03_bucket"
+    ],
+    "questions": {
+      "c01_row": {
+        "question_id": "c01_row",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20261207181500",
+            "columns": [
+              "created_by",
+              "idempotency_key",
+              "name",
+              "rollback",
+              "statements",
+              "version"
+            ],
+            "created_by": null,
+            "idempotency_key_present": false,
+            "statement_lengths": [
+              3150,
+              1652
+            ],
+            "statement_sha256": [
+              "1d7d490663d3dbdd",
+              "21591d3f2ecf6e15"
+            ],
+            "joined_normalized_sha256": "68a3e61cf7ce96772b0d3049a45f26e84c53dfa4c20e94bf3615cc19bddf8dfe"
+          },
+          {
+            "version": "20261207181600",
+            "columns": [
+              "created_by",
+              "idempotency_key",
+              "name",
+              "rollback",
+              "statements",
+              "version"
+            ],
+            "created_by": null,
+            "idempotency_key_present": false,
+            "statement_lengths": [
+              2112,
+              384,
+              1619
+            ],
+            "statement_sha256": [
+              "9ab99396e90347fb",
+              "0e3b63fdb0eb91dd",
+              "ec9fb942a2ec9dd7"
+            ],
+            "joined_normalized_sha256": "73877b456671a58f467dd661704daed4bc66737fb47423f4605716fb6c5ececd"
+          }
+        ]
+      },
+      "c02_privilege": {
+        "question_id": "c02_privilege",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "document_field_definitions",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          },
+          {
+            "table": "document_field_values",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          },
+          {
+            "table": "document_versions",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          },
+          {
+            "table": "documents",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          },
+          {
+            "table": "form_submission_documents",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          },
+          {
+            "table": "form_submission_signatures",
+            "anon_any": false,
+            "authenticated_any": false,
+            "service_role_crud": true
+          }
+        ]
+      },
+      "c03_bucket": {
+        "question_id": "c03_bucket",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "org_documents",
+            "public": false,
+            "file_size_limit": 20971520,
+            "allowed_mime_types": [
+              "application/pdf",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/msword",
+              "image/png",
+              "image/jpeg",
+              "text/plain",
+              "text/csv",
+              "text/html"
+            ],
+            "storage_objects_rls": true,
+            "client_object_policies": 0
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}
