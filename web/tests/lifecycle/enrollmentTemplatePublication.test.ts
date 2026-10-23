@@ -2,7 +2,7 @@
  * BP V2 Slice 8B-1 — the Enrollment template applies, validates and is publishable on a CLEAN process.
  *
  * Runs the same sequence the configuration routes run, with the same functions:
- *   create_process (createLifecycleProcess) → apply_enrollment_v2_template (applyEnrollmentTemplateInConfig)
+ *   create_process (createLifecycleProcess) → apply_enrollment_v2_template (applyEnrollmentTemplateWithCommandsInConfig)
  *   → set_process_entry_point ×2 (setProcessEntryPoint) → ensureBuilderCommandSetsOnSave
  *   → the save gate every builder PATCH applies (validateConfiguredStageReferences)
  *   → the publish gate (validateBusinessProcessForPublish), with the stage-based Work Views attached
@@ -24,7 +24,12 @@ import {
     applyEnrollmentTemplateInConfig,
     applyEnrollmentTemplateToProcess,
     ENROLLMENT_STAGE_SPECS,
+    ENROLLMENT_DECISION_WORK_TEMPLATE_KEY,
+    ENROLLMENT_PER_CHILD_CAPABILITIES,
 } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+import { parseStageOperatingPlanV1, resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { applyEnrollmentTemplateWithCommandsInConfig } from "@/lib/businessProcessTemplates/enrollmentTemplateCommandSelection";
+import { commandSetHasEnabledKey } from "@/lib/lifecycle/processCommandSetV1";
 import {
     createLifecycleProcess,
     emptyLifecycleBuilderV1,
@@ -76,7 +81,7 @@ function cleanTenant(): { config: LifecycleBuilderV1; processId: string } {
 
 /** The route sequence, step for step. */
 function applyThroughRoutes(config: LifecycleBuilderV1, processId: string): LifecycleBuilderV1 {
-    let next = applyEnrollmentTemplateInConfig(config, processId);
+    let next = applyEnrollmentTemplateWithCommandsInConfig(config, processId);
     next = setProcessEntryPoint(next, processId, "create_lead", "lead");
     next = setProcessEntryPoint(next, processId, "enrollment_start", "enrolling");
     return ensureBuilderCommandSetsOnSave(next);
@@ -131,7 +136,11 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
     const CORRECTED_OUTCOMES = new Set<string>([
         ...LOST_EXITS.map((x) => `${x.stage}:${x.outcome}`),
         "tour:no_availability", "decision:wants_waitlist", "waitlist:spot_offered",
+        // D2/D5: the family decision no longer carries a child effect — children start on their own paths.
+        "decision:family_enrolling",
     ]);
+    /** D5: the three Tour helpers no registered capability executes (see `dropUnexecutableHelpfulActions`). */
+    const DEAD_TOUR_HELPERS = new Set(["send_confirmation", "send_reminder", "reschedule"]);
     const CORRECTED_EXITS = new Set<string>([...LOST_EXITS.map((x) => x.ref), "tour_to_waitlist", "decision_to_waitlist", "waitlist_to_enrolling"]);
 
     it("every OTHER exit, outcome, work template and outcome definition is exactly the default plan's", () => {
@@ -145,7 +154,15 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
                 .toEqual((defaults.outgoing_transitions ?? []).filter((e) => !CORRECTED_EXITS.has(e.transition_ref)));
             expect((plan.outcome_rules ?? []).filter((r) => !CORRECTED_OUTCOMES.has(`${s.key}:${r.when_outcome_key}`)))
                 .toEqual((defaults.outcome_rules ?? []).filter((r) => !CORRECTED_OUTCOMES.has(`${s.key}:${r.when_outcome_key}`)));
-            expect(plan.work_templates).toEqual(defaults.work_templates);
+            // Corrections, named: dead Tour helpers dropped; the Decision work gains its per-child paths + gate.
+            const expected = defaults.work_templates.map((w) => {
+                const helpful = w.helpful_actions?.filter((a) => !DEAD_TOUR_HELPERS.has(a.action_ref));
+                const base = helpful ? { ...w, helpful_actions: helpful } : w;
+                return w.template_key === ENROLLMENT_DECISION_WORK_TEMPLATE_KEY
+                    ? { ...base, completion_policy: { requires_all_participants_resolved: true }, participant_decisions: expect.any(Array) }
+                    : base;
+            });
+            expect(plan.work_templates).toEqual(expected);
             expect(plan.outcomes).toEqual(defaults.outcomes);
         }
     });
@@ -311,5 +328,32 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
         expect(before.map((p) => p.key).sort()).toEqual(["assignments", "billing"]);
         const applied = applyEnrollmentTemplateInConfig(config, enrollment(config).id);
         expect(others(applied)).toEqual(before);
+    });
+
+    describe("BP V2 D2/D5 — the family decides as a family; each child gets its own path", () => {
+        it("D2: the plan parser keeps `enter_child_enrollment` (it was silently dropped, so the outcome did nothing and reported success)", () => {
+            // The default Decision plan as stored JSON — exactly the shape that lost its child target when published.
+            const plan = parseStageOperatingPlanV1(JSON.parse(JSON.stringify(defaultStageOperatingPlanForEnrollmentStage("decision"))));
+            expect(plan!.outcome_rules.find((r) => r.when_outcome_key === "family_enrolling")!.targets.map((t) => t.kind)).toEqual(["no_movement", "enter_child_enrollment"]);
+        });
+
+        it("D5: the Decision work carries Begin Enrolling / Waitlist / Not Enrolling per child, gated on every child resolved", () => {
+            const { config, processId } = cleanTenant();
+            const p = enrollment(applyThroughRoutes(config, processId));
+            const runtimePlan = resolveStageOperatingPlanForStage(stage(p, "decision"), "decision")!;
+            const work = runtimePlan.work_templates.find((w) => w.template_key === ENROLLMENT_DECISION_WORK_TEMPLATE_KEY)!;
+            expect(work.completion_policy?.requires_all_participants_resolved).toBe(true);
+            expect(work.participant_decisions!.map((d) => [d.decision_key, d.action_ref, d.subject_grain, d.targets])).toEqual([
+                ["child_begin_enrolling", "enroll_child", "child", [{ kind: "update_child_enrollment_status", disposition_key: "enrolling" }, { kind: "move_to_stage", stage_key: "enrolling" }]],
+                ["child_waitlist", "waitlist_child", "child", [{ kind: "update_child_enrollment_status", disposition_key: "waitlisted" }, { kind: "move_to_stage", stage_key: "waitlist" }]],
+                ["child_not_enrolling", "update_child_enrollment_status", "child", [{ kind: "update_child_enrollment_status", disposition_key: "not_enrolling" }]],
+            ]);
+            // Each destination is a CHILD stage the process has; the family never moves (participant targets cannot write it).
+            for (const key of ["enrolling", "waitlist"]) expect(stage(p, key).grain).toBe("child");
+            // The family outcome records intent only — no child effect, no movement.
+            expect(runtimePlan.outcome_rules.find((r) => r.when_outcome_key === "family_enrolling")!.targets).toEqual([{ kind: "no_movement" }]);
+            // The per-child commands are enabled for the process — the runtime refuses a path whose command is not.
+            for (const key of ENROLLMENT_PER_CHILD_CAPABILITIES) expect(commandSetHasEnabledKey(p.command_set_v1, key), key).toBe(true);
+        });
     });
 });

@@ -502,18 +502,32 @@ export type StageOperatingPlanV1 = {
 const JOURNEY_SEGMENTS = new Set<StageJourneySegment>(["family", "child"]);
 const OWNER_STRATEGIES = new Set<StageWorkOwnerStrategy>(["record_owner", "creator", "unassigned"]);
 const EXECUTION_MODES = new Set<StageWorkTemplateExecutionModeV1>(["direct_action", "outcome_led"]);
-const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
-    "update_family_case_status",
-    "update_child_enrollment_status",
-    "update_candidate_status",
-    "create_needs_attention",
-    "create_next_work",
-    "reopen_work",
-    "mark_stage_work_complete",
-    "move_to_stage",
-    "no_movement",
-    "stamp_enrollment_date",
-]);
+/**
+ * EVERY target kind the runtime executes, and the parser admits — one list, checked by the compiler.
+ *
+ * `parseTarget` drops a kind it does not admit, and `parseOutcomeRule` keeps the rest of the rule. So a
+ * kind missing here does not fail anywhere: the outcome runs with fewer effects than configured and
+ * reports success. That is how `enter_child_enrollment` — declared in the union, executed by
+ * `applyStageOutcomeRuleTarget`, written by the Enrollment template — vanished from every published
+ * `family_enrolling` rule, so "Family Enrolling" completed the Decision work having done nothing and
+ * the executor's refusal for a multi-child family was unreachable (BP V2 D2).
+ *
+ * A `Record` over the union makes a missing kind a type error instead of a silent drop.
+ */
+const TARGET_KIND_ADMITTED: Record<StageOutcomeRuleTargetKind, true> = {
+    update_family_case_status: true,
+    update_child_enrollment_status: true,
+    update_candidate_status: true,
+    create_needs_attention: true,
+    create_next_work: true,
+    reopen_work: true,
+    mark_stage_work_complete: true,
+    move_to_stage: true,
+    no_movement: true,
+    stamp_enrollment_date: true,
+    enter_child_enrollment: true,
+};
+const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>(Object.keys(TARGET_KIND_ADMITTED) as StageOutcomeRuleTargetKind[]);
 const ATTENTION_KINDS = new Set<StageAttentionRuleKind>([
     "work_overdue",
     "stage_age_exceeded",

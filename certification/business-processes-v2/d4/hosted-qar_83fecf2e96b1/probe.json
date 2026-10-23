@@ -1,0 +1,194 @@
+{
+  "run": "qar_83fecf2e96b1",
+  "A": {
+    "admin": {
+      "charge_household_sourced": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "card_household": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "card_by_child": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "payment_methods": {
+        "status": 200,
+        "amounts_or_names_in_body": false
+      }
+    },
+    "director": {
+      "charge_household_sourced": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "card_household": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "card_by_child": {
+        "status": 200,
+        "amounts_or_names_in_body": true
+      },
+      "payment_methods": {
+        "status": 200,
+        "amounts_or_names_in_body": false
+      }
+    },
+    "restricted_operator": {
+      "charge_household_sourced": {
+        "status": 404,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "ok": false,
+          "error": "No such charge."
+        }
+      },
+      "card_household": {
+        "status": 404,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "Not found"
+        }
+      },
+      "card_by_child": {
+        "status": 404,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "Not found"
+        }
+      },
+      "payment_methods": {
+        "status": 404,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "Not found"
+        }
+      }
+    },
+    "no_finance_operator": {
+      "charge_household_sourced": {
+        "status": 403,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+          "required_permission": "fin.read"
+        }
+      },
+      "card_household": {
+        "status": 403,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+          "required_permission": "fin.read"
+        }
+      },
+      "card_by_child": {
+        "status": 403,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+          "required_permission": "fin.read"
+        }
+      },
+      "payment_methods": {
+        "status": 403,
+        "amounts_or_names_in_body": false,
+        "body": {
+          "error": "You don't have access to view financial information for this organization. Contact an administrator to request access.",
+          "required_permission": "fin.read"
+        }
+      }
+    }
+  },
+  "B": {
+    "add": {
+      "status": 200,
+      "chargeId": "30fdf69b-1681-496e-8bf5-6b9ead4cd998",
+      "result": {
+        "write_status": "created",
+        "resolution_key": "tpl:qa_review_fee_584637:2026-10-23:e7a65731-f820-4712-bbe1-327d5c84f2d2",
+        "review_required": true,
+        "posted": false
+      }
+    },
+    "source": {
+      "status": 200,
+      "billableSourceType": "enrollment_agreement",
+      "status_": "draft"
+    },
+    "reads": {
+      "admin": {
+        "status": 200,
+        "has_detail": true
+      },
+      "director": {
+        "status": 200,
+        "has_detail": true
+      },
+      "restricted_operator": {
+        "status": 200,
+        "has_detail": true
+      },
+      "no_finance_operator": {
+        "status": 403,
+        "has_detail": false
+      }
+    },
+    "cancel": {
+      "status": 200,
+      "result": {
+        "status": "void",
+        "already_cancelled": false,
+        "withdrawn_reductions": 0
+      }
+    }
+  },
+  "C": {
+    "admin": {
+      "card_calls": [
+        {
+          "status": 200,
+          "url": "/api/admin/financials/card",
+          "leak": true
+        },
+        {
+          "status": 200,
+          "url": "/api/admin/view-models/drawer/opportunity/d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+          "leak": false
+        }
+      ],
+      "blocked": [],
+      "panel": {
+        "state": "record",
+        "has_financials_heading": true,
+        "shows_amount": true,
+        "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Chi"
+      }
+    },
+    "restricted_operator": {
+      "card_calls": [
+        {
+          "status": 404,
+          "url": "/api/admin/financials/card",
+          "leak": false
+        },
+        {
+          "status": 200,
+          "url": "/api/admin/view-models/drawer/opportunity/d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+          "leak": false
+        }
+      ],
+      "blocked": [],
+      "panel": {
+        "state": "record",
+        "has_financials_heading": true,
+        "shows_amount": false,
+        "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Chi"
+      }
+    }
+  },
+  "build": "17991d6d4768f815fd1c317f6922cbc8636ebfd0"
+}
