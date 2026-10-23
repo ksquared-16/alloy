@@ -86,6 +86,7 @@ function emptyForm(): FormState {
             description: "",
             primaryEligible: true,
             allowsOverlap: false,
+            providesHomeroom: false,
             programRequirement: "required",
             roomRequirement: "required",
             eligibleSpaceMode: "any",
@@ -499,6 +500,18 @@ export default function AssignmentTypesStudioPanel({
                             />
                             Can overlap another assignment
                         </label>
+                        <label className="flex items-center gap-2 text-[12.5px] text-alloy-midnight">
+                            <input
+                                type="checkbox"
+                                data-testid="assignment-type-provides-homeroom"
+                                checked={form.behavior.providesHomeroom === true}
+                                onChange={(e) => patchBehavior({ providesHomeroom: e.target.checked })}
+                            />
+                            Provides homeroom
+                        </label>
+                        <p className="pl-6 text-[11px] text-alloy-slate">
+                            A classroom configured for this use is a homeroom for the children assigned there.
+                        </p>
                     </Section>
 
                     <Section title="Requirements">
@@ -755,6 +768,10 @@ export default function AssignmentTypesStudioPanel({
                                         <div className="flex flex-wrap gap-x-1">
                                             <dt className="font-semibold text-alloy-midnight/70">Primary</dt>
                                             <dd>{t.behavior.primaryEligible ? "Eligible" : "Not eligible"}</dd>
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-1" data-assignment-type-homeroom={t.behavior.providesHomeroom ? "yes" : "no"}>
+                                            <dt className="font-semibold text-alloy-midnight/70">Homeroom</dt>
+                                            <dd>{t.behavior.providesHomeroom ? "Provides homeroom" : "No"}</dd>
                                         </div>
                                         <div className="flex flex-wrap gap-x-1">
                                             <dt className="font-semibold text-alloy-midnight/70">Program</dt>

@@ -13,7 +13,8 @@ describe("assignment roster read model shape", () => {
                     enrollmentAgreementId: "a1",
                     subjectType: "child",
                     assignmentCount: 2,
-                    primaryRoom: "Blue Room",
+                    homerooms: [{ spaceId: "blue", spaceLabel: "Blue Room", homeroomUseIds: ["cat-home"], sources: [{ assignmentId: "as1", categoryId: null, spaceFrom: "assignment", startDate: "2026-09-01", endDate: null }] }],
+                    staffPrimaryRoom: null,
                     assignments: [
                         {
                             assignmentId: "as1",
@@ -64,7 +65,7 @@ describe("assignment roster read model shape", () => {
 
         expect(model.subjects[0].assignmentCount).toBe(2);
         expect(model.subjects[0].assignments[0].roleLabel).toBe("Primary");
-        expect(model.subjects[0].primaryRoom).toBe("Blue Room");
+        expect(model.subjects[0].homerooms.map((h) => h.spaceLabel)).toEqual(["Blue Room"]);
     });
 
     it("models a staff subject without child fields", () => {
@@ -81,7 +82,8 @@ describe("assignment roster read model shape", () => {
                     positionLabel: "Lead Teacher",
                     subjectType: "staff",
                     assignmentCount: 1,
-                    primaryRoom: "Toddler Room A",
+                    homerooms: [],
+                    staffPrimaryRoom: "Toddler Room A",
                     assignments: [
                         {
                             assignmentId: "as-staff-1",
