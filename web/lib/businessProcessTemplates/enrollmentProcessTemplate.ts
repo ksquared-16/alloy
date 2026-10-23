@@ -25,6 +25,8 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
+import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { mapOpportunityRecordActionToPatch } from "@/lib/recordChrome/opportunityRecordActionMap";
 
 export const ENROLLMENT_TEMPLATE_PROCESS_KEY = ENROLLMENT_PROCESS_KEY;
 
@@ -111,11 +113,60 @@ export const ENROLLMENT_DEFAULT_TRACKS: ProcessTracksV1 = {
     ],
 };
 
+/** The family track's terminal stage — where every closed family case sits, whatever the reason. */
+const ENROLLMENT_FAMILY_TERMINAL_STAGE_KEY = "closed" as const;
+
+/**
+ * "CLOSE AS LOST" LANDS ON THE FAMILY TERMINAL STAGE, AND SAYS WHY.
+ *
+ * The shared default operating plans give `lead`, `tour` and `decision` a "Close as Lost" exit to
+ * `closed_lost` — a stage this template has never had. Applied as-is, the template was refused by the
+ * builder's own referential gate (422 `dangling_stage_reference`) for every new tenant.
+ *
+ * "Lost" is not a position: the family status vocabulary is `open` / `closed`, and why a case closed is
+ * a durable close reason (`mark_lost` → `{ status_key: "closed", close_reason_key: "lost" }`). So the exit
+ * lands on the family terminal stage, and the outcome that takes it records the lost reason FIRST —
+ * repointing alone would close a lost family exactly like a family whose children enrolled. This is the
+ * canonical repair `correctInvalidClosedLostTargets` makes to drifted configurations; the template now
+ * produces that corrected form directly (it cannot import the correction: that module reads this one's
+ * track constants at load).
+ *
+ * Done HERE, not in the shared defaults: the runtime fallback for stages without a stored plan strips
+ * movement but keeps every other target, so a reason target in the defaults would start closing cases
+ * that it then leaves sitting in their stage. Only exits that close the case AND point outside the
+ * template are touched; every other exit and outcome is exactly the default.
+ */
+function closeLostExitsOntoFamilyTerminal(plan: StageOperatingPlanV1): StageOperatingPlanV1 {
+    const templateStages = new Set<string>(ENROLLMENT_STAGE_SPECS.map((s) => s.key));
+    const exits = plan.outgoing_transitions ?? [];
+    const lostRefs = new Set(
+        exits
+            .filter((e) => (e.closes_record === true || (e.status_key ?? "").trim() === "closed") && !templateStages.has(e.target_stage_key))
+            .map((e) => e.transition_ref),
+    );
+    if (!lostRefs.size) return plan;
+    const lost = mapOpportunityRecordActionToPatch("mark_lost");
+    if (!lost?.status_key || !lost.close_reason_key) {
+        throw new Error("Enrollment template: the canonical lost-close mapping is unavailable; refusing to close lost cases without their reason");
+    }
+    const reason: StageOutcomeRuleTargetV1 = { kind: "update_family_case_status", status_key: lost.status_key, close_reason_key: lost.close_reason_key };
+    return {
+        ...plan,
+        outgoing_transitions: exits.map((e) => (lostRefs.has(e.transition_ref) ? { ...e, target_stage_key: ENROLLMENT_FAMILY_TERMINAL_STAGE_KEY } : e)),
+        outcome_rules: (plan.outcome_rules ?? []).map((rule) => {
+            const takesLostExit = (rule.targets ?? []).some((t) => t.kind === "move_to_stage" && typeof t.transition_ref === "string" && lostRefs.has(t.transition_ref));
+            const recordsReason = (rule.targets ?? []).some((t) => t.kind === "update_family_case_status" && (t.close_reason_key ?? "").trim());
+            return takesLostExit && !recordsReason ? { ...rule, targets: [reason, ...(rule.targets ?? [])] } : rule;
+        }),
+    };
+}
+
 /** Build enrollment template stage records (metadata only — no DB seeding). */
 export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageRecord[] {
     return ENROLLMENT_STAGE_SPECS.map((spec, index) => {
         const membership = defaultEnrollmentQueueMembershipForStage(spec.key) ?? undefined;
-        const operatingPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key) ?? undefined;
+        const defaultPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key);
+        const operatingPlan = defaultPlan ? closeLostExitsOntoFamilyTerminal(defaultPlan) : undefined;
         // Seed the row-type grain so Work Views can be scoped per grain (family vs child) and the
         // grain banner has data. Family track = one row per case; child track = one row per enrollment track.
         const grain: StageGrain = spec.track_key === ENROLLMENT_TRACK_CHILD_KEY ? "child" : "family";
