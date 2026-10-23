@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_6a6b8a3f17fffe",
+  "query_hash": "701fa41dbbe50c507c2baa6c23623459e3aa420e6458d298ef50750a18894f5a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T03:46:38.680Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_6a6b8a3f17fffe",
+    "query_hash": "701fa41dbbe50c507c2baa6c23623459e3aa420e6458d298ef50750a18894f5a",
+    "authorization_id": "grnt_50a6f1f9a39b449d",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T03:46:48.589Z",
+    "question_ids": [
+      "l00_identity",
+      "l01_version"
+    ],
+    "questions": {
+      "l00_identity": {
+        "question_id": "l00_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_head": "20261207181600",
+            "ledger_rows": 541
+          }
+        ]
+      },
+      "l01_version": {
+        "question_id": "l01_version",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20261206090000",
+            "expected_name": "tour_booking_slot_capacity_guard",
+            "expected_sha256": null,
+            "present": false,
+            "recorded_name": null,
+            "statements": 0,
+            "recorded_sha256": null,
+            "identity_matches": null
+          },
+          {
+            "version": "20261207181500",
+            "expected_name": "documents_direct_access_revocation",
+            "expected_sha256": "36cba5183ac7d06d487bcf1d968ea7bd0f0c16ce4594ff52270911c11567caef",
+            "present": true,
+            "recorded_name": "documents_direct_access_revocation",
+            "statements": 2,
+            "recorded_sha256": "1d7d490663d3dbddfbdb53372f0c92955c9bd2f881b93ee7a9b552e234d92ab5",
+            "identity_matches": false
+          },
+          {
+            "version": "20261207181600",
+            "expected_name": "org_documents_bucket_governance",
+            "expected_sha256": "518001ead97ecd2afc80ccf5920e3c30b18c3f672e563cddcf13b74a5b53451a",
+            "present": true,
+            "recorded_name": "org_documents_bucket_governance",
+            "statements": 3,
+            "recorded_sha256": "9ab99396e90347fb774bbc02cb2634da11c511749455ecdc9915669830e927d3",
+            "identity_matches": false
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

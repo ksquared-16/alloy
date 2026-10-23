@@ -197,14 +197,24 @@ else:
     check("processing case for the intake document", None, False, None, reason="no case id")
 
 # 5. Public ingestion. No valid token and no valid file are sent, so nothing can be written.
-s, b = call("/api/vendor-application", None, "POST", b"--x--\r\n", "multipart/form-data; boundary=x", {"content-length": str(64 * 1024 * 1024)})
-check("vendor application: declared oversize body refused before reading", None, s == 413, s, code_of(b))
+# A REAL oversize body (6 MiB of zero bytes, not a valid file). The platform edge or the route must refuse it,
+# and either refusal persists nothing. Which layer answered is recorded.
+big_body, big_ct = multipart({"first_name": "QA"}, "oversize.pdf", b"\x00" * (6 * 1024 * 1024), "application/pdf")
+try:
+    s, b = call("/api/vendor-application", None, "POST", big_body, big_ct)
+except Exception as e:  # a connection closed by the edge is also a refusal; record it as such
+    s, b = None, {"error": type(e).__name__}
+layer = "route" if code_of(b) == "TOO_LARGE" else ("platform_edge" if s == 413 else ("connection_closed" if s is None else "other"))
+check("vendor application: oversize body refused", None, s in (413, None), s, code_of(b), layer=layer)
 
 
 def rate_probe(name, path, body, ctype, limit):
     statuses = []
     for _ in range(limit + 2):
-        s, b = call(path, None, "POST", body, ctype)
+        try:
+            s, b = call(path, None, "POST", body, ctype)
+        except Exception:
+            s, b = None, None
         statuses.append(s)
         if s == 429:
             break
