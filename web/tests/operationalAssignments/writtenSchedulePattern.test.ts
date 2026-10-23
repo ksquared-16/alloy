@@ -23,13 +23,49 @@ describe("resolveWrittenSchedulePattern", () => {
         expect(r).toEqual({ patternId: null, scheduleType: null, ambiguous: true });
     });
 
-    it("a chosen schedule type is written, preferring its pattern on the selected days", () => {
+    it("a chosen schedule type is written through its ONE pattern on the selected days", () => {
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "weekly", days: [2] })).toEqual({
+            patternId: "soccer-tue",
+            scheduleType: "weekly",
+            ambiguous: false,
+        });
+    });
+
+    it("A6: two patterns of the chosen type on these days — explicit selection is required, not the first", () => {
+        // Full Day and QA Primary Day are both full_day on Mon–Fri; Before and After Care both weekly.
         expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "full_day", days: MF })).toEqual({
+            patternId: null,
+            scheduleType: null,
+            ambiguous: true,
+        });
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "weekly", days: MF }).ambiguous).toBe(true);
+        // Choosing one settles it.
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "full_day", days: MF, chosenPatternId: "qa-primary-day" }).patternId).toBe("qa-primary-day");
+    });
+
+    it("A6: custom weekdays keep the operator's days — never silently become another pattern's", () => {
+        // Mon/Wed/Fri full day: no full_day pattern sits on those days. The chosen pattern carries the
+        // type; the days are custom (written as the assignment's own Assignment Time).
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "full_day", days: [1, 3, 5], chosenPatternId: "full-day" })).toEqual({
             patternId: "full-day",
             scheduleType: "full_day",
             ambiguous: false,
+            custom: true,
         });
-        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "weekly", days: [2] }).patternId).toBe("soccer-tue");
+        // The type's only pattern carries a custom week when nothing more specific was chosen.
+        const onlyOne = site.filter((p) => p.id !== "qa-primary-day");
+        expect(resolveWrittenSchedulePattern({ patterns: onlyOne, chosenScheduleType: "full_day", days: [1, 3, 5] })).toEqual({
+            patternId: "full-day",
+            scheduleType: "full_day",
+            ambiguous: false,
+            custom: true,
+        });
+        // Several candidate carriers and none chosen: the operator chooses (it used to be ofType[0]).
+        expect(resolveWrittenSchedulePattern({ patterns: site, chosenScheduleType: "full_day", days: [1, 3, 5] })).toEqual({
+            patternId: null,
+            scheduleType: null,
+            ambiguous: true,
+        });
     });
 
     it("unchosen days that only one schedule type covers decide it", () => {
@@ -39,7 +75,7 @@ describe("resolveWrittenSchedulePattern", () => {
             ambiguous: false,
         });
         // Order of selection does not matter.
-        const only = site.filter((p) => p.scheduleTypeKey === "full_day");
+        const only = site.filter((p) => p.id === "full-day");
         expect(resolveWrittenSchedulePattern({ patterns: only, chosenScheduleType: null, days: [5, 1, 3, 2, 4] }).scheduleType).toBe("full_day");
     });
 

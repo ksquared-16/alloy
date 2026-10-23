@@ -12,6 +12,31 @@ import { createOperationalAssignment } from "@/lib/operationalAssignments/operat
 import { operatorFacingAssignmentError } from "@/lib/operationalAssignments/operatorAssignmentErrors";
 import { isValidIsoDateString } from "@/lib/childcareOperational/effectiveDating";
 import { assignmentSiteAuthorizer } from "@/lib/adminV2/actions/definitions/assignmentSiteAuthorizer";
+import {
+    AssignmentTimeRejectedError,
+    setAssignmentTime,
+    validateAssignmentTimeDays,
+    type AssignmentTimeDayInput,
+} from "@/lib/assignmentTime/setAssignmentTime";
+
+/**
+ * The week the operator gave the new assignment — `[{ weekday, start_time?, end_time? }]`, the same
+ * shape `assignment.set_time` takes. Absent leaves the hours the pattern seeded; present, it is the
+ * assignment's own Assignment Time from the first day (V7 S3 / audit A4: a secondary's hours and
+ * custom days used to be shown in the editor and never written).
+ */
+function readDays(payload: Record<string, unknown> | undefined): AssignmentTimeDayInput[] | null {
+    const raw = payload?.days;
+    if (!Array.isArray(raw) || raw.length === 0) return null;
+    return raw.map((d) => {
+        const row = (d ?? {}) as Record<string, unknown>;
+        return {
+            weekday: Number(row.weekday),
+            startTime: t(row.start_time ?? row.startTime) || null,
+            endTime: t(row.end_time ?? row.endTime) || null,
+        };
+    });
+}
 
 export const ASSIGNMENT_CREATE_ACTION_KEY = "assignment.create";
 
@@ -54,6 +79,11 @@ export const assignmentCreateAction: RegisteredAction = {
                     { code: "invalid_end_date", message: "End date must be on or after the start date", field: "end_date" },
                 ],
             };
+        }
+        const days = readDays(src);
+        const dayProblems = days ? validateAssignmentTimeDays(days) : [];
+        if (dayProblems.length > 0) {
+            return { ok: false, blockers: [{ code: "invalid_days", message: dayProblems[0], field: "days" }] };
         }
         return { ok: true, value: src };
     },
@@ -147,6 +177,22 @@ export const assignmentCreateAction: RegisteredAction = {
                     ? { duplicated_from_assignment_id: t(payload.duplicate_of) }
                     : {},
             });
+            const days = readDays(payload);
+            if (days) {
+                try {
+                    await setAssignmentTime(supabase, { assignmentId: row.id, days, actorUserId: ctx.userId ?? null });
+                } catch (e) {
+                    // The row exists; its hours did not land. Said, with the row named, never shown as saved.
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 422,
+                        error: `The assignment was saved, but its days and hours were not: ${
+                            e instanceof AssignmentTimeRejectedError ? e.message : "they could not be written"
+                        }`,
+                    };
+                }
+            }
             return {
                 ok: true,
                 correlationId,

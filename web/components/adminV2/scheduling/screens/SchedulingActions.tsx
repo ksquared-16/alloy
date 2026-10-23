@@ -7,7 +7,7 @@
  */
 
 import type { ReactNode } from "react";
-import { Archive, ArrowRightLeft, Layers, Plus, Star, Users } from "lucide-react";
+import { Archive, ArrowRightLeft, Layers, Plus, Users } from "lucide-react";
 
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import { WS_EYEBROW } from "@/components/workspace/workspaceTokens";
@@ -45,14 +45,6 @@ const ASSIGNMENT_WORKSPACE_ACTIONS: AssignmentWorkspaceAction[] = [
         description: "Select assignments on the Roster, then Bulk room change with effective dating.",
         status: "available",
         icon: <ArrowRightLeft className="h-4 w-4" strokeWidth={2} />,
-    },
-    {
-        key: "bulk_primary_change",
-        label: "Bulk Primary Change",
-        description: "Select secondary assignments on the Roster, then Make primary.",
-        status: "available",
-        registeredActionKey: "assignment.set_primary",
-        icon: <Star className="h-4 w-4" strokeWidth={2} />,
     },
     {
         key: "bulk_archive",

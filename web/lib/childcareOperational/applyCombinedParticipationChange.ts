@@ -70,6 +70,9 @@ export type CombinedParticipationChangeInput = {
     assignment?: {
         startDate: string;
         schedulePatternId: string;
+        /** Named only when the placement moves with it (see `AssignmentChangeFields`). */
+        roomLocationId?: string | null;
+        programCategoryId?: string | null;
         metadata?: Record<string, unknown>;
     };
 };
@@ -164,7 +167,13 @@ export async function applyCombinedParticipationChange(
                     : undefined,
             assignment:
                 assignmentInput && resolvedAssignment
-                    ? assignmentChangePayload(assignmentInput, resolvedAssignment)
+                    ? {
+                          ...assignmentChangePayload(assignmentInput, resolvedAssignment),
+                          ...(input.assignment?.roomLocationId ? { roomLocationId: input.assignment.roomLocationId } : {}),
+                          ...(input.assignment?.programCategoryId
+                              ? { programCategoryId: input.assignment.programCategoryId }
+                              : {}),
+                      }
                     : undefined,
         });
     } catch (e) {

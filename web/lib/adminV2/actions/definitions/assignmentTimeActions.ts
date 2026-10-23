@@ -61,7 +61,9 @@ export const assignmentSetTimeAction: RegisteredAction = {
     defaultLabel: "Set assignment hours",
     description:
         "Record which days an assignment runs and the hours it runs on each of them. The reusable pattern is not changed.",
-    supportedEntityTypes: ["person"],
+    // A child's assignment is corrected in place too (V7 S3): the row is read by id and its site
+    // authorised from the row, so the subject type adds nothing to check.
+    supportedEntityTypes: ["child", "person"],
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
