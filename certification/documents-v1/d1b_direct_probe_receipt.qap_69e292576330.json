@@ -1,0 +1,1079 @@
+{
+  "schema": "vacilando.qa_principal_probe.v1",
+  "probe_id": "qap_69e292576330",
+  "probe_plan": "documents_d1b_direct_access",
+  "request_ref": {
+    "path": "certification/documents-v1/D1B-PROBE-CAPABILITY-REQUEST.md",
+    "sha256": "8a627a68d802ec91fb3d390699e66c9e4e8162820715d26cd07c84fd8c798bc1"
+  },
+  "qa_run_id": "qar_efe9bd0d1d9c",
+  "qa_plan": "authz_q1",
+  "lane_id": "lane_aa660dc9554d",
+  "governed_request_id": "gar_2c9cb8815bafc4",
+  "trusted_host_action_id": "tha_75e672a9f55e50",
+  "target": {
+    "key": "alloy_staging_web",
+    "deployed_git_sha": "ead892226da93f43c5615a51a5e5a16c26ebcb57",
+    "deployed_project_ref": "ikaxilmwmrmbagoidedu",
+    "database_project_ref": "ikaxilmwmrmbagoidedu",
+    "credentials_proven": true
+  },
+  "sessions": [
+    {
+      "persona": "doc_reader",
+      "http_status": 200,
+      "live": true,
+      "refreshed": false,
+      "correlation": {
+        "sb-request-id": "01a1692f-246b-7b28-b578-03e26e75ed41",
+        "cf-ray": "a4f17640add25aad-VIE"
+      }
+    },
+    {
+      "persona": "scoped_ops",
+      "http_status": 200,
+      "live": true,
+      "refreshed": false,
+      "correlation": {
+        "sb-request-id": "01a1692f-2730-7f91-9fe2-08f57dc8ae22",
+        "cf-ray": "a4f1764519615aad-VIE"
+      }
+    },
+    {
+      "persona": "fixture_admin",
+      "http_status": 200,
+      "live": true,
+      "refreshed": false,
+      "correlation": {
+        "sb-request-id": "01a1692f-2892-7958-938b-5ca0059514ad",
+        "cf-ray": "a4f176474b1a5aad-VIE"
+      }
+    },
+    {
+      "persona": "cross_org_admin",
+      "http_status": 200,
+      "live": true,
+      "refreshed": false,
+      "correlation": {
+        "sb-request-id": "01a1692f-29ff-734e-949d-0cab2ab784e7",
+        "cf-ray": "a4f176497cc15aad-VIE"
+      }
+    }
+  ],
+  "controls": {
+    "control_list_org": true,
+    "control_object": true
+  },
+  "fixtures": {
+    "tag": "qa-authz-qar_efe9bd0d1d9c",
+    "count": 5
+  },
+  "sentinel": "00000000-0000-4000-8000-0000000000d1",
+  "executed_at": "2026-10-23T14:34:14.271Z",
+  "summary": {
+    "total": 59,
+    "passed": 59,
+    "failed": 0
+  },
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "select:documents:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/documents?select=id&limit=1",
+      "resource_class": "table:documents",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-36ab-7bf6-b395-23f18df49ba4",
+        "cf-ray": "a4f1765dded70d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_versions:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/document_versions?select=id&limit=1",
+      "resource_class": "table:document_versions",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_versions",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table document_versions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-39a4-7729-a113-5b5c84a4fbb0",
+        "cf-ray": "a4f176629a954f59-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_values:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/document_field_values?select=id&limit=1",
+      "resource_class": "table:document_field_values",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_values",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table document_field_values",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-3b6b-7d3d-9d6e-64d0a2707158",
+        "cf-ray": "a4f176656a670d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_definitions:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/document_field_definitions?select=id&limit=1",
+      "resource_class": "table:document_field_definitions",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_definitions",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table document_field_definitions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-3cf8-7b80-9a7a-ec1586ef937d",
+        "cf-ray": "a4f17667eac50d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_documents:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/form_submission_documents?select=id&limit=1",
+      "resource_class": "table:form_submission_documents",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_documents",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table form_submission_documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-3e8e-7e23-ad99-6bb60a88bbab",
+        "cf-ray": "a4f1766a7c5d0d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_signatures:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/form_submission_signatures?select=id&limit=1",
+      "resource_class": "table:form_submission_signatures",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_signatures",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table form_submission_signatures",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-400e-7058-b2a2-8dd2072d3781",
+        "cf-ray": "a4f1766cde190d50-VIE"
+      }
+    },
+    {
+      "id": "select_ocr:documents:anon",
+      "persona": "anon",
+      "operation": "GET /rest/v1/documents?select=extracted_text&limit=1",
+      "resource_class": "column:documents.extracted_text",
+      "http_status": 401,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "401 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4194-7d2e-a8e8-a0dde8f4a667",
+        "cf-ray": "a4f1766f4ea80d50-VIE"
+      }
+    },
+    {
+      "id": "select:documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/documents?select=id&limit=1",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-431a-72da-819c-7e65cc01beef",
+        "cf-ray": "a4f17671be694f59-VIE"
+      }
+    },
+    {
+      "id": "select:document_versions:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/document_versions?select=id&limit=1",
+      "resource_class": "table:document_versions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_versions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_versions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-44a6-7a46-a724-8f848354d49f",
+        "cf-ray": "a4f1767439170d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_values:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/document_field_values?select=id&limit=1",
+      "resource_class": "table:document_field_values",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_values",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_values",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4629-7ff5-94be-311ab3ddaa43",
+        "cf-ray": "a4f1767699d60d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_definitions:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/document_field_definitions?select=id&limit=1",
+      "resource_class": "table:document_field_definitions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_definitions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_definitions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-47b6-7349-b79b-a5c96434970b",
+        "cf-ray": "a4f176791d780d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/form_submission_documents?select=id&limit=1",
+      "resource_class": "table:form_submission_documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4945-7d65-8f88-a9851d6926ba",
+        "cf-ray": "a4f1767b98370d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_signatures:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/form_submission_signatures?select=id&limit=1",
+      "resource_class": "table:form_submission_signatures",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_signatures",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_signatures",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4ab6-7ee1-a4f6-74fad371a003",
+        "cf-ray": "a4f1767deff80d50-VIE"
+      }
+    },
+    {
+      "id": "select_ocr:documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /rest/v1/documents?select=extracted_text&limit=1",
+      "resource_class": "column:documents.extracted_text",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4c30-7728-8ed2-fbd11d6d2cdc",
+        "cf-ray": "a4f1768048530d50-VIE"
+      }
+    },
+    {
+      "id": "select:documents:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/documents?select=id&limit=1",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4dd8-7d4e-8299-01880a3644f1",
+        "cf-ray": "a4f17682e9290d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_versions:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/document_versions?select=id&limit=1",
+      "resource_class": "table:document_versions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_versions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_versions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-4f5c-73f7-b42e-05f09f680429",
+        "cf-ray": "a4f17685592b0d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_values:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/document_field_values?select=id&limit=1",
+      "resource_class": "table:document_field_values",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_values",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_values",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-50d5-7917-89e4-ef8f418f591d",
+        "cf-ray": "a4f17687ba430d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_definitions:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/document_field_definitions?select=id&limit=1",
+      "resource_class": "table:document_field_definitions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_definitions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_definitions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5259-76e9-9402-649ff18e3ec4",
+        "cf-ray": "a4f1768a2aaa0d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_documents:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/form_submission_documents?select=id&limit=1",
+      "resource_class": "table:form_submission_documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5400-7d5a-92fb-f7b3e887aed7",
+        "cf-ray": "a4f1768ccc210d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_signatures:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/form_submission_signatures?select=id&limit=1",
+      "resource_class": "table:form_submission_signatures",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_signatures",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_signatures",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5585-776d-9f7c-736a2c87f065",
+        "cf-ray": "a4f1768f3cd30d50-VIE"
+      }
+    },
+    {
+      "id": "select_ocr:documents:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /rest/v1/documents?select=extracted_text&limit=1",
+      "resource_class": "column:documents.extracted_text",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-56f0-7027-bbb5-b2e8f5a8da5a",
+        "cf-ray": "a4f176917c2f0d50-VIE"
+      }
+    },
+    {
+      "id": "select:documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/documents?select=id&limit=1",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-585a-7666-a1b6-b8114e77de2a",
+        "cf-ray": "a4f17693bd060d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_versions:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/document_versions?select=id&limit=1",
+      "resource_class": "table:document_versions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_versions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_versions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5a21-79df-9a66-122e09b84c42",
+        "cf-ray": "a4f176969e3f0d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_values:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/document_field_values?select=id&limit=1",
+      "resource_class": "table:document_field_values",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_values",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_values",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5b94-7f3f-b6c2-2cded9bff297",
+        "cf-ray": "a4f17698eec90d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_definitions:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/document_field_definitions?select=id&limit=1",
+      "resource_class": "table:document_field_definitions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_definitions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_definitions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5d00-72ba-b70d-fc40d5537ba8",
+        "cf-ray": "a4f1769b28230d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/form_submission_documents?select=id&limit=1",
+      "resource_class": "table:form_submission_documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5e74-7236-8792-40227204d2d8",
+        "cf-ray": "a4f1769d88b70d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_signatures:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/form_submission_signatures?select=id&limit=1",
+      "resource_class": "table:form_submission_signatures",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_signatures",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_signatures",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-5fde-7fa9-9c38-b3e4f8e8c2e9",
+        "cf-ray": "a4f1769fb90f0d50-VIE"
+      }
+    },
+    {
+      "id": "select_ocr:documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /rest/v1/documents?select=extracted_text&limit=1",
+      "resource_class": "column:documents.extracted_text",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-615a-70fa-84da-b4741bcb4743",
+        "cf-ray": "a4f176a218d80d50-VIE"
+      }
+    },
+    {
+      "id": "select:documents:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/documents?select=id&limit=1",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-62c5-733e-80a5-f2515074ddca",
+        "cf-ray": "a4f176a468930d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_versions:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/document_versions?select=id&limit=1",
+      "resource_class": "table:document_versions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_versions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_versions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-645e-7746-916e-56361c0419c1",
+        "cf-ray": "a4f176a6f9bb0d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_values:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/document_field_values?select=id&limit=1",
+      "resource_class": "table:document_field_values",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_values",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_values",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-65ce-72aa-a178-87d71423816b",
+        "cf-ray": "a4f176a94b9e0d50-VIE"
+      }
+    },
+    {
+      "id": "select:document_field_definitions:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/document_field_definitions?select=id&limit=1",
+      "resource_class": "table:document_field_definitions",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table document_field_definitions",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table document_field_definitions",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-6742-7f14-af34-00bec1363291",
+        "cf-ray": "a4f176ab9c7d0d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_documents:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/form_submission_documents?select=id&limit=1",
+      "resource_class": "table:form_submission_documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-68af-7bb3-a27a-4887b6c9d02e",
+        "cf-ray": "a4f176addc830d50-VIE"
+      }
+    },
+    {
+      "id": "select:form_submission_signatures:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/form_submission_signatures?select=id&limit=1",
+      "resource_class": "table:form_submission_signatures",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table form_submission_signatures",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table form_submission_signatures",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-6a85-7224-80d5-7394c6fce951",
+        "cf-ray": "a4f176b0cf110d50-VIE"
+      }
+    },
+    {
+      "id": "select_ocr:documents:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /rest/v1/documents?select=extracted_text&limit=1",
+      "resource_class": "column:documents.extracted_text",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-6bf9-7547-b9e1-1e3127c7c5ea",
+        "cf-ray": "a4f176b32fc00d50-VIE"
+      }
+    },
+    {
+      "id": "update:documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "PATCH /rest/v1/documents?id=eq.<sentinel>",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-6d67-726b-9542-6a38ecb9a005",
+        "cf-ray": "a4f176b56f740d50-VIE"
+      }
+    },
+    {
+      "id": "insert:documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "POST /rest/v1/documents {}",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-6ee4-7e75-be95-aedfa569820d",
+        "cf-ray": "a4f176b7c8170d50-VIE"
+      }
+    },
+    {
+      "id": "delete:documents:doc_reader",
+      "persona": "doc_reader",
+      "operation": "DELETE /rest/v1/documents?id=eq.<sentinel>",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-70a5-7caf-9faf-959c2332a497",
+        "cf-ray": "a4f176ba99cd0d50-VIE"
+      }
+    },
+    {
+      "id": "update:documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "PATCH /rest/v1/documents?id=eq.<sentinel>",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-7212-70f4-a50e-b142143c386b",
+        "cf-ray": "a4f176bce9790d50-VIE"
+      }
+    },
+    {
+      "id": "insert:documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "POST /rest/v1/documents {}",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-7383-7bdf-addd-ed9f8553dbfd",
+        "cf-ray": "a4f176bf39160d50-VIE"
+      }
+    },
+    {
+      "id": "delete:documents:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "DELETE /rest/v1/documents?id=eq.<sentinel>",
+      "resource_class": "table:documents",
+      "http_status": 403,
+      "error_code": "42501",
+      "error_message": "permission denied for table documents",
+      "row_count": null,
+      "expected": "403 42501 permission denied for table documents",
+      "result": "PASS",
+      "reason": "privilege refused",
+      "correlation": {
+        "sb-request-id": "01a1692f-74e8-71b4-8199-220259dfb4e4",
+        "cf-ray": "a4f176c168730d50-VIE"
+      }
+    },
+    {
+      "id": "storage_list_org:anon",
+      "persona": "anon",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <QA Shared org>/}",
+      "resource_class": "bucket:org_documents:qa_shared_org_prefix",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-765a-7fd7-834e-d4bc9501d455",
+        "cf-ray": "a4f176c3b8970d50-VIE"
+      }
+    },
+    {
+      "id": "storage_list_folder:anon",
+      "persona": "anon",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <run fixture folder>/}",
+      "resource_class": "bucket:org_documents:run_fixture_folder",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-7a28-748f-9876-4f673d08493b",
+        "cf-ray": "a4f176c9ce03c1f9-VIE"
+      }
+    },
+    {
+      "id": "storage_download:anon",
+      "persona": "anon",
+      "operation": "GET /storage/v1/object/org_documents/<run fixture object>",
+      "resource_class": "object:org_documents:run_fixture",
+      "http_status": 400,
+      "error_code": "NoSuchKey",
+      "error_message": "Object not found",
+      "row_count": null,
+      "expected": "400/404 (or 401/403) while the trusted control sees the object",
+      "result": "PASS",
+      "reason": "refused (400)",
+      "correlation": {
+        "sb-request-id": "01a1692f-7ba4-7cfd-9547-da299b751e64",
+        "cf-ray": "a4f176cc2f3f0d50-VIE"
+      }
+    },
+    {
+      "id": "storage_list_org:doc_reader",
+      "persona": "doc_reader",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <QA Shared org>/}",
+      "resource_class": "bucket:org_documents:qa_shared_org_prefix",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-7d68-7eaa-962c-60f6ef76f22c",
+        "cf-ray": "a4f176cf0eb0c1f9-VIE"
+      }
+    },
+    {
+      "id": "storage_list_folder:doc_reader",
+      "persona": "doc_reader",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <run fixture folder>/}",
+      "resource_class": "bucket:org_documents:run_fixture_folder",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-7f00-7049-bf23-198e0eb7634c",
+        "cf-ray": "a4f176d199210d50-VIE"
+      }
+    },
+    {
+      "id": "storage_download:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /storage/v1/object/org_documents/<run fixture object>",
+      "resource_class": "object:org_documents:run_fixture",
+      "http_status": 400,
+      "error_code": "NoSuchKey",
+      "error_message": "Object not found",
+      "row_count": null,
+      "expected": "400/404 (or 401/403) while the trusted control sees the object",
+      "result": "PASS",
+      "reason": "refused (400)",
+      "correlation": {
+        "sb-request-id": "01a1692f-8079-7111-85df-69ae9fb00dc3",
+        "cf-ray": "a4f176d3ef42c1f9-VIE"
+      }
+    },
+    {
+      "id": "storage_list_org:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <QA Shared org>/}",
+      "resource_class": "bucket:org_documents:qa_shared_org_prefix",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-838c-71a4-ad57-a259ab846ed9",
+        "cf-ray": "a4f176d8d9c20d50-VIE"
+      }
+    },
+    {
+      "id": "storage_list_folder:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <run fixture folder>/}",
+      "resource_class": "bucket:org_documents:run_fixture_folder",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-8524-7a73-b510-5b131a4fb31a",
+        "cf-ray": "a4f176db6b8dc1f9-VIE"
+      }
+    },
+    {
+      "id": "storage_download:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /storage/v1/object/org_documents/<run fixture object>",
+      "resource_class": "object:org_documents:run_fixture",
+      "http_status": 400,
+      "error_code": "NoSuchKey",
+      "error_message": "Object not found",
+      "row_count": null,
+      "expected": "400/404 (or 401/403) while the trusted control sees the object",
+      "result": "PASS",
+      "reason": "refused (400)",
+      "correlation": {
+        "sb-request-id": "01a1692f-8695-7532-ab2f-3c0c60e660c2",
+        "cf-ray": "a4f176ddb9570d50-VIE"
+      }
+    },
+    {
+      "id": "storage_list_org:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <QA Shared org>/}",
+      "resource_class": "bucket:org_documents:qa_shared_org_prefix",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-8959-7eeb-81d4-82f1a45b88fe",
+        "cf-ray": "a4f176e21b1fc1f9-VIE"
+      }
+    },
+    {
+      "id": "storage_list_folder:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "POST /storage/v1/object/list/org_documents {prefix: <run fixture folder>/}",
+      "resource_class": "bucket:org_documents:run_fixture_folder",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 0,
+      "expected": "[] (or a refusal) while the trusted control sees objects",
+      "result": "PASS",
+      "reason": "empty while objects exist",
+      "correlation": {
+        "sb-request-id": "01a1692f-8ade-7252-9cd7-3726a0d9b0f4",
+        "cf-ray": "a4f176e48ffa0d50-VIE"
+      }
+    },
+    {
+      "id": "storage_download:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /storage/v1/object/org_documents/<run fixture object>",
+      "resource_class": "object:org_documents:run_fixture",
+      "http_status": 400,
+      "error_code": "NoSuchKey",
+      "error_message": "Object not found",
+      "row_count": null,
+      "expected": "400/404 (or 401/403) while the trusted control sees the object",
+      "result": "PASS",
+      "reason": "refused (400)",
+      "correlation": {
+        "sb-request-id": "01a1692f-8c64-784c-94ec-5382752f8783",
+        "cf-ray": "a4f176e6fb71c1f9-VIE"
+      }
+    },
+    {
+      "id": "product_list:fixture_admin",
+      "persona": "fixture_admin",
+      "operation": "GET /api/admin/documents?limit=200",
+      "resource_class": "route:/api/admin/documents",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": null,
+      "expected": "200, run fixture listed",
+      "result": "PASS",
+      "reason": "5 run fixture(s) listed",
+      "correlation": {
+        "x-vercel-id": "fra1::pdx1::qgmlz-1792766087370-97fb23c2c18e"
+      }
+    },
+    {
+      "id": "product_list:doc_reader",
+      "persona": "doc_reader",
+      "operation": "GET /api/admin/documents?limit=200",
+      "resource_class": "route:/api/admin/documents",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": null,
+      "expected": "200, run fixture listed",
+      "result": "PASS",
+      "reason": "4 run fixture(s) listed",
+      "correlation": {
+        "x-vercel-id": "fra1::pdx1::kzbvg-1792766088869-b0f4bb749c64"
+      }
+    },
+    {
+      "id": "product_list:scoped_ops",
+      "persona": "scoped_ops",
+      "operation": "GET /api/admin/documents?limit=200",
+      "resource_class": "route:/api/admin/documents",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": null,
+      "expected": "200",
+      "result": "PASS",
+      "reason": "authorized",
+      "correlation": {
+        "x-vercel-id": "fra1::pdx1::9hgsl-1792766089921-6f67e5c48f25"
+      }
+    },
+    {
+      "id": "product_list:cross_org_admin",
+      "persona": "cross_org_admin",
+      "operation": "GET /api/admin/documents?limit=200",
+      "resource_class": "route:/api/admin/documents",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": null,
+      "expected": "200, no QA Shared fixture",
+      "result": "PASS",
+      "reason": "own organization only",
+      "correlation": {
+        "x-vercel-id": "fra1::pdx1::vctw2-1792766091016-5ceb63722f20"
+      }
+    },
+    {
+      "id": "product_list:anon",
+      "persona": "anon",
+      "operation": "GET /api/admin/documents?limit=200",
+      "resource_class": "route:/api/admin/documents",
+      "http_status": 401,
+      "error_code": null,
+      "error_message": "Unauthorized",
+      "row_count": null,
+      "expected": "401/403 or a sign-in redirect",
+      "result": "PASS",
+      "reason": "product refuses anonymous",
+      "correlation": {
+        "x-vercel-id": "fra1::pdx1::cmdjs-1792766092256-75f72fb07152"
+      }
+    },
+    {
+      "id": "no_mutation:documents",
+      "persona": "trusted_control",
+      "operation": "fixture rows before = after",
+      "resource_class": "table:documents:run_fixtures",
+      "http_status": 200,
+      "error_code": null,
+      "error_message": null,
+      "row_count": 5,
+      "expected": "5 fixture row(s) unchanged",
+      "result": "PASS",
+      "reason": "unchanged",
+      "correlation": {
+        "sb-request-id": "01a1692f-a7fc-76e1-b61a-553a6a8ac9ce",
+        "cf-ray": "a4f177131deec21c-VIE"
+      }
+    }
+  ]
+}

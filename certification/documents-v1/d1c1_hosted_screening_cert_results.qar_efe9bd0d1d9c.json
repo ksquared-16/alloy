@@ -1,0 +1,220 @@
+{
+  "summary": {
+    "passed": 28,
+    "total": 29,
+    "qa_run_id": "qar_efe9bd0d1d9c",
+    "at": "2026-10-23T14:36:26Z"
+  },
+  "results": [
+    {
+      "case": "deployed build",
+      "persona": null,
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sha": "ead892226da93f43c5615a51a5e5a16c26ebcb57",
+      "project": "ikaxilmwmrmbagoidedu"
+    },
+    {
+      "case": "clean PDF stored available",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "clean PDF readable by a reader",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "PDF with JavaScript is quarantined",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "findings": [
+        "pdf:/JavaScript",
+        "pdf:/JS"
+      ]
+    },
+    {
+      "case": "quarantined: no link",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: no link",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: no link",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: no preview",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: no extracted text",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "quarantined: not in the documents list",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "quarantined: not in the documents list",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "quarantined: not in the Processing list",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "quarantined: no drawer",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "review queue lists it for a reviewer",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "screening_reason": "active_content"
+    },
+    {
+      "case": "review queue refused to a non-reviewer",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "review queue refused to a non-reviewer",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "review queue refused to a non-reviewer",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "review queue refused to a non-reviewer",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "release refused to a non-reviewer",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "release invisible to another organization",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "release without a reason refused",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "REASON_REQUIRED"
+    },
+    {
+      "case": "still quarantined after refused releases",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "authorized release",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "released document is available",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "second release refused (not quarantined)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NOT_QUARANTINED"
+    },
+    {
+      "case": "refused upload (corrupt-png)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED"
+    },
+    {
+      "case": "refused upload (png-as-pdf)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "CONTENT_MISMATCH"
+    },
+    {
+      "case": "refused upload (truncated-pdf)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "SCREENING_REFUSED"
+    },
+    {
+      "case": "public vendor application: corrupt files refused before anything is written",
+      "persona": null,
+      "pass": false,
+      "status": 429,
+      "code": "RATE_LIMITED"
+    }
+  ]
+}

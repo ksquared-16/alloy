@@ -117,6 +117,27 @@ def queue(persona):
     return s, {(d or {}).get("id"): d for d in ((b or {}).get("documents") or [])} if isinstance(b, dict) else {}
 
 
+def vendor_refusal_check():
+    vendor_fields = {"first_name": "QA", "last_name": "Screening", "email": "qa-screening@example.com", "phone": "5550000000",
+                     "consent_contractor_agreement": "true", "consent_legal": "true", "vertical_ids[]": "qa"}
+    bnd = "----qad1c1" + uuid.uuid4().hex
+    parts = [f'--{bnd}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in vendor_fields.items()]
+    for field in ("proof_of_insurance", "drivers_license"):
+        parts.append(f'--{bnd}\r\nContent-Disposition: form-data; name="{field}"; filename="{TAG}-{field}.png"\r\nContent-Type: image/png\r\n\r\n'.encode() + CORRUPT_PNG + b"\r\n")
+    parts.append(f"--{bnd}--\r\n".encode())
+    s, b = call("/api/vendor-application", None, "POST", b"".join(parts), f"multipart/form-data; boundary={bnd}")
+    check("public vendor application: corrupt files refused before anything is written", None, s == 415 and code_of(b) == "SCREENING_REFUSED", s, code_of(b))
+
+
+if PHASE == "vendor_refusal":
+    # The public vendor-application refusal alone, in a fresh rate-limit window (the D1b driver's rate probe spends this
+    # caller's budget, which is the limit working).
+    vendor_refusal_check()
+    summary = {"passed": sum(r["pass"] for r in results), "total": len(results), "qa_run_id": RUN, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    print("\nSUMMARY", json.dumps(summary))
+    json.dump({"summary": summary, "results": results}, open(os.path.join(HERE, f"d1c1_vendor_refusal_results.{RUN}.json"), "w"), indent=2)
+    sys.exit(0 if summary["passed"] == summary["total"] else 1)
+
 if PHASE == "certify":
     ids = {}
     s, info = call("/api/build-info")
@@ -193,16 +214,7 @@ if PHASE == "certify":
     ]:
         s, b = upload("fixture_admin", key, target, content, ext, mime)
         check(f"refused upload ({key})", "fixture_admin", s == 415 and code_of(b) == want and not doc_of(b), s, code_of(b))
-    vendor_fields = {"first_name": "QA", "last_name": "Screening", "email": "qa-screening@example.com", "phone": "5550000000",
-                     "consent_contractor_agreement": "true", "consent_legal": "true", "vertical_ids[]": "qa"}
-    bnd = "----qad1c1" + uuid.uuid4().hex
-    parts = [f'--{bnd}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in vendor_fields.items()]
-    for field in ("proof_of_insurance", "drivers_license"):
-        parts.append(f'--{bnd}\r\nContent-Disposition: form-data; name="{field}"; filename="{TAG}-{field}.png"\r\nContent-Type: image/png\r\n\r\n'.encode() + CORRUPT_PNG + b"\r\n")
-    parts.append(f"--{bnd}--\r\n".encode())
-    s, b = call("/api/vendor-application", None, "POST", b"".join(parts), f"multipart/form-data; boundary={bnd}")
-    check("public vendor application: corrupt files refused before anything is written", None, s == 415 and code_of(b) == "SCREENING_REFUSED", s, code_of(b))
-
+    vendor_refusal_check()
     summary = {"passed": sum(r["pass"] for r in results), "total": len(results), "qa_run_id": RUN, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     print("\nSUMMARY", json.dumps(summary))
     json.dump({"summary": summary, "results": results}, open(os.path.join(HERE, f"d1c1_hosted_screening_cert_results.{RUN}.json"), "w"), indent=2)
