@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,9 @@ export async function GET(request: NextRequest) {
     /* Absent means the HOUSEHOLD grain. It is never inferred from an empty selection elsewhere. */
     const raw = (params.get("customer_member_id") ?? "").trim();
     const customerMemberId = raw ? raw : null;
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(supabase, ctx.orgId, { household: { customerId, customerMemberId } });
+    if (outOfScope) return outOfScope;
 
     try {
         const arrangement = await readAccountArrangement(supabase, { orgId: ctx.orgId, customerId, customerMemberId });

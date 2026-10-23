@@ -189,3 +189,33 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
 
 **Not exercised** (local certification stands): Overdue payments, Payment exceptions, Funding variances.
 
+
+## Update 2026-10-23T11:55Z: D1 repaired, deployed and certified on hosted QA Shared
+
+**D1 is CLOSED.** PR #1577 (squash `91ee6721b78e`, deployed 10:34Z).
+- **The repair:** a successful publication of an Enrollment staged process now provisions the org's `workflow_v1` opportunity drawer override, if it has none.
+- **Contract:**
+  - insert-only and idempotent;
+  - existing overrides are preserved and reported;
+  - reported on the response, never a failed publish;
+  - Assignments and Billing do not trigger it;
+  - no migration, and Firefly is untouched.
+- **Local certification** (`d1/LOCAL-CERTIFICATION.md`):
+  - live suite 11/11 on fresh orgs;
+  - the counterfactual fails 4 scenarios (view-model 422 `classic_layout_deferred`);
+  - 0 new failures across 1,266 suites.
+- **Hosted** (`d1/HOSTED-QA.md`; run `qar_43db70ca2b00` → **QUIESCED_RETAINED**, census `gar_07c4153d995320` 13/13, bound `gar_bfc69cdb8806f1`):
+  - republishing QA Shared Enrollment → `provisioned` (`16c5344a…`), then `already_present`;
+  - the effective layout moved from global/null to org/`workflow_v1`;
+  - in the browser, the Decision family and the Waitlist child open in the Focus Panel with their cards (view-model 200);
+  - Assignments and Billing are unchanged.
+
+**The merge path needed a fresh census.** The merge was refused twice (`ledger_evidence_stale` / `scoped_parity_dependency_unsettled`): the gate's identity census pre-dated the documents lane's `20261207181500`/`181600` applies. A fresh census filed with `inputs.queryArtifactPath` cleared it (`gar_42f7e99af47fa9`: head `20261207181600`, 541 rows, nothing missing).
+
+**D3 is readable on hosted, admin and Director.** The closed record opens with a CLOSED card ("No current work configured"). The Work View provisioning answer still returns `no_truthful_primary_action` for the subject, with no visible effect.
+
+**D8 (new).**
+- **What happens:** opening a closed (lost) family auto-opens an Assignments "Create Assignment" editor for its child over the panel.
+- **Status:** Focus Panel behaviour; not repaired, and no writes were made.
+
+**Open:** D2, D4, D5, D6, D7, D8; O1. **Not exercised** (local certification stands): Overdue payments, Payment exceptions, Funding variances.

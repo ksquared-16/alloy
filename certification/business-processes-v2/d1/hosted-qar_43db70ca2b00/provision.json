@@ -1,0 +1,79 @@
+{
+ "run": "qar_43db70ca2b00",
+ "build": "91ee6721b78e2e175e9ab2fcbcb92bdc529415b6",
+ "before": {
+  "at": "2026-10-23T11:34:29.270Z",
+  "status": 200,
+  "layout_id": "0680209d-12e4-45a3-b00f-7dca0f53d2b9",
+  "inquiry_drawer_mode": null,
+  "version": 1,
+  "config_keys": [
+   "overview_section_order",
+   "version"
+  ]
+ },
+ "validate": {
+  "status": 200,
+  "errors": []
+ },
+ "publish": {
+  "status": 200,
+  "published": {
+   "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+   "revision_id": "caaf8b6a-e578-4699-be5e-ac2e6a2d19b0",
+   "revision_number": 2,
+   "publication_id": "eb126e5f-ff35-41fc-a795-2d2f7ac5e817",
+   "published_at": "2026-10-23T02:22:55.147449+00:00",
+   "already_published": true
+  },
+  "opportunity_drawer_override": {
+   "status": "provisioned",
+   "processKeys": [
+    "enrollment"
+   ]
+  },
+  "error": null
+ },
+ "after": {
+  "at": "2026-10-23T11:34:32.226Z",
+  "status": 200,
+  "layout_id": "16c5344a-558c-4d29-bc67-1129a8318901",
+  "inquiry_drawer_mode": "workflow_v1",
+  "version": 3,
+  "config_keys": [
+   "inquiry_drawer_mode",
+   "inquiry_workflow_sections",
+   "overview_hidden_sections",
+   "overview_section_order",
+   "suppress_body_status",
+   "version"
+  ]
+ },
+ "republish": {
+  "status": 200,
+  "already_published": true,
+  "opportunity_drawer_override": {
+   "status": "already_present",
+   "processKeys": [
+    "enrollment"
+   ],
+   "id": "16c5344a-558c-4d29-bc67-1129a8318901"
+  }
+ },
+ "after_republish": {
+  "at": "2026-10-23T11:34:33.840Z",
+  "status": 200,
+  "layout_id": "16c5344a-558c-4d29-bc67-1129a8318901",
+  "inquiry_drawer_mode": "workflow_v1",
+  "version": 3,
+  "config_keys": [
+   "inquiry_drawer_mode",
+   "inquiry_workflow_sections",
+   "overview_hidden_sections",
+   "overview_section_order",
+   "suppress_body_status",
+   "version"
+  ]
+ },
+ "note": "before/after re-derived from the API log (GET /api/admin/record-layouts?entity_type=opportunity returns {layouts:[...]}); the first-pass parser read the wrong shape. 0680209d\u2026 is the global record_layouts default; 16c5344a\u2026 is the provisioned org override."
+}

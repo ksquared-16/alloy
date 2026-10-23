@@ -34,6 +34,7 @@ import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { financialReadScopeFromAccess, householdFinancialsReadable } from "@/lib/financials/workspace/financialReadScope";
 import { recordProducerSpans, producerClock } from "@/lib/perf/routeTimingDiagnostic";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type {
@@ -269,6 +270,19 @@ export async function projectFocusPanelCardProducers(input: {
                   // Only reached when the gate ALLOWED. A denied caller never causes a ledger read
                   // at all, which is both the authorization property and the cheaper answer.
                   if (!gate.ok) return { gateOk: false, vm: null };
+                  /*
+                   * BP V2 D4 — the same site-scope decision the /card endpoint makes, so the panel's
+                   * first paint is not the softer door. Out of scope is a refusal (`forbidden`), not
+                   * an empty account, and no ledger read happens.
+                   */
+                  // Not a separate timing span: an org-wide caller does no read here at all.
+                  const inScope = await householdFinancialsReadable(supabase, {
+                      orgId,
+                      scope: financialReadScopeFromAccess(access),
+                      customerId: financialSubjectId,
+                      customerMemberId,
+                  }).catch(() => "out_of_scope" as const);
+                  if (inScope !== "readable") return { gateOk: false, vm: null };
                   const vm = await clock.time("financials_build_ms", () =>
                       buildFinancialsCardVM(supabase, {
                           orgId,

@@ -14,6 +14,7 @@ import {
 } from "@/lib/financials/reductions/resolveFinancialReductions";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,9 @@ export async function GET(request: NextRequest) {
     const serviceDate = (params.get("service_date") ?? "").trim() || new Date().toISOString().slice(0, 10);
     if (!customerId) return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
     if (!categoryKey) return NextResponse.json({ error: "category_key is required" }, { status: 400 });
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(supabase, ctx.orgId, { household: { customerId, customerMemberId: customerMemberId || null } });
+    if (outOfScope) return outOfScope;
 
     try {
         /*

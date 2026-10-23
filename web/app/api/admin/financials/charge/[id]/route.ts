@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
+import { financialItemReadable, financialReadScopeFromAccess } from "@/lib/financials/workspace/financialReadScope";
 import { resolveChargeDetail } from "@/lib/financials/workspace/resolveChargeDetail";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -19,7 +20,10 @@ export const dynamic = "force-dynamic";
  * other tenant resolves to nothing and answers 404, which is also what a charge that never existed
  * answers. The two are deliberately indistinguishable from outside.
  *
- * Reading a charge is `fin.read`. This route executes nothing.
+ * Reading a charge is `fin.read` AND the charge's location being visible to the caller — the same
+ * `isFinancialWorkVisible` decision every list reader makes before reading money (BP V2 D4). A charge at
+ * a site the caller does not hold, or a household-sourced charge for a site-restricted caller, answers the
+ * same 404 as a charge that does not exist. This route executes nothing.
  */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const gate = await loadAdminRouteGate();
@@ -36,6 +40,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
     const { id } = await context.params;
     try {
+        const scope = financialReadScopeFromAccess(ctx);
+        const readable = await financialItemReadable(supabase, { orgId: ctx.orgId, scope, table: "charges", id: (id ?? "").trim() });
+        if (readable !== "readable" && readable !== "not_governed") return NextResponse.json({ ok: false, error: "No such charge." }, { status: 404 });
         const detail = await resolveChargeDetail(supabase, { orgId: ctx.orgId, chargeId: (id ?? "").trim() });
         if (!detail) return NextResponse.json({ ok: false, error: "No such charge." }, { status: 404 });
         return NextResponse.json({ ok: true, detail });
