@@ -848,7 +848,7 @@ async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> 
         const kept = new Set(
             (await filterDocumentRowsBySensitivity(createAdminClient(), ctx.orgId, access, rows)).map((d) => d.id),
         );
-        documents = (body.documents as Array<Record<string, unknown>>).filter((d) => kept.has(d.id));
+        documents = (body.documents as Array<Record<string, unknown>>).filter((d) => kept.has(String(d.id ?? "")));
     }
     return NextResponse.json({ ...body, documents }, { status: 200 });
 }
