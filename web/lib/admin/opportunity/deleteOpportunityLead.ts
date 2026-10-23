@@ -13,6 +13,7 @@ import {
     type OpportunityLeadDeletionGraph,
     type OpportunityLeadDeletionPreview,
 } from "@/lib/admin/opportunity/opportunityLeadDeletionGraph";
+import { disposeDocumentsOfDeletedSubjects, type DocumentDisposition } from "@/lib/documents/documentDisposal";
 
 export type { OpportunityLeadDeletionPreview } from "@/lib/admin/opportunity/opportunityLeadDeletionGraph";
 
@@ -20,6 +21,8 @@ export type OpportunityLeadDeletionResult = {
     deleted: Record<string, number>;
     orphans: Record<string, number>;
     audit_logged: boolean;
+    /** Per candidate document: deleted with its stored files, retained (and why), or already absent. */
+    documents: DocumentDisposition[];
 };
 
 export { previewOpportunityLeadDeletion };
@@ -171,37 +174,14 @@ async function deleteFormSubmissionsGraph(
     return deleted;
 }
 
-async function deleteDocumentsGraph(
-    supabase: SupabaseClient,
-    orgId: string,
-    documentIds: readonly string[]
-): Promise<Record<string, number>> {
-    const deleted: Record<string, number> = {
-        document_field_values: 0,
-        document_versions: 0,
-        documents: 0,
-    };
-    if (!documentIds.length) return deleted;
-
-    deleted.document_field_values = await deleteByIn(
-        supabase,
-        "document_field_values",
-        "document_id",
-        documentIds,
-        orgId
-    );
-    deleted.document_versions = await deleteByIn(supabase, "document_versions", "document_id", documentIds, orgId);
-    deleted.documents = await deleteByIn(supabase, "documents", "id", documentIds, orgId);
-    return deleted;
-}
-
 /**
  * FK-safe single-opportunity deletion order (aligned with enrollment runtime reset idsOnly path).
  * Never touches locations, work_units, departments, or config/layout/form definitions.
  */
 export async function executeOpportunityLeadDeletionGraph(
     supabase: SupabaseClient,
-    graph: OpportunityLeadDeletionGraph
+    graph: OpportunityLeadDeletionGraph,
+    options: { actorUserId: string; documentDispositions?: DocumentDisposition[] }
 ): Promise<Record<string, number>> {
     const { orgId, opportunityId } = graph;
     const deleted: Record<string, number> = {};
@@ -303,8 +283,19 @@ export async function executeOpportunityLeadDeletionGraph(
     // 7. Forms
     Object.assign(deleted, await deleteFormSubmissionsGraph(supabase, orgId, graph.formSubmissionIds));
 
-    // 8. Documents
-    Object.assign(deleted, await deleteDocumentsGraph(supabase, orgId, graph.documentIds));
+    // 8. Documents — through Documents, never a generic row delete. A document still relied on elsewhere (another
+    //    subject, Forms, Processing, evidence, a hold) is kept; the rest go WITH their stored files, audited. This
+    //    runs before the opportunity row is deleted, so a disposal failure leaves the lead in place to retry.
+    const dispositions = await disposeDocumentsOfDeletedSubjects(supabase, {
+        orgId,
+        actorUserId: options.actorUserId,
+        documentIds: graph.documentIds,
+        deletedSubjectIds: [...opp, ...deletablePersons, ...deletableCustomer, ...deletableMembers],
+        route: "admin/opportunities/delete",
+    });
+    options.documentDispositions?.push(...dispositions);
+    deleted.documents = dispositions.filter((d) => d.outcome === "deleted").length;
+    deleted.documents_retained = dispositions.filter((d) => d.outcome === "retained").length;
 
     // 9. Field values (opportunity + deletable household entities)
     deleted.field_values = 0;
@@ -403,7 +394,8 @@ export async function executeDeleteOpportunityLead(params: {
     if (!graph) throw new Error("Opportunity not found");
     if (graph.blocked) throw new Error(graph.blockReason ?? "Deletion blocked");
 
-    const deleted = await executeOpportunityLeadDeletionGraph(supabase, graph);
+    const documents: DocumentDisposition[] = [];
+    const deleted = await executeOpportunityLeadDeletionGraph(supabase, graph, { actorUserId, documentDispositions: documents });
     const orphans = await verifyOpportunityLeadDeletionOrphans(supabase, orgId, opportunityId, graph);
 
     logAdminAudit({
@@ -414,7 +406,7 @@ export async function executeDeleteOpportunityLead(params: {
         role: actorRole,
     });
 
-    return { deleted, orphans, audit_logged: true };
+    return { deleted, orphans, audit_logged: true, documents };
 }
 
 export async function verifyOpportunityLeadDeletionOrphans(

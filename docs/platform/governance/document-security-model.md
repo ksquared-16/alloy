@@ -74,7 +74,27 @@ ever drawn into a generated PDF.
 **Malware scanning** is not in place. The intended design is quarantine before availability, using the existing `quarantined`
 status, plus one scanning step. It needs a Director provider decision.
 
-## 5. Known boundaries (fail-closed until D2)
+## 5. Disposal: the only way a subject's documents are deleted
+
+A deletion that removes a subject (today: lead deletion) passes its candidate documents to
+`disposeDocumentsOfDeletedSubjects` (`web/lib/documents/documentDisposal.ts`). It never issues a generic row delete.
+
+- **Retained, row and file, when anything else relies on the document:**
+  - another subject;
+  - a Forms link or drawn signature;
+  - a Processing case source;
+  - staff-qualification, safeguarding, medical-consent or subsidy evidence;
+  - a vendor pointer, or a remaining person's profile photo;
+  - a legal hold or unexpired retention (`metadata.legal_hold`, `metadata.retention_until`), interim until D2;
+  - a stored path outside the organization prefix.
+- **Otherwise deleted, in this order:**
+  1. `document_delete_authorized` is recorded.
+  2. The document's own object and every version's object are removed. "Already absent" counts as removed.
+  3. The field values, versions and row are deleted.
+- **Failure:** a failed read, audit or storage step stops the disposal before the row goes, and the subject row stays. Retrying the whole deletion is safe.
+- **Organization scope:** another organization's document is never read or touched.
+
+## 6. Known boundaries (fail-closed until D2)
 
 - Sensitivity is inferred, not declared.
 - Person, household and child subject scope uses department/site linkage only.
@@ -82,7 +102,7 @@ status, plus one scanning step. It needs a Director provider decision.
 
 See `certification/documents-v1/D1B-SECURITY-HARDENING.md` §Security-model boundaries.
 
-## 6. Certification
+## 7. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
 - **Q1:** `certification/documents-v1/Q1-HOSTED-CERTIFICATION.md`.

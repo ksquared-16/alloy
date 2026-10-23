@@ -158,3 +158,16 @@ There is no AV engine. The image libraries `sharp` and `file-type` are not insta
 - **#1576** (evidence-only) was **closed without merging** (`gar_1ad7a3f31a1aa9`) after verifying exact preservation. Its head `064509ed2` equals `origin/agent/documents`, with 3 commits: `4c6e5c3bd`, `b97d9b039`, `064509ed2`.
 - **This packet and the S3 censuses** are additional evidence-only commits on the same branch.
 - **Promotion plan:** the next eligible executable Documents candidate (for example D1c-1, or the `deleteOpportunityLead` fix) is cut from `agent/documents`, so these commits are included. Its PR re-validates the evidence against that candidate's exact SHA: re-run the D1b driver and Q1 matrix on the candidate's deployment, and the ledger/content census. The commits are never rewritten or squashed.
+
+---
+
+## Director decisions recorded (2026-10-23, "NEXT EXECUTION" authorization)
+
+These decisions do not authorize D1c or D2 implementation; they bind the slices that follow.
+
+- **D1c-1:** structural screening is **approved**, with **fail-closed quarantine** of flagged files.
+- **D1c-2:** signature-based malware scanning is **deferred** to a separate provider decision.
+- **D2 shape:** keep the existing logical `documents` identity, **activate immutable versions**, introduce **typed subject associations**, and preserve legacy compatibility.
+- **Waiver ownership:** **Documents owns its document-specific requirement waivers**; Enrollment retains *stage* exceptions. This supersedes the proposal above, which assigned waivers to Enrollment.
+- **Sensitive access** requires all three: capability, subject authorization and sensitivity clearance.
+- **Retention:** retention and legal holds govern eventual purge. Until D2's policy exists, `documents.metadata.legal_hold` / `metadata.retention_until` are the interim hold markers. `disposeDocumentsOfDeletedSubjects` honors them.

@@ -441,16 +441,56 @@ async function resolveFormSubmissionIds(
     return [...ids];
 }
 
+/**
+ * CANDIDATE documents of the subjects this deletion removes. The candidates are:
+ *   * documents whose subject is one of the deleted subjects: the opportunity, deletable persons, the
+ *     deletable customer and deletable customer members (children's records were missed before);
+ *   * documents linked to the form submissions this deletion removes (generated PDFs, uploads, drawn signatures).
+ *     Their junctions go with the submissions; without them the documents would dangle.
+ *
+ * Candidates are not deletions. `disposeDocumentsOfDeletedSubjects` (Documents) decides each one: it keeps any
+ * document another subject, consumer, retention or legal hold still relies on, and deletes the rest WITH their
+ * stored files, audited.
+ */
 async function resolveDocumentIds(
     supabase: SupabaseClient,
     orgId: string,
     opportunityId: string,
     deletableCustomerId: string | null,
-    deletablePersonIds: readonly string[]
+    deletablePersonIds: readonly string[],
+    deletableCustomerMemberIds: readonly string[],
+    formSubmissionIds: readonly string[]
 ): Promise<string[]> {
-    const entityIds = [opportunityId, ...deletablePersonIds];
+    const entityIds = [opportunityId, ...deletablePersonIds, ...deletableCustomerMemberIds];
     if (deletableCustomerId) entityIds.push(deletableCustomerId);
-    return selectIdsByIn(supabase, "documents", "entity_id", entityIds, orgId);
+    const [owned, linked, drawn] = await Promise.all([
+        selectIdsByIn(supabase, "documents", "entity_id", entityIds, orgId),
+        selectColumnByIn(supabase, "form_submission_documents", "document_id", "form_submission_id", formSubmissionIds, orgId),
+        selectColumnByIn(supabase, "form_submission_signatures", "drawn_asset_document_id", "form_submission_id", formSubmissionIds, orgId),
+    ]);
+    return [...new Set([...owned, ...linked, ...drawn])];
+}
+
+/** Non-null values of `column` from `table` rows whose `filterColumn` is one of `ids`, in this org. */
+async function selectColumnByIn(
+    supabase: SupabaseClient,
+    table: string,
+    column: string,
+    filterColumn: string,
+    ids: readonly string[],
+    orgId: string
+): Promise<string[]> {
+    if (!ids.length) return [];
+    const out = new Set<string>();
+    for (const part of chunkIds(ids)) {
+        const { data, error } = await supabase.from(table).select(column).eq("org_id", orgId).in(filterColumn, part);
+        if (error) throw new Error(`select ${table}.${column}: ${error.message}`);
+        for (const row of (data ?? []) as unknown as Array<Record<string, unknown>>) {
+            const v = row[column];
+            if (typeof v === "string" && v.trim()) out.add(v.trim());
+        }
+    }
+    return [...out];
 }
 
 export async function resolveOpportunityLeadDeletionGraph(
@@ -504,11 +544,19 @@ export async function resolveOpportunityLeadDeletionGraph(
         if (!hasRefs) deletablePersonIds.push(personId);
     }
 
-    const [threadIds, formSubmissionIds, documentIds] = await Promise.all([
+    const [threadIds, formSubmissionIds] = await Promise.all([
         resolveCommunicationThreadIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
         resolveFormSubmissionIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
-        resolveDocumentIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
     ]);
+    const documentIds = await resolveDocumentIds(
+        supabase,
+        orgId,
+        opportunityId,
+        deletableCustomerId,
+        deletablePersonIds,
+        deletableCustomerMemberIds,
+        formSubmissionIds
+    );
 
     return {
         orgId,
