@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
@@ -407,6 +408,7 @@ export async function submitPublicVendorApplication(
     original_filename: insuranceFilename,
     mime_type: input.proof_of_insurance.contentType || "application/octet-stream",
     byte_size: insuranceBuf.length,
+    checksum_sha256: createHash("sha256").update(insuranceBuf).digest("hex"),
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: insurancePath,
     status: input.proof_of_insurance.status ?? "uploaded",
@@ -434,6 +436,7 @@ export async function submitPublicVendorApplication(
     original_filename: driversFilename,
     mime_type: input.drivers_license.contentType || "application/octet-stream",
     byte_size: driversBuf.length,
+    checksum_sha256: createHash("sha256").update(driversBuf).digest("hex"),
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: driversPath,
     status: input.drivers_license.status ?? "uploaded",

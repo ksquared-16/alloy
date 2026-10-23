@@ -124,7 +124,10 @@ describe("a document owned only by the deleted lead", () => {
         const r = await dispose([D.owned]);
         expect(outcome(r, D.owned)).toMatchObject({ outcome: "deleted", objectsRemoved: 2, objectsAlreadyAbsent: 0 });
         expect(db.rows("documents").some((d) => d.id === D.owned)).toBe(false);
-        expect(db.rows("document_versions")).toHaveLength(0);
+        // D2: the version rows go with the document row (ON DELETE CASCADE, proven on the database). The disposal never
+        // deletes a version itself — the database refuses that while the document remains — so this in-memory store,
+        // which has no cascade, still holds the seeded version row.
+        expect(db.rows("document_versions").filter((v) => v.document_id === D.owned)).toHaveLength(1);
         expect(db.rows("document_field_values")).toHaveLength(0);
         expect(db.objects.has(`${BUCKET}/${path(D.owned)}`)).toBe(false);
         expect(db.objects.has(`${BUCKET}/${ORG}/opportunity/${OPP}/${D.owned}-v1.pdf`)).toBe(false);

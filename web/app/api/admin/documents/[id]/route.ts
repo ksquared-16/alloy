@@ -8,6 +8,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { documentSubjectInActorScope, requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes";
+import { UNAVAILABLE_DOCUMENT_STATUSES } from "@/lib/documents/documentAvailability";
 
 /**
  * PATCH: update document workflow status. Persists to `documents.status` (text); there is no documents.status_key column.
@@ -15,6 +16,10 @@ import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes
  * D1a: requires `documents.write` (was `ctx.role !== "admin"`, the compatibility projection), and the
  * document's subject must be inside the caller's department/site scope — the same predicate as the
  * list and the signer — so a writer cannot change by id a document their list does not show them.
+ *
+ * D2: the lifecycle statuses (`deleted`, `quarantined`, `restricted`) are neither set nor left here. Each has its own
+ * audited path: the document delete, the D1c-1 screening release (reviewer capability + written reason). Before this, a
+ * `documents.write` holder could move a quarantined file to `uploaded` and skip the release review entirely.
  */
 export async function PATCH(
     request: NextRequest,
@@ -72,6 +77,13 @@ export async function PATCH(
 
     const newSk =
         body.status_key === "" || body.status_key == null ? null : String(body.status_key).trim() || null;
+
+    if ((oldStored && UNAVAILABLE_DOCUMENT_STATUSES.includes(oldStored)) || (newSk && UNAVAILABLE_DOCUMENT_STATUSES.includes(newSk))) {
+        return NextResponse.json(
+            { error: "This status is changed only through its own audited action.", code: "LIFECYCLE_STATUS" },
+            { status: 409 },
+        );
+    }
 
     const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "documents", newSk);
     if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });

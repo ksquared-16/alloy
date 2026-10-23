@@ -1837,6 +1837,14 @@
         "reason": "Documents V1 / D1c-1 (2026-10-23). Releases a quarantined document after review. Requires processing.documents.manage AND documents read admission, the subject inside the reviewer's scope, and every sensitive class cleared. Only a quarantined document; a written reason is required; document_released is recorded before the status changes (503 if the audit cannot be written). Not an antivirus result."
       }
     },
+    "app/api/admin/documents/[id]/sensitivity/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Raises a document's declared sensitivity class (raise-only, enforced by the database). documents.write AND the access decision AND the actor's own clearance for the class; document_sensitivity_raised recorded before the change."
+      }
+    },
     "app/api/admin/documents/[id]/signed-url/route.ts": {
       "GET": {
         "status": "declared",
@@ -1849,6 +1857,34 @@
         "status": "declared",
         "capability": "documents.read",
         "helper": "assertDocumentAccess"
+      }
+    },
+    "app/api/admin/documents/[id]/subjects/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D2 (2026-10-23). A document's typed subject associations (owners, one primary, and context links incl. derived Forms/Processing links). Full document access decision."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Sets the primary owner, links or unlinks an owning subject. documents.write AND the access decision on the document AND the target subject inside the actor's scope; document_subject_changed recorded before the change. Access stays decided by the primary owner only."
+      }
+    },
+    "app/api/admin/documents/[id]/versions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D2 (2026-10-23). Lists a document's immutable versions (metadata only, never a storage path). Admission is the full document access decision: read admission, subject scope, every sensitive class, availability."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Replaces a document's file with a new immutable version. documents.write AND the full access decision; content signature and D1c-1 screening, only a clean file is stored; a written reason; document_version_added recorded before the version exists. The previous version is kept."
       }
     },
     "app/api/admin/documents/screening/route.ts": {
