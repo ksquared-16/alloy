@@ -63,7 +63,7 @@ import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDra
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
-import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { resolveSchedulingCaseOpportunityId } from "@/lib/adminV2/runtime/focusPanel/scheduling/resolveSchedulingCaseOpportunityId";
 import {
     resolveSchedulingFocus,
     schedulingFocusNotice,
@@ -502,14 +502,11 @@ export default function SchedulingCard({ model, context, receded = false, coordi
      * The resolver is not wrong; it was written for grains that always have a case. The question
      * simply does not apply to a staff subject, so it is not asked.
      */
-    const opportunityId =
-        subjectKind === "staff"
-            ? null
-            : resolveFocusPanelMutationOpportunityId({
-                  subjectId: context.subject.id,
-                  grain: context.grain,
-                  truth: context.truth as Record<string, unknown>,
-              });
+    // BP V2 D6 — a durable child record has no case of its own; its child id is never an opportunity id.
+    const opportunityId = resolveSchedulingCaseOpportunityId({
+        subjectKind,
+        context: context as Parameters<typeof resolveSchedulingCaseOpportunityId>[0]["context"],
+    });
 
     // Prebuilt projection: composed server-side into context.truth by the Focus Panel
     // first-paint runtime (like Household), so the card reveals WITH the panel and opens
