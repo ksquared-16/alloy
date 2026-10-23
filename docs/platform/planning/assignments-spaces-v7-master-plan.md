@@ -19,8 +19,8 @@ Primary/Secondary; pricing never decides homeroom).
 | ID | Item | State | Owner lane | Depends on | Next evidence |
 |---|---|---|---|---|---|
 | V7-01 | Canonical model + impact census | **COMPLETE** (this document) | enrollment-placement | — | — |
-| V7-02 | Space configuration and purpose/use | **V7-02a IMPLEMENTED_UNMERGED** (S1, S2, S4 approved); V7-02b (S3) not authorized | enrollment-placement (+configuration) | V7-01 | V7-02a candidate PR; compat decision §10 |
-| V7-03 | Multiple assignments + derived homerooms | DECISION_REQUIRED (H1–H3) | enrollment-placement | V7-02 | derived-homeroom read model |
+| V7-02 | Space configuration and purpose/use | **V7-02a PROMOTED & DEPLOYED-VERIFIED** (#1583, merge `1c7e4ccd`, 2026-10-23); V7-02b (S3) not authorized | enrollment-placement (+configuration) | V7-01 | §10–11 |
+| V7-03 | Multiple assignments + derived homerooms | **IMPLEMENTED_UNMERGED** (H-ID A, H-COMPAT 1 approved) | enrollment-placement | V7-02 | §12 |
 | V7-04 | Operator "Add Schedule" experience | NOT_STARTED | enrollment-placement (UI) | V7-02, V7-03 | mounted flows |
 | V7-05 | Enrollment & commercial separation | DECISION_REQUIRED (C1–C3) | commercial + financials | V7-03 | live pricing suites |
 | V7-06 | Set-aware expected attendance | NOT_STARTED | operations-temporal | V7-03 | live multi-session suites |
@@ -191,3 +191,60 @@ new schedules; a *physical space* never is; a *new* space is always configured (
 alternative — strict mode (unconfigured classrooms refuse new schedules) — would block every new
 assignment on staging until each of its 21 active spaces is configured. One constant
 (`UNCONFIGURED_CLASSROOM_KEEPS_LEGACY_ELIGIBILITY`) switches it.
+
+## 11. V7-02a promotion (2026-10-23)
+
+**COMPAT-1, as ruled by the Director.** Absent `space_uses` keeps bounded legacy eligibility (classrooms
+only); a non-empty list is authoritative; an explicit empty list denies every category-based use; a
+present malformed value (scalar, object, `null`, or a list with a non-text/blank member) is its own
+state — refused on write, fail-closed on read with `space_uses_malformed`, never rewritten. An edit
+keeping its room and use is grandfathered. Browser QA of the first accepted candidate found malformed
+values read as unconfigured (unrestricted); the repair replaced that candidate before promotion.
+
+**Promotion.** PR #1583 (candidate `cbc_38ebd4d8f47d`, `77d8840e`, acceptance `qaa_6a33b97235057f`)
+merged as `1c7e4ccd`; 49 paths, no migrations. Deployed staging verified read-only plus refused
+writes (kinds and filters, Uses UI, malformed-write refusals, ratio refusal on a shared space, roster
+picker eligibility, fixture history unchanged). Write-dependent scenarios rest on the exact
+candidate's isolated-preview QA.
+
+**Open.** S2 homeroom-only enforcement waits on H1. The shared context package
+(`docs/context/package/distribution-manifest.json`) is stale on staging since #1577 — owned by the
+Business Processes lane; V7-02a changes no canonical context claims.
+
+## 12. V7-03 derived homerooms (2026-10-23)
+
+Decisions (`assignments-v7-03-homeroom-decision-packet.md`): **H-ID Option A** — a category behavior
+property `providesHomeroom`, set in the Assignment Categories Studio (child categories only; never by
+name); **H-COMPAT Option 1** — the enrollment's own uncategorized assignment is compatible.
+
+**Implemented.** One pure `deriveHomerooms` (`web/lib/location/homerooms.ts`) and one loader
+(`loadHomeroomContext.ts`) feed the scheduling projection (`ChildScheduling.homerooms`, read by the
+Focus Panel) and the roster. A homeroom is a classroom (`operational_group`, Uses configured and not
+malformed) whose Uses include a Homeroom-providing category, holding a committed child assignment on
+the date whose category provides Homeroom (and is one of the room's uses) or that is the enrollment's
+own uncategorized assignment; a room-less one resolves through the single committed placement in
+effect, else nothing. Date-true: the inclusive window decides, canceled never counts, so history and
+the gap before a planned move resolve correctly. Distinct by space; provenance kept; display order
+only; `is_primary` never read; nothing persisted; no migration.
+
+**Surfaces.** Roster: "Homeroom(s): …" or "No homeroom" for children (staff keep "Primary:").
+Focus Panel Room, once enrolled: the derived set ("Derived homeroom: …" / "No homeroom …"); before
+enrolment the planning value. Program and Program/Room locking stay on the committed primary.
+
+**Retired.** The roster's primary-row / enrollment-draft room guess (`resolveDraftPrimaryRooms`,
+`primaryRoom`) and the primary gate's `room`.
+
+**Tests.** `tests/location/homerooms.test.ts` (zero/one/many, dedupe, enrichment, shared space,
+legacy classroom, malformed space, primary_classroom unflagged, placement compatibility incl. none
+and ambiguous, history/move/gap, canceled/ended, row-order determinism, behavior flag);
+`tests/scheduling/rosterHomerooms.test.ts`; live `tests/location/live/homerooms.live.test.ts`
+(real writer and triggers: two classrooms, enrichment-only, legacy classroom, placement and no
+placement, supersession across today, canceled, projection = roster, no writes).
+
+**Deferred.** First-row room displays that do not claim Homeroom — the compact schedule line,
+`SchedulingCard`, the projection's per-row room-from-placement — converge with V7-09. Attendance,
+expectations and pricing keep the placement / primary they certify against (V7-05, V7-06).
+
+**Outstanding.** Today no space is configured with a Homeroom use, so every child shows "No
+homeroom" until an operator flags a category and configures classrooms.
+

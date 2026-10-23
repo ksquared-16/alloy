@@ -33,7 +33,12 @@ export type AssignmentTypeBehavior = {
     locationIds?: string[];
     /** Finer financial relationship; derives billing_participation column on write. */
     billingExpectation?: BillingExpectation;
-    /** Catalog-category keys this Category may bill against (behavior-only). */
+    /**
+     * This category, when configured as a use of a classroom, makes that classroom a homeroom for the
+     * children assigned there (V7-03, Director H-ID Option A). Child categories only. Never inferred
+     * from the category's name — an operator sets it.
+     */
+    providesHomeroom?: boolean;
 };
 
 function asRequirement(raw: unknown, fallbackRequired: boolean): RequirementMode {
@@ -80,6 +85,7 @@ export function readAssignmentTypeBehavior(raw: unknown): AssignmentTypeBehavior
         eligibleRoomIds,
         locationIds,
         billingExpectation: asBillingExpectation(bag.billingExpectation, "none"),
+        providesHomeroom: bag.providesHomeroom === true,
     };
 }
 
@@ -99,6 +105,7 @@ export function writeAssignmentTypeBehavior(behavior: AssignmentTypeBehavior): A
         eligibleRoomIds: behavior.eligibleRoomIds ?? [],
         locationIds: behavior.locationIds ?? [],
         billingExpectation: behavior.billingExpectation ?? "none",
+        providesHomeroom: behavior.providesHomeroom === true,
     };
 }
 

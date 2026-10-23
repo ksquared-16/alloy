@@ -219,16 +219,16 @@ function buildRecordRows(args: {
             (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
             || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
             || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
-        const primaryRoomName = childEvidence ? trimOrNull(childEvidence.room) : null;
-        // Program never shows "Determined by primary classroom…" — the field value IS the program.
-        // Room may still point operators to Assignments before a primary exists.
+        const homeroomNames = childEvidence ? trimOrNull(childEvidence.room) : null;
+        // Program never shows a derivation line — the field value IS the program.
+        // Room, once enrolled, is the derived homeroom set; before that it points to Assignments.
         const derivedSourceLabel =
             isProgramField
                 ? null
-                : assignmentOwned && childHasPrimary && primaryRoomName
-                  ? `Determined by primary classroom: ${primaryRoomName}`
+                : assignmentOwned && childHasPrimary && homeroomNames
+                  ? `Derived homeroom: ${homeroomNames}`
                   : assignmentOwned && childHasPrimary
-                    ? "Determined by primary classroom"
+                    ? "No homeroom — a classroom provides one when configured for a Homeroom use"
                     : isRoomField && !childHasPrimary
                       ? "Set up in Assignments"
                       : isLocationField && childEvidence?.locationInherited
