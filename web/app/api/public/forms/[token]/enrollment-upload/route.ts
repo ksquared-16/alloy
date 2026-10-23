@@ -33,6 +33,7 @@ import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolv
 import { resolveParticipantUploadDestination } from "@/lib/enrollment/participantRuntime/resolveParticipantUploadDestination";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { CANONICAL_DOCUMENT_MIME, DOCUMENT_CONTENT_EXT, sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
+import { auditQuarantine, decideIngestion } from "@/lib/documents/screenedIngestion";
 import {
     enforcePublicUploadRateLimit,
     PUBLIC_UPLOAD_MAX_FILE_BYTES,
@@ -95,6 +96,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const sniffed = sniffPublicUploadKind(bytes);
     if (!sniffed) return publicErr("Please attach a PDF, PNG or JPEG.", 400, { code: "BAD_TYPE" });
     const kind = { mime: CANONICAL_DOCUMENT_MIME[sniffed], ext: DOCUMENT_CONTENT_EXT[sniffed] };
+    // D1c-1: structural screening before storage. Refused files are never stored; flagged files are held for review.
+    const screened = decideIngestion(bytes, sniffed);
+    if (!screened.store) return publicErr(screened.message, 400, { code: "SCREENING_REFUSED" });
 
     /*
      * The ARTIFACT decides what this attachment is — not the caller.
@@ -149,8 +153,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             byte_size: bytes.length,
             bucket,
             storage_path: storagePath,
-            status: "uploaded",
+            status: screened.status,
             metadata: {
+                screening: screened.screening,
                 source: "participant_upload_v1",
                 packet_session_id: access.value.sessionId,
                 /* Which obligation this satisfies — the association a reviewer needs. */
@@ -166,5 +171,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return publicErr(insErr?.message ?? "Could not store the document.", 500);
     }
 
-    return publicOk({ document_id: (docRow as { id: string }).id, filename, byte_size: bytes.length });
+    const documentId = (docRow as { id: string }).id;
+    await auditQuarantine({
+        orgId: access.value.orgId,
+        actor: "public:enrollment_upload",
+        documentId,
+        decision: screened,
+        route: "public/forms/enrollment-upload",
+    });
+    return publicOk({
+        document_id: documentId,
+        filename,
+        byte_size: bytes.length,
+        ...(screened.status === "quarantined" ? { held_for_review: true } : {}),
+    });
 }

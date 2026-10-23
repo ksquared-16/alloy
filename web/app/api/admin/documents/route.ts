@@ -6,6 +6,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
 import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
     fetchEffectiveStatusDefinitions,
@@ -181,7 +182,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (rawRows ?? []) as DocRow[];
+    // D1c-1: quarantined (and deleted/restricted) documents are not listed. Reviewers use the screening queue.
+    const rows = ((rawRows ?? []) as DocRow[]).filter((r) => !isDocumentUnavailable(r.status));
 
     // D1b.6: scope first, then sensitive classes (medical → health.view, safeguarding evidence →
     // safeguarding view), the same two filters the single-document decision applies.

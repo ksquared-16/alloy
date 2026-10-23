@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { submitPublicVendorApplication } from "@/lib/vendors/publicVendorApplication";
 import { emitEvent } from "@/lib/emitEvent";
 import { CANONICAL_DOCUMENT_MIME, DOCUMENT_CONTENT_EXT, sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
+import { auditQuarantine, decideIngestion, type IngestionDecision } from "@/lib/documents/screenedIngestion";
 import {
   enforcePublicUploadRateLimit,
   PUBLIC_UPLOAD_MAX_FILE_BYTES,
@@ -36,7 +37,11 @@ function getAll(form: FormData, key: string): string[] {
  * A public file, accepted only as what its BYTES prove (D1b.4): PDF, PNG or JPEG, at most 10 MiB.
  * The stored content type and extension come from that proof, never from the browser's label.
  */
-function vettedPublicFile(file: File, buffer: Buffer, label: string): { ok: true; filename: string; contentType: string } | { ok: false; response: NextResponse } {
+function vettedPublicFile(
+  file: File,
+  buffer: Buffer,
+  label: string,
+): { ok: true; filename: string; contentType: string; decision: Extract<IngestionDecision, { store: true }> } | { ok: false; response: NextResponse } {
   if (buffer.length > PUBLIC_UPLOAD_MAX_FILE_BYTES) {
     return { ok: false, response: NextResponse.json({ ok: false, error: `${label} must be under 10MB`, code: "TOO_LARGE" }, { status: 413 }) };
   }
@@ -44,8 +49,13 @@ function vettedPublicFile(file: File, buffer: Buffer, label: string): { ok: true
   if (!kind) {
     return { ok: false, response: NextResponse.json({ ok: false, error: `${label} must be a PDF, PNG or JPEG`, code: "BAD_TYPE" }, { status: 415 }) };
   }
+  // D1c-1: structural screening. Refused files are never stored; flagged files are held for review.
+  const decision = decideIngestion(buffer, kind);
+  if (!decision.store) {
+    return { ok: false, response: NextResponse.json({ ok: false, error: `${label}: ${decision.message}`, code: "SCREENING_REFUSED" }, { status: 415 }) };
+  }
   const base = (file.name || label).replace(/\.[A-Za-z0-9]+$/, "").replace(/[^\w. -]+/g, "").trim().slice(0, 80) || "upload";
-  return { ok: true, filename: `${base}.${DOCUMENT_CONTENT_EXT[kind]}`, contentType: CANONICAL_DOCUMENT_MIME[kind] };
+  return { ok: true, filename: `${base}.${DOCUMENT_CONTENT_EXT[kind]}`, contentType: CANONICAL_DOCUMENT_MIME[kind], decision };
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -156,16 +166,37 @@ export async function POST(request: NextRequest) {
         buffer: insuranceBuf,
         filename: insurance.filename,
         contentType: insurance.contentType,
+        status: insurance.decision.status,
+        screening: insurance.decision.screening,
       },
       drivers_license: {
         buffer: driversBuf,
         filename: drivers.filename,
         contentType: drivers.contentType,
+        status: drivers.decision.status,
+        screening: drivers.decision.screening,
       },
     });
 
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+    }
+
+    // D1c-1: record each quarantined file (by its vendor and document type; the application creates exactly one of each).
+    for (const [vetted, docType] of [[insurance, "insurance"], [drivers, "drivers_license"]] as const) {
+      if (vetted.decision.status !== "quarantined") continue;
+      const { data: held } = await supabase
+        .from("documents")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("entity_type", "vendor")
+        .eq("entity_id", result.vendor_id)
+        .eq("doc_type", docType)
+        .maybeSingle();
+      const heldId = (held as { id?: string } | null)?.id;
+      if (heldId) {
+        await auditQuarantine({ orgId, actor: "public:vendor_application", documentId: heldId, decision: vetted.decision, route: "public/vendor-application" });
+      }
     }
 
     try {

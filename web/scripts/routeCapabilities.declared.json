@@ -1829,6 +1829,14 @@
         "reason": "Documents V1 / D1a (2026-10-20). Was ctx.role !== \"admin\", the compatibility projection, which refused ops (granted documents.write in every organization) and could express no custom role. The document's subject must also be inside the caller's department/site scope, with the same predicate the list and the signer use."
       }
     },
+    "app/api/admin/documents/[id]/screening/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D1c-1 (2026-10-23). Releases a quarantined document after review. Requires processing.documents.manage AND documents read admission, the subject inside the reviewer's scope, and every sensitive class cleared. Only a quarantined document; a written reason is required; document_released is recorded before the status changes (503 if the audit cannot be written). Not an antivirus result."
+      }
+    },
     "app/api/admin/documents/[id]/signed-url/route.ts": {
       "GET": {
         "status": "declared",
@@ -1841,6 +1849,14 @@
         "status": "declared",
         "capability": "documents.read",
         "helper": "assertDocumentAccess"
+      }
+    },
+    "app/api/admin/documents/screening/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D1c-1 (2026-10-23). The structural-screening review queue: this organization's quarantined documents, which no other list shows. Requires the Processing source-document authority that already governs deleting a document, AND documents read admission (requireDocumentRead), with department/site scope and sensitive-class filters applied. Returns the screening record only, never bytes, links or text."
       }
     },
     "app/api/admin/documents/entity-options/route.ts": {

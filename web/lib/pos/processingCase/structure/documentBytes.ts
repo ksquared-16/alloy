@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 
 export async function downloadDocumentBytesSafe(
     supabase: SupabaseClient,
@@ -17,12 +18,15 @@ export async function downloadDocumentBytesSafe(
         if (!args.orgId || !args.documentId) return null;
         const { data: row, error } = await supabase
             .from("documents")
-            .select("bucket, storage_path, mime_type")
+            .select("bucket, storage_path, mime_type, status")
             .eq("org_id", args.orgId)
             .eq("id", args.documentId)
             .maybeSingle();
         if (error || !row) return null;
-        const r = row as { bucket?: string | null; storage_path?: string | null; mime_type?: string | null };
+        const r = row as { bucket?: string | null; storage_path?: string | null; mime_type?: string | null; status?: string | null };
+        // A quarantined (or deleted/restricted) document's bytes are never read: not by Processing, Forms rendering or any
+        // public route (D1c-1).
+        if (isDocumentUnavailable(r.status)) return null;
         const bucket = r.bucket?.trim();
         const path = r.storage_path?.trim();
         if (!bucket || !path) return null;
