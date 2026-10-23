@@ -111,6 +111,11 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
   [`work-view-membership-and-navigation.md` § 11](work-view-membership-and-navigation.md#11-domain-projection-work-views-bp-v2-slice-2).
 - **Same publication chain.** One department per process; draft → validate → publish → department
   projection, unchanged. The publish RPC is content-agnostic; the gate is `validateBusinessProcessForPublish`.
+- **Work View Row Grain at publication (BP V2 D7).** On a staged lifecycle, a view whose declared
+  `row_grain_v1` matches none of the stages it filters is refused (`work_view_grain_mismatch`, naming the
+  view and the incompatible stage refs). A view that mixes in stages of the other grain is warned
+  (`work_view_grain_mixed`). Projection views are unaffected. The rule is in
+  [`work-view-membership-and-navigation.md` § 2](work-view-membership-and-navigation.md#grain-is-a-membership-rule).
 - **Workspace tile (BP V2 Slice 7).** Each process tile adds one line of explicit Work Items attributed to
   the process (open · overdue) — see [`presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md).
   Only lifecycle stage work stamps `metadata.department_id`, so manual, Task Assist, definition-instantiated
