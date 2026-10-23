@@ -1,0 +1,41 @@
+{
+  "cancel review draft": {
+    "status": 200,
+    "ok": true,
+    "result": {
+      "status": "void",
+      "already_cancelled": false,
+      "withdrawn_reductions": 0
+    },
+    "error": null
+  },
+  "reverse due charge": {
+    "status": 200,
+    "ok": true,
+    "result": {
+      "correction_kind": "reversal",
+      "source_charge_id": "1312c61e-8162-4ebf-be5b-7ec7745e6a17",
+      "amount_cents": -5000
+    },
+    "error": null
+  },
+  "open_before": [
+    {
+      "id": "c51fd8f9-fe90-4ac4-b3c8-8aa61c9337e0",
+      "title": "QA follow-up 584637 (overdue)"
+    },
+    {
+      "id": "1545eaa4-510e-40fd-8950-6d5ff8c0dcf8",
+      "title": "Review waitlist position"
+    }
+  ],
+  "complete QA follow-up 584637 (overdue)": {
+    "status": 200,
+    "error": null
+  },
+  "complete Review waitlist position": {
+    "status": 200,
+    "error": null
+  },
+  "open_after": []
+}

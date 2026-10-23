@@ -1,6 +1,6 @@
 # Business Processes V2: sprint status (authoritative)
 
-**As of:** 2026-10-23T02:45Z
+**As of:** 2026-10-23T03:45Z
 **Lane:** `lane_581d120e4e41` (`agent/business-processes`)
 **Deployed staging:** `e541dba05f34` (project `ikaxilmwmrmbagoidedu`). It contains every BP V2 merge below.
 **Vacilando toolkit:** `2cc54168bf80`.
@@ -56,7 +56,7 @@
 | 8A-R | Hosted QA readiness, Decision classification, walkthrough | COMPLETE | #1567 → `a12b8808d` | — | — |
 | 8A-Q | Financial quiescence: census v2 `c1b6c335…`, 13 checks | COMPLETE | #1567 → `a12b8808d` | `financialQuiescence.live.test.ts` (3) | Every BP run's close certified 13/13 (§3) |
 | 8B-1 | Enrollment template repair (`closed_lost` → `closed` + lost reason; family/child Waitlist separation, Director Option 1) | COMPLETE | #1574 → `e541dba05` | `enrollmentTemplatePublication.test.ts` (13, zero publish errors) | Readiness run `qar_e59e093c2b05` (§3) |
-| **8A-H** | **Hosted three-process walkthrough with populated records** | **READY TO RUN** (Enrollment unblocked) | — | — | §4, §6 |
+| **8B-2** | **Hosted populated-record walkthrough** | **PARTIAL**: Assignments complete; Billing complete for hostable views; Enrollment progression and per-child isolation pass, but the record surface is BLOCKED (D1) | — | — | `slice8b2/HOSTED-WALKTHROUGH.md`; run `qar_58463703cedd` |
 
 Local commits not pushed, all evidence with no code: `241daa6d6`, `a0bc3bddf`, `3c9f211f5`, `25d5437af`, `830ce1a5f`, `8ef9baf28`, and this update.
 
@@ -172,4 +172,20 @@ Evidence: `slice8a/hosted/` (`qa-ledger-closeout.json`, and one folder per run).
 - (b) QA Shared has no child status definitions, so `waitlist_child` has no target. The child status vocabulary must be configured before per-child waitlisting can run on hosted staging.
 - (c) QA Shared option sets `person_gender` and `childcare_program_type` return 404.
 - (d) Publish validation does not check Work View row grain against the grain of the stage it filters on.
+
+## Update 2026-10-23T03:45Z: Slice 8B-2 populated hosted walkthrough
+
+Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13/13 with real quiesced financial records; bound by `gar_1f2e19bbd0f334`. Full results: `slice8b2/HOSTED-WALKTHROUGH.md`.
+
+**PASS on hosted staging:**
+- Assignments: all five views populated, counts = rows, the Scheduling card opens on the exact assignment, an authorized archive commits, the out-of-site archive is refused, site-scoped visibility holds.
+- Billing: Charges needing review and Payments due populated, the Financials card leads on the right charge, the settled charge is excluded, the No-Finance refusals hold.
+- Enrollment: Create Lead and the Lead → Tour → Decision progression; per-child waitlisting with sibling independence.
+- Workspace: tiles and Work Item counts.
+
+**Blocking defect:** D1. A new org has no `workflow_v1` opportunity drawer layout and no write path to set one, so every Enrollment record panel is unavailable.
+
+**Other defects:** D2–D7 (see the packet).
+
+**Not exercised** (local certification stands): Overdue payments, Payment exceptions, Funding variances.
 

@@ -1,0 +1,93 @@
+{
+  "restricted_out_of_site": {
+    "status": 403,
+    "response": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "You do not have access to that site, so this assignment cannot be changed there.",
+        "details": {
+          "blockers": [
+            {
+              "code": "site_out_of_scope",
+              "message": "You do not have access to that site, so this assignment cannot be changed there."
+            }
+          ]
+        }
+      },
+      "correlation_id": "730e71fa-c3fd-4bfd-8fd5-67b457e21a60"
+    },
+    "before": [
+      {
+        "id": "242ae39f-2f34-41a8-bbb8-6593446dfbea",
+        "status": "active",
+        "is_primary": true,
+        "end_date": null,
+        "site": "cfb73302-3bbe-49db-b173-876fda776a6d",
+        "updated_at": "2026-10-23T03:02:43.0048+00:00"
+      }
+    ],
+    "after": [
+      {
+        "id": "242ae39f-2f34-41a8-bbb8-6593446dfbea",
+        "status": "active",
+        "is_primary": true,
+        "end_date": null,
+        "site": "cfb73302-3bbe-49db-b173-876fda776a6d",
+        "updated_at": "2026-10-23T03:02:43.0048+00:00"
+      }
+    ],
+    "unchanged": true
+  },
+  "director_archive": {
+    "status": 200,
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "assignment_id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+          "end_date": "2026-10-23",
+          "status": "ended"
+        },
+        "affected_id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d"
+      },
+      "correlation_id": "328ccc4b-fd3a-4184-954f-0018e9733599"
+    },
+    "before": [
+      {
+        "id": "f1e6de50-3f58-41ba-b80e-7f707d38fb5c",
+        "status": "active",
+        "is_primary": true,
+        "end_date": null,
+        "site": "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+        "updated_at": "2026-10-23T03:02:37.441201+00:00"
+      },
+      {
+        "id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+        "status": "active",
+        "is_primary": false,
+        "end_date": "2026-11-01",
+        "site": "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+        "updated_at": "2026-10-23T03:03:26.398208+00:00"
+      }
+    ],
+    "after": [
+      {
+        "id": "f1e6de50-3f58-41ba-b80e-7f707d38fb5c",
+        "status": "active",
+        "is_primary": true,
+        "end_date": null,
+        "site": "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+        "updated_at": "2026-10-23T03:02:37.441201+00:00"
+      },
+      {
+        "id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+        "status": "ended",
+        "is_primary": false,
+        "end_date": "2026-10-23",
+        "site": "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+        "updated_at": "2026-10-23T03:21:57.171794+00:00"
+      }
+    ]
+  }
+}

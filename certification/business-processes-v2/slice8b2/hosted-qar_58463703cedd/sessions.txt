@@ -1,0 +1,4 @@
+admin: identity: qa-pool-01@example.com result: PASS 1bc16d7a-6d16-4bfd-85c7-aacf335b8d4b qa-pool-01@example.com
+director: identity: qa-pool-02@example.com result: PASS e00a5cbe-640b-46b0-ad4a-cc0cbf2adb80 qa-pool-02@example.com
+restricted_operator: identity: qa-pool-03@example.com result: PASS 12ef503f-ce54-40b5-836d-629b87d953cf qa-pool-03@example.com
+no_finance_operator: identity: qa-pool-04@example.com result: PASS d4683917-7534-4450-a10d-4075bc6b1df5 qa-pool-04@example.com
