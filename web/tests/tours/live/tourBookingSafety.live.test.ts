@@ -17,7 +17,7 @@
  *   - a reminder for a booking canceled behind the orchestrator's back is withdrawn at
  *     dispatch, never sent (D-T4)
  *   - two simultaneous bookings for the last seat yield exactly one reservation, through
- *     either writer (D-T5) — REQUIRES migration 20261206090000 on this database
+ *     either writer (D-T5) — REQUIRES migration 20261210090000 on this database
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -370,7 +370,7 @@ describeLive("S1 tour booking & communication safety — live certification data
         await cancelTourBooking(db, ORG, booking.id, { canceledBy: "s1-cert" });
     });
 
-    describe("atomic capacity — requires migration 20261206090000_tour_booking_slot_capacity_guard", () => {
+    describe("atomic capacity — requires migration 20261210090000_tour_booking_slot_capacity_guard", () => {
         it("four simultaneous bookings — public and admin writers — for the last seat yield exactly one reservation", async () => {
             await cancelTourBooking(db, ORG, pending.id, { canceledBy: "s1-cert" });
             const fams = await Promise.all([8, 9, 10, 11].map((n) => family(n)));

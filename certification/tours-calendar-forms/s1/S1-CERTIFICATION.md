@@ -13,6 +13,20 @@ Sprint: Tours, Operating Calendar & Public Forms · slice S1 · **commit-only, n
 | Pushed (operator-authorized, governed, no PR) | `origin/sprint/tours-calendar-forms` gar_f30fc7c5b83ce0; `origin/agent/claude/tours-s1-cert` (same SHA, exists only because the certification apply resolves `agent/**`/`promotion/**`/`staging` refs, not `sprint/**`) gar_0eeb5837138556 |
 | Migration 20261206090000 | applied to **local certification (`alloy-cert`) only** — gar_9bc53323a8010b / tha_cd7b663ac290ae. **Not applied to staging or any deployed database.** |
 
+### Migration renumbered (2026-10-23)
+
+`origin/staging` moved to `7741db690`, whose newest migration is `20261209090200`. A fresh database
+replays the directory in name order, so the S1 guard was renumbered **`20261206090000` →
+`20261210090000`** with byte-identical SQL. The certification apply above ran the identical SQL
+under the old version; the body is re-runnable (`CREATE OR REPLACE`, `DROP TRIGGER IF EXISTS`).
+The local certification ledger may still carry `20261206090000` — reconcile it (repair the old
+version out, record the new one) before any further governed certification apply. Recheck the
+version against `refs/remotes/origin/staging` at sprint integration: staging may move again.
+
+Note: `web/tests/financials/migrationVersionOrdering.test.ts` resolves the ambiguous name
+`origin/staging`; in this worktree a stale LOCAL branch `refs/heads/origin/staging` (`66d6ee27f`)
+wins that resolution, so the guard can pass falsely here. Owner: Financials test; not changed by S1.
+
 ## Defect disposition
 
 | D0 id | Disposition | Proof |
