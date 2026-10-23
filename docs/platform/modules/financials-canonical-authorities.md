@@ -180,7 +180,20 @@ Derived, same file: `compactPayableRows` (scope ∩ current period ∩ `offersPa
 `ledgerPayableRows` (scope ∩ `offersPayment`, every period). Compact may only settle the current
 period; the ledger crosses periods deliberately.
 
----
+### 2.1 Site visibility of detail reads: the same location contract, two grains (BP V2 D4)
+
+**Owner of the rule:** `web/lib/financials/workspace/financialWorkLocation.ts`, via
+`isFinancialWorkVisible` (unchanged).
+**Owner of the detail-read enforcement:** `web/lib/financials/workspace/financialReadScope.ts`.
+
+| Grain | Readable to a site-restricted actor when | Readers |
+|---|---|---|
+| one money row (charge, payment, attempt, ledger row) | its own billable-source location is visible | every list reader; `charge/[id]`, `ledger/[id]`, `eligible-target-charges`, `collection-state` |
+| one household's financial presentation | **every** location its money occupies is visible | Financials card + Focus Panel producer, and the household-keyed reads the card is built from |
+
+The subject scope in §2 above (which child, or the household) is a different question. It is an
+attention filter inside an account the actor is already entitled to, not an authorization.
+Household record (CRM) visibility grants nothing here.
 
 ## 3. The six time identities
 

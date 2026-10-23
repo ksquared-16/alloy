@@ -9,6 +9,8 @@ import {
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { financialReadScopeFromAccess, householdFinancialsReadable } from "@/lib/financials/workspace/financialReadScope";
 
 /**
  * GET /api/admin/financials/card?customer_id=…&customer_member_id=…&date=…
@@ -135,6 +137,23 @@ export async function GET(request: NextRequest) {
         const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
         mark("perm");
         if (denied) return denied;
+
+        /*
+         * BP V2 D4 — SITE SCOPE IS PART OF READING A HOUSEHOLD'S MONEY. The card totals the whole
+         * account, so a site-restricted caller may read it only when every location the household's
+         * money occupies is visible to them (`householdFinancialsReadable`, over the canonical
+         * `isFinancialWorkVisible`). Anything else answers the 404 an unknown household answers.
+         */
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const inScope = await householdFinancialsReadable(createAdminClient(), {
+            orgId: ctx.orgId,
+            scope: financialReadScopeFromAccess(access),
+            customerId,
+            customerMemberId,
+        });
+        mark("scope");
+        if (inScope !== "readable") return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         const vm = await vmP;
         if (!vm) throw readFailure ?? new Error("Financial records unavailable.");

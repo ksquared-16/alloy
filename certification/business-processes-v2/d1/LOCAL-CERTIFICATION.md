@@ -58,6 +58,10 @@ The unit tests are in `web/tests/layout/enrollmentDrawerOverrideProvisioning.tes
 
 ## D3: closed Enrollment record (measured, NOT repaired)
 
+> **Superseded by hosted QA** (`HOSTED-QA.md` §3, run `qar_43db70ca2b00`).
+> - In the browser the closed record **is readable** (view-model 200, panel `record`, CLOSED card), so the "blocker" verdict below, drawn from the server answer alone, is withdrawn.
+> - The provisioning answer still refuses the subject. A separate defect, D8, was found: a "Create Assignment" editor auto-opens over the closed record.
+
 The live suite closes the lead through the supported path: *Not interested* on its Lead stage work → family stage `closed`, status `closed`. The published `closed` stage has **0 work templates**.
 
 | Read | Result |

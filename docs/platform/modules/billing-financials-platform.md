@@ -897,6 +897,46 @@ there would change what its numbers MEAN rather than which of them are shown. Th
 labelled *Account-wide* for exactly that reason, and hosts Thread 2 unforked through the smallest
 adapter that builds its two Focus Panel props.
 
+**Account-wide is shown only to an actor entitled to the whole account (BP V2 D4, Director decision).**
+Being able to open a household is not permission to read every amount on it.
+
+- **Household record visibility** is CRM scope (`accessScope.ts`): can this actor open the family, the
+  child or the Enrollment case.
+- **Financial subject listing** is `isFinancialSubjectVisible`: the household appears in Accounts when
+  ANY of its locations is visible.
+- **Financial item visibility** is the location contract above, applied to each charge, payment,
+  collection attempt or ledger row.
+
+Detail reads enforce item visibility server-side, through `web/lib/financials/workspace/financialReadScope.ts`
+(and `financialReadScopeGuard.ts` at the route layer). That module adds no rule: it locates the
+requested thing exactly as the lists do and asks `isFinancialWorkVisible`.
+
+- **One item** (`charge/[id]`, `ledger/[id]`, `eligible-target-charges` by payment, `collection-state`
+  by attempt): readable when its own location is visible.
+- **One household's presentation**: the Financials card, the Focus Panel card producer (and therefore
+  Billing's source-focused card), `payment-methods`, `autopay`, `responsibility-arrangement`,
+  `responsibility-positions`, `family-discount-position`, `assignable-discounts`,
+  `proposed-charge-discounts` and `reduction-forecast`.
+  - These are readable to a site-restricted actor only when EVERY location the household's money
+    occupies is visible: each agreement's site, plus the org-scoped household account if any charge or
+    payment is household-sourced.
+  - These presentations total across the account. They are refused whole rather than shown with a
+    subtotal that includes withheld money, because "a total is the one place a leaked row is invisible".
+- **What a refusal looks like:** the same 404 as a record that does not exist, so ids cannot be
+  probed. In the Focus Panel it is the producer's `forbidden` state.
+- **Unrestricted actors:** unchanged, with no extra reads.
+- **`job`-sourced money:** outside the location contract; it keeps its previous authorization.
+
+Before D4 these reads stopped at org + `fin.read`. A Riverside-only operator read a mixed household's
+amounts that every list withheld (hosted run `qar_58463703cedd`).
+
+**Residual, not covered by D4** (org-wide lists and aggregates): `needs-recognition`, the `ledger` and
+`journal-entries` lists, `snapshot` and `statements`. Money-free household rosters
+(`responsibility-candidates`, `responsibility-scopes`, `billing-periods`) follow CRM reachability.
+
+**Proof:** `web/tests/financials/live/financialDetailSiteScope.live.test.ts` (real routes, real access
+chain, real records; fails without the guard) and `web/tests/financials/financialReadScope.test.ts`.
+
 **One read feeds every number.** Overview tiles, the section health band and the queue all come from
 the same fetch, and the counts are derived from the rows returned. A tile showing 7 above a list of 6
 is not something an operator can be asked to reconcile.

@@ -1,0 +1,808 @@
+{
+  "vm": [
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    },
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    },
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    },
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    },
+    {
+      "status": 200,
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+    }
+  ],
+  "persona": "admin",
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: net::ERR_FAILED"
+  ],
+  "page_errors": [],
+  "http_errors": [
+    {
+      "status": 404,
+      "url": "/api/admin/financial-config/opportunity/0554eb4f-2cb9-42f2-82ad-058e66c889ae"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/financial-config/opportunity/ed14eb72-b80f-4184-9c7b-c44bfce6da43"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/financial-config/opportunity/ed14eb72-b80f-4184-9c7b-c44bfce6da43?draft_customer_member_id=ed14eb72-b80f-4184-9c7b-c44bfce6da43&d"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/childcare_program_type"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/person_gender"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/person_gender"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/childcare_program_type"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/person_gender"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/childcare_program_type"
+    },
+    {
+      "status": 404,
+      "url": "/api/admin/option-sets/person_gender"
+    }
+  ],
+  "blocked_non_get": [
+    "POST /api/admin/queues/stage-membership-ack",
+    "POST /api/admin/queues/stage-membership-ack",
+    "POST /api/admin/queues/stage-membership-ack"
+  ],
+  "views": [
+    {
+      "tile": "Assignments",
+      "label": "Current assignments3›",
+      "ms": 13657,
+      "url": "/workspace/work-unit/current-assignments",
+      "terminal": "projection",
+      "active_view": "current_assignments",
+      "row_grain": null,
+      "pills": [
+        "Current assignments3",
+        "Ending soon0",
+        "Upcoming changes1",
+        "Schedule gaps1",
+        "Proposed / incomplete4"
+      ],
+      "rows": [
+        {
+          "type": "durable_subject",
+          "id": "child:41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+          "text": "BBen Walk 584637 · Ben Walk 584637Primary since Sep 22 · Current assignmentsBen Walk 584637"
+        },
+        {
+          "type": "durable_subject",
+          "id": "child:cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+          "text": "EEve Walk 584637 · Eve Walk 584637Primary since Oct 12 · Current assignmentsEve Walk 584637"
+        },
+        {
+          "type": "durable_subject",
+          "id": "person:d29b6dff-145c-4efe-9902-90a56a04b70c",
+          "text": "QQA Teacher Walk 584637 · QA Teacher Walk 584637Secondary since Oct 2 · Current assignments"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "durable_subject",
+            "id": "child:41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+            "text": "BBen Walk 584637 · Ben Walk 584637Primary since Sep 22 · Current assignmentsBen Walk 584637"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": "assignments",
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room N 584637 Mon–Fri Starts Sep 22, 2026 Edit Assignment View history RELATED WORK Enrollment Go to → Assignment Go to → Assignment Showing",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": "assignments",
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room N 584637 Mon–Fri Starts Sep 22, 2026 Edit Assignment View history RELATED WORK Enrollment Go to → Assignment Go to → Assignment Showing",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Assignments",
+      "label": "Ending soon0›",
+      "ms": 13715,
+      "url": "/workspace/work-unit/ending-soon",
+      "terminal": "projection",
+      "active_view": "assignments_ending_soon",
+      "row_grain": null,
+      "pills": [
+        "Current assignments3",
+        "Ending soon0",
+        "Upcoming changes1",
+        "Schedule gaps1",
+        "Proposed / incomplete4"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Assignments",
+      "label": "Upcoming changes1›",
+      "ms": 13215,
+      "url": "/workspace/work-unit/upcoming-changes",
+      "terminal": "projection",
+      "active_view": "assignments_upcoming_changes",
+      "row_grain": null,
+      "pills": [
+        "Current assignments3",
+        "Ending soon0",
+        "Upcoming changes1",
+        "Schedule gaps1",
+        "Proposed / incomplete4"
+      ],
+      "rows": [
+        {
+          "type": "durable_subject",
+          "id": "child:0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+          "text": "CCara Walk 584637 · Cara Walk 584637New primary assignment starts Oct 29 · Upcoming changesCara Walk 584637"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "durable_subject",
+            "id": "child:0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+            "text": "CCara Walk 584637 · Cara Walk 584637New primary assignment starts Oct 29 · Upcoming changesCara Walk 584637"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": "assignments",
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Assignments · Upcoming changes — New primary assignment starts Oct 29 Cara Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Upcoming Room N 584637 Mon–Fri Starts Oct 29, 2026 Edit Assignment View history RELATED WORK Assignment Showing",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": "assignments",
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Assignments · Upcoming changes — New primary assignment starts Oct 29 Cara Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Upcoming Room N 584637 Mon–Fri Starts Oct 29, 2026 Edit Assignment View history RELATED WORK Assignment Showing",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Assignments",
+      "label": "Schedule gaps1›",
+      "ms": 14227,
+      "url": "/workspace/work-unit/schedule-gaps",
+      "terminal": "projection",
+      "active_view": "schedule_gaps",
+      "row_grain": null,
+      "pills": [
+        "Current assignments3",
+        "Ending soon0",
+        "Upcoming changes1",
+        "Schedule gaps1",
+        "Proposed / incomplete4"
+      ],
+      "rows": [
+        {
+          "type": "durable_subject",
+          "id": "child:ed14eb72-b80f-4184-9c7b-c44bfce6da43",
+          "text": "DDan Walk 584637 · Dan Walk 584637No committed schedule · Schedule gapsDan Walk 584637"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "durable_subject",
+            "id": "child:ed14eb72-b80f-4184-9c7b-c44bfce6da43",
+            "text": "DDan Walk 584637 · Dan Walk 584637No committed schedule · Schedule gapsDan Walk 584637"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": "assignments",
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Assignments · Schedule gaps — No committed schedule Dan Walk 584637 Child Household ASSIGNMENTS This enrollment agreement has no committed schedule yet. D5 Dan Walk 584637 11/3/2021 (4y11m) New schedule ROOM Select a room Select Site · QA North DAYS M T W T F S S Use a pattern DATES Start End Open-ended DAILY HOURS Start 🕒 End 🕒 TUITION Tuition — Dan Walk 584637 No matching rate Who owes this — set responsibility Create Assignment — configure the minimum. Cancel Create Assignment RELATED WORK Assignment Showing",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": "assignments",
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Assignments · Schedule gaps — No committed schedule Dan Walk 584637 Child Household ASSIGNMENTS This enrollment agreement has no committed schedule yet. D5 Dan Walk 584637 11/3/2021 (4y11m) New schedule ROOM Select a room Select Site · QA North DAYS M T W T F S S Use a pattern DATES Start End Open-ended DAILY HOURS Start 🕒 End 🕒 TUITION Tuition — Dan Walk 584637 No matching rate Who owes this — set responsibility Create Assignment — configure the minimum. Cancel Create Assignment RELATED WORK Assignment Showing",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Assignments",
+      "label": "Proposed / incomplete4›",
+      "ms": 12999,
+      "url": "/workspace/work-unit/proposed-incomplete",
+      "terminal": "projection",
+      "active_view": "assignments_proposed_incomplete",
+      "row_grain": null,
+      "pills": [
+        "Current assignments3",
+        "Ending soon0",
+        "Upcoming changes1",
+        "Schedule gaps1",
+        "Proposed / incomplete4"
+      ],
+      "rows": [
+        {
+          "type": "durable_subject",
+          "id": "child:84d16ebf-7222-4b8e-937c-83f9703dfb40",
+          "text": "AAva Walk 584637 · Ava Walk 584637Proposed assignment awaiting disposition · Proposed / incompleteAva Walk 584637"
+        },
+        {
+          "type": "durable_subject",
+          "id": "child:41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+          "text": "BBen Walk 584637 · Ben Walk 584637Missing assignment type · Proposed / incompleteBen Walk 584637"
+        },
+        {
+          "type": "durable_subject",
+          "id": "child:0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+          "text": "CCara Walk 584637 · Cara Walk 584637Missing assignment type · Proposed / incompleteCara Walk 584637"
+        },
+        {
+          "type": "durable_subject",
+          "id": "child:cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+          "text": "EEve Walk 584637 · Eve Walk 584637Missing assignment type · Proposed / incompleteEve Walk 584637"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "durable_subject",
+            "id": "child:84d16ebf-7222-4b8e-937c-83f9703dfb40",
+            "text": "AAva Walk 584637 · Ava Walk 584637Proposed assignment awaiting disposition · Proposed / incompleteAva Walk 584637"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": "assignments",
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Assignments · Proposed / incomplete — Proposed assignment awaiting disposition Ava Walk 584637 Child Household ASSIGNMENTS ← Assignments Classroom 584637 Proposed Mon–Fri Starts Nov 5, 2026 Edit Assignment This Assignment can only become active after enrollment is completed. Make Primary OPERATIONAL EFFECTS Proposed only — not attendance or billing truth View history RELATED WORK Waitlist Go to → Assignment Go to → Assignment Showing",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": "assignments",
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Assignments · Proposed / incomplete — Proposed assignment awaiting disposition Ava Walk 584637 Child Household ASSIGNMENTS ← Assignments Classroom 584637 Proposed Mon–Fri Starts Nov 5, 2026 Edit Assignment This Assignment can only become active after enrollment is completed. Make Primary OPERATIONAL EFFECTS Proposed only — not attendance or billing truth View history RELATED WORK Waitlist Go to → Assignment Go to → Assignment Showing",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Billing",
+      "label": "Charges needing review0›",
+      "ms": 13155,
+      "url": "/workspace/work-unit/charges-needing-review",
+      "terminal": "projection",
+      "active_view": "charges_needing_review",
+      "row_grain": null,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Billing",
+      "label": "Payment exceptions0›",
+      "ms": 13060,
+      "url": "/workspace/work-unit/payment-exceptions",
+      "terminal": "projection",
+      "active_view": "payment_exceptions",
+      "row_grain": null,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Billing",
+      "label": "Funding variances0›",
+      "ms": 12336,
+      "url": "/workspace/work-unit/funding-variances",
+      "terminal": "projection",
+      "active_view": "funding_variances",
+      "row_grain": null,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Billing",
+      "label": "Payments due0›",
+      "ms": 13361,
+      "url": "/workspace/work-unit/payments-due",
+      "terminal": "projection",
+      "active_view": "payments_due",
+      "row_grain": null,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Billing",
+      "label": "Overdue payments0›",
+      "ms": 13334,
+      "url": "/workspace/work-unit/overdue-payments",
+      "terminal": "projection",
+      "active_view": "overdue_payments",
+      "row_grain": null,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Enrollment",
+      "label": "New LeadsRespond to every new family inquiry.0›",
+      "ms": 13113,
+      "url": "/workspace/work-unit/new-leads",
+      "terminal": "empty",
+      "active_view": "new_leads",
+      "row_grain": "family",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Enrollment",
+      "label": "ToursConfirm the visit and record the outcome.0›",
+      "ms": 13681,
+      "url": "/workspace/work-unit/tours",
+      "terminal": "empty",
+      "active_view": "tours",
+      "row_grain": "family",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Enrollment",
+      "label": "DecisionHelp families decide after the tour.1›",
+      "ms": 12882,
+      "url": "/workspace/work-unit/decision",
+      "terminal": "operational",
+      "active_view": "decision",
+      "row_grain": "family",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2",
+        "Work",
+        "Activity"
+      ],
+      "rows": [
+        {
+          "type": "opportunity",
+          "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+          "text": "WWalk 584637 Family · Walk 584637 FamilyOpen · 1 Waitlist · 1 undecidedQA Parent Walk 584637Ava Walk 584637 (5y1m), Ben Walk 584637 (3y8m), Cara Walk 584637 (4y"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "opportunity",
+            "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+            "text": "WWalk 584637 Family · Walk 584637 FamilyOpen · 1 Waitlist · 1 undecidedQA Parent Walk 584637Ava Walk 584637 (5y1m), Ben Walk 584637 (3y8m), Cara Walk 584637 (4y"
+          },
+          "vm": [
+            {
+              "status": 200,
+              "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+            }
+          ],
+          "state": "record",
+          "projection": null,
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → CHILDREN Needs info 5 children · 1 waitlisted 5 child",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": null,
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → CHILDREN Needs info 5 children · 1 waitlisted 5 child",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Enrollment",
+      "label": "RegistrationComplete enrollment for children who are enrolling.0›",
+      "ms": 13683,
+      "url": "/workspace/work-unit/registration",
+      "terminal": "empty",
+      "active_view": "registration",
+      "row_grain": "child",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2"
+      ],
+      "rows": [],
+      "message": null,
+      "opened": []
+    },
+    {
+      "tile": "Enrollment",
+      "label": "WaitlistKeep waitlisted families informed.1›",
+      "ms": 13159,
+      "url": "/workspace/work-unit/waitlist",
+      "terminal": "operational",
+      "active_view": "waitlist",
+      "row_grain": "child",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2",
+        "Work",
+        "Activity"
+      ],
+      "rows": [
+        {
+          "type": "opportunity",
+          "id": "58c9c264-460c-4078-9e2d-30d112ece3f5",
+          "text": "WWalk 584637 Family · Ava Walk 584637waitlisted · WaitlistAva Walk 584637 (5y1m)8h"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "opportunity",
+            "id": "58c9c264-460c-4078-9e2d-30d112ece3f5",
+            "text": "WWalk 584637 Family · Ava Walk 584637waitlisted · WaitlistAva Walk 584637 (5y1m)8h"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": null,
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "A5 Walk 584637 Family · Ava Walk 584637 Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitlist Enrolling Enrolled Closed / Withdrawn WAITLIST Waitlist · Manage waitlist candidates and spot offers. LAST ACTIONFamily · Family Enrolling · Today • 3:00 AM Recent activity 7 ▾ FINANCIALS Responsibility $50.00 Current balance $0.00 Payment Add Details HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → HEALTH & SAFETY REQUIRED INFORMATION Physical / health as",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": null,
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "A5 Walk 584637 Family · Ava Walk 584637 Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitlist Enrolling Enrolled Closed / Withdrawn WAITLIST Waitlist · Manage waitlist candidates and spot offers. LAST ACTIONFamily · Family Enrolling · Today • 3:00 AM Recent activity 7 ▾ FINANCIALS Responsibility $50.00 Current balance $0.00 Payment Add Details HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → HEALTH & SAFETY REQUIRED INFORMATION Physical / health as",
+        "classic": false,
+        "cant_open": false
+      }
+    },
+    {
+      "tile": "Enrollment",
+      "label": "AllEvery family in the process.2›",
+      "ms": 13522,
+      "url": "/workspace/work-unit/all",
+      "terminal": "operational",
+      "active_view": "all",
+      "row_grain": "family",
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision1",
+        "Registration0",
+        "Waitlist1",
+        "All2",
+        "Work",
+        "Activity"
+      ],
+      "rows": [
+        {
+          "type": "opportunity",
+          "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+          "text": "WWalk 584637 Family · Walk 584637 FamilyOpen · 1 Waitlist · 1 undecidedQA Parent Walk 584637Ava Walk 584637 (5y1m), Ben Walk 584637 (3y8m), Cara Walk 584637 (4y"
+        },
+        {
+          "type": "opportunity",
+          "id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+          "text": "RReadiness e59e093c2b05 Family · Readiness e59e093c2b05 FamilyClosed · ClosedQA Parent Readiness e59e093c2b05QA Child A Readiness e59e093c2b05 (4y7m)9h"
+        }
+      ],
+      "message": null,
+      "opened": [
+        {
+          "row": {
+            "type": "opportunity",
+            "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+            "text": "WWalk 584637 Family · Walk 584637 FamilyOpen · 1 Waitlist · 1 undecidedQA Parent Walk 584637Ava Walk 584637 (5y1m), Ben Walk 584637 (3y8m), Cara Walk 584637 (4y"
+          },
+          "vm": [
+            {
+              "status": 200,
+              "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb"
+            }
+          ],
+          "state": "record",
+          "projection": null,
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → CHILDREN Needs info 5 children · 1 waitlisted 5 child",
+          "classic": false,
+          "cant_open": false
+        },
+        {
+          "row": {
+            "type": "opportunity",
+            "id": "de17caff-d706-44e8-b9d1-07aa58caa44b",
+            "text": "RReadiness e59e093c2b05 Family · Readiness e59e093c2b05 FamilyClosed · ClosedQA Parent Readiness e59e093c2b05QA Child A Readiness e59e093c2b05 (4y7m)9h"
+          },
+          "vm": [],
+          "state": "record",
+          "projection": null,
+          "durable": false,
+          "opportunity_panel": true,
+          "cards": [],
+          "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → CHILDREN Needs info 5 children · 1 waitlisted 5 child",
+          "classic": false,
+          "cant_open": false
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "projection": null,
+        "durable": false,
+        "opportunity_panel": true,
+        "cards": [],
+        "text": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 Closed Waitlist A5 Ava Enrolling Enrolled Closed / Withdrawn PLACEMENT / DECISION Placement / Decision · Help the family choose a path, then record the decision outcome. LAST ACTIONFamily Enrolling · Today • 3:00 AM Message Send form Recent activity 7 ▾ HOUSEHOLD Needs contact 584637 household Updated Oct 23, 2026 Q5 QA Parent Walk 584637 Primary First name QA Last name Parent Walk 584637 Email qa-bp-walk-584637@example.com Phone — 5 Children Add emergency contact → View household → CHILDREN Needs info 5 children · 1 waitlisted 5 child",
+        "classic": false,
+        "cant_open": false
+      }
+    }
+  ],
+  "timings": [
+    {
+      "what": "workspace",
+      "ms": 20381
+    }
+  ],
+  "build": "91ee6721b78e2e175e9ab2fcbcb92bdc529415b6",
+  "tiles": [
+    {
+      "title": "Assignments",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "work_items_open": "0",
+      "work_items_overdue": "0",
+      "views": [
+        {
+          "label": "Current assignments3›",
+          "href": "/workspace/work-unit/current-assignments"
+        },
+        {
+          "label": "Ending soon0›",
+          "href": "/workspace/work-unit/ending-soon"
+        },
+        {
+          "label": "Upcoming changes1›",
+          "href": "/workspace/work-unit/upcoming-changes"
+        },
+        {
+          "label": "Schedule gaps1›",
+          "href": "/workspace/work-unit/schedule-gaps"
+        },
+        {
+          "label": "Proposed / incomplete4›",
+          "href": "/workspace/work-unit/proposed-incomplete"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/current-assignments"
+        }
+      ]
+    },
+    {
+      "title": "Billing",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "work_items_open": "0",
+      "work_items_overdue": "0",
+      "views": [
+        {
+          "label": "Charges needing review0›",
+          "href": "/workspace/work-unit/charges-needing-review"
+        },
+        {
+          "label": "Payment exceptions0›",
+          "href": "/workspace/work-unit/payment-exceptions"
+        },
+        {
+          "label": "Funding variances0›",
+          "href": "/workspace/work-unit/funding-variances"
+        },
+        {
+          "label": "Payments due0›",
+          "href": "/workspace/work-unit/payments-due"
+        },
+        {
+          "label": "Overdue payments0›",
+          "href": "/workspace/work-unit/overdue-payments"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/charges-needing-review"
+        }
+      ]
+    },
+    {
+      "title": "Enrollment",
+      "answer": "—Time to schedule tour",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "work_items_open": "0",
+      "work_items_overdue": "0",
+      "views": [
+        {
+          "label": "New LeadsRespond to every new family inquiry.0›",
+          "href": "/workspace/work-unit/new-leads"
+        },
+        {
+          "label": "ToursConfirm the visit and record the outcome.0›",
+          "href": "/workspace/work-unit/tours"
+        },
+        {
+          "label": "DecisionHelp families decide after the tour.1›",
+          "href": "/workspace/work-unit/decision"
+        },
+        {
+          "label": "RegistrationComplete enrollment for children who are enrolling.0›",
+          "href": "/workspace/work-unit/registration"
+        },
+        {
+          "label": "WaitlistKeep waitlisted families informed.1›",
+          "href": "/workspace/work-unit/waitlist"
+        },
+        {
+          "label": "AllEvery family in the process.2›",
+          "href": "/workspace/work-unit/all"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/new-leads"
+        }
+      ]
+    }
+  ]
+}

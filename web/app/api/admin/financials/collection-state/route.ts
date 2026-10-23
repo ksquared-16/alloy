@@ -5,6 +5,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { collectionLifecycle, retryAvailable } from "@/lib/financials/payments/collectionLifecycle";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 /**
  * GET /api/admin/financials/collection-state?attempt_id=…
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
     if (!attemptId) {
         return NextResponse.json({ error: "attempt_id is required" }, { status: 400 });
     }
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(createAdminClient(), ctx.orgId, { item: "payment_collection_attempts", id: attemptId });
+    if (outOfScope) return outOfScope;
 
     const supabase = createAdminClient();
     const { data, error } = await supabase
