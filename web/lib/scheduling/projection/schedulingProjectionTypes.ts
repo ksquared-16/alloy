@@ -23,6 +23,8 @@
  * week. Deferred to V2; V1 authors one week only.
  */
 
+import type { DerivedHomeroom } from "@/lib/location/homerooms";
+
 /** Lifecycle bucket an assignment resolves into for a given `asOf` date. */
 export type SchedulingLifecycleBucket = "current" | "upcoming" | "temporary";
 
@@ -181,6 +183,11 @@ export type ChildScheduling = {
     temporary: ScheduleView[];
     history: ScheduleHistoryEntry[];
     availableCommands: ConfiguredCommandRef[];
+    /**
+     * The child's derived homerooms on `asOf` (V7-03, `deriveHomerooms`): zero, one or many, distinct
+     * by space. Absent when the producer did not derive them; never a single chosen room.
+     */
+    homerooms?: DerivedHomeroom[];
 };
 
 export type SchedulingProjectionSubject = {

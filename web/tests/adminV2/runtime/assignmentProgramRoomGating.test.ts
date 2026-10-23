@@ -8,7 +8,7 @@ import {
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 
 describe("assignmentProgramRoomGating", () => {
-    it("detects primary assignment program and room", () => {
+    it("detects the primary assignment's program — and no longer claims its room (the Room value is the derived homeroom set)", () => {
         const scheduling = {
             status: "scheduled",
             current: {
@@ -21,10 +21,7 @@ describe("assignmentProgramRoomGating", () => {
             },
             proposed: null,
         } as unknown as ChildScheduling;
-        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({
-            program: "Preschool",
-            room: "Room A",
-        });
+        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({ program: "Preschool" });
     });
 
     it("blocks program field edit when primary assignment exists", () => {
@@ -80,9 +77,6 @@ describe("assignmentProgramRoomGating", () => {
             },
             proposed: null,
         } as unknown as ChildScheduling;
-        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({
-            program: "Pre-K",
-            room: "Pre-K",
-        });
+        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({ program: "Pre-K" });
     });
 });

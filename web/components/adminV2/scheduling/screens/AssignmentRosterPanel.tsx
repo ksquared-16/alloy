@@ -27,7 +27,10 @@ export type AssignmentRosterSubject = {
     positionLabel?: string | null;
     subjectType: "child" | "staff";
     assignmentCount: number;
-    primaryRoom: string | null;
+    /** Children: derived homerooms (zero, one or many). */
+    homerooms: Array<{ spaceId: string; spaceLabel: string | null }>;
+    /** Staff: the primary assignment's room. */
+    staffPrimaryRoom: string | null;
     /** Profile image URL when the child/staff person record carries one, else initials avatar. */
     imageUrl?: string | null;
     assignments: {
@@ -731,7 +734,15 @@ export default function AssignmentRosterPanel({
                                                     ) : null}
                                                 </div>
                                                 <p className="mt-0.5 text-[11.5px] text-alloy-slate">
-                                                    Primary: {subject.primaryRoom ?? "—"}
+                                                    {subject.subjectType === "staff" ? (
+                                                        <>Primary: {subject.staffPrimaryRoom ?? "—"}</>
+                                                    ) : (
+                                                        <span data-assignment-roster-homerooms={subject.homerooms.map((h) => h.spaceId).join(" ")}>
+                                                            {subject.homerooms.length === 0
+                                                                ? "No homeroom"
+                                                                : `${subject.homerooms.length === 1 ? "Homeroom" : "Homerooms"}: ${subject.homerooms.map((h) => h.spaceLabel ?? "Room").join(" · ")}`}
+                                                        </span>
+                                                    )}
                                                     <span className="mx-1.5 text-alloy-stone">·</span>
                                                     {subject.assignmentCount}{" "}
                                                     {subject.assignmentCount === 1 ? "Assignment" : "Assignments"}
