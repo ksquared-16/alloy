@@ -47,7 +47,7 @@ function tenantPayload(org: "firefly" | "qa_shared") {
 const grainFindings = (payload: unknown) => {
     const r = validateBusinessProcessForPublish(payload);
     const pick = (list: { code: string; detail?: unknown }[]) =>
-        list.filter((d) => d.code.startsWith("work_view_grain_")).map((d) => ({ code: d.code, ...(d.detail as Row) }));
+        list.filter((d) => d.code.startsWith("work_view_grain_")).map((d): Row => ({ code: d.code, ...(d.detail as Row) }));
     return { errors: pick(r.errors), warnings: pick(r.warnings) };
 };
 
