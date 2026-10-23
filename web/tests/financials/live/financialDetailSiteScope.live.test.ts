@@ -255,7 +255,7 @@ describe.skipIf(!live)("live — D4: financial detail reads enforce the Financia
             const access = await resolveAdminAccessCore(supabase, p.userId);
             const out = await projectFocusPanelCardProducers({
                 supabase, orgId: ORG, context: { participantScope: null }, financialSubjectId: household,
-                access: { ok: true, userId: p.userId, ...(access as never) },
+                access: Object.assign({ ok: true as const, userId: p.userId }, access) as never,
             });
             return { state: out.financials.state, hasData: out.financials.data != null, text: JSON.stringify(out.financials) };
         };

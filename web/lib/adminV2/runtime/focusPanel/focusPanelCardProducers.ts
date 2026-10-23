@@ -275,14 +275,13 @@ export async function projectFocusPanelCardProducers(input: {
                    * first paint is not the softer door. Out of scope is a refusal (`forbidden`), not
                    * an empty account, and no ledger read happens.
                    */
-                  const inScope = await clock.time("financials_scope_ms", () =>
-                      householdFinancialsReadable(supabase, {
-                          orgId,
-                          scope: financialReadScopeFromAccess(access),
-                          customerId: financialSubjectId,
-                          customerMemberId,
-                      }),
-                  ).catch(() => "out_of_scope" as const);
+                  // Not a separate timing span: an org-wide caller does no read here at all.
+                  const inScope = await householdFinancialsReadable(supabase, {
+                      orgId,
+                      scope: financialReadScopeFromAccess(access),
+                      customerId: financialSubjectId,
+                      customerMemberId,
+                  }).catch(() => "out_of_scope" as const);
                   if (inScope !== "readable") return { gateOk: false, vm: null };
                   const vm = await clock.time("financials_build_ms", () =>
                       buildFinancialsCardVM(supabase, {
