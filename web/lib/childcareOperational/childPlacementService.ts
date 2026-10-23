@@ -477,10 +477,6 @@ export async function supersedeChildPlacement(
  * and it makes the absence of real enforcement harder to notice.
  */
 
-export function isOperationalPlacementRow(row: ChildPlacementRow): boolean {
-    return isPlacementOperationalStatus(row.status);
-}
-
 /**
  * Cancel a placement that should never have been effective.
  *

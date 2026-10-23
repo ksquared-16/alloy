@@ -6,6 +6,7 @@
  * `_scheduling_projection`; the card reads it synchronously from `context.truth`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { schedulableForChildren } from "@/lib/location/spaceUse";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { loadSchedulingProjectionsForChildren } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
@@ -16,7 +17,6 @@ import {
     type OrgAssignmentTypeOption,
 } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import {
-    assignableClassrooms,
     loadSiteOperationalRooms,
     type SiteOperationalRoom,
 } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
@@ -131,7 +131,7 @@ export async function loadSchedulingProjectionsForFirstPaint(
             loadOrgAssignmentTypes(supabase, orgId, { subjectType: "child" }).catch(() => []),
             // Classroom picker: operational groups only.
             loadSiteOperationalRooms(supabase, orgId, siteLocationId)
-                .then(assignableClassrooms)
+                .then(schedulableForChildren)
                 .catch(() => []),
         ]);
     // ONE canonical read of the whole child set. This used to be one loader invocation per child —

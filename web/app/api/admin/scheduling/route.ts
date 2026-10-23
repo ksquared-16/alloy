@@ -463,13 +463,11 @@ export async function GET(request: NextRequest) {
             const programs = ((programRows ?? []) as { key: string; label: string | null; is_active: boolean }[])
                 .filter((p) => p.is_active)
                 .map((p) => ({ key: p.key, label: p.label?.trim() || p.key }));
-            const { loadSiteOperationalRooms, assignableClassrooms } = await import(
-                "@/lib/operationalAssignments/loadSiteOperationalRooms"
-            );
-            // The Scheduling room picker asks WHICH CLASSROOM, so it may offer only
-            // operational groups. A physical room is the licensed shell and a shared
-            // space is somewhere a child may be without belonging to it.
-            const operationalRooms = assignableClassrooms(
+            const { loadSiteOperationalRooms } = await import("@/lib/operationalAssignments/loadSiteOperationalRooms");
+            const { schedulableForChildren } = await import("@/lib/location/spaceUse");
+            // Spaces a child schedule may use (V7-02a): classrooms, and shared spaces with configured
+            // uses — never a physical container. Pickers narrow further by the chosen use.
+            const operationalRooms = schedulableForChildren(
                 await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(() => [])
             );
             return NextResponse.json({
@@ -525,7 +523,9 @@ export async function GET(request: NextRequest) {
             const { options, fitContext } = await generatePlacementOptions(supabase, {
                 orgId: ctx.orgId,
                 siteLocationId,
-                childAgreementId,
+                // `child_agreement_id` is a legacy NAME: every caller sends the child's customer
+                // member id (SchedulingCard `child.id`). The engine resolves the agreement itself.
+                customerMemberId: childAgreementId,
                 programCategoryId,
                 patternId,
                 dateStart,

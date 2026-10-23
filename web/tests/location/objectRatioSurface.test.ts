@@ -20,13 +20,13 @@ const PANEL = "components/adminV2/settings/locations/LocationRoomDetailPanel.tsx
 const RATIO = "components/adminV2/settings/locations/SpaceRatioSection.tsx";
 const PAGE = "components/adminV2/settings/locations/LocationsConfigurationPage.tsx";
 
-describe("Kind is the structural word, and there are only two", () => {
-    it("offers Operational and Physical, and nothing else", () => {
-        expect(ROOM_TYPE_OPTIONS.map((o) => o.label)).toEqual(["Operational", "Physical"]);
+describe("Kind is the structural word: Operational, Shared, Physical (V7 S2)", () => {
+    it("offers Operational, Shared and Physical, and nothing else", () => {
+        expect(ROOM_TYPE_OPTIONS.map((o) => o.label)).toEqual(["Operational", "Shared", "Physical"]);
     });
 
-    it("a stored shared space presents as Physical", () => {
-        expect(roomTypeLabel("shared_space")).toBe("Physical");
+    it("a stored shared space presents as Shared", () => {
+        expect(roomTypeLabel("shared_space")).toBe("Shared");
     });
 
     it("the editors label the field Kind, and the relationship Physical space", () => {
@@ -41,17 +41,27 @@ describe("Kind is the structural word, and there are only two", () => {
 });
 
 describe("the rail can be narrowed by Kind", () => {
-    it("offers All, Operational and Physical", () => {
+    it("offers All, Operational, Shared and Physical — one chip per canonical role", () => {
         const src = read(PANEL);
         // The ids are template-generated, so the keys are what to assert.
-        expect(src).toContain("locations-room-kind-filter-${key}");
-        const block = src.slice(src.indexOf("listFilter={"), src.indexOf("listFilter={") + 900);
-        for (const key of ['"all"', '"operational"', '"physical"']) {
+        expect(src).toContain("locations-room-kind-filter-${testKey}");
+        const block = src.slice(src.indexOf("listFilter={"), src.indexOf("listFilter={") + 1100);
+        for (const key of ['"all"', '"operational_group"', '"shared_space"', '"physical_space"']) {
             expect(block).toContain(key);
         }
-        for (const label of ['"All"', '"Operational"', '"Physical"']) {
+        for (const label of ['"All"', '"Operational"', '"Shared"', '"Physical"']) {
             expect(block).toContain(label);
         }
+    });
+
+    it("never counts a shared space as physical", () => {
+        const src = read(PANEL);
+        const counts = src.slice(src.indexOf("const kindCounts"), src.indexOf("const kindCounts") + 400);
+        expect(counts).toContain('shared: rooms.filter((r) => kindOf(r) === "shared_space")');
+        expect(counts).toContain('physical: rooms.filter((r) => kindOf(r) === "physical_space")');
+        expect(counts).not.toContain('!== "operational_group"');
+        const visible = src.slice(src.indexOf("const visibleRooms"), src.indexOf("const visibleRooms") + 200);
+        expect(visible).toContain("kindOf(r) === kindFilter");
     });
 
     it("filters presentation only — it renders no second classification", () => {

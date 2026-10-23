@@ -1,6 +1,6 @@
 /**
  * Pure Program ↔ Room resolution helpers for the Assignment editors (SchedulingCard's
- * ScheduleEditor, WorkspaceCreateAssignmentModal). Extracted so the resolution rules —
+ * ScheduleEditor). Extracted so the resolution rules —
  * "a room with a canonical Program locks the Program", "an invalid Room clears when
  * the Program changes" — are unit-tested independent of any editor's React state.
  *

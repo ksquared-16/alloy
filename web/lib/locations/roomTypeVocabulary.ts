@@ -16,18 +16,10 @@
  * vocabulary wearing a different hat. What a space IS gets said by its name and
  * its Programs; what it STRUCTURALLY is gets said by Kind.
  *
- * `shared_space` is no longer offered: measured across the product, no
- * behavioral branch distinguished it from `physical_space` — placement and
- * scheduling exclude both, and attendance offers every unit regardless of role —
- * so it was a choice that changed nothing and cost the operator a decision on
- * every space they created.
- *
- * Stored `shared_space` rows keep working and keep their stored role. They
- * simply PRESENT as a Physical space, which is what they always behaved as.
- * The one residual difference is containment: the mutation authority only
- * accepts `physical_space` as a parent, so a stored shared space is not offered
- * as a container. Converging that is a storage question, recorded separately;
- * it is not worth a data migration to answer here.
+ * THREE KINDS (V7 S2). `shared_space` is offered again: it now changes behaviour — a shared space
+ * (gym, playground) can carry configured child uses and so hold a schedule, while a physical space
+ * is only the licensed container of classrooms and takes no uses. It was withdrawn when nothing
+ * distinguished it; the space-use rule (`lib/location/spaceUse.ts`) is what distinguishes it now.
  */
 
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
@@ -52,9 +44,14 @@ export const ROOM_TYPE_OPTIONS: readonly RoomTypeOption[] = [
         hint: "A group children are assigned to, such as Toddler 1.",
     },
     {
+        role: "shared_space",
+        label: "Shared",
+        hint: "A place groups visit for an activity, such as the gym or the playground.",
+    },
+    {
         role: "physical_space",
         label: "Physical",
-        hint: "A place people can be, such as Room 1 or the playground.",
+        hint: "A licensed room that holds classrooms, such as Room 1.",
     },
 ];
 
@@ -65,45 +62,26 @@ export const ROOM_TYPE_OPTIONS: readonly RoomTypeOption[] = [
  */
 export const DEFAULT_ROOM_TYPE: CanonicalUnitRole = "operational_group";
 
-/**
- * The operator-facing name for a stored role.
- *
- * A stored `shared_space` folds to "Physical space" — the compatibility half of
- * dropping that type from the vocabulary. Without the fold, Playground would
- * keep showing a word the Add Space form can no longer produce, and an operator
- * would have no way to understand where it came from.
- */
+/** The operator-facing name for a stored role. */
 export function roomTypeLabel(role: CanonicalUnitRole | null | undefined): string {
-    if (role === "shared_space") return "Physical";
     return ROOM_TYPE_OPTIONS.find((o) => o.role === role)?.label ?? "Operational";
 }
 
 export function roomTypeHint(role: CanonicalUnitRole): string {
-    if (role === "shared_space") return roomTypeHint("physical_space");
     return ROOM_TYPE_OPTIONS.find((o) => o.role === role)?.hint ?? "";
 }
 
+/** The type options to offer for this object — the same three for every space. */
+export function roomTypeOptionsFor(_role: CanonicalUnitRole | null | undefined): readonly RoomTypeOption[] {
+    return ROOM_TYPE_OPTIONS;
+}
+
 /**
- * The type options to offer for THIS object.
- *
- * A stored shared space keeps its own role in the list so that editing it does
- * not silently rewrite storage the moment someone opens the form and saves.
- * It occupies the "Physical" slot, because that is what it is to the
- * operator. So a stored shared space can be turned into a Classroom, or left
- * exactly as it is; the editor never converts it to `physical_space`, and no
- * ordinary Save rewrites a role nobody asked to change.
+ * Which uses a space of this kind may be configured with (V7 S2): a classroom takes child and staff
+ * uses, a shared space child uses, a physical container none.
  */
-export function roomTypeOptionsFor(role: CanonicalUnitRole | null | undefined): readonly RoomTypeOption[] {
-    if (role !== "shared_space") return ROOM_TYPE_OPTIONS;
-    // SUBSTITUTED, not appended. Two options both reading "Physical space" would
-    // ask the operator to distinguish something the vocabulary just stopped
-    // distinguishing. The stored role takes that slot, so leaving the type
-    // alone leaves storage alone.
-    return ROOM_TYPE_OPTIONS.map((option) =>
-        option.role === "physical_space" ?
-            { role: "shared_space" as const, label: option.label, hint: option.hint }
-        :   option,
-    );
+export function roleAcceptsUses(role: CanonicalUnitRole): boolean {
+    return role !== "physical_space";
 }
 
 /**

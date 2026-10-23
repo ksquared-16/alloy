@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateSpaceUsesConfiguration } from "@/lib/location/validateSpaceUses";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
@@ -221,6 +222,16 @@ export async function PATCH(
             current: currentTopology,
         });
         if (!topology.ok) return topologyRefusalResponse(topology);
+    }
+
+    // Configured uses (V7-02a), judged against the space as it will stand after this patch.
+    if (updates.metadata !== undefined || updates.unit_role !== undefined) {
+        const uses = await validateSpaceUsesConfiguration(supabase, ctx.orgId, {
+            locationType: candidate.locationType,
+            unitRole: candidate.unitRole,
+            metadata: (updates.metadata as Record<string, unknown> | undefined) ?? ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null),
+        });
+        if (!uses.ok) return NextResponse.json({ error: uses.message, code: "space_uses_invalid" }, { status: 400 });
     }
 
     const systemKeys = [...ALLOWED_KEYS, "customer_id", "org_id", "vendor_id"] as const;

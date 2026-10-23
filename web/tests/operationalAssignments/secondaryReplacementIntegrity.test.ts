@@ -160,7 +160,7 @@ describe("secondary replacement integrity", () => {
         expect(store.schedule_assignments).toHaveLength(0);
     });
 
-    it("a staff room must be a classroom; a child secondary in a shared space is not decided here", async () => {
+    it("a staff room must be a classroom; a child uses a shared space only for its configured uses (V7-02a)", async () => {
         const store = seeded();
         const supabase = createOperationalEnrollmentMockSupabase(store);
         await expect(
@@ -182,15 +182,44 @@ describe("secondary replacement integrity", () => {
             todayYmd: TODAY,
         });
         expect(staffInClassroom.room_location_id).toBe(UNIT_ID);
+        // An UNCONFIGURED shared space is not offered or accepted for a new child schedule.
+        await expect(
+            createOperationalAssignment(supabase, {
+                orgId: ORG_ID,
+                subject: child(),
+                schedulePatternId: PATTERN_ID,
+                startDate: TODAY,
+                roomLocationId: "unit-yard",
+                assignmentTypeId: "type-enrichment",
+                isPrimary: false,
+                todayYmd: TODAY,
+            }),
+        ).rejects.toMatchObject({ code: "validation_failed", details: { code: "space_uses_not_configured" } });
+        // Configured for Enrichment: Enrichment is accepted, another use is refused.
+        const yard = (store.locations as Array<Record<string, unknown>>).find((l) => l.id === "unit-yard")!;
+        yard.metadata = { space_uses: ["type-enrichment"] };
         const childInYard = await createOperationalAssignment(supabase, {
             orgId: ORG_ID,
             subject: child(),
             schedulePatternId: PATTERN_ID,
             startDate: TODAY,
             roomLocationId: "unit-yard",
+            assignmentTypeId: "type-enrichment",
             isPrimary: false,
             todayYmd: TODAY,
         });
         expect(childInYard.room_location_id).toBe("unit-yard");
+        await expect(
+            createOperationalAssignment(supabase, {
+                orgId: ORG_ID,
+                subject: child(),
+                schedulePatternId: PATTERN_ID,
+                startDate: TODAY,
+                roomLocationId: "unit-yard",
+                assignmentTypeId: "type-before-care",
+                isPrimary: false,
+                todayYmd: TODAY,
+            }),
+        ).rejects.toMatchObject({ code: "validation_failed", details: { code: "use_not_configured_for_space" } });
     });
 });
