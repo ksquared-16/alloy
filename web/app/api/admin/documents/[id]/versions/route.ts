@@ -1,0 +1,159 @@
+import { createHash, randomUUID } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
+
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import {
+    assertDocumentAccess,
+    documentAccessHttp,
+    documentActorForRequest,
+    requireDocumentWrite,
+} from "@/lib/documents/assertDocumentAccess";
+import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKind } from "@/lib/documents/documentContentSignature";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
+import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
+import { decideIngestion } from "@/lib/documents/screenedIngestion";
+import { addDocumentVersion, listDocumentVersions } from "@/lib/documents/documentVersions";
+
+/**
+ * D2 — a document's versions.
+ *
+ * GET  lists them, newest first, with the current one marked. Metadata only: never a storage path. Admission is the full
+ *      document access decision (read admission, subject scope, every sensitive class, availability), the same one that
+ *      signs a link — so the list is visible exactly to those who may open the document.
+ *
+ * POST replaces the file: multipart `file` + `reason` (at least 10 characters). It needs `documents.write` AND the access
+ *      decision. The new bytes go through the same content-signature check and D1c-1 screening as an upload, and only a
+ *      CLEAN file becomes a version: a file screening would quarantine or refuse is not stored at all (a replacement
+ *      never reaches a reader through a release queue). `document_version_added` is recorded before the version exists;
+ *      no record, no version. The previous version is kept and stays retrievable through
+ *      `GET /api/admin/documents/[id]/signed-url?version=<id>`. The document's OCR text belonged to the previous bytes and
+ *      is cleared; extraction is not re-run here.
+ */
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContextCached();
+    const access = await getAdminAccessContextCached();
+    const { id } = await context.params;
+    const supabase = createAdminClient();
+
+    const decision = await assertDocumentAccess({ supabase, actor: documentActorForRequest(ctx, access), documentId: id, operation: "preview" });
+    if (decision.outcome !== "allowed") {
+        const http = documentAccessHttp(decision);
+        return NextResponse.json(http.body, { status: http.status });
+    }
+    const listed = await listDocumentVersions(supabase, decision.document.orgId, decision.document.id);
+    if (!listed.ok) return NextResponse.json({ ok: false, error: "Versions could not be read.", code: "VERSIONS_UNAVAILABLE" }, { status: 500 });
+    return NextResponse.json({ ok: true, document_id: decision.document.id, versions: listed.versions });
+}
+
+function sanitizeFilename(name: string): string {
+    return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 180) || "file";
+}
+
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden", code: "AUTH" }, { status: ctx.status });
+    const writeDenied = requireDocumentWrite(ctx);
+    if (writeDenied) return writeDenied;
+    const access = await getAdminAccessContextCached();
+    const { id } = await context.params;
+    const supabase = createAdminClient();
+
+    const decision = await assertDocumentAccess({ supabase, actor: documentActorForRequest(ctx, access), documentId: id, operation: "download" });
+    if (decision.outcome !== "allowed") {
+        const http = documentAccessHttp(decision);
+        return NextResponse.json(http.body, { status: http.status });
+    }
+    const document = decision.document;
+
+    let formData: FormData;
+    try {
+        formData = await request.formData();
+    } catch {
+        return NextResponse.json({ error: "Expected multipart form data", code: "BAD_REQUEST" }, { status: 400 });
+    }
+    const file = formData.get("file");
+    if (!(file instanceof Blob)) return NextResponse.json({ error: "A file is required", code: "FILE_REQUIRED" }, { status: 400 });
+    const reason = typeof formData.get("reason") === "string" ? String(formData.get("reason")).trim() : "";
+    if (reason.length < 10) {
+        return NextResponse.json({ error: "A replacement needs a written reason (at least 10 characters).", code: "REASON_REQUIRED" }, { status: 400 });
+    }
+
+    const origName = file instanceof File && file.name ? file.name : "replacement";
+    const sourceFormat = detectProcessingSourceFormat(origName, file.type || "");
+    const caps = capabilitiesForFormat(sourceFormat);
+    if (!caps.store) return NextResponse.json({ error: `${caps.label} is not supported.`, code: "UNSUPPORTED_FORMAT" }, { status: 415 });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES) {
+        return NextResponse.json({ error: "The file is too large.", code: "FILE_TOO_LARGE", max_bytes: ADMIN_DOCUMENT_UPLOAD_MAX_BYTES }, { status: 413 });
+    }
+    const kind = sourceFormat as DocumentContentKind;
+    if (!bytesMatchDocumentKind(buffer, kind)) {
+        return NextResponse.json({ error: `This file is not a valid ${caps.label}.`, code: "CONTENT_MISMATCH" }, { status: 415 });
+    }
+    const screened = decideIngestion(buffer, kind);
+    if (!screened.store || screened.status !== "uploaded") {
+        return NextResponse.json(
+            {
+                error: "A replacement must pass screening; this file was not stored.",
+                code: "SCREENING_REFUSED",
+                reason: screened.result.verdict === "clean" ? null : screened.result.reason,
+            },
+            { status: 415 },
+        );
+    }
+
+    const checksumSha256 = createHash("sha256").update(buffer).digest("hex");
+    const mimeType = CANONICAL_DOCUMENT_MIME[kind];
+    const segment = document.entityType && document.entityId ? `${document.entityType}/${document.entityId}` : "pos_intake";
+    const storagePath = `${document.orgId}/${segment}/${randomUUID()}-${sanitizeFilename(origName)}`;
+
+    const audit = await recordDocumentAudit({
+        orgId: document.orgId,
+        actorUserId: ctx.userId,
+        event: "document_version_added",
+        subject: { type: "documents", id: document.id },
+        route: "admin/documents/versions",
+        detail: { reason, checksum_sha256: checksumSha256, byte_size: buffer.length, mime_type: mimeType, screening_engine: screened.screening.engine ?? null },
+    });
+    if (!audit.ok) return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+
+    const { error: upErr } = await supabase.storage.from(document.bucket).upload(storagePath, buffer, { contentType: mimeType, upsert: false });
+    if (upErr) {
+        console.error("[DOCUMENT_VERSION_STORAGE]", { document_id: document.id });
+        const classified = classifySupabaseStorageError(upErr);
+        return NextResponse.json({ error: classified.message, code: classified.code }, { status: classified.httpStatus });
+    }
+
+    const added = await addDocumentVersion(supabase, {
+        orgId: document.orgId,
+        documentId: document.id,
+        bucket: document.bucket,
+        storagePath,
+        originalFilename: origName !== "replacement" ? origName : null,
+        mimeType,
+        byteSize: buffer.length,
+        checksumSha256,
+        reason,
+        actorUserId: ctx.userId,
+        screening: screened.screening,
+        provenance: { route: "admin/documents/versions", audit_event_id: audit.eventId, source_format: sourceFormat },
+    });
+    if (!added.ok) {
+        await supabase.storage.from(document.bucket).remove([storagePath]).catch(() => console.error("[DOCUMENT_VERSION_ROLLBACK]", { document_id: document.id }));
+        const status = added.code === "DOCUMENT_UNAVAILABLE" ? 409 : added.code === "NOT_FOUND" ? 404 : 500;
+        return NextResponse.json({ ok: false, error: "The new version could not be recorded.", code: added.code }, { status });
+    }
+
+    return NextResponse.json({
+        ok: true,
+        document_id: document.id,
+        version_id: added.versionId,
+        version_number: added.versionNumber,
+        supersedes_version_id: added.supersedesVersionId,
+        checksum_sha256: checksumSha256,
+    });
+}

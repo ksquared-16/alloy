@@ -350,14 +350,14 @@ async function persistComposedSignedArtifact(
         if (ref) {
             const { data: doc } = await supabase
                 .from("documents")
-                .select("id, title, file_name, checksum_sha256")
+                .select("id, title, original_filename, checksum_sha256")
                 .eq("org_id", input.orgId)
                 .eq("id", ref)
                 .maybeSingle();
-            const d = doc as { id?: string; title?: string; file_name?: string; checksum_sha256?: string } | null;
+            const d = doc as { id?: string; title?: string; original_filename?: string; checksum_sha256?: string } | null;
             sourceDocumentId = d?.id ?? null;
             sourceSha = d?.checksum_sha256 ?? null;
-            sourceTitle = d?.title ?? d?.file_name ?? null;
+            sourceTitle = d?.title ?? d?.original_filename ?? null;
         }
     }
 

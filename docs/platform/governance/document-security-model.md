@@ -7,7 +7,7 @@ supersedes: []
 
 # Document security model
 
-**Status:** canonical owner for document access, storage and ingestion security (Documents V1, D1a and D1b).
+**Status:** canonical owner for document access, storage, ingestion and identity security (Documents V1, D1a, D1b, D1c-1 and D2).
 **Last reviewed:** 2026-10-23, at staging `267d9400`.
 **Higher authority:** the code and migrations named below. Where this prose disagrees with them, they win.
 
@@ -112,25 +112,57 @@ A deletion that removes a subject (today: lead deletion) passes its candidate do
   - a Processing case source;
   - staff-qualification, safeguarding, medical-consent or subsidy evidence;
   - a vendor pointer, or a remaining person's profile photo;
-  - a legal hold or unexpired retention (`metadata.legal_hold`, `metadata.retention_until`), interim until D2;
+  - a legal hold or unexpired retention (`documents.legal_hold`, `documents.retention_until`; the interim `metadata` markers are still honoured);
   - a stored path outside the organization prefix.
 - **Otherwise deleted, in this order:**
   1. `document_delete_authorized` is recorded.
   2. The document's own object and every version's object are removed. "Already absent" counts as removed.
-  3. The field values, versions and row are deleted.
+  3. The field values and the row are deleted. The versions and subject associations go with the row (ON DELETE CASCADE).
 - **Failure:** a failed read, audit or storage step stops the disposal before the row goes, and the subject row stays. Retrying the whole deletion is safe.
 - **Organization scope:** another organization's document is never read or touched.
 
-## 6. Known boundaries (fail-closed until D2)
+## 6. Canonical identity, versions, subjects and sensitivity (D2)
 
-- Sensitivity is inferred, not declared.
-- Person, household and child subject scope uses department/site linkage only.
-- Profile photos are authorized by the caller's own scoped read.
+Migration `supabase/migrations/20261208090000_documents_d2_canonical_foundation.sql`. Record:
+`certification/documents-v1/D2-CANONICAL-FOUNDATION.md`.
 
-See `certification/documents-v1/D1B-SECURITY-HARDENING.md` §Security-model boundaries.
+- **Logical identity:** `documents.id` never changes. Every foreign key into `documents` keeps working.
+- **Immutable versions:**
+  - A document's file is a `document_versions` row: bucket, path, sha256, size, MIME and provenance.
+    `documents.current_version_id` names the current one, and the file columns on `documents` are its projection.
+  - The database refuses to change a version, except its review and expiration fields. It also refuses to repoint a
+    document's file outside a version, and to delete a version while its document remains.
+  - Every insert gets version 1 from the database itself.
+  - A replacement (`POST /api/admin/documents/[id]/versions`) must be a clean, screened file and carry a written reason.
+    It becomes version n+1. The previous version stays signable through `signed-url?version=<id>` under the same decision.
+- **Typed subjects:**
+  - `document_subjects` has the types household, person (including staff), child, opportunity, vendor,
+    processing_case and form_submission.
+  - Each association is `owner` or `context`, and an attached document has exactly one active **primary** owner.
+  - The legacy `entity_type` / `entity_id` are the primary owner's projection. A legacy writer that sets them is
+    routed into the association, and is refused if the subject is not in the organization.
+  - The table is written only through `document_set_primary_subject`, `document_link_subject` and
+    `document_unlink_subject`.
+  - `document_subject_links` adds the Forms and Processing context links without copying them.
+- **Access is decided by the primary owner alone.** Being linked to a record an actor can read grants nothing.
+- **Declared sensitivity:**
+  - `documents.sensitivity` is one of standard, personal_identity, medical, custody_safeguarding or restricted.
+  - It may only be raised (`POST /api/admin/documents/[id]/sensitivity`, which needs the actor's own clearance for the class).
+  - A document carries its declared class **and** the D1b inference.
+  - Clearances: medical → `health.view`; custody_safeguarding → safeguarding view; personal_identity and restricted →
+    the `owner`/`admin` role.
+  - An unknown class is restricted.
+- **Lifecycle statuses** (`deleted`, `quarantined`, `restricted`) are never set or left through the status PATCH. Each has its own audited path.
+- **Audit:** `document_version_added`, `document_subject_changed` and `document_sensitivity_raised` are recorded before the change.
+- **Known boundaries:**
+  - Person, household and child subject scope still uses department/site linkage only.
+  - Profile photos are authorized by the caller's own scoped read.
+  - Retention policy values per class, and the governed purge, are not yet defined (D3).
 
 ## 7. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
 - **Q1:** `certification/documents-v1/Q1-HOSTED-CERTIFICATION.md`.
 - **D1b:** `certification/documents-v1/D1B-SECURITY-HARDENING.md`.
+- **D1b / D1c-1 final:** `certification/documents-v1/D1B-D1C1-SECURITY-CERTIFICATION.md`.
+- **D2:** `certification/documents-v1/D2-CANONICAL-FOUNDATION.md`; database invariants `certification/invariants/documents-d2-canonical-foundation.sql`.

@@ -25,7 +25,7 @@
  */
 
 import { NextRequest } from "next/server";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
@@ -151,6 +151,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             original_filename: filename,
             mime_type: kind.mime,
             byte_size: bytes.length,
+            checksum_sha256: createHash("sha256").update(bytes).digest("hex"),
             bucket,
             storage_path: storagePath,
             status: screened.status,

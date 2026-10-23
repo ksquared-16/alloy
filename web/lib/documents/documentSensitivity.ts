@@ -17,16 +17,64 @@
  * FAILS CLOSED. If a classification cannot be read, the document is treated as sensitive in every
  * class, and an actor who holds neither authority is refused.
  *
- * DEFERRED TO D2 (canonical subject/sensitivity model): a declared sensitivity on the document itself,
- * and person/household subject scope. Until D2 is in place, these two classes are the enforceable
- * restriction, and they are applied on every path that discloses a document.
+ * D2 adds the DECLARED class on the document itself (`documents.sensitivity`: standard | personal_identity |
+ * medical | custody_safeguarding | restricted). A document carries the UNION of its declared class and the
+ * inferred ones above, so a declaration can only add a restriction, never remove one:
+ *
+ *   personal_identity → an `owner` or `admin` role
+ *   restricted        → an `owner` or `admin` role
+ *
+ * Both are role clearances, the safeguarding model, and not new permission keys: minting catalog keys is a Director
+ * decision (W-11) and is recorded as a D3 prerequisite. No document carried either class when D2 shipped.
+ *
+ * An unknown declared value counts as `restricted`. Before the D2 migration has reached a database the column
+ * does not exist (42703); then no document can carry a declared class beyond the inferred ones, and only the
+ * inference applies. Any other read failure fails closed in every class.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { HEALTH_VIEW_PERMISSION } from "@/lib/health/healthAccess";
 import { canViewSafeguarding } from "@/lib/safeguarding/safeguardingAuthority";
 
-export type DocumentSensitivityClass = "medical" | "safeguarding";
+export type DocumentSensitivityClass = "medical" | "safeguarding" | "personal_identity" | "restricted";
+
+/** The declared vocabulary of `documents.sensitivity` (migration 20261208090000). */
+export const DECLARED_DOCUMENT_SENSITIVITIES = Object.freeze([
+    "standard",
+    "personal_identity",
+    "medical",
+    "custody_safeguarding",
+    "restricted",
+] as const);
+export type DeclaredDocumentSensitivity = (typeof DECLARED_DOCUMENT_SENSITIVITIES)[number];
+
+/** Roles cleared for `personal_identity` and `restricted` documents. */
+export const DOCUMENT_ELEVATED_CLEARANCE_ROLES: readonly string[] = Object.freeze(["owner", "admin"]);
+
+function holdsElevatedClearance(roleKeys: readonly string[] | null | undefined): boolean {
+    const held = new Set((roleKeys ?? []).map((r) => String(r).trim()));
+    return DOCUMENT_ELEVATED_CLEARANCE_ROLES.some((r) => held.has(r));
+}
+
+/**
+ * The class a declared value imposes. `standard` imposes none; an unknown value is `restricted`. A row that carries no
+ * value at all imposes none: the column is NOT NULL, so that is only a reader that did not select it.
+ */
+export function classForDeclaredSensitivity(value: unknown): DocumentSensitivityClass | null {
+    if (value === undefined || value === null) return null;
+    switch (value) {
+        case "standard":
+            return null;
+        case "medical":
+            return "medical";
+        case "custody_safeguarding":
+            return "safeguarding";
+        case "personal_identity":
+            return "personal_identity";
+        default:
+            return "restricted";
+    }
+}
 
 /** Must equal the doc_type list of the `documents_medical_*` restrictive policies. */
 export const MEDICAL_DOCUMENT_TYPES: readonly string[] = Object.freeze([
@@ -41,10 +89,16 @@ export type SensitivityActor = { roleKeys?: readonly string[] | null; permission
 export function actorMayReadSensitivity(actor: SensitivityActor, classes: ReadonlySet<DocumentSensitivityClass>): boolean {
     if (classes.has("medical") && !(actor.permissionKeys ?? []).includes(HEALTH_VIEW_PERMISSION)) return false;
     if (classes.has("safeguarding") && !canViewSafeguarding(actor.roleKeys ?? [])) return false;
+    if ((classes.has("personal_identity") || classes.has("restricted")) && !holdsElevatedClearance(actor.roleKeys)) return false;
     return true;
 }
 
-const ALL_CLASSES: ReadonlySet<DocumentSensitivityClass> = new Set<DocumentSensitivityClass>(["medical", "safeguarding"]);
+const ALL_CLASSES: ReadonlySet<DocumentSensitivityClass> = new Set<DocumentSensitivityClass>([
+    "medical",
+    "safeguarding",
+    "personal_identity",
+    "restricted",
+]);
 
 /**
  * The sensitive classes of each document. Each row needs `id`; `doc_type` is used when present.
@@ -73,6 +127,21 @@ export async function resolveDocumentSensitivity(
     };
 
     try {
+        // The declared class (D2). The column is absent only before the D2 migration has reached this database.
+        const { data: declared, error: declaredErr } = await supabase
+            .from("documents")
+            .select("id, sensitivity")
+            .eq("org_id", orgId)
+            .in("id", ids);
+        if (declaredErr) {
+            if ((declaredErr as { code?: string }).code !== "42703") return failClosed();
+        } else {
+            for (const row of (declared ?? []) as Array<{ id: string; sensitivity?: unknown }>) {
+                const cls = classForDeclaredSensitivity(row.sensitivity);
+                if (cls) out.get(row.id)?.add(cls);
+            }
+        }
+
         // Safeguarding evidence: cited by any restriction in this org, in any state.
         const { data: sg, error: sgErr } = await supabase
             .from("child_safeguarding_restrictions")

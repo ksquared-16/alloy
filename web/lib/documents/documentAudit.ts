@@ -26,6 +26,10 @@ export type DocumentAuditEvent =
     | "document_delete_failed"
     | "document_quarantined"
     | "document_released"
+    // D2: a replacement version, an association change, a raised sensitivity class. Each is recorded BEFORE the change.
+    | "document_version_added"
+    | "document_subject_changed"
+    | "document_sensitivity_raised"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 

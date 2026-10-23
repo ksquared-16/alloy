@@ -5,6 +5,7 @@ import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { isStoragePathWithinOrg } from "@/lib/documents/assertDocumentAccess";
 import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
+import { documentStoredObjects } from "@/lib/documents/documentVersions";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     try {
         const { data: docRow, error: docErr } = await supabase
             .from("documents")
-            .select("id, bucket, storage_path, entity_type, entity_id, doc_type")
+            .select("id, bucket, storage_path, entity_type, entity_id, doc_type, legal_hold, retention_until")
             .eq("org_id", ctx.orgId)
             .eq("id", documentId)
             .maybeSingle();
@@ -86,7 +87,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             entity_type: string | null;
             entity_id: string | null;
             doc_type: string | null;
+            legal_hold: boolean | null;
+            retention_until: string | null;
         };
+        // D2: a held or retained document is never discarded here.
+        const retainedUntil = doc.retention_until ? Date.parse(doc.retention_until) : NaN;
+        if (doc.legal_hold === true || (Number.isFinite(retainedUntil) && retainedUntil > Date.now())) {
+            return jsonError("This document is under a legal hold or retention period and cannot be deleted.", 409);
+        }
         if (doc.storage_path && !isStoragePathWithinOrg(doc.storage_path, ctx.orgId)) {
             return jsonError("This document's stored file is not inside this organization, so it cannot be deleted here.", 409);
         }
@@ -158,10 +166,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             if (delCaseErr) throw new Error(delCaseErr.message);
         }
 
-        if (doc.bucket && doc.storage_path) {
-            // Best-effort storage cleanup — don't fail the delete if the object is already gone.
-            const { error: rmErr } = await supabase.storage.from(doc.bucket).remove([doc.storage_path]);
-            if (rmErr) console.warn("[POS_DOC_DELETE_STORAGE]", doc.bucket, doc.storage_path, rmErr.message);
+        // Every stored file of the document: each version's and the row's own. Best-effort — an object already gone is
+        // not a failure. The version rows go with the document row (ON DELETE CASCADE).
+        const stored = await documentStoredObjects(supabase, ctx.orgId, [documentId]);
+        if (!stored.ok) throw new Error(stored.error);
+        for (const object of stored.objects) {
+            if (!isStoragePathWithinOrg(object.storagePath, ctx.orgId)) continue;
+            const { error: rmErr } = await supabase.storage.from(object.bucket).remove([object.storagePath]);
+            if (rmErr) console.warn("[POS_DOC_DELETE_STORAGE]", { document_id: documentId, error: rmErr.message });
         }
 
         const { error: delDocErr } = await supabase

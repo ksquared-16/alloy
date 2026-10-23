@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -190,6 +190,7 @@ export async function createGeneratedPdfForSubmission(
             original_filename: `${sanitizeFilename(templateKey)}.pdf`,
             mime_type: "application/pdf",
             byte_size: buf.length,
+            checksum_sha256: createHash("sha256").update(buf).digest("hex"),
             bucket,
             storage_path: storagePath,
             status: "uploaded",
