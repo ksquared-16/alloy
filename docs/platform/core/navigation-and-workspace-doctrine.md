@@ -566,6 +566,8 @@ Public module: `web/lib/presentation/adaptiveWorkspaceSystem.ts`.
 
 Pinned is optional productivity. Floating is the natural operating mode. Passive context updates as quiet chrome pills; passive “Switched active record…” must not appear as chat.
 
+**An unrequested assistant does not cover the record the operator opened (BP V2 D9).** On a **Work Unit** surface (queue + Focus Panel), the *unchosen* floating default is presented as **closed** — the launcher ("Open BOS") is the way in. It applies only until the operator chooses: opening, closing or pinning BOS is stored for the tab and wins everywhere, so explicit open/close, refresh and record switching all follow the operator; an explicit invocation (Ask BOS, a command session) opens it. The Workspace and other shell surfaces keep the floating default. The signal is committed Focus (`BosRecordSurfaceBridge` → `setRecordSurfaceActive`), never the pathname. Measured before the change on hosted Enrollment: the auto-recommended float covered 32% of the Focus Panel on first entry and refresh, 9% on a record switch, with no click and no stored preference.
+
 **Floating geometry:** lower-right default; min ~320×420; default ~400×620; max ~60% canvas width and usable height minus safe margins. Viewport clamp is temporary and does not overwrite preferred geometry until the operator moves/resizes. Unpin restores last floating geometry; Reset restores defaults; Close returns to launcher.
 
 ### Actions — operational chrome (not assistant ownership)

@@ -14,6 +14,7 @@ import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalS
 import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
+import { BosRecordSurfaceBridge } from "@/components/adminV2/BosRecordSurfaceBridge";
 import { RuntimeKernelProvider } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import OperatorFocusAttentionListener from "@/components/adminV2/OperatorFocusAttentionListener";
 import type { CSSProperties, ReactNode } from "react";
@@ -129,6 +130,9 @@ export default function AdminV2WorkspaceClientProviders({
                             never a route push — the route is seed-only, and a push blanks the
                             surface. */}
                         <OperatorFocusAttentionListener />
+                        {/* BP V2 D9 — tells the shell's BOS presentation controller when a Work Unit
+                            (queue + Focus Panel) is the committed destination. */}
+                        <BosRecordSurfaceBridge />
                         <SurfaceHostProvider>{children}</SurfaceHostProvider>
                       </RuntimeKernelProvider>
                     </WorkspaceRouteVmProvider>

@@ -78,6 +78,11 @@ type BosPresentationControllerValue = {
     closeToLauncher: () => void;
     pin: () => void;
     unpinToFloating: () => void;
+    /**
+     * Whether a Work Unit surface (queue + Focus Panel) is the operator's committed destination.
+     * Reported from inside the runtime kernel by `BosRecordSurfaceBridge`; see `presentedPreferred`.
+     */
+    setRecordSurfaceActive: (active: boolean) => void;
 };
 
 const BosPresentationControllerContext = createContext<BosPresentationControllerValue | null>(null);
@@ -109,6 +114,9 @@ export function BosPresentationControllerProvider({
         () => defaultBosFloatingGeometry({ width: 1440, height: 900 }),
     );
     const [sessionHydrated, setSessionHydrated] = useState(false);
+    /** The operator has CHOSEN a presentation in this tab (stored by open / close / pin). */
+    const [preferenceChosen, setPreferenceChosen] = useState(false);
+    const [recordSurfaceActive, setRecordSurfaceActiveState] = useState(false);
     /**
      * The reveal epoch whose collision geometry has been COMMITTED by the automatic park.
      *
@@ -149,7 +157,10 @@ export function BosPresentationControllerProvider({
     // (no launcher) diverge from the first client render (launcher when preferred=closed).
     useEffect(() => {
         const storedPreferred = readBosPresentationPreference();
-        if (storedPreferred) setPreferredState(storedPreferred);
+        if (storedPreferred) {
+            setPreferredState(storedPreferred);
+            setPreferenceChosen(true);
+        }
         setPinnedWidthState(readBosPinnedWidthPx());
         const bounds = viewportBounds();
         const storedGeo = readBosFloatingGeometry(bounds);
@@ -209,15 +220,33 @@ export function BosPresentationControllerProvider({
         setPreferredState(recommendBosPresentation(canvas));
     }, [canvas, sessionHydrated]);
 
+    /**
+     * AN UNREQUESTED ASSISTANT DOES NOT COVER THE RECORD THE OPERATOR OPENED (BP V2 D9).
+     *
+     * `floating` is the workspace's designed default and stays one: with no choice stored, the
+     * Workspace and the other shell surfaces still recommend it. On a Work Unit surface the operator
+     * has opened a queue and its Focus Panel, and the auto-recommended float parked over that record —
+     * measured on hosted Enrollment at 32% of the Focus Panel on first entry and refresh, 9% on a record
+     * switch, with no click and no stored preference (`qar_08296c326232`).
+     *
+     * So an UNCHOSEN floating default is presented as `closed` there: the launcher ("Open BOS") is the
+     * existing way in. Any choice the operator has made in this tab — open, close, pin — is stored
+     * (`writeBosPresentationPreference`) and wins everywhere, so explicit opening, closing, refresh and
+     * record switching all follow the operator. Nothing is written by this rule, and leaving the Work
+     * Unit restores the default presentation untouched.
+     */
+    const presentedPreferred: BosPresentationState =
+        recordSurfaceActive && !preferenceChosen ? "closed" : preferred;
+
     const derivation = useMemo(
         () =>
             deriveBosPresentation({
-                preferred,
+                preferred: presentedPreferred,
                 canvas,
                 ambientWidthPx,
                 preferredPinnedWidthPx: pinnedWidthPx,
             }),
-        [preferred, canvas, ambientWidthPx, pinnedWidthPx],
+        [presentedPreferred, canvas, ambientWidthPx, pinnedWidthPx],
     );
 
     useEffect(() => {
@@ -403,6 +432,11 @@ export function BosPresentationControllerProvider({
     const setPreferred = useCallback((state: BosPresentationState) => {
         writeBosPresentationPreference(state);
         setPreferredState(state);
+        setPreferenceChosen(true);
+    }, []);
+
+    const setRecordSurfaceActive = useCallback((active: boolean) => {
+        setRecordSurfaceActiveState((prev) => (prev === active ? prev : active));
     }, []);
 
     const setPinnedWidthPx = useCallback((px: number) => {
@@ -418,6 +452,7 @@ export function BosPresentationControllerProvider({
         if (preferred !== "pinned") {
             writeBosPresentationPreference("pinned");
             setPreferredState("pinned");
+            setPreferenceChosen(true);
         }
     }, [preferred]);
 
@@ -493,6 +528,7 @@ export function BosPresentationControllerProvider({
             closeToLauncher,
             pin,
             unpinToFloating,
+            setRecordSurfaceActive,
         }),
         [
             canvas,
@@ -509,6 +545,7 @@ export function BosPresentationControllerProvider({
             closeToLauncher,
             pin,
             unpinToFloating,
+            setRecordSurfaceActive,
         ],
     );
 
