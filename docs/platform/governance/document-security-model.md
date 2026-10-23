@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-10-23
+supersedes: []
+---
+
 # Document security model
 
 **Status:** canonical owner for document access, storage and ingestion security (Documents V1, D1a and D1b).
