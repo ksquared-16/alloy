@@ -1,6 +1,6 @@
 # Documents V1 — D2 canonical document foundation
 
-Status: **D2.0 ratified; D2.1–D2.7 in progress.** The final verdict is recorded at the end of this file.
+Status: **CERTIFIED: promoted, deployed and hosted-certified.** See "Verdict" at the end of this file.
 
 ## D2.0 — implementation preflight
 
@@ -107,3 +107,89 @@ The writer and reader surveys found:
 
 - **The document status PATCH can bypass the D1c-1 quarantine release.** It can set any status defined for the org, and staging defines `uploaded`. It could also bring back `deleted` or `restricted` documents. Fixed: lifecycle statuses cannot be set or left through the PATCH.
 - **`persistComposedSignedArtifact` selects a column that does not exist (`file_name`).** The composed artifact's source provenance (source document id and sha256) was therefore silently null. Fixed.
+
+## D2.1–D2.5 — implementation
+
+| Item | Where |
+|---|---|
+| Migration (additive, re-runnable, self-verifying, with backfill) | `supabase/migrations/20261208090000_documents_d2_canonical_foundation.sql` |
+| Versions | `web/lib/documents/documentVersions.ts`; `GET`/`POST /api/admin/documents/[id]/versions`; `GET /api/admin/documents/[id]/signed-url?version=` |
+| Subjects | `web/lib/documents/documentSubjects.ts`; `GET`/`POST /api/admin/documents/[id]/subjects`; Processing `attachDocument` goes through `document_set_primary_subject` |
+| Sensitivity | `web/lib/documents/documentSensitivity.ts` (declared class plus the D1b inference); `POST /api/admin/documents/[id]/sensitivity` |
+| Retention and hold | `documents.legal_hold*` and `retention_until`, honoured by `documentDisposal.ts` and the POS delete |
+| Audit | `document_version_added`, `document_subject_changed`, `document_sensitivity_raised`; link events name the version |
+| Writers | every document insert now records its sha256; the deletes remove every version's object |
+| Canonical model | `docs/platform/governance/document-security-model.md` §6 |
+
+## D2.6 — migration and backfill
+
+1. **Isolated proof on `certenv-a134d2e184`:**
+   - apply `gar_11506b2b501ea6` (181500, 181600 and 20261208090000 in one transaction, ledger verified);
+   - rollback invariants `gar_0937bd43b699a7`, 11/11 PASS (`certification/invariants/documents-d2-canonical-foundation.sql`).
+   - The first run, `gar_8e21235d34651c`, failed in its own fixture step (CASE 0) before any guard ran, and its rollback was verified. The test was corrected in `8639b711`.
+2. **Local proof:**
+   - the migration applied twice adds nothing on the second run;
+   - a backfill rehearsal on staging-shaped data kept all 18 rows' legacy columns byte for byte;
+   - removing a guard makes the invariant test fail (CASE 2 and CASE 5 each proved this).
+3. **Staging:** the Supabase integration applied the migration on merge `b3df4084`. A direct apply was correctly refused: `gar_12a3a15299f8fb`, `migration_owned_by_pending_merge`.
+4. **Reconciliation (`gar_b99340cc4501a7`, `d2-postmigration-reconciliation.sql`), against the baseline:**
+   - 378 documents; the identity hash `6e7ff5693393b627d22d0a39ec0ae8f1` is unchanged.
+   - **Versions:** 378 legacy versions, every one matching its file; 378/378 objects present with an eTag; 267 with a sha256 (as before).
+   - **Owners:** 172 primary owners (168 child, 4 person), and no resolvable parent lacks one. The 158 unresolved parents are left unowned and unchanged; 48 documents are unattached.
+   - **Sensitivity:** 246 declared medical (35 by doc type, 211 by medical-form link), all of which D1b already inferred, so nobody's access changes.
+   - **References:** every reference count equals the baseline; 333 derived context links.
+
+## D2.7 — certification
+
+**Lineage:**
+- D2 PR #1585, merged at `b3df4084` (`gar_18a4bb683d148e`).
+- Tested and deployed: staging `/api/build-info` `7e7019c4` (#1589), which contains `b3df4084` and changes no documents code, migration or fixture.
+- The canonical checkout was reconciled automatically by toolkit `2d366647e873`: fast-forward `1c7e4ccd` → `b0283e04`, identity verified, untracked files kept. The resets later ran at `7e7019c4`.
+
+**Automated (repository):**
+- Documents suites 292/292, including the D2 route suite (22) and the writer/reader census ratchet (10).
+- Consumer regression: 0 new failures. The 39 red tests are identical on untouched staging.
+- Prebuild passes, and CI on #1585 is all green.
+
+**Hosted: `authz_q1` run `qar_32891f09f872`**
+- **Personas:** 7/7 verified on fresh sessions.
+- **Fixture ensures:** vendor `gar_570a6d78ad8245` (`tha_08de3ed946527a`, the one that reconciled the checkout); QA Shared subjects `tha_c7da13f3f7afc0`; QA Secondary subjects `gar_38093c4d8de445`.
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Q1 authorization regression | 90/90 | `q1_hosted_authz_cert_results.qar_32891f09f872.json` |
+| D1b security regression | 25/25 | `d1b_hosted_security_cert_results.qar_32891f09f872.json` |
+| D2 hosted matrix | 40/40 | `d2_hosted_foundation_cert_results.qar_32891f09f872.json` |
+| Logical identity and immutable versions | PASS | the insert creates v1 with a checksum; a clean replacement adds v2 superseding v1 with a reason; v1 is kept |
+| Current and historical retrieval | PASS | v1 and the current version are signed for a reader; v1 is refused to another organization; another document's version is never signed |
+| Replacement refusals | PASS | no write 403; no reason 400; an unsafe file 415 with nothing stored; another organization 404 |
+| Typed subjects and the primary owner | PASS | the primary equals the legacy parent; the in-scope reader is admitted and the out-of-scope reader refused |
+| Secondary associations grant nothing | PASS | a context link to the scoped reader's own subject still gives 404 |
+| Re-filing and association changes | PASS | re-filing moves access away and back; the primary cannot be unlinked (409); another organization's subject is refused (404); a reader cannot re-file (403) |
+| Sensitivity | PASS | raised to restricted: reader, scoped and OCR get 403 `SENSITIVE_DOCUMENT` on the link and on the version list; the cleared admin reads every version; lowering 409 |
+| Lifecycle-status guard | PASS | setting `quarantined` through the PATCH gives 409 `LIFECYCLE_STATUS` |
+| Legacy consumers; Forms, Processing and document operations | PASS | the Q1 matrix (lists, related, drawer, Processing intake, OCR, previews, vendor links) and the D1b driver unchanged at 115/115; the legacy projection equals the primary owner on every run document |
+| No duplicate physical files | PASS | `gar_d9c97c01d25635`: 9 version objects, 9 distinct, none shared, all present |
+| Audit | PASS | `gar_d9c97c01d25635`: 1 `document_version_added` (reason and checksum); 6 `document_subject_changed`; 1 `document_sensitivity_raised` (standard → restricted, with a reason); 2 link events naming a historical version; actor on every event |
+| Teardown | PASS | all 8 run documents deleted through the audited delete (`DELETE /api/admin/pos/documents/[id]`), each then 404 |
+| Fixture resets | PASS | QA Shared subjects `gar_bc0250e116f976`; QA Secondary subjects `gar_e136f9c10da7c3`; vendor `gar_722d56aa39e06d` |
+| Close | PASS | `gar_908d70e7a28e2e` / `tha_93a5729c1269fa`: access clean, 0 grants, sessions removed |
+| Zero residue | 12/12 zero | `gar_1a3a87c07bd26e` (20:10:10Z), including the QA Shared and QA Secondary objects: version 2's object went with the document |
+| Binding | ZERO_RESIDUE | `gar_72236d74dbac74` |
+
+**Audit note.** `document_subject_changed` is recorded before the database rules on the change, like `document_delete_authorized`. Two of the six events are attempts the database refused: unlinking the primary, and filing under another organization's subject. The audit therefore records authorized attempts; the resulting state is what `document_subjects` holds.
+
+## Not done here (D3 prerequisites)
+
+- **Dedicated permission keys** for `personal_identity` and `restricted`, if wanted. This is a Director decision (W-11); today owner/admin are cleared by role.
+- **The doc-type policy for declared classes**, for example vendor driver's licences as `personal_identity`. No writer declares those classes yet.
+- **Retention policy values per class**, and the governed purge that would be the only deleter of superseded versions (design only).
+- **The canonical document-requirement model**, and the Documents-owned requirement waiver built on it.
+- **The 158 documents whose child no longer exists:** historical orphans, left untouched. Cleanup needs separate authorization.
+- **OCR text** stays on `documents`; it is cleared on replacement. Moving it to the version is D3.
+- **Remaining readers of the legacy parent:** 7 are frozen by the ratchet, and should move to `listDocumentSubjects`.
+- **No expiration or reminder queues, Studio, Focus Panel or filing UX** (out of scope).
+
+## Verdict
+
+**DOCUMENTS_V1_D2_COMPLETE_PROMOTED_DEPLOYED_CERTIFIED.** Every D2 gate passed on the deployed build `7e7019c4`, which contains merge `b3df4084`. The hosted run `qar_32891f09f872` is bound ZERO_RESIDUE.
