@@ -258,3 +258,18 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
 **Documentation correction.** The child's stage lives on its Enrollment journey (`process_instances`), not on `opportunity_customer_members.stage_key`.
 
 **Open:** D6, D7, D8; O1. **Residual:** the D4 org-wide Financials lists. **Next acceptance gates:** D8 (closed-record Create Assignment editor), then D6/D7.
+
+## Update 2026-10-23T15:20Z: D8 repaired, deployed and proven on hosted QA Shared
+
+**D8 is CLOSED.** PR #1584 (squash `9adb3c664a47`, deployed 15:11Z).
+
+- **Cause.** The Scheduling card opens a single subject directly (intended), and its work surface initialized `existing ? "detail" : "create"`. So any one-child family whose child had no assignment opened straight into the Create Assignment editor.
+- **Fix.** The surface now enters on its assignments; the editor opens only from "+ Add Assignment", Edit or a type pick.
+- **Local proof** (`d8/LOCAL-CERTIFICATION.md`): rendered interaction test 5/5 (base 5/5 fail); 0 new failures across 2,222 suites.
+- **Hosted proof** (`d8/HOSTED-QA.md`; `qar_cfa20b0578d5` → QUIESCED_RETAINED; census `gar_28712e7ade83d6` 13/13, bound), for admin and Director:
+  - the closed/lost family opens with no editor;
+  - the explicit "+ Add Assignment" opens it, and Cancel returns;
+  - other records and refresh stay passive;
+  - no write requests from opening.
+
+**Remaining acceptance items:** D6 (Scheduling card `financial-config` 404), D7 (publish-time Work View grain check), O1, the D4 residual Financials read-scope inventory (org-wide lists and aggregates), tile presentation feedback (Open/Overdue under the tile), and the Director product review (including the BOS panel auto-opening on record entry).
