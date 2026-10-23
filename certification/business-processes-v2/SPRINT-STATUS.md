@@ -219,3 +219,24 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
 - **Status:** Focus Panel behaviour; not repaired, and no writes were made.
 
 **Open:** D2, D4, D5, D6, D7, D8; O1. **Not exercised** (local certification stands): Overdue payments, Payment exceptions, Funding variances.
+
+## Update 2026-10-23T12:50Z: D4 repaired, deployed and proven on hosted QA Shared
+
+**D4 is CLOSED.** PR #1578 (squash `17991d6d4768`, deployed 12:42Z).
+
+- **What was wrong.** Financials detail reads now enforce the canonical site-visibility policy (`isFinancialWorkVisible`) through `financialReadScope`. That covers charge detail, the card, the Focus Panel card producer (and so Billing's source-focused card), `ledger/[id]`, payment and attempt reads, and 9 household-keyed reads. Before, they stopped at org + `fin.read`.
+- **Local proof** (`d4/LOCAL-CERTIFICATION.md`):
+  - live security suite 7/7; base fails with 200s;
+  - unit tests 18/18;
+  - regressions explained.
+- **CI.** The first run failed on 2 type errors, fixed in `d29160720`.
+- **Hosted proof** (`d4/HOSTED-QA.md`; run `qar_83fecf2e96b1` → QUIESCED_RETAINED, census `gar_8668478b99adf3` 13/13, bound):
+  - the QA North operator now gets 404 with no amounts for the exact charge and card that leaked in 8B-2;
+  - a QA North agreement charge stays readable to them (200);
+  - No-Finance gets 403;
+  - admin and Director are unchanged;
+  - in the browser, the panel shows no financial amount to the restricted operator.
+
+**Residual (classified, not in D4).** Org-wide lists and aggregates without a site filter: `needs-recognition`, the `ledger` and `journal-entries` lists, `snapshot`, `statements`.
+
+**Open:** D2, D5, D6, D7, D8; O1. **Next acceptance repair:** D2/D5, multi-child Enrollment progression and truthful work completion.
