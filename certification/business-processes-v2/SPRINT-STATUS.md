@@ -1,8 +1,8 @@
 # Business Processes V2: sprint status (authoritative)
 
-**As of:** 2026-10-23T01:30Z
+**As of:** 2026-10-23T02:45Z
 **Lane:** `lane_581d120e4e41` (`agent/business-processes`)
-**Deployed staging:** `8bb731eadbf3` (project `ikaxilmwmrmbagoidedu`). It contains every BP V2 merge below.
+**Deployed staging:** `e541dba05f34` (project `ikaxilmwmrmbagoidedu`). It contains every BP V2 merge below.
 **Vacilando toolkit:** `2cc54168bf80`.
 
 **Overall: PARTIAL, not certified.**
@@ -55,7 +55,8 @@
 | 7 | Tile Work Items line | COMPLETE | #1554 → `ed5abbcd1` | `live-tile-work-items` | Firefly read-only (111 open · 89 overdue = server); QA Shared tiles show "No open work items" |
 | 8A-R | Hosted QA readiness, Decision classification, walkthrough | COMPLETE | #1567 → `a12b8808d` | — | — |
 | 8A-Q | Financial quiescence: census v2 `c1b6c335…`, 13 checks | COMPLETE | #1567 → `a12b8808d` | `financialQuiescence.live.test.ts` (3) | Every BP run's close certified 13/13 (§3) |
-| **8A-H** | **Hosted three-process walkthrough with populated records** | **PARTIAL / BLOCKED** | — | — | §4; blocked by §5.1 |
+| 8B-1 | Enrollment template repair (`closed_lost` → `closed` + lost reason; family/child Waitlist separation, Director Option 1) | COMPLETE | #1574 → `e541dba05` | `enrollmentTemplatePublication.test.ts` (13, zero publish errors) | Readiness run `qar_e59e093c2b05` (§3) |
+| **8A-H** | **Hosted three-process walkthrough with populated records** | **READY TO RUN** (Enrollment unblocked) | — | — | §4, §6 |
 
 Local commits not pushed, all evidence with no code: `241daa6d6`, `a0bc3bddf`, `3c9f211f5`, `25d5437af`, `830ce1a5f`, `8ef9baf28`, and this update.
 
@@ -67,6 +68,7 @@ Local commits not pushed, all evidence with no code: `241daa6d6`, `a0bc3bddf`, `
 | `qar_17c26a706ca7` | `1d35ef4690f2` → `23626b9e6b87` | Session verification failed at open; residual profiles; recovered after the Access & Identity (#1571) and runner repairs | **QUIESCED_RETAINED** | `gar_afd84a85847332` 13/13 |
 | `qar_2765465b1e2b` | `23626b9e6b87` | Assignments and Billing configured and walked by 4 personas | **QUIESCED_RETAINED** | `gar_91e81845df7173` 13/13 (bind `gar_7eb0e4f868993c`) |
 | `qar_1546aa9036c7` | `43ce22941af3` | No-Finance role certified; Billing refused | **QUIESCED_RETAINED** | `gar_91261ae7a0d440` 13/13 (bind `gar_2ab6bd0873f4eb`) |
+| `qar_e59e093c2b05` | `2cc54168bf80` | S8B-1 readiness: Enrollment template published (r1, r2), three tiles, Create Lead household + child, Close as Lost executed | **QUIESCED_RETAINED** | `gar_eaa41f83f0838b` 13/13 (bind `gar_bd1d5c718729ae`) |
 
 - Every BP run is terminal. All four pool identities have 0 roles and 0 access profiles. No sessions remain. QA Shared is free; every Documents run is also CLOSED.
 - **Retained in QA Shared** (census `gar_91e81845df7173`):
@@ -108,7 +110,7 @@ Evidence: `slice8a/hosted/` (`qa-ledger-closeout.json`, and one folder per run).
 
 ## 5. Defects and blockers
 
-1. **Enrollment template references a stage it doesn't create.** **Not corrected and not deployed**; no open PR.
+1. **Enrollment template references a stage it doesn't create.** **REPAIRED and deployed** (PR #1574 → `e541dba05`), together with the family/child Waitlist separation. Proven on hosted staging by readiness run `qar_e59e093c2b05`: apply and publish with 0 errors; Create Lead commits a household and child; Close as Lost applies `{closed, lost}` and lands on `closed`. *Original description:*
    - `apply_enrollment_v2_template` is refused (422 `dangling_stage_reference`).
    - The template creates family stage `closed` (`web/lib/businessProcessTemplates/enrollmentProcessTemplate.ts:38`).
    - Its operating plans move outcomes to `closed_lost` (`web/lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts`, 11 references).
@@ -148,3 +150,26 @@ Evidence: `slice8a/hosted/` (`qa-ledger-closeout.json`, and one folder per run).
    4. quiesce through product commands;
    5. close, run census v2 13/13, and bind.
 5. **V2 acceptance.**
+
+## Update 2026-10-23T02:45Z: Slice 8B-1 deployed, Enrollment unblocked
+
+**Template repair: PR #1574, merged and deployed at `e541dba05`.**
+- **Close as Lost:** lands on `closed` and records `lost`.
+- **Wants Waitlist:** keeps the family at Decision.
+- **No Availability:** moves the family Tour → Decision.
+- **Spot Offered:** moves the child through a declared `waitlist_to_enrolling`.
+
+**Hosted readiness (`qar_e59e093c2b05`).**
+- Template applied, validated (0 errors) and published, then republished as revision 2 after correcting the QA child-view grain. 8 stages, 2 tracks.
+- The lead stage work unit needs status filters; it uses the canonical family status `open`.
+- Create Lead committed: household `4e324c66…` and child `c5fa60c4…`, landing in New Leads (1 = 1 row).
+- All three tiles render side by side.
+- Close as Lost executed through the product.
+- Closed and quiesced: census 13/13, bound.
+
+**New findings, none blocking the walkthrough:**
+- (a) A closed family record cannot be opened: "stage `closed` offers no work templates". Owner: Runtime / Enrollment.
+- (b) QA Shared has no child status definitions, so `waitlist_child` has no target. The child status vocabulary must be configured before per-child waitlisting can run on hosted staging.
+- (c) QA Shared option sets `person_gender` and `childcare_program_type` return 404.
+- (d) Publish validation does not check Work View row grain against the grain of the stage it filters on.
+

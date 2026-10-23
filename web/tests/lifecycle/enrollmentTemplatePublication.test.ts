@@ -52,14 +52,16 @@ const LOST_EXITS = [
 /** The stage-based Work Views the hosted QA run publishes (counts must match deployed data). */
 const STAGE_VIEWS = parseWorkViewsV1(
     [
-        ["new_leads", "New Leads", "lead"],
-        ["tours", "Tours", "tour"],
-        ["decision", "Decision", "decision"],
-        ["registration", "Registration", "enrolling"],
-        ["waitlist", "Waitlist", "waitlist"],
+        // Row grain matches the grain of the stage the view filters on: the runtime refuses a family lens
+        // over child stages (measured on hosted staging, S8B-1 readiness run qar_e59e093c2b05).
+        ["new_leads", "New Leads", "lead", "family"],
+        ["tours", "Tours", "tour", "family"],
+        ["decision", "Decision", "decision", "family"],
+        ["registration", "Registration", "enrolling", "child"],
+        ["waitlist", "Waitlist", "waitlist", "child"],
     ]
-        .map(([id, label, stage], i) => ({
-            id, label, row_grain_v1: "family", display_order: i + 1, visible_in_runtime: true,
+        .map(([id, label, stage, grain], i) => ({
+            id, label, row_grain_v1: grain, display_order: i + 1, visible_in_runtime: true,
             filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: stage }],
         }))
         .concat([{ id: "all", label: "All", row_grain_v1: "family", display_order: 6, visible_in_runtime: true, filters_v1: [] } as never]),
@@ -211,6 +213,11 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
             processes: applied.processes.map((p) => (p.id === processId ? { ...p, work_views_v1: STAGE_VIEWS } as LifecycleBuilderProcessRecord : p)),
         };
         expect(STAGE_VIEWS.map((v) => v.id)).toEqual(["new_leads", "tours", "decision", "registration", "waitlist", "all"]);
+        const grainOf = new Map(enrollment(applied).stages.map((s) => [s.key, s.grain]));
+        for (const v of STAGE_VIEWS) {
+            const stageFilter = (v.filters_v1 ?? []).find((f) => f.field_key === "opportunity_stage");
+            if (stageFilter) expect({ view: v.id, grain: v.row_grain_v1 }).toEqual({ view: v.id, grain: grainOf.get(String(stageFilter.value)) });
+        }
         expect(validateConfiguredStageReferences(withViews)).toEqual({ ok: true });
         const result = validateBusinessProcessForPublish(withViews);
         expect(result.errors).toEqual([]);
