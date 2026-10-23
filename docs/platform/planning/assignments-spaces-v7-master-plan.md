@@ -20,19 +20,20 @@ Primary/Secondary; pricing never decides homeroom).
 |---|---|---|---|---|---|
 | V7-01 | Canonical model + impact census | **COMPLETE** (this document) | enrollment-placement | — | — |
 | V7-02 | Space configuration and purpose/use | **V7-02a PROMOTED & DEPLOYED-VERIFIED** (#1583, merge `1c7e4ccd`, 2026-10-23); V7-02b (S3) not authorized | enrollment-placement (+configuration) | V7-01 | §10–11 |
-| V7-03 | Multiple assignments + derived homerooms | **IMPLEMENTED_UNMERGED** (H-ID A, H-COMPAT 1 approved) | enrollment-placement | V7-02 | §12 |
-| V7-04 | Operator "Add Schedule" experience | NOT_STARTED | enrollment-placement (UI) | V7-02, V7-03 | mounted flows |
+| V7-03 | Multiple assignments + derived homerooms | **PROMOTED & DEPLOYED-VERIFIED** (#1587, merge `502d5975`, 2026-10-23) | enrollment-placement | V7-02 | §12–13 |
+| V7-04 | Assignment Card (was "Add Schedule experience") | **AUDITED** — no redesign; save defects A4–A8 → slice S3; Make-primary → P1 | enrollment-placement (UI) | — | audit §1 A1–A8 |
 | V7-05 | Enrollment & commercial separation | DECISION_REQUIRED (C1–C3) | commercial + financials | V7-03 | live pricing suites |
-| V7-06 | Set-aware expected attendance | NOT_STARTED | operations-temporal | V7-03 | live multi-session suites |
-| V7-07 | Actual attendance and room movements | DISCOVERY done; repair NOT_STARTED | attendance | — (independent) | whereabouts convergence |
-| V7-08 | Capacity, ratios, staffing convergence | NOT_STARTED | staffing/capacity | V7-06 | side-by-side measures |
-| V7-09 | Roster and Focus Panel convergence | NOT_STARTED | surfaces | V7-03, V7-06 | mounted roster/card |
+| V7-06 | Expected attendance | **AUDITED** — supersede gap E2 → slice S2 (defect); per-session expectations → **P2** then S6 | operations-temporal | P2 | audit §1 E1–E5 |
+| V7-07 | Actual attendance and room movements | **S1 IMPLEMENTED_UNMERGED** — `attendance.move` judged by the canonical whereabouts; `resolveCurrentRoom` removed | attendance | — | audit §1 M2; §14 |
+| V7-08 | Capacity, ratios, staffing | **AUDITED** — roster actual ratio K1 → slice S4; P3–P5 policy; no new engine | staffing/capacity | P3–P5 | audit §1 K1–K7 |
+| V7-09 | Roster and Focus Panel | **AUDITED** — homerooms complete; one-room lines R3/R4 + three tiles → slice S5 | surfaces | — | audit §1 R1–R7 |
 | V7-10 | Secondary/staff change-event parity | DECISION_REQUIRED (Director ruling) | operations-temporal + integrations | — | contract tests |
-| V7-11 | Obsolete code and architecture retirement | IMPLEMENTING per slice (§4) | each slice's lane | each replacement | removal evidence |
+| V7-11 | Obsolete code and architecture retirement | **AUDITED** — O1 retire now, O3/O5 with S1/P1, O4 after census, O6 keep | each slice's lane | each replacement | audit §1 O1–O7 |
 | V7-12 | Full cross-domain certification | NOT_STARTED | all | V7-02…V7-11 | mounted + live |
 
-Recommended order: **V7-02 → V7-03 → V7-04 → V7-06 → V7-08 → V7-09 → V7-05 → V7-10 → V7-12**,
-with **V7-07** independent (any time) and **V7-11** inside every slice.
+Recommended order (after the 2026-10-23 convergence audit, `assignments-v7-convergence-audit.md`):
+**S1 → S2 → S3 → S4 → S5**, with Director policies **P1–P5** gating S6 and the capacity/ratio questions,
+then V7-05 and V7-10, then V7-12.
 
 ## 2. Current → target authority map
 
@@ -247,4 +248,48 @@ expectations and pricing keep the placement / primary they certify against (V7-0
 
 **Outstanding.** Today no space is configured with a Homeroom use, so every child shows "No
 homeroom" until an operator flags a category and configures classrooms.
+
+## 13. V7-03 promotion (2026-10-23)
+
+PR #1587 (candidate `cbc_3a62a6f395e9`, `85d01320`, acceptance `qaa_e61fa69e482039`) merged as `502d5975`
+over staging `484800c3`; 20 paths, no migrations. The gateway accepted the candidate's ancestry (its base
+`b3df4084` precedes `484800c3`, which overlapped none of its paths), so no reconciliation was needed.
+
+**Deployed verification (read only, no writes).** Build-info = `502d5975`. On staging no category provides
+Homeroom and no space carries Uses, so every child reads "No homeroom" on the mounted roster; the roster
+and the scheduling projection (Focus Panel source) agree for every child; the Studio shows the Homeroom
+line on every category and the "Provides homeroom" control; staff keep "Primary:". One, many, enrichment,
+shared-space, legacy-placement and dated cases are certified on the exact candidate (isolated preview
+mounted QA and the live suite), not on staging: configuring Homeroom there would change live operator
+behaviour. Staging also has no child whose primary row names a room, so the absence of a primary fallback
+is proven by the candidate's mounted QA, unit and live tests.
+
+**Next.** Operators adopt Homeroom by flagging a category and configuring classrooms' Uses. Recommended
+next slice: V7-04 (Add Schedule experience), which can now present Homeroom-providing uses; V7-09 converges
+the remaining room lines (`SchedulingCard`, compact schedule, per-row placement room).
+
+## 14. S1 — attendance room movement on canonical whereabouts (2026-10-23)
+
+**Root cause (M2).** `attendance.move` took its source room from `resolveCurrentRoom`, which walked the
+day's events backwards returning the first room ANY event named (a check-out or absence included) and
+fell back to the placement room. Its refusal therefore only fired for a child with no placement: a
+checked-out, absent or not-yet-arrived child could be "moved" and then read present in the destination.
+It also judged the move on the UTC date while the fact was recorded on the local service date.
+
+**Repair.** The move reads that service day's facts and folds them at the move instant with
+`resolveCurrentWhereabouts` (the day board's reader over the canonical `whereaboutsAt` fold, which the
+Attendance card also uses). Only a `present` child can be moved, from the fold's room; checked-out,
+absent and not-arrived children are refused with the reason. The service day is derived exactly as the
+attendance service records it. A retried move with the same idempotency key converges on the fact
+already recorded. `resolveCurrentRoom` is deleted (its only caller was this guard). No new state, no
+schema, nothing outside attendance written.
+
+**Evidence.** Live (real actions, real database): `tests/childcareOperational/attendance/live/
+attendanceMoveWhereabouts.live.test.ts` — deployed code fails 4/9 (moves allowed after check-out,
+absence, before arrival; a retried move errors), the repair passes 9/9. CI guard:
+`tests/childcareOperational/attendance/attendanceMoveGuard.test.ts` (11).
+
+**Recertification.** Attendance capture and movement: the live suite above plus the existing
+cross-channel and assigned-scope live suites; a mounted move on the Attendance card for a present child
+and a refused move for a checked-out child.
 
