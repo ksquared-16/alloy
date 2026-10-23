@@ -30,6 +30,11 @@ import { mapCommercialResolutionToBillingProjection } from "@/lib/scheduling/bil
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/scheduleCreateInputs";
 import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
+import {
+    changeEnrolledPrimarySchedule,
+    hasOperationalPrimary,
+} from "@/lib/childcareOperational/changeEnrolledPrimarySchedule";
+import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { buildRosterReadModel, type RosterReadModel } from "@/lib/scheduling/roster/buildRosterReadModel";
 import {
@@ -829,6 +834,56 @@ export async function POST(request: NextRequest) {
             { status: siteFail.status }
         );
     }
+    /*
+     * ── AN ENROLLED CHILD'S SCHEDULE IS EDITED, NOT CREATED AGAIN (V7 S3 / audit A5) ──
+     *
+     * With a live primary, `schedule.create` can only refuse ("Child already has an operational
+     * schedule"). The edit goes through the canonical change path instead — one supersession
+     * transaction, judged against the primary the operator opened (`expected_assignment_id`), or an
+     * in-place correction of hours when nothing effective-dated changed. Site authority was applied
+     * above, to the same payload.
+     */
+    const agreementId = String(body.enrollment_agreement_id ?? "").trim();
+    if (agreementId && (await hasOperationalPrimary(supabase, ctx.orgId, agreementId))) {
+        try {
+            const edit = await changeEnrolledPrimarySchedule(supabase, {
+                orgId: ctx.orgId,
+                enrollmentAgreementId: agreementId,
+                todayYmd: await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId),
+                actorUserId: ctx.userId,
+                expectedAssignmentId: String(body.expected_assignment_id ?? "").trim() || null,
+                schedulePatternId: String(body.schedule_pattern_id ?? "").trim(),
+                startDate: String(body.start_date ?? "").trim(),
+                roomLocationId: String(body.room_location_id ?? "").trim() || null,
+                programCategoryId: String(body.program_category_id ?? "").trim() || null,
+                days: assignmentTimeDaysFromRequest(body.weekdays, body.times),
+            });
+            return NextResponse.json({
+                ok: true,
+                result: {
+                    actionKey: "schedule.change",
+                    entityType: "child",
+                    entityId: customerMemberId,
+                    affectedId: edit.assignmentId,
+                    detail: {
+                        kind: edit.kind,
+                        prior_assignment_id: edit.priorAssignmentId,
+                        placement_superseded: edit.placementSuperseded,
+                    },
+                },
+            });
+        } catch (e) {
+            if (e instanceof OperationalEnrollmentServiceError) {
+                const status = e.code === "conflict" ? 409 : e.code === "not_found" ? 404 : 422;
+                return NextResponse.json({ error: e.message, code: e.code }, { status });
+            }
+            if (e instanceof AssignmentTimeRejectedError) {
+                return NextResponse.json({ error: e.message, code: "assignment_time_failed" }, { status: 422 });
+            }
+            throw e;
+        }
+    }
+
     const result = await action.execute(scheduleDeps);
 
     if (!result.ok) {

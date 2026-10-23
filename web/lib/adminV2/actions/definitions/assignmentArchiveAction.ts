@@ -50,7 +50,7 @@ export const assignmentArchiveAction: RegisteredAction = {
     async buildPreview({ payload }) {
         return {
             summary: `Archive assignment effective ${t(payload?.end_date) || "today"}.`,
-            changes: ["Set end date", "Mark status ended", "Primary assignments are rejected"],
+            changes: ["Set end date", "Ends now, or stays live until a future end date", "Primary assignments are rejected"],
         };
     },
 
@@ -63,6 +63,7 @@ export const assignmentArchiveAction: RegisteredAction = {
                 assignmentId: t(payload.assignment_id) || invocation.entityId,
                 endDate: t(payload.end_date) || todayYmd,
                 actorUserId: ctx.userId ?? null,
+                todayYmd,
             });
             return {
                 ok: true,

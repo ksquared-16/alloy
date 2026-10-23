@@ -27,7 +27,7 @@ export function operatorFacingAssignmentError(raw: string | null | undefined): s
         return "This enrollment has ended. Choose an active enrollment or create a Proposed Assignment.";
     }
     if (lower.includes("primary assignment") && lower.includes("supersede")) {
-        return "This child already has a primary Assignment. Make another primary first, or use Make Primary.";
+        return "This child already has a primary schedule. Edit it to change it.";
     }
     // Strip obvious field-name leakage
     if (/^[a-zA-Z0-9_]+ is required$/.test(msg)) {

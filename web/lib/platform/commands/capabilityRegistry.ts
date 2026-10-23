@@ -1410,7 +1410,7 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         maturity: "executable",
         executionOwner: "registered_action",
         catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["person"],
+        supportedSubjects: ["child", "person"],
         supportsPreview: true,
         confirmationPolicy: "none",
         registeredActionKey: "assignment.set_time",
@@ -1726,7 +1726,8 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         maturity: "executable",
         executionOwner: "registered_action",
         catalogVisibility: "organization_command_catalog",
-        supportedSubjects: ["child", "person"],
+        // Staff only: a child's primary is changed by editing it (V7 decision P1).
+        supportedSubjects: ["person"],
         supportsPreview: true,
         confirmationPolicy: "confirm",
         registeredActionKey: "assignment.set_primary",

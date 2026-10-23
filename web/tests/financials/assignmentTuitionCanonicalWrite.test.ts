@@ -92,8 +92,9 @@ describe("the snapshot is kept, and is not the price", () => {
          */
         const from = card.indexOf("async function save()");
         const body = card.slice(from, card.indexOf("if (roomPicking) {", from));
-        /* Both paths: the secondary-assignment branch and the primary one. */
-        expect((body.match(/await finishAfterWrite\(\)/g) ?? []).length, "every save path settles tuition").toBe(2);
+        /* Every writing path: a secondary corrected on its own start (V7 S3), a secondary created or
+           replaced, and the primary. (A secondary prices no tuition — finishAfterWrite skips it there.) */
+        expect((body.match(/await finishAfterWrite\(\)/g) ?? []).length, "every save path settles tuition").toBe(3);
         // The follow-ups — quote snapshot, tuition (re-read THEN commit), card re-read — run together,
         // and the editor closes only after ALL of them answered (no optimistic success).
         const fin = card.slice(card.indexOf("async function finishAfterWrite"));

@@ -1,7 +1,13 @@
 /**
  * End (archive) an operational assignment without inventing a second ledger.
- * Closes the row with an end date — primary rows must use assignment.set_primary
- * to transfer home, not archive.
+ * Closes the row with an end date — a primary row is never archived (a child's primary ends with the
+ * enrollment; a staff primary is replaced through assignment.set_primary).
+ *
+ * An end date AFTER today schedules the end: the row stays live (its status is kept) and the
+ * projection moves it to history once the date passes — it used to be marked `ended` at once, so an
+ * operator setting next month's end date watched it vanish today. An end date today or earlier ends
+ * it now, as before. A row that is no longer live is refused: ending a superseded row would rewrite
+ * history, and means the operator was looking at a stale row.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -18,6 +24,8 @@ export type ArchiveOperationalAssignmentInput = {
     assignmentId: string;
     endDate: string;
     actorUserId?: string | null;
+    /** The org's today. Without it every end is immediate (the prior behaviour). */
+    todayYmd?: string | null;
 };
 
 export async function archiveOperationalAssignment(
@@ -46,6 +54,13 @@ export async function archiveOperationalAssignment(
             "Cannot archive the primary assignment; set a new primary first"
         );
     }
+    if (!["planned", "active", "ending"].includes(row.status)) {
+        throw new OperationalEnrollmentServiceError(
+            "conflict",
+            "This assignment has already changed — reopen it to see the current one",
+            { assignment_id: row.id }
+        );
+    }
     if (compareIsoDates(endDate, row.start_date) < 0) {
         throw new OperationalEnrollmentServiceError(
             "validation_failed",
@@ -57,7 +72,7 @@ export async function archiveOperationalAssignment(
         .from("schedule_assignments")
         .update({
             end_date: endDate,
-            status: "ended",
+            status: input.todayYmd && compareIsoDates(endDate, input.todayYmd) > 0 ? row.status : "ended",
             updated_by: trimOrNull(input.actorUserId),
         })
         .eq("org_id", input.orgId)
