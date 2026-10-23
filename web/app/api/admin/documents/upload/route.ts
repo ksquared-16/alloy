@@ -37,6 +37,7 @@ import {
 import { proposeImportDisplayName, resolveDisplayNameWithCollision } from "@/lib/pos/documentInstanceNaming";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
+import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKind } from "@/lib/documents/documentContentSignature";
 import { CANONICAL_DOCUMENT_ENTITY_TYPE } from "@/lib/documents/documentEntityTypes";
 import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
 
@@ -214,6 +215,20 @@ export async function POST(request: NextRequest) {
     if (buffer.length > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES) {
         return tooLargeResponse();
     }
+    // D1b.3: the bytes must be the format the name and type claim. A stored format always has a
+    // canonical content type, and that, not the browser's label, is what the governed bucket accepts.
+    const contentKind = sourceFormat as DocumentContentKind;
+    if (!bytesMatchDocumentKind(buffer, contentKind)) {
+        return NextResponse.json(
+            {
+                error: `This file is not a valid ${formatCaps.label}.`,
+                code: "CONTENT_MISMATCH",
+                format: sourceFormat,
+            },
+            { status: 415 }
+        );
+    }
+    const storedMimeType = CANONICAL_DOCUMENT_MIME[contentKind];
     // Content hash of the bytes we are about to store.
     //
     // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every
@@ -227,7 +242,7 @@ export async function POST(request: NextRequest) {
     const storagePath = `${ctx.orgId}/${pathSegment}/${objectId}-${safeName}`;
 
     const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
-        contentType: file.type || "application/octet-stream",
+        contentType: storedMimeType,
         upsert: false,
     });
 
@@ -272,7 +287,7 @@ export async function POST(request: NextRequest) {
             doc_type: docType,
             title,
             original_filename: origName !== "upload" ? origName : null,
-            mime_type: mimeType || null,
+            mime_type: storedMimeType,
             byte_size: buffer.length,
             checksum_sha256: checksumSha256,
             bucket,

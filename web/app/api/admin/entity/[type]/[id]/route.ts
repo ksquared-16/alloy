@@ -25,6 +25,8 @@ import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
+import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
+import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 import { apiError, apiOk } from "@/lib/api/apiResponse";
 
 /**
@@ -1036,7 +1038,18 @@ async function getEntityImpl(
             if (docErr || !doc) {
                 return entitySupabaseError(docErr);
             }
-            const row = doc as Record<string, unknown>;
+            // D1b.6: the drawer is a document read. It needs document read admission and every sensitive
+            // class the document carries, and it never carries OCR / extracted text. That is served only by
+            // the extracted-text route, behind processing.operate and the full document decision.
+            const docRow = doc as Record<string, unknown>;
+            if (!actorMayReadDocuments(access)) return entityNotFound();
+            const docSensitivity = await resolveDocumentSensitivity(supabase, orgId, [
+                { id: String(docRow.id), doc_type: docRow.doc_type ? String(docRow.doc_type) : null },
+            ]);
+            if (!actorMayReadSensitivity(access, docSensitivity.get(String(docRow.id)) ?? new Set())) return entityNotFound();
+            const { extracted_text: _omitText, extracted_data: _omitData, ...row } = docRow;
+            void _omitText;
+            void _omitData;
             const out: Record<string, unknown> = { ...row };
             const n = normalizeDocumentRow(row);
             out.name = n.name;

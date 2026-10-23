@@ -188,6 +188,18 @@ async function composedSignatureMarks(
         const entry = raw as { kind?: string; drawn_document_id?: string; typed_full_name?: string } | null;
         if (!entry || typeof entry !== "object") continue;
         if (entry.kind === "drawn" && typeof entry.drawn_document_id === "string" && entry.drawn_document_id) {
+            // D1b.6: only a captured signature mark may be drawn into an artifact. Any other document in the
+            // organization (a child's record, a vendor's licence) is never embedded, whatever id the payload names.
+            const { data: assetRow } = await supabase
+                .from("documents")
+                .select("doc_type")
+                .eq("org_id", orgId)
+                .eq("id", entry.drawn_document_id)
+                .maybeSingle();
+            if ((assetRow as { doc_type?: string | null } | null)?.doc_type !== "signature_asset") {
+                out[fieldId] = { drawnPng: null };
+                continue;
+            }
             const asset = await downloadDocumentBytesSafe(supabase, { orgId, documentId: entry.drawn_document_id });
             out[fieldId] = { drawnPng: asset?.bytes ?? null };
             continue;

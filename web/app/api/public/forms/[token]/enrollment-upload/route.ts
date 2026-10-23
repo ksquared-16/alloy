@@ -21,7 +21,7 @@
  * doc_type, or the artifact: those all come from the session. This is not an authentication bypass
  * and grants no operator capability.
  *
- * Narrow by design: PDF, PNG and JPEG, magic-bytes verified, 10MB cap.
+ * Narrow by design: PDF, PNG and JPEG, magic-bytes verified, 10MB cap, rate-limited per caller (D1b.4).
  */
 
 import { NextRequest } from "next/server";
@@ -32,15 +32,15 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { resolveParticipantUploadDestination } from "@/lib/enrollment/participantRuntime/resolveParticipantUploadDestination";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import { CANONICAL_DOCUMENT_MIME, DOCUMENT_CONTENT_EXT, sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
+import {
+    enforcePublicUploadRateLimit,
+    PUBLIC_UPLOAD_MAX_FILE_BYTES,
+    PUBLIC_UPLOAD_MAX_JSON_BODY_BYTES,
+    refuseOversizedPublicBody,
+} from "@/lib/documents/publicUploadGuard";
 
-const MAX_BYTES = 10 * 1024 * 1024;
-
-/** What a browser may hand us, recognised by its BYTES rather than by what the caller called it. */
-const ACCEPTED = [
-    { mime: "application/pdf", ext: "pdf", magic: [0x25, 0x50, 0x44, 0x46] },
-    { mime: "image/png", ext: "png", magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
-    { mime: "image/jpeg", ext: "jpg", magic: [0xff, 0xd8, 0xff] },
-] as const;
+const MAX_BYTES = PUBLIC_UPLOAD_MAX_FILE_BYTES;
 
 function plaintextToken(raw: string): string {
     try {
@@ -48,14 +48,6 @@ function plaintextToken(raw: string): string {
     } catch {
         return raw;
     }
-}
-
-function sniff(bytes: Buffer): (typeof ACCEPTED)[number] | null {
-    for (const kind of ACCEPTED) {
-        if (bytes.length < kind.magic.length) continue;
-        if (kind.magic.every((b, i) => bytes[i] === b)) return kind;
-    }
-    return null;
 }
 
 /** A filename fit to store: the parent's own words, stripped of anything that is not a name. */
@@ -69,6 +61,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { token: rawToken } = await params;
     const supabase = createServiceRoleClient();
+
+    // D1b.4: size and rate gates run before the token is resolved or the body is read.
+    const oversized = refuseOversizedPublicBody(request.headers, PUBLIC_UPLOAD_MAX_JSON_BODY_BYTES);
+    if (oversized) return oversized;
+    const limited = await enforcePublicUploadRateLimit(supabase, "enrollment_upload", request.headers);
+    if (limited) return limited;
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
     if (!access.ok) {
@@ -94,8 +92,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (bytes.length === 0) return publicErr("The file was empty.", 400, { code: "BAD_FILE" });
     if (bytes.length > MAX_BYTES) return publicErr("Please attach a file under 10MB.", 400, { code: "TOO_LARGE" });
-    const kind = sniff(bytes);
-    if (!kind) return publicErr("Please attach a PDF, PNG or JPEG.", 400, { code: "BAD_TYPE" });
+    const sniffed = sniffPublicUploadKind(bytes);
+    if (!sniffed) return publicErr("Please attach a PDF, PNG or JPEG.", 400, { code: "BAD_TYPE" });
+    const kind = { mime: CANONICAL_DOCUMENT_MIME[sniffed], ext: DOCUMENT_CONTENT_EXT[sniffed] };
 
     /*
      * The ARTIFACT decides what this attachment is — not the caller.

@@ -9,6 +9,8 @@ import { getProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/proc
 import { makeDefaultSourceEvidenceRegistry } from "@/lib/pos/processingCase/readModel/processingCaseEvidenceDb";
 import { resolveSourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +38,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         if (!detail) return jsonError("Not found", 404);
         const evidenceRegistry = makeDefaultSourceEvidenceRegistry(supabase, ctx.orgId, { permissionKeys: ctx.permissionKeys });
         const result = await resolveSourceEvidence(detail, evidenceRegistry);
-        return jsonData(result);
+        // D1b: the stored form-draft preview carries OCR text; it is shown only to an actor who may
+        // read the source document's extracted text.
+        const access = await getAdminAccessContextCached();
+        const textActor = access.ok ? access : { roleKeys: [], permissionKeys: [] };
+        return jsonData({
+            ...result,
+            formDraftPreview: await discloseFormDraftTextPreview(supabase, ctx.orgId, textActor, result.formDraftPreview),
+        });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to load processing case" },

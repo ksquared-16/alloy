@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
+import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
@@ -822,14 +825,42 @@ async function getRelatedImpl(
     }
 }
 
+/**
+ * D1b.6: a related-records tab lists documents. It may list only documents the actor may read: it needs
+ * document read admission (`documents.read` or a document role), and it never shows a sensitive document
+ * (medical → health.view, safeguarding evidence → safeguarding view) to an actor without that authority.
+ *
+ * Every entity branch above assembles `documents` its own way, so the rule is applied once, here, to
+ * the response every branch returns. A branch added later cannot skip it.
+ */
+async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> {
+    if (res.status !== 200) return res;
+    const body = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || !Array.isArray(body.documents)) return res;
+    const ctx = await getAdminContextCached();
+    const access = await getAdminAccessContextCached();
+    let documents: unknown[] = [];
+    if (ctx.ok && access.ok && actorMayReadDocuments(access)) {
+        const rows = (body.documents as Array<Record<string, unknown>>).map((d) => ({
+            ...d,
+            doc_type: (d.document_type as string | null | undefined) ?? (d.doc_type as string | null | undefined) ?? null,
+        }));
+        const kept = new Set(
+            (await filterDocumentRowsBySensitivity(createAdminClient(), ctx.orgId, access, rows)).map((d) => d.id),
+        );
+        documents = (body.documents as Array<Record<string, unknown>>).filter((d) => kept.has(d.id));
+    }
+    return NextResponse.json({ ...body, documents }, { status: 200 });
+}
+
 /** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
 export async function GET(
     request: NextRequest,
     context: { params: Promise<{ entity: string; id: string }> }
 ) {
-    if (!adminPerfEnabled()) return getRelatedImpl(request, context);
+    if (!adminPerfEnabled()) return withDocumentDisclosure(await getRelatedImpl(request, context));
     const t0 = adminPerfNow();
-    const res = await getRelatedImpl(request, context);
+    const res = await withDocumentDisclosure(await getRelatedImpl(request, context));
     const { entity, id } = await context.params;
     logAdminPerf({ route: "related", entity, id, status: res.status, t0 });
     return res;

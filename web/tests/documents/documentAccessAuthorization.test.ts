@@ -40,6 +40,8 @@ vi.mock("@/lib/supabaseAdmin", () => ({
         from: () => ({
             select: () => ({
                 eq: () => ({
+                    // D1b.6 sensitivity lookups (safeguarding evidence, medical form links) find nothing here.
+                    in: async () => ({ data: [], error: null }),
                     eq: () => ({ maybeSingle: async () => ({ data: documentRow, error: null }) }),
                 }),
             }),
@@ -269,7 +271,7 @@ describe("assertDocumentAccess — decision function", () => {
     function supa(data: Record<string, unknown> | null) {
         return {
             from: () => ({
-                select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data, error: null }) }) }) }),
+                select: () => ({ eq: () => ({ in: async () => ({ data: [], error: null }), eq: () => ({ maybeSingle: async () => ({ data, error: null }) }) }) }),
             }),
         };
     }
