@@ -57,6 +57,14 @@ function timeToMinutes(t: string | null): number | null {
     return hh * 60 + mm;
 }
 
+function datesIntersect(x: Assignment, y: Assignment): boolean {
+    const xTo = x.openEnded ? null : x.effectiveTo?.slice(0, 10) ?? null;
+    const yTo = y.openEnded ? null : y.effectiveTo?.slice(0, 10) ?? null;
+    if (xTo && y.effectiveFrom.slice(0, 10) > xTo) return false;
+    if (yTo && x.effectiveFrom.slice(0, 10) > yTo) return false;
+    return true;
+}
+
 function rangesOverlap(
     aStart: string | null,
     aEnd: string | null,
@@ -119,8 +127,10 @@ export function buildAssignmentTimelineForWeekday(
     for (let i = 0; i < sorted.length; i++) {
         const a = sorted[i]!;
         const prev = i > 0 ? sorted[i - 1]! : null;
+        // Two rows that never apply on the same date (a row and the change scheduled after it) cannot
+        // overlap, however alike their hours.
         const overlapsPrevious = prev
-            ? rangesOverlap(prev.arriveTime, prev.departTime, a.arriveTime, a.departTime)
+            ? datesIntersect(prev, a) && rangesOverlap(prev.arriveTime, prev.departTime, a.arriveTime, a.departTime)
             : false;
         const gapAfterPreviousMinutes = prev
             ? gapMinutes(prev.departTime, a.arriveTime, overlapsPrevious)

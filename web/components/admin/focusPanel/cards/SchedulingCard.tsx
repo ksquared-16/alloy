@@ -445,6 +445,51 @@ function existingView(p: SubjectProj | null): ProjView | null {
 }
 
 /**
+ * The scheduled changes behind today's rows: upcoming committed rows that supersede a current one
+ * (directly or along a chain). Listed beside the row they replace, so the card shows what applies
+ * now AND what it changes to (V7 Package 1 / audit E2) — not one or the other.
+ */
+function pendingSuccessors(p: SubjectProj | null, kind: "child" | "staff"): ProjAssignment[] {
+    const upcoming = (((p as { upcoming?: ProjView[] } | null)?.upcoming ?? []) as ProjView[])
+        .flatMap((v) => v.assignments)
+        .filter((a) => (a.subjectType ?? "child") === kind);
+    const chain = new Set((p?.current?.assignments ?? []).map((a) => a.id));
+    const out: ProjAssignment[] = [];
+    for (let grew = true; grew; ) {
+        grew = false;
+        for (const a of upcoming) {
+            if (a.supersedes && chain.has(a.supersedes) && !chain.has(a.id)) {
+                chain.add(a.id);
+                out.push(a);
+                grew = true;
+            }
+        }
+    }
+    return out.sort((x, y) => x.effectiveFrom.localeCompare(y.effectiveFrom));
+}
+
+/**
+ * The view the primary editor opens. With a change already scheduled behind today's primary, the
+ * editor opens THAT change (the live row) — editing today's row would have to overwrite the pending
+ * change, and the server would refuse it as stale. Null when nothing is pending.
+ */
+function pendingPrimaryEditView(p: SubjectProj | null, kind: "child" | "staff"): ProjView | null {
+    const latest = pendingSuccessors(p, kind).filter((a) => a.isPrimary).at(-1);
+    if (!latest) return null;
+    const view = (((p as { upcoming?: ProjView[] } | null)?.upcoming ?? []) as ProjView[]).find((v) =>
+        v.assignments.some((a) => a.id === latest.id),
+    );
+    return {
+        effectiveFrom: latest.effectiveFrom,
+        effectiveTo: latest.effectiveTo,
+        openEnded: latest.openEnded,
+        scheduleType: view?.scheduleType ?? p?.current?.scheduleType ?? null,
+        scheduleTypeLabel: view?.scheduleTypeLabel ?? p?.current?.scheduleTypeLabel ?? null,
+        assignments: [latest],
+    };
+}
+
+/**
  * Plural list: committed + proposed planning rows (proposed never replaces committed).
  *
  * The rows are filtered to the SUBJECT'S OWN KIND. That filter used to be the constant
@@ -455,7 +500,7 @@ function existingView(p: SubjectProj | null): ProjView | null {
  */
 function listAssignments(p: SubjectProj | null, kind: "child" | "staff"): ProjAssignment[] {
     const mine = (a: ProjAssignment) => (a.subjectType ?? "child") === kind;
-    const committed = (p?.current?.assignments ?? []).filter(mine);
+    const committed = [...(p?.current?.assignments ?? []).filter(mine), ...pendingSuccessors(p, kind)];
     const proposed = (p?.proposed?.assignments ?? []).filter(mine);
     if (committed.length === 0) return proposed;
     if (proposed.length === 0) return committed;
@@ -1351,6 +1396,7 @@ function ScheduleWorkSurface({
               }
             : null);
 
+    const pendingEdit = mode === "edit" ? pendingPrimaryEditView(proj, child.kind) : null;
     return (
         <div data-schedule-surface="true" data-schedule-ready="true" data-scheduling-focus={focusResolution.status}>
             {header}
@@ -1358,13 +1404,19 @@ function ScheduleWorkSurface({
             {actionError ? (
                 <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
             ) : null}
+            {pendingEdit ? (
+                <p data-schedule-pending-change={pendingEdit.effectiveFrom} style={{ fontSize: 12, color: T.slate, margin: "0 0 8px" }}>
+                    A change is scheduled from {formatDate(pendingEdit.effectiveFrom)}. You are editing that change; today&apos;s
+                    schedule applies until then.
+                </p>
+            ) : null}
             <ScheduleEditor
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
                 config={config}
                 truth={truth}
-                existing={mode === "edit" ? existing : editingAssignment ? {
+                existing={mode === "edit" ? pendingEdit ?? existing : editingAssignment ? {
                     effectiveFrom: editingAssignment.effectiveFrom,
                     effectiveTo: editingAssignment.effectiveTo,
                     openEnded: editingAssignment.openEnded,

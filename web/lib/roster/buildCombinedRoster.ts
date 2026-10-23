@@ -328,6 +328,7 @@ export async function buildCombinedRoster(
         placements: withAgeGroups.placements,
         assignments: withAgeGroups.assignments,
         patternsById: withAgeGroups.patternsById,
+        weekdaysByAssignmentId: withAgeGroups.weekdaysByAssignmentId,
         config: withAgeGroups.config,
         ageGroupByRoomLocationId: withAgeGroups.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: withAgeGroups.ageGroupByProgramCategoryId,

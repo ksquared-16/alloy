@@ -74,7 +74,10 @@ export function resolveAssignmentLifecycleState(
     const from = (facts.effectiveFrom ?? "").slice(0, 10) || null;
     const to = facts.openEnded ? null : (facts.effectiveTo ?? "").slice(0, 10) || null;
 
-    if (isTerminalStatus(status)) {
+    // A superseded row is Completed once its window has passed — not before: until its end date it is
+    // still the schedule that applies (a future-dated change is pending behind it).
+    const pendingSupersession = status === "superseded" && asOf != null && to != null && cmpYmd(to, asOf) >= 0;
+    if (isTerminalStatus(status) && !pendingSupersession) {
         return { label: "Completed", tone: "muted" };
     }
     if (asOf && to && cmpYmd(to, asOf) < 0) {

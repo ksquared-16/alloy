@@ -201,6 +201,7 @@ export async function resolveEquivalentCountForRoom(
         placements: loaded.placements,
         assignments: loaded.assignments,
         patternsById: loaded.patternsById,
+        weekdaysByAssignmentId: loaded.weekdaysByAssignmentId,
     });
 
     const patternsById = new Map<string, { weekdays: number[]; schedule_type_key: string }>();
