@@ -1,6 +1,6 @@
 -- Documents D3 — Document Studio configuration holds at the database. Rollback-only.
 -- Run by database.run_rollback_invariant_test against an isolated certification environment (certenv-*) carrying
--- migrations 20261208090000, 20261209090000 and 20261209090100. The executor owns the transaction and discards it.
+-- migrations 20261208090000, 20261209090000, 20261209090100 and 20261209090200. The executor owns the transaction and discards it.
 -- Each CASE is one DO block; an invariant that does not hold RAISEs. An expected refusal is caught in its own sub-block.
 
 CREATE TEMP TABLE d3_ctx (org uuid, other_org uuid, cat_a uuid, cat_b uuid, cat_c uuid, foreign_cat uuid, type_id uuid, v1 uuid, v2 uuid, child uuid);
@@ -104,7 +104,7 @@ BEGIN
   BEGIN
     PERFORM public.document_type_publish(c.org, t, x1, gen_random_uuid(), NULL);
     RAISE EXCEPTION 'CASE 2 FAILED: a stale compare-and-swap was accepted';
-  EXCEPTION WHEN serialization_failure THEN NULL;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL;
   END;
   r := public.document_type_publish(c.org, t, x1, NULL, NULL);
   IF (SELECT published_version_id FROM public.document_types WHERE id = t) <> x1 THEN RAISE EXCEPTION 'CASE 2 FAILED: version 1 not current'; END IF;
