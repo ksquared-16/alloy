@@ -1,6 +1,6 @@
 # Documents V1 / D1b — database, storage and ingestion hardening: certification record
 
-**Verdict: PARTIAL.**
+**Verdict: PARTIAL (superseded).** The open D1b.2, D1b.3 and D1b.7 gaps (the direct PostgREST and Storage probes) closed on 2026-10-23 in `qar_efe9bd0d1d9c` on `ead89222`. The final verdict is **CERTIFIED**; see `D1B-D1C1-SECURITY-CERTIFICATION.md`.
 - Every implemented protection is merged, deployed and certified at the application and database layers.
 - Hosted *direct* REST and Storage probes are BLOCKED on a missing governed probe capability (`D1B-PROBE-CAPABILITY-REQUEST.md`).
 - Malware scanning and orphan cleanup await Director decisions.

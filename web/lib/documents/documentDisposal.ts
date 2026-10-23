@@ -14,8 +14,8 @@
  *       - Processing (a case source);
  *       - staff-qualification, safeguarding, medical-consent or subsidy evidence;
  *       - a vendor's document pointer, or a remaining person's profile-photo pointer;
- *       - a retention or legal hold (interim marker: `metadata.legal_hold === true` or `metadata.retention_until`
- *         in the future, until D2's retention policy replaces it);
+ *       - a retention or legal hold: D2's `documents.legal_hold` / `documents.retention_until`, and the interim
+ *         `metadata.legal_hold === true` / future `metadata.retention_until` markers they were backfilled from;
  *       - a stored path outside the organization prefix. This path never deletes another tenant's object.
  *   * DELETE, through the same contract as the audited POS delete:
  *       1. record `document_delete_authorized` first (no record, no deletion);
@@ -92,6 +92,9 @@ type DocRow = {
     entity_id: string | null;
     doc_type: string | null;
     metadata: Record<string, unknown> | null;
+    /** D2 hold columns. The interim metadata markers are still honoured. */
+    legal_hold?: boolean | null;
+    retention_until?: string | null;
 };
 
 const CHUNK = 100;
@@ -146,9 +149,14 @@ async function profilePhotoPointers(
 function holdReasons(row: DocRow, now: Date): DocumentRetentionReason[] {
     const meta = row.metadata ?? {};
     const reasons: DocumentRetentionReason[] = [];
-    if (meta.legal_hold === true) reasons.push("legal_hold");
-    const until = typeof meta.retention_until === "string" ? Date.parse(meta.retention_until) : NaN;
-    if (Number.isFinite(until) && until > now.getTime()) reasons.push("retention_period");
+    if (row.legal_hold === true || meta.legal_hold === true) reasons.push("legal_hold");
+    for (const value of [row.retention_until, meta.retention_until]) {
+        const until = typeof value === "string" ? Date.parse(value) : NaN;
+        if (Number.isFinite(until) && until > now.getTime()) {
+            reasons.push("retention_period");
+            break;
+        }
+    }
     return reasons;
 }
 
@@ -167,7 +175,7 @@ export async function disposeDocumentsOfDeletedSubjects(
     for (const part of chunks(candidates)) {
         const { data, error } = await supabase
             .from("documents")
-            .select("id, bucket, storage_path, entity_type, entity_id, doc_type, metadata")
+            .select("id, bucket, storage_path, entity_type, entity_id, doc_type, metadata, legal_hold, retention_until")
             .eq("org_id", orgId)
             .in("id", part as string[]);
         if (error) throw new DocumentDisposalError("reference_lookup_failed", null, `documents: ${error.message}`);
@@ -269,10 +277,10 @@ export async function disposeDocumentsOfDeletedSubjects(
             absent = Math.max(0, uniquePaths.length - removed);
         }
 
-        // 3. The rows, children first. Each delete is a no-op on retry.
+        // 3. The rows, children first. Each delete is a no-op on retry. The versions and subject associations go with the
+        //    document row (ON DELETE CASCADE): D2 refuses to delete a version while its document remains.
         for (const [table, column] of [
             ["document_field_values", "document_id"],
-            ["document_versions", "document_id"],
             ["documents", "id"],
         ] as const) {
             const { error } = await supabase.from(table).delete().eq("org_id", orgId).eq(column, row.id);

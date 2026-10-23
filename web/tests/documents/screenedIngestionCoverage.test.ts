@@ -37,6 +37,8 @@ const SCREENED: Record<string, string> = {
     "app/api/public/forms/[token]/enrollment-upload/route.ts": "app/api/public/forms/[token]/enrollment-upload/route.ts",
     "app/api/public/forms/[token]/enrollment-signature-asset/route.ts": "app/api/public/forms/[token]/enrollment-signature-asset/route.ts",
     "lib/vendors/publicVendorApplication.ts": "app/api/vendor-application/route.ts",
+    // D2: a replacement version. Only a CLEAN file is stored.
+    "app/api/admin/documents/[id]/versions/route.ts": "app/api/admin/documents/[id]/versions/route.ts",
 };
 /** Server-generated writers: the bytes are produced by the platform, not received. */
 const GENERATED = new Set(["lib/forms/pdf/createGeneratedPdfForSubmission.ts", "lib/forms/pdf/persistSignedEnrollmentArtifact.ts"]);
