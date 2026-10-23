@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import {
     buildManualFormDraft,
@@ -12,6 +14,13 @@ import { SECTION_DISPOSITIONS, type SectionDisposition } from "@/lib/pos/process
 import { dbStoreFormDraftPreview, stampFormDraftPreview, parseStoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { ocrProvenanceFromDocument } from "@/lib/pos/processingCase/formDraft/ocrDraftProvenance";
 import { safeParseFormSchema } from "@/lib/forms/schema";
+
+
+/** D1b: the OCR text preview in a form draft is disclosed only to an actor who may read it. */
+async function textActor() {
+    const access = await getAdminAccessContextCached();
+    return access.ok ? access : { roleKeys: [], permissionKeys: [] };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 caseId,
                 draft: { ...prior, studio_schema: parsed.data, studio_schema_saved_at: new Date().toISOString() },
             });
-            return jsonData({ caseId, form_draft_preview: stored });
+            return jsonData({ caseId, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), stored) });
         } catch (e) {
             return NextResponse.json(
                 { error: e instanceof Error ? e.message : "Failed to save form" },
@@ -292,7 +301,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             ...(priorPreview?.studio_schema_saved_at ? { studio_schema_saved_at: priorPreview.studio_schema_saved_at } : {}),
         });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
-        return jsonData({ caseId, form_draft_preview: stored });
+        return jsonData({ caseId, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), stored) });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to save form draft" },

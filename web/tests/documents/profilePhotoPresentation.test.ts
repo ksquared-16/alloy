@@ -30,6 +30,8 @@ function supa(opts: { row?: Record<string, unknown> | null; signAs?: string } = 
         from: () => ({
             select: () => ({
                 eq: () => ({
+                    // D1b.6 sensitivity lookups (safeguarding evidence, medical form links) find nothing here.
+                    in: async () => ({ data: [], error: null }),
                     eq: () => ({
                         maybeSingle: async () => ({
                             data:

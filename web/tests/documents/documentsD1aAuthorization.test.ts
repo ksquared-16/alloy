@@ -187,7 +187,8 @@ type Persona = {
     allowedDepartmentIds?: string[] | null;
 };
 
-const ALL_ADMIN = ["documents.read", "documents.write", "processing.operate", "processing.documents.manage", "processing.archive"];
+// An administrator holds Medical's `health.view` by default; ops never does (D1b.6).
+const ALL_ADMIN = ["documents.read", "documents.write", "processing.operate", "processing.documents.manage", "processing.archive", "health.view", "health.manage"];
 const OPS = ["documents.read", "documents.write", "processing.operate"];
 
 const P = {
@@ -267,8 +268,9 @@ const vendorSignedUrl = (vendorId: string, documentId: string) =>
 describe("signed-url — the actor × document matrix", () => {
     const EXPECT: Record<string, Partial<Record<keyof typeof DOC, number>>> = {
         admin: { child: 200, opp1: 200, opp2: 200, intake: 200, vendor: 200, unprefixed: 403, foreignPath: 403, traversal: 403, otherOrg: 404 },
-        ops: { child: 200, opp1: 200, opp2: 200, intake: 200, vendor: 200, unprefixed: 403, foreignPath: 403, otherOrg: 404 },
-        readOnly: { child: 200, opp1: 200, intake: 200 },
+        // `child` is an immunization record: since D1b.6 it needs `health.view`, so ops and a plain reader are refused.
+        ops: { child: 403, opp1: 200, opp2: 200, intake: 200, vendor: 200, unprefixed: 403, foreignPath: 403, otherOrg: 404 },
+        readOnly: { child: 403, opp1: 200, intake: 200 },
         customRole: { child: 403, opp1: 403, opp2: 403, intake: 403, vendor: 403 },
         processingOnly: { child: 403, intake: 403 },
         scopedOps: { opp1: 200, pluralOpp1: 200, opp2: 404, child: 404, intake: 404, vendor: 404 },
@@ -327,7 +329,7 @@ describe("signed-url — the actor × document matrix", () => {
 
 describe("signed-url — issuance is recorded before the link exists", () => {
     it("writes one document_link_issued event, with no URL and no storage path in it", async () => {
-        as(P.ops);
+        as(P.admin);
         const res = await signedUrl(DOC.child);
         expect(res.status).toBe(200);
         const events = auditRows("document_link_issued");
@@ -430,8 +432,10 @@ describe("GET /api/admin/documents — documents.read and scope", () => {
         as(P.readOnly);
         const res = await list();
         expect(res.status).toBe(200);
-        expect(ids(res.body)).toContain(DOC.child);
+        expect(ids(res.body)).toContain(DOC.opp1);
         expect(ids(res.body)).not.toContain(DOC.otherOrg);
+        // D1b.6: the immunization record is medical; a reader without health.view is not shown it.
+        expect(ids(res.body)).not.toContain(DOC.child);
     });
 
     it("narrows a restricted actor to in-scope subjects — the same rule the signer applies", async () => {
@@ -534,7 +538,7 @@ describe("POST /api/admin/documents/upload — documents.write, Processing autho
 
     it("refuses a file over the limit with 413 and stores nothing", async () => {
         as(P.admin);
-        const big = new Blob([new Uint8Array(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 1)], { type: "text/plain" });
+        const big = new Blob([new Uint8Array(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES + 1).fill(0x61)], { type: "text/plain" });
         const res = await upload({ entity_type: "customer", entity_id: CUSTOMER }, big);
         expect(res.status).toBe(413);
         expect(res.body).toMatchObject({ code: "FILE_TOO_LARGE" });
@@ -543,7 +547,7 @@ describe("POST /api/admin/documents/upload — documents.write, Processing autho
 
     it("accepts a file exactly at the limit", async () => {
         as(P.admin);
-        const atLimit = new Blob([new Uint8Array(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES)], { type: "text/plain" });
+        const atLimit = new Blob([new Uint8Array(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES).fill(0x61)], { type: "text/plain" });
         const res = await upload({ entity_type: "customer", entity_id: CUSTOMER }, atLimit);
         expect(res.status).toBe(200);
     });
@@ -557,7 +561,8 @@ describe("POST /api/admin/documents/upload — documents.write, Processing autho
 // no workflow event. Recorded as APP_BOUNDARY_CERTIFIED / HOSTED_TRANSPORT_LIMITED.
 
 describe("upload size — application boundary (10 MB), rejection before persistence", () => {
-    const at = (n: number) => new Blob([new Uint8Array(n)], { type: "text/plain" });
+    // Text bytes: since D1b.3 a `.txt` must actually be text, so zero-filled buffers are refused as CONTENT_MISMATCH.
+    const at = (n: number) => new Blob([new Uint8Array(n).fill(0x61)], { type: "text/plain" });
     const target = { entity_type: "customer", entity_id: CUSTOMER };
     const persisted = () => ({
         uploads: db.uploadCalls.length,

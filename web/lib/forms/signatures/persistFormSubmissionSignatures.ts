@@ -79,6 +79,43 @@ export async function persistFormSubmissionSignatures(
 
     const now = new Date().toISOString();
     const channel: SignatureChannel = input.channel ?? { kind: "operator", userId: null };
+
+    /*
+     * D1b.6: a drawn signature's image must be THIS signer's own signature capture.
+     *
+     * The payload names `drawn_document_id`, and only its UUID shape was checked. It was then linked
+     * to the submission as a `signature_asset` and its bytes embedded in the signed PDF. So a public
+     * link could cite any document in the organization (another child's record, say) and have it
+     * rendered into its own artifact. On a public link the document must be a `signature_asset` that
+     * this same packet session captured. The operator channel is already bound to the submission's
+     * organization by the database trigger (`validate_form_submission_signatures_drawn_doc`).
+     */
+    if (channel.kind === "public_link") {
+        const cited = [
+            ...new Set(
+                collected
+                    .filter((c) => c.signature.kind === "drawn" && c.signature.drawn_document_id)
+                    .map((c) => c.signature.drawn_document_id!),
+            ),
+        ];
+        if (cited.length > 0) {
+            if (!channel.packetSessionId) return { error: "A drawn signature must be captured on this signing link." };
+            const { data: own, error: ownErr } = await supabase
+                .from("documents")
+                .select("id, doc_type, metadata")
+                .eq("org_id", input.orgId)
+                .in("id", cited);
+            if (ownErr) return { error: ownErr.message };
+            const valid = new Set(
+                ((own ?? []) as Array<{ id: string; doc_type: string | null; metadata: Record<string, unknown> | null }>)
+                    .filter((d) => d.doc_type === "signature_asset" && d.metadata?.packet_session_id === channel.packetSessionId)
+                    .map((d) => d.id),
+            );
+            if (cited.some((id) => !valid.has(id))) {
+                return { error: "A drawn signature must be captured on this signing link." };
+            }
+        }
+    }
     const rows = collected.map((c) => {
         const sig = c.signature;
         const acknowledgedAt = typeof sig.acknowledged_at === "string" && sig.acknowledged_at.trim() ? sig.acknowledged_at : now;

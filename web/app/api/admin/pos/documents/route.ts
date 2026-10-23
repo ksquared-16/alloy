@@ -5,6 +5,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
+import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import {
     buildPosDocumentsList,
     type PosDocumentCaseInfo,
@@ -58,11 +59,16 @@ export async function GET(request: NextRequest) {
             .order("created_at", { ascending: false })
             .limit(limit);
         if (docErr) throw new Error(docErr.message);
-        const scoped = await filterDocumentRowsInActorScope(
+        const scoped = await filterDocumentRowsBySensitivity(
             supabase,
             ctx.orgId,
-            scopeDimensionsFromAccess(access),
-            (docRows ?? []) as Array<PosDocumentRow & { entity_type: string | null; entity_id: string | null }>,
+            access,
+            await filterDocumentRowsInActorScope(
+                supabase,
+                ctx.orgId,
+                scopeDimensionsFromAccess(access),
+                (docRows ?? []) as Array<PosDocumentRow & { entity_type: string | null; entity_id: string | null }>,
+            ),
         );
         const docs: PosDocumentRow[] = scoped.map((d) => ({
             id: d.id,

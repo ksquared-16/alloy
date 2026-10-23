@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { submitPublicVendorApplication } from "@/lib/vendors/publicVendorApplication";
 import { emitEvent } from "@/lib/emitEvent";
+import { CANONICAL_DOCUMENT_MIME, DOCUMENT_CONTENT_EXT, sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
+import {
+  enforcePublicUploadRateLimit,
+  PUBLIC_UPLOAD_MAX_FILE_BYTES,
+  PUBLIC_VENDOR_APPLICATION_MAX_BODY_BYTES,
+  refuseOversizedPublicBody,
+} from "@/lib/documents/publicUploadGuard";
 
 function getStr(form: FormData, key: string): string {
   const v = form.get(key);
@@ -25,6 +32,22 @@ function getAll(form: FormData, key: string): string[] {
   return v.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean);
 }
 
+/**
+ * A public file, accepted only as what its BYTES prove (D1b.4): PDF, PNG or JPEG, at most 10 MiB.
+ * The stored content type and extension come from that proof, never from the browser's label.
+ */
+function vettedPublicFile(file: File, buffer: Buffer, label: string): { ok: true; filename: string; contentType: string } | { ok: false; response: NextResponse } {
+  if (buffer.length > PUBLIC_UPLOAD_MAX_FILE_BYTES) {
+    return { ok: false, response: NextResponse.json({ ok: false, error: `${label} must be under 10MB`, code: "TOO_LARGE" }, { status: 413 }) };
+  }
+  const kind = sniffPublicUploadKind(buffer);
+  if (!kind) {
+    return { ok: false, response: NextResponse.json({ ok: false, error: `${label} must be a PDF, PNG or JPEG`, code: "BAD_TYPE" }, { status: 415 }) };
+  }
+  const base = (file.name || label).replace(/\.[A-Za-z0-9]+$/, "").replace(/[^\w. -]+/g, "").trim().slice(0, 80) || "upload";
+  return { ok: true, filename: `${base}.${DOCUMENT_CONTENT_EXT[kind]}`, contentType: CANONICAL_DOCUMENT_MIME[kind] };
+}
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_REGEX = /^\d{5}$/;
 
@@ -35,6 +58,13 @@ export async function POST(request: NextRequest) {
       console.error("[VENDOR_APPLICATION] ALLOY_PUBLIC_ORG_ID not set");
       return NextResponse.json({ ok: false, error: "Server configuration error" }, { status: 500 });
     }
+
+    // D1b.4: size and rate gates run before the multipart body is read.
+    const oversized = refuseOversizedPublicBody(request.headers, PUBLIC_VENDOR_APPLICATION_MAX_BODY_BYTES);
+    if (oversized) return oversized;
+    const supabase = createServiceRoleClient();
+    const limited = await enforcePublicUploadRateLimit(supabase, "vendor_application", request.headers);
+    if (limited) return limited;
 
     const form = await request.formData();
 
@@ -93,11 +123,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const supabase = createServiceRoleClient();
-
-    const contentType = (file: File) => file.type || "application/octet-stream";
     const insuranceBuf = Buffer.from(await proof_of_insurance.arrayBuffer());
     const driversBuf = Buffer.from(await drivers_license.arrayBuffer());
+    const insurance = vettedPublicFile(proof_of_insurance, insuranceBuf, "Proof of insurance");
+    if (!insurance.ok) return insurance.response;
+    const drivers = vettedPublicFile(drivers_license, driversBuf, "Drivers license");
+    if (!drivers.ok) return drivers.response;
 
     const result = await submitPublicVendorApplication(supabase, {
       orgId,
@@ -123,13 +154,13 @@ export async function POST(request: NextRequest) {
       consent_legal,
       proof_of_insurance: {
         buffer: insuranceBuf,
-        filename: proof_of_insurance.name,
-        contentType: contentType(proof_of_insurance),
+        filename: insurance.filename,
+        contentType: insurance.contentType,
       },
       drivers_license: {
         buffer: driversBuf,
-        filename: drivers_license.name,
-        contentType: contentType(drivers_license),
+        filename: drivers.filename,
+        contentType: drivers.contentType,
       },
     });
 

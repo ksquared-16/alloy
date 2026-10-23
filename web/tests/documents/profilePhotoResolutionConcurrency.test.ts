@@ -59,6 +59,8 @@ function trackingClient() {
         from: () => ({
             select: () => ({
                 eq: () => ({
+                    // D1b.6 sensitivity lookups (safeguarding evidence, medical form links) find nothing here.
+                    in: async () => ({ data: [], error: null }),
                     eq: () => ({
                         maybeSingle: async () => {
                             enter();

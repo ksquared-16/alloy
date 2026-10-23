@@ -5,6 +5,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
+import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
     fetchEffectiveStatusDefinitions,
@@ -182,7 +183,14 @@ export async function GET(request: NextRequest) {
 
     const rows = (rawRows ?? []) as DocRow[];
 
-    const scopedRows = await filterDocumentRowsInActorScope(supabase, ctx.orgId, dim, rows);
+    // D1b.6: scope first, then sensitive classes (medical → health.view, safeguarding evidence →
+    // safeguarding view), the same two filters the single-document decision applies.
+    const scopedRows = await filterDocumentRowsBySensitivity(
+        supabase,
+        ctx.orgId,
+        access,
+        await filterDocumentRowsInActorScope(supabase, ctx.orgId, dim, rows),
+    );
 
     const labelMap = await attachRelatedLabels(supabase, ctx.orgId, scopedRows);
     const docDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });

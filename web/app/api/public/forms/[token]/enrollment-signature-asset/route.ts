@@ -9,8 +9,8 @@
  * request selects nothing — the asset is attached to the session's OWN child (the D-95 process
  * anchor's subject), never to a caller-named entity. The body carries image bytes, never a target.
  *
- * Narrow by design: PNG only, magic-bytes verified, 300KB cap. This is a signature mark, not a
- * general upload channel.
+ * Narrow by design: PNG only, magic-bytes verified, 300KB cap, rate-limited per caller (D1b.4). This is
+ * a signature mark, not a general upload channel.
  */
 
 import { NextRequest } from "next/server";
@@ -20,6 +20,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import { enforcePublicUploadRateLimit, refuseOversizedPublicBody } from "@/lib/documents/publicUploadGuard";
 
 const MAX_BYTES = 300 * 1024;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -52,6 +53,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { token: rawToken } = await params;
     const supabase = createServiceRoleClient();
+
+    // D1b.4: size and rate gates run before the token is resolved or the body is read.
+    const oversized = refuseOversizedPublicBody(request.headers, Math.ceil((MAX_BYTES * 4) / 3) + 16 * 1024);
+    if (oversized) return oversized;
+    const limited = await enforcePublicUploadRateLimit(supabase, "enrollment_signature_asset", request.headers);
+    if (limited) return limited;
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
     if (!access.ok) {

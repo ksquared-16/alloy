@@ -143,6 +143,14 @@ export async function addChildSafeguardingRestriction(
         if (!data) return { ok: false, code: "affected_person_not_found", error: "Affected person not found." };
     }
 
+    // D1b.6: a cited evidence document must be ours too. The foreign key alone accepts any tenant's document.
+    const evidenceDocumentId = trimOrNull(input.evidenceDocumentId);
+    if (evidenceDocumentId) {
+        const { data } = await supabase
+            .from("documents").select("id").eq("id", evidenceDocumentId).eq("org_id", input.orgId).maybeSingle();
+        if (!data) return { ok: false, code: "evidence_document_not_found", error: "Evidence document not found." };
+    }
+
     const now = new Date().toISOString();
     const { data, error } = await supabase
         .from("child_safeguarding_restrictions")
