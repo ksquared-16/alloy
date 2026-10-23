@@ -71,6 +71,20 @@ export function countsPresent(states: readonly SubjectActualState[]): number {
     return states.filter((s) => s.state === "present").length;
 }
 
+/**
+ * Where a PRESENT child counts right now: the room the whereabouts fold names, or — when the fold
+ * could not name one — the room they are expected in. Null when the child is not present. The one
+ * rule shared by the Attendance overview ("here now") and the roster's actual staffing ratio (V7 K1),
+ * so the two cannot disagree about which room a child is in.
+ */
+export function presentChildRoom(
+    actual: { state: string; actualRoomLocationId: string | null },
+    expectedRoomLocationId: string,
+): string | null {
+    if (actual.state !== "present") return null;
+    return actual.actualRoomLocationId ?? expectedRoomLocationId;
+}
+
 export type ActualStaffingInput = {
     /** Children physically present right now (never the expected count). */
     actualChildrenPresent: number;
