@@ -44,12 +44,27 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 vi.mock("@/lib/supabase/serverServiceClient", () => ({
     createServiceRoleClient: () => dbRef.current,
 }));
+// The Processing read model is Processing's; the case route only serializes it. A stored draft carrying
+// OCR text stands in for it here, so the route's own disclosure step is what is exercised.
+vi.mock("@/lib/pos/processingCase/readModel/processingCaseReadModelService", () => ({
+    getProcessingCaseDetail: async () => ({
+        id: "ca5e0000-0000-4000-8000-000000000001",
+        formDraftPreview: {
+            source_document_id: "d1b00000-0000-4000-8000-000000000001",
+            diagnostics: { extracted_text_length: 12, extracted_text_preview: "secret words" },
+        },
+    }),
+}));
+vi.mock("@/lib/pos/processingCase/readModel/resolveSourceEvidence", () => ({
+    resolveSourceEvidence: async (detail: unknown) => ({ detail, evidence: [], affectedRecordTypes: [] }),
+}));
 
 import { GET as signedUrlGET } from "@/app/api/admin/documents/[id]/signed-url/route";
 import { GET as documentsListGET } from "@/app/api/admin/documents/route";
 import { POST as uploadPOST } from "@/app/api/admin/documents/upload/route";
 import { GET as entityGET } from "@/app/api/admin/entity/[type]/[id]/route";
 import { GET as relatedGET } from "@/app/api/admin/related/[entity]/[id]/route";
+import { GET as processingCaseGET } from "@/app/api/admin/processing/cases/[caseId]/route";
 import { POST as vendorApplicationPOST } from "@/app/api/vendor-application/route";
 import { POST as enrollmentUploadPOST } from "@/app/api/public/forms/[token]/enrollment-upload/route";
 import {
@@ -192,7 +207,7 @@ describe("content signatures (D1b.3 / D1b.4)", () => {
             const form = new FormData();
             form.set("entity_type", "customer");
             form.set("entity_id", CUSTOMER);
-            form.set("file", new File([bytes], name, { type }));
+            form.set("file", new File([bytes as unknown as BlobPart], name, { type }));
             return invokeRoute(uploadPOST, new NextRequest("http://localhost/api/admin/documents/upload", { method: "POST", body: form }));
         };
         const mismatch = await upload(PNG, "photo.pdf", "application/pdf");
@@ -403,6 +418,22 @@ describe("OCR text in a stored form-draft preview (D1b.2 / D1b.6)", () => {
     it("is shown to an actor who may read the source document's text", async () => {
         const out = await discloseFormDraftTextPreview(db as never, ORG, P.ops, draft(D.plain));
         expect(out.diagnostics.extracted_text_preview).toBe("secret words");
+    });
+
+    it("the Processing case detail route serves the preview only to an actor who may read it", async () => {
+        const caseId = "ca5e0000-0000-4000-8000-000000000001";
+        const get = () =>
+            invokeRoute(processingCaseGET, buildRequest({ path: `/api/admin/processing/cases/${caseId}` }), routeParams({ caseId }));
+        const preview = (body: unknown) =>
+            (body as { data?: { detail?: { formDraftPreview?: { diagnostics?: { extracted_text_preview?: string } } } } }).data?.detail
+                ?.formDraftPreview?.diagnostics?.extracted_text_preview;
+        as(P.reader);
+        const blanked = await get();
+        expect(blanked.status).toBe(200);
+        expect(preview(blanked.body)).toBe("");
+        expect(JSON.stringify(blanked.body)).not.toContain("secret words");
+        as(P.ops);
+        expect(preview((await get()).body)).toBe("secret words");
     });
 
     it("is blanked when the source document is medical and the actor lacks health.view", async () => {

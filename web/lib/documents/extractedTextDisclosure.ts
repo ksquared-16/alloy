@@ -26,7 +26,7 @@ export function actorMayReadExtractedText(actor: SensitivityActor): boolean {
 
 type DraftWithTextPreview = {
     source_document_id?: string | null;
-    diagnostics?: { extracted_text_preview?: string | null } & Record<string, unknown>;
+    diagnostics?: { extracted_text_preview?: string | null };
 };
 
 /** The draft as this actor may see it: identical, except the OCR preview is blanked when not allowed. */
@@ -52,5 +52,5 @@ export async function discloseFormDraftTextPreview<T extends DraftWithTextPrevie
         allowed = actorMayReadSensitivity(actor, classes.get(draft.source_document_id) ?? new Set());
     }
     if (allowed) return draft;
-    return { ...draft, diagnostics: { ...draft.diagnostics, extracted_text_preview: "" } };
+    return { ...draft, diagnostics: { ...draft.diagnostics, extracted_text_preview: "" } } as T;
 }

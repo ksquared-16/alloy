@@ -842,7 +842,7 @@ async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> 
     let documents: unknown[] = [];
     if (ctx.ok && access.ok && actorMayReadDocuments(access)) {
         const rows = (body.documents as Array<Record<string, unknown>>).map((d) => ({
-            ...d,
+            id: typeof d.id === "string" ? d.id : "",
             doc_type: (d.document_type as string | null | undefined) ?? (d.doc_type as string | null | undefined) ?? null,
         }));
         const kept = new Set(

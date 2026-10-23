@@ -44,7 +44,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         const textActor = access.ok ? access : { roleKeys: [], permissionKeys: [] };
         return jsonData({
             ...result,
-            formDraftPreview: await discloseFormDraftTextPreview(supabase, ctx.orgId, textActor, result.formDraftPreview),
+            detail: {
+                ...result.detail,
+                formDraftPreview: await discloseFormDraftTextPreview(supabase, ctx.orgId, textActor, result.detail.formDraftPreview),
+            },
         });
     } catch (e) {
         return NextResponse.json(
