@@ -293,38 +293,3 @@ export async function buildOperationalEnrollmentReadModelForMemberSite(
     return buildOperationalEnrollmentReadModelForAgreement(supabase, orgId, agreement.id);
 }
 
-/** Prefer most recent terminal agreement when no operational row exists (history display). */
-export async function getLatestAgreementForMemberSite(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerMemberId: string,
-    siteLocationId: string
-): Promise<ChildEnrollmentAgreementRow | null> {
-    const operational = await getOperationalAgreementForMemberSite(
-        supabase,
-        orgId,
-        customerMemberId,
-        siteLocationId
-    );
-    if (operational) return operational;
-
-    const { data, error } = await supabase
-        .from("child_enrollment_agreements")
-        .select("*")
-        .eq("org_id", orgId)
-        .eq("customer_member_id", customerMemberId)
-        .eq("site_location_id", siteLocationId)
-        .in("status", ["ended", "canceled"])
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (error) {
-        throw new OperationalEnrollmentServiceError("db_error", error.message);
-    }
-    return data ? (data as ChildEnrollmentAgreementRow) : null;
-}
-
-export function isCurrentOperationalPlacement(placement: ChildPlacementRow | null): boolean {
-    return placement != null && isPlacementOperationalStatus(placement.status);
-}
