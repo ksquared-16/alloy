@@ -21,14 +21,14 @@ Primary/Secondary; pricing never decides homeroom).
 | V7-01 | Canonical model + impact census | **COMPLETE** (this document) | enrollment-placement | — | — |
 | V7-02 | Space configuration and purpose/use | **V7-02a PROMOTED & DEPLOYED-VERIFIED** (#1583, merge `1c7e4ccd`, 2026-10-23); V7-02b (S3) not authorized | enrollment-placement (+configuration) | V7-01 | §10–11 |
 | V7-03 | Multiple assignments + derived homerooms | **PROMOTED & DEPLOYED-VERIFIED** (#1587, merge `502d5975`, 2026-10-23) | enrollment-placement | V7-02 | §12–13 |
-| V7-04 | Assignment Card (was "Add Schedule experience") | **AUDITED** — no redesign; save defects A4–A8 → slice S3; Make-primary → P1 | enrollment-placement (UI) | — | audit §1 A1–A8 |
+| V7-04 | Assignment Card (was "Add Schedule experience") | **S3 IMPLEMENTED** — A4–A8 repaired, child Make Primary retired (P1); candidate awaiting Director merge review | enrollment-placement (UI) | — | audit §1 A1–A8; §16 |
 | V7-05 | Enrollment & commercial separation | DECISION_REQUIRED (C1–C3) | commercial + financials | V7-03 | live pricing suites |
 | V7-06 | Expected attendance | **AUDITED** — supersede gap E2 → slice S2 (defect); per-session expectations → **P2** then S6 | operations-temporal | P2 | audit §1 E1–E5 |
-| V7-07 | Actual attendance and room movements | **S1 IMPLEMENTED_UNMERGED** — `attendance.move` judged by the canonical whereabouts; `resolveCurrentRoom` removed | attendance | — | audit §1 M2; §14 |
+| V7-07 | Actual attendance and room movements | **S1 COMPLETE** — promoted as #1589 (merge `7e7019c4`, 2026-10-23), deployed-verified | attendance | — | §14–15 |
 | V7-08 | Capacity, ratios, staffing | **AUDITED** — roster actual ratio K1 → slice S4; P3–P5 policy; no new engine | staffing/capacity | P3–P5 | audit §1 K1–K7 |
 | V7-09 | Roster and Focus Panel | **AUDITED** — homerooms complete; one-room lines R3/R4 + three tiles → slice S5 | surfaces | — | audit §1 R1–R7 |
 | V7-10 | Secondary/staff change-event parity | DECISION_REQUIRED (Director ruling) | operations-temporal + integrations | — | contract tests |
-| V7-11 | Obsolete code and architecture retirement | **AUDITED** — O1 retire now, O3/O5 with S1/P1, O4 after census, O6 keep | each slice's lane | each replacement | audit §1 O1–O7 |
+| V7-11 | Obsolete code and architecture retirement | **AUDITED** — O1 retire now, O3 retired with S1, O5 retired with S3/P1, O4 after census, O6 keep | each slice's lane | each replacement | audit §1 O1–O7 |
 | V7-12 | Full cross-domain certification | NOT_STARTED | all | V7-02…V7-11 | mounted + live |
 
 Recommended order (after the 2026-10-23 convergence audit, `assignments-v7-convergence-audit.md`):
@@ -292,4 +292,67 @@ absence, before arrival; a retried move errors), the repair passes 9/9. CI guard
 **Recertification.** Attendance capture and movement: the live suite above plus the existing
 cross-channel and assigned-scope live suites; a mounted move on the Attendance card for a present child
 and a refused move for a checked-out child.
+
+## 15. S1 promotion (2026-10-23)
+
+PR #1589 (candidate `cbc_d1c3278d72cb`, `dd07a006`, acceptance `qaa_bcb6760977f21d`) merged as `7e7019c4` over
+staging `b0283e04`; 6 paths, no migrations; deployed build-info `7e7019c4`.
+
+**Deployed verification.** At the merge commit `resolveCurrentRoom` has no references and the move guard
+folds the day's facts with `resolveCurrentWhereabouts`. On deployed staging a move on a not-yet-arrived
+child (day board `no_record`) is refused (409) and the day board is unchanged — the only write attempted.
+Staging had no child checked in, checked out or absent today, so the present / checked-out / absent cases
+and the day board ⇄ Attendance card agreement rest on the exact candidate's evidence (live suite 9/9 on
+the certification database; mounted QA on the isolated preview), not on staging records.
+
+**Next.** S2 — date-true expectation rows (audit E2).
+
+## 16. S3 — Assignment Card correctness and Make Primary retirement (2026-10-23)
+
+Base: staging `7e7019c4`. No schema change, no new runtime or service; each repair goes through the
+existing canonical write.
+
+**A4 — secondary end date and hours.** `save()` sent pattern, start, room and label only. Now
+`assignment.create` takes `end_date` and `days` (Assignment Time, written with the row); a later start
+replaces the row atomically (`replace_secondary_schedule_assignment`) carrying both; the same start
+corrects that row (`assignment.set_time`; `assignment.archive` for an end date — a future end keeps the
+row live until then, and archive refuses a row that is no longer live). The projection reads an
+assignment's days and per-day hours from its own intervals (`dailyHours`), so the editor reopens what
+was saved; recurrence still falls back to the pattern for a row without intervals.
+
+**A5 — editing an enrolled child's primary.** The route ran `schedule.create`, which refuses a second
+primary. With a live primary it now calls `changeEnrolledPrimarySchedule`: an hours-only edit on the
+same start corrects the current primary; a pattern, room or program change supersedes it through
+`apply_participation_operational_change` from the chosen start, in one transaction, moving the placement
+and the primary's own room together (the homeroom reads the primary's room first); the facts changed on
+the same start are refused ("choose the date this change takes effect"). The edit is judged against the
+primary the operator opened (`expected_assignment_id`): stale → 409, nothing written; a repeated submit
+converges. One live primary, effective-dated history, site checks and pricing are untouched by design —
+no tuition term is written by the edit.
+
+**A6 — custom weekdays.** `resolveWrittenSchedulePattern` no longer falls back to the type's first
+pattern. Two or more fitting patterns require an explicit choice; days no pattern of the type sits on
+are a custom week carried by the chosen (or the type's only) pattern, the days kept as Assignment Time.
+
+**A7 — bulk outcomes.** Roster bulk archive, create and room change read every answer and report
+"All N applied" / "Partially completed: N applied, M refused, K failed" / "Nothing applied", with each
+refused or failed row named. Rows commit one by one; nothing claims atomicity.
+
+**A8 / P1 — Make Primary retired for children.** Removed: the card's Make Primary (detail and list), the
+roster bulk "Make primary", the "Bulk Primary Change" catalog entry, and the archive message pointing at
+it (a child's primary now reads "the enrollment's own schedule — change it with Edit"). Blocked:
+`assignment.set_primary` refuses a child subject (409); its capability lists staff only. Kept:
+`setPrimaryOperationalAssignment`, the staff Make Primary, `is_primary` and the one-live-primary
+constraint.
+
+**Evidence (local).** Live, certification database (`tests/operationalAssignments/live/
+assignmentCardS3.live.test.ts`): new primary; secondary end date on its own start (live until then;
+stale archive refused); enrolled-primary edit — one transaction, placement and room moved together, one
+live primary, no pricing term written, homeroom follows the dated room, 150 ms; stale edit refused with
+nothing written, double submit converges; child Make Primary refused with nothing written — 5/5. The
+cases that write a week need `set_assignment_weekday_intervals`, which the shared local stack lacked on
+2026-10-23: they are reported unmeasured there and are exercised on the candidate's isolated preview
+(mounted QA). Units: bulk outcomes, pattern resolution (A6), subject applicability, tuition save lock.
+
+**Next.** S2 — date-true expectation rows (audit E2); S4–S5 per §13.
 

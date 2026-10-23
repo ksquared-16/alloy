@@ -43,14 +43,17 @@ export type PlacementChangeFields = {
 /**
  * Assignment fields the caller may change.
  *
- * Deliberately narrower than the placement payload: room, site, program category, assignment type and
- * commitment kind are NOT accepted here, because no caller intent distinguishes them — the primitive
- * carries them forward from the prior row (migration 20261109120000). Adding them here would invent a
- * capability the operator surfaces cannot express.
+ * Narrower than the placement payload: site, assignment type and commitment kind are NOT accepted —
+ * the primitive carries them forward from the prior row (migration 20261109120000). Room and program
+ * ARE accepted, for one intent only: an enrolled primary edit that moves the placement names the same
+ * room/program on the primary successor, so the two rows move together in one transaction
+ * (`changeEnrolledPrimarySchedule`). Omitted, they carry forward as before.
  */
 export type AssignmentChangeFields = {
     startDate: string;
     schedulePatternId?: string | null;
+    roomLocationId?: string | null;
+    programCategoryId?: string | null;
     sourceKey?: string | null;
     metadata?: Record<string, unknown>;
 };

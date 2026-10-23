@@ -87,11 +87,15 @@ export function assignmentAnchorPayload(subject: OperationalAssignmentSubject): 
 /** What the canonical write layer will accept for this subject. */
 export type AssignmentSubjectApplicability = {
     /**
-     * `assignment.set_primary` — valid for BOTH subjects.
+     * `assignment.set_primary` — STAFF ONLY for operators.
      *
      * `setPrimaryOperationalAssignment` resolves a staff subject explicitly (it requires
      * `personId` + `siteLocationId`, and refuses a promote target whose `subject_person_id`
      * differs), so a staff primary is a real operational home, not a child concept borrowed.
+     *
+     * A child's primary is the enrollment's own schedule (V7 decision P1): it is changed by editing
+     * it — the participation change path — never by promoting a secondary over it. The action
+     * refuses a child subject; this flag keeps the control from being offered at all.
      */
     canSetPrimary: boolean;
     /**
@@ -133,7 +137,7 @@ export function assignmentSubjectApplicability(
 ): AssignmentSubjectApplicability {
     const isChild = subject.type === "child";
     return {
-        canSetPrimary: true,
+        canSetPrimary: !isChild,
         canCreatePrimaryDirectly: isChild,
         canPromoteProposed: isChild,
         hasEnrollmentAgreement: isChild,

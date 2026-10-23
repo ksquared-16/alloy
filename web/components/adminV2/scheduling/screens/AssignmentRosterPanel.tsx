@@ -59,6 +59,22 @@ export type BulkAssignmentPreviewRow = {
     payload: Record<string, unknown>;
 };
 
+/** What a bulk run did. Rows commit one by one, so a run can be partial — and is reported so. */
+export type BulkOutcome = { succeeded: number; refused: string[]; failed: string[] };
+
+/** One honest sentence for a bulk run, plus the rows that did not apply. */
+export function describeBulkOutcome(outcome: BulkOutcome, skipped: string[] = []): { headline: string; lines: string[] } {
+    const notApplied = outcome.refused.length + outcome.failed.length + skipped.length;
+    const parts = [`${outcome.succeeded} applied`];
+    if (outcome.refused.length + skipped.length) parts.push(`${outcome.refused.length + skipped.length} refused`);
+    if (outcome.failed.length) parts.push(`${outcome.failed.length} failed`);
+    const headline =
+        notApplied === 0 ? `All ${outcome.succeeded} applied.`
+        : outcome.succeeded === 0 ? `Nothing applied — ${parts.slice(1).join(", ")}.`
+        : `Partially completed: ${parts.join(", ")}.`;
+    return { headline, lines: [...skipped, ...outcome.refused, ...outcome.failed.map((l) => `Failed — ${l}`)] };
+}
+
 export type AssignmentRosterBulkHandlers = {
     /**
      * THE LENS-LEVEL COMMAND — always available, subject not yet known.
@@ -70,16 +86,15 @@ export type AssignmentRosterBulkHandlers = {
      */
     onCreateAssignment?: () => void;
     onCreateForChild?: (customerMemberId: string) => void;
-    onBulkArchive?: (assignmentIds: string[]) => void | Promise<void>;
-    onBulkMakePrimary?: (payload: { subjectKey: string; assignmentId: string; effectiveFrom: string }[]) => void | Promise<void>;
+    /** Every bulk command answers what happened, row by row — never a bare success. */
+    onBulkArchive?: (assignmentIds: string[]) => Promise<BulkOutcome>;
     onBulkAssignment?: (
         subjects: AssignmentRosterSubject[],
         preview: BulkAssignmentPreviewRow[],
-    ) => void | Promise<void>;
-    /** Answers the refusals, one line per row the server refused (empty = all applied). */
+    ) => Promise<BulkOutcome>;
     onBulkRoomChange?: (
         rows: { customerMemberId: string; subjectName: string; payload: Record<string, unknown> }[],
-    ) => Promise<string[]>;
+    ) => Promise<BulkOutcome>;
     assignmentTypes?: OrgAssignmentTypeOption[];
     siteId?: string;
     busy?: boolean;
@@ -120,7 +135,7 @@ export default function AssignmentRosterPanel({
     const [bulkTypeId, setBulkTypeId] = useState("");
     const [bulkPatternId, setBulkPatternId] = useState("");
     const [bulkRoomId, setBulkRoomId] = useState("");
-    const [bulkRoomResult, setBulkRoomResult] = useState<string[] | null>(null);
+    const [bulkReport, setBulkReport] = useState<{ headline: string; lines: string[] } | null>(null);
     const [bulkStartDate, setBulkStartDate] = useState(new Date().toISOString().slice(0, 10));
 
     useEffect(() => {
@@ -441,23 +456,12 @@ export default function AssignmentRosterPanel({
                         </button>
                         <button
                             type="button"
-                            className="text-[11px] font-semibold text-alloy-bend-pine disabled:opacity-50"
-                            disabled={bulk?.busy || selectedAssignments.every((r) => r.isPrimary)}
-                            onClick={() => {
-                                const targets = selectedAssignments.filter((r) => !r.isPrimary);
-                                void bulk?.onBulkMakePrimary?.(targets);
-                            }}
-                            data-bulk-make-primary="true"
-                        >
-                            Make primary
-                        </button>
-                        <button
-                            type="button"
                             className="text-[11px] font-semibold text-alloy-ember disabled:opacity-50"
                             disabled={bulk?.busy || selectedAssignments.every((r) => r.isPrimary)}
                             onClick={() => {
                                 const ids = selectedAssignments.filter((r) => !r.isPrimary).map((r) => r.assignmentId);
-                                void bulk?.onBulkArchive?.(ids);
+                                setBulkReport(null);
+                                void bulk?.onBulkArchive?.(ids).then((o) => setBulkReport(describeBulkOutcome(o)));
                             }}
                             data-bulk-archive="true"
                         >
@@ -542,7 +546,10 @@ export default function AssignmentRosterPanel({
                                 || bulkAssignmentPreview.every((r) => r.status !== "ready")
                             }
                             onClick={() =>
-                                void bulk?.onBulkAssignment?.(selectedSubjects, bulkAssignmentPreview)
+                                void bulk?.onBulkAssignment?.(selectedSubjects, bulkAssignmentPreview).then((o) => {
+                                    setBulkReport(describeBulkOutcome(o));
+                                    if (o.refused.length + o.failed.length === 0) setBulkMode(null);
+                                })
                             }
                         >
                             Apply ready
@@ -555,6 +562,24 @@ export default function AssignmentRosterPanel({
                             Cancel
                         </button>
                     </div>
+                </div>
+            ) : null}
+
+            {bulkReport ? (
+                <div
+                    className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-[11px]"
+                    data-bulk-result={bulkReport.lines.length === 0 ? "applied" : "incomplete"}
+                >
+                    <p className={bulkReport.lines.length === 0 ? "font-semibold text-alloy-bend-pine" : "font-semibold text-alloy-ember"}>
+                        {bulkReport.headline}
+                    </p>
+                    {bulkReport.lines.length > 0 ? (
+                        <ul className="mt-1 text-alloy-ember" data-bulk-room-result="refused">
+                            {bulkReport.lines.map((line) => (
+                                <li key={line}>{line}</li>
+                            ))}
+                        </ul>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -628,11 +653,11 @@ export default function AssignmentRosterPanel({
                                         },
                                     }];
                                 });
-                                setBulkRoomResult(null);
-                                void (bulk?.onBulkRoomChange?.(rows) ?? Promise.resolve([] as string[])).then((refused) => {
-                                    const lines = [...skipped, ...refused];
-                                    setBulkRoomResult(lines);
-                                    if (lines.length === 0) setBulkMode(null);
+                                setBulkReport(null);
+                                void (bulk?.onBulkRoomChange?.(rows) ?? Promise.resolve({ succeeded: 0, refused: [], failed: [] })).then((o) => {
+                                    const report = describeBulkOutcome(o, skipped);
+                                    setBulkReport(report);
+                                    if (report.lines.length === 0) setBulkMode(null);
                                 });
                             }}
                         >
@@ -646,13 +671,7 @@ export default function AssignmentRosterPanel({
                             Cancel
                         </button>
                     </div>
-                    {bulkRoomResult && bulkRoomResult.length > 0 ? (
-                        <ul className="mt-2 text-[11px] text-alloy-ember" data-bulk-room-result="refused">
-                            {bulkRoomResult.map((line) => (
-                                <li key={line}>{line}</li>
-                            ))}
-                        </ul>
-                    ) : null}
+
                 </div>
             ) : null}
 

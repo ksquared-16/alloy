@@ -76,6 +76,11 @@ export type Assignment = {
     weekdays: number[]; // 0=Sun .. 6=Sat
     arriveTime: string | null;
     departTime: string | null;
+    /**
+     * Each weekday's own hours, when that day has exactly one recorded interval. Present so an editor
+     * reopens a week whose days differ as it was saved — `arriveTime`/`departTime` are null for it.
+     */
+    dailyHours?: Record<number, { arrive: string; depart: string }>;
     effectiveFrom: string; // YYYY-MM-DD
     effectiveTo: string | null; // null => open-ended
     openEnded: boolean;

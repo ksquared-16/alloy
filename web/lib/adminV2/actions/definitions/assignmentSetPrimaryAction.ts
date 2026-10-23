@@ -1,5 +1,11 @@
 /**
  * Registered action: Set primary assignment (`assignment.set_primary`).
+ *
+ * STAFF subjects only. A child's primary is the enrollment's own schedule (V7 decision P1): an
+ * operator changes it by editing it, through the participation change path that keeps the
+ * placement, the agreement and the accepted terms in step. Promoting a secondary over it bypassed
+ * all of that, so a child subject is refused here. `setPrimaryOperationalAssignment` itself, the
+ * `is_primary` column and its one-live-primary constraint are unchanged.
  */
 
 import { randomUUID } from "crypto";
@@ -28,7 +34,7 @@ export const assignmentSetPrimaryAction: RegisteredAction = {
     authorizeSites: assignmentSiteAuthorizer(ASSIGNMENT_SET_PRIMARY_ACTION_KEY),
     defaultLabel: "Set primary assignment",
     description:
-        "Designate the effective-dated primary (operational home) assignment for a child or staff subject.",
+        "Designate the effective-dated primary (operational home) assignment for a staff subject. A child's primary is changed by editing it.",
     supportedEntityTypes: ["child", "person"],
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
@@ -55,21 +61,24 @@ export const assignmentSetPrimaryAction: RegisteredAction = {
         const promoteAssignmentId = trimmedValue(payload.promote_assignment_id) || null;
         const schedulePatternId = trimmedValue(payload.schedule_pattern_id) || null;
 
+        if (subjectType !== "staff" || invocation.entityType === "child") {
+            return {
+                ok: false,
+                correlationId,
+                status: 409,
+                error: "A child's primary schedule is changed by editing it, not by making another assignment primary.",
+            };
+        }
+
         try {
             const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
             const result = await setPrimaryOperationalAssignment(supabase, {
                 orgId: ctx.orgId,
-                subject:
-                    subjectType === "child"
-                        ? {
-                              type: "child",
-                              enrollmentAgreementId: trimmedValue(payload.enrollment_agreement_id),
-                          }
-                        : {
-                              type: "staff",
-                              personId: trimmedValue(payload.person_id) || invocation.entityId,
-                              siteLocationId: trimmedValue(payload.site_location_id),
-                          },
+                subject: {
+                    type: "staff",
+                    personId: trimmedValue(payload.person_id) || invocation.entityId,
+                    siteLocationId: trimmedValue(payload.site_location_id),
+                },
                 effectiveDate,
                 promoteAssignmentId,
                 create: schedulePatternId

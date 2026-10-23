@@ -112,6 +112,26 @@ const T = {
 };
 
 type DailyHours = { arrive: string; depart: string };
+/** One weekday of Assignment Time, as `assignment.set_time` / `assignment.create` take it. */
+type AssignmentTimeDayPayload = { weekday: number; start_time: string | null; end_time: string | null };
+
+/**
+ * The editor's week as Assignment Time: every selected day, with that day's own hours when "different
+ * times per day" gives it some, else the daily hours, else UNKNOWN (the day recurs, hours unrecorded).
+ * The same rule the primary route applies to `weekdays` + `times`.
+ */
+function editorWeek(
+    days: readonly number[],
+    daily: { arrive: string; depart: string },
+    perDay: Record<number, DailyHours> | null,
+): AssignmentTimeDayPayload[] {
+    const valid = (h: DailyHours | undefined | null) => Boolean(h && h.arrive && h.depart && h.depart > h.arrive);
+    return [...new Set(days)].sort((a, b) => a - b).map((weekday) => {
+        const own = perDay?.[weekday];
+        const h = valid(own) ? own! : valid(daily) ? daily : null;
+        return { weekday, start_time: h?.arrive ?? null, end_time: h?.depart ?? null };
+    });
+}
 type Money = { amountCents: number; currency: string };
 type BillingProjection = {
     status: "resolved" | "pending" | "unconfigured" | "stale";
@@ -859,6 +879,11 @@ function ScheduleWorkSurface({
     const subject = useMemo(() => operationalSubjectFor(child, proj), [child, proj]);
     const binding = useMemo(() => assignmentActionBinding(subject), [subject]);
     const applicability = useMemo(() => assignmentSubjectApplicability(subject), [subject]);
+    // A child's primary is the enrollment's own schedule: it is edited, and ends with the enrollment
+    // (V7 decision P1). A staff primary is replaced by making another assignment primary.
+    const primaryArchiveBlockedReason = applicability.canSetPrimary
+        ? "Make another assignment primary before archiving this one."
+        : "This is the enrollment's own schedule — change it with Edit; it ends with the enrollment.";
 
     /*
      * BP V2 S4 — THE ROW'S SOURCE, RESOLVED AGAINST THIS CARD'S OWN READ.
@@ -1073,8 +1098,8 @@ function ScheduleWorkSurface({
                         setMode("pick-type");
                     }}
                     onSetPrimary={
-                        // Valid for BOTH subjects: `setPrimaryOperationalAssignment` resolves a staff
-                        // subject explicitly and refuses a promote target belonging to another person.
+                        // STAFF only (V7 decision P1): a child's primary is changed by editing it,
+                        // so `canSetPrimary` is false for a child and no control is offered.
                         activeAssignment.isPrimary || !applicability.canSetPrimary
                             ? undefined
                             : () =>
@@ -1083,13 +1108,6 @@ function ScheduleWorkSurface({
                                       ...binding,
                                       payload: {
                                           ...assignmentAnchorPayload(subject),
-                                          // Kept as `?? ""` — an EMPTY STRING, not undefined — because
-                                          // that is what the child path has always sent and the action
-                                          // distinguishes them. Omitted entirely for staff, who have
-                                          // no agreement to name.
-                                          ...(applicability.hasEnrollmentAgreement
-                                              ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
-                                              : {}),
                                           effective_date: activeAssignment.effectiveFrom,
                                           promote_assignment_id: activeAssignment.id,
                                           subject_label: child.name,
@@ -1124,11 +1142,7 @@ function ScheduleWorkSurface({
                                       payload: { assignment_id: activeAssignment.id },
                                   })
                     }
-                    archiveBlockedReason={
-                        activeAssignment.isPrimary
-                            ? "Make another assignment primary before archiving this one."
-                            : null
-                    }
+                    archiveBlockedReason={activeAssignment.isPrimary ? primaryArchiveBlockedReason : null}
                     onDelete={
                         activeAssignment.commitmentKind === "proposed"
                             ? () => setDeleteConfirmOpen(true)
@@ -1249,9 +1263,6 @@ function ScheduleWorkSurface({
                                 ...binding,
                                 payload: {
                                     ...assignmentAnchorPayload(subject),
-                                    ...(applicability.hasEnrollmentAgreement
-                                        ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
-                                        : {}),
                                     effective_date: a.effectiveFrom,
                                     promote_assignment_id: a.id,
                                     subject_label: child.name,
@@ -1284,8 +1295,7 @@ function ScheduleWorkSurface({
                                 payload: { assignment_id: a.id },
                             });
                         },
-                        archiveBlockedReasonFor: (a) =>
-                            a.isPrimary ? "Make another assignment primary before archiving this one." : null,
+                        archiveBlockedReasonFor: (a) => (a.isPrimary ? primaryArchiveBlockedReason : null),
                     }}
                 />
             </div>
@@ -1378,6 +1388,7 @@ function ScheduleWorkSurface({
                 onSaved={onSaved}
                 reloadSaved={reloadChild}
                 onNotice={setActionError}
+                binding={binding}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
                         throw new Error("Choose an Assignment Category before creating.");
@@ -1388,6 +1399,8 @@ function ScheduleWorkSurface({
                         payload: assignmentCreatePayload(subject, {
                             schedule_pattern_id: payload.schedule_pattern_id,
                             start_date: payload.start_date,
+                            end_date: payload.end_date,
+                            days: payload.days,
                             room_location_id: payload.room_location_id,
                             assignment_type_id: selectedType.id,
                             assignment_type_label: selectedType.label,
@@ -1808,7 +1821,10 @@ function ScheduleEditor({
     onNotice,
     reloadSaved,
     onCreateSecondary,
+    binding,
 }: {
+    /** The subject's action binding (entity_type/entity_id), for corrections of an existing row. */
+    binding?: { entity_type: string; entity_id: string };
     child: SchedSubject;
     opportunityId: string | null;
     proj: SubjectProj | null;
@@ -1833,8 +1849,11 @@ function ScheduleEditor({
     onCreateSecondary?: (payload: {
         schedule_pattern_id: string | null;
         start_date: string;
+        end_date: string | null;
         room_location_id: string | null;
         assignment_type_label: string;
+        /** The week as Assignment Time — the days and each day's hours, written with the row. */
+        days: AssignmentTimeDayPayload[];
     }) => Promise<void>;
 }) {
     const ex = existing?.assignments[0] ?? null;
@@ -1848,11 +1867,18 @@ function ScheduleEditor({
     // AND for an existing secondary, which is edited under mode "create" (its Save writes a successor).
     // It used to hydrate only under "edit", so a secondary opened with no days and no start.
     const editingRow = mode === "edit" || (createAsSecondary && ex != null);
+    // An enrolled child's primary ends with the enrollment: its editor changes it, never ends it.
+    const enrolledPrimaryEdit = mode === "edit" && !createAsSecondary && Boolean(proj?.enrollmentAgreementId);
     const [days, setDays] = useState<number[]>(editingRow && ex?.weekdays.length ? [...ex.weekdays] : []);
     const [arrive, setArrive] = useState(ex?.arriveTime || "");
     const [depart, setDepart] = useState(ex?.departTime || "");
-    const [perDayOpen, setPerDayOpen] = useState(false);
-    const [perDay, setPerDay] = useState<Record<number, DailyHours>>({});
+    // A week whose days differ reopens as it was saved: each day's own hours, the per-day grid open.
+    const seededPerDay =
+        editingRow && ex && !(ex.arriveTime && ex.departTime) && ex.dailyHours && Object.keys(ex.dailyHours).length > 0
+            ? (ex.dailyHours as Record<number, DailyHours>)
+            : null;
+    const [perDayOpen, setPerDayOpen] = useState(seededPerDay != null);
+    const [perDay, setPerDay] = useState<Record<number, DailyHours>>(seededPerDay ? { ...seededPerDay } : {});
     const [start, setStart] = useState(editingRow ? existing?.effectiveFrom || "" : "");
     const [end, setEnd] = useState(existing?.effectiveTo || "");
     const [openEnded, setOpenEnded] = useState(existing ? existing.openEnded : true);
@@ -2622,24 +2648,70 @@ function ScheduleEditor({
         try {
             // The written pattern: chosen or implied by the days — never a default (patterns are warm;
             // the shared load is awaited only if the editor saved before it answered).
-            const pid = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days, chosenPatternId }).patternId;
+            const resolved = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days, chosenPatternId });
+            const pid = resolved.patternId;
+            if (!pid) {
+                setError(
+                    resolved.ambiguous
+                        ? "More than one pattern fits these days — choose one with Use a pattern."
+                        : "Choose a schedule pattern before saving this assignment.",
+                );
+                return;
+            }
+            const week = editorWeek(days, { arrive, depart }, perDayOpen ? perDay : null);
+            const endDate = openEnded ? null : end || null;
             if (createAsSecondary && onCreateSecondary) {
-                // An existing secondary saved unchanged is not a change: nothing is written (a successor
-                // must start after the row it replaces, and there is nothing to replace it with).
-                if (ex && pid === ex.patternId && start === (existing?.effectiveFrom ?? "") && (roomId || null) === (ex.room.id ?? null)) {
-                    await onSaved();
-                    return;
-                }
-                if (!pid) {
-                    setError("Choose a schedule pattern before saving this assignment.");
-                    setBusy(false);
-                    return;
+                if (ex) {
+                    /*
+                     * AN EXISTING SECONDARY. What changed decides the write (V7 S3 / audit A4):
+                     *   - a later start → the atomic replacement, carrying end date and week;
+                     *   - the same start → corrections of THIS row: its week (`assignment.set_time`) and
+                     *     its end (`assignment.archive`, which keeps a future-dated end live until then).
+                     *     A changed pattern or room needs the date it takes effect.
+                     */
+                    const sameStart = start === (existing?.effectiveFrom ?? "");
+                    const factsChanged = pid !== ex.patternId || (roomId || null) !== (ex.room.id ?? null);
+                    const priorEnd = existing?.openEnded ? null : existing?.effectiveTo ?? null;
+                    const exWeek = editorWeek(ex.weekdays, { arrive: ex.arriveTime ?? "", depart: ex.departTime ?? "" }, (ex.dailyHours as Record<number, DailyHours> | undefined) ?? null);
+                    const weekChanged = JSON.stringify(week) !== JSON.stringify(exWeek);
+                    if (sameStart) {
+                        if (factsChanged) {
+                            setError(`Choose the date this change takes effect — after ${existing?.effectiveFrom}.`);
+                            return;
+                        }
+                        if (endDate !== priorEnd && endDate == null) {
+                            setError("An end date can't be removed here. Add a new assignment from the day after it ends.");
+                            return;
+                        }
+                        if (!weekChanged && endDate === priorEnd) {
+                            await onSaved();
+                            return;
+                        }
+                        if (weekChanged) {
+                            await executeAssignmentAction({
+                                action_key: "assignment.set_time",
+                                ...binding,
+                                payload: { assignment_id: ex.id, days: week },
+                            });
+                        }
+                        if (endDate !== priorEnd && endDate) {
+                            await executeAssignmentAction({
+                                action_key: "assignment.archive",
+                                ...binding,
+                                payload: { assignment_id: ex.id, end_date: endDate },
+                            });
+                        }
+                        await finishAfterWrite();
+                        return;
+                    }
                 }
                 await onCreateSecondary({
                     schedule_pattern_id: pid,
                     start_date: start,
+                    end_date: endDate,
                     room_location_id: roomId || null,
                     assignment_type_label: assignmentTypeLabel || "Assignment",
+                    days: week,
                 });
                 await finishAfterWrite();
                 return;
@@ -2675,11 +2747,14 @@ function ScheduleEditor({
                     // assignment prices exactly as the editor's draft tuition did.
                     program_category_id: programCategoryId || null,
                     start_date: start || null,
-                    end_date: openEnded ? null : end || null,
+                    // An enrolled primary ends with the enrollment; its editor offers no end date.
+                    end_date: enrolledPrimaryEdit ? null : endDate,
                     weekdays: days,
                     times,
                     site_location_id: siteId,
-                    // Effective-dated intent: Create makes the next schedule; Edit changes the current.
+                    // Edit: the primary the operator opened. The server refuses the edit as stale if it
+                    // is no longer current, rather than applying it over someone else's change.
+                    ...(mode === "edit" && ex ? { expected_assignment_id: ex.id } : {}),
                 }),
             });
             await finishAfterWrite();
@@ -3204,10 +3279,15 @@ function ScheduleEditor({
                         </button>
                         {!patternPicking && patterns && days.length > 0 && !written.scheduleType ? (
                             // Said, not guessed: Save records no schedule type until one is chosen.
-                            <span data-schedule-type-unset="true" style={{ fontSize: 11, color: T.muted }}>
+                            <span data-schedule-type-unset={written.ambiguous ? "ambiguous" : "true"} style={{ fontSize: 11, color: T.muted }}>
                                 {written.ambiguous
-                                    ? "These days match more than one schedule type — use a pattern to choose."
+                                    ? "More than one pattern fits these days — use a pattern to choose."
                                     : "No pattern matches these days — use a pattern to set the schedule type."}
+                            </span>
+                        ) : null}
+                        {!patternPicking && written.custom ? (
+                            <span data-schedule-custom-days="true" style={{ fontSize: 11, color: T.muted }}>
+                                Custom days — kept on this assignment.
                             </span>
                         ) : null}
                         {patternPicking &&
@@ -3348,14 +3428,22 @@ function ScheduleEditor({
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
                                 <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
-                            <label style={{ display: "grid", gap: 3 }}>
-                                <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
-                            </label>
-                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
-                                <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
-                                Open-ended
-                            </label>
+                            {enrolledPrimaryEdit ? (
+                                <span data-primary-ends-with-enrollment="true" style={{ fontSize: 11.5, color: T.muted, paddingBottom: 7 }}>
+                                    Ends with the enrollment. A change takes effect on the start date.
+                                </span>
+                            ) : (
+                                <>
+                                    <label style={{ display: "grid", gap: 3 }}>
+                                        <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
+                                        <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} data-assignment-end-date="true" className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
+                                    </label>
+                                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
+                                        <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
+                                        Open-ended
+                                    </label>
+                                </>
+                            )}
                         </div>
                     </div>
                 }

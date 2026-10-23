@@ -11,23 +11,46 @@
  * ── IT EXECUTES NOTHING OF ITS OWN ──
  *
  * Every handler posts to `/api/admin/actions/execute` with a canonical `action_key`
- * (`assignment.archive`, `.set_primary`, `.create`), which is the same RegisteredAction the Focus
- * Panel card invokes for one assignment. No endpoint here, no domain rule here, and no second
- * ledger: the caller supplies the subjects it already loaded from `?view=assignment_roster`.
+ * (`assignment.archive`, `.create`), which is the same RegisteredAction the Focus Panel card invokes
+ * for one assignment. No endpoint here, no domain rule here, and no second ledger: the caller
+ * supplies the subjects it already loaded from `?view=assignment_roster`.
  *
- * ── THE ONE DOMAIN RULE THAT IS ENFORCED, AND WHY IT LIVES HERE ──
+ * ── EVERY ANSWER IS READ ──
  *
- * `set_primary` is a CHILD concept: it promotes an assignment against an enrollment agreement, and a
- * staff subject has neither. The guard travels WITH the handler rather than sitting in the panel,
- * because a second host adopting the panel would otherwise have to remember to re-apply it — and
- * forgetting is silent, since the command would simply be posted with a null agreement.
+ * Each row commits on its own (there is no batch transaction), so each handler reports what really
+ * happened per row: applied, REFUSED by the server (its reason), or FAILED (an error or no answer).
+ * A bulk run that applies some rows and not others is reported as exactly that, never as success.
+ *
+ * (A bulk "Make primary" used to live here. It is retired — V7 decision P1: a child's primary is the
+ * enrollment's own schedule, and promotion copied a secondary's category and room into it.)
  */
 
 import type {
     AssignmentRosterBulkHandlers,
     AssignmentRosterSubject,
+    BulkOutcome,
 } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
+
+export type { BulkOutcome };
+
+/** Run one row's action and file its answer into the outcome. */
+async function settle(outcome: BulkOutcome, label: string, run: () => Promise<Response>): Promise<void> {
+    let res: Response;
+    try {
+        res = await run();
+    } catch (e) {
+        outcome.failed.push(`${label}: ${e instanceof Error ? e.message : "no response"}`);
+        return;
+    }
+    if (res.ok) {
+        outcome.succeeded += 1;
+        return;
+    }
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } | string } | null;
+    const message = (typeof body?.error === "string" ? body.error : body?.error?.message) || `status ${res.status}`;
+    (res.status >= 500 ? outcome.failed : outcome.refused).push(`${label}: ${message}`);
+}
 
 /** Post one canonical action. Sequential by caller design — see `buildAssignmentRosterBulkHandlers`. */
 async function execute(actionKey: string, entityType: string, entityId: string, payload: unknown): Promise<Response> {
@@ -44,7 +67,7 @@ async function execute(actionKey: string, entityType: string, entityId: string, 
 }
 
 export type BuildAssignmentRosterBulkHandlersInput = {
-    /** The subjects the host already loaded. Read for the `set_primary` grain guard. */
+    /** The subjects the host already loaded (labels for the outcome lines). */
     subjects: readonly AssignmentRosterSubject[];
     assignmentTypes: OrgAssignmentTypeOption[];
     siteId: string;
@@ -80,65 +103,47 @@ export function buildAssignmentRosterBulkHandlers(
         onCreateForChild: input.onCreateForChild,
 
         onBulkArchive: async (assignmentIds) => {
+            const outcome: BulkOutcome = { succeeded: 0, refused: [], failed: [] };
             for (const assignment_id of assignmentIds) {
-                await execute("assignment.archive", "assignment", assignment_id, { assignment_id });
+                const owner = subjects.find((s) => s.assignments.some((a) => a.assignmentId === assignment_id));
+                await settle(outcome, owner?.subjectName ?? assignment_id, () =>
+                    execute("assignment.archive", "assignment", assignment_id, { assignment_id }),
+                );
             }
             onRefresh();
-        },
-
-        onBulkMakePrimary: async (rows) => {
-            for (const row of rows) {
-                // Primary is a child concept; a staff subject has no enrollment agreement and must
-                // not reach this command. Skipping is the honest outcome — the row simply is not
-                // eligible, which is different from the command failing.
-                const subject = subjects.find((s) => s.subjectKey === row.subjectKey);
-                const agreementId = subject?.enrollmentAgreementId;
-                if (!agreementId || subject?.subjectType === "staff") continue;
-                await execute("assignment.set_primary", "child", agreementId, {
-                    subject_type: "child",
-                    enrollment_agreement_id: agreementId,
-                    effective_date: row.effectiveFrom,
-                    promote_assignment_id: row.assignmentId,
-                });
-            }
-            onRefresh();
+            return outcome;
         },
 
         onBulkAssignment: async (_subjects, preview) => {
             // Only rows the PREVIEW judged ready. The preview is the eligibility authority;
             // re-deciding it here would be a second opinion the operator never saw.
+            const outcome: BulkOutcome = { succeeded: 0, refused: [], failed: [] };
             for (const row of preview.filter((p) => p.status === "ready")) {
-                // A row that cannot name its subject is not a row to execute. `customerMemberId` is
-                // nullable on the preview shape, and the inline version this replaced posted it into
-                // an untyped JSON body — so a null went to the action as `entity_id: null` and was
-                // refused server-side rather than skipped here. CI's typecheck found it the moment
-                // the call went through a typed helper.
-                if (!row.customerMemberId) continue;
-                await execute("assignment.create", "child", row.customerMemberId, row.payload);
+                // A row that cannot name its subject is not a row to execute: it is reported, not sent.
+                if (!row.customerMemberId) {
+                    outcome.refused.push(`${row.subjectName ?? "A row"}: no child to assign`);
+                    continue;
+                }
+                await settle(outcome, row.subjectName ?? row.customerMemberId, () =>
+                    execute("assignment.create", "child", row.customerMemberId as string, row.payload),
+                );
             }
             onRefresh();
+            return outcome;
         },
 
         onBulkRoomChange: async (rows) => {
             // A room change is a NEW effective-dated assignment, not an edit — which is why this
             // posts `assignment.create` like the one above. The dating is what supersedes the prior
             // room, and that is the ledger's own mechanism.
-            //
-            // No null guard here, unlike the handler above: these rows declare
-            // `customerMemberId: string`, so a guard would be dead code implying a case the type
-            // says cannot happen.
-            // Each answer is read: a refused row is reported, never silently dropped.
-            const refused: string[] = [];
+            const outcome: BulkOutcome = { succeeded: 0, refused: [], failed: [] };
             for (const row of rows) {
-                const res = await execute("assignment.create", "child", row.customerMemberId, row.payload);
-                if (!res.ok) {
-                    const body = (await res.json().catch(() => null)) as { error?: { message?: string } | string } | null;
-                    const message = typeof body?.error === "string" ? body.error : body?.error?.message;
-                    refused.push(`${row.subjectName}: ${message || `refused (${res.status})`}`);
-                }
+                await settle(outcome, row.subjectName, () =>
+                    execute("assignment.create", "child", row.customerMemberId, row.payload),
+                );
             }
             onRefresh();
-            return refused;
+            return outcome;
         },
 
         assignmentTypes: input.assignmentTypes,
