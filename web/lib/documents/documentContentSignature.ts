@@ -2,7 +2,7 @@
  * What a stored document IS, decided from its bytes. The caller's label does not decide it.
  *
  * D1b.3 / D1b.4. The `org_documents` bucket accepts exactly eight content types
- * (migration 20261206090100). Every upload path therefore stores the CANONICAL type of the format the
+ * (migration 20261207181600). Every upload path therefore stores the CANONICAL type of the format the
  * bytes prove, never a client-supplied `file.type`, an `image/jpg` alias or `application/octet-stream`.
  * Binary formats must carry their signature. Text formats must not carry binary content.
  *

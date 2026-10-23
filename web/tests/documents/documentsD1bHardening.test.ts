@@ -414,8 +414,8 @@ describe("OCR text in a stored form-draft preview (D1b.2 / D1b.6)", () => {
 // ── 6. Declared posture ─────────────────────────────────────────────────────────────────────────
 
 describe("the migrations declare the posture the code relies on (D1b.2 / D1b.3)", () => {
-    const revoke = readFileSync(resolve(ROOT, "supabase/migrations/20261206090000_documents_direct_access_revocation.sql"), "utf8");
-    const bucket = readFileSync(resolve(ROOT, "supabase/migrations/20261206090100_org_documents_bucket_governance.sql"), "utf8");
+    const revoke = readFileSync(resolve(ROOT, "supabase/migrations/20261207181500_documents_direct_access_revocation.sql"), "utf8");
+    const bucket = readFileSync(resolve(ROOT, "supabase/migrations/20261207181600_org_documents_bucket_governance.sql"), "utf8");
 
     it("revokes client privileges on every document-owned table and keeps the service role", () => {
         for (const t of ["documents", "document_versions", "document_field_values", "document_field_definitions", "form_submission_documents", "form_submission_signatures"]) {
