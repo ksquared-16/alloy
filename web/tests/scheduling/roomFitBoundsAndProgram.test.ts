@@ -30,25 +30,25 @@ describe("age bounds in years cover the whole final year", () => {
 describe("program fit uses the room's configured Program", () => {
     it("the same Program matches; a different one does not", () => {
         expect(
-            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryId: "p-toddler", childAgeGroup: null, roomAgeGroup: null }),
+            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryIds: ["p-toddler"], childAgeGroup: null, roomAgeGroup: null }),
         ).toEqual({ programKnown: true, programMatch: true });
         expect(
-            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryId: "p-preschool", childAgeGroup: null, roomAgeGroup: null }),
+            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryIds: ["p-preschool"], childAgeGroup: null, roomAgeGroup: null }),
         ).toEqual({ programKnown: true, programMatch: false });
     });
 
     it("without a room Program, age groups compare case-insensitively", () => {
         expect(
-            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryId: null, childAgeGroup: "toddler", roomAgeGroup: "Toddler" }),
+            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryIds: null, childAgeGroup: "toddler", roomAgeGroup: "Toddler" }),
         ).toEqual({ programKnown: true, programMatch: true });
     });
 
     it("an unknowable comparison gives no verdict — never 'different program'", () => {
         expect(
-            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryId: null, childAgeGroup: "toddler", roomAgeGroup: null }),
+            roomProgramFit({ childProgramCategoryId: "p-toddler", roomProgramCategoryIds: null, childAgeGroup: "toddler", roomAgeGroup: null }),
         ).toEqual({ programKnown: false, programMatch: false });
         expect(
-            roomProgramFit({ childProgramCategoryId: null, roomProgramCategoryId: "p-toddler", childAgeGroup: null, roomAgeGroup: null }).programKnown,
+            roomProgramFit({ childProgramCategoryId: null, roomProgramCategoryIds: ["p-toddler"], childAgeGroup: null, roomAgeGroup: null }).programKnown,
         ).toBe(false);
     });
 });

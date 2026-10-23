@@ -22,6 +22,8 @@ export function writeRoomProgramsAndScheduleMetadata(input: {
     supportedProgramKeys: readonly string[];
     schedulePatternId: string | null;
     capacity?: string | null;
+    /** Configured uses (assignment category ids). Omitted = leave the stored uses untouched. */
+    spaceUses?: readonly string[];
 }): Record<string, unknown> {
     const base =
         input.existing != null && typeof input.existing === "object" && !Array.isArray(input.existing) ?
@@ -34,6 +36,9 @@ export function writeRoomProgramsAndScheduleMetadata(input: {
     else delete base.category;
     if (input.schedulePatternId?.trim()) base.schedule_pattern_id = input.schedulePatternId.trim();
     else delete base.schedule_pattern_id;
+    if (input.spaceUses !== undefined) {
+        base.space_uses = [...new Set(input.spaceUses.map((value) => value.trim()).filter(Boolean))];
+    }
     if (input.capacity != null) {
         const capacity = String(input.capacity).trim();
         if (capacity) base.capacity = capacity;

@@ -12,7 +12,7 @@ import { AlloySelect } from "@/components/workspace/AlloySelect";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { CREATE_ASSIGNMENT_LABEL } from "@/components/adminV2/scheduling/AssignmentSubjectPicker";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
-import { roomsForEveryCategory, type AssignmentTypeBehavior } from "@/lib/operationalAssignments/assignmentTypeBehavior";
+import { roomsForEveryCategory } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 
@@ -303,27 +303,30 @@ export default function AssignmentRosterPanel({
         };
     }, [bulkMode, siteId]);
 
-    const behaviorOf = (typeId: string | null | undefined) =>
-        bulk?.assignmentTypes?.find((t) => t.id === typeId)?.behavior;
-    const roomChoices = (behaviors: Array<AssignmentTypeBehavior | undefined>) =>
-        roomsForEveryCategory(siteRooms, behaviors.filter((b): b is AssignmentTypeBehavior => Boolean(b))).map((r) => ({
+    /** Each row's USE: its Category's behavior and identity — the space's configuration decides first. */
+    const useOf = (typeId: string | null | undefined) => ({
+        behavior: bulk?.assignmentTypes?.find((t) => t.id === typeId)?.behavior ?? {},
+        use: { categoryId: typeId ?? null, subjectType: "child" as const },
+    });
+    const roomChoices = (uses: ReturnType<typeof useOf>[]) =>
+        roomsForEveryCategory(siteRooms, uses).map((r) => ({
             value: r.roomId,
             label: r.roomName?.trim() || "Unnamed room",
         }));
-    /** Room change: rooms every selected secondary's own Category would offer in the editor. */
+    /** Room change: rooms every selected secondary could use, as the editor would offer them. */
     const roomChangeOptions = useMemo(() => {
-        const behaviors = selectedAssignments
+        const uses = selectedAssignments
             .filter((r) => !r.isPrimary)
             .map((r) => {
                 const subject = subjects.find((s) => s.subjectKey === r.subjectKey);
-                return behaviorOf(subject?.assignments.find((a) => a.assignmentId === r.assignmentId)?.assignmentTypeId);
+                return useOf(subject?.assignments.find((a) => a.assignmentId === r.assignmentId)?.assignmentTypeId);
             });
-        return roomChoices(behaviors);
+        return roomChoices(uses);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [siteRooms, selectedAssignments, subjects, bulk?.assignmentTypes]);
-    /** Bulk assignment: rooms the chosen Category offers. */
+    /** Bulk assignment: rooms the chosen Category may use. */
     const bulkAssignmentRoomOptions = useMemo(
-        () => roomChoices([behaviorOf(bulkTypeId)]),
+        () => roomChoices([useOf(bulkTypeId)]),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [siteRooms, bulkTypeId, bulk?.assignmentTypes],
     );

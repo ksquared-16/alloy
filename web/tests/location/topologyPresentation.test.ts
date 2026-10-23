@@ -57,9 +57,9 @@ describe("1-5. operator grammar", () => {
         expect(p.typeLabel).not.toBe("Operational");
     });
 
-    it("4. a stored Shared space now reads Physical space · North Campus with no containing segment", () => {
+    it("4. a stored Shared space reads Shared · North Campus with no containing segment", () => {
         const p = presentRoomTopology(PLAY, ROWS);
-        expect(p.subtitle).toBe("Physical · North Campus");
+        expect(p.subtitle).toBe("Shared · North Campus");
         expect(p.containingSpaceLabel).toBeNull();
     });
 
@@ -152,7 +152,7 @@ describe("rail grammar inside one site", () => {
     it("shows only Type for a room that hangs off the site", () => {
         expect(roomRailTopologySegments(INFANT, ROWS)).toEqual(["Operational"]);
         expect(roomRailTopologySegments(ROOM1, ROWS)).toEqual(["Physical"]);
-        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Physical"]);
+        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Shared"]);
     });
 
     it("never repeats the campus in a row already scoped to it", () => {

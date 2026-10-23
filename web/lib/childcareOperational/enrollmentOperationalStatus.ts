@@ -70,10 +70,6 @@ const AGREEMENT_TERMINAL_SET = new Set<string>(CHILD_ENROLLMENT_AGREEMENT_TERMIN
 const PLACEMENT_OPERATIONAL_SET = new Set<string>(CHILD_PLACEMENT_OPERATIONAL_STATUSES);
 const PLACEMENT_TERMINAL_SET = new Set<string>(CHILD_PLACEMENT_TERMINAL_STATUSES);
 
-export function isChildEnrollmentAgreementStatus(value: string): value is ChildEnrollmentAgreementStatus {
-    return (CHILD_ENROLLMENT_AGREEMENT_STATUSES as readonly string[]).includes(value);
-}
-
 export function isAgreementOperationalStatus(status: string): boolean {
     return AGREEMENT_OPERATIONAL_SET.has(status);
 }
@@ -86,20 +82,12 @@ export function isAgreementNonTerminalStatus(status: string): boolean {
     return isAgreementOperationalStatus(status);
 }
 
-export function isChildPlacementStatus(value: string): value is ChildPlacementStatus {
-    return (CHILD_PLACEMENT_STATUSES as readonly string[]).includes(value);
-}
-
 export function isPlacementOperationalStatus(status: string): boolean {
     return PLACEMENT_OPERATIONAL_SET.has(status);
 }
 
 export function isPlacementTerminalStatus(status: string): boolean {
     return PLACEMENT_TERMINAL_SET.has(status);
-}
-
-export function isScheduleAssignmentOperationalStatus(status: string): boolean {
-    return PLACEMENT_OPERATIONAL_SET.has(status);
 }
 
 export function isScheduleAssignmentTerminalStatus(status: string): boolean {

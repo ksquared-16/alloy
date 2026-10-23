@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateSpaceUsesConfiguration } from "@/lib/location/validateSpaceUses";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { canonicalUnitRoleFromStorage } from "@/lib/location/canonicalLocationModel";
@@ -245,6 +246,14 @@ export async function POST(request: NextRequest) {
         },
     });
     if (!topology.ok) return topologyRefusalResponse(topology);
+    if (body.metadata != null && typeof body.metadata === "object") {
+        const uses = await validateSpaceUsesConfiguration(supabase, ctx.orgId, {
+            locationType: location_type,
+            unitRole: unit_role,
+            metadata: body.metadata as Record<string, unknown>,
+        });
+        if (!uses.ok) return NextResponse.json({ error: uses.message, code: "space_uses_invalid" }, { status: 400 });
+    }
 
     const is_primary = customer_id ? !!body.is_primary : false;
     const is_active = body.is_active !== false;

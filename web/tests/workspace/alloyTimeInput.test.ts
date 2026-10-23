@@ -5,7 +5,6 @@ import {
     parseAlloyTimeInput,
 } from "@/lib/workspace/alloyTimeValue";
 import {
-    filterRoomsForPurposeBehavior,
     scopeRoomsForAssignmentPicker,
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
@@ -36,14 +35,12 @@ describe("scopeRoomsForAssignmentPicker", () => {
         { roomId: "open", programCategoryId: null },
     ];
 
-    it("keeps program mismatches visible for override (unlike hard filter)", () => {
+    it("keeps program mismatches visible for override", () => {
         const behavior: AssignmentTypeBehavior = {
             roomRequirement: "required",
             eligibleSpaceMode: "program_match",
         };
-        const hard = filterRoomsForPurposeBehavior(rooms, behavior, "prog-infant");
         const scoped = scopeRoomsForAssignmentPicker(rooms, behavior);
-        expect(hard.map((r) => r.roomId)).toEqual(["infant", "open"]);
         expect(scoped.map((r) => r.roomId)).toEqual(["infant", "toddler", "open"]);
     });
 

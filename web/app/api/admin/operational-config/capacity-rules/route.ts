@@ -10,7 +10,7 @@ import {
 } from "@/lib/childcareOperational/config/configRuleAuthoringService";
 import { setObjectCapacity } from "@/lib/childcareOperational/config/objectCapacityService";
 import { listCapacityRules } from "@/lib/childcareOperational/config/childcareConfigRuleService";
-import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { canonicalUnitRoleFromStorage, type CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import {
     operationalEnrollmentErrorResponse,
     parseJsonObject,
@@ -125,7 +125,20 @@ export async function POST(request: NextRequest) {
                     { status: 400 },
                 );
             }
-            const role = body.unit_role != null ? (String(body.unit_role) as CanonicalUnitRole) : null;
+            // The space's STORED role decides physical vs operational capacity — never a role the
+            // caller asserts (V7 S4: a physical/shared space must not acquire operational capacity).
+            const { data: unit, error: unitError } = await supabase
+                .from("locations")
+                .select("location_type, unit_role")
+                .eq("org_id", ctx.orgId)
+                .eq("id", roomLocationId)
+                .maybeSingle();
+            if (unitError) return NextResponse.json({ error: unitError.message, code: "db_error" }, { status: 500 });
+            if (!unit) return NextResponse.json({ error: "That space does not exist.", code: "not_found" }, { status: 404 });
+            const role: CanonicalUnitRole | null = canonicalUnitRoleFromStorage(
+                (unit as { location_type?: unknown }).location_type,
+                (unit as { unit_role?: unknown }).unit_role,
+            );
             const rules = await listCapacityRules(supabase, ctx.orgId);
             const result = await setObjectCapacity(supabase, {
                 orgId: ctx.orgId,
