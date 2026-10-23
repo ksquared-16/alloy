@@ -125,7 +125,7 @@
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "ef8b0d9c782325ad43ca37073bb6b38aa21a5e7e",
+      "blob_sha": "64f040e80df72e53a43d3eedb97c2c3d92fe7f55",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "eaf127b53dff8b6f083118cf37dc19d416faf281",
+      "blob_sha": "55d8ca32b4b98b38aec9d9666081a219640a4fab",
       "exists": true
     },
     {

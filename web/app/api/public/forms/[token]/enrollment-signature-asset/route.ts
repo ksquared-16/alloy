@@ -21,6 +21,7 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { enforcePublicUploadRateLimit, refuseOversizedPublicBody } from "@/lib/documents/publicUploadGuard";
+import { decideIngestion } from "@/lib/documents/screenedIngestion";
 
 const MAX_BYTES = 300 * 1024;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -75,6 +76,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const png = typeof body.png_base64 === "string" ? decodePng(body.png_base64) : null;
     if (!png) return publicErr("A PNG signature image under 300KB is required.", 400, { code: "BAD_IMAGE" });
+    // D1c-1: a signature mark must decode as a PNG. Anything else, including a file this engine cannot fully inspect, is
+    // refused rather than held: a signature is never quarantined into a submission.
+    const screenedSignature = decideIngestion(png, "png");
+    if (!screenedSignature.store || screenedSignature.status !== "uploaded") {
+        return publicErr("A PNG signature image under 300KB is required.", 400, { code: "BAD_IMAGE" });
+    }
 
     // The session's own child — the D-95 anchor's subject — is the only entity this can attach to.
     const { data: pi } = await supabase
@@ -109,6 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             storage_path: storagePath,
             status: "uploaded",
             metadata: {
+                screening: screenedSignature.screening,
                 source: "participant_signature_capture_v1",
                 packet_session_id: access.value.sessionId,
             },

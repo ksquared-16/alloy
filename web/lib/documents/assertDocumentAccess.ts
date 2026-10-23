@@ -46,6 +46,7 @@ import {
 import type { AdminAccessContextResult } from "@/lib/admin/getAdminAccessContext";
 import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes";
 import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
+import { UNAVAILABLE_DOCUMENT_STATUSES } from "@/lib/documents/documentAvailability";
 import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 
 export type DocumentAccessOperation = "preview" | "download" | "attachment";
@@ -221,7 +222,7 @@ export { isStoragePathWithinOrg };
  * Document statuses that must never be signed regardless of actor.
  * `null` status is treated as normal — most rows predate any status vocabulary.
  */
-const RESTRICTED_STATUSES: readonly string[] = ["deleted", "quarantined", "restricted"] as const;
+const RESTRICTED_STATUSES: readonly string[] = UNAVAILABLE_DOCUMENT_STATUSES;
 
 export type DocumentAccessInput = {
     supabase: SupabaseClient;

@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
 import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
@@ -848,7 +849,9 @@ async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> 
         const kept = new Set(
             (await filterDocumentRowsBySensitivity(createAdminClient(), ctx.orgId, access, rows)).map((d) => d.id),
         );
-        documents = (body.documents as Array<Record<string, unknown>>).filter((d) => kept.has(String(d.id ?? "")));
+        documents = (body.documents as Array<Record<string, unknown>>).filter(
+            (d) => kept.has(String(d.id ?? "")) && !isDocumentUnavailable(d.status),
+        );
     }
     return NextResponse.json({ ...body, documents }, { status: 200 });
 }

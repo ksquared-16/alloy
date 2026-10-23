@@ -45,6 +45,7 @@ import {
     scopeRoomsForAssignmentPicker,
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
+import type { UseForSpace } from "@/lib/location/spaceUse";
 import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 import {
     programCategoryIdForRoom,
@@ -1368,6 +1369,7 @@ function ScheduleWorkSurface({
                 createAsSecondary={createAsSecondary}
                 assignmentTypeLabel={selectedType?.label ?? null}
                 assignmentTypeBehavior={selectedType?.behavior}
+                assignmentTypeId={selectedType?.id ?? null}
                 // Real program from assignment/child context — never a hardcoded null. When
                 // editing an existing assignment, its room already implies a canonical
                 // program (if any); ScheduleEditor keeps this current as the room changes.
@@ -1802,6 +1804,7 @@ function ScheduleEditor({
     createAsSecondary = false,
     assignmentTypeLabel = null,
     assignmentTypeBehavior,
+    assignmentTypeId = null,
     programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
@@ -1820,6 +1823,8 @@ function ScheduleEditor({
     createAsSecondary?: boolean;
     assignmentTypeLabel?: string | null;
     assignmentTypeBehavior?: AssignmentTypeBehavior;
+    /** The chosen category's id — the USE the space's configuration is checked against. */
+    assignmentTypeId?: string | null;
     /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
     programCategoryId?: string | null;
     onCancel: () => void;
@@ -1870,6 +1875,8 @@ function ScheduleEditor({
             && initialProgramCategoryId != null
     );
     const [roomPicking, setRoomPicking] = useState(false);
+    // The use this schedule is for — stable across renders so the room picker does not refetch.
+    const purposeUse = useMemo<UseForSpace>(() => ({ categoryId: assignmentTypeId, subjectType: child.kind }), [assignmentTypeId, child.kind]);
     const [patternPicking, setPatternPicking] = useState(false);
 
     // Patterns are PRELOADED via first-paint (config.patterns), so the shortcut opens
@@ -2676,7 +2683,6 @@ function ScheduleEditor({
                     times,
                     site_location_id: siteId,
                     // Effective-dated intent: Create makes the next schedule; Edit changes the current.
-                    change_kind: mode === "create" && existing ? "successor" : "current",
                 }),
             });
             await finishAfterWrite();
@@ -2697,6 +2703,7 @@ function ScheduleEditor({
                 selectedRoomId={roomId}
                 seedRooms={config.operationalRooms}
                 purposeBehavior={assignmentTypeBehavior}
+                purposeUse={purposeUse}
                 programCategoryId={childProgramForFit}
                 onProgramResolved={(resolvedProgramCategoryId) => {
                     // Adopt the server-resolved child program only when none is known at all.
@@ -3521,6 +3528,7 @@ function RoomPicker({
     selectedRoomId,
     seedRooms,
     purposeBehavior,
+    purposeUse,
     programCategoryId,
     onProgramResolved,
     onPick,
@@ -3533,6 +3541,8 @@ function RoomPicker({
     selectedRoomId: string | null;
     seedRooms: SiteOperationalRoom[];
     purposeBehavior?: AssignmentTypeBehavior;
+    /** The use being scheduled; the space's configured uses decide first (V7-02a). */
+    purposeUse?: UseForSpace;
     programCategoryId?: string | null;
     /** Server-resolved Program from child/assignment context (`?view=options`), adopted
      *  only when no Program is already known client-side — never overrides a Program
@@ -3543,7 +3553,7 @@ function RoomPicker({
 }) {
     const seedOptions = useMemo((): PlacementOption[] => {
         const active = seedRooms.filter((r) => r.active !== false);
-        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {});
+        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {}, purposeUse);
         return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
@@ -3552,7 +3562,7 @@ function RoomPicker({
             reason: "",
             programCategoryId: r.programCategoryId,
         }));
-    }, [seedRooms, purposeBehavior]);
+    }, [seedRooms, purposeBehavior, purposeUse]);
 
     const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [fitContext, setFitContext] = useState<{
@@ -3578,14 +3588,22 @@ function RoomPicker({
                 if (cancelled) return;
                 const raw = (o.options ?? []) as PlacementOption[];
                 // Keep Category allow-list / not_used scoping — do not drop program mismatches.
+                // Placement fit scores CLASSROOMS only; the seed's space data (kind, uses) decides
+                // which of them this use may take, and any use-eligible shared space the scorer
+                // does not rank is kept after them rather than vanishing once scoring lands.
+                const seedById = new Map(seedRooms.map((r) => [r.roomId, r]));
                 const scoped = scopeRoomsForAssignmentPicker(
                     raw.map((r) => ({
                         ...r,
                         programCategoryId: r.programCategoryId ?? null,
+                        unitRole: seedById.get(r.roomId)?.unitRole,
+                        spaceUses: seedById.get(r.roomId)?.spaceUses ?? null,
                     })),
                     purposeBehavior ?? {},
+                    purposeUse,
                 );
-                setScored(scoped);
+                const scoredIds = new Set(scoped.map((r) => r.roomId));
+                setScored([...scoped, ...seedOptions.filter((o) => !scoredIds.has(o.roomId))]);
                 if (o.fitContext && typeof o.fitContext === "object") {
                     setFitContext(o.fitContext as {
                         dateOfBirth: string | null;
@@ -3607,7 +3625,7 @@ function RoomPicker({
         // `onProgramResolved` intentionally omitted — an inline callback from the parent;
         // depending on it would refetch every render without changing behavior.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteId, patternId, childId, start, purposeBehavior, programCategoryId]);
+    }, [siteId, patternId, childId, start, purposeBehavior, purposeUse, seedOptions, seedRooms, programCategoryId]);
 
     const options = useMemo(() => {
         const list = scored ?? seedOptions;

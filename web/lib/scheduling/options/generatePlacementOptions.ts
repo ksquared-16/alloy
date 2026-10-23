@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { placeableRooms, resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
+import { readRoomSupportedProgramKeys } from "@/lib/locations/roomOfferingMetadata";
 import {
     buildScheduleExpectations,
     type ExpectationWarning,
@@ -101,7 +102,10 @@ function continuityRoomIdsForChild(
 
 export type BuildRoomEngineFactsArgs = {
     inputs: OperationalExpectationInputs;
+    /** The child's ENROLLMENT AGREEMENT id — real, or the hypothetical one below for a lead. */
     childAgreementId: string;
+    /** A lead's stand-in agreement, so the hypothetical child is counted. Null when enrolled. */
+    hypotheticalAgreement?: OperationalExpectationInputs["agreements"][number] | null;
     programCategoryId: string | null;
     patternId: string;
     patternWeekdays: number[];
@@ -118,7 +122,15 @@ export type BuildRoomEngineFactsArgs = {
  * ranking is decided here (that is `placement.room_fit`).
  */
 export function buildRoomEngineFacts(args: BuildRoomEngineFactsArgs): RoomEngineFacts[] {
-    const { inputs, childAgreementId } = args;
+    const { childAgreementId } = args;
+    /*
+     * The child must be IN the agreement set, or the hypothetical below expands to nothing: a lead
+     * (no agreement yet) used to be keyed by its customer member id, which matched no agreement, so
+     * "after" occupancy equalled "before" and an over-full room never reported capacity_exceeded.
+     */
+    const inputs: OperationalExpectationInputs = args.hypotheticalAgreement
+        ? { ...args.inputs, agreements: [...args.inputs.agreements, args.hypotheticalAgreement] }
+        : args.inputs;
 
     const programAgeGroupId =
         args.programCategoryId != null ? inputs.ageGroupByProgramCategoryId?.[args.programCategoryId] ?? null : null;
@@ -203,8 +215,8 @@ type CandidateRoomConfig = {
     name: string | null;
     active: boolean;
     ageBand: RoomAgeBandMonths | null;
-    /** The room's configured Program (`metadata.program_category_id`) — the same one the card shows. */
-    programCategoryId: string | null;
+    /** The room's supported programs (Rooms editor `supported_program_keys`); null = not configured. */
+    supportedProgramCategoryIds: string[] | null;
 };
 
 /** Load candidate rooms with the config the fit calculation needs: age band + active. */
@@ -225,6 +237,13 @@ async function loadCandidateRoomConfigs(
     // that changing which group they belong to — offering either as a placement
     // target is how a playground becomes a roster owner. Legacy rooms are
     // unaffected: a unit with no stored role reads as `operational_group`.
+    const { data: programRows, error: programError } = await supabase
+        .from("location_program_categories")
+        .select("id, key")
+        .eq("org_id", orgId)
+        .eq("location_id", siteLocationId);
+    if (programError) throw new OperationalEnrollmentServiceError("db_error", programError.message);
+    const programIdByKey = new Map(((programRows ?? []) as Array<{ id: string; key: string }>).map((p) => [p.key, p.id]));
     let rooms;
     try {
         rooms = placeableRooms(
@@ -246,11 +265,12 @@ async function loadCandidateRoomConfigs(
             // Fail-open: a room is active unless an explicit non-active status says otherwise.
             const status = (r.statusKey ?? "").trim().toLowerCase();
             const active = status === "" || status === "active" || status === "open";
-            const programCategoryId =
-                typeof meta.program_category_id === "string" && meta.program_category_id.trim()
-                    ? meta.program_category_id.trim()
-                    : null;
-            return { id: r.id, name: r.name != null ? String(r.name).trim() || null : null, active, ageBand, programCategoryId };
+            // The keys the Rooms editor writes — not `metadata.program_category_id`, which nothing writes.
+            const keys = readRoomSupportedProgramKeys(meta);
+            const supportedProgramCategoryIds = keys.length
+                ? keys.map((k) => programIdByKey.get(k)).filter((id): id is string => Boolean(id))
+                : null;
+            return { id: r.id, name: r.name != null ? String(r.name).trim() || null : null, active, ageBand, supportedProgramCategoryIds };
         },
     );
 }
@@ -264,10 +284,8 @@ function numOrNull(v: unknown): number | null {
 export type GeneratePlacementOptionsInput = {
     orgId: string;
     siteLocationId: string;
-    /** In the Scheduling flow this is the customer_member_id the card sends. */
-    childAgreementId: string;
-    /** Explicit customer_member_id for DOB resolution (defaults to childAgreementId). */
-    customerMemberId?: string;
+    /** The child (customer member). The engine resolves the child's operational agreement itself. */
+    customerMemberId: string;
     programCategoryId: string | null;
     patternId: string;
     dateStart: string;
@@ -288,8 +306,9 @@ export type PlacementFitContext = {
 /**
  * Does this room run the child's program?
  *
- * 1. The room's configured Program (`metadata.program_category_id`) is the authority — the same
- *    Program the Assignments card shows for the room.
+ * 1. The room's supported Programs (Rooms editor `supported_program_keys`) are the authority: a room
+ *    supporting several programs fits each of them, and one that lists programs excluding the
+ *    child's does not.
  * 2. Only when the room has no Program, compare age groups — case-insensitively, since the program
  *    side is a category key and the room side a free field value ("toddler" vs "Toddler").
  * 3. Neither knowable → no verdict (fail open), never "different program".
@@ -299,14 +318,15 @@ export type PlacementFitContext = {
  */
 export function roomProgramFit(args: {
     childProgramCategoryId: string | null;
-    roomProgramCategoryId: string | null;
+    roomProgramCategoryIds: readonly string[] | null;
     childAgeGroup: string | null;
     roomAgeGroup: string | null;
 }): { programKnown: boolean; programMatch: boolean } {
     const child = args.childProgramCategoryId?.trim() || null;
     if (!child) return { programKnown: false, programMatch: false };
-    const roomProgram = args.roomProgramCategoryId?.trim() || null;
-    if (roomProgram) return { programKnown: true, programMatch: roomProgram === child };
+    if (args.roomProgramCategoryIds && args.roomProgramCategoryIds.length > 0) {
+        return { programKnown: true, programMatch: args.roomProgramCategoryIds.includes(child) };
+    }
     const a = args.childAgeGroup?.trim().toLowerCase() || null;
     const b = args.roomAgeGroup?.trim().toLowerCase() || null;
     if (a && b) return { programKnown: true, programMatch: a === b };
@@ -354,6 +374,24 @@ export async function generatePlacementOptions(
 
     const candidateRooms = await loadCandidateRoomConfigs(supabase, input.orgId, input.siteLocationId);
 
+    /*
+     * WHO THE CHILD IS. The card sends a customer member id; the engine keys placements and
+     * expectations by ENROLLMENT AGREEMENT. Treating the member id as an agreement id meant the
+     * child's current room was never "continuity" and a lead was never counted in the room it would
+     * join. Resolve the operational agreement at this site; a lead gets an explicit stand-in.
+     */
+    const agreement = inputs.agreements.find((a) => a.customer_member_id === input.customerMemberId) ?? null;
+    const hypotheticalAgreement = agreement
+        ? null
+        : {
+              id: `hypothetical-agreement:${input.customerMemberId}`,
+              customer_member_id: input.customerMemberId,
+              site_location_id: input.siteLocationId,
+              start_date: input.dateStart,
+              end_date: null,
+              status: "active",
+          };
+
     // Age groups for the CANDIDATE rooms + this child's program (a lead child has no
     // placement yet), merged over the placement-derived maps — so program compat resolves.
     const extraAgeGroups = await loadExpectationAgeGroups(supabase, input.orgId, {
@@ -370,7 +408,8 @@ export async function generatePlacementOptions(
 
     const facts = buildRoomEngineFacts({
         inputs: inputsWithAgeGroups,
-        childAgreementId: input.childAgreementId,
+        childAgreementId: agreement?.id ?? hypotheticalAgreement!.id,
+        hypotheticalAgreement,
         programCategoryId: input.programCategoryId,
         patternId: input.patternId,
         patternWeekdays,
@@ -384,7 +423,7 @@ export async function generatePlacementOptions(
 
     // Child age as of the PROPOSED effective (start) date — the correctness gate.
     // Source: persons.date_of_birth (preferred), else customer_members.dob.
-    const memberId = input.customerMemberId ?? input.childAgreementId;
+    const memberId = input.customerMemberId;
     const { data: cm } = await supabase
         .from("customer_members")
         .select("person_id, dob")
@@ -424,7 +463,7 @@ export async function generatePlacementOptions(
             ageBand: cfg?.ageBand ?? null,
             ...roomProgramFit({
                 childProgramCategoryId: input.programCategoryId,
-                roomProgramCategoryId: cfg?.programCategoryId ?? null,
+                roomProgramCategoryIds: cfg?.supportedProgramCategoryIds ?? null,
                 childAgeGroup: programKnown
                     ? inputsWithAgeGroups.ageGroupByProgramCategoryId?.[input.programCategoryId!] ?? null
                     : null,

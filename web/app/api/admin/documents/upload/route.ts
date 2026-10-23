@@ -38,6 +38,7 @@ import { proposeImportDisplayName, resolveDisplayNameWithCollision } from "@/lib
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKind } from "@/lib/documents/documentContentSignature";
+import { auditQuarantine, decideIngestion } from "@/lib/documents/screenedIngestion";
 import { CANONICAL_DOCUMENT_ENTITY_TYPE } from "@/lib/documents/documentEntityTypes";
 import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
 
@@ -229,6 +230,17 @@ export async function POST(request: NextRequest) {
         );
     }
     const storedMimeType = CANONICAL_DOCUMENT_MIME[contentKind];
+    // D1c-1: structural screening, BEFORE storage and before any parser (PDF text extraction, OCR) touches the bytes.
+    // Refused: nothing stored. Flagged: stored unavailable (`quarantined`), with no extraction and no Processing case,
+    // until an authorized release.
+    const screened = decideIngestion(buffer, contentKind);
+    if (!screened.store) {
+        return NextResponse.json(
+            { error: screened.message, code: "SCREENING_REFUSED", reason: screened.result.reason, format: sourceFormat },
+            { status: 415 }
+        );
+    }
+    const quarantined = screened.status === "quarantined";
     // Content hash of the bytes we are about to store.
     //
     // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every
@@ -292,8 +304,9 @@ export async function POST(request: NextRequest) {
             checksum_sha256: checksumSha256,
             bucket,
             storage_path: storagePath,
-            status: "uploaded",
+            status: screened.status,
             metadata: {
+                screening: screened.screening,
                 processing_intent: processingIntent,
                 ...processingIntentMetadata(processingIntent),
                 source_format: sourceFormat,
@@ -318,6 +331,23 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+
+    if (quarantined) {
+        await auditQuarantine({ orgId: ctx.orgId, actor: ctx.userId, documentId: docId, decision: screened, route: "admin/documents/upload" });
+        return NextResponse.json({
+            document,
+            raw: row,
+            processing_case_id: null,
+            classification_key: null,
+            extraction_candidate_count: null,
+            screening: {
+                verdict: "quarantine",
+                reason: screened.result.verdict === "quarantine" ? screened.result.reason : null,
+                findings: screened.result.verdict === "quarantine" ? screened.result.findings : [],
+                note: "Held for review: structural screening found content it will not serve. This is not an antivirus result.",
+            },
+        });
+    }
 
     if (isProfilePhoto) {
         try {

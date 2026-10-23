@@ -56,6 +56,7 @@ import {
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import {
     roleAcceptsInside,
+    roleAcceptsUses,
     roleUsesProgramFields,
     roomTypeHint,
     roomTypeOptionsFor,
@@ -66,6 +67,8 @@ import {
     roomTopologyPatch,
 } from "@/lib/locations/roomTopologyEdit";
 import { topologyRefusalCopy } from "@/lib/locations/topologyRefusalCopy";
+import SpaceUsesSection, { useSpaceUseLabels } from "@/components/adminV2/settings/locations/SpaceUsesSection";
+import { readSpaceUses } from "@/lib/location/spaceUse";
 import { topologyRefusalCodeOf } from "@/lib/locations/topologyRefusalError";
 
 export default function LocationRoomDetailPanel({
@@ -124,6 +127,10 @@ export default function LocationRoomDetailPanel({
     const [label, setLabel] = useState("");
     const [capacity, setCapacity] = useState("");
     const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
+    // `null` = never configured. Written back ONLY when the operator changes it, so an ordinary save
+    // of a legacy space never converts it to "configured with no uses".
+    const [spaceUses, setSpaceUses] = useState<string[] | null>(null);
+    const [spaceUsesTouched, setSpaceUsesTouched] = useState(false);
     const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
     const [roomType, setRoomType] = useState<CanonicalUnitRole>("operational_group");
@@ -131,7 +138,7 @@ export default function LocationRoomDetailPanel({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
-    const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
+    const [kindFilter, setKindFilter] = useState<"all" | CanonicalUnitRole>("all");
     const [ratioDraft, setRatioDraft] = useState<RatioDraftRow[]>([]);
     const [confirmingArchive, setConfirmingArchive] = useState(false);
     const [archiving, setArchiving] = useState(false);
@@ -182,6 +189,8 @@ export default function LocationRoomDetailPanel({
         );
         setCapacity(canonical != null ? String(canonical) : "");
         setSupportedKeys(readRoomSupportedProgramKeys(md));
+        setSpaceUses(readSpaceUses(md));
+        setSpaceUsesTouched(false);
         setSchedulePatternId(readRoomSchedulePatternId(md) ?? "");
         setActive(next.is_active !== false);
         // Committed topology, effective — a historical NULL hydrates as Classroom,
@@ -203,6 +212,8 @@ export default function LocationRoomDetailPanel({
         setEditing(false);
     }, [room]);
 
+    // The COMMITTED uses (what is saved), for the read-only facts — not the edit draft.
+    const committedUseLabels = useSpaceUseLabels(room ? readSpaceUses((room.metadata ?? {}) as Record<string, unknown>) : null);
     const programLabels = supportedKeys
         .map((key) => {
             const match = programOptions.find((program) => program.key === key);
@@ -341,21 +352,21 @@ export default function LocationRoomDetailPanel({
      */
     /*
      * KIND FILTER. Twelve mixed rows is not a site an operator can read at a
-     * glance, and the two kinds answer different questions — "where do children
-     * go" and "what places exist". Presentation only: it narrows the rail and
-     * creates no second classification of anything.
+     * glance, and the three kinds answer different questions — "where do children
+     * belong", "where do groups visit" and "what places exist". One chip per
+     * canonical role, so a shared space is never counted as physical.
+     * Presentation only: it narrows the rail and creates no second
+     * classification of anything.
      */
     const kindOf = (entry: LocationHierarchyRow): CanonicalUnitRole =>
         committedRoomTopology(entry, siteId).roomType;
     const kindCounts = {
         all: rooms.length,
         operational: rooms.filter((r) => kindOf(r) === "operational_group").length,
-        physical: rooms.filter((r) => kindOf(r) !== "operational_group").length,
+        shared: rooms.filter((r) => kindOf(r) === "shared_space").length,
+        physical: rooms.filter((r) => kindOf(r) === "physical_space").length,
     };
-    const visibleRooms =
-        kindFilter === "all" ? rooms
-        : kindFilter === "operational" ? rooms.filter((r) => kindOf(r) === "operational_group")
-        : rooms.filter((r) => kindOf(r) !== "operational_group");
+    const visibleRooms = kindFilter === "all" ? rooms : rooms.filter((r) => kindOf(r) === kindFilter);
 
     const operationalSpacesIn = (entry: LocationHierarchyRow): string[] =>
         rooms
@@ -497,6 +508,19 @@ export default function LocationRoomDetailPanel({
                     {/* Classroom-only. A physical space serves no program and keeps no
                         default pattern, so offering either would author data that
                         nothing reads. */}
+                    {roleAcceptsUses(roomType) ?
+                        <SpaceUsesSection
+                            role={roomType}
+                            value={spaceUses}
+                            onChange={(next) => {
+                                setSpaceUses(next);
+                                setSpaceUsesTouched(true);
+                            }}
+                            disabled={!canMutate}
+                            testId="locations-room-editor-uses"
+                        />
+                    :   null}
+
                     {roleUsesProgramFields(roomType) ?
                     <>
                     <ConfigEditorSection
@@ -647,6 +671,7 @@ export default function LocationRoomDetailPanel({
                                                 existing: (room.metadata ?? {}) as Record<string, unknown>,
                                                 supportedProgramKeys: supportedKeys,
                                                 schedulePatternId: schedulePatternId || null,
+                                                spaceUses: spaceUsesTouched && roleAcceptsUses(roomType) ? spaceUses ?? [] : undefined,
                                             });
                                             await onSave(room.id, {
                                                 label: label.trim() || null,
@@ -808,6 +833,18 @@ export default function LocationRoomDetailPanel({
                         // Programs and schedule are operational facts. A physical space has
                         // neither, and an em dash for a property that cannot apply reads
                         // as missing data rather than as an inapplicable field.
+                        ...(roleAcceptsUses(committedRoomTopology(room, siteId).roomType) ?
+                            [
+                                {
+                                    key: "uses",
+                                    label: "Uses",
+                                    value:
+                                        committedUseLabels == null ? "Not configured"
+                                        : committedUseLabels.length === 0 ? "None"
+                                        : committedUseLabels.join(", "),
+                                },
+                            ]
+                        :   []),
                         ...(roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
                             [
                                 {
@@ -876,15 +913,16 @@ export default function LocationRoomDetailPanel({
             listFilter={
                 <div className="flex flex-wrap gap-1" data-testid="locations-room-kind-filter" role="group" aria-label="Filter spaces by kind">
                     {([
-                        ["all", "All", kindCounts.all],
-                        ["operational", "Operational", kindCounts.operational],
-                        ["physical", "Physical", kindCounts.physical],
-                    ] as const).map(([key, label, count]) => (
+                        ["all", "All", kindCounts.all, "all"],
+                        ["operational_group", "Operational", kindCounts.operational, "operational"],
+                        ["shared_space", "Shared", kindCounts.shared, "shared"],
+                        ["physical_space", "Physical", kindCounts.physical, "physical"],
+                    ] as const).map(([key, label, count, testKey]) => (
                         <button
                             key={key}
                             type="button"
                             onClick={() => setKindFilter(key)}
-                            data-testid={`locations-room-kind-filter-${key}`}
+                            data-testid={`locations-room-kind-filter-${testKey}`}
                             aria-pressed={kindFilter === key}
                             className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
                                 kindFilter === key ?

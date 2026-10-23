@@ -28,6 +28,8 @@ function siteRoom(over: Partial<SiteOperationalRoom> & { roomId: string }): Site
     return {
         roomName: over.roomId,
         programCategoryId: null,
+        supportedProgramCategoryIds: null,
+        spaceUses: null,
         active: true,
         unitRole: "operational_group",
         containingSpaceLocationId: null,
@@ -102,26 +104,31 @@ describe("1-2. a tenant whose rooms all predate Topology V1 loses nothing", () =
 // 5-10 — each consumer path independently reaches the filter.
 // ---------------------------------------------------------------------------
 describe("5-10. every classroom-question path is converged", () => {
+    /*
+     * V7-02a: CHILD schedules may use classrooms AND shared spaces configured for the use, so the
+     * three child paths narrow through `schedulableForChildren` (lib/location/spaceUse.ts); STAFF rooms
+     * stay classrooms only, through `assignableClassrooms`. One adapter per question, still CALLED.
+     */
     const PICKER_PATHS = [
-        ["scheduling route (config view)", "app/api/admin/scheduling/route.ts"],
-        ["opportunity first paint", "lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint.ts"],
-        ["child scheduling card", "lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildScheduling.ts"],
-        ["staff scheduling card", "lib/adminV2/runtime/focusPanel/durableSubject/composeDurableStaffScheduling.ts"],
+        ["scheduling route (config view)", "app/api/admin/scheduling/route.ts", "schedulableForChildren"],
+        ["opportunity first paint", "lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint.ts", "schedulableForChildren"],
+        ["child scheduling card", "lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildScheduling.ts", "schedulableForChildren"],
+        ["staff scheduling card", "lib/adminV2/runtime/focusPanel/durableSubject/composeDurableStaffScheduling.ts", "assignableClassrooms"],
     ] as const;
 
-    for (const [name, rel] of PICKER_PATHS) {
+    for (const [name, rel, adapter] of PICKER_PATHS) {
         it(`${name} narrows through the shared adapter`, () => {
             const src = read(rel);
             // The symbol must be CALLED, not merely imported. Asserting the bare
             // name passes on a file that still imports the adapter and no longer
             // uses it — which is precisely how a converged call site quietly
             // un-converges.
-            const importLine = /import\s*\{[^}]*\}\s*from\s*["'][^"']*loadSiteOperationalRooms["'];?/g;
+            const importLine = /import\s*\{[^}]*\}\s*from\s*["'][^"']*(loadSiteOperationalRooms|spaceUse)["'];?/g;
             const body = src.replace(importLine, "").replace(
                 /const\s*\{[^}]*\}\s*=\s*await import\([^)]*\);/g,
                 "",
             );
-            expect(body).toMatch(/assignableClassrooms\s*[(),]/);
+            expect(body).toMatch(new RegExp(`${adapter}\\s*[(),]`));
             // 18 — and does not spell the role comparison itself.
             expect(src).not.toMatch(/unitRole\s*===/);
         });

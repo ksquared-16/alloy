@@ -122,8 +122,17 @@ describe.skipIf(!env)("staff set_primary against the room invariant, live", () =
         expect(error, error?.message).toBeNull();
         units.push((unit as { id: string }).id);
         const before = await rows(p);
-        await expect(setPrimary(p, "2026-11-16", (unit as { id: string }).id)).rejects.toThrow(/staff assignment room must be an operational group/);
+        // The service refuses first, through the shared space-use rule (V7-02a)…
+        await expect(setPrimary(p, "2026-11-16", (unit as { id: string }).id)).rejects.toThrow(
+            /A staff assignment's room must be a classroom \(operational group\)/,
+        );
         expect(await rows(p)).toEqual(before);
+        // …and the DATABASE invariant still holds for any writer that bypasses the service.
+        const { error: direct } = await db
+            .from("schedule_assignments")
+            .update({ room_location_id: (unit as { id: string }).id })
+            .eq("id", first.primary.id);
+        expect(direct?.message ?? "").toMatch(/staff assignment room must be an operational group/);
         expect((await rows(p)).find((x) => x.id === first.primary.id)).toMatchObject({ end_date: null });
     });
 });
