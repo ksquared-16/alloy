@@ -1,0 +1,129 @@
+{
+  "run": "1d00d124",
+  "at": "2026-10-23T12:08:31.979Z",
+  "scenarios": {
+    "fixtures": {
+      "riverChargeMixed": "e4e39819-0252-4523-9b2f-2eadf8d30ff1",
+      "householdChargeMixed": "c6d77c58-146e-43b1-ae24-0da0902b021b",
+      "lakeCharge": "8698e7de-8357-44c9-b6a8-4feccc4fe497",
+      "otherOrgCharge": "d1d756d0-78a1-44da-a0cf-db00bddcb2c9",
+      "lakeChild": "00000000-0000-4000-8000-30000000003b",
+      "mixedChild": "00000000-0000-4000-8000-00005000006b",
+      "certSitePayment": "b07f2b1e-9f50-4cc0-92a0-1aaf82e42feb",
+      "householdPayment": "172797e6-1642-4e4a-8f57-8f60d0c98876",
+      "lakeAttempt": "8f9f0e79-7ae2-484c-9868-49f4fdd4be16",
+      "householdChargeAmount": "15000",
+      "mixedHouseholdName": "Smith Household"
+    },
+    "actors": {
+      "all": {
+        "siteScope": "all",
+        "sites": null,
+        "finRead": true,
+        "portal": true
+      },
+      "river": {
+        "siteScope": "restricted",
+        "sites": [
+          "00000000-0000-4000-8000-000000000010"
+        ],
+        "finRead": true,
+        "portal": true
+      },
+      "lake": {
+        "siteScope": "restricted",
+        "sites": [
+          "00000000-0000-4000-8000-000000000011"
+        ],
+        "finRead": true,
+        "portal": true
+      },
+      "nofin": {
+        "siteScope": "all",
+        "sites": null,
+        "finRead": false,
+        "portal": true
+      }
+    },
+    "charge_detail": {
+      "all:riverChargeMixed": 200,
+      "all:householdChargeMixed": 200,
+      "all:lakeCharge": 200,
+      "river:riverChargeMixed": 200,
+      "river:householdChargeMixed": 404,
+      "river:lakeCharge": 404,
+      "lake:lakeCharge": 200,
+      "lake:riverChargeMixed": 404
+    },
+    "cross_org_and_no_fin": {
+      "cross": 404,
+      "nofin_charge": 403,
+      "nofin_card": 403
+    },
+    "card": {
+      "all:mixed": 200,
+      "lake:lake": 200,
+      "lake:lake_by_child": 200,
+      "lake:mixed": 404,
+      "river:mixed": 404,
+      "river:mixed_by_child": 404,
+      "river:lake": 404,
+      "lake:forged_member": 404
+    },
+    "producer": {
+      "all_mixed": {
+        "state": "ready",
+        "hasData": true
+      },
+      "river_mixed": {
+        "state": "forbidden",
+        "hasData": false
+      },
+      "lake_lake": {
+        "state": "ready",
+        "hasData": true
+      },
+      "lake_mixed": {
+        "state": "forbidden",
+        "hasData": false
+      }
+    },
+    "household_and_item_routes": {
+      "payment-methods": {
+        "all": 200,
+        "river": 404,
+        "lake": 404
+      },
+      "responsibility-positions": {
+        "all": 200,
+        "river": 404,
+        "lake": 404
+      },
+      "family-discount-position": {
+        "all": 200,
+        "river": 404,
+        "lake": 404
+      },
+      "eligible-target-charges:certSitePayment": {
+        "all": 200,
+        "river": 404,
+        "lake": 404
+      },
+      "eligible-target-charges:householdPayment": {
+        "all": 200,
+        "river": 404,
+        "lake": 404
+      },
+      "collection-state:lakeAttempt": {
+        "all": 200,
+        "river": 404,
+        "lake": 200
+      }
+    },
+    "list_detail_parity": {
+      "river_position_rows": 2,
+      "all_site_riverside": true
+    }
+  },
+  "persona_rows_remaining": 0
+}

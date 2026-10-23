@@ -164,8 +164,9 @@ describe("the concurrency is real, not merely rearranged", () => {
     });
 
     it("the repaired branch really is one awaited chain inside the settled region", () => {
-        // gate → build, as a single producer, so allSettled owns all three concurrently.
-        expect((BRANCH.match(/await /g) ?? []).length).toBe(2);
+        // gate → site scope (BP V2 D4) → build, as a single producer, so allSettled owns all three
+        // concurrently. Scope runs after the gate on purpose: a denied caller causes no financial read.
+        expect((BRANCH.match(/await /g) ?? []).length).toBe(3);
     });
 });
 

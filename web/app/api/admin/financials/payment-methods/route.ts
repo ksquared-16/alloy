@@ -4,6 +4,7 @@ import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/a
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { readAccountMethods } from "@/lib/financials/payments/paymentMethodService";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 /**
  * GET /api/admin/financials/payment-methods?customer_id=…
@@ -40,6 +41,9 @@ export async function GET(request: Request) {
     if (!customerId) {
         return NextResponse.json({ error: "An account is required." }, { status: 400 });
     }
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(supabase, ctx.orgId, { household: { customerId } });
+    if (outOfScope) return outOfScope;
 
     try {
         const methods = await readAccountMethods(supabase, { orgId: ctx.orgId, customerId });

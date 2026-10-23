@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { readAssignmentDiscountPosition } from "@/lib/financials/reductions/readAssignmentDiscountPosition";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
 
     const customerId = (request.nextUrl.searchParams.get("customer_id") ?? "").trim();
     if (!customerId) return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(supabase, ctx.orgId, { household: { customerId } });
+    if (outOfScope) return outOfScope;
 
     try {
         /*

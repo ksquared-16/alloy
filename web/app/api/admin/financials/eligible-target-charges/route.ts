@@ -21,6 +21,7 @@ import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { resolveEligibleTargetCharges } from "@/lib/financials/eligibleTargetCharges";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { refuseOutOfScopeFinancialRead } from "@/lib/financials/workspace/financialReadScopeGuard";
 
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
     if (!paymentId) {
         return NextResponse.json({ error: "payment_id is required" }, { status: 400 });
     }
+    // BP V2 D4 — site scope is part of reading this household's financial records.
+    const outOfScope = await refuseOutOfScopeFinancialRead(createAdminClient(), ctx.orgId, { item: "payments", id: paymentId });
+    if (outOfScope) return outOfScope;
     // The charge the money is being moved OFF, so the panel never offers it as a destination.
     const exclude = searchParams.getAll("exclude_charge_id").map((v) => v.trim()).filter(Boolean);
 
