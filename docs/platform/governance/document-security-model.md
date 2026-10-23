@@ -7,7 +7,7 @@ supersedes: []
 
 # Document security model
 
-**Status:** canonical owner for document access, storage, ingestion and identity security (Documents V1, D1a, D1b, D1c-1 and D2).
+**Status:** canonical owner for document access, storage, ingestion, identity and type-policy security (Documents V1, D1a–D3).
 **Last reviewed:** 2026-10-23, at staging `267d9400`.
 **Higher authority:** the code and migrations named below. Where this prose disagrees with them, they win.
 
@@ -149,8 +149,9 @@ Migration `supabase/migrations/20261208090000_documents_d2_canonical_foundation.
   - `documents.sensitivity` is one of standard, personal_identity, medical, custody_safeguarding or restricted.
   - It may only be raised (`POST /api/admin/documents/[id]/sensitivity`, which needs the actor's own clearance for the class).
   - A document carries its declared class **and** the D1b inference.
-  - Clearances: medical → `health.view`; custody_safeguarding → safeguarding view; personal_identity and restricted →
-    the `owner`/`admin` role.
+  - Clearances: medical → `health.view`; custody_safeguarding → safeguarding view; personal_identity →
+    `documents.identity.read`; restricted → `documents.restricted.read`. Each key is granted to every organization's
+    `admin` role only (D3, `20261209090000`), and the `owner` role is cleared without a key.
   - An unknown class is restricted.
 - **Lifecycle statuses** (`deleted`, `quarantined`, `restricted`) are never set or left through the status PATCH. Each has its own audited path.
 - **Audit:** `document_version_added`, `document_subject_changed` and `document_sensitivity_raised` are recorded before the change.
@@ -159,10 +160,28 @@ Migration `supabase/migrations/20261208090000_documents_d2_canonical_foundation.
   - Profile photos are authorized by the caller's own scoped read.
   - Retention policy values per class, and the governed purge, are not yet defined (D3).
 
-## 7. Certification
+## 7. Document categories and types (D3)
+
+Migration `supabase/migrations/20261209090100_documents_d3_studio_configuration.sql`. Record:
+`certification/documents-v1/D3-DOCUMENT-STUDIO.md`.
+
+- **Categories** are organization vocabulary, live on save. The key never changes; parents stay in the organization and
+  never form a cycle. A category in use is archived; only an unused one is deleted.
+- **Types** are a stable identity (`document_types`) with immutable versions (`document_type_versions`): draft →
+  validated → published, published by compare-and-swap through `document_type_publish`. `documents.doc_type` stores the
+  type key, so every existing value keeps its meaning.
+- **The one enforced policy:** a published type's default sensitivity applies to NEW documents of that type, and to a
+  document re-typed onto it, raise-only. A revision may not lower it, the four medical type keys never publish below
+  `medical`, and no existing document is reclassified by a type change. Review, replacement, formats, subjects and validity are
+  declared intent for D5–D7 and are labelled as such.
+- **Authority:** writes need `processing.documents.manage`; reads need `documents.read`. Every change is audited before
+  it happens (`document_category_changed`, `document_type_changed`).
+
+## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
 - **Q1:** `certification/documents-v1/Q1-HOSTED-CERTIFICATION.md`.
 - **D1b:** `certification/documents-v1/D1B-SECURITY-HARDENING.md`.
 - **D1b / D1c-1 final:** `certification/documents-v1/D1B-D1C1-SECURITY-CERTIFICATION.md`.
 - **D2:** `certification/documents-v1/D2-CANONICAL-FOUNDATION.md`; database invariants `certification/invariants/documents-d2-canonical-foundation.sql`.
+- **D3:** `certification/documents-v1/D3-DOCUMENT-STUDIO.md`; database invariants `certification/invariants/documents-d3-studio-configuration.sql`.

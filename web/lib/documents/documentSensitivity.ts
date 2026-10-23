@@ -21,11 +21,12 @@
  * medical | custody_safeguarding | restricted). A document carries the UNION of its declared class and the
  * inferred ones above, so a declaration can only add a restriction, never remove one:
  *
- *   personal_identity → an `owner` or `admin` role
- *   restricted        → an `owner` or `admin` role
+ *   personal_identity → `documents.identity.read`, or the `owner` role
+ *   restricted        → `documents.restricted.read`, or the `owner` role
  *
- * Both are role clearances, the safeguarding model, and not new permission keys: minting catalog keys is a Director
- * decision (W-11) and is recorded as a D3 prerequisite. No document carried either class when D2 shipped.
+ * D3 minted both keys (migration 20261209090000, Director authorization 2026-10-23) and granted them to every
+ * organization's `admin` role only, replacing D2's interim owner/admin role clearance. The `owner` role holds no
+ * seeded grants and keeps the clearance it always had, so no one who was cleared loses it and no one else gains it.
  *
  * An unknown declared value counts as `restricted`. Before the D2 migration has reached a database the column
  * does not exist (42703); then no document can carry a declared class beyond the inferred ones, and only the
@@ -48,12 +49,15 @@ export const DECLARED_DOCUMENT_SENSITIVITIES = Object.freeze([
 ] as const);
 export type DeclaredDocumentSensitivity = (typeof DECLARED_DOCUMENT_SENSITIVITIES)[number];
 
-/** Roles cleared for `personal_identity` and `restricted` documents. */
-export const DOCUMENT_ELEVATED_CLEARANCE_ROLES: readonly string[] = Object.freeze(["owner", "admin"]);
+export const DOCUMENT_IDENTITY_READ_PERMISSION = "documents.identity.read" as const;
+export const DOCUMENT_RESTRICTED_READ_PERMISSION = "documents.restricted.read" as const;
 
-function holdsElevatedClearance(roleKeys: readonly string[] | null | undefined): boolean {
-    const held = new Set((roleKeys ?? []).map((r) => String(r).trim()));
-    return DOCUMENT_ELEVATED_CLEARANCE_ROLES.some((r) => held.has(r));
+/** The owner role holds no seeded grants; it keeps the elevated clearance it had before the keys existed. */
+const OWNER_ROLE = "owner";
+
+function holdsClearance(actor: SensitivityActor, permission: string): boolean {
+    if ((actor.permissionKeys ?? []).includes(permission)) return true;
+    return (actor.roleKeys ?? []).some((r) => String(r).trim() === OWNER_ROLE);
 }
 
 /**
@@ -89,7 +93,8 @@ export type SensitivityActor = { roleKeys?: readonly string[] | null; permission
 export function actorMayReadSensitivity(actor: SensitivityActor, classes: ReadonlySet<DocumentSensitivityClass>): boolean {
     if (classes.has("medical") && !(actor.permissionKeys ?? []).includes(HEALTH_VIEW_PERMISSION)) return false;
     if (classes.has("safeguarding") && !canViewSafeguarding(actor.roleKeys ?? [])) return false;
-    if ((classes.has("personal_identity") || classes.has("restricted")) && !holdsElevatedClearance(actor.roleKeys)) return false;
+    if (classes.has("personal_identity") && !holdsClearance(actor, DOCUMENT_IDENTITY_READ_PERMISSION)) return false;
+    if (classes.has("restricted") && !holdsClearance(actor, DOCUMENT_RESTRICTED_READ_PERMISSION)) return false;
     return true;
 }
 

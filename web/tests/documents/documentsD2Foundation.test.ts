@@ -58,7 +58,8 @@ const V_OTHER = "e2000000-0000-4000-8000-000000000002";
 const BUCKET = "org_documents";
 
 type Persona = { orgId: string; role: "admin" | "ops"; roleKeys: string[]; permissionKeys: string[]; depts?: string[] };
-const ADMIN_KEYS = ["documents.read", "documents.write", "processing.operate", "health.view"];
+// D3 (20261209090000): every organization's admin role holds the two sensitive-read keys by grant.
+const ADMIN_KEYS = ["documents.read", "documents.write", "processing.operate", "health.view", "documents.identity.read", "documents.restricted.read"];
 const P = {
     admin: { orgId: ORG, role: "admin", roleKeys: ["admin"], permissionKeys: ADMIN_KEYS },
     ops: { orgId: ORG, role: "ops", roleKeys: ["ops"], permissionKeys: ["portal.access", "documents.read", "documents.write"] },
@@ -182,12 +183,23 @@ describe("declared sensitivity (D2.4)", () => {
         expect(classForDeclaredSensitivity("top_secret")).toBe("restricted");
     });
 
-    it("personal_identity and restricted clear only owner/admin; every class needs its own clearance", () => {
+    it("personal_identity and restricted are cleared by their key or the owner role; every class needs its own clearance", () => {
         const ops = { roleKeys: ["ops"], permissionKeys: ["documents.read", "health.view"] };
-        const admin = { roleKeys: ["admin"], permissionKeys: ["documents.read"] };
+        const admin = { roleKeys: ["admin"], permissionKeys: ["documents.read", "documents.identity.read", "documents.restricted.read"] };
+        const adminWithoutKeys = { roleKeys: ["admin"], permissionKeys: ["documents.read"] };
+        const owner = { roleKeys: ["owner"], permissionKeys: [] };
+        const custom = { roleKeys: ["qa_doc_reader"], permissionKeys: ["documents.read", "documents.identity.read"] };
         expect(actorMayReadSensitivity(ops, new Set(["personal_identity"]))).toBe(false);
         expect(actorMayReadSensitivity(ops, new Set(["restricted"]))).toBe(false);
         expect(actorMayReadSensitivity(admin, new Set(["restricted"]))).toBe(true);
+        expect(actorMayReadSensitivity(admin, new Set(["personal_identity"]))).toBe(true);
+        // D3: the role alone no longer clears; an organization that removes the key from its admin role means it.
+        expect(actorMayReadSensitivity(adminWithoutKeys, new Set(["restricted"]))).toBe(false);
+        // The owner role holds no seeded grants and keeps the clearance it always had.
+        expect(actorMayReadSensitivity(owner, new Set(["restricted", "personal_identity"]))).toBe(true);
+        // One key never clears the other class.
+        expect(actorMayReadSensitivity(custom, new Set(["personal_identity"]))).toBe(true);
+        expect(actorMayReadSensitivity(custom, new Set(["restricted"]))).toBe(false);
         // A union: clearance for one class never covers another.
         expect(actorMayReadSensitivity(admin, new Set(["restricted", "medical"]))).toBe(false);
     });

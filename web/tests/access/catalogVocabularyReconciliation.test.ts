@@ -122,6 +122,15 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260915200000 — defining the organization's reusable labels, types and relationship vocabulary. Its own key because no existing Configuration authority truthfully meant it: fields.manage, option_sets.manage, layouts.manage and sections.manage each have established narrower meanings, and the Director declined to stretch one. Status definitions are deliberately NOT under it — editing one can rebind a process stage, so they take business_process.configure",
     "communications.bulk.send":
         "20260915180000 — organization-wide, announcement and campaign sends, separated from communications.send because the blast radius is materially different and no product statement ever said one implied the other",
+    /*
+     * Documents D3 (Director authorization, 2026-10-23). D2 cleared these two classes by role and recorded the keys
+     * as a Director decision (W-11); the D3 authorization makes it. Admin only, the D-H6 precedent: no administrator
+     * loses the clearance the role gave, and no other role gains it. Enforced in documentSensitivity.ts.
+     */
+    "documents.identity.read":
+        "20261209090000 — Director D3 authorization: reading documents declared personal_identity, beyond documents.read",
+    "documents.restricted.read":
+        "20261209090000 — Director D3 authorization: reading documents declared restricted, beyond documents.read",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
