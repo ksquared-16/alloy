@@ -36,6 +36,12 @@ export const LEGACY_OPPORTUNITY_DRAWER_LAYOUT_WRITE_PATHS = [
         path: "PATCH /api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements",
         description: "field_placements_v1 required/editable overrides",
     },
+    {
+        id: "enrollment_publication_provisioning",
+        path: "POST /api/admin/business-process/configuration/publish",
+        description:
+            "Insert-only: creates the workflow_v1 override when an Enrollment staged process publishes and the org has none (never updates)",
+    },
 ] as const;
 
 /**
