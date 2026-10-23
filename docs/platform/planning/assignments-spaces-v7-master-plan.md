@@ -21,19 +21,19 @@ Primary/Secondary; pricing never decides homeroom).
 | V7-01 | Canonical model + impact census | **COMPLETE** (this document) | enrollment-placement | — | — |
 | V7-02 | Space configuration and purpose/use | **V7-02a PROMOTED & DEPLOYED-VERIFIED** (#1583, merge `1c7e4ccd`, 2026-10-23); V7-02b (S3) not authorized | enrollment-placement (+configuration) | V7-01 | §10–11 |
 | V7-03 | Multiple assignments + derived homerooms | **PROMOTED & DEPLOYED-VERIFIED** (#1587, merge `502d5975`, 2026-10-23) | enrollment-placement | V7-02 | §12–13 |
-| V7-04 | Assignment Card (was "Add Schedule experience") | **S3 IMPLEMENTED** — A4–A8 repaired, child Make Primary retired (P1); candidate awaiting Director merge review | enrollment-placement (UI) | — | audit §1 A1–A8; §16 |
-| V7-05 | Enrollment & commercial separation | DECISION_REQUIRED (C1–C3) | commercial + financials | V7-03 | live pricing suites |
-| V7-06 | Expected attendance | **AUDITED** — supersede gap E2 → slice S2 (defect); per-session expectations → **P2** then S6 | operations-temporal | P2 | audit §1 E1–E5 |
+| V7-04 | Assignment Card (was "Add Schedule experience") | **S3 COMPLETE** — promoted as #1590 (merge `f16bee5e`, 2026-10-23), deployed-verified; A4–A8 repaired, child Make Primary retired (P1) | enrollment-placement (UI) | — | §16–17 |
+| V7-05 | Enrollment & commercial separation | → **Package 3** (verify C1/C3; C2 only on an approved gap) | commercial + financials | V7-03 | §18 P-3 |
+| V7-06 | Expected attendance | **P-1 1A implemented** (E2 + own-week recurrence); per-session S6 = decision packet D1–D4 (§19) | operations-temporal | P2 for S6 | §18 P-1 |
 | V7-07 | Actual attendance and room movements | **S1 COMPLETE** — promoted as #1589 (merge `7e7019c4`, 2026-10-23), deployed-verified | attendance | — | §14–15 |
-| V7-08 | Capacity, ratios, staffing | **AUDITED** — roster actual ratio K1 → slice S4; P3–P5 policy; no new engine | staffing/capacity | P3–P5 | audit §1 K1–K7 |
-| V7-09 | Roster and Focus Panel | **AUDITED** — homerooms complete; one-room lines R3/R4 + three tiles → slice S5 | surfaces | — | audit §1 R1–R7 |
-| V7-10 | Secondary/staff change-event parity | DECISION_REQUIRED (Director ruling) | operations-temporal + integrations | — | contract tests |
-| V7-11 | Obsolete code and architecture retirement | **AUDITED** — O1 retire now, O3 retired with S1, O5 retired with S3/P1, O4 after census, O6 keep | each slice's lane | each replacement | audit §1 O1–O7 |
-| V7-12 | Full cross-domain certification | NOT_STARTED | all | V7-02…V7-11 | mounted + live |
+| V7-08 | Capacity, ratios, staffing | **P-1 1B implemented** (K1); P3–P5 policy; no new engine | staffing/capacity | P3–P5 | §18 P-1 |
+| V7-09 | Roster and Focus Panel | → **Package 2** (R4 defect; R3 convergence; R6 three tiles; R7 cert gap) | surfaces | — | §18 P-2 |
+| V7-10 | Secondary/staff change-event parity | → **Package 3** (E1 ruling; secondary/staff writers emit nothing today) | operations-temporal + integrations | E1 | §18 P-3 |
+| V7-11 | Obsolete code and architecture retirement | O3 retired (S1), O5 retired (S3/P1); O1, O4 → **Package 2**; O2 with financials sign-off; O6 keep | each package's owner | each replacement | §18 P-2 |
+| V7-12 | Full cross-domain certification | NOT_STARTED — one plan after the packages | all | Packages 1–3 | §18 |
 
-Recommended order (after the 2026-10-23 convergence audit, `assignments-v7-convergence-audit.md`):
-**S1 → S2 → S3 → S4 → S5**, with Director policies **P1–P5** gating S6 and the capacity/ratio questions,
-then V7-05 and V7-10, then V7-12.
+Order (Director, 2026-10-23, after S1 and S3 closed): **Package 1** (schedule & operational truth) →
+**Package 2** (operator experience & retirement) → **Package 3** (commercial & events) → **V7-12**
+certification — §18. The standalone slices S2, S4, S5, S6, V7-02b are folded into the packages.
 
 ## 2. Current → target authority map
 
@@ -356,3 +356,185 @@ cases that write a week need `set_assignment_weekday_intervals`, which the share
 
 **Next.** S2 — date-true expectation rows (audit E2); S4–S5 per §13.
 
+
+## 17. S3 promotion (2026-10-23)
+
+PR #1590 (candidate `cbc_4c29ac8c2c04`, `27a7c5be`, acceptance `qaa_c88e9b81c5f32d`) merged as `f16bee5e`
+over staging `7e7019c4`; 25 paths, no migrations; required checks green; deployed build-info `f16bee5e`.
+
+**Deployed verification (read-only, no writes).** At the merge commit `bulk_primary_change` has no
+references, the pattern resolver has no first-pattern fallback (only the guarded "the type's only
+pattern" carrier), and the route reaches `changeEnrolledPrimarySchedule`. On deployed staging six child
+projections across the sites answer 200 with the interval-derived week (two rows carry per-day hours),
+and a child's Assignment card renders with no Make Primary. Staging had no child with a current
+secondary, so the secondary-detail check rests on the isolated candidate evidence.
+
+**Evidence classes carried to V7-12.** Isolated exact-candidate: A4 round-trips (end date, per-day
+hours, custom weekdays), A5 correction vs supersession and stale refusal, A8 UI. Live certification DB:
+5/5 (week-writing cases unmeasured there — the shared stack lacked `set_assignment_weekday_intervals`).
+Unit-only: bulk outcome reporting (A7). Preview, environment `certenv-d066e085e1` and candidate retired.
+
+## 18. Remaining program — three packages, then certification (Director, 2026-10-23)
+
+The standalone slices S2, S4, S5, S6 and V7-02b, V7-05, V7-10, V7-11 are replaced by three coordinated
+packages. Each package opens with a short current-code delta review (not new discovery), keeps one
+mutation owner per PR, and closes on one package-level acceptance plan. No new runtime, engine, reader
+or calculation; no redesign of the Assignment Card or Roster.
+
+**Delta review on staging `7e7019c4` (2026-10-23).** Still present: E2 (expectation loader reads only
+`planned/active/ending`, `loadOperationalExpectationInputs.ts:23`, core `:126`), E3 (`is_primary = true`
+filter, `:98`), K1 (`buildCombinedRoster.ts:604` counts the placement-room cell's children wherever they
+are), R3 (`projectCompactScheduleForIdentity.ts:165` `find(isPrimary) ?? [0]`), R4
+(`buildSchedulingProjection.ts:576` `?? placements[0]`), R6 (`AssignmentRosterPanel.tsx:756` vertical
+stack), O1 (`deriveSchedulingWork` — test caller only), O2 (`resolveDraftChargeForAgreementPeriod` — test
+caller only), O4 (behaviour fields only in `assignmentTypeBehavior.ts` + `AssignmentTypesStudioPanel.tsx`).
+New fact for Package 3: `createOperationalAssignment`, `replace_secondary_schedule_assignment`,
+`assignment.set_time` and `assignment.archive` emit no change event; only the primary change path
+(`applyCombinedParticipationChange` / `scheduleAssignmentService`) and `setPrimaryOperationalAssignment` do.
+
+### Package tracker
+
+| Package | Scope | State | Mutation owners | Depends on |
+|---|---|---|---|---|
+| **P-1 Schedule & operational truth** | S2, S4, S6 determination | **IMPLEMENTED** — 1A + 1B candidates for Director promotion review; S6 = decision packet (D1–D4), §19 | operations-temporal (expectations); operations/roster (ratio) | S3 deployed |
+| **P-2 Operator experience & retirement** | S5, V7-02b, V7-11 (O1, O4; O2 with financials sign-off) | NOT_STARTED | surfaces; enrollment-placement (configuration) | P-1 for the expected-room wording only |
+| **P-3 Commercial & event compatibility** | V7-05, V7-10 | NOT_STARTED | commercial + financials; operations-temporal + integrations | P-1 (session model) for C1 |
+| **V7-12 Certification** | cross-domain | NOT_STARTED | all | P-1…P-3 |
+
+### P-1 — Schedule & operational truth
+
+| # | Item | Class | Owner / files | Change | Eliminated |
+|---|---|---|---|---|---|
+| 1 | E2 future-dated supersession: expectations and the card lose the still-current primary until the successor starts | **DEFECT (runtime-proven, S3 QA re-observed on the card)** | operations-temporal: `loadOperationalExpectationInputs.ts`, `scheduleExpectationCore.ts`; scheduling projection `bucketFor` (read-only twin) | choose the row whose dated window covers each date (the homeroom `inEffect` rule, already used by `deriveHomerooms`) instead of filtering by live status | no new reader; no change to supersession writes |
+| 2 | K1 actual ratio by whereabouts | **DEFECT (code-proven)** | operations/roster: `buildCombinedRoster.ts` | count `actualChildrenPresent` per the fold's room (`resolveCurrentWhereabouts`, already computed per child) | no new presence model |
+| 3 | Per-schedule expected attendance vs category configuration and intervals (E3/E4/K6) | **POLICY (P2)** — verify, then decide | operations-temporal | none until P2: measure what `attendance_participation` + Assignment Time would produce | — |
+| 4 | Multiple sessions / overlapping intervals (S6) | **POLICY (P2, P3, P5)** | operations-temporal, staffing | a written behavioral contract first; implementation only with Director approval | anchor-only loader branch, if P2 approves |
+
+PR boundaries: **PR 1a** expectations date-true rows (+ projection bucket twin, same owner rule);
+**PR 1b** roster actual ratio. S6 is a contract document, then its own PR if approved.
+Acceptance: E2 probe (old primary to day N, successor from N+1 → expected through N, once on N+1, never
+twice); the card shows current + upcoming after a future-dated edit; K1 probe (a moved child counts in
+the destination's actual ratio, not the origin's); expected and actual stay separate surfaces; live
+expectation, attendance and staffing suites green; no billing, accepted-term, movement-event or anchor
+change (live snapshot).
+
+### P-2 — Operator experience & retirement
+
+| # | Item | Class | Owner / files | Change | Eliminated |
+|---|---|---|---|---|---|
+| 1 | R4 misdated room label | **DEFECT (code-proven)** | surfaces: `buildSchedulingProjection.ts:576` | no covering placement → no room (not `placements[0]`) | the fallback |
+| 2 | R3 one-room presentation | **CONVERGENCE** | surfaces: `projectCompactScheduleForIdentity.ts`, SchedulingCard child line, `assignmentsProjections.ts` | read `homeroomLabel` (existing) | `find(isPrimary) ?? [0]` guesses |
+| 3 | R6 three roster tiles per row at wide desktop | **POLISH (Director-requested)** | surfaces: `AssignmentRosterPanel.tsx` | responsive grid (1 / 2 / 3 columns) | — |
+| 4 | V7-02b category room lists → space uses; behaviour keys retired | **CONFIG MIGRATION (approved S3 decision)** | enrollment-placement (configuration) | stored-JSON census, copy `eligibleRoomIds` onto `space_uses`, then delete the keys | `eligibleSpaceMode`, `eligibleRoomIds`, `primaryEligible`, `requiresProgram/Room`, `locationIds` scoping |
+| 5 | V7-11 dead code | **RETIREMENT** | owners as listed | delete after a per-symbol reference proof | O1 `deriveSchedulingWork` (+test); O2 only with financials sign-off |
+
+PR boundaries: **PR 2a** projection/presentation (R3, R4, R6, O1); **PR 2b** configuration census +
+migration + key removal (V7-02b, O4). Acceptance: mounted card / Children / BP lines show the homeroom
+set; a row with no covering placement shows no room; three tiles per row at ≥ the wide breakpoint and
+1–2 below; census before/after equal on space eligibility; R7 — a tenant with the Room field placed is
+rendered once (certification gap closed).
+
+### P-3 — Commercial & event compatibility
+
+| # | Item | Class | Owner | Change | Eliminated |
+|---|---|---|---|---|---|
+| 1 | Accepted terms with multiple assignments (C1, C3) | **VERIFY** | commercial + financials | measure tuition/terms for a child with a primary + secondaries; lock C3 (pricing never decides homeroom) with a guard test | — |
+| 2 | Multi-offering support (C2, M5) | **POLICY** — only if an approved product gap exists | commercial | none without a named gap and owner | — |
+| 3 | Change-event completeness (V7-10, E1) | **POLICY + likely DEFECT** — secondary/staff writers emit nothing | operations-temporal + integrations | Director ruling on the contract; then emit through the existing `emitScheduleAssignmentChangedEvent` from the existing writers | no new event infrastructure |
+
+PR boundaries: one PR per owner (commercial guard/verification; event parity). Acceptance: contract tests
+for every writer that changes assignment truth; financial live suites unchanged; no new tables.
+
+### V7-12 — Certification (final)
+
+One plan reusing accepted evidence: S1 (#1589), V7-02a (#1583), V7-03 (#1587), S3 (#1590) and the
+packages. The report separates **deployed mounted** evidence, **isolated exact-candidate** evidence,
+**unit/integration-only** evidence, and **remaining unmeasured** conditions. Carried obligations:
+S3 per-day hours and custom weekdays (isolated-only — the shared certification stack lacked
+`set_assignment_weekday_intervals`), S3 bulk outcome reporting (unit-only), S1 present/checked-out/
+absent moves (isolated-only — staging had no such records), R7 Room field (never rendered).
+
+### Director decisions still open
+
+P2 (per-session expectations), P3 (ratio in a shared space), P4 (shell vs classroom capacity), P5 (staff
+day-grain supply), C2 (separately priced services), E1 (event contract), and the
+`replace_secondary_schedule_assignment` rule that an end-dated row can only be replaced after its end.
+
+## 19. Package 1 — schedule & operational truth (2026-10-23, base `f16bee5e`)
+
+### 1A — date-true schedule resolution (E2 + its card twin; one owner rule)
+
+**Reproduced.** Live, certification database, against staging code: an enrolled child whose primary is
+changed from day +7 (canonical change path) is **not expected on days 0–6**; dates before a past change
+resolve to nothing; a primary whose own week is Mon/Wed/Fri on a Mon–Fri pattern is expected Mon–Fri —
+3/3 fail. Root causes: the loader read only `planned/active/ending` rows (a supersession marks the prior
+`superseded` at once); the core kept ONE row per agreement for the whole range; recurrence came from the
+pattern, not the assignment's own Assignment Time (new finding — the S3 custom-week write had no reader
+here). Card: the projection bucketed `superseded` as history first, so today's primary vanished.
+
+**Repair.** One window rule, the one `deriveHomerooms` already applies: for each date the row whose
+window covers it (`rowEffectiveOn`; live beats superseded, then the later start). Loader reads live +
+`superseded` rows (live first, so first-row readers keep their answer) and each assignment's own
+weekdays through `resolveAssignmentTimes` (one batched read beside the pattern read). Projection: a
+superseded row inside its window is current/upcoming; lifecycle reads Active until its end. Card: the
+scheduled change is listed beside today's row, and Edit opens the scheduled change (editing today's row
+would overwrite it). Timeline "Overlap" requires intersecting date windows. Placement continuity reads
+live rows only. **Retired:** `indexOperationalByAgreement` (the one-row-per-agreement pick).
+
+**Evidence.** Live (`expectationsAcrossSupersession.live.test.ts`): 3/3 (staging code 0/3). Unit
+(`dateTrueSchedule.test.ts`): boundary continuity, no double count in any row order, overlapping rows,
+history, undated superseded rows, placement room change on its day, custom week, card current+upcoming,
+lifecycle, timeline. Unchanged: tuition, accepted terms, placement writes, the enrollment anchor (no
+writer touched); S1 and S3 suites green.
+
+### 1B — actual roster ratio by whereabouts (K1)
+
+**Reproduced (code-proven).** `buildCombinedRoster` computed each room's actual demand from roster
+presence — children expected in the room who are present anywhere — so a child moved to the gym kept
+driving the classroom's actual ratio.
+
+**Repair.** Roster presence (`actualChildrenPresent`, "is my class here") keeps its certified meaning.
+New `actualChildrenInRoom` = present children whose whereabouts put them in the room (a present child
+with no recorded room counts in her expected room); the actual demand and verdict use it, and the card's
+"Here now" shows it beside staff counted the same way. The rule is one helper (`presentChildRoom`) shared
+with the Attendance overview's "here now". Expected side unchanged. No attendance event, transfer
+semantics or staff assignment touched; no new staffing calculation (same `resolveTiers` /
+`resolveActualStaffing`). Point-in-time = the roster's as-of instant; day-grain fields unchanged.
+
+**P3 consequence (preserved, not decided).** A shared space a child walks into gets no ratio row of its
+own: rows are seeded only for operational groups and rooms with expected children or scheduled staff.
+Counting a shared space's actual ratio waits on P3.
+
+### 1C — S6 multi-session compatibility: **POLICY DECISION PACKET** (no implementation)
+
+| Question | Finding (current code) |
+|---|---|
+| Authoritative setting | `operational_assignment_types.attendance_participation` (`none` / `expected`, DB check). Read today only for labels (projection, assignment roster); expectations ignore it and read the primary only. Primary rows are uncategorized and always the enrollment's schedule. |
+| Sessions, intervals, spaces | Each `schedule_assignments` row is a session: its days and hours are its Assignment Time (`assignment_weekday_intervals`, several intervals per weekday allowed); its space is the row's `room_location_id` (primary falls back to the placement room). |
+| What already supports it | `expandPlannedAttendance` already expands any row with its own room; the staffing projection folds per-interval segments, unique children per room × segment (K2); `resolveAssignmentTimes` batch-reads every row's week. |
+| Overlap and unique counts | Day-grain occupancy (`tallyByRoomDate`) counts entries, so two sessions of one child in one room on one date would count twice — needs a per (room, date, child) dedupe; site unique-child totals need a per (date, child) dedupe. Interval-grain staffing is already unique per segment. |
+| Commercial / staffing authorities | Pricing reads the primary only (`assignmentPricingFacts`) — unaffected. Expected staffing demand and occupancy WOULD change (more expected children in Before/After Care rooms) — intended, but visible on every staffing and capacity surface. |
+
+**Smallest contract (proposed).** (1) The primary always produces expectations (unchanged). (2) A committed
+secondary produces an expectation for each date its own window and week cover **iff** its category's
+`attendance_participation = 'expected'`, in its own room, on its own hours. (3) Room·date occupancy counts
+a child once per room per date; site totals count a child once per date. (4) Expected attendance never
+records presence; missing-arrival attention stays per child per day, keyed to the earliest expected
+session. (5) A secondary with no room is expected at the site with no room (as `missing_placement_room`).
+
+**Director decisions required before implementation.** D1 adopt (2) for all `expected` categories
+(Before Care, Enrichment, homeroom categories) — or a narrower list; D2 the dedupe rule in (3) for
+day-grain capacity (interacts with **P4**); D3 whether a child in two rooms on one day counts in both
+rooms' day-grain demand (**P3/P5**); D4 attention keyed to the earliest session (4). With D1–D4 the change
+is one loader branch (drop the primary-only filter for `expected` categories) + the dedupe — no new
+reader, no schema.
+
+### P3 / P4 / P5
+
+Behaviour preserved. P3 now has a visible edge (above); P4 and P5 unaffected by 1A/1B.
+
+### Package 1 PRs
+
+PR 1A (operations-temporal + scheduling read) and PR 1B (operations roster), separate candidates on
+`f16bee5e`. Package 2 recommendation: start with PR 2a (R4 `placements[0]`, R3 one-room lines, R6 tiles,
+O1) — R4 is now the last date-untrue room reader on the card.

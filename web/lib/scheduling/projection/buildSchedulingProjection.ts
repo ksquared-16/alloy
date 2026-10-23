@@ -179,7 +179,10 @@ function mapAssignment(input: AssignmentInput): Assignment {
 type Bucket = "current" | "upcoming" | "temporary" | "history";
 
 function bucketFor(row: ScheduleAssignmentRow, asOf: string): Bucket {
-    if (isScheduleAssignmentTerminalStatus(row.status)) return "history";
+    // A superseded row is still what applies until its end date (audit E2): a future-dated change must
+    // not hide the schedule the child is on today. Its window decides, like any live row's.
+    const datedSupersession = row.status === "superseded" && row.end_date != null;
+    if (isScheduleAssignmentTerminalStatus(row.status) && !datedSupersession) return "history";
     if (row.end_date && compareIsoDates(row.end_date, asOf) < 0) return "history";
     if (row.assignment_kind === "temporary") return "temporary";
     if (compareIsoDates(row.start_date, asOf) > 0) return "upcoming";

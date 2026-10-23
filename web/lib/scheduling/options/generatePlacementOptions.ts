@@ -95,6 +95,9 @@ function continuityRoomIdsForChild(
 ): Set<string> {
     const ids = new Set<string>();
     for (const p of placements) {
+        // Live rows only: the loader also carries superseded rows (date-true expectations), and a
+        // room the child has left is not one they occupy.
+        if (!["planned", "active", "ending"].includes(p.status)) continue;
         if (p.enrollment_agreement_id === childAgreementId && p.room_location_id) ids.add(p.room_location_id);
     }
     return ids;
@@ -149,6 +152,7 @@ export function buildRoomEngineFacts(args: BuildRoomEngineFactsArgs): RoomEngine
         placements: inputs.placements,
         assignments: inputs.assignments,
         patternsById,
+        weekdaysByAssignmentId: inputs.weekdaysByAssignmentId,
         config: inputs.config,
         ageGroupByRoomLocationId: inputs.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: inputs.ageGroupByProgramCategoryId,
@@ -181,6 +185,7 @@ export function buildRoomEngineFacts(args: BuildRoomEngineFactsArgs): RoomEngine
             placements: [...inputs.placements, hypoPlacement],
             assignments: [...inputs.assignments, hypoAssignment],
             patternsById,
+            weekdaysByAssignmentId: inputs.weekdaysByAssignmentId,
             config: inputs.config,
             ageGroupByRoomLocationId: inputs.ageGroupByRoomLocationId,
             ageGroupByProgramCategoryId: inputs.ageGroupByProgramCategoryId,
