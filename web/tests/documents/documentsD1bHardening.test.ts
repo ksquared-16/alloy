@@ -433,6 +433,14 @@ describe("the migrations declare the posture the code relies on (D1b.2 / D1b.3)"
         expect(bucket).toMatch(/file_size_limit = 20971520/);
     });
 
+    it("the rollback invariant test runs the two migrations verbatim", () => {
+        const invariant = readFileSync(resolve(ROOT, "certification/invariants/documents-d1b-direct-access-denial.sql"), "utf8");
+        const strip = (sql: string) => sql.split("\n").filter((l) => !l.startsWith("--")).join("\n").trim();
+        expect(invariant).toContain(strip(revoke));
+        expect(invariant).toContain(strip(bucket));
+        expect(invariant).not.toMatch(/^\\/m);
+    });
+
     it("no upload path stores a client-supplied or octet-stream content type", () => {
         for (const f of [
             "web/app/api/admin/documents/upload/route.ts",
