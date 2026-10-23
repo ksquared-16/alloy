@@ -1,0 +1,195 @@
+{
+  "trusted_host_action_id": "tha_1e9d2e284ad777",
+  "query_hash": "172d3c19434258d0c69ae42e45dc060a94ba4bce93cd712aac7c49cd5b660b3a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T22:07:31.078Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1e9d2e284ad777",
+    "query_hash": "172d3c19434258d0c69ae42e45dc060a94ba4bce93cd712aac7c49cd5b660b3a",
+    "authorization_id": "grnt_f1ad2f63da754eea",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T22:07:36.550Z",
+    "question_ids": [
+      "a00_configuration",
+      "a01_audit_count",
+      "a02_publish_detail"
+    ],
+    "questions": {
+      "a00_configuration": {
+        "question_id": "a00_configuration",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T22:07:35.731146+00:00",
+            "tagged_categories": [
+              {
+                "key": "qa_ad7ca37df52f_child",
+                "status": "active",
+                "parent_set": true
+              },
+              {
+                "key": "qa_ad7ca37df52f_parent",
+                "status": "active",
+                "parent_set": false
+              }
+            ],
+            "tagged_types": [
+              {
+                "key": "qa_ad7ca37df52f_permit",
+                "status": "archived",
+                "versions": [
+                  {
+                    "n": 1,
+                    "status": "superseded",
+                    "sensitivity": "personal_identity"
+                  },
+                  {
+                    "n": 2,
+                    "status": "published",
+                    "sensitivity": "restricted"
+                  }
+                ]
+              }
+            ],
+            "typed_documents": [
+              {
+                "document_id": "80fefac8-ea4d-4577-9004-f4baa1cf4f23",
+                "sensitivity": "restricted"
+              }
+            ],
+            "tagged_configuration_outside_qa_shared": 0
+          }
+        ]
+      },
+      "a01_audit_count": {
+        "question_id": "a01_audit_count",
+        "row_count": null,
+        "rows": [
+          {
+            "event": "document_category_changed",
+            "action": "archive",
+            "events": 5,
+            "actor_present": true
+          },
+          {
+            "event": "document_category_changed",
+            "action": "create",
+            "events": 6,
+            "actor_present": true
+          },
+          {
+            "event": "document_category_changed",
+            "action": "delete",
+            "events": 2,
+            "actor_present": true
+          },
+          {
+            "event": "document_category_changed",
+            "action": "update",
+            "events": 4,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "archive",
+            "events": 1,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "create",
+            "events": 2,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "delete",
+            "events": 2,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "publish",
+            "events": 7,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "save_draft",
+            "events": 2,
+            "actor_present": true
+          },
+          {
+            "event": "document_type_changed",
+            "action": "validate",
+            "events": 4,
+            "actor_present": true
+          }
+        ]
+      },
+      "a02_publish_detail": {
+        "question_id": "a02_publish_detail",
+        "row_count": null,
+        "rows": [
+          {
+            "subject": "3c8e526d-561f-4bba-9141-6ae270a059fe",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T21:30:00.476535+00:00"
+          },
+          {
+            "subject": "3c8e526d-561f-4bba-9141-6ae270a059fe",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T21:30:03.044189+00:00"
+          },
+          {
+            "subject": "3c8e526d-561f-4bba-9141-6ae270a059fe",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T21:31:18.743158+00:00"
+          },
+          {
+            "subject": "4233b3a0-0aef-4b13-aae7-5cfc7b597f4e",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T22:02:13.225792+00:00"
+          },
+          {
+            "subject": "4233b3a0-0aef-4b13-aae7-5cfc7b597f4e",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T22:02:16.516005+00:00"
+          },
+          {
+            "subject": "4233b3a0-0aef-4b13-aae7-5cfc7b597f4e",
+            "version_number": "1",
+            "from": null,
+            "to": "personal_identity",
+            "at": "2026-10-23T22:02:17.758994+00:00"
+          },
+          {
+            "subject": "4233b3a0-0aef-4b13-aae7-5cfc7b597f4e",
+            "version_number": "2",
+            "from": "personal_identity",
+            "to": "restricted",
+            "at": "2026-10-23T22:02:24.760589+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 18
+  }
+}
