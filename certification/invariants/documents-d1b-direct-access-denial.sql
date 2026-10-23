@@ -2,31 +2,27 @@
 -- Run by database.run_rollback_invariant_test against an isolated ALLOY_LOCAL_CERTIFICATION environment
 -- (certenv-*): the executor owns the transaction and always discards it.
 --
--- CASE 0 applies the two D1b migrations VERBATIM (comment lines removed). The binding test
--- web/tests/documents/documentsD1bHardening.test.ts proves the bytes are the migrations' own.
--- Each later case is a REAL attempt by the `anon` / `authenticated` roles, the roles PostgREST runs a
--- client's request as. It is made under SET LOCAL ROLE and must fail with insufficient_privilege.
--- Any invariant that does not hold RAISEs.
+-- CASE 0 applies the two D1b migrations. This harness refuses dynamic SQL, so the revocation migration's
+-- loop of format()-built statements appears here as its static expansion: one REVOKE and one GRANT per
+-- table. Its self-verification block and the whole bucket migration appear verbatim. The binding test
+-- web/tests/documents/documentsD1bHardening.test.ts proves both statements.
+-- Every later attempt is a REAL statement run as the `anon` or `authenticated` role, the roles PostgREST
+-- runs a client's request as, under SET LOCAL ROLE inside its own sub-block. A refused attempt raises
+-- insufficient_privilege, and the role reverts with the sub-block. Any invariant that does not hold RAISEs.
 
--- CASE 0 — the migrations, verbatim.
-DO $$
-DECLARE
-    t text;
-BEGIN
-    FOREACH t IN ARRAY ARRAY[
-        'documents',
-        'document_versions',
-        'document_field_values',
-        'document_field_definitions',
-        'form_submission_documents',
-        'form_submission_signatures'
-    ] LOOP
-        IF to_regclass('public.' || t) IS NOT NULL THEN
-            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC, anon, authenticated', t);
-            EXECUTE format('GRANT ALL ON TABLE public.%I TO service_role', t);
-        END IF;
-    END LOOP;
-END $$;
+-- CASE 0 — the migrations.
+REVOKE ALL ON TABLE public.documents FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.documents TO service_role;
+REVOKE ALL ON TABLE public.document_versions FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.document_versions TO service_role;
+REVOKE ALL ON TABLE public.document_field_values FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.document_field_values TO service_role;
+REVOKE ALL ON TABLE public.document_field_definitions FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.document_field_definitions TO service_role;
+REVOKE ALL ON TABLE public.form_submission_documents FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.form_submission_documents TO service_role;
+REVOKE ALL ON TABLE public.form_submission_signatures FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.form_submission_signatures TO service_role;
 
 DO $verify$
 DECLARE
@@ -126,41 +122,302 @@ DO $$
 BEGIN
   INSERT INTO public.orgs (id, name, slug) VALUES ('d1b00000-0000-4000-8000-0000000000aa'::uuid, 'D1b invariant org', 'd1b-invariant-org');
   INSERT INTO public.documents (id, org_id, title, original_filename, bucket, storage_path, extracted_text)
-  VALUES ('d1b00000-0000-4000-8000-0000000000d1'::uuid, 'd1b00000-0000-4000-8000-0000000000aa'::uuid, 'd1b invariant', 'x.pdf',
-          'org_documents', 'd1b00000-0000-4000-8000-0000000000aa/pos_intake/x.pdf', 'secret OCR text');
+  VALUES ('d1b00000-0000-4000-8000-0000000000d1'::uuid, 'd1b00000-0000-4000-8000-0000000000aa'::uuid, 'd1b invariant', 'x.pdf', 'org_documents', 'd1b00000-0000-4000-8000-0000000000aa/pos_intake/x.pdf', 'secret OCR text');
   RAISE NOTICE 'CASE 1 PASS seeded one document with OCR text';
 END $$;
 
 -- CASE 2 — every document-owned table refuses every client operation, for both client roles.
 DO $$
-DECLARE
-  r text;
-  t text;
-  op text;
-  stmt text;
-  refused int := 0;
+DECLARE refused int := 0;
 BEGIN
-  FOREACH r IN ARRAY ARRAY['authenticated', 'anon'] LOOP
-    FOREACH t IN ARRAY ARRAY['documents', 'document_versions', 'document_field_values', 'document_field_definitions',
-                             'form_submission_documents', 'form_submission_signatures'] LOOP
-      FOREACH op IN ARRAY ARRAY['select', 'update', 'delete', 'truncate'] LOOP
-        stmt := CASE op
-          WHEN 'select' THEN format('SELECT count(*) FROM public.%I', t)
-          WHEN 'update' THEN format('UPDATE public.%I SET metadata = metadata WHERE false', t)
-          WHEN 'delete' THEN format('DELETE FROM public.%I WHERE false', t)
-          WHEN 'truncate' THEN format('TRUNCATE public.%I', t)
-        END;
-        BEGIN
-          EXECUTE format('SET LOCAL ROLE %I', r);
-          EXECUTE stmt;
-          RAISE EXCEPTION 'CASE 2 FAILED: % was allowed to % public.%', r, op, t;
-        EXCEPTION WHEN insufficient_privilege THEN
-          refused := refused + 1;
-        END;
-        RESET ROLE;
-      END LOOP;
-    END LOOP;
-  END LOOP;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.documents SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.documents WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.document_versions;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.document_versions SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.document_versions WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.document_versions;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.document_field_values;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.document_field_values SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.document_field_values WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.document_field_values;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.document_field_definitions;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.document_field_definitions SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.document_field_definitions WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.document_field_definitions;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.form_submission_documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.form_submission_documents SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.form_submission_documents WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.form_submission_documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM count(*) FROM public.form_submission_signatures;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to select public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    UPDATE public.form_submission_signatures SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to update public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    DELETE FROM public.form_submission_signatures WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to delete public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    TRUNCATE public.form_submission_signatures;
+    RAISE EXCEPTION 'CASE 2 FAILED: authenticated was allowed to truncate public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.documents SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.documents WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.document_versions;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.document_versions SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.document_versions WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.document_versions;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.document_versions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.document_field_values;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.document_field_values SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.document_field_values WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.document_field_values;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.document_field_values';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.document_field_definitions;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.document_field_definitions SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.document_field_definitions WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.document_field_definitions;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.document_field_definitions';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.form_submission_documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.form_submission_documents SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.form_submission_documents WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.form_submission_documents;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.form_submission_documents';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.form_submission_signatures;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to select public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    UPDATE public.form_submission_signatures SET metadata = metadata WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to update public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    DELETE FROM public.form_submission_signatures WHERE false;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to delete public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    TRUNCATE public.form_submission_signatures;
+    RAISE EXCEPTION 'CASE 2 FAILED: anon was allowed to truncate public.form_submission_signatures';
+  EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1;
+  END;
   IF refused <> 48 THEN RAISE EXCEPTION 'CASE 2 FAILED: expected 48 refusals, saw %', refused; END IF;
   RAISE NOTICE 'CASE 2 PASS 48 of 48 client operations refused (2 roles x 6 tables x select/update/delete/truncate)';
 END $$;
@@ -174,14 +431,12 @@ BEGIN
     RAISE EXCEPTION 'CASE 3 FAILED: authenticated read extracted_text';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
-  RESET ROLE;
   BEGIN
     SET LOCAL ROLE authenticated;
     UPDATE public.documents SET storage_path = 'elsewhere/x.pdf' WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid;
     RAISE EXCEPTION 'CASE 3 FAILED: authenticated rewrote a storage path';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
-  RESET ROLE;
   BEGIN
     SET LOCAL ROLE authenticated;
     INSERT INTO public.documents (org_id, title, bucket, storage_path)
@@ -189,23 +444,25 @@ BEGIN
     RAISE EXCEPTION 'CASE 3 FAILED: authenticated inserted a document';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
-  RESET ROLE;
-  IF (SELECT storage_path FROM public.documents WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid)
-     <> 'd1b00000-0000-4000-8000-0000000000aa/pos_intake/x.pdf' THEN
+  IF (SELECT storage_path FROM public.documents WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid) <> 'd1b00000-0000-4000-8000-0000000000aa/pos_intake/x.pdf' THEN
     RAISE EXCEPTION 'CASE 3 FAILED: the row changed';
   END IF;
   RAISE NOTICE 'CASE 3 PASS OCR read, path rewrite and forged insert all refused; row unchanged';
 END $$;
 
--- CASE 4 — the server path still works: service_role reads and writes the same row.
+-- CASE 4 — the server path still works: service_role reads the OCR text and updates the row.
+-- The sub-block ends with a sentinel exception, so the role change is undone with it.
 DO $$
 DECLARE n int;
 BEGIN
-  SET LOCAL ROLE service_role;
-  SELECT count(*) INTO n FROM public.documents WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid AND extracted_text = 'secret OCR text';
-  UPDATE public.documents SET title = 'd1b invariant (service)' WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid;
-  RESET ROLE;
-  IF n <> 1 THEN RAISE EXCEPTION 'CASE 4 FAILED: service_role could not read the document'; END IF;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    SELECT count(*) INTO n FROM public.documents WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid AND extracted_text = 'secret OCR text';
+    UPDATE public.documents SET title = 'd1b invariant (service)' WHERE id = 'd1b00000-0000-4000-8000-0000000000d1'::uuid;
+    RAISE EXCEPTION 'd1b_sentinel:%', n;
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'd1b_sentinel:1' THEN RAISE EXCEPTION 'CASE 4 FAILED: service_role read % row(s) (%)', n, SQLERRM; END IF;
+  END;
   RAISE NOTICE 'CASE 4 PASS service_role reads OCR text and updates the row';
 END $$;
 
@@ -217,20 +474,25 @@ BEGIN
     RAISE EXCEPTION 'CASE 5 FAILED: bucket not private';
   END IF;
   INSERT INTO storage.objects (bucket_id, name) VALUES ('org_documents', 'd1b00000-0000-4000-8000-0000000000aa/pos_intake/x.pdf');
-  SET LOCAL ROLE authenticated;
-  SELECT count(*) INTO n FROM storage.objects WHERE bucket_id = 'org_documents';
-  RESET ROLE;
-  IF n <> 0 THEN RAISE EXCEPTION 'CASE 5 FAILED: authenticated saw % object(s)', n; END IF;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    SELECT count(*) INTO n FROM storage.objects WHERE bucket_id = 'org_documents';
+    RAISE EXCEPTION 'd1b_sentinel:%', n;
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'd1b_sentinel:0' THEN RAISE EXCEPTION 'CASE 5 FAILED: authenticated saw objects (%)', SQLERRM; END IF;
+  END;
+  BEGIN
+    SET LOCAL ROLE anon;
+    SELECT count(*) INTO n FROM storage.objects WHERE bucket_id = 'org_documents';
+    RAISE EXCEPTION 'd1b_sentinel:%', n;
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'd1b_sentinel:0' THEN RAISE EXCEPTION 'CASE 5 FAILED: anon saw objects (%)', SQLERRM; END IF;
+  END;
   BEGIN
     SET LOCAL ROLE authenticated;
     INSERT INTO storage.objects (bucket_id, name) VALUES ('org_documents', 'd1b00000-0000-4000-8000-0000000000aa/planted.pdf');
     RAISE EXCEPTION 'CASE 5 FAILED: authenticated placed an object';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
-  RESET ROLE;
-  SET LOCAL ROLE anon;
-  SELECT count(*) INTO n FROM storage.objects WHERE bucket_id = 'org_documents';
-  RESET ROLE;
-  IF n <> 0 THEN RAISE EXCEPTION 'CASE 5 FAILED: anon saw % object(s)', n; END IF;
   RAISE NOTICE 'CASE 5 PASS bucket private; authenticated and anon see 0 objects; authenticated cannot place one';
 END $$;

@@ -464,12 +464,22 @@ describe("the migrations declare the posture the code relies on (D1b.2 / D1b.3)"
         expect(bucket).toMatch(/file_size_limit = 20971520/);
     });
 
-    it("the rollback invariant test runs the two migrations verbatim", () => {
+    it("the rollback invariant test runs exactly the two migrations", () => {
         const invariant = readFileSync(resolve(ROOT, "certification/invariants/documents-d1b-direct-access-denial.sql"), "utf8");
         const strip = (sql: string) => sql.split("\n").filter((l) => !l.startsWith("--")).join("\n").trim();
-        expect(invariant).toContain(strip(revoke));
+        // The revocation loop, expanded: its table list, in order, yields one REVOKE + one GRANT each.
+        const loopTables = [...(revoke.match(/FOREACH t IN ARRAY ARRAY\[([\s\S]*?)\] LOOP/)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+        expect(loopTables.length).toBe(6);
+        const expansion = loopTables
+            .map((t) => `REVOKE ALL ON TABLE public.${t} FROM PUBLIC, anon, authenticated;\nGRANT ALL ON TABLE public.${t} TO service_role;`)
+            .join("\n");
+        expect(invariant).toContain(expansion);
+        expect(invariant).toContain(revoke.slice(revoke.indexOf("DO $verify$")).trim());
         expect(invariant).toContain(strip(bucket));
+        // The harness's own refusals: no psql meta-commands, no dynamic SQL, no session-level role change.
         expect(invariant).not.toMatch(/^\\/m);
+        expect(invariant).not.toMatch(/\bEXECUTE\b/);
+        expect(invariant).not.toMatch(/RESET ROLE|SET ROLE/);
     });
 
     it("no upload path stores a client-supplied or octet-stream content type", () => {
