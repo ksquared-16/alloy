@@ -26,11 +26,16 @@
 > | Persona | Roles (existing) | Scope | Effective grants to verify server-side |
 > |---|---|---|---|
 > | QA Admin | `admin` | all departments, all sites | configure and publish processes; `scheduling.write`; `fin.read`, `fin.write`, `fin.subsidy` |
-> | QA Director | `ops` + `school_director` | all sites | portal admission (`ops`); `fin.read` (`school_director`); no `fin.write` |
-> | QA Restricted Operator | `ops` + `school_director` | **QA North only** (`user_site_access`) | as Director, restricted to one site |
-> | QA No-Finance Operator | `ops` | all sites | no `fin.*` |
+> | QA Director | `ops` + `school_director` | all sites | portal admission (`ops`); `fin.read`, `fin.write`, `billing.read`, `billing.write` (seeded `ops`) — *corrected 2026-10-23, see below* |
+> | QA Restricted Operator | `ops` + `school_director` | **QA North only** (`user_site_access`) | as Director, restricted to one site — **the site-scope negative test** |
+> | QA No-Finance Operator | `qa_bp_no_finance` (plan role: seeded `ops` minus `fin.*`, `billing.*`, `staff.compensation.*`, `enrollment.pricing.override`; keeps `portal.access`) | all sites | none of those keys — **the financial negative test** (*corrected 2026-10-23*) |
 >
 > Allow `environment.restore_deployed_qa_session` to target each of the four identities.
+>
+> **QA contract correction (2026-10-23, BP V2 Slice 8B-1).** This is not a role-policy change. No grant was added or removed anywhere.
+> - **Director.** The original row said "no `fin.write`". That assumed seeded `ops` carried no financial keys, but it does: hosted run `qar_1546aa9036c7` measured `fin.read`, `fin.write`, `billing.read` and `billing.write`. The Director is the existing `ops` + `school_director` persona with exactly those grants. No `qa_bp_director` role is introduced. No Business Processes V2 acceptance scenario depends on the Director being refused a financial write: the walkthrough has the Director read and decide.
+> - **No-Finance.** The original row (`ops`) was not finance-less for the same reason. The plan now provisions the bounded role `qa_bp_no_finance`, and hosted run `qar_1546aa9036c7` verified it: 57 keys, none financial, `portal.access` kept. All five Billing views are refused, 8 finance APIs return 403, and no figures are disclosed. It remains the explicit financial negative test.
+> - **Restricted Operator.** It remains the explicit site-scope negative test.
 >
 > **Option B: extend the governed catalog.** Add `environment.provision_qa_organization`, whose inputs are a name, sites and the persona table above, together with a persona-aware deployed session restore. This option is the better fit if hosted QA will recur.
 

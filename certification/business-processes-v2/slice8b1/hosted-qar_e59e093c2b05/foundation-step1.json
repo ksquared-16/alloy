@@ -1,0 +1,117 @@
+{
+  "wu": {
+    "work_unit": {
+      "id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6",
+      "key": "lifecycle_wu_lead",
+      "name": "New Leads",
+      "is_active": true
+    },
+    "snapshot": {
+      "id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6",
+      "key": "lifecycle_wu_lead",
+      "name": "New Leads",
+      "is_active": true,
+      "queues": [
+        {
+          "key": "lifecycle_lead",
+          "label": "New Leads"
+        }
+      ],
+      "queueDefinitionRaw": {
+        "ui": {
+          "layout": "single_section",
+          "sections": [
+            {
+              "key": "primary",
+              "label": "New Leads",
+              "queue_keys": [
+                "lifecycle_lead"
+              ]
+            }
+          ],
+          "row_preview": {
+            "fields": [
+              "title",
+              "status",
+              "primary_contact",
+              "phone",
+              "email",
+              "child_name",
+              "program",
+              "start_date",
+              "tour_date"
+            ],
+            "actions": [
+              "open"
+            ],
+            "variant": "crm_compact"
+          },
+          "primary_total_label": "New Leads",
+          "primary_total_queue": "lifecycle_lead",
+          "suppress_lifecycle_panel": true,
+          "suppress_active_queue_description": false
+        },
+        "queues": [
+          {
+            "key": "lifecycle_lead",
+            "grain": "case",
+            "label": "New Leads",
+            "filters": [
+              {
+                "type": "case_status",
+                "values": [
+                  "open",
+                  "new_inquiry",
+                  "new"
+                ],
+                "operator": "in"
+              }
+            ],
+            "filters_compat_v1": [
+              {
+                "type": "status",
+                "values": [
+                  "open",
+                  "new_inquiry",
+                  "new"
+                ],
+                "operator": "in"
+              }
+            ]
+          }
+        ],
+        "version": 2,
+        "entity_type": "opportunity"
+      }
+    },
+    "created": true,
+    "updated": false,
+    "identity": {
+      "state": "created",
+      "stage_key": "lead",
+      "work_unit_key": "lifecycle_wu_lead",
+      "work_unit_id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6"
+    },
+    "needs_sync": false
+  },
+  "lead": {
+    "ok": true,
+    "data": {
+      "execution_result": {
+        "mode": "committed",
+        "processing_case_id": "09920ba9-31db-4599-9db7-90dd1a3b8342",
+        "readiness": "committed",
+        "idempotency_key": "949747c08db1d57bec69bca4bb1a656c56b25b4d4d31007acafda305f2c5dfe9",
+        "work_unit_id": "2611a9d8-726a-45c3-bf3f-ece0937d59b6",
+        "work_unit_key": "lifecycle_wu_lead",
+        "work_view_id": "new_leads",
+        "work_view_route_key": "new_leads",
+        "status_key": "open",
+        "stage_key": "lead",
+        "opportunity_id": "de17caff-d706-44e8-b9d1-07aa58caa44b"
+      },
+      "affected_id": "de17caff-d706-44e8-b9d1-07aa58caa44b"
+    },
+    "correlation_id": "49c2e485-b43b-4126-a8cf-e32880226894"
+  }
+}

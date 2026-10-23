@@ -1,0 +1,392 @@
+{
+  "schema": "alloy.bp_v2.qa_ledger_closeout.v1",
+  "at": "2026-10-23T01:30Z",
+  "toolkit": "2cc54168bf80",
+  "deployed_staging": "8bb731eadbf3",
+  "final_census": {
+    "request": {
+      "request_id": "gar_91e81845df7173",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_0c6a05eabfa797",
+      "execution_ended_at": "2026-10-23T01:23:03.830Z"
+    },
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "census_run_at": "2026-10-23T01:23:10.276Z",
+    "checks": {
+      "bp_qr_pool_access": "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true",
+      "bp_qr_zero_sent": "communication_messages ~ outbound_send_evidence ~ zero ~ true",
+      "bp_qr_org_exists": "orgs ~ qa_shared ~ present ~ true",
+      "bp_qr_fin_no_merchant": "payment_provider_merchants ~ any ~ zero ~ true",
+      "bp_qr_fin_no_usable_method": "payment_methods ~ usable ~ zero ~ true",
+      "bp_qr_fin_no_autopay": "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true",
+      "bp_qr_fin_no_provider_activity": "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true",
+      "bp_qr_fin_no_active_schedule": "scheduled_work ~ financials_or_payments_active ~ zero ~ true",
+      "bp_qr_fin_no_draft": "charges ~ draft ~ zero ~ true",
+      "bp_qr_fin_no_open_balance": "charges ~ owed_unreversed_uncovered ~ zero ~ true",
+      "bp_qr_fin_no_open_variance": "financial_subsidy_variances ~ unresolved ~ zero ~ true",
+      "bp_qr_fin_no_unapplied_money": "payments ~ inbound_posted_unapplied ~ zero ~ true",
+      "bp_qr_fin_attributed": "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+    },
+    "retained": {
+      "bp_qr_retained_financial": [
+        {
+          "artifact": "posted financial records (immutable)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_charge_rows": 0,
+          "by_status": {},
+          "reversal_rows": 0,
+          "payment_rows": 0,
+          "variance_rows": 0
+        }
+      ],
+      "bp_qr_retained_process_config": [
+        {
+          "artifact": "published process configuration",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_configuration_publication_rows": 2
+        }
+      ],
+      "bp_qr_retained_audit": [
+        {
+          "artifact": "access audit history (mutation_events)",
+          "status": "retained_by_design",
+          "not_residue": true,
+          "qa_shared_mutation_event_rows": 83
+        }
+      ]
+    }
+  },
+  "binds": {
+    "qar_1546aa9036c7": {
+      "request_id": "gar_2ab6bd0873f4eb",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_d77aa2932071f9",
+      "execution_ended_at": "2026-10-23T00:44:57.946Z"
+    },
+    "qar_2765465b1e2b": {
+      "request_id": "gar_7eb0e4f868993c",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_ecd986c43c07d1",
+      "execution_ended_at": "2026-10-23T01:23:54.005Z"
+    }
+  },
+  "runs": {
+    "qar_46a50c686b62": {
+      "plan": "authz_q1",
+      "state": "CLOSED",
+      "verdict": "ZERO_RESIDUE",
+      "census": "gar_a5b078ed009b22",
+      "census_executed_at": "2026-10-22T17:37:06.504Z",
+      "closed_at": "2026-10-22T17:35:51.891Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_05",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_f9a9275db057": {
+      "plan": "bp_v2",
+      "state": "CLOSED",
+      "verdict": "QUIESCED_RETAINED",
+      "census": "gar_51efecdc15c6a5",
+      "census_executed_at": "2026-10-22T17:47:02.138Z",
+      "closed_at": "2026-10-22T17:46:11.731Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_17c26a706ca7": {
+      "plan": "bp_v2",
+      "state": "CLOSED",
+      "verdict": "QUIESCED_RETAINED",
+      "census": "gar_afd84a85847332",
+      "census_executed_at": "2026-10-22T21:25:07.797Z",
+      "closed_at": "2026-10-22T21:24:01.317Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 0,
+          "swept_access_rows": 1,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 0,
+          "swept_access_rows": 1,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 0,
+          "swept_access_rows": 2,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 0,
+          "swept_access_rows": 1,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_2765465b1e2b": {
+      "plan": "bp_v2",
+      "state": "CLOSED",
+      "verdict": "QUIESCED_RETAINED",
+      "census": "gar_91e81845df7173",
+      "census_executed_at": "2026-10-23T01:23:03.830Z",
+      "closed_at": "2026-10-22T21:47:10.080Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_bb94bbb62263": {
+      "plan": "authz_q1",
+      "state": "CLOSED",
+      "verdict": "ZERO_RESIDUE",
+      "census": "gar_fb082f4e122b75",
+      "census_executed_at": "2026-10-22T22:14:39.503Z",
+      "closed_at": "2026-10-22T22:12:24.083Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_05",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_1546aa9036c7": {
+      "plan": "bp_v2",
+      "state": "CLOSED",
+      "verdict": "QUIESCED_RETAINED",
+      "census": "gar_91261ae7a0d440",
+      "census_executed_at": "2026-10-23T00:33:45.540Z",
+      "closed_at": "2026-10-23T00:32:23.573Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 2,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    },
+    "qar_99a8d9bf95e6": {
+      "plan": "authz_q1",
+      "state": "CLOSED",
+      "verdict": "ZERO_RESIDUE",
+      "census": "gar_dd0218ef74eefe",
+      "census_executed_at": "2026-10-23T01:03:59.900Z",
+      "closed_at": "2026-10-23T01:02:46.843Z",
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_05",
+          "removed": 1,
+          "swept_access_rows": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ]
+    }
+  }
+}

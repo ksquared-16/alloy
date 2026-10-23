@@ -1,0 +1,88 @@
+{
+  "today": "2026-10-22",
+  "household": "23865933-7148-4438-acd8-0b970e84ae5c",
+  "steps": [
+    {
+      "name": "policy billing_calendar",
+      "status": 201,
+      "id": "490a0e4b-75e8-4ca6-bfc9-06685708eaeb",
+      "error": null
+    },
+    {
+      "name": "policy due_date",
+      "status": 201,
+      "id": "67b380f8-07af-4402-b22d-e6a4b14e3f79",
+      "error": null
+    },
+    {
+      "name": "template qa_fee_584637",
+      "status": 201,
+      "id": "89327282-03c3-46f6-ade6-d9e0c44ef4ed",
+      "error": null
+    },
+    {
+      "name": "template qa_review_fee_584637",
+      "status": 201,
+      "id": "10f3442a-9fa0-4a69-a391-1165884d6654",
+      "error": null
+    },
+    {
+      "name": "charge: fee due in 4 days (posts)",
+      "status": 200,
+      "id": "1312c61e-8162-4ebf-be5b-7ec7745e6a17",
+      "error": null,
+      "result": {
+        "posted": true,
+        "review_required": false,
+        "posts_on": null,
+        "post_failed": null
+      }
+    },
+    {
+      "name": "charge: review draft",
+      "status": 200,
+      "id": "baa509ae-f24c-4832-9764-665a0e3346fb",
+      "error": null,
+      "result": {
+        "posted": false,
+        "review_required": true,
+        "posts_on": null,
+        "post_failed": null
+      }
+    },
+    {
+      "name": "charge: fee to be paid",
+      "status": 200,
+      "id": "103787e5-426e-4ef1-a8ba-e96114be3fab",
+      "error": null,
+      "result": {
+        "posted": true,
+        "review_required": false,
+        "posts_on": null,
+        "post_failed": null
+      }
+    },
+    {
+      "name": "payment.record (check, full)",
+      "status": 200,
+      "id": "de88693a-f512-40df-b1c5-76c73f1511fe",
+      "error": null
+    }
+  ],
+  "calendar": "490a0e4b-75e8-4ca6-bfc9-06685708eaeb",
+  "due": "67b380f8-07af-4402-b22d-e6a4b14e3f79",
+  "tpl_fee": "89327282-03c3-46f6-ade6-d9e0c44ef4ed",
+  "tpl_review": "10f3442a-9fa0-4a69-a391-1165884d6654",
+  "charge_due": "1312c61e-8162-4ebf-be5b-7ec7745e6a17",
+  "charge_review": "baa509ae-f24c-4832-9764-665a0e3346fb",
+  "charge_paid": "103787e5-426e-4ef1-a8ba-e96114be3fab",
+  "payment": "de88693a-f512-40df-b1c5-76c73f1511fe",
+  "payment_result": {
+    "payment_id": "de88693a-f512-40df-b1c5-76c73f1511fe",
+    "allocation_id": "365c33fc-7ac3-4d4f-96d8-677f68d23f4c",
+    "applied_cents": 5000,
+    "payment_status": "posted",
+    "already_recorded": false,
+    "already_applied": false
+  }
+}

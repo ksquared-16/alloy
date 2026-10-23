@@ -1,0 +1,259 @@
+{
+  "schema": "alloy.bp_v2.hosted_qa_attempt.v1",
+  "deployed_staging": "9d96c7e88eda05cea620cc9d5965ac2000264cb3",
+  "toolkit": "7414457452d7",
+  "plan": "bp_v2",
+  "target": "alloy_staging_web",
+  "qa_run": {
+    "run_id": "qar_f9a9275db057",
+    "plan_key": "bp_v2",
+    "target": {
+      "kind": "hosted",
+      "key": "alloy_staging_web"
+    },
+    "lane_id": "lane_581d120e4e41",
+    "run_ref": "erun2_3dd68191d0970b38",
+    "open_request_id": "gar_5d90847cba7444",
+    "state": "CLOSED",
+    "opened_at": "2026-10-22T17:44:48.138Z",
+    "lease_expires_at": "2026-10-22T23:44:48.138Z",
+    "personas": [
+      {
+        "persona_key": "admin",
+        "identity_key": "qa_pool_01",
+        "email": "qa-pool-01@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "admin"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "director",
+        "identity_key": "qa_pool_02",
+        "email": "qa-pool-02@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "restricted_operator",
+        "identity_key": "qa_pool_03",
+        "email": "qa-pool-03@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops",
+          "school_director"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "restricted"
+        },
+        "session": true
+      },
+      {
+        "persona_key": "no_finance_operator",
+        "identity_key": "qa_pool_04",
+        "email": "qa-pool-04@example.com",
+        "org_key": "qa_shared",
+        "roles": [
+          "ops"
+        ],
+        "scope": {
+          "department": "all",
+          "site": "all"
+        },
+        "session": true
+      }
+    ],
+    "fixture_namespace": {
+      "qa_run_id": "qar_f9a9275db057"
+    },
+    "sessions": [],
+    "failure": null,
+    "close": {
+      "request_id": "gar_9d0be10c850567",
+      "started_at": "2026-10-22T17:46:11.731Z",
+      "recovery": true,
+      "closed_at": "2026-10-22T17:46:11.731Z",
+      "verdict": "QUIESCED_RETAINED",
+      "access_clean": true,
+      "sessions_removed": true,
+      "revoked": [
+        {
+          "identity_key": "qa_pool_01",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "removed": 0,
+          "clean": true,
+          "remaining_roles": 0,
+          "remaining_profiles": 0
+        }
+      ],
+      "custom_roles": [],
+      "sessions_signed_out": [
+        {
+          "identity_key": "qa_pool_01",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_02",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_03",
+          "signed_out": true
+        },
+        {
+          "identity_key": "qa_pool_04",
+          "signed_out": true
+        }
+      ],
+      "residue_census": {
+        "ok": true,
+        "request_id": "gar_51efecdc15c6a5",
+        "executed_at": "2026-10-22T17:47:02.138Z",
+        "checks": [
+          "bp_qr_pool_access",
+          "bp_qr_zero_sent",
+          "bp_qr_org_exists",
+          "bp_qr_fin_no_merchant",
+          "bp_qr_fin_no_usable_method",
+          "bp_qr_fin_no_autopay",
+          "bp_qr_fin_no_provider_activity",
+          "bp_qr_fin_no_active_schedule",
+          "bp_qr_fin_no_draft",
+          "bp_qr_fin_no_open_balance",
+          "bp_qr_fin_no_open_variance",
+          "bp_qr_fin_no_unapplied_money",
+          "bp_qr_fin_attributed"
+        ]
+      },
+      "retained_by_design": [
+        "posted financial records (immutable), neutralized and attributed by run",
+        "published process configuration",
+        "access audit history (mutation_events)"
+      ]
+    },
+    "updated_at": "2026-10-22T17:48:03.484Z",
+    "history": [
+      {
+        "at": "2026-10-22T17:44:48.138Z",
+        "event": "opening"
+      },
+      {
+        "at": "2026-10-22T17:44:48.138Z",
+        "event": "open_failed",
+        "detail": "qa_audited_function_failed"
+      },
+      {
+        "at": "2026-10-22T17:46:11.731Z",
+        "event": "closing",
+        "detail": "abandoned"
+      },
+      {
+        "at": "2026-10-22T17:46:11.731Z",
+        "event": "closed",
+        "detail": "ACCESS_CLEAN_RETAINED_ARTIFACTS_UNVERIFIED"
+      },
+      {
+        "at": "2026-10-22T17:48:03.484Z",
+        "event": "census_attached",
+        "detail": "gar_51efecdc15c6a5"
+      }
+    ]
+  },
+  "requests": {
+    "open": {
+      "request_id": "gar_5d90847cba7444",
+      "action_key": "environment.qa_run_open",
+      "status": "failed",
+      "failure_reason": "qa_audited_function_failed \u2014 assign_member_role_audited: new row for relation \"mutation_events\" violates check constraint \"mutation_events_origin_check\"",
+      "trusted_host_action_id": null,
+      "execution_started_at": "2026-10-22T17:44:48.138Z",
+      "execution_ended_at": null
+    },
+    "recovery_close": {
+      "request_id": "gar_9d0be10c850567",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_e7bef3984fef52",
+      "execution_started_at": "2026-10-22T17:46:11.731Z",
+      "execution_ended_at": "2026-10-22T17:46:11.731Z"
+    },
+    "census_after_close": {
+      "request_id": "gar_51efecdc15c6a5",
+      "action_key": "database.read_census",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_e9faf49e907b78",
+      "execution_started_at": "2026-10-22T17:47:02.138Z",
+      "execution_ended_at": "2026-10-22T17:47:02.138Z"
+    },
+    "bind_census": {
+      "request_id": "gar_8c0a22cfabba7a",
+      "action_key": "environment.qa_run_close",
+      "status": "complete",
+      "failure_reason": null,
+      "trusted_host_action_id": "tha_e112206e3c55f3",
+      "execution_started_at": "2026-10-22T17:48:03.484Z",
+      "execution_ended_at": "2026-10-22T17:48:03.484Z"
+    }
+  },
+  "census_after_close": {
+    "query_hash": "c1b6c335db7676449de5ae6366b723e9ac7ce52894ff73ba88e1385a72b05648",
+    "census_run_at": "2026-10-22T17:47:08.130Z",
+    "checks": {
+      "bp_qr_pool_access": "user_roles+user_access_profiles+user_site_access+user_department_access ~ qa_shared_non_actor ~ zero ~ true",
+      "bp_qr_zero_sent": "communication_messages ~ outbound_send_evidence ~ zero ~ true",
+      "bp_qr_org_exists": "orgs ~ qa_shared ~ present ~ true",
+      "bp_qr_fin_no_merchant": "payment_provider_merchants ~ any ~ zero ~ true",
+      "bp_qr_fin_no_usable_method": "payment_methods ~ usable ~ zero ~ true",
+      "bp_qr_fin_no_autopay": "payment_autopay_arrangements ~ active_or_paused ~ zero ~ true",
+      "bp_qr_fin_no_provider_activity": "payment_collection_attempts+payment_provider_refunds+provider_payments ~ any ~ zero ~ true",
+      "bp_qr_fin_no_active_schedule": "scheduled_work ~ financials_or_payments_active ~ zero ~ true",
+      "bp_qr_fin_no_draft": "charges ~ draft ~ zero ~ true",
+      "bp_qr_fin_no_open_balance": "charges ~ owed_unreversed_uncovered ~ zero ~ true",
+      "bp_qr_fin_no_open_variance": "financial_subsidy_variances ~ unresolved ~ zero ~ true",
+      "bp_qr_fin_no_unapplied_money": "payments ~ inbound_posted_unapplied ~ zero ~ true",
+      "bp_qr_fin_attributed": "charges+payments+variances ~ non_qa_actor ~ zero ~ true"
+    }
+  },
+  "root_cause": {
+    "defect": "toolkit lib/qa-run-db.mjs:28 QA_RUN_ORIGIN='vacilando_qa_run' is passed as p_origin to assign_member_role_audited / replace_membership_with_access_profile / remove_member_access_audited / replace_role_permission_grants; Alloy mutation_events.origin CHECK allows only operator|automation|api|system (supabase/migrations/20260630121000_mutation_events_outbox.sql:16-17). Every audited access write is refused, so no hosted QA run can open (bp_v2 qar_f9a9275db057; authz_q1 qar_46a50c686b62 failed identically at 17:34Z).",
+    "owner": "Vacilando Backend (QA-run runner)",
+    "smallest_fix": "pass an allowed origin (e.g. 'automation') and keep the run id in p_correlation_id (already passed); add a test that the runner's origin is in the Alloy CHECK set"
+  },
+  "evidence_policy": "no QA Shared write occurred: the run failed before any grant; recovery close removed 0 rows; census after close 13/13 true"
+}

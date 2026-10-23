@@ -1,0 +1,394 @@
+{
+  "persona": "admin",
+  "console_errors": [],
+  "page_errors": [],
+  "http_errors": [],
+  "blocked_non_get": [],
+  "views": [
+    {
+      "tile": "Assignments",
+      "label": "Current assignments0›",
+      "url": "/workspace/work-unit/current-assignments",
+      "terminal": "projection",
+      "active_view": "current_assignments",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Ending soon0›",
+      "url": "/workspace/work-unit/ending-soon",
+      "terminal": "projection",
+      "active_view": "assignments_ending_soon",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Upcoming changes0›",
+      "url": "/workspace/work-unit/upcoming-changes",
+      "terminal": "projection",
+      "active_view": "assignments_upcoming_changes",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Schedule gaps0›",
+      "url": "/workspace/work-unit/schedule-gaps",
+      "terminal": "projection",
+      "active_view": "schedule_gaps",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Assignments",
+      "label": "Proposed / incomplete0›",
+      "url": "/workspace/work-unit/proposed-incomplete",
+      "terminal": "projection",
+      "active_view": "assignments_proposed_incomplete",
+      "projection_domain": "assignments",
+      "rows": 0,
+      "pills": [
+        "Current assignments0",
+        "Ending soon0",
+        "Upcoming changes0",
+        "Schedule gaps0",
+        "Proposed / incomplete0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Assignments 0 Needs attention 0 Overdue work 0 Current assignments 0 Ending soon 0 Upcoming changes 0 Schedule gaps 0 Proposed / incomplete 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Charges needing review0›",
+      "url": "/workspace/work-unit/charges-needing-review",
+      "terminal": "projection",
+      "active_view": "charges_needing_review",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Payment exceptions0›",
+      "url": "/workspace/work-unit/payment-exceptions",
+      "terminal": "projection",
+      "active_view": "payment_exceptions",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Funding variances0›",
+      "url": "/workspace/work-unit/funding-variances",
+      "terminal": "projection",
+      "active_view": "funding_variances",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Payments due0›",
+      "url": "/workspace/work-unit/payments-due",
+      "terminal": "projection",
+      "active_view": "payments_due",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Billing",
+      "label": "Overdue payments0›",
+      "url": "/workspace/work-unit/overdue-payments",
+      "terminal": "projection",
+      "active_view": "overdue_payments",
+      "projection_domain": "billing",
+      "rows": 0,
+      "pills": [
+        "Charges needing review0",
+        "Payment exceptions0",
+        "Funding variances0",
+        "Payments due0",
+        "Overdue payments0"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP Billing 0 Needs attention 0 Overdue work 0 Charges needing review 0 Payment exceptions 0 Funding variances 0 Payments due 0 Overdue payments 0 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "New LeadsRespond to every new family inquiry.0›",
+      "url": "/workspace/work-unit/new-leads",
+      "terminal": "empty",
+      "active_view": "new_leads",
+      "projection_domain": null,
+      "rows": 0,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads 1 Needs attention 0 Overdue work 0 New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "ToursConfirm the visit and record the outcome.0›",
+      "url": "/workspace/work-unit/tours",
+      "terminal": "empty",
+      "active_view": "tours",
+      "projection_domain": null,
+      "rows": 0,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads 1 Needs attention 0 Overdue work 0 New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "DecisionHelp families decide after the tour.0›",
+      "url": "/workspace/work-unit/decision",
+      "terminal": "empty",
+      "active_view": "decision",
+      "projection_domain": null,
+      "rows": 0,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads 1 Needs attention 0 Overdue work 0 New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "RegistrationComplete enrollment for children who are enrolling.0›",
+      "url": "/workspace/work-unit/registration",
+      "terminal": "empty",
+      "active_view": "registration",
+      "projection_domain": null,
+      "rows": 0,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads 1 Needs attention 0 Overdue work 0 New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "WaitlistKeep waitlisted families informed.0›",
+      "url": "/workspace/work-unit/waitlist",
+      "terminal": "empty",
+      "active_view": "waitlist",
+      "projection_domain": null,
+      "rows": 0,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads 1 Needs attention 0 Overdue work 0 New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 No records in this view Select a record to begin The record you open appears here."
+    },
+    {
+      "tile": "Enrollment",
+      "label": "AllEvery family in the process.1›",
+      "url": "/workspace/work-unit/all",
+      "terminal": "error",
+      "active_view": null,
+      "projection_domain": null,
+      "rows": 1,
+      "pills": [
+        "New Leads0",
+        "Tours0",
+        "Decision0",
+        "Registration0",
+        "Waitlist0",
+        "All1"
+      ],
+      "text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP New Leads Needs attention Overdue work New Leads 0 Tours 0 Decision 0 Registration 0 Waitlist 0 All 1 Filters R Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed · Closed QA Parent Readiness e59e093c2b05 QA Child A Readiness e59e093c2b05 (4y7m) 4m This record can’t be opened until its configuration is fixed. stage \"closed\" offers "
+    }
+  ],
+  "build": "e541dba05f34c7c7678ad0d45c9d4cb2bc603201",
+  "tiles": [
+    {
+      "id": "f76244aa-f239-4810-bd3e-6402ad21edda:5b999ae2-d568-4e29-9323-5fcadfe5e59a",
+      "title": "Assignments",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "views": [
+        {
+          "label": "Current assignments0›",
+          "href": "/workspace/work-unit/current-assignments"
+        },
+        {
+          "label": "Ending soon0›",
+          "href": "/workspace/work-unit/ending-soon"
+        },
+        {
+          "label": "Upcoming changes0›",
+          "href": "/workspace/work-unit/upcoming-changes"
+        },
+        {
+          "label": "Schedule gaps0›",
+          "href": "/workspace/work-unit/schedule-gaps"
+        },
+        {
+          "label": "Proposed / incomplete0›",
+          "href": "/workspace/work-unit/proposed-incomplete"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/current-assignments"
+        }
+      ]
+    },
+    {
+      "id": "5abbc24f-9087-4c32-908e-38f622f98186:67cf201e-ee0d-4325-83dd-49a35d128c7c",
+      "title": "Billing",
+      "answer": "No signal configured yet",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "views": [
+        {
+          "label": "Charges needing review0›",
+          "href": "/workspace/work-unit/charges-needing-review"
+        },
+        {
+          "label": "Payment exceptions0›",
+          "href": "/workspace/work-unit/payment-exceptions"
+        },
+        {
+          "label": "Funding variances0›",
+          "href": "/workspace/work-unit/funding-variances"
+        },
+        {
+          "label": "Payments due0›",
+          "href": "/workspace/work-unit/payments-due"
+        },
+        {
+          "label": "Overdue payments0›",
+          "href": "/workspace/work-unit/overdue-payments"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/charges-needing-review"
+        }
+      ]
+    },
+    {
+      "id": "7c1ac953-1124-493a-b204-fdb754335c8f:2b324043-8bc0-46ae-a45b-f4b462e1a104",
+      "title": "Enrollment",
+      "answer": "—Time to schedule tour",
+      "unavailable": null,
+      "work_items": "No open work items",
+      "views": [
+        {
+          "label": "New LeadsRespond to every new family inquiry.0›",
+          "href": "/workspace/work-unit/new-leads"
+        },
+        {
+          "label": "ToursConfirm the visit and record the outcome.0›",
+          "href": "/workspace/work-unit/tours"
+        },
+        {
+          "label": "DecisionHelp families decide after the tour.0›",
+          "href": "/workspace/work-unit/decision"
+        },
+        {
+          "label": "RegistrationComplete enrollment for children who are enrolling.0›",
+          "href": "/workspace/work-unit/registration"
+        },
+        {
+          "label": "WaitlistKeep waitlisted families informed.0›",
+          "href": "/workspace/work-unit/waitlist"
+        },
+        {
+          "label": "AllEvery family in the process.1›",
+          "href": "/workspace/work-unit/all"
+        },
+        {
+          "label": "Open process→",
+          "href": "/workspace/work-unit/new-leads"
+        }
+      ]
+    }
+  ],
+  "workspace_text": "STAGING — NOT PRODUCTION 1 ⌘K All locations ▾ QP ZZ Alloy QA 1 Needs attention 0 Overdue work 0 Active children Assignments No signal No signal configured yet No open work items TODAY'S WORK Current assignments 0 › Ending soon 0 › Upcoming changes 0 › Schedule gaps 0 › Proposed / incomplete 0 › Open process → Billing No signal No signal configured yet No open work items TODAY'S WORK Charges needing review 0 › Payment exceptions 0 › Funding variances 0 › Payments due 0 › Overdue payments 0 › Open process → Enrollment No signal — Time to schedule tour Target 48h No open work items TODAY'S WORK New Leads Respond to every new family inquiry. 0 › Tours Confirm the visit and record the outcome. 0 › Decision Help families decide after the tour. 0 › Registration Complete enrollment for children who are enrolling. 0 › Waitlist Keep waitlisted families informed. 0 › All Every family in the process"
+}

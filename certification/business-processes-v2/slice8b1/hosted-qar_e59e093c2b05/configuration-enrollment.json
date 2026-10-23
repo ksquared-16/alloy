@@ -1,0 +1,50 @@
+{
+  "enrollment": {
+    "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+    "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+    "published": {
+      "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+      "revision_id": "caaf8b6a-e578-4699-be5e-ac2e6a2d19b0",
+      "revision_number": 2,
+      "publication_id": "eb126e5f-ff35-41fc-a795-2d2f7ac5e817",
+      "published_at": "2026-10-23T02:22:55.147449+00:00",
+      "already_published": false
+    },
+    "work_units": {
+      "ok": true,
+      "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+      "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+      "actions": [],
+      "work_units": [],
+      "entry": {
+        "id": "7c1ac953-1124-493a-b204-fdb754335c8f:2b324043-8bc0-46ae-a45b-f4b462e1a104",
+        "config_source": "departments.metadata.lifecycle_builder_v1",
+        "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+        "department_key": "enrollment",
+        "department_name": "Enrollment",
+        "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+        "process_key": "enrollment",
+        "process_model": {
+          "kind": "staged_lifecycle"
+        },
+        "lifecycle_name": "Enrollment",
+        "source": "builder_owned",
+        "stage_count": 8,
+        "track_count": 2,
+        "work_unit_count": 1,
+        "activation_owned": true,
+        "can_delete": true,
+        "can_repair": false,
+        "workspace": {
+          "backing_department_exists": true,
+          "department_is_active": true,
+          "visible_in_workspace_api": true,
+          "user_has_access": true,
+          "name_matches_tile": true,
+          "runtime_status": "visible",
+          "tile_name": "Enrollment"
+        }
+      }
+    }
+  }
+}
