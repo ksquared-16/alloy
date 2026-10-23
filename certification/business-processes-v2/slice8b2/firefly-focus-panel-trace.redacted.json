@@ -1,0 +1,88 @@
+{
+  "build": "267d9400b8c797d0d1ec5f32864bc9495c4f6771",
+  "tiles": [
+    "Enrollment"
+  ],
+  "views": [
+    {
+      "view": "Decision13\u203a",
+      "rows": 12,
+      "row": {
+        "type": "opportunity",
+        "id": "bc82d0ee-4437-40ac-88dc-53ac745381e4"
+      },
+      "vm_calls": [
+        {
+          "status": 200,
+          "url": "/api/admin/view-models/drawer/opportunity/bc82d0ee-4437-40ac-88dc-53ac745381e4",
+          "body": null
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "sections": [
+          "WU.HEADER",
+          "WU.HEADER_CALCULATIONS",
+          "WU.WORK_VIEW_PILLS",
+          "FP.SURFACE"
+        ],
+        "classic_layout_message": false,
+        "cant_open_message": false
+      }
+    },
+    {
+      "view": "WaitlistChildren tha",
+      "rows": 21,
+      "row": {
+        "type": "opportunity",
+        "id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8"
+      },
+      "vm_calls": [
+        {
+          "status": 200,
+          "url": "/api/admin/view-models/drawer/opportunity/9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+          "body": {
+            "ok": null,
+            "skip_reason": null,
+            "keys": [
+              "__not_found"
+            ]
+          }
+        },
+        {
+          "status": 200,
+          "url": "/api/admin/entity-layouts/focus-panel-summary",
+          "body": {
+            "ok": null,
+            "skip_reason": null,
+            "keys": [
+              "published",
+              "draft"
+            ]
+          }
+        },
+        {
+          "status": 200,
+          "url": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "body": null
+        }
+      ],
+      "focus": {
+        "state": "record",
+        "sections": [
+          "WU.HEADER",
+          "WU.HEADER_CALCULATIONS",
+          "WU.WORK_VIEW_PILLS",
+          "FP.SURFACE"
+        ],
+        "classic_layout_message": false,
+        "cant_open_message": false
+      }
+    }
+  ],
+  "blocked_writes": [
+    "POST /api/admin/queues/stage-membership-ack",
+    "POST /api/admin/queues/stage-membership-ack"
+  ],
+  "note": "read-only harness; panel text and screenshots withheld (operating-tenant data)"
+}
