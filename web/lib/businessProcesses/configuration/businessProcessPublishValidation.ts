@@ -38,6 +38,7 @@ import {
     type ProcessEntryIntentV1,
 } from "@/lib/lifecycle/processEntryPointsV1";
 import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
+import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import {
     isDomainProjectionModel,
     PROCESS_PROJECTION_DOMAIN_LABELS,
@@ -105,6 +106,29 @@ export const PUBLISH_ENTRY_STAGE_GRAIN_MISMATCH = "process_entry_stage_grain_mis
  * the operator as a success that changed nothing.
  */
 export const PUBLISH_CHILD_COMPLETION_UNREACHABLE = "child_completion_unreachable" as const;
+/**
+ * BP V2 D7 — a Work View declares one Row Grain and filters only on stages of another.
+ *
+ * A family view filtering a child stage (or a child view filtering a family stage) published cleanly, and
+ * the runtime then refused the lens on every open (`grain_ambiguous`: "the declaration contradicts the
+ * lens"). The publisher could have seen it. This refuses exactly that configuration, before publication —
+ * the runtime refusal is unchanged, and nothing is coerced.
+ *
+ * Read with the platform's own readers, never a second copy: the stages a view filters on are
+ * `lensStageKeys` (the runtime's reading of the view's stage conditions), and each stage's grain is
+ * `resolveStageGrain` over its configured declarations (the entry-grain check's reading). Only a DECLARED
+ * Row Grain is checked: an undeclared (legacy) view's grain is derived from its stages, so it cannot
+ * contradict them, and a stage-independent view has no stage to contradict. A stage whose grain cannot be
+ * resolved is not proof of a mismatch and is left to the validators that own it.
+ *
+ * BLOCKING has the runtime's boundary: no filtered stage holds the declared grain. A view that ALSO filters
+ * stages of the other grain is served by the runtime today (Firefly's published Decision view filters
+ * Decision and Offer pending as family) — refusing it would block that tenant's next publication over a
+ * view that works, so it is reported as `PUBLISH_WORK_VIEW_GRAIN_MIXED`, a warning naming the stages.
+ */
+export const PUBLISH_WORK_VIEW_GRAIN_MISMATCH = "work_view_grain_mismatch" as const;
+/** BP V2 D7 — a declared-grain Work View that also filters stages of another grain. Reported, not blocking. */
+export const PUBLISH_WORK_VIEW_GRAIN_MIXED = "work_view_grain_mixed" as const;
 /** BP V2 S1 — an authored `process_model_v1` the platform cannot read (unknown kind or domain). */
 export const PUBLISH_PROCESS_MODEL_UNKNOWN = "process_model_unknown" as const;
 /**
@@ -538,6 +562,57 @@ export function validateParsedBusinessProcessForPublish(
                         : { entry_stage_grain_reason: grain.reason }),
                 },
             });
+        }
+
+        // WORK VIEW ROW GRAIN — see PUBLISH_WORK_VIEW_GRAIN_MISMATCH.
+        for (const view of process.work_views_v1 ?? []) {
+            const declared = view.row_grain_v1;
+            if (!declared) continue;
+            const incompatible: { stage_key: string; stage_grain: string }[] = [];
+            let compatible = 0;
+            for (const stageKey of lensStageKeys(view)) {
+                const stage = activeStages.find((s) => s.key === stageKey);
+                if (!stage) continue;
+                const grain = stageGrainOf(stage, stageGrainMetadata.get(stage.key) ?? null);
+                if (!grain.ok) continue;
+                if (grain.grain === declared) compatible += 1;
+                else incompatible.push({ stage_key: stage.key, stage_grain: grain.grain });
+            }
+            if (!incompatible.length) continue;
+            const named = incompatible
+                .map((i) => `“${activeStages.find((s) => s.key === i.stage_key)?.label ?? i.stage_key}” (${i.stage_grain})`)
+                .join(", ");
+            const detail = {
+                work_view_id: view.id,
+                work_view_label: view.label ?? null,
+                declared_row_grain: declared,
+                incompatible_stages: incompatible,
+            };
+            const path = `processes[${process.key}].work_views_v1[${view.id}].row_grain_v1`;
+            if (compatible === 0) {
+                errors.push({
+                    code: PUBLISH_WORK_VIEW_GRAIN_MISMATCH,
+                    stage_key: incompatible[0].stage_key,
+                    path,
+                    message:
+                        `Work View “${view.label ?? view.id}” shows ${declared} records but filters only on `
+                        + `${named}, which ${incompatible.length === 1 ? "holds" : "hold"} a different subject, `
+                        + `so it could never open. Change the view's Row Grain or the stages it filters on so they `
+                        + `describe the same records.`,
+                    detail,
+                });
+            } else {
+                warnings.push({
+                    code: PUBLISH_WORK_VIEW_GRAIN_MIXED,
+                    stage_key: incompatible[0].stage_key,
+                    path,
+                    message:
+                        `Work View “${view.label ?? view.id}” shows ${declared} records and also filters on `
+                        + `${named}, which ${incompatible.length === 1 ? "holds" : "hold"} a different subject. `
+                        + `It shows only ${declared} records from ${incompatible.length === 1 ? "that stage" : "those stages"}.`,
+                    detail,
+                });
+            }
         }
 
         /**

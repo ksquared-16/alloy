@@ -1,0 +1,325 @@
+{
+  "run": "efcd4cda",
+  "at": "2026-10-23T15:36:54.899Z",
+  "scenarios": {
+    "template_stages": [
+      {
+        "key": "lead",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "tour",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "decision",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "closed",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "waitlist",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "enrolling",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "enrolled",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "closed_withdrawn",
+        "grain": "child",
+        "segment": "child"
+      }
+    ],
+    "1 · valid family-grain view": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "2 · valid child-grain view": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "3 · family view filtering a child stage": {
+      "validate": {
+        "can_publish": false,
+        "errors": [
+          "work_view_grain_mismatch"
+        ],
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "enrolling",
+            "path": "processes[enrollment].work_views_v1[fam_on_child].row_grain_v1",
+            "message": "Work View “Family on Enrolling” shows family records but filters only on “Enrolling” (child), which holds a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "fam_on_child",
+              "work_view_label": "Family on Enrolling",
+              "declared_row_grain": "family",
+              "incompatible_stages": [
+                {
+                  "stage_key": "enrolling",
+                  "stage_grain": "child"
+                }
+              ]
+            }
+          }
+        ],
+        "mixed": []
+      },
+      "publish": {
+        "status": 422,
+        "code": "business_process_publication_blocked",
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "enrolling",
+            "path": "processes[enrollment].work_views_v1[fam_on_child].row_grain_v1",
+            "message": "Work View “Family on Enrolling” shows family records but filters only on “Enrolling” (child), which holds a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "fam_on_child",
+              "work_view_label": "Family on Enrolling",
+              "declared_row_grain": "family",
+              "incompatible_stages": [
+                {
+                  "stage_key": "enrolling",
+                  "stage_grain": "child"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "4 · child view filtering a family stage": {
+      "validate": {
+        "can_publish": false,
+        "errors": [
+          "work_view_grain_mismatch"
+        ],
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "decision",
+            "path": "processes[enrollment].work_views_v1[child_on_fam].row_grain_v1",
+            "message": "Work View “Children in Decision” shows child records but filters only on “Placement / Decision” (family), which holds a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "child_on_fam",
+              "work_view_label": "Children in Decision",
+              "declared_row_grain": "child",
+              "incompatible_stages": [
+                {
+                  "stage_key": "decision",
+                  "stage_grain": "family"
+                }
+              ]
+            }
+          }
+        ],
+        "mixed": []
+      },
+      "publish": {
+        "status": 422,
+        "code": "business_process_publication_blocked",
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "decision",
+            "path": "processes[enrollment].work_views_v1[child_on_fam].row_grain_v1",
+            "message": "Work View “Children in Decision” shows child records but filters only on “Placement / Decision” (family), which holds a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "child_on_fam",
+              "work_view_label": "Children in Decision",
+              "declared_row_grain": "child",
+              "incompatible_stages": [
+                {
+                  "stage_key": "decision",
+                  "stage_grain": "family"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "5 · multiple compatible stages": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "6a · mixed stages, none holding the declared grain": {
+      "validate": {
+        "can_publish": false,
+        "errors": [
+          "work_view_grain_mismatch"
+        ],
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "waitlist",
+            "path": "processes[enrollment].work_views_v1[all_child].row_grain_v1",
+            "message": "Work View “Children's stages as families” shows family records but filters only on “Waitlist” (child), “Enrolling” (child), which hold a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "all_child",
+              "work_view_label": "Children's stages as families",
+              "declared_row_grain": "family",
+              "incompatible_stages": [
+                {
+                  "stage_key": "waitlist",
+                  "stage_grain": "child"
+                },
+                {
+                  "stage_key": "enrolling",
+                  "stage_grain": "child"
+                }
+              ]
+            }
+          }
+        ],
+        "mixed": []
+      },
+      "publish": {
+        "status": 422,
+        "code": "business_process_publication_blocked",
+        "grain": [
+          {
+            "code": "work_view_grain_mismatch",
+            "stage_key": "waitlist",
+            "path": "processes[enrollment].work_views_v1[all_child].row_grain_v1",
+            "message": "Work View “Children's stages as families” shows family records but filters only on “Waitlist” (child), “Enrolling” (child), which hold a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+            "detail": {
+              "work_view_id": "all_child",
+              "work_view_label": "Children's stages as families",
+              "declared_row_grain": "family",
+              "incompatible_stages": [
+                {
+                  "stage_key": "waitlist",
+                  "stage_grain": "child"
+                },
+                {
+                  "stage_key": "enrolling",
+                  "stage_grain": "child"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "6b · mixed stages, one holding the declared grain": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": [
+          {
+            "code": "work_view_grain_mixed",
+            "stage_key": "waitlist",
+            "path": "processes[enrollment].work_views_v1[mixed].row_grain_v1",
+            "message": "Work View “Decision to Enrolled” shows family records and also filters on “Waitlist” (child), “Enrolling” (child), which hold a different subject. It shows only family records from those stages.",
+            "detail": {
+              "work_view_id": "mixed",
+              "work_view_label": "Decision to Enrolled",
+              "declared_row_grain": "family",
+              "incompatible_stages": [
+                {
+                  "stage_key": "waitlist",
+                  "stage_grain": "child"
+                },
+                {
+                  "stage_key": "enrolling",
+                  "stage_grain": "child"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "7 · legacy Work View defaults (no declared grain)": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "8 · assignments": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "9 · billing": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    }
+  },
+  "fixture_orgs_for_teardown": [
+    "01c196a8-ee75-48e4-a427-f60c4bfa02d8"
+  ]
+}
