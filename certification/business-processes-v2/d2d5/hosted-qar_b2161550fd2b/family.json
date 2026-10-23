@@ -1,0 +1,47 @@
+{
+  "run": "qar_b2161550fd2b",
+  "created": [
+    {
+      "kind": "opportunity",
+      "id": "e8967944-82f6-4ac4-88a5-ab14a7c16178",
+      "via": "create_lead",
+      "status": 200
+    },
+    {
+      "kind": "child",
+      "id": "a87680d4-eba9-457b-a217-87da24ad8522",
+      "via": "child.add",
+      "status": 200
+    },
+    {
+      "kind": "participation",
+      "id": "970cee85-9846-4b34-b8a3-976c5654b8fc",
+      "via": "opportunity-customer-members",
+      "status": 200
+    }
+  ],
+  "opportunity_id": "e8967944-82f6-4ac4-88a5-ab14a7c16178",
+  "household": "fee0cb3d-163c-477f-b92a-385983c0b645",
+  "ava": "6ec28af5-4728-4375-b041-4a429b6ec406",
+  "ben": "a87680d4-eba9-457b-a217-87da24ad8522",
+  "tasks": [
+    {
+      "id": "9a27fdc1-8835-4259-b715-09ae74d90d83",
+      "title": "Conduct Tour",
+      "status": "completed",
+      "child": null
+    },
+    {
+      "id": "2dab264a-fbe4-4724-bd2d-3158ffa71523",
+      "title": "Contact Family",
+      "status": "completed",
+      "child": null
+    },
+    {
+      "id": "18178d75-7514-4af0-aea1-73784a4ce87a",
+      "title": "Support Enrollment Decision",
+      "status": "open",
+      "child": null
+    }
+  ]
+}
