@@ -240,3 +240,21 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
 **Residual (classified, not in D4).** Org-wide lists and aggregates without a site filter: `needs-recognition`, the `ledger` and `journal-entries` lists, `snapshot`, `statements`.
 
 **Open:** D2, D5, D6, D7, D8; O1. **Next acceptance repair:** D2/D5, multi-child Enrollment progression and truthful work completion.
+
+## Update 2026-10-23T14:10Z: D2/D5 repaired, deployed and proven on hosted QA Shared
+
+**D2 and D5 are CLOSED.** PR #1581 (squash `1e4bc8877060`, deployed 13:49Z).
+
+- **D2 root cause.** `enter_child_enrollment` was missing from the plan parser's allow-list, so "Family Enrolling" silently ran as `no_movement` and completed work. The allow-list is now exhaustive over the target-kind union.
+- **D5 root cause.** The Enrollment template declared none of the per-child paths the platform already executes and that Firefly publishes. The template now declares them (Begin Enrolling / Waitlist / Not Enrolling), gates the family outcome on every child having a path, and selects their commands.
+- **Firefly is unchanged.** No published rule carried the dropped target (census `gar_c036e6dd7a6c79`).
+- **Local proof** (`d2d5/LOCAL-CERTIFICATION.md`): live two-child suite 6/6 (base answers 200 to both refusals); 0 new failures across 1,841 suites.
+- **Hosted proof** (`d2d5/HOSTED-QA.md`; `qar_b2161550fd2b` → QUIESCED_RETAINED; census `gar_001c6d9e918adc` 13/13, bound). In the real browser:
+  - "Family Enrolling" is refused with the real message and the work stays open.
+  - Ava is waitlisted and Ben begins enrolling, each on their own path.
+  - The Registration view shows only Ben and the Waitlist view only Ava.
+  - The family work completes only after every child has a path.
+
+**Documentation correction.** The child's stage lives on its Enrollment journey (`process_instances`), not on `opportunity_customer_members.stage_key`.
+
+**Open:** D6, D7, D8; O1. **Residual:** the D4 org-wide Financials lists. **Next acceptance gates:** D8 (closed-record Create Assignment editor), then D6/D7.

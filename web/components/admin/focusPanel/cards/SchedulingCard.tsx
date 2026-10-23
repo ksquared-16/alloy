@@ -826,7 +826,17 @@ function ScheduleWorkSurface({
 }) {
     const [proj, setProj] = useState<SubjectProj | null>(projection);
     const existing = existingView(proj);
-    const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
+    /*
+     * ENTERING IS PASSIVE (BP V2 D8). The surface opens on the subject's assignments — the list, or
+     * "No assignments yet" with "+ Add Assignment" — and authoring starts only when the operator asks:
+     * `beginCreateAssignment`, Edit, a type pick, or an assignment focus source.
+     *
+     * It used to open straight into `create` whenever the subject had no assignment. Because a card
+     * with a single subject opens that subject directly ("one subject is not a decision", above), opening
+     * any one-child family whose child had no assignment — a closed/lost family included — launched the
+     * Create Assignment editor without a click.
+     */
+    const [mode, setMode] = useState<SurfaceMode>("detail");
     const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
     const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
