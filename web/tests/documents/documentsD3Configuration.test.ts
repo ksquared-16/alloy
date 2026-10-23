@@ -308,6 +308,14 @@ describe("the validator (editor preview) matches the database's", () => {
         expect([...appCodes].sort()).toEqual([...sqlCodes].sort());
     });
 
+    it("a publish conflict is never a retryable error (hosted: SQLSTATE 40001 was retried until the request timed out)", () => {
+        const sql = readFileSync(join(resolve(__dirname, "../../.."), "supabase/migrations/20261209090200_documents_d3_publish_conflict_not_retryable.sql"), "utf8");
+        const body = sql.replace(/--[^\n]*/g, "");
+        expect(body).toContain("document_type_publish_conflict");
+        expect(body).toContain("ERRCODE = 'object_not_in_prerequisite_state'");
+        expect(body.match(/ERRCODE = 'serialization_failure'/g)).toBeNull();
+    });
+
     it("raise-only, as public.document_sensitivity_raise", () => {
         expect(raiseSensitivity("standard", "medical")).toBe("medical");
         expect(raiseSensitivity("medical", "standard")).toBe("medical");
