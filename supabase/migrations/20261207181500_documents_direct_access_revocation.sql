@@ -58,7 +58,6 @@ DO $verify$
 DECLARE
     t text;
     r text;
-    p text;
     leaks text := '';
 BEGIN
     FOREACH t IN ARRAY ARRAY[
@@ -73,11 +72,10 @@ BEGIN
             RAISE EXCEPTION 'expected table public.% is missing', t;
         END IF;
         FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
-            FOREACH p IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] LOOP
-                IF has_table_privilege(r, ('public.' || t)::regclass, p) THEN
-                    leaks := leaks || format('%s.%s:%s ', t, r, p);
-                END IF;
-            END LOOP;
+            -- One call over every table privilege: true if the role holds ANY of them.
+            IF has_table_privilege(r, ('public.' || t)::regclass, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+                leaks := leaks || format('%s.%s ', t, r);
+            END IF;
         END LOOP;
         IF NOT has_table_privilege('service_role', ('public.' || t)::regclass, 'SELECT, INSERT, UPDATE, DELETE') THEN
             RAISE EXCEPTION 'service_role lost access to public.%', t;
