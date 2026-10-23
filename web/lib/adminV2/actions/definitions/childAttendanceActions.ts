@@ -25,12 +25,14 @@ import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actio
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import {
     resolveAttendanceSubject,
-    resolveCurrentRoom,
 } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import {
     correctAttendanceEvent,
+    listAttendanceEvents,
     recordAttendanceEvent,
 } from "@/lib/childcareOperational/attendance/attendanceService";
+import { serviceDateForInstant } from "@/lib/childcareOperational/attendance/attendanceServiceDate";
+import { resolveCurrentWhereabouts } from "@/lib/roster/resolveCurrentWhereabouts";
 import type { AttendanceEventKind } from "@/lib/childcareOperational/attendance/attendanceVocabulary";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import {
@@ -47,6 +49,13 @@ export const ATTENDANCE_CHECK_OUT_ACTION_KEY = "attendance.check_out";
 export const ATTENDANCE_MOVE_ACTION_KEY = "attendance.move";
 export const ATTENDANCE_CORRECT_ACTION_KEY = "attendance.correct";
 export const ATTENDANCE_MARK_ABSENT_ACTION_KEY = "attendance.mark_absent";
+
+/** Why a move is refused, by the child's canonical whereabouts. */
+const NOT_PRESENT_TO_MOVE: Record<"checked_out" | "absent" | "not_arrived", string> = {
+    checked_out: "This child has been checked out, so they are not in a room to move them from.",
+    absent: "This child is marked absent today, so they are not in a room to move them from.",
+    not_arrived: "This child has not been checked in yet, so there is nothing to move them from.",
+};
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -264,25 +273,56 @@ function recordAction(args: {
                     return { ok: false, correlationId, status: 409, error: resolved.message };
                 }
                 const eventAt = t(payload.event_at) || new Date().toISOString();
-                const serviceDate = t(payload.service_date) || eventAt.slice(0, 10);
+                const timeZone = t(payload.time_zone) || "UTC";
+                // The service day the fact will be RECORDED on — the same derivation the attendance
+                // service applies — so the move is judged against the day it lands in.
+                const serviceDate = t(payload.service_date) || serviceDateForInstant(eventAt, timeZone);
                 /*
-                 * THE SOURCE ROOM IS THE DOMAIN'S, NOT THE CALLER'S.
+                 * THE SOURCE ROOM IS THE CANONICAL WHEREABOUTS, NOT THE LAST ROOM ANY EVENT NAMED.
                  *
-                 * A transfer's "from" is where the child actually is, decided by the attendance
-                 * fold. Accepting a client-supplied source would let a stale screen rewrite where a
-                 * child was. Only a transfer needs it, so only a transfer resolves it.
+                 * A transfer moves a child who IS somewhere: the same fold the day board and the
+                 * Attendance card read (`resolveCurrentWhereabouts`), at the instant of the move, over
+                 * that service day's facts. A checked-out, absent or not-yet-arrived child is not in a
+                 * room, so there is nothing to move — the placement room is where they are meant to
+                 * be, not where they are. A client-supplied source is never trusted.
                  */
-                const fromRoom =
-                    args.eventKind === "room_transfer"
-                        ? await resolveCurrentRoom(supabase, ctx.orgId, resolved.subject, serviceDate)
-                        : null;
-                if (args.eventKind === "room_transfer" && !fromRoom) {
-                    return {
-                        ok: false,
-                        correlationId,
-                        status: 409,
-                        error: "This child is not in a room yet, so there is nothing to move them from.",
-                    };
+                let fromRoom: string | null = null;
+                if (args.eventKind === "room_transfer") {
+                    const dayEvents = await listAttendanceEvents(supabase, ctx.orgId, {
+                        enrollmentAgreementId: resolved.subject.enrollmentAgreementId,
+                        serviceDateStart: serviceDate,
+                        serviceDateEnd: serviceDate,
+                    });
+                    // A retried move (same idempotency key) converges on the fact already recorded:
+                    // after the first one the child IS in the destination, so recomputing would
+                    // describe a different move.
+                    const idempotencyKey = t(payload.idempotency_key);
+                    const already = idempotencyKey
+                        ? dayEvents.find((e) => (e as { idempotency_key?: string | null }).idempotency_key === idempotencyKey)
+                        : undefined;
+                    if (already) {
+                        return {
+                            ok: true,
+                            correlationId,
+                            result: {
+                                actionKey: args.actionKey,
+                                entityType: invocation.entityType,
+                                entityId: childId,
+                                affectedId: already.id,
+                                detail: { event_kind: args.eventKind, attendance_event_id: already.id, converged: true },
+                            },
+                        };
+                    }
+                    const whereabouts = resolveCurrentWhereabouts(dayEvents, eventAt);
+                    if (whereabouts.state !== "present" || !whereabouts.locationId) {
+                        return {
+                            ok: false,
+                            correlationId,
+                            status: 409,
+                            error: NOT_PRESENT_TO_MOVE[whereabouts.state === "present" ? "not_arrived" : whereabouts.state],
+                        };
+                    }
+                    fromRoom = whereabouts.locationId;
                 }
 
                 const roomForEvent =
