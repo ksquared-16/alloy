@@ -273,3 +273,39 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
   - no write requests from opening.
 
 **Remaining acceptance items:** D6 (Scheduling card `financial-config` 404), D7 (publish-time Work View grain check), O1, the D4 residual Financials read-scope inventory (org-wide lists and aggregates), tile presentation feedback (Open/Overdue under the tile), and the Director product review (including the BOS panel auto-opening on record entry).
+
+## Update 2026-10-23T17:30Z: D6 and D7 repaired (PR pending); D9 recorded
+
+D6, D7 and D9 are classified independently. Local proof: `d6d7/LOCAL-CERTIFICATION.md`. Hosted proof: `d6d7/HOSTED-QA.md`, after deploy.
+
+**D6: REPAIRED (local), hosted pending.** The Scheduling card requested `financial-config/opportunity/<child id>` and got 404.
+- **Cause.** For a durable child (an Assignments row), the card's case came from the mutation resolver, which falls back to `return subjectId`.
+- **Fix.** `resolveSchedulingCaseOpportunityId` returns:
+  - the opportunity subject;
+  - otherwise the family binding;
+  - otherwise the operational host;
+  - otherwise **none**, and then no request is made.
+- **Proof.** 6/6; rendered durable child with 0 `financial-config` requests (the base card issues 2).
+- **Unchanged:** staff, financial and assignment semantics.
+
+**D7: REPAIRED (local), hosted pending.** Publication accepted a Work View whose declared Row Grain contradicts its stages.
+- **Fix.** In the publish validator, using `lensStageKeys` and `resolveStageGrain`:
+  - `work_view_grain_mismatch` blocks when no filtered stage holds the declared grain (the runtime's `grain_ambiguous` boundary);
+  - `work_view_grain_mixed` warns when the view also filters stages of the other grain.
+- **Proof.** The live draft → validate → publish suite passes 11/11 across the brief's cases 1–9; the counterfactual publishes all 3 refusals.
+- **Case 10 (Firefly), read-only** via census `gar_8df61ae8b70aeb`: 0 errors.
+- **Product decision for the Director.** Firefly's published **Decision** view declares `family` over `decision` + `offered` (child). Today that is a warning. Making mixed views blocking would refuse Firefly's next publication until that view is changed.
+
+**D9: RECORDED, not repaired (owner: Runtime/BOS).** The BOS assistant panel opens over the Focus Panel on record entry.
+- **Observed** in D8 hosted (`qar_cfa20b0578d5`) for admin and Director: the record was entered from a Work View row, a deep link (`/workspace/work-unit/<view>?subject_id=…`), or a refresh. The panel opened with **no explicit invocation**, partly covering the record. Hosted automation had to close it ("Close") before clicking.
+- **No write** results from it.
+- **Does not block** the D6/D7 acceptance. It **does affect** the Director's review of the Focus Panel, because the record is partly covered on entry. It is to be decided in that review: passive entry (the D8 rule) suggests BOS should open only when asked.
+
+**Financials org-wide authorization review (recorded, scope unchanged).** The D4 residual still stands: org-wide lists and aggregates without a site filter (`needs-recognition`, `ledger`, `journal-entries`, `snapshot`, `statements`). This needs its own Financials authorization review. Nothing in D6/D7 widens or narrows it.
+
+**Director presentation requirements (carried forward, not implemented in this slice):**
+1. Open and Overdue are integrated visually into the existing process tiles, not as a line under them.
+2. Each Work View shows a visible, authoritative count.
+3. Optionally, a financial value per Billing Work View. This is a future enhancement and depends on the Financials review above.
+
+**Open:** D6/D7 hosted proof, O1, the D4 residual, the Director review (D9, tile presentation, the mixed-view decision). **Stop condition:** this slice ends at the D6/D7 promotion. There is no BOS repair, tile redesign, Financials expansion or Firefly activation.
