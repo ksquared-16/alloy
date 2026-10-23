@@ -25,7 +25,7 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
-import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1, StageWorkParticipantDecisionV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { mapOpportunityRecordActionToPatch } from "@/lib/recordChrome/opportunityRecordActionMap";
 
 export const ENROLLMENT_TEMPLATE_PROCESS_KEY = ENROLLMENT_PROCESS_KEY;
@@ -248,13 +248,113 @@ function separateFamilyFromChildWaitlist(stageKey: string, plan: StageOperatingP
     return plan;
 }
 
+/**
+ * BP V2 D2/D5 — the family decides as a family; each child gets its own path (Director: family and child
+ * lifecycle authority are separate).
+ *
+ * The default Decision plan said "Family Enrolling" = no family movement + `enter_child_enrollment`. That
+ * target begins enrollment for the ONE child a family has and refuses for two or more, so in a multi-child
+ * family the only way forward was a per-child path the template never declared — and until the plan parser
+ * admitted the kind, the target was silently dropped and the outcome completed the work having done nothing.
+ *
+ * The template now carries the per-child pattern the platform already executes (and that Firefly's published
+ * Decision stage uses): `participant_decisions` on the Decision work — Begin Enrolling (`enroll_child`),
+ * Waitlist (`waitlist_child`), Not Enrolling — run by `executeParticipantDecisionForChild` against ONE chosen
+ * child, moving that child's status and stage and nothing else. `requires_all_participants_resolved` keeps the
+ * family outcome refused until every child has a path, so "Family Enrolling" records the family's intent and
+ * never stands in for, or implies, a child's enrollment. Its child target is removed: starting a child is the
+ * child's decision, not a side effect of the family's.
+ *
+ * Template-only (new organizations): the shared default plans, the runtime fallback and every published
+ * configuration — Firefly's included — are unchanged.
+ */
+export const ENROLLMENT_DECISION_WORK_TEMPLATE_KEY = "support_enrollment_decision" as const;
+export const ENROLLMENT_PER_CHILD_CAPABILITIES = ["enroll_child", "waitlist_child", "update_child_enrollment_status"] as const;
+const ENROLLMENT_PER_CHILD_DECISIONS: StageWorkParticipantDecisionV1[] = [
+    {
+        decision_key: "child_begin_enrolling",
+        action_ref: "enroll_child",
+        label: "Begin Enrolling",
+        subject_grain: "child",
+        targets: [
+            { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
+            { kind: "move_to_stage", stage_key: "enrolling" },
+        ],
+    },
+    {
+        decision_key: "child_waitlist",
+        action_ref: "waitlist_child",
+        label: "Waitlist",
+        subject_grain: "child",
+        targets: [
+            { kind: "update_child_enrollment_status", disposition_key: "waitlisted" },
+            { kind: "move_to_stage", stage_key: "waitlist" },
+        ],
+    },
+    {
+        decision_key: "child_not_enrolling",
+        action_ref: "update_child_enrollment_status",
+        label: "Not Enrolling",
+        subject_grain: "child",
+        targets: [{ kind: "update_child_enrollment_status", disposition_key: "not_enrolling" }],
+        required_inputs: [
+            {
+                key: "close_reason_key",
+                label: "Reason",
+                type: "select",
+                required: true,
+                binds_to_target_field: "close_reason_key",
+                options: [
+                    { label: "Chose another provider", value: "chose_another_provider" },
+                    { label: "No suitable capacity", value: "no_capacity" },
+                    { label: "Schedule did not fit", value: "schedule_mismatch" },
+                    { label: "Cost", value: "cost" },
+                    { label: "No longer needs care", value: "no_longer_needed" },
+                ],
+            },
+        ],
+    },
+];
+
+function declarePerChildDecisionPaths(stageKey: string, plan: StageOperatingPlanV1): StageOperatingPlanV1 {
+    if (stageKey !== "decision") return plan;
+    const refuse = (what: string): never => {
+        throw new Error(`Enrollment template: expected ${what} in the default decision plan; refusing to build a template that skipped its per-child paths`);
+    };
+    if (!(plan.work_templates ?? []).some((w) => w.template_key === ENROLLMENT_DECISION_WORK_TEMPLATE_KEY)) refuse(`work "${ENROLLMENT_DECISION_WORK_TEMPLATE_KEY}"`);
+    let found = false;
+    const outcome_rules = (plan.outcome_rules ?? []).map((rule) => {
+        if (rule.when_outcome_key !== "family_enrolling") return rule;
+        const targets = (rule.targets ?? []).filter((t) => {
+            if (t.kind !== "enter_child_enrollment") return true;
+            found = true;
+            return false;
+        });
+        return { ...rule, targets: targets.length ? targets : [{ kind: "no_movement" } as StageOutcomeRuleTargetV1] };
+    });
+    if (!found) refuse(`outcome "family_enrolling" carrying "enter_child_enrollment"`);
+    return {
+        ...plan,
+        work_templates: plan.work_templates.map((w) =>
+            w.template_key !== ENROLLMENT_DECISION_WORK_TEMPLATE_KEY
+                ? w
+                : {
+                      ...w,
+                      completion_policy: { ...(w.completion_policy ?? {}), requires_all_participants_resolved: true },
+                      participant_decisions: structuredClone(ENROLLMENT_PER_CHILD_DECISIONS),
+                  },
+        ),
+        outcome_rules,
+    };
+}
+
 /** Build enrollment template stage records (metadata only — no DB seeding). */
 export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageRecord[] {
     return ENROLLMENT_STAGE_SPECS.map((spec, index) => {
         const membership = defaultEnrollmentQueueMembershipForStage(spec.key) ?? undefined;
         const defaultPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key);
         const operatingPlan = defaultPlan
-            ? separateFamilyFromChildWaitlist(spec.key, closeLostExitsOntoFamilyTerminal(defaultPlan))
+            ? declarePerChildDecisionPaths(spec.key, separateFamilyFromChildWaitlist(spec.key, closeLostExitsOntoFamilyTerminal(defaultPlan)))
             : undefined;
         // Seed the row-type grain so Work Views can be scoped per grain (family vs child) and the
         // grain banner has data. Family track = one row per case; child track = one row per enrollment track.

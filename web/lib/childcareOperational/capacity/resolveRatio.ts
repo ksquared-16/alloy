@@ -136,11 +136,6 @@ export function resolveRequiredStaffForChildren(tiers: readonly RatioTier[], chi
     return requiredStaffForChildren(tiers, childCount);
 }
 
-/** Thin wrapper: highest child count a staff count can cover under the tiers. */
-export function resolveRatioCapacityForStaff(tiers: readonly RatioTier[], staffCount: number): number {
-    return maxChildrenForStaff(tiers, staffCount);
-}
-
 /**
  * Resolve the binding ratio for a room/context, reconciling mixed-age rooms with
  * the `most_restrictive` policy: the binding is the HIGHEST required staff and

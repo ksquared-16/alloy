@@ -1,0 +1,15 @@
+{
+  "completed": [
+    {
+      "title": "Send Enrollment Packet",
+      "status": 200,
+      "error": null
+    },
+    {
+      "title": "Review waitlist position",
+      "status": 200,
+      "error": null
+    }
+  ],
+  "open_after": []
+}

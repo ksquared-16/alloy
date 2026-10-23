@@ -349,6 +349,20 @@ describes staged lifecycles; for a projection view the following is the contract
   it re-read) dispatches the existing Work Unit convergence event with no opportunity id, so rows and counts
   re-read. Process-scoped card ORDER for a durable record is not configurable yet: the published Focus Panel
   summary is addressed to opportunities only.
+- **Opening a record is passive; authoring is explicit (BP V2 D8).** Entering any record shows the cards and
+  their authoritative state, and starts no authoring workflow and no write. This covers a Work View row, a
+  deep link, a refresh, a closed/lost Enrollment family, and a subject with no current work.
+  - **Entry.** The Scheduling card opens a single subject directly ("one subject is not a decision"), and
+    its work surface enters on the subject's assignments: the list, or "No assignments yet" with
+    "+ Add Assignment".
+  - **Authoring.** The Create Assignment editor opens only from an explicit request: "+ Add Assignment"
+    (`beginCreateAssignment`), Edit, or a type pick. An assignment focus source still opens that
+    assignment's detail.
+  - **Cancel and record changes.** Cancel returns to the list. Selecting another record never carries an
+    open editor onto it.
+  - **What was wrong before D8.** The surface used to enter in `create` whenever the subject had no
+    assignment. So any one-child family without one opened straight into the editor, without a click.
+  - **Proof:** `web/tests/businessProcesses/schedulingCardPassiveEntry.test.tsx`.
 - **Scope.** Rows and counts are read under the request's access scope (site restrictions enforced;
   `fin.read` for Billing) **intersected with the `/workspace` site selection** (BP V2 Slice 3). The
   selection is part of the answer's identity (`workspace_site_id` on the provisioning-answer URL) and of the

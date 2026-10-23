@@ -8,7 +8,6 @@ import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { WS_EYEBROW } from "@/components/workspace/workspaceTokens";
 import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
 import {
-    ELIGIBLE_CATALOG_CATEGORIES,
     billingParticipationFromExpectation,
     defaultVisualToneForAssignmentTypeLabel,
     type AssignmentTypeBehavior,
@@ -93,7 +92,6 @@ function emptyForm(): FormState {
             eligibleRoomIds: [],
             locationIds: [],
             billingExpectation: "none",
-            eligibleCatalogCategories: [],
         },
     };
 }
@@ -114,7 +112,6 @@ function formFromType(t: AssignmentTypeAdminRecord): FormState {
             eligibleRoomIds: b.eligibleRoomIds ?? [],
             locationIds: b.locationIds ?? [],
             billingExpectation: b.billingExpectation ?? (t.billingParticipation === "eligible" ? "expected" : "none"),
-            eligibleCatalogCategories: b.eligibleCatalogCategories ?? [],
         },
     };
 }
@@ -244,34 +241,6 @@ function AppearancePicker({ value, onChange }: { value: string; onChange: (v: st
                             style={{ background: opt.swatch }}
                             aria-hidden
                         />
-                        {opt.label}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-/** Multi-select chip list for eligible catalog categories — fixed vocabulary, behavior-only. */
-function CatalogCategoryPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-    return (
-        <div className="flex flex-wrap gap-1.5">
-            {ELIGIBLE_CATALOG_CATEGORIES.map((opt) => {
-                const on = value.includes(opt.value);
-                return (
-                    <button
-                        key={opt.value}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() =>
-                            onChange(on ? value.filter((v) => v !== opt.value) : [...value, opt.value])
-                        }
-                        className={`rounded-full border px-2.5 py-1 text-[11.5px] font-medium ${
-                            on
-                                ? "border-alloy-bend-pine/40 bg-alloy-bend-pine/10 text-alloy-bend-pine"
-                                : "border-alloy-stone/25 bg-white text-alloy-midnight hover:bg-alloy-stone/20"
-                        }`}
-                    >
                         {opt.label}
                     </button>
                 );
@@ -637,15 +606,6 @@ export default function AssignmentTypesStudioPanel({
                                 aria-label="Financial relationship"
                             />
                         </label>
-                        {(form.behavior.billingExpectation ?? "none") !== "none" ? (
-                            <div className="sm:col-span-2">
-                                <FieldLabel>Eligible catalog categories</FieldLabel>
-                                <CatalogCategoryPicker
-                                    value={form.behavior.eligibleCatalogCategories ?? []}
-                                    onChange={(v) => patchBehavior({ eligibleCatalogCategories: v })}
-                                />
-                            </div>
-                        ) : null}
                     </Section>
 
                     <Section title="Availability">

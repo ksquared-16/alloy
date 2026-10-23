@@ -15,7 +15,7 @@ import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOp
 import { assertValidIsoDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { validateRoomLocationUnderSite, validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
-import { canonicalUnitRoleFromStorage, isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
+import { assertSpaceEligibleForAssignment } from "@/lib/operationalAssignments/assertSpaceEligible";
 import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export type OperationalAssignmentSubject =
@@ -214,8 +214,8 @@ export async function createOperationalAssignment(
      * resolve under the selected site). The database trigger checks only the org, so this writer let a
      * secondary or staff assignment name a room at another site — and a staff row's room is what
      * attendance capture scope resolves through. A STAFF room must also be an operational group
-     * (attendance-system: staff assignment belongs to the operational_group unit). Whether a child's
-     * secondary may sit in a shared space is not ratified, so it is not decided here.
+     * (attendance-system: staff assignment belongs to the operational_group unit). Which spaces a
+     * child's schedule may use is the space's own configuration (V7 S1/S2), via spaceEligibleForUse.
      */
     const roomLocationId = trimOrNull(input.roomLocationId);
     if (roomLocationId) {
@@ -225,26 +225,15 @@ export async function createOperationalAssignment(
                 field: "room_location_id",
             });
         }
-        if (input.subject.type === "staff") {
-            const { data: unit, error: unitError } = await supabase
-                .from("locations")
-                .select("location_type, unit_role")
-                .eq("org_id", input.orgId)
-                .eq("id", roomLocationId)
-                .maybeSingle();
-            if (unitError) throw new OperationalEnrollmentServiceError("db_error", unitError.message);
-            const role = canonicalUnitRoleFromStorage(
-                (unit as { location_type?: unknown } | null)?.location_type,
-                (unit as { unit_role?: unknown } | null)?.unit_role
-            );
-            if (!isOperationalGroupRole(role)) {
-                throw new OperationalEnrollmentServiceError(
-                    "validation_failed",
-                    "A staff assignment's room must be a classroom (operational group)",
-                    { field: "room_location_id" }
-                );
-            }
-        }
+        // The space's structure and configured uses (V7-02a) — one rule with the pickers and
+        // Rooms configuration; staff rooms stay classrooms-only through the same rule.
+        await assertSpaceEligibleForAssignment(supabase, {
+            orgId: input.orgId,
+            roomLocationId,
+            categoryId: trimOrNull(input.assignmentTypeId),
+            subjectType: input.subject.type,
+            supersedesAssignmentId: trimOrNull(input.supersedesAssignmentId),
+        });
     }
 
     const isPrimary = input.isPrimary === true;

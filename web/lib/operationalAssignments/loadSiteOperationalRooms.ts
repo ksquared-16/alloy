@@ -17,11 +17,22 @@ import { isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { readSpaceUses } from "@/lib/location/spaceUse";
+import { readRoomSupportedProgramKeys } from "@/lib/locations/roomOfferingMetadata";
 
 export type SiteOperationalRoom = {
     roomId: string;
     roomName: string | null;
+    /**
+     * The programs this room supports (the site's program category ids), from the Rooms editor's
+     * `supported_program_keys` — `null` when the room has no programs configured (unknown, never
+     * "every program").
+     */
+    supportedProgramCategoryIds: string[] | null;
+    /** The single program a room implies — set only when it supports exactly one. */
     programCategoryId: string | null;
+    /** Configured uses (assignment category ids); `null` = never configured. See `spaceUse.ts`. */
+    spaceUses: string[] | null;
     active: boolean;
     /**
      * What kind of unit this is. Exposed so a caller can tell a classroom from a
@@ -32,18 +43,6 @@ export type SiteOperationalRoom = {
     /** The physical space containing this room, or null when it hangs off the site. */
     containingSpaceLocationId: string | null;
 };
-
-function programCategoryFromMetadata(meta: Record<string, unknown> | null | undefined): string | null {
-    if (!meta) return null;
-    const direct = meta.program_category_id;
-    if (typeof direct === "string" && direct.trim()) return direct.trim();
-    const nested = meta.room_config;
-    if (nested && typeof nested === "object") {
-        const id = (nested as Record<string, unknown>).program_category_id;
-        if (typeof id === "string" && id.trim()) return id.trim();
-    }
-    return null;
-}
 
 /** Load active-ish operational rooms belonging to a site, at any allowed depth. */
 export async function loadSiteOperationalRooms(
@@ -66,14 +65,32 @@ export async function loadSiteOperationalRooms(
         );
     }
 
+    /*
+     * PROGRAMS ARE THE KEYS THE ROOMS EDITOR WRITES. This loader used to read
+     * `metadata.program_category_id`, which nothing in the product writes (census 2026-10-22: zero
+     * rooms carry it, six carry `supported_program_keys`), so every room read as program-less and
+     * "room implies program" never fired. Keys resolve against the site's own programs.
+     */
+    const { data: programRows, error: programError } = await supabase
+        .from("location_program_categories")
+        .select("id, key")
+        .eq("org_id", orgId)
+        .eq("location_id", siteLocationId);
+    if (programError) throw new OperationalEnrollmentServiceError("db_error", programError.message);
+    const programIdByKey = new Map(((programRows ?? []) as Array<{ id: string; key: string }>).map((p) => [p.key, p.id]));
+
     return rooms
         .map((r) => {
             const status = (r.statusKey ?? "").trim().toLowerCase();
             const active = status === "" || status === "active" || status === "open";
+            const keys = readRoomSupportedProgramKeys(r.metadata);
+            const supported = keys.length ? keys.map((k) => programIdByKey.get(k)).filter((id): id is string => Boolean(id)) : null;
             return {
                 roomId: r.id,
                 roomName: r.name != null ? String(r.name).trim() || null : null,
-                programCategoryId: programCategoryFromMetadata(r.metadata),
+                supportedProgramCategoryIds: supported,
+                programCategoryId: supported?.length === 1 ? supported[0]! : null,
+                spaceUses: readSpaceUses(r.metadata),
                 active,
                 unitRole: r.unitRole,
                 containingSpaceLocationId: r.containingSpaceLocationId,

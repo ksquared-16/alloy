@@ -103,10 +103,6 @@ export function isStartDateAfterToday(startDate: string, todayYmd: string): bool
     return compareIsoDates(startDate, todayYmd) > 0;
 }
 
-export function isStartDateOnOrBeforeToday(startDate: string, todayYmd: string): boolean {
-    return !isStartDateAfterToday(startDate, todayYmd);
-}
-
 /**
  * Supersede invalid when new start is on or before prior start, or when new start
  * is before prior end (overlap) for a still-open prior row.
@@ -145,25 +141,3 @@ export function shouldTransitionAgreementEndingToEnded(
     return compareIsoDates(endDate, todayYmd) < 0;
 }
 
-export function shouldTransitionPlacementEndingToEnded(
-    status: string,
-    endDate: string | null | undefined,
-    todayYmd: string
-): boolean {
-    return shouldTransitionAgreementEndingToEnded(status, endDate, todayYmd);
-}
-
-export function resolveAgreementStatusAfterStartDateChange(
-    startDate: string | null | undefined,
-    todayYmd: string,
-    currentStatus: ChildEnrollmentAgreementStatus
-): ChildEnrollmentAgreementStatus {
-    if (currentStatus === "ending" || currentStatus === "ended" || currentStatus === "canceled") {
-        return currentStatus;
-    }
-    return deriveAgreementStatusFromStartDate(startDate, todayYmd);
-}
-
-export function resolvePlacementStatusForStartDate(startDate: string, todayYmd: string): "planned" | "active" {
-    return derivePlacementStatusFromStartDate(startDate, todayYmd);
-}

@@ -1,152 +1,242 @@
 ---
 owner: platform
-status: proposed
-last_reviewed: 2026-10-20
+status: superseded
+last_reviewed: 2026-10-22
 supersedes: []
+superseded_by: docs/platform/planning/assignments-spaces-v7-master-plan.md
 ---
 
-# Assignment Category — Option C Decision Packet
+# Option C v2 — Enrollment Commitment & Scheduled Participation
 
-Status: **PROPOSED — Director decision required. No implementation authorized.**
-Evidence base: staging `3416e3952`; code paths cited are under `web/` and `supabase/migrations/`.
-
-The goal: an operator selects the actual assignment **target** (a room, or a configured service),
-and Alloy resolves the assignment **category** (purpose) from configuration wherever that is
-unambiguous — without confusing category with the **primary** designation, and without a second
-taxonomy, room identity, pricing engine or assignment writer.
+> **Superseded** by [`assignments-spaces-v7-master-plan.md`](assignments-spaces-v7-master-plan.md) (Director V7 decision, 2026-10-22) wherever they conflict — notably homeroom is derived from space use, operators no longer choose Primary/Secondary, and pricing never decides homeroom. Kept as planning history.
+Evidence base: staging `8bb731ea` (V6-B deployed); the deployed-database census of 2026-10-22
+(`certification/census/option-c-space-and-assignment-shape.sql`); a read-only mounted pass over the
+Rooms and Assignment Categories configuration UI. This version replaces the 2026-10-20 packet, whose
+"Phase 0 gaps" (atomic secondary replacement, room-under-site) shipped in #1538 and whose model
+predates the V6 findings.
 
 ---
 
-## 1. Current canonical entities and relationships
+## 1. Current as-built model
 
-| Entity | Storage | Owner | Notes |
+| Concept | Where it lives | Cardinality / rule |
+|---|---|---|
+| Enrollment commitment | `child_enrollment_agreements` | one operational agreement per child per site (`ux_child_enrollment_agreements_one_operational_per_member_site`); no program or service column |
+| Enrollment line (commercial subject) | `opportunity_customer_members` (OCM) | one per child per opportunity; pricing terms key on it |
+| Home classroom / program | `child_placements` | one live placement per agreement; room must be an `operational_group` (trigger) |
+| Scheduled participation | `schedule_assignments` | many per agreement; **at most one live child primary** (`ux_schedule_assignments_one_operational_primary_child`) |
+| Hours | `assignment_weekday_intervals` | **several non-overlapping intervals per weekday per assignment** (unique `(assignment, weekday, start_time)` + GiST no-overlap) — a same-day split schedule fits ONE assignment |
+| Recurrence template | `schedule_patterns` (site-owned) | shared by many assignments; editing never reaches existing hours |
+| Assignment category | `operational_assignment_types` | typed participation columns + `default_behavior` JSON |
+| Program | `location_program_categories` (site-scoped) | a room lists supported programs in `metadata.supported_program_keys` |
+| Offering | `program_offerings` | unique `(org, program_key, attendance_type)`; attendance types include `before_school`, `after_school`, `custom` |
+| Price | `program_offering_variants` → `commercial_tuition_rates` | variant by quantity (days/hours/sessions) |
+| Agreed price | `enrollment_pricing_terms` | `term_kind = 'tuition'` only; **one live term per (OCM, term_kind, effective_start)**; already stores `offering_id`, `variant_id` |
+| Tuition obligation | `generateTuitionCharges` (from accepted terms) | one recurring charge stream per live term |
+| Other charges | `financial_charge_templates` via the consumption pipeline | triggers manual / event / attendance / schedule; not scoped by category |
+| Add-ons | `commercial_addons` | configuration only — **no billing consumer found** |
+| Space type | `locations.unit_role` | fixed CHECK: `operational_group` · `physical_space` · `shared_space`; NULL reads as `operational_group` |
+
+**What `is_primary` does today (V6-B):** it is the enrollment's *base schedule* — the one row the
+canonical reader returns, tuition prices from (`assignmentPricingFacts`), the draft-charge basis
+uses, expected attendance / occupancy / staffing / rosters read, the primary-change primitive
+(`apply_participation_operational_change`) supersedes, materialization and `/api/v1` POST create,
+and `setPrimaryOperationalAssignment` mirrors into the placement. Its display uses ("Primary room",
+ordering, archive guard) sit on top. It is **not** a statement that a child has one home: nothing in
+the database requires an enrolled child to have one, and a staff primary means only site authority.
+
+**Category fields — authoritative vs display** (measured):
+
+| Field | Server effect today |
+|---|---|
+| `subject_types` | enforced (DB trigger: category belongs to org, supports subject) |
+| `staffing_participation` (column) | read by staff supply |
+| `attendance_participation` (column) | **display only** |
+| `billing_participation` (column) | **display only** |
+| `behavior.billingExpectation` | display only; Studio writes it back to `billing_participation` on save |
+| `behavior.primaryEligible` | display only — never consulted; seeded Primary Classroom shows "Primary: Not eligible" while all 5 live staging primaries carry **no** category |
+| `behavior.allowsOverlap` | Studio checkbox only |
+| `behavior.roomRequirement`, `eligibleSpaceMode`, `eligibleRoomIds` | UI pickers only (editor, roster) — the server enforces only room-under-site |
+| `behavior.programRequirement`, `locationIds` | UI only |
+
+**The financial conflict.** Seeded `primary_classroom` has `billing_participation = eligible` (seed
+migration) and `default_behavior = {}`, which reads as `billingExpectation = none`
+("No financial relationship" in the Studio). Neither value drives billing; they disagree because the
+seed wrote the column and never the behavior.
+
+**Spaces on staging (main tenant):** 12 operational groups (5 active), 8 physical spaces (2 active),
+1 shared space, 13 legacy NULL (read as operational group). The Rooms UI offers only **Operational**
+and **Physical**; `shared_space` can no longer be chosen. Assignment pickers offer operational groups
+only (`assignableClassrooms`); the service accepts any room under the site for a child secondary.
+
+## 2. Confirmed gaps
+
+1. **Commitment granularity.** One live tuition term per child per date; a separately priced second
+   service (Before Care priced apart from School Age) has nowhere to be agreed.
+2. **No link from a session to what funds it.** An assignment carries `program_category_id` and a
+   category, never the offering or term it is delivered under.
+3. **Single-session expectations.** Expected attendance, occupancy, capacity and staffing read only
+   the base schedule (deterministically since V6-B); every other session is invisible to them, and
+   their room is the placement's, not the session's.
+4. **Category settings are advisory.** Space/room/program rules are UI-only; participation columns
+   other than staffing are display-only; the financial setting is duplicated and contradictory.
+5. **Shared spaces are unreachable** for children (the UI cannot set the type; pickers exclude it).
+6. **Primary means two things.** The base schedule (real, load-bearing) and a "home classroom"
+   implication (false for BC+AC-only children, where the operator must pick one arbitrarily).
+
+## 3. Recommended target model
+
+**Principle: commitment and participation are separate, and both already exist.**
+
+```
+Enrollment agreement ─┬─ Placement (home cohort, optional room)            — unchanged
+                      ├─ Accepted terms   (what is agreed and priced; per OFFERING)
+                      └─ Assignments      (when/where participation is expected; per SESSION)
+                              └─ category = purpose + participation policy
+                              └─ offering it is delivered under (optional)
+```
+
+1. **Commitment = agreement + accepted terms, one live term per offering.** Widen the existing
+   uniqueness from `(OCM, term_kind, effective_start)` to `(OCM, term_kind, offering_id,
+   effective_start)`. `offering_id` already exists on the term. A bundle (one price for Before &
+   After) is one offering; separate prices are separate offerings. No new resolver, generator or
+   payment path: `generateTuitionCharges` already iterates live terms.
+2. **Session → offering link.** Add nullable `schedule_assignments.program_offering_id`: the
+   offering a session is delivered under. Null = included / not separately priced (enrichment
+   included in tuition, transportation, therapy). A session with no offering creates no charge.
+3. **Category = purpose + participation policy.** Purpose (label, icon, subject types) plus the
+   three typed participation columns as the ONLY participation authority. `billingExpectation` is
+   folded into `billing_participation`; `primaryEligible` is retired (Primary is not a category
+   property — D2); `allowsOverlap` becomes the pull-out rule in §5.
+4. **`is_primary` keeps exactly its V6-B role** — the enrollment's base schedule and placement
+   mirror — through the transition. It is renamed in the UI ("Enrolled schedule"), never inferred
+   from category, never required to be a classroom, and is retired only after set-aware readers are
+   certified (§9).
+5. **Space type stays the three-value classification.** Children's sessions may use a `shared_space`
+   or `physical_space` when the session's category allows it; placement, staff rooms, licensing
+   capacity and ratios stay on `operational_group` only.
+
+## 4. Alternatives and rejected approaches
+
+| Approach | Verdict |
+|---|---|
+| A. Keep Primary/Secondary, configuration-driven pickers only | **Insufficient**: cannot price BC and AC separately, cannot count sessions in their own rooms |
+| B. Equal assignments, `is_primary` reinterpreted as "home" now | **Rejected now**: breaks the unique index's purpose, the primary RPC, materialization, `/api/v1` semantics, pricing and the V6-B readers in one step |
+| C-full. New `enrollment_services` / commitment-line table | **Rejected**: duplicates accepted terms + offerings, which already express "what is agreed" |
+| Category as room type ("Before Care room") | **Rejected**: conflates purpose with space; one gym serves enrichment and after care |
+| Invent a classroom/primary for BC+AC-only children | **Rejected** (Director requirement); same-room BC+AC is one assignment with split intervals |
+| **C-minimal (recommended)** | terms per offering + session→offering link + category participation authority + set-aware readers, staged |
+
+## 5. ECE scenario coverage (target)
+
+| Scenario | Model |
+|---|---|
+| School Age + Before Care | Base assignment School Age (Mon–Fri 15:00–18:00); Before Care assignment (category Before Care, eligible shared/any space, 07:00–08:30). Bundled → one School Age term; separate → a second term on the Before Care offering |
+| Before Care + After Care only, same room | **One** assignment, offering School Age · `custom` "Before & After", intervals 07:00–08:30 and 15:00–18:00 each weekday. One term. No invented classroom (placement room optional) |
+| Before Care + After Care only, separate rooms or prices | Two assignments on `before_school` / `after_school` offerings; two terms if priced apart, one bundle offering if not. The base schedule (`is_primary`) is whichever carries the bundle / first term — a pricing anchor, not a home |
+| Preschool + Soccer Shots | Base Preschool assignment; Enrichment assignment in the gym (shared space), Tue 10:00–10:45, `allowsOverlap` (pull-out). Included → no offering; extra → its own offering/term |
+| Several schedules in one program | Different hours per weekday on one assignment; different date ranges are effective-dated successors |
+| Several distinct offerings | One term per offering (widened uniqueness) |
+| Shared spaces | Session room may be `shared_space` / `physical_space` per category; occupancy counted in that space for the interval |
+| Sessions with no charge | Session with no offering, or category `billing_participation = none` |
+
+**Multi-session expectations (target):** an expected-attendance entry per *(child, session, date,
+interval)* for sessions whose category `attendance_participation = expected`; room = session room ??
+placement room. Derived measures:
+- **unique children per day** — distinct children with ≥1 entry (the headline "expected today");
+- **per-space occupancy per time bucket** — distinct children whose interval covers the bucket;
+- **pull-out precedence** — during an `allowsOverlap` session the child counts in the pull-out space
+  and not in the base room (never twice);
+- **staffing demand / capacity** — from per-space peak concurrent occupancy; licensing ratios stay
+  per operational group;
+- **actual attendance unchanged** — check-in/out stays per child per day; room capture is separate.
+
+Until the replacement is certified, V6-B's base-schedule-only behaviour stays exactly as deployed.
+
+## 6. Director decisions
+
+| # | Decision | Recommendation | Approve / Reject / Revise |
 |---|---|---|---|
-| Assignment Category | `operational_assignment_types` (org-level: `key`, `label`, `subject_types[]`, `default_behavior jsonb`, `billing_/attendance_/staffing_participation`) | Configuration (Operations → Studio) | Seeded: primary_classroom, before_care, after_care, enrichment, transportation, therapy, recurring_service. **Seed sets no `default_behavior`.** |
-| Category behavior | `default_behavior` → `AssignmentTypeBehavior` (`lib/operationalAssignments/assignmentTypeBehavior.ts`) | Configuration | `primaryEligible`, `allowsOverlap`, `programRequirement`, `roomRequirement`, `eligibleSpaceMode` (any/selected/program_match), `eligibleRoomIds`, `locationIds`, `billingExpectation`, `eligibleCatalogCategories` |
-| Room | `locations` (`location_type='unit'`, `unit_role` operational_group / physical_space / shared_space) | Location | Carries ≤1 `metadata.program_category_id`. **No category.** |
-| Program | `location_program_categories` | Programs | Room → program via room metadata. |
-| Program offering / variant | `program_offerings` (`program_key`, `attendance_type`), `program_offering_variants` | Programs → Commercial | Prices attach to variants. **No category link.** |
-| Service / product | `financial_services`, `commercial_products` | Commercial / Financials | **No category link.** Not selectable in the assignment flow. |
-| Assignment | `schedule_assignments` (`subject_type`, `site_location_id`, `room_location_id`, `program_category_id`, `operational_assignment_type_id`, `is_primary`, effective dates, status) | Enrollment / Placement + Operations Temporal | Child home room/program also in `child_placements`. |
-| Accepted tuition | `enrollment_pricing_terms` | Financials | Pricing reads program/schedule/days/site — **not category.** |
+| D1 | Commitment = agreement + accepted terms, **one live term per offering** (widen the term uniqueness) | Approve | |
+| D2 | `is_primary` = enrollment base schedule only; UI calls it "Enrolled schedule"; `primaryEligible` retired | Approve | |
+| D3 | Nullable `schedule_assignments.program_offering_id` (session → offering) | Approve | |
+| D4 | Category participation columns are the sole authority; `billingExpectation` folded into `billing_participation`; Studio reads/writes the columns | Approve | |
+| D5 | Server-side enforcement of category room requirement / space mode / allowed rooms (service level, new writes only) | Approve | |
+| D6 | Children's sessions may use `shared_space` / `physical_space` when the category allows; restore "Shared" in Rooms | Approve | |
+| D7 | Set-aware expectations per §5 (unique children, per-space buckets, pull-out precedence) | Approve design; implement after D1–D6 | |
+| D8 | BC+AC in one room = one assignment with split intervals (no invented classroom) | Approve | |
+| D9 | Operator noun: **"Schedule"** for the per-session object ("Add schedule"); "Assignment" stays internal | Approve | |
+| D10 | The 5 category-null staging primaries: read-time default "Enrolled program", **no backfill** | Approve | |
+| D11 | Secondary/staff change-event parity: separate workstream owned by operations-temporal + integrations; prerequisite for exposing D7 externally | Approve as dependency | |
 
-Relationships that exist: room → program (one); category → rooms (`eligibleRoomIds`, optional,
-empty by default, browser-only). Relationships that **do not** exist: room → category,
-offering/service → category, org default primary category.
+## 7. Proposed schema / configuration changes
 
-## 2. Confirmed inconsistencies and server-enforcement gaps
-
-Classification: (a) missing invariant enforcement · (b) deliberate client guidance ·
-(c) enforced via another canonical path · (d) needs a product decision.
-
-| Rule | Server today | Class |
+| Change | Kind | Trigger |
 |---|---|---|
-| `primaryEligible` | Not read by any writer or trigger; not even by a picker. Seeds read `false` (Primary Classroom included); Studio-created categories default `true`. | (d) first (seed backfill + meaning), then (a) |
-| `allowsOverlap` | Not enforced; conflicts hard-coded 0. Inventory doc: Calculations own binding, Assignments warn. | (b)/(d) |
-| `roomRequirement` | Not enforced by the service; `change_room` demands *some* room even for not_used; Card treats optional as required, Workspace modal as optional. | (a) + (d) for "optional" meaning |
-| `programRequirement` | Not enforced (DB checks program ∈ site only). | (a) |
-| `eligibleSpaceMode` `program_match` | Picker shows misses for override — documented intent. | (b) |
-| `eligibleSpaceMode` `selected` / `eligibleRoomIds` | Picker filter only. | (a) or (d) if override intended |
-| `locationIds` | Never read anywhere; inactive categories not rejected on write. | (a) |
-| `subject_types` | DB trigger. | (c) |
-| Category required on secondary | Command layer (`assignment.create` / `change_room` eligibility). | (c) |
-| Category on primary | Every primary writer writes **null** (first schedule, materialization, `/api/admin/schedule-assignments`, `/api/v1/schedule-assignments`). Inventory doc lists an org default primary type as future work. | (d) |
-| Assignment room is an operational group | Enforced for `child_placements` only (trigger); `schedule_assignments.room_location_id` accepts any org location. | (a) |
-| Assignment room belongs to the assignment site | Placement validates; assignment checks org only. A staff row's room drives attendance capture scope. | (a) |
-| Child primary uniqueness | Unique index (one operational primary per agreement) + overlap trigger. | (c) |
-| Supersession, primary | Atomic RPC / `set_primary` with compensation. | (c) |
-| Supersession, secondary edit / `change_room` | Prior row closed, **then** successor inserted, no compensation; prior row lookup not scoped to the subject. | (a) |
+| `enrollment_pricing_terms` unique → `(org, OCM, term_kind, offering_id, effective_start) WHERE superseded_at IS NULL` | migration (index swap) | financials recertification |
+| `schedule_assignments.program_offering_id uuid NULL REFERENCES program_offerings` | migration (additive column) | `ops.temporal-table-migration` full recertification |
+| `operational_assignment_types`: no column change; behavior keys `billingExpectation`, `primaryEligible` retired in code | code + Studio | none |
+| `locations.unit_role`: no change; "Shared" option restored in the Rooms UI | UI | none |
+| Category enforcement in `createOperationalAssignment` and the roster path | code | writer census unchanged (no new writer) |
 
-Side findings: `set_primary` promote leaves the promoted secondary live; the Card's promote sends
-an effective date the service refuses (≤ current primary start). Projection labels a typeless
-committed primary "No billing"; attention counts every typeless primary as missing a type; a
-room-less child service row *displays the home classroom* (projection falls back to placement).
+No other table, resolver, obligation writer or payment path.
 
-## 3. Proposed target relationships
+## 8. Commercial and attendance implications
 
-1. **Every assignment carries a category** — primary included. "Primary" stays a separate
-   designation (`is_primary`), never inferred from a category.
-2. **Category ↔ room: eligibility, not identity.** A room may list the categories it serves
-   (`eligibleCategoryKeys` on the room, or reuse category `eligibleRoomIds` as the single
-   direction). One direction only — recommended: keep it on the **category**
-   (`eligibleSpaceMode`/`eligibleRoomIds`, already authored in Studio) and add a
-   **room default** only where Directors want one.
-3. **Category ↔ service/offering:** a service assignment's category comes from the offering it
-   delivers. Requires an explicit `program_offerings.assignment_type_key` (or on
-   `financial_services`) — new, opt-in.
-4. **Org default primary category** (already planned): the first/primary assignment of a child
-   defaults to it (normally Primary Classroom).
+- **One program, several sessions** — one offering/term; sessions reference it; one charge stream.
+- **BC + AC bundled** — `custom` offering "Before & After"; one term.
+- **BC + AC separate** — two offerings, two terms, two charge streams (existing generator).
+- **Optional enrichment** — its own offering/term when priced; none when included.
+- **Uncharged sessions** — no offering; `billing_participation = none`.
+- Pricing facts for a term come from the sessions delivered under its offering (days from the union
+  of their weekdays) — replacing "days from the base schedule" only when D1/D3 ship; until then the
+  V6-A primary-days rule stands.
+- Attendance / occupancy / staffing change only with D7 and only behind its certification.
 
-## 4. Proposed operator interaction
+## 9. Compatibility strategy
 
-- **Add Assignment** opens the target picker: rooms (operational groups at the site) and, when
-  configured, services. Not a category list.
-- Choosing a target resolves eligible categories:
-  - exactly one → shown as a chip ("Before Care"), editable;
-  - several → an inline required choice among *those* categories only (no arbitrary inference);
-  - none → the operator chooses from all active child categories (today's picker, inline).
-- The first assignment for a child resolves to the org default primary category and the
-  primary designation; later assignments are secondary unless explicitly promoted.
+1. **`is_primary` contract (unchanged until D7 is certified):** one live base schedule per agreement;
+   the primary RPC, materialization, `/api/v1` POST/change, placement sync and the V6 readers keep
+   using it. New sessions are never primary.
+2. **External API:** `/api/v1/schedule-assignments` keeps `is_primary` with its current meaning;
+   `assignment_type_key` and `program_offering_id` are added as additive fields only after D11.
+3. **Historical integrity:** no backfill of offerings, categories, terms or attendance; a null offering
+   means "priced under the agreement's existing term" for all history.
+4. **Rollout:** one PR per slice; the term-uniqueness widening is backward compatible (existing data
+   has ≤1 live term per OCM/date). **Rollback:** dropping the new nullable column or restoring the
+   narrower index is possible only while no second live term exists — the slice that first writes a
+   second term is the one-way door.
 
-### Examples
+## 10. Minimal implementation roadmap
 
-| Scenario | Target | Category resolution | Room | Notes |
-|---|---|---|---|---|
-| Infant B, primary | Room Infant B | Org default primary category (Primary Classroom) | Required, operational group | Primary designation by first-assignment rule, not by category name. Tuition from program/offering as today. |
-| Soccer Shots | Service "Soccer Shots" (offering/service with `assignment_type_key = recurring_service`) | Recurring Service | Optional — any eligible space or none | Independent schedule; commercial terms from the service, not tuition. Requires §5 link + a space policy (shared spaces are not placement targets). |
-| Before Care | Room "Toddler 2" | Room serves Primary Classroom **and** Before Care → inline choice | Same room as primary allowed | Secondary; distinct schedule; no change to home placement. |
-| One room, many categories | Any multi-purpose room | Inline choice limited to that room's eligible categories | — | Never inferred by name or position. |
+| Slice | Operator outcome | Lane | Schema | Gates / certification | Approval |
+|---|---|---|---|---|---|
+| **C1 Category authority** | Studio and pickers read the participation columns; `billingExpectation` / `primaryEligible` retired; server enforces room/space rules; "Shared" restored | enrollment-placement (+configuration) | none | unit + live create/replace with refused rooms; mounted Studio + editor | D2, D4, D5, D6 |
+| **C2 Schedule UX** | "Add schedule": program/service → category → eligible space → days/hours (split intervals) → pricing review | enrollment-placement (UI) | none | mounted editor flows for every §5 scenario on a preview | D8, D9 |
+| **C3 Terms per offering** | separately priced services and bundles | commercial + financials | index swap | live accept / override / generate per offering; no duplicate charge; financial recert | D1 |
+| **C4 Session → offering** | sessions know what funds them; pricing facts from their sessions | enrollment-placement + commercial | additive column | full temporal recert; V6-A/B live suites | D3 |
+| **C5 Set-aware expectations** | sessions counted in their own spaces; unique-child and per-space counts | operations-temporal (+staffing, capacity) | none | live multi-session suites; mounted roster/attendance; recert of expectations, capacity, staffing | D7, after D11 |
+| **E Event parity** | secondary/staff change events | operations-temporal + integrations | event contract | contract + consumer tests | D11 |
+| **Last** | full Focus Panel certification | surfaces | — | mounted | — |
 
-## 5. Minimum configuration / schema changes (each needs approval)
+Code reused throughout: `createOperationalAssignment`, `replace_secondary_schedule_assignment`,
+`assignment_weekday_intervals`, offerings/variants/rates, `acceptEnrollmentPricingTerm`,
+`generateTuitionCharges`, `loadOperationalExpectationInputs`. Removed: the `primaryEligible` and
+`billingExpectation` behavior keys; `assignableClassrooms` as the only child-session room filter.
 
-1. Backfill `default_behavior.primaryEligible` for seeded categories (data, no schema).
-2. Org setting: default primary category key (setting row; planned in inventory doc).
-3. Optional: room default category (location metadata key) — only if §3.2 room defaults are wanted.
-4. Optional, for services: `assignment_type_key` on `program_offerings` or `financial_services`
-   (one column + validation) — only if service-first selection is wanted now.
-5. No new tables, no new assignment writer, no pricing change.
+## 11. Risk and certification matrix
 
-## 6. Existing-record compatibility and migration
-
-- Null-category primaries remain **valid**. Options: (a) leave null and resolve the org default at
-  read time for display; (b) one-time backfill to the org default primary category (data
-  migration, reversible, audited). Recommend (b) only after §5.1–5.2 land.
-- Typed secondaries unchanged. Supersession already carries category forward.
-- No change to `child_placements`, accepted tuition, attendance or pricing history.
-
-## 7. Downstream impacts
-
-- Staffing supply / qualifications read category: correct categories improve them; a wrong
-  inference would change staff supply — hence "never infer arbitrarily".
-- Projection/attention: a typed primary stops reading "No billing" / "missing type".
-- Pricing and attendance: no change (they do not read category).
-
-## 8. Authorization and temporal implications
-
-- Category changes on committed assignments must supersede (effective-dated), never patch; the
-  secondary supersede path needs to become atomic first (§2).
-- `primaryEligible` enforcement belongs in the command layer and `set_primary`, not the browser.
-- Server must validate room ∈ site and room role for assignments (today placement-only).
-
-## 9. Complexity assessment and code that can be removed
-
-- Removes: the separate `pick-type` screen/mode; the Card vs Workspace disagreement on
-  "optional"; the browser-only `scopeRoomsForAssignmentPicker` becomes server-backed validation
-  plus a picker hint.
-- Adds: one resolver (target → eligible categories, pure, server and client shared), command
-  validations, an org setting. Moderate.
-
-## 10. Recommended phases and approval boundaries
-
-| Phase | Scope | Approval needed |
+| Slice | Main risk | Certification |
 |---|---|---|
-| 0 | Fix confirmed gaps that are invariants regardless of UX: room ∈ site and room role on assignment writes; atomic secondary supersession. | Engineering approval (no product semantics). |
-| 1 | Decide primaryEligible meaning; backfill seeds; org default primary category setting. | **Director:** semantics + data migration. |
-| 2 | Primary assignments carry the default category (new + optional backfill). | **Director:** migration consequences. |
-| 3 | Target-first picker with category resolved from category→room eligibility; inline choice when several. | **Director:** UX sign-off. |
-| 4 | Services as targets (offering/service → category link). | **Director:** schema + commercial boundary. |
+| C1 | refusing rooms operators already use | census of existing rows against category rules before enforcing; enforce for new writes only |
+| C2 | regression in the V2–V6 editor flows | existing deployed Assignments cert steps + new scenario steps |
+| C3 | duplicate tuition charges | live: two terms ⇒ two streams, retry idempotent, override rules intact |
+| C4 | temporal-table migration | `ops.temporal-table-migration` full recert; writer census; atomicity suites |
+| C5 | occupancy / ratio numbers change | side-by-side old/new on the certification stack; mounted roster and attendance |
+| E | external consumers | contract tests; staged exposure |
 
-Open Director decisions: (1) primaryEligible meaning and seed backfill; (2) org default primary
-category; (3) direction of the room↔category link (category list vs room default); (4) whether
-services become assignment targets now; (5) backfill vs read-time default for existing primaries;
-(6) whether `selected` space mode is a hard rule or overridable guidance.
+## 12. Recommended first slice
+
+**C1 — Category authority**, no schema. It removes the contradictory financial setting and the
+unenforced room rules that every later slice depends on, makes shared spaces usable, and changes no
+pricing, attendance or `is_primary` behaviour. Approval needed: D2, D4, D5, D6.

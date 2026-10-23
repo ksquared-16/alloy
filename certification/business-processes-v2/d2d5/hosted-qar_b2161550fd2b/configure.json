@@ -1,0 +1,66 @@
+{
+  "run": "qar_b2161550fd2b",
+  "steps": [
+    {
+      "name": "tour plan (drop dead helpers)",
+      "status": 200,
+      "error": null,
+      "code": null
+    },
+    {
+      "name": "decision plan (per-child paths + gate)",
+      "status": 200,
+      "error": null,
+      "code": null
+    },
+    {
+      "name": "command set add",
+      "status": 200,
+      "error": null,
+      "code": null
+    }
+  ],
+  "process": {
+    "id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+    "key": "enrollment",
+    "command_set_present": false
+  },
+  "command_set": {
+    "added": [
+      "enroll_child",
+      "waitlist_child",
+      "update_child_enrollment_status",
+      "schedule_tour",
+      "send_tour_invitation",
+      "send_form",
+      "quick_message"
+    ],
+    "removed": [],
+    "commands": [
+      "enroll_child",
+      "waitlist_child",
+      "update_child_enrollment_status",
+      "schedule_tour",
+      "send_tour_invitation",
+      "send_form",
+      "quick_message"
+    ]
+  },
+  "validate": {
+    "status": 200,
+    "errors": []
+  },
+  "publish": {
+    "status": 200,
+    "published": {
+      "department_id": "7c1ac953-1124-493a-b204-fdb754335c8f",
+      "revision_id": "59ba9904-18cb-4393-8560-8b0fe65f916f",
+      "revision_number": 3,
+      "publication_id": "5db84f5e-ce75-44fa-9314-0854cb4dae86",
+      "published_at": "2026-10-23T13:50:04.811903+00:00",
+      "already_published": false
+    },
+    "error": null,
+    "errors": null
+  }
+}

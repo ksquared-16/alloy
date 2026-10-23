@@ -772,16 +772,6 @@ export async function loadSchedulingProjectionForStaff(
     return { ...projection, subject: { type: "staff", id: personId, name: params.subjectName } };
 }
 
-/** Re-export for callers that only have an agreement id. */
-export async function agreementStatusById(
-    supabase: SupabaseClient,
-    orgId: string,
-    agreementId: string
-): Promise<string | null> {
-    const agreement = await getAgreementById(supabase, orgId, agreementId);
-    return agreement?.status ?? null;
-}
-
 // ---------------------------------------------------------------------------
 // CANONICAL BULK SCHEDULING PROJECTION
 //
