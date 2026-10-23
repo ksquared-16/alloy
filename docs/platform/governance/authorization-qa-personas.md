@@ -65,6 +65,10 @@ Every identity belongs to exactly one organization, forever, because a second me
 Access is granted only through Alloy's canonical audited functions. Custom roles are created through
 `create_role_definition_audited` and `replace_role_permission_grants`; memberships through `assign_member_role_audited`;
 department scope through `replace_member_access_scope_audited`; removal through `remove_member_access_audited`.
+`remove_member_access_audited` ends the `(user, org)` membership: it deletes `user_roles` **and**
+`user_access_profiles` (site/department junctions cascade). A role-less residual profile is reusable
+scope and is not a clean close — pool-access censuses count profiles as residue. Audit history of
+prior roles and scopes is retained in `mutation_events`.
 
 **The QA-run actions must refuse (unchanged from Revision 1):**
 - a persona key not in the registry;

@@ -102,6 +102,8 @@
     "dev:qa:ensure-shared-tenant": "tsx --tsconfig tsconfig.json scripts/ensureSharedQaTenant.ts",
     "dev:qa:authz-fixture-ensure": "node scripts/qaAuthzFixtureEnsure.mjs",
     "dev:qa:authz-fixture-reset": "node scripts/qaAuthzFixtureReset.mjs",
+    "dev:qa:authz-subject-fixture-ensure": "node scripts/qaAuthzSubjectFixtureEnsure.mjs",
+    "dev:qa:authz-subject-fixture-reset": "node scripts/qaAuthzSubjectFixtureReset.mjs",
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",

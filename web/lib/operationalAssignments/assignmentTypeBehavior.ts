@@ -195,3 +195,20 @@ export function scopeRoomsForAssignmentPicker<T extends { roomId: string; progra
     }
     return rooms;
 }
+
+/**
+ * The rooms one choice may apply to SEVERAL assignments — the Roster's bulk pickers.
+ *
+ * Active rooms only, then {@link scopeRoomsForAssignmentPicker} once per Category involved: a room
+ * is offered only if every selected row's Category would offer it in the Assignment editor. No
+ * Category (an unknown or missing behavior) narrows nothing, exactly as in the editor.
+ */
+export function roomsForEveryCategory<T extends { roomId: string; active?: boolean; programCategoryId?: string | null }>(
+    rooms: T[],
+    behaviors: AssignmentTypeBehavior[],
+): T[] {
+    return behaviors.reduce(
+        (offered, behavior) => scopeRoomsForAssignmentPicker(offered, behavior),
+        rooms.filter((r) => r.active !== false),
+    );
+}

@@ -79,12 +79,23 @@ export async function loadOperationalExpectationInputs(
                   .in("enrollment_agreement_id", agreementIds)
                   .in("status", ROW_OPERATIONAL)
             : Promise.resolve(EMPTY_QUERY_RESULT),
+        /*
+         * THE ENROLLMENT'S PRIMARY — the one schedule per agreement `expandExpectedAttendance`
+         * documents. Every committed live row used to come back, and `indexOperationalByAgreement`
+         * kept the last: a five-day child whose Before Care was added after enrolment was expected
+         * only on the Before Care days, and a child with no primary was expected from a secondary.
+         * Proven live: `tests/childcareOperational/live/expectedAttendancePrimarySchedule.live.test.ts`.
+         * Expecting a child per SESSION (each assignment's own room and hours) is a separate, unratified
+         * design question, not this read.
+         */
         agreementIds.length > 0
             ? supabase
                   .from("schedule_assignments")
                   .select("id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
                   .eq("org_id", orgId)
+                  .eq("subject_type", "child")
                   .in("enrollment_agreement_id", agreementIds)
+                  .eq("is_primary", true)
                   .eq("commitment_kind", "committed")
                   .in("status", ROW_OPERATIONAL)
             : Promise.resolve(EMPTY_QUERY_RESULT),

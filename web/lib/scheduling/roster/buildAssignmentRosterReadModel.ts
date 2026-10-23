@@ -236,6 +236,29 @@ async function resolveLocationLabels(
     return map;
 }
 
+/** Latest enrollment draft's room per pre-enrolment child (`process_instances.metadata.program_room_cohort_key`). */
+async function resolveDraftPrimaryRooms(
+    supabase: SupabaseClient,
+    orgId: string,
+    memberIds: string[]
+): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (memberIds.length === 0) return map;
+    const { data } = await supabase
+        .from("process_instances")
+        .select("subject_id, metadata, created_at")
+        .eq("org_id", orgId)
+        .eq("process_key", "enrollment")
+        .in("subject_id", memberIds)
+        .order("created_at", { ascending: false });
+    for (const row of (data ?? []) as { subject_id: string; metadata: Record<string, unknown> | null }[]) {
+        if (map.has(row.subject_id)) continue; // latest instance wins, as in the projection
+        const room = String(row.metadata?.program_room_cohort_key ?? "").trim();
+        if (room) map.set(row.subject_id, room);
+    }
+    return map;
+}
+
 async function resolvePatternWeekdays(
     supabase: SupabaseClient,
     orgId: string,
@@ -420,7 +443,23 @@ export async function buildAssignmentRosterReadModel(
         documentActor,
     );
 
-    const roomIds = rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id));
+    /*
+     * A PRE-ENROLMENT CHILD'S PRIMARY IS ITS DRAFT, NOT A ROW. Before enrolment the primary proposal
+     * lives on the child's enrollment process instance; a proposed secondary (Before Care) is a ledger
+     * row. The summary used to take the first row when no row was primary — so a child whose primary
+     * is Toddler 2 read "Primary: Infant A", its Before Care room. The draft's room is read for exactly
+     * those children (latest instance, as the scheduling projection reads it).
+     */
+    const membersWithPrimaryRow = new Set(
+        rows.filter((r) => r.is_primary && r.customer_member_id).map((r) => r.customer_member_id as string)
+    );
+    const draftMembers = memberIds.filter((id) => !agreementByMember.has(id) && !membersWithPrimaryRow.has(id));
+    const draftRoomByMember = await resolveDraftPrimaryRooms(supabase, orgId, draftMembers);
+
+    const roomIds = [
+        ...rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id)),
+        ...draftRoomByMember.values(),
+    ];
     const patternIds = rows.map((r) => r.schedule_pattern_id).filter((id): id is string => Boolean(id));
     const typeIds = rows
         .map((r) => r.operational_assignment_type_id)
@@ -542,7 +581,10 @@ export async function buildAssignmentRosterReadModel(
             if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
             return a.effectiveFrom.localeCompare(b.effectiveFrom);
         });
-        const primary = assignments.find((a) => a.isPrimary) ?? assignments[0];
+        const primaryRow = assignments.find((a) => a.isPrimary) ?? null;
+        // Identity fields may come from any row; the PRIMARY ROOM never comes from a secondary.
+        const primary = primaryRow ?? assignments[0];
+        const draftRoomId = !primaryRow && primary.customerMemberId ? draftRoomByMember.get(primary.customerMemberId) ?? null : null;
         subjects.push({
             subjectKey,
             subjectName: primary.subjectName,
@@ -551,7 +593,7 @@ export async function buildAssignmentRosterReadModel(
             positionLabel: primary.positionLabel ?? null,
             subjectType: primary.subjectType,
             assignmentCount: assignments.length,
-            primaryRoom: primary?.roomName ?? null,
+            primaryRoom: primaryRow ? primaryRow.roomName : draftRoomId ? roomLabels.get(draftRoomId) ?? null : null,
             assignments,
             imageUrl: primary.personId ? imageUrlByPersonId.get(primary.personId) ?? null : null,
         });

@@ -8,8 +8,8 @@
  * agreed to.
  *
  *   program        committed `child_placements.program_category_id`, else the proposal, else the assignment's own
- *   attendance     committed pattern's schedule type, else the proposal's, else the assignment's
- *   days a week    the committed `schedule_assignments` pattern, else the proposal's weekdays /
+ *   attendance     committed primary pattern's schedule type, else the proposal's, else the assignment's
+ *   days a week    the committed PRIMARY `schedule_assignments` pattern, else the proposal's weekdays /
  *                  requested days, else the assignment's requested days
  *   site           the committed placement's site, else the proposal's, else the assignment's
  *   date           the caller's date, else the proposal's start, else the assignment's, else today
@@ -143,11 +143,19 @@ export async function readAssignmentPricingFacts(
             .order("start_date", { ascending: false });
         placement = ((placementRows ?? [])[0] as Record<string, unknown>) ?? null;
 
+        /*
+         * THE PRIMARY's schedule, never "the latest open row". A committed secondary (Before Care,
+         * Enrichment …) carries the same agreement, so reading the latest-starting open row let a
+         * three-day secondary that began after a five-day primary price the child at three days —
+         * and made an accepted five-day term read as stale. Proven live:
+         * `tests/enrollment/live/primaryTuitionFacts.live.test.ts`.
+         */
         const { data: assignmentRows } = await supabase
             .from("schedule_assignments")
             .select("id, schedule_pattern_id, start_date, status")
             .eq("org_id", args.orgId)
             .eq("enrollment_agreement_id", agreement.id)
+            .eq("is_primary", true)
             .is("end_date", null)
             .order("start_date", { ascending: false });
         const patternId = t(((assignmentRows ?? [])[0] as Record<string, unknown> | undefined)?.schedule_pattern_id);

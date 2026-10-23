@@ -16,15 +16,34 @@ do $$ begin
 end $$;
 \endif
 
-do $$
-begin
-  if :'org'::uuid not in (
-    '4acc9386-c485-486f-aa1f-05d83499d142'::uuid,
-    'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
-  ) then
-    raise exception 'organization % is not a registered QA org', :'org';
-  end if;
+-- Whitelist registered QA orgs only (Firefly and every other tenant are absent from this list).
+-- Evaluated OUTSIDE dollar quotes: psql never interpolates the org variable inside a dollar-quoted DO body, so a
+-- whitelist written there reaches the server as the literal variable text and fails with a syntax error.
+select (:'org' in (
+    '4acc9386-c485-486f-aa1f-05d83499d142',
+    'ad53fee2-2570-460f-9300-f0e106c473b6'
+  )) as qa_org_registered \gset
+\if :qa_org_registered
+\else
+do $$ begin
+  raise exception 'organization is not a registered QA org';
 end $$;
+\endif
+
+-- Documents attached to a fixture vendor must already be gone. SQL could delete their rows but never
+-- their storage objects, so a reset that ran first would orphan the objects. Delete them through the
+-- audited document delete (DELETE /api/admin/pos/documents/[id]) before this reset.
+select exists (
+    select 1 from public.documents d
+     where d.org_id = :'org'::uuid
+       and d.entity_type in ('vendor', 'vendors')
+       and d.entity_id::text like 'aa000000-%'
+  ) as vendor_documents_remaining \gset
+\if :vendor_documents_remaining
+do $$ begin
+  raise exception 'documents are still attached to QA fixture vendors; delete them through the audited document delete first';
+end $$;
+\endif
 
 \set vendor_1 'aa000000-0000-4000-8000-000000000001'
 \set vendor_2 'aa000000-0000-4000-8000-000000000002'
