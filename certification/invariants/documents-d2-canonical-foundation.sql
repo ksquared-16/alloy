@@ -7,10 +7,10 @@
 -- caught in its own sub-block (the sub-block's work is undone with it).
 
 -- CASE 0 — the schema is the D2 schema, and the fixture subjects exist.
-CREATE TEMP TABLE d2_ctx (org uuid, opp1 uuid, opp2 uuid, child uuid, foreign_opp uuid, doc uuid, med uuid, raw uuid);
+CREATE TEMP TABLE d2_ctx (org uuid, opp1 uuid, opp2 uuid, child uuid, foreign_org uuid, foreign_doc uuid, doc uuid, med uuid, raw uuid);
 
 DO $$
-DECLARE v_org uuid; v_opp1 uuid; v_opp2 uuid; v_child uuid; v_foreign uuid;
+DECLARE v_org uuid; v_opp1 uuid; v_opp2 uuid; v_child uuid; v_foreign uuid; v_foreign_doc uuid;
 BEGIN
   IF to_regclass('public.document_subjects') IS NULL OR to_regclass('public.document_subject_links') IS NULL THEN
     RAISE EXCEPTION 'CASE 0 FAILED: D2 tables missing';
@@ -25,9 +25,14 @@ BEGIN
   SELECT id INTO v_opp1 FROM public.opportunities WHERE org_id = v_org ORDER BY id LIMIT 1;
   SELECT id INTO v_opp2 FROM public.opportunities WHERE org_id = v_org AND id <> v_opp1 ORDER BY id LIMIT 1;
   SELECT id INTO v_child FROM public.customer_members WHERE org_id = v_org ORDER BY id LIMIT 1;
-  SELECT id INTO v_foreign FROM public.opportunities WHERE org_id <> v_org ORDER BY id LIMIT 1;
-  IF v_foreign IS NULL THEN RAISE EXCEPTION 'CASE 0 FAILED: no opportunity in a second organization'; END IF;
-  INSERT INTO d2_ctx (org, opp1, opp2, child, foreign_opp) VALUES (v_org, v_opp1, v_opp2, v_child, v_foreign);
+  -- A second organization, with a document of its own. Its subjects need not exist: the proof is that THIS
+  -- organization's subjects can never own or be linked to ITS document.
+  SELECT id INTO v_foreign FROM public.orgs WHERE id <> v_org ORDER BY id LIMIT 1;
+  IF v_foreign IS NULL THEN RAISE EXCEPTION 'CASE 0 FAILED: no second organization'; END IF;
+  INSERT INTO public.documents (org_id, title, mime_type, byte_size, checksum_sha256, bucket, storage_path, status)
+  VALUES (v_foreign, 'd2 foreign', 'application/pdf', 10, repeat('0', 64), 'org_documents', v_foreign::text || '/pos_intake/d2-foreign.pdf', 'uploaded')
+  RETURNING id INTO v_foreign_doc;
+  INSERT INTO d2_ctx (org, opp1, opp2, child, foreign_org, foreign_doc) VALUES (v_org, v_opp1, v_opp2, v_child, v_foreign, v_foreign_doc);
   RAISE NOTICE 'CASE 0 PASS schema present; fixture subjects resolved';
 END $$;
 
@@ -195,13 +200,23 @@ BEGIN
   EXCEPTION WHEN check_violation THEN NULL;
   END;
   BEGIN
-    PERFORM public.document_set_primary_subject(c.org, c.doc, 'opportunity', c.foreign_opp, NULL);
+    PERFORM public.document_set_primary_subject(c.foreign_org, c.foreign_doc, 'opportunity', c.opp1, NULL);
     RAISE EXCEPTION 'CASE 5 FAILED: another organization''s opportunity became the owner';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
   BEGIN
-    PERFORM public.document_link_subject(c.org, c.doc, 'opportunity', c.foreign_opp, 'context', NULL);
+    PERFORM public.document_link_subject(c.foreign_org, c.foreign_doc, 'opportunity', c.opp1, 'context', NULL);
     RAISE EXCEPTION 'CASE 5 FAILED: another organization''s opportunity was linked';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    PERFORM public.document_set_primary_subject(c.org, c.foreign_doc, 'opportunity', c.opp1, NULL);
+    RAISE EXCEPTION 'CASE 5 FAILED: another organization''s document was reached';
+  EXCEPTION WHEN no_data_found THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.documents SET entity_type = 'opportunity', entity_id = c.opp1 WHERE id = c.foreign_doc;
+    RAISE EXCEPTION 'CASE 5 FAILED: a legacy re-file crossed organizations';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
   BEGIN
