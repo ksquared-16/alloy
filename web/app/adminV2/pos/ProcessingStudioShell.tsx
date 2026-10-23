@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export type ProcessingStudioTab = "forms" | "packets" | "fields" | "branding";
+export type ProcessingStudioTab = "forms" | "packets" | "documents" | "fields" | "branding";
 
 /** Studio execution body — section tabs live in DigitalMailroomShell (Communications doctrine). */
 export default function ProcessingStudioShell({ children }: { children: ReactNode }) {

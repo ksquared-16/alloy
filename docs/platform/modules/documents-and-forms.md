@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-10-23
 supersedes: []
 ---
 
@@ -141,6 +141,22 @@ Visual tokens: Midnight Forge, Bend Pine, Stone, White in shell chrome.
 See `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md`.
 
 ---
+
+## Studio → Documents (D3)
+
+The Digital Mailroom's Studio has a **Documents** tab (Forms | Packets | Documents | Fields | Branding) where an
+organization maintains the document categories and types it tracks.
+
+- **Categories:** vocabulary, saved immediately.
+- **Types:** versioned (draft → validated → published).
+- **Where it lives:** `web/app/adminV2/pos/ProcessingDocumentsStudio.tsx`.
+- **Internal API:** `/api/admin/documents/configuration/*`.
+- **Authority:** writes need `processing.documents.manage`, reads need `documents.read`.
+- **Starter vocabulary:** every organization receives a childcare starter vocabulary (10 categories, 13 types, including
+  the existing `doc_type` values) as ordinary editable rows.
+- **Enforcement:** only the type's default sensitivity is enforced today. The rest of the policy is declared intent for
+  D5–D7, and the Studio says so beside each field.
+- **Security model:** `docs/platform/governance/document-security-model.md` §7.
 
 ## Integration points
 

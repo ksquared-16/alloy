@@ -30,6 +30,9 @@ export type DocumentAuditEvent =
     | "document_version_added"
     | "document_subject_changed"
     | "document_sensitivity_raised"
+    // D3: a Studio configuration change (category or type), recorded before the change.
+    | "document_category_changed"
+    | "document_type_changed"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
@@ -37,8 +40,8 @@ export type DocumentAuditInput = {
     orgId: string;
     actorUserId: string;
     event: DocumentAuditEvent;
-    /** `documents` for an event about one document, `persons` for the photo pointer. */
-    subject: { type: "documents" | "persons"; id: string };
+    /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3. */
+    subject: { type: "documents" | "persons" | "document_categories" | "document_types"; id: string };
     /** Where the action came from, e.g. `admin/documents/signed-url`. */
     route: string;
     detail?: Record<string, unknown>;

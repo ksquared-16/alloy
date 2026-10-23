@@ -23,6 +23,7 @@ const WORK_TABS = [
 const STUDIO_TABS: { key: ProcessingStudioTab; label: string }[] = [
     { key: "forms", label: "Forms" },
     { key: "packets", label: "Packets" },
+    { key: "documents", label: "Documents" },
     { key: "fields", label: "Fields" },
     { key: "branding", label: "Branding" },
 ];

@@ -96,6 +96,8 @@ const OPS_WITHHELD = [
     "fin.subsidy",
     "health.view",
     "health.manage",
+    "documents.identity.read",
+    "documents.restricted.read",
 ] as const;
 
 /**

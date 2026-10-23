@@ -17,7 +17,7 @@ export const PROCESSING_DEFAULT_POSITION = {
     studioTab: "forms",
 } satisfies StableWorkspacePosition;
 
-const STUDIO_TABS = new Set(["forms", "packets", "fields", "branding"]);
+const STUDIO_TABS = new Set(["forms", "packets", "documents", "fields", "branding"]);
 
 export function isValidProcessingPosition(position: StableWorkspacePosition): boolean {
     if (position.mode !== "work" && position.mode !== "studio") return false;
