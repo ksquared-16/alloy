@@ -1,0 +1,214 @@
+{
+  "qa_run_id": "qar_58463703cedd",
+  "prefix": "QA8B2 584637",
+  "created": [
+    {
+      "kind": "opportunity",
+      "id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+      "at": "2026-10-23T02:58:56.697Z",
+      "via": "create_lead",
+      "mode": "committed",
+      "processing_case_id": "7e4984ee-b029-42d5-b999-39371dcfd53e"
+    },
+    {
+      "kind": "household",
+      "id": "23865933-7148-4438-acd8-0b970e84ae5c",
+      "at": "2026-10-23T02:58:57.954Z",
+      "name": "Walk 584637 Family"
+    },
+    {
+      "kind": "child",
+      "id": "84d16ebf-7222-4b8e-937c-83f9703dfb40",
+      "at": "2026-10-23T02:58:57.954Z",
+      "name": "Ava"
+    },
+    {
+      "kind": "child",
+      "id": "41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "at": "2026-10-23T02:58:58.803Z",
+      "name": "Ben",
+      "via": "child.add"
+    },
+    {
+      "kind": "participation",
+      "id": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+      "at": "2026-10-23T02:59:00.600Z",
+      "child": "Ava"
+    },
+    {
+      "kind": "participation",
+      "id": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+      "at": "2026-10-23T02:59:00.600Z",
+      "child": "Ben"
+    },
+    {
+      "kind": "room",
+      "id": "81a903e6-00fe-429b-bd2f-3314ae0aa2dc",
+      "at": "2026-10-23T03:02:32.891Z",
+      "retained": "configuration"
+    },
+    {
+      "kind": "room",
+      "id": "1aa06a04-088f-4dd7-be7c-0d023b134166",
+      "at": "2026-10-23T03:02:32.891Z",
+      "retained": "configuration"
+    },
+    {
+      "kind": "schedule_pattern",
+      "id": "9c3f70fc-c577-49d7-aa54-6c837ca11913",
+      "at": "2026-10-23T03:02:32.891Z",
+      "retained": "configuration"
+    },
+    {
+      "kind": "schedule_pattern",
+      "id": "044fee44-ed8f-4d43-ae3e-4f648d779408",
+      "at": "2026-10-23T03:02:32.891Z",
+      "retained": "configuration"
+    },
+    {
+      "kind": "child",
+      "id": "0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+      "at": "2026-10-23T03:02:33.847Z",
+      "name": "Cara"
+    },
+    {
+      "kind": "child",
+      "id": "ed14eb72-b80f-4184-9c7b-c44bfce6da43",
+      "at": "2026-10-23T03:02:34.816Z",
+      "name": "Dan"
+    },
+    {
+      "kind": "child",
+      "id": "cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "at": "2026-10-23T03:02:35.566Z",
+      "name": "Eve"
+    },
+    {
+      "kind": "agreement+assignment",
+      "id": "e7a65731-f820-4712-bbe1-327d5c84f2d2",
+      "at": "2026-10-23T03:02:44.245Z",
+      "child": "Ben",
+      "site": "qa_north"
+    },
+    {
+      "kind": "agreement+assignment",
+      "id": "0239a344-080f-4cd1-975e-7b9711fae29b",
+      "at": "2026-10-23T03:02:44.245Z",
+      "child": "Cara",
+      "starts": "2026-10-29"
+    },
+    {
+      "kind": "agreement",
+      "id": "e5867597-ec67-4938-bc3b-2a63f89d45d7",
+      "at": "2026-10-23T03:02:44.245Z",
+      "child": "Dan",
+      "note": "no schedule"
+    },
+    {
+      "kind": "agreement+assignment",
+      "id": "57447bb6-d6ac-4c3f-bc90-f1dc2d1f517f",
+      "at": "2026-10-23T03:02:44.245Z",
+      "child": "Eve",
+      "site": "qa_south"
+    },
+    {
+      "kind": "staff_person",
+      "id": "c5460feb-374a-4dee-8d10-5fb44ee27581",
+      "at": "2026-10-23T03:02:44.245Z"
+    },
+    {
+      "kind": "assignment_type",
+      "id": "1a61c00a-26fa-430f-b0d3-9a90396ba5db",
+      "at": "2026-10-23T03:03:25.163Z",
+      "retained": "configuration"
+    },
+    {
+      "kind": "assignment",
+      "id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+      "at": "2026-10-23T03:03:26.244Z",
+      "child": "Ben",
+      "ends": "2026-11-01"
+    },
+    {
+      "kind": "assignment",
+      "id": "413e504d-d479-4e14-b1ab-c0e2ca0fe8ae",
+      "at": "2026-10-23T03:03:27.419Z",
+      "child": "Ava",
+      "proposed": true
+    },
+    {
+      "kind": "assignment",
+      "id": "929cb28e-7bd4-4c70-bb19-fa8455ade141",
+      "at": "2026-10-23T03:03:44.521Z",
+      "staff": true
+    },
+    {
+      "kind": "financial_policy",
+      "id": "490a0e4b-75e8-4ca6-bfc9-06685708eaeb",
+      "at": "2026-10-23T03:04:21.075Z",
+      "type": "billing_calendar",
+      "retained": "configuration"
+    },
+    {
+      "kind": "financial_policy",
+      "id": "67b380f8-07af-4402-b22d-e6a4b14e3f79",
+      "at": "2026-10-23T03:04:21.898Z",
+      "type": "due_date",
+      "retained": "configuration"
+    },
+    {
+      "kind": "charge_template",
+      "id": "89327282-03c3-46f6-ade6-d9e0c44ef4ed",
+      "at": "2026-10-23T03:04:22.836Z",
+      "key": "qa_fee_584637",
+      "cents": 5000,
+      "review_required": false,
+      "retained": "configuration"
+    },
+    {
+      "kind": "charge_template",
+      "id": "10f3442a-9fa0-4a69-a391-1165884d6654",
+      "at": "2026-10-23T03:04:23.625Z",
+      "key": "qa_review_fee_584637",
+      "cents": 7500,
+      "review_required": true,
+      "retained": "configuration"
+    },
+    {
+      "kind": "charge",
+      "id": "1312c61e-8162-4ebf-be5b-7ec7745e6a17",
+      "at": "2026-10-23T03:04:25.310Z",
+      "cents": 5000,
+      "expect": "posted, due +4 → Payments due"
+    },
+    {
+      "kind": "charge",
+      "id": "baa509ae-f24c-4832-9764-665a0e3346fb",
+      "at": "2026-10-23T03:04:26.809Z",
+      "cents": 7500,
+      "expect": "draft, review required → Charges needing review"
+    },
+    {
+      "kind": "charge",
+      "id": "103787e5-426e-4ef1-a8ba-e96114be3fab",
+      "at": "2026-10-23T03:04:28.408Z",
+      "cents": 5000,
+      "expect": "posted then fully paid → not due"
+    },
+    {
+      "kind": "payment",
+      "id": "de88693a-f512-40df-b1c5-76c73f1511fe",
+      "at": "2026-10-23T03:04:29.819Z",
+      "cents": 5000,
+      "method": "check",
+      "charge": "103787e5-426e-4ef1-a8ba-e96114be3fab"
+    },
+    {
+      "kind": "work_item",
+      "id": "c51fd8f9-fe90-4ac4-b3c8-8aa61c9337e0",
+      "due_at": "2026-10-22T01:05:16.105Z",
+      "expect": "overdue, Enrollment department",
+      "at": "2026-10-23T03:05:17.886Z"
+    }
+  ]
+}

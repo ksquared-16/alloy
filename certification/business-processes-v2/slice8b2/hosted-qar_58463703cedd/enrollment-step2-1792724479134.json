@@ -1,0 +1,98 @@
+[
+  {
+    "step": "before",
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "waitlisted",
+        "updated_at": "2026-10-23T02:59:50.875438+00:00"
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "new_inquiry",
+        "updated_at": null
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "134466ba-e5d7-4720-b706-af2b6cd8fb53",
+        "title": "Support Enrollment Decision",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "1545eaa4-510e-40fd-8950-6d5ff8c0dcf8",
+        "title": "Review waitlist position",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  },
+  {
+    "step": "ben_enrolling",
+    "result": {
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "result": "{\"execution_result\":{\"kind\":\"mutation\",\"mutation_result\":{\"status\":\"committed\",\"mutationId\":\"d564358b-9ee5-4e21-8659-cd7682c1e875\",\"commandKey\":\"update_child_enrollment_status\",\"domain\":\"enrollment_status\",\"subjectId\":\"1e9cb04d-e06a-49e6-be60-8f0744b2c022\",\"subjectType\":\"opportunity_customer_member\",\"previousState\":\"new_inquiry\",\"newState\":\"enrolling\",\"warnings\":[],\"sideEffects\":[],\"committedAt\":\"2026-10-23T03:01:16.936Z\"}},\"affected_id\":\"1e9cb04d-e06a-49e6-be60-8f0744b2c022\"}"
+    },
+    "children": {
+      "Ava": {
+        "ocm": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+        "outcome_status_key": "waitlisted",
+        "updated_at": "2026-10-23T02:59:50.875438+00:00"
+      },
+      "Ben": {
+        "ocm": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+        "outcome_status_key": "enrolling",
+        "updated_at": "2026-10-23T03:01:16.901849+00:00"
+      }
+    },
+    "work": [
+      {
+        "id": "d4c2b5de-2c12-4186-8a63-0585742dce7f",
+        "title": "Conduct Tour",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+        "title": "Contact Family",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "134466ba-e5d7-4720-b706-af2b6cd8fb53",
+        "title": "Support Enrollment Decision",
+        "status": "completed",
+        "stage": null,
+        "template": null
+      },
+      {
+        "id": "1545eaa4-510e-40fd-8950-6d5ff8c0dcf8",
+        "title": "Review waitlist position",
+        "status": "open",
+        "stage": null,
+        "template": null
+      }
+    ]
+  }
+]

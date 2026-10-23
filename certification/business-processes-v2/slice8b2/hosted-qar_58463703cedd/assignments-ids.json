@@ -1,0 +1,211 @@
+{
+  "today": "2026-10-22",
+  "room_n": "81a903e6-00fe-429b-bd2f-3314ae0aa2dc",
+  "room_s": "1aa06a04-088f-4dd7-be7c-0d023b134166",
+  "pattern_n": "9c3f70fc-c577-49d7-aa54-6c837ca11913",
+  "pattern_s": "044fee44-ed8f-4d43-ae3e-4f648d779408",
+  "type": "1a61c00a-26fa-430f-b0d3-9a90396ba5db",
+  "cara": "0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+  "dan": "ed14eb72-b80f-4184-9c7b-c44bfce6da43",
+  "eve": "cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+  "ben_agreement": "e7a65731-f820-4712-bbe1-327d5c84f2d2",
+  "ben_direct": {
+    "customer_member_id": "41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+    "agreement_id": "e7a65731-f820-4712-bbe1-327d5c84f2d2",
+    "placement_id": "c0638a10-eb37-4bca-a1d0-da0b26be4f52",
+    "schedule_assignment_id": "f1e6de50-3f58-41ba-b80e-7f707d38fb5c",
+    "warnings": []
+  },
+  "ben_ending": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+  "cara_upcoming": {
+    "customer_member_id": "0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+    "agreement_id": "0239a344-080f-4cd1-975e-7b9711fae29b",
+    "placement_id": "144d0ffe-52c8-4673-ba6d-4b66309393b3",
+    "schedule_assignment_id": "333275b9-7205-48a8-b2c6-34ec884772cd",
+    "warnings": []
+  },
+  "dan_gap": "e5867597-ec67-4938-bc3b-2a63f89d45d7",
+  "ava_proposed": "413e504d-d479-4e14-b1ab-c0e2ca0fe8ae",
+  "eve_south": {
+    "customer_member_id": "cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+    "agreement_id": "57447bb6-d6ac-4c3f-bc90-f1dc2d1f517f",
+    "placement_id": "5ca5cbdb-952e-42d1-a57e-14c9f5d8a4d6",
+    "schedule_assignment_id": "242ae39f-2f34-41a8-bbb8-6593446dfbea",
+    "warnings": []
+  },
+  "staff": "d29b6dff-145c-4efe-9902-90a56a04b70c",
+  "staff_assignment": "929cb28e-7bd4-4c70-bb19-fa8455ade141",
+  "steps": [
+    {
+      "name": "room QA North",
+      "status": 200,
+      "id": "81a903e6-00fe-429b-bd2f-3314ae0aa2dc",
+      "error": null
+    },
+    {
+      "name": "room QA South",
+      "status": 200,
+      "id": "1aa06a04-088f-4dd7-be7c-0d023b134166",
+      "error": null
+    },
+    {
+      "name": "pattern QA North",
+      "status": 201,
+      "id": "9c3f70fc-c577-49d7-aa54-6c837ca11913",
+      "error": null
+    },
+    {
+      "name": "pattern QA South",
+      "status": 201,
+      "id": "044fee44-ed8f-4d43-ae3e-4f648d779408",
+      "error": null
+    },
+    {
+      "name": "assignment type",
+      "status": 422,
+      "id": null,
+      "error": "Choose whether this category contributes Staff supply. A staffing choice cannot be left unset."
+    },
+    {
+      "name": "child.add Cara",
+      "status": 200,
+      "id": "0554eb4f-2cb9-42f2-82ad-058e66c889ae",
+      "error": null
+    },
+    {
+      "name": "child.add Dan",
+      "status": 200,
+      "id": "ed14eb72-b80f-4184-9c7b-c44bfce6da43",
+      "error": null
+    },
+    {
+      "name": "child.add Eve",
+      "status": 200,
+      "id": "cf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "error": null
+    },
+    {
+      "name": "current: Ben @ QA North (enrollment.direct)",
+      "status": 200,
+      "id": "e7a65731-f820-4712-bbe1-327d5c84f2d2",
+      "error": null
+    },
+    {
+      "name": "ending soon: Ben secondary (assignment.create, end +10)",
+      "status": 400,
+      "id": null,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Choose an Assignment Category before saving",
+        "details": {
+          "blockers": [
+            {
+              "code": "missing_assignment_type",
+              "message": "Choose an Assignment Category before saving",
+              "field": "assignment_type_id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "upcoming: Cara @ QA North starts +7",
+      "status": 200,
+      "id": "0239a344-080f-4cd1-975e-7b9711fae29b",
+      "error": null
+    },
+    {
+      "name": "schedule gap: Dan agreement, no schedule",
+      "status": 201,
+      "id": "e5867597-ec67-4938-bc3b-2a63f89d45d7",
+      "error": null
+    },
+    {
+      "name": "proposed: Ava (assignment.create, no agreement)",
+      "status": 400,
+      "id": null,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Choose an Assignment Category before saving",
+        "details": {
+          "blockers": [
+            {
+              "code": "missing_assignment_type",
+              "message": "Choose an Assignment Category before saving",
+              "field": "assignment_type_id"
+            },
+            {
+              "code": "missing_child_anchor",
+              "message": "Select a child and site to save a Proposed Assignment, or complete enrollment first",
+              "field": "customer_member_id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "current: Eve @ QA South",
+      "status": 200,
+      "id": "57447bb6-d6ac-4c3f-bc90-f1dc2d1f517f",
+      "error": null
+    },
+    {
+      "name": "staff.add",
+      "status": 200,
+      "id": "c5460feb-374a-4dee-8d10-5fb44ee27581",
+      "error": null
+    },
+    {
+      "name": "current staff assignment",
+      "status": 400,
+      "id": null,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Choose an Assignment Category before saving",
+        "details": {
+          "blockers": [
+            {
+              "code": "missing_assignment_type",
+              "message": "Choose an Assignment Category before saving",
+              "field": "assignment_type_id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "assignment type",
+      "status": 201,
+      "id": "1a61c00a-26fa-430f-b0d3-9a90396ba5db",
+      "error": null
+    },
+    {
+      "name": "ending soon: Ben secondary (end +10)",
+      "status": 200,
+      "id": "a5fb309b-e955-44cd-bf59-05a2ba10fb9d",
+      "error": null
+    },
+    {
+      "name": "proposed: Ava (no agreement)",
+      "status": 200,
+      "id": "413e504d-d479-4e14-b1ab-c0e2ca0fe8ae",
+      "error": null
+    },
+    {
+      "name": "current staff assignment",
+      "status": 422,
+      "id": null,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Staff assignments require a person in this organization"
+      }
+    },
+    {
+      "name": "current staff assignment",
+      "status": 200,
+      "id": "929cb28e-7bd4-4c70-bb19-fa8455ade141",
+      "error": null
+    }
+  ],
+  "staff_employment": "c5460feb-374a-4dee-8d10-5fb44ee27581"
+}
