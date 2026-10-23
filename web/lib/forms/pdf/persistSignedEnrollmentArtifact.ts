@@ -114,7 +114,15 @@ export async function persistSignedEnrollmentArtifact(
         // stand-in — the mark on paper must be the mark that was captured.
         let drawnPng: Uint8Array | null = null;
         if (row.drawn_asset_document_id) {
-            const asset = await downloadDocumentBytesSafe(supabase, {
+            // D1b.6: only a captured signature mark is ever drawn onto paper, never another document.
+            const { data: assetRow } = await supabase
+                .from("documents")
+                .select("doc_type")
+                .eq("org_id", input.orgId)
+                .eq("id", row.drawn_asset_document_id)
+                .maybeSingle();
+            const isSignatureAsset = (assetRow as { doc_type?: string | null } | null)?.doc_type === "signature_asset";
+            const asset = !isSignatureAsset ? null : await downloadDocumentBytesSafe(supabase, {
                 orgId: input.orgId,
                 documentId: row.drawn_asset_document_id,
             });

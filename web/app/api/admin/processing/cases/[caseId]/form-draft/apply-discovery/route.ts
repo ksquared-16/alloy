@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { parseStoredFormDraftPreview, dbStoreFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { dbLoadDiscoveryDecisions } from "@/lib/pos/discovery/discoveryDecisionsDb";
 import { fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
 import { DISCOVERY_APPLICATION_METADATA_KEY } from "@/lib/pos/discovery/initializeStrongUnderstanding";
+
+
+/** D1b: the OCR text preview in a form draft is disclosed only to an actor who may read it. */
+async function textActor() {
+    const access = await getAdminAccessContextCached();
+    return access.ok ? access : { roleKeys: [], permissionKeys: [] };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -60,5 +69,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cas
 
     // Return the BOUND draft so the review + generate flow carries the applied field bindings
     // straight into the published form (source→discovery→binding→published lineage).
-    return jsonData({ caseId, application: { counts: result.counts, results: result.results }, form_draft_preview: updatedDraft });
+    return jsonData({ caseId, application: { counts: result.counts, results: result.results }, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), updatedDraft) });
 }
