@@ -161,12 +161,101 @@ function closeLostExitsOntoFamilyTerminal(plan: StageOperatingPlanV1): StageOper
     };
 }
 
+/**
+ * THE FAMILY DOES NOT ENTER WAITLIST; ITS CHILDREN DO. (Director decision, BP V2 Slice 8B-1.)
+ *
+ * Waitlist is a CHILD-track stage. The shared defaults let two family outcomes move the family case onto
+ * it — `tour.no_availability` and `decision.wants_waitlist` — which publication refuses
+ * (`outcome_movement_grain_mismatch`), and they leave Waitlist's own child movement undeclared. The rule:
+ *
+ *   - Wants Waitlist: the family stays at Decision. The operator waitlists each applicable child through
+ *     the existing child-level Decision (`per_subject_outcomes` → `waitlist`); nothing waitlists every
+ *     child of a family automatically.
+ *   - No Availability: the family moves Tour → Decision on the existing `tour_to_decision` exit, where the
+ *     same child-level Decision places children on Waitlist.
+ *   - Spot Offered: Waitlist declares `waitlist_to_enrolling` (child → child) and the existing outcome moves
+ *     through it — same destination, same child status update, now a declared path.
+ *
+ * The family → Waitlist exits are removed rather than kept unused: an exit is an operator-visible path, and
+ * this one would move a family case onto a child stage. Template-only, like the lost-close correction
+ * above, so no published configuration and no runtime fallback changes. Each correction names exactly what
+ * it expects in the defaults and REFUSES if that is absent, so drift in the defaults surfaces here instead
+ * of shipping a template that silently skipped its own correction.
+ */
+const FAMILY_TO_WAITLIST_EXITS = { tour: "tour_to_waitlist", decision: "decision_to_waitlist" } as const;
+const WAITLIST_TO_ENROLLING_REF = "waitlist_to_enrolling" as const;
+
+function separateFamilyFromChildWaitlist(stageKey: string, plan: StageOperatingPlanV1): StageOperatingPlanV1 {
+    const refuse = (what: string): never => {
+        throw new Error(`Enrollment template: expected ${what} in the default ${stageKey} plan; refusing to build a template that skipped its waitlist correction`);
+    };
+    const replaceMove = (outcome: string, ref: string, replacement: StageOutcomeRuleTargetV1): StageOperatingPlanV1["outcome_rules"] => {
+        let found = false;
+        const rules = (plan.outcome_rules ?? []).map((rule) => {
+            if (rule.when_outcome_key !== outcome) return rule;
+            const targets = (rule.targets ?? []).map((t) => {
+                if (t.kind === "move_to_stage" && t.transition_ref === ref) { found = true; return replacement; }
+                return t;
+            });
+            return { ...rule, targets };
+        });
+        if (!found) refuse(`outcome "${outcome}" moving through "${ref}"`);
+        return rules;
+    };
+
+    if (stageKey === "tour" || stageKey === "decision") {
+        const ref = FAMILY_TO_WAITLIST_EXITS[stageKey];
+        const exits = plan.outgoing_transitions ?? [];
+        if (!exits.some((e) => e.transition_ref === ref)) refuse(`exit "${ref}"`);
+        if (stageKey === "tour" && !exits.some((e) => e.transition_ref === "tour_to_decision" && e.target_stage_key === "decision")) {
+            refuse(`exit "tour_to_decision" to decision`);
+        }
+        return {
+            ...plan,
+            outgoing_transitions: exits.filter((e) => e.transition_ref !== ref),
+            outcome_rules: stageKey === "tour"
+                ? replaceMove("no_availability", ref, { kind: "move_to_stage", transition_ref: "tour_to_decision" })
+                : replaceMove("wants_waitlist", ref, { kind: "no_movement" }),
+        };
+    }
+
+    if (stageKey === "waitlist") {
+        let found = false;
+        const outcome_rules = (plan.outcome_rules ?? []).map((rule) => {
+            if (rule.when_outcome_key !== "spot_offered") return rule;
+            return {
+                ...rule,
+                targets: (rule.targets ?? []).map((t) => {
+                    if (t.kind === "move_to_stage" && !t.transition_ref && t.stage_key === "enrolling") {
+                        found = true;
+                        return { kind: "move_to_stage", transition_ref: WAITLIST_TO_ENROLLING_REF } as StageOutcomeRuleTargetV1;
+                    }
+                    return t;
+                }),
+            };
+        });
+        if (!found) refuse(`outcome "spot_offered" moving to "enrolling"`);
+        return {
+            ...plan,
+            outgoing_transitions: [
+                ...(plan.outgoing_transitions ?? []),
+                { transition_ref: WAITLIST_TO_ENROLLING_REF, source_stage_key: "waitlist", target_stage_key: "enrolling", label: "Offer Spot", available: true },
+            ],
+            outcome_rules,
+        };
+    }
+
+    return plan;
+}
+
 /** Build enrollment template stage records (metadata only — no DB seeding). */
 export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageRecord[] {
     return ENROLLMENT_STAGE_SPECS.map((spec, index) => {
         const membership = defaultEnrollmentQueueMembershipForStage(spec.key) ?? undefined;
         const defaultPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key);
-        const operatingPlan = defaultPlan ? closeLostExitsOntoFamilyTerminal(defaultPlan) : undefined;
+        const operatingPlan = defaultPlan
+            ? separateFamilyFromChildWaitlist(spec.key, closeLostExitsOntoFamilyTerminal(defaultPlan))
+            : undefined;
         // Seed the row-type grain so Work Views can be scoped per grain (family vs child) and the
         // grain banner has data. Family track = one row per case; child track = one row per enrollment track.
         const grain: StageGrain = spec.track_key === ENROLLMENT_TRACK_CHILD_KEY ? "child" : "family";

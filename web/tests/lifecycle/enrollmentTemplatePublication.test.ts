@@ -8,9 +8,15 @@
  *   → the publish gate (validateBusinessProcessForPublish), with the stage-based Work Views attached
  *   → the runtime's plan resolution over the published projection (resolveEffectiveStageOperatingPlan).
  *
- * The defect it locks: the template's family terminal stage is `closed`, but the default operating plans'
- * "Close as Lost" exits on lead / tour / decision target `closed_lost`, which the template never creates —
- * so `apply_enrollment_v2_template` was refused (422 dangling_stage_reference) for every new tenant.
+ * The two defects it locks (both template-only corrections; the shared defaults and the runtime are unchanged):
+ *   1. "Close as Lost" exits on lead / tour / decision targeted `closed_lost`, a stage the template never creates,
+ *      so `apply_enrollment_v2_template` was refused (422 dangling_stage_reference) for every new tenant. They now
+ *      land on the family terminal stage `closed` and record close reason `lost`.
+ *   2. Family outcomes moved the FAMILY onto the child-grain `waitlist` stage, and `waitlist` declared no exit, so
+ *      publication was refused. Director decision (S8B-1, Option 1): the family stays at Decision / moves Tour →
+ *      Decision; children are waitlisted one at a time by the existing per-child Decision; Spot Offered moves the
+ *      child through a declared `waitlist_to_enrolling` exit.
+ * Acceptance: ZERO publication errors on a clean process.
  */
 import { describe, expect, it } from "vitest";
 
@@ -119,50 +125,95 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
         expect(correctInvalidClosedLostTargets({ version: 1, active_process_id: p.id, processes: [p] }).alreadyCorrect).toBe(true);
     });
 
-    it("every OTHER exit and outcome keeps exactly the default operating plan's destination", () => {
+    /** Every correction the template makes, by (stage, outcome) and by exit — and nothing else. */
+    const CORRECTED_OUTCOMES = new Set<string>([
+        ...LOST_EXITS.map((x) => `${x.stage}:${x.outcome}`),
+        "tour:no_availability", "decision:wants_waitlist", "waitlist:spot_offered",
+    ]);
+    const CORRECTED_EXITS = new Set<string>([...LOST_EXITS.map((x) => x.ref), "tour_to_waitlist", "decision_to_waitlist", "waitlist_to_enrolling"]);
+
+    it("every OTHER exit, outcome, work template and outcome definition is exactly the default plan's", () => {
         const { config, processId } = cleanTenant();
         const p = enrollment(applyThroughRoutes(config, processId));
-        const lostRefs = new Set<string>(LOST_EXITS.map((x) => x.ref));
-        const lostOutcomes = new Set<string>(LOST_EXITS.map((x) => `${x.stage}:${x.outcome}`));
         for (const s of p.stages) {
             const plan = s.stage_operating_plan_v1;
             const defaults = defaultStageOperatingPlanForEnrollmentStage(s.key);
             if (!plan || !defaults) { expect(plan ?? null).toEqual(defaults ?? null); continue; }
-            const exits = (plan.outgoing_transitions ?? []).filter((e) => !lostRefs.has(e.transition_ref));
-            const defaultExits = (defaults.outgoing_transitions ?? []).filter((e) => !lostRefs.has(e.transition_ref));
-            expect(exits).toEqual(defaultExits);
-            expect((plan.outcome_rules ?? []).filter((r) => !lostOutcomes.has(`${s.key}:${r.when_outcome_key}`)))
-                .toEqual((defaults.outcome_rules ?? []).filter((r) => !lostOutcomes.has(`${s.key}:${r.when_outcome_key}`)));
+            expect((plan.outgoing_transitions ?? []).filter((e) => !CORRECTED_EXITS.has(e.transition_ref)))
+                .toEqual((defaults.outgoing_transitions ?? []).filter((e) => !CORRECTED_EXITS.has(e.transition_ref)));
+            expect((plan.outcome_rules ?? []).filter((r) => !CORRECTED_OUTCOMES.has(`${s.key}:${r.when_outcome_key}`)))
+                .toEqual((defaults.outcome_rules ?? []).filter((r) => !CORRECTED_OUTCOMES.has(`${s.key}:${r.when_outcome_key}`)));
             expect(plan.work_templates).toEqual(defaults.work_templates);
             expect(plan.outcomes).toEqual(defaults.outcomes);
         }
     });
 
-    /*
-     * PUBLISH: the closed_lost defect is gone; what remains is the template's SECOND, separate defect —
-     * family outcomes (`tour.no_availability`, `decision.wants_waitlist`) move the FAMILY onto the
-     * child-grain `waitlist` stage, and `waitlist` declares no outgoing transition. What those family
-     * outcomes should do instead is an Enrollment product decision (BP V2 S8B-1 closeout, §G), so this
-     * locks the exact remaining set: when that decision lands, this list becomes [] and the test says so.
-     */
-    it("publish validation: no closed_lost-class error remains; only the known Waitlist-grain set is left", () => {
+    it("Waitlist decision (Director, S8B-1): the family never enters Waitlist; children do, one at a time", () => {
+        const { config, processId } = cleanTenant();
+        const p = enrollment(applyThroughRoutes(config, processId));
+        const rule = (stageKey: string, outcome: string) => stage(p, stageKey).stage_operating_plan_v1!.outcome_rules!.find((r) => r.when_outcome_key === outcome)!;
+        const exits = (stageKey: string) => (stage(p, stageKey).stage_operating_plan_v1!.outgoing_transitions ?? []).map((e) => e.transition_ref);
+
+        // A. Wants Waitlist: the family stays at Decision; the family→Waitlist exit is gone; nothing waitlists
+        //    the family's children automatically (no child effect on the family outcome).
+        expect(exits("decision")).not.toContain("decision_to_waitlist");
+        expect(rule("decision", "wants_waitlist").targets).toEqual([{ kind: "no_movement" }]);
+        // B. No Availability: Tour → Decision on the existing exit; no automatic waitlisting.
+        expect(exits("tour")).not.toContain("tour_to_waitlist");
+        const noAvailability = rule("tour", "no_availability").targets;
+        expect(noAvailability).toEqual([{ kind: "move_to_stage", transition_ref: "tour_to_decision" }]);
+        expect(stage(p, "tour").stage_operating_plan_v1!.outgoing_transitions!.find((e) => e.transition_ref === "tour_to_decision")!.target_stage_key).toBe("decision");
+        for (const t of [...rule("decision", "wants_waitlist").targets, ...noAvailability]) {
+            expect(["enter_child_enrollment", "update_child_enrollment_status"]).not.toContain(t.kind);
+        }
+        // The child path that DOES waitlist: the existing per-child Decision split, one subject at a time.
+        const split = (p.tracks_v1 as { split_rules?: Array<{ from_stage_key: string; per_subject_outcomes: Array<{ outcome_key: string; target_stage_key: string | null }> }> }).split_rules!
+            .find((r) => r.from_stage_key === "decision")!;
+        expect(split.per_subject_outcomes.find((o) => o.outcome_key === "waitlist")!.target_stage_key).toBe("waitlist");
+        expect(split.per_subject_outcomes.find((o) => o.outcome_key === "enrolling")!.target_stage_key).toBe("enrolling");
+        // C. Spot Offered: a declared child→child exit, same destination and same child status update.
+        const wl = stage(p, "waitlist").stage_operating_plan_v1!;
+        expect(wl.outgoing_transitions).toEqual([
+            { transition_ref: "waitlist_to_enrolling", source_stage_key: "waitlist", target_stage_key: "enrolling", label: "Offer Spot", available: true },
+        ]);
+        const spot = rule("waitlist", "spot_offered").targets;
+        const before = defaultStageOperatingPlanForEnrollmentStage("waitlist")!.outcome_rules!.find((r) => r.when_outcome_key === "spot_offered")!.targets;
+        expect(spot).toEqual(before.map((t) => (t.kind === "move_to_stage" ? { kind: "move_to_stage", transition_ref: "waitlist_to_enrolling" } : t)));
+        expect(before.some((t) => t.kind === "move_to_stage" && t.stage_key === "enrolling")).toBe(true);
+    });
+
+    it("grain consistency: no exit or outcome moves the family onto a child stage, or a child onto a family stage", () => {
+        const { config, processId } = cleanTenant();
+        const p = enrollment(applyThroughRoutes(config, processId));
+        const grainOf = new Map(p.stages.map((s) => [s.key, s.grain]));
+        for (const s of p.stages) {
+            const plan = s.stage_operating_plan_v1;
+            if (!plan) continue;
+            const exitTarget = new Map((plan.outgoing_transitions ?? []).map((e) => [e.transition_ref, e.target_stage_key]));
+            for (const [ref, to] of exitTarget) expect({ from: s.key, ref, grain: grainOf.get(to) }).toEqual({ from: s.key, ref, grain: s.grain });
+            for (const r of plan.outcome_rules ?? []) {
+                for (const t of r.targets ?? []) {
+                    if (t.kind !== "move_to_stage") continue;
+                    // Movement is declared: every move names an exit of its own stage (no raw stage_key).
+                    expect({ stage: s.key, outcome: r.when_outcome_key, ref: t.transition_ref ?? null, raw: t.stage_key ?? null })
+                        .toEqual({ stage: s.key, outcome: r.when_outcome_key, ref: t.transition_ref, raw: null });
+                    expect(exitTarget.has(t.transition_ref!)).toBe(true);
+                }
+            }
+        }
+    });
+
+    it("validates and publishes with ZERO errors, with the stage-based Work Views", () => {
         const { config, processId } = cleanTenant();
         const applied = applyThroughRoutes(config, processId);
         const withViews: LifecycleBuilderV1 = {
             ...applied,
             processes: applied.processes.map((p) => (p.id === processId ? { ...p, work_views_v1: STAGE_VIEWS } as LifecycleBuilderProcessRecord : p)),
         };
-        expect(STAGE_VIEWS).toHaveLength(6);
+        expect(STAGE_VIEWS.map((v) => v.id)).toEqual(["new_leads", "tours", "decision", "registration", "waitlist", "all"]);
+        expect(validateConfiguredStageReferences(withViews)).toEqual({ ok: true });
         const result = validateBusinessProcessForPublish(withViews);
-        const codes = result.errors.map((e) => `${e.code}:${(e.detail as { contract_code?: string; control_id?: string } | undefined)?.contract_code}:${(e.detail as { control_id?: string } | undefined)?.control_id}`).sort();
-        expect(JSON.stringify(result.errors)).not.toContain("closed_lost");
-        expect(codes).toEqual([
-            "stage_operating_contract:outcome_movement_grain_mismatch:stage-outcome-automation-no_availability-transition",
-            "stage_operating_contract:outcome_movement_grain_mismatch:stage-outcome-automation-wants_waitlist-transition",
-            "stage_operating_contract:stage_transition_missing:stage-outgoing-transitions",
-            "stage_operating_contract:transition_destination_grain_mismatch:stage-transition-decision_to_waitlist",
-            "stage_operating_contract:transition_destination_grain_mismatch:stage-transition-tour_to_waitlist",
-        ]);
+        expect(result.errors).toEqual([]);
         for (const s of enrollment(withViews).stages) {
             for (const t of s.stage_operating_plan_v1?.work_templates ?? []) expect(t.template_key).toBeTruthy();
         }
@@ -179,6 +230,10 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
         }
         const lead = resolveEffectiveStageOperatingPlan({ departmentMetadata, builderStageKey: "lead" });
         expect(lead.plan?.outgoing_transitions?.find((e) => e.transition_ref === "lead_to_closed_lost")?.target_stage_key).toBe("closed");
+        const waitlist = resolveEffectiveStageOperatingPlan({ departmentMetadata, builderStageKey: "waitlist" });
+        expect(waitlist.plan?.outgoing_transitions?.map((e) => e.transition_ref)).toEqual(["waitlist_to_enrolling"]);
+        const decision = resolveEffectiveStageOperatingPlan({ departmentMetadata, builderStageKey: "decision" });
+        expect(decision.plan?.outgoing_transitions?.map((e) => e.target_stage_key)).not.toContain("waitlist");
     });
 
     it("the runtime fallback for stages WITHOUT a stored plan is unchanged (shared defaults untouched)", () => {
@@ -189,6 +244,8 @@ describe("Enrollment template on a clean process (BP V2 S8B-1)", () => {
             const rule = defaults.outcome_rules!.find((r) => r.when_outcome_key === x.outcome)!;
             expect(rule.targets.some((t) => t.kind === "update_family_case_status")).toBe(false);
         }
+        expect(defaultStageOperatingPlanForEnrollmentStage("decision")!.outgoing_transitions!.map((e) => e.transition_ref)).toContain("decision_to_waitlist");
+        expect(defaultStageOperatingPlanForEnrollmentStage("waitlist")!.outgoing_transitions ?? []).toEqual([]);
     });
 
     it("existing Enrollment configuration is not touched: a process with stages is still refused", () => {
