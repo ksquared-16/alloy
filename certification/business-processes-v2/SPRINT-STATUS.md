@@ -309,3 +309,37 @@ D6, D7 and D9 are classified independently. Local proof: `d6d7/LOCAL-CERTIFICATI
 3. Optionally, a financial value per Billing Work View. This is a future enhancement and depends on the Financials review above.
 
 **Open:** D6/D7 hosted proof, O1, the D4 residual, the Director review (D9, tile presentation, the mixed-view decision). **Stop condition:** this slice ends at the D6/D7 promotion. There is no BOS repair, tile redesign, Financials expansion or Firefly activation.
+
+## Update 2026-10-23T17:45Z: D6 and D7 deployed and proven on hosted QA Shared; D9 observed
+
+**D6 is CLOSED. D7 is CLOSED.** PR #1586 was merged as squash `484800c326e9`. The deployed staging build is `502d597537a7`, which contains it. Evidence: `d6d7/HOSTED-QA.md`.
+
+- **Run** `qar_08296c326232` → CLOSED, **QUIESCED_RETAINED**.
+  - Close `gar_e9013780c3d6d7`: access clean, sessions signed out.
+  - Census `gar_daf258da13154c`: **13/13**.
+  - Bound by `gar_af0313de9af64a`.
+  - No fixtures created.
+- **D6.** Admin and Director open an Assignments durable child (Ben Walk 584637, QA North), go to "+ Add Assignment" and pick a category; the editor opens and works. Through the open, Cancel, record switch and refresh there were **0** `financial-config/opportunity/*` requests, 0 API errors, and no writes.
+- **D7.** A temporary family view filtering `enrolling` was added to the QA Shared Enrollment draft:
+  - validate refused with `work_view_grain_mismatch` (view and stage `enrolling`/child named);
+  - publish returned 422 `business_process_publication_blocked`;
+  - the draft was restored byte-identical (sha `ff2b7edd…` equals the published payload, still published revision 3; publication rows unchanged at 5).
+  - Firefly was not touched.
+- **Regressions.** 16 Enrollment, Assignments and Billing views loaded with no error states. The option-set 404s were already known; Billing reads 0 because its charges are quiesced.
+- **QA Shared lease.** The run opened after the Documents lane closed `qar_31a2b9da28cd` (`authz_q1`) on Kelly's decision.
+
+**D9: OBSERVED, not repaired (owner: Runtime/BOS).**
+- With no stored preference and no click, the BOS rail opens visibly as floating on **Enrollment** record first entry, refresh and record switch, covering 32%, 32% and 9% of the Focus Panel.
+- On an **Assignments** (projection) record it is mounted but hidden.
+- **Cause:** the `BosPresentationControllerProvider` default is `"floating"`, and an auto-recommend effect re-applies it until the operator closes the panel; that preference is stored in sessionStorage, per tab.
+- It doesn't block D6/D7, and it goes to the Director review.
+
+**Remaining Director acceptance items:**
+- **Product review**, covering:
+  - D9 (BOS default-open);
+  - the tile presentation requirements (Open/Overdue built into the tiles, an authoritative count per Work View, an optional Billing value);
+  - whether mixed-grain Work Views should become blocking (Firefly's Decision view is the one affected).
+- **Other open items:**
+  - O1;
+  - the D4 residual Financials org-wide authorization review;
+  - the Director persona contract (§5.2).

@@ -1,0 +1,144 @@
+{
+  "run": "qar_08296c326232",
+  "org": "4acc9386-c485-486f-aa1f-05d83499d142",
+  "steps": {
+    "before": {
+      "status": 200,
+      "draft_revision": 11,
+      "draft_status": "published",
+      "unpublished_changes": false,
+      "payload_sha": "ff2b7edd6d4343e7c424231e8cae7d5fdab42dc932197a40a4eae49d18997fef",
+      "published_sha": "ff2b7edd6d4343e7c424231e8cae7d5fdab42dc932197a40a4eae49d18997fef",
+      "draft_equals_published": true,
+      "publication": {
+        "id": "59ba9904-18cb-4393-8560-8b0fe65f916f",
+        "revision_number": 3,
+        "published_at": "2026-10-23T13:50:04.811903+00:00"
+      },
+      "process_id": "2b324043-8bc0-46ae-a45b-f4b462e1a104",
+      "views": [
+        [
+          "new_leads",
+          "family"
+        ],
+        [
+          "tours",
+          "family"
+        ],
+        [
+          "decision",
+          "family"
+        ],
+        [
+          "registration",
+          "child"
+        ],
+        [
+          "waitlist",
+          "child"
+        ],
+        [
+          "all",
+          "family"
+        ]
+      ]
+    },
+    "draft_probe": {
+      "status": 200,
+      "draft_revision": 12,
+      "error": null
+    },
+    "validate": {
+      "status": 200,
+      "can_publish": false,
+      "error_codes": [
+        "work_view_grain_mismatch"
+      ],
+      "grain": [
+        {
+          "code": "work_view_grain_mismatch",
+          "stage_key": "enrolling",
+          "path": "processes[enrollment].work_views_v1[d7_probe_family_on_enrolling].row_grain_v1",
+          "message": "Work View “D7 probe — family on Enrolling” shows family records but filters only on “Enrolling” (child), which holds a different subject, so it could never open. Change the view's Row Grain or the stages it filters on so they describe the same records.",
+          "detail": {
+            "work_view_id": "d7_probe_family_on_enrolling",
+            "work_view_label": "D7 probe — family on Enrolling",
+            "declared_row_grain": "family",
+            "incompatible_stages": [
+              {
+                "stage_key": "enrolling",
+                "stage_grain": "child"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "publish_attempt": {
+      "status": 422,
+      "code": "business_process_publication_blocked",
+      "grain": [
+        {
+          "work_view_id": "d7_probe_family_on_enrolling",
+          "work_view_label": "D7 probe — family on Enrolling",
+          "declared_row_grain": "family",
+          "incompatible_stages": [
+            {
+              "stage_key": "enrolling",
+              "stage_grain": "child"
+            }
+          ]
+        }
+      ]
+    },
+    "restore": {
+      "status": 200,
+      "error": null
+    },
+    "after": {
+      "draft_revision": 13,
+      "draft_status": "published",
+      "unpublished_changes": false,
+      "payload_sha": "ff2b7edd6d4343e7c424231e8cae7d5fdab42dc932197a40a4eae49d18997fef",
+      "published_sha": "ff2b7edd6d4343e7c424231e8cae7d5fdab42dc932197a40a4eae49d18997fef",
+      "publication": {
+        "id": "59ba9904-18cb-4393-8560-8b0fe65f916f",
+        "revision_number": 3,
+        "published_at": "2026-10-23T13:50:04.811903+00:00"
+      },
+      "views": [
+        [
+          "new_leads",
+          "family"
+        ],
+        [
+          "tours",
+          "family"
+        ],
+        [
+          "decision",
+          "family"
+        ],
+        [
+          "registration",
+          "child"
+        ],
+        [
+          "waitlist",
+          "child"
+        ],
+        [
+          "all",
+          "family"
+        ]
+      ]
+    }
+  },
+  "org_check": null,
+  "restored_identical": {
+    "payload": true,
+    "views": true,
+    "publication_unchanged": true,
+    "probe_absent": true
+  }
+}
