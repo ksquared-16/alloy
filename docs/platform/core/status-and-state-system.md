@@ -92,10 +92,18 @@ ordinary policy, so none was needed.
 | Grain | Durable state | Stage position | Owns |
 |-------|---------------|----------------|------|
 | **Case** | `opportunities.status_key` (`open`\|`closed`) + `close_reason_key` | `opportunities.stage_key` | Household coordination — is the case open, and why did it close |
-| **Child enrollment** | `opportunity_customer_members.outcome_status_key` + `close_reason_key` | `opportunity_customer_members.stage_key` | Per-child durable enrollment state |
+| **Child enrollment** | `opportunity_customer_members.outcome_status_key` + `close_reason_key` | the child's Enrollment journey, `process_instances.stage_key` (`context_type = enrollment_participation`) | Per-child durable enrollment state |
 
 **Do not** treat case status as every child's enrollment state. Tour/qualification/decision
 progress is **Stage + Work**, never status (see `stage-membership-and-outcomes.md`).
+
+**Where a child's stage lives (corrected October 2026, BP V2 D5).** This table used to name `opportunity_customer_members.stage_key`. The executor's single child stage writer is the child's own journey (`stageOutcomeRuleTargetExecutor`: "the child's process instance owns stage_key"; the participation `stage_key` mirror write was removed). The participation `stage_key` stays null, and Work Views and the Focus Panel read the journey.
+
+**Per-child progression (BP V2 D2/D5).**
+- **One child at a time.** A child leaves the family's Decision on its own path: a `participant_decision` such as Begin Enrolling or Waitlist, executed for exactly one chosen child.
+- **Status and stage together.** The decision writes that child's status (`outcome_status_key`) and that child's stage (its journey) together, through the canonical writers. Siblings and the family case are untouched.
+- **No status invented.** A child status missing from the org's `status_definitions` is reported as a degraded effect, never invented.
+- **The family outcome waits.** It is refused until every child has a path, and it never writes a child's status or stage.
 
 Status definitions live in org config (`status_definitions`) with `entity_type` discriminating opportunity vs OCM.
 
