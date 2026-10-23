@@ -27,6 +27,7 @@ import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/l
 import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
 import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { apiError, apiOk } from "@/lib/api/apiResponse";
 
 /**
@@ -1043,6 +1044,8 @@ async function getEntityImpl(
             // the extracted-text route, behind processing.operate and the full document decision.
             const docRow = doc as Record<string, unknown>;
             if (!actorMayReadDocuments(access)) return entityNotFound();
+            // D1c-1: a quarantined document has no drawer until it is released.
+            if (isDocumentUnavailable(docRow.status)) return entityNotFound();
             const docSensitivity = await resolveDocumentSensitivity(supabase, orgId, [
                 { id: String(docRow.id), doc_type: docRow.doc_type ? String(docRow.doc_type) : null },
             ]);

@@ -60,7 +60,7 @@ canonical content type its bytes prove (`web/lib/documents/documentContentSignat
 
 | Path | Who | Checks |
 |---|---|---|
-| `POST /api/admin/documents/upload` | `documents.write`; `processing.operate` to open or attach a case | 10 MiB; bytes must match the claimed format (415 `CONTENT_MISMATCH`) |
+| `POST /api/admin/documents/upload` | `documents.write`; `processing.operate` to open or attach a case | 10 MiB; bytes must match the claimed format (415 `CONTENT_MISMATCH`); structural screening (415 `SCREENING_REFUSED`, or quarantine with no extraction and no Processing case) |
 | `POST /api/public/forms/[token]/enrollment-upload` | form-link token; the session's pinned schema decides the destination | Content-Length precheck; rate limit; PDF/PNG/JPEG by magic bytes; 10 MiB |
 | `POST /api/public/forms/[token]/enrollment-signature-asset` | form-link token | Content-Length precheck; rate limit; PNG by magic bytes; 300 KB |
 | `POST /api/vendor-application` | unauthenticated | Content-Length precheck; rate limit; PDF/PNG/JPEG by magic bytes; 10 MiB per file |
@@ -71,8 +71,35 @@ any token or body is read, and they fail closed (`web/lib/documents/publicUpload
 **A public drawn signature** may cite only a `signature_asset` captured on the same packet session. Only signature assets are
 ever drawn into a generated PDF.
 
-**Malware scanning** is not in place. The intended design is quarantine before availability, using the existing `quarantined`
-status, plus one scanning step. It needs a Director provider decision.
+**Structural screening (D1c-1).** Every path that stores an outside file calls `decideIngestion`
+(`web/lib/documents/screenedIngestion.ts`) before the bytes reach storage or any parser. That covers the vendor application, the
+enrollment attachment, the drawn signature and the operator upload. The screening itself is `screenDocumentBytes`
+(`web/lib/documents/structuralScreening.ts`), which is deterministic and fails closed:
+- **Refused, nothing stored:** bytes that are not the declared format; a corrupt file (a PDF without its end marker or with
+  an unterminated stream; a PNG whose chunks fail CRC or whose image data does not decompress to the declared size; a JPEG
+  that never reaches its end-of-image).
+- **Quarantined** (`documents.status = 'quarantined'`):
+  - a PDF carrying `/JavaScript`, `/JS`, `/Launch`, `/EmbeddedFile(s)`, `/XFA`, `/RichMedia`, `/ImportData` or `/GoToE`.
+    Names are matched after `#xx` decoding, inside Flate-compressed object streams too;
+  - an encrypted PDF;
+  - an uninspectable stream;
+  - a time, stream or size limit reached;
+  - an internal error;
+  - an Office file with macros.
+
+  A drawn signature is never quarantined: anything short of clean is refused.
+- **Quarantined documents are unreachable.** The access decision refuses them, the byte readers return nothing, and every
+  list, related tab and drawer omits them.
+- **Review:** they appear only in `GET /api/admin/documents/screening`. Releasing one takes
+  `POST /api/admin/documents/[id]/screening {action:"release", reason}`, which requires `processing.documents.manage`,
+  document read, scope and sensitivity clearance; records `document_released` first; and refuses with 503 if it cannot.
+  To discard a quarantined file instead, use the audited delete.
+- **Bypass lock:** `web/tests/documents/screenedIngestionCoverage.test.ts` fails if a storage upload appears that is not
+  screened (or a declared server-generated writer), or a download that is not gated.
+
+**This is not antivirus.** No signature database is consulted, and no record claims a file is malware-free.
+Signature-based scanning (D1c-2) is deferred to a provider decision. Existing files were not screened in place. A
+report-only survey (`web/scripts/documentScreeningSurvey.ts`) is prepared, and acting on its findings needs separate authorization.
 
 ## 5. Disposal: the only way a subject's documents are deleted
 

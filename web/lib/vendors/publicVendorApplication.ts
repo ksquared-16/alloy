@@ -19,6 +19,9 @@ export type PublicVendorApplicationFile = {
   buffer: Buffer;
   filename: string;
   contentType: string;
+  /** D1c-1: the route's structural-screening decision. A quarantined file is stored unavailable until released. */
+  status?: "uploaded" | "quarantined";
+  screening?: Record<string, unknown>;
 };
 
 export type SubmitPublicVendorApplicationParams = {
@@ -406,7 +409,8 @@ export async function submitPublicVendorApplication(
     byte_size: insuranceBuf.length,
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: insurancePath,
-    status: "uploaded",
+    status: input.proof_of_insurance.status ?? "uploaded",
+    metadata: input.proof_of_insurance.screening ? { screening: input.proof_of_insurance.screening } : {},
   });
   if (doc1Err) {
     console.error("[submitPublicVendorApplication] documents insert (insurance) failed:", doc1Err.message);
@@ -432,7 +436,8 @@ export async function submitPublicVendorApplication(
     byte_size: driversBuf.length,
     bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
     storage_path: driversPath,
-    status: "uploaded",
+    status: input.drivers_license.status ?? "uploaded",
+    metadata: input.drivers_license.screening ? { screening: input.drivers_license.screening } : {},
   });
   if (doc2Err) {
     console.error("[submitPublicVendorApplication] documents insert (drivers_license) failed:", doc2Err.message);

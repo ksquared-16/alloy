@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DocumentTextResult } from "./types";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 
 const UNAVAILABLE = (reason: string): DocumentTextResult => ({ available: false, text: null, reason });
 
@@ -22,14 +23,16 @@ export async function extractDocumentTextSafe(
 
         const { data, error } = await supabase
             .from("documents")
-            .select("extracted_text, mime_type")
+            .select("extracted_text, mime_type, status")
             .eq("org_id", args.orgId)
             .eq("id", args.documentId)
             .maybeSingle();
         if (error) return UNAVAILABLE("document_query_failed");
         if (!data) return UNAVAILABLE("document_not_found");
 
-        const row = data as { extracted_text?: string | null; mime_type?: string | null };
+        const row = data as { extracted_text?: string | null; mime_type?: string | null; status?: string | null };
+        // D1c-1: a quarantined document's text is never handed to Processing.
+        if (isDocumentUnavailable(row.status)) return UNAVAILABLE("document_unavailable");
         const text = typeof row.extracted_text === "string" ? row.extracted_text.trim() : "";
         if (text.length > 0) {
             return { available: true, text, reason: null };

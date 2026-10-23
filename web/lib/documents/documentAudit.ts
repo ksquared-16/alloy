@@ -24,6 +24,8 @@ export type DocumentAuditEvent =
     | "document_link_issued"
     | "document_delete_authorized"
     | "document_delete_failed"
+    | "document_quarantined"
+    | "document_released"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
