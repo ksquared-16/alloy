@@ -190,3 +190,26 @@ Evidence: `slice8a/hosted/`.
 3. **Census binding for `qar_2765465b1e2b`.** The census filed after close was deduplicated onto this lane run's earlier same-hash census, which ran before the close. Next step: file census v2 in a new lane run, then `qa_run_close {qaRunId, residueCensusRequestId}`.
 
 **Left in QA Shared** (published process configuration, kept by design): Assignments and Billing, both published. The Enrollment department holds an unpublished draft process with no stages.
+
+## Update 2026-10-23T00:50Z: No-Finance persona certified (toolkit `43ce22941af3`, staging `8bb731eadbf3`)
+
+**Run `qar_1546aa9036c7`.**
+- Opened by `gar_9ad7f3df3a90fb`. All four sessions verified as their exact identities.
+- `qa_bp_no_finance` = seeded `ops` minus `fin.*`, `billing.*`, `staff.compensation.*` and `enrollment.pricing.override`: 57 keys, exact, with `portal.access` kept.
+- **Billing is refused for the No-Finance Operator.**
+  - All five Billing views refuse with "You don't have access to view financial information".
+  - The tile shows no counts.
+  - Eight finance APIs return 403. As the Director, the same APIs return 200, except `statements`, which returns 400 without parameters.
+  - No financial figures were disclosed.
+- Closed clean by `gar_788652e7bece89`; the custom role was emptied to 0 grants.
+- Census v2 `gar_91261ae7a0d440`: **13/13**.
+- Bound by `gar_2ab6bd0873f4eb`. Verdict **`QUIESCED_RETAINED`**.
+
+**`qar_2765465b1e2b`.** The same census qualifies for it: it ran after that run's 21:47Z close. The bind was refused at filing because the lane run had completed, so it is one filing in the next lane run.
+
+**Director persona discrepancy (needs a Director decision).**
+- The contract (`QA-READINESS.md §1`) says the Director has `fin.read` but no `fin.write`.
+- The Director's effective grants, through seeded `ops`, include `fin.read`, `fin.write`, `billing.read` and `billing.write`.
+- No BP V2 product acceptance criterion depends on the Director lacking write. The walkthrough has the Director read and decide; it never refuses the Director a write.
+- But the approved persona contract states something the deployment does not do.
+
