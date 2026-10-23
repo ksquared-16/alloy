@@ -45,6 +45,8 @@ import type {
     SchedulingProjection,
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import { resolveAssignmentTimes, uniformDailyInterval, type AssignmentTime } from "@/lib/assignmentTime/resolveAssignmentTime";
+import { deriveHomerooms, type HomeroomPlacement } from "@/lib/location/homerooms";
+import { homeroomAssignmentFromRow, homeroomPlacementFromRow, loadHomeroomContext } from "@/lib/location/loadHomeroomContext";
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -1041,6 +1043,12 @@ export async function loadSchedulingProjectionsForChildren(
         assignmentIds: [...assignmentsByMember.values()].flat().map((r) => r.id),
     });
 
+    // Homeroom facts for the batch — the same loader the roster uses, fed the placements read above.
+    const homeroomContext = await loadHomeroomContext(supabase, orgId, {
+        roomIds: assignmentRowsAll.map((r) => r.room_location_id ?? ""),
+        placements: placementRows.map(homeroomPlacementFromRow).filter((p): p is HomeroomPlacement => p != null),
+    });
+
     // ── Stitch. No I/O below this line: every child is built from the rows above by the same pure
     //    path the single-child owner has always used.
     for (const memberId of memberIds) {
@@ -1065,6 +1073,14 @@ export async function loadSchedulingProjectionsForChildren(
             proposedPatternByType,
             assignmentTimesById,
         });
+        const homerooms = deriveHomerooms({
+            onDate: params.todayYmd,
+            assignments: assignmentRows.map(homeroomAssignmentFromRow),
+            spacesById: homeroomContext.spacesById,
+            homeroomCategoryIds: homeroomContext.homeroomCategoryIds,
+            placementsByAgreement: homeroomContext.placementsByAgreement,
+        });
+        for (const child of projection.children) child.homerooms = homerooms;
         out.set(memberId, projection);
     }
     // EVERY requested child has an entry. A child with no agreement, no assignment and no draft is

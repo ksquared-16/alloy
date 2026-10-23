@@ -28,6 +28,7 @@ import {
 import { resolveInquiryChildGenderLabelFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { personDrawerGenderDisplayLabel } from "@/lib/admin/person/personDrawerGenderField";
 import { primaryAssignmentFromScheduling } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { homeroomLabel } from "@/lib/location/homerooms";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import {
     resolvePreferredWeekdays,
@@ -330,10 +331,18 @@ export function buildChildrenCardEvidence(
                 ? opportunitySiteLabel
                 : null)
             ?? (!childLocationId ? opportunitySiteLabel : null);
+        /*
+         * ROOM IS THE DERIVED HOMEROOM SET once the child is enrolled (V7-03): every qualifying
+         * classroom, or nothing — never the primary row's room, the first row's room or the placement
+         * room standing in for one. Before enrolment it stays the planning value (the proposed or
+         * desired room), which is an inquiry fact, not a homeroom claim.
+         */
         const room =
-            primaryAssignment?.room
-            ?? scheduleCompact.roomLabel
-            ?? trimOrNull(row.program_room_cohort_label);
+            hasCommittedPrimaryAssignment && schedulingProjection?.homerooms
+                ? homeroomLabel(schedulingProjection.homerooms)
+                : hasCommittedPrimaryAssignment
+                  ? null
+                  : scheduleCompact.roomLabel ?? trimOrNull(row.program_room_cohort_label);
         const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;

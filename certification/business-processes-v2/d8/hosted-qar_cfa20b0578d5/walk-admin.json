@@ -1,0 +1,158 @@
+{
+  "persona": "admin",
+  "build": "9adb3c664a471d863c0a9c76f9d3577a7f547c2b",
+  "steps": [
+    {
+      "name": "closed-family-open",
+      "panel": "record",
+      "editor": false,
+      "add_assignment": true,
+      "no_assignments": true,
+      "cards": [],
+      "header": "Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed QA North Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitli",
+      "writes_so_far": [
+        {
+          "at": 1792768325375,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768327533,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        }
+      ]
+    },
+    {
+      "name": "explicit-add-assignment",
+      "panel": "record",
+      "editor": true,
+      "add_assignment": false,
+      "no_assignments": false,
+      "cards": [],
+      "header": "Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed QA North Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitli",
+      "writes_so_far": [
+        {
+          "at": 1792768325375,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768327533,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        }
+      ]
+    },
+    {
+      "name": "after-cancel",
+      "panel": "record",
+      "editor": false,
+      "add_assignment": true,
+      "no_assignments": true,
+      "cards": [],
+      "header": "Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed QA North Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitli",
+      "writes_so_far": [
+        {
+          "at": 1792768325375,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768327533,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        }
+      ]
+    },
+    {
+      "name": "other-record",
+      "panel": "record",
+      "editor": false,
+      "add_assignment": false,
+      "no_assignments": false,
+      "cards": [],
+      "header": "Walk 584637 Family · Walk 584637 Family Decision · Waitlist 2 locations Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision B5 Ben C5 Cara +2 C",
+      "writes_so_far": [
+        {
+          "at": 1792768325375,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768327533,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768350393,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        }
+      ]
+    },
+    {
+      "name": "closed-family-refresh",
+      "panel": "record",
+      "editor": false,
+      "add_assignment": true,
+      "no_assignments": true,
+      "cards": [],
+      "header": "Readiness e59e093c2b05 Family · Readiness e59e093c2b05 Family Closed QA North Manage ▾ Work Activity ENROLLMENT New Lead Tour Placement / Decision Closed Waitli",
+      "writes_so_far": [
+        {
+          "at": 1792768325375,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768327533,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768350393,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768365457,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        },
+        {
+          "at": 1792768367147,
+          "method": "POST",
+          "url": "/api/admin/queue-view-totals"
+        }
+      ]
+    }
+  ],
+  "writes": [
+    {
+      "at": 1792768325375,
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "at": 1792768327533,
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "at": 1792768350393,
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "at": 1792768365457,
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "at": 1792768367147,
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    }
+  ]
+}

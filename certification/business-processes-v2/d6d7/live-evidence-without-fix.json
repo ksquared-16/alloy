@@ -1,0 +1,181 @@
+{
+  "run": "dee8bf78",
+  "at": "2026-10-23T15:37:08.202Z",
+  "scenarios": {
+    "template_stages": [
+      {
+        "key": "lead",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "tour",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "decision",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "closed",
+        "grain": "family",
+        "segment": "family"
+      },
+      {
+        "key": "waitlist",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "enrolling",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "enrolled",
+        "grain": "child",
+        "segment": "child"
+      },
+      {
+        "key": "closed_withdrawn",
+        "grain": "child",
+        "segment": "child"
+      }
+    ],
+    "1 · valid family-grain view": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "2 · valid child-grain view": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "3 · family view filtering a child stage": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "4 · child view filtering a family stage": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "5 · multiple compatible stages": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "6a · mixed stages, none holding the declared grain": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "6b · mixed stages, one holding the declared grain": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "7 · legacy Work View defaults (no declared grain)": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "8 · assignments": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    },
+    "9 · billing": {
+      "validate": {
+        "can_publish": true,
+        "errors": [],
+        "grain": [],
+        "mixed": []
+      },
+      "publish": {
+        "status": 200,
+        "code": null,
+        "grain": []
+      }
+    }
+  },
+  "fixture_orgs_for_teardown": [
+    "b302264d-e9f2-45e7-bbb0-6e5022103d5b"
+  ]
+}

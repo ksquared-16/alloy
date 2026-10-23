@@ -258,3 +258,88 @@ Run `qar_58463703cedd` → **QUIESCED_RETAINED**. Census `gar_5eb1ed3a0dee90` 13
 **Documentation correction.** The child's stage lives on its Enrollment journey (`process_instances`), not on `opportunity_customer_members.stage_key`.
 
 **Open:** D6, D7, D8; O1. **Residual:** the D4 org-wide Financials lists. **Next acceptance gates:** D8 (closed-record Create Assignment editor), then D6/D7.
+
+## Update 2026-10-23T15:20Z: D8 repaired, deployed and proven on hosted QA Shared
+
+**D8 is CLOSED.** PR #1584 (squash `9adb3c664a47`, deployed 15:11Z).
+
+- **Cause.** The Scheduling card opens a single subject directly (intended), and its work surface initialized `existing ? "detail" : "create"`. So any one-child family whose child had no assignment opened straight into the Create Assignment editor.
+- **Fix.** The surface now enters on its assignments; the editor opens only from "+ Add Assignment", Edit or a type pick.
+- **Local proof** (`d8/LOCAL-CERTIFICATION.md`): rendered interaction test 5/5 (base 5/5 fail); 0 new failures across 2,222 suites.
+- **Hosted proof** (`d8/HOSTED-QA.md`; `qar_cfa20b0578d5` → QUIESCED_RETAINED; census `gar_28712e7ade83d6` 13/13, bound), for admin and Director:
+  - the closed/lost family opens with no editor;
+  - the explicit "+ Add Assignment" opens it, and Cancel returns;
+  - other records and refresh stay passive;
+  - no write requests from opening.
+
+**Remaining acceptance items:** D6 (Scheduling card `financial-config` 404), D7 (publish-time Work View grain check), O1, the D4 residual Financials read-scope inventory (org-wide lists and aggregates), tile presentation feedback (Open/Overdue under the tile), and the Director product review (including the BOS panel auto-opening on record entry).
+
+## Update 2026-10-23T17:30Z: D6 and D7 repaired (PR pending); D9 recorded
+
+D6, D7 and D9 are classified independently. Local proof: `d6d7/LOCAL-CERTIFICATION.md`. Hosted proof: `d6d7/HOSTED-QA.md`, after deploy.
+
+**D6: REPAIRED (local), hosted pending.** The Scheduling card requested `financial-config/opportunity/<child id>` and got 404.
+- **Cause.** For a durable child (an Assignments row), the card's case came from the mutation resolver, which falls back to `return subjectId`.
+- **Fix.** `resolveSchedulingCaseOpportunityId` returns:
+  - the opportunity subject;
+  - otherwise the family binding;
+  - otherwise the operational host;
+  - otherwise **none**, and then no request is made.
+- **Proof.** 6/6; rendered durable child with 0 `financial-config` requests (the base card issues 2).
+- **Unchanged:** staff, financial and assignment semantics.
+
+**D7: REPAIRED (local), hosted pending.** Publication accepted a Work View whose declared Row Grain contradicts its stages.
+- **Fix.** In the publish validator, using `lensStageKeys` and `resolveStageGrain`:
+  - `work_view_grain_mismatch` blocks when no filtered stage holds the declared grain (the runtime's `grain_ambiguous` boundary);
+  - `work_view_grain_mixed` warns when the view also filters stages of the other grain.
+- **Proof.** The live draft → validate → publish suite passes 11/11 across the brief's cases 1–9; the counterfactual publishes all 3 refusals.
+- **Case 10 (Firefly), read-only** via census `gar_8df61ae8b70aeb`: 0 errors.
+- **Product decision for the Director.** Firefly's published **Decision** view declares `family` over `decision` + `offered` (child). Today that is a warning. Making mixed views blocking would refuse Firefly's next publication until that view is changed.
+
+**D9: RECORDED, not repaired (owner: Runtime/BOS).** The BOS assistant panel opens over the Focus Panel on record entry.
+- **Observed** in D8 hosted (`qar_cfa20b0578d5`) for admin and Director: the record was entered from a Work View row, a deep link (`/workspace/work-unit/<view>?subject_id=…`), or a refresh. The panel opened with **no explicit invocation**, partly covering the record. Hosted automation had to close it ("Close") before clicking.
+- **No write** results from it.
+- **Does not block** the D6/D7 acceptance. It **does affect** the Director's review of the Focus Panel, because the record is partly covered on entry. It is to be decided in that review: passive entry (the D8 rule) suggests BOS should open only when asked.
+
+**Financials org-wide authorization review (recorded, scope unchanged).** The D4 residual still stands: org-wide lists and aggregates without a site filter (`needs-recognition`, `ledger`, `journal-entries`, `snapshot`, `statements`). This needs its own Financials authorization review. Nothing in D6/D7 widens or narrows it.
+
+**Director presentation requirements (carried forward, not implemented in this slice):**
+1. Open and Overdue are integrated visually into the existing process tiles, not as a line under them.
+2. Each Work View shows a visible, authoritative count.
+3. Optionally, a financial value per Billing Work View. This is a future enhancement and depends on the Financials review above.
+
+**Open:** D6/D7 hosted proof, O1, the D4 residual, the Director review (D9, tile presentation, the mixed-view decision). **Stop condition:** this slice ends at the D6/D7 promotion. There is no BOS repair, tile redesign, Financials expansion or Firefly activation.
+
+## Update 2026-10-23T17:45Z: D6 and D7 deployed and proven on hosted QA Shared; D9 observed
+
+**D6 is CLOSED. D7 is CLOSED.** PR #1586 was merged as squash `484800c326e9`. The deployed staging build is `502d597537a7`, which contains it. Evidence: `d6d7/HOSTED-QA.md`.
+
+- **Run** `qar_08296c326232` → CLOSED, **QUIESCED_RETAINED**.
+  - Close `gar_e9013780c3d6d7`: access clean, sessions signed out.
+  - Census `gar_daf258da13154c`: **13/13**.
+  - Bound by `gar_af0313de9af64a`.
+  - No fixtures created.
+- **D6.** Admin and Director open an Assignments durable child (Ben Walk 584637, QA North), go to "+ Add Assignment" and pick a category; the editor opens and works. Through the open, Cancel, record switch and refresh there were **0** `financial-config/opportunity/*` requests, 0 API errors, and no writes.
+- **D7.** A temporary family view filtering `enrolling` was added to the QA Shared Enrollment draft:
+  - validate refused with `work_view_grain_mismatch` (view and stage `enrolling`/child named);
+  - publish returned 422 `business_process_publication_blocked`;
+  - the draft was restored byte-identical (sha `ff2b7edd…` equals the published payload, still published revision 3; publication rows unchanged at 5).
+  - Firefly was not touched.
+- **Regressions.** 16 Enrollment, Assignments and Billing views loaded with no error states. The option-set 404s were already known; Billing reads 0 because its charges are quiesced.
+- **QA Shared lease.** The run opened after the Documents lane closed `qar_31a2b9da28cd` (`authz_q1`) on Kelly's decision.
+
+**D9: OBSERVED, not repaired (owner: Runtime/BOS).**
+- With no stored preference and no click, the BOS rail opens visibly as floating on **Enrollment** record first entry, refresh and record switch, covering 32%, 32% and 9% of the Focus Panel.
+- On an **Assignments** (projection) record it is mounted but hidden.
+- **Cause:** the `BosPresentationControllerProvider` default is `"floating"`, and an auto-recommend effect re-applies it until the operator closes the panel; that preference is stored in sessionStorage, per tab.
+- It doesn't block D6/D7, and it goes to the Director review.
+
+**Remaining Director acceptance items:**
+- **Product review**, covering:
+  - D9 (BOS default-open);
+  - the tile presentation requirements (Open/Overdue built into the tiles, an authoritative count per Work View, an optional Billing value);
+  - whether mixed-grain Work Views should become blocking (Firefly's Decision view is the one affected).
+- **Other open items:**
+  - O1;
+  - the D4 residual Financials org-wide authorization review;
+  - the Director persona contract (§5.2).
