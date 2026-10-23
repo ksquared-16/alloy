@@ -1,6 +1,6 @@
 """Documents V1 / D1b.7 — hosted security certification against staging (authz_q1 personas).
 
-Usage: d1b_hosted_security_cert.py <qa_run_id> setup|certify|teardown
+Usage: d1b_hosted_security_cert.py <qa_run_id> setup|certify|lead_delete|teardown
 
 Runs alongside the certified Q1 driver (q1_hosted_authz_cert.py), which owns the five Q1 fixture
 documents and the positive server-side regression matrix. This driver adds what D1b changed:
@@ -116,6 +116,37 @@ if PHASE == "setup":
             json.dump(ids, open(STATE_FILE, "w"), indent=2)
     print("SETUP", json.dumps({k: True for k in ids}))
     sys.exit(0 if "medical" in ids else 1)
+
+if PHASE == "lead_delete":
+    # The lead-deletion repair (PR #1579), on the deployed build. fixture_admin deletes QA fixture opportunity OPP2
+    # through the real product route. Its documents (the Q1 wu2 upload, plus one uploaded here) must be disposed of
+    # WITH their stored files. The zero-residue census after the close proves no qa-authz object remains. The teardown
+    # cannot mask a leftover object here: it deletes only documents whose row still exists.
+    OPP2 = "aa000000-0000-4000-8000-000000000112"
+    q1 = json.load(open(Q1_IDS))
+    s, b = upload("fixture_admin", "lead-owned", {"entity_type": "opportunity", "entity_id": OPP2, "doc_type": "other"},
+                  tiny_pdf("lead-owned"), "pdf", "application/pdf")
+    own = ((b or {}).get("document") or {}).get("id") if isinstance(b, dict) else None
+    check("upload a document owned only by the lead", "fixture_admin", s == 200 and bool(own), s, code_of(b))
+    targets = [x for x in (own, q1["wu2"]["id"]) if x]
+    s, b = call(f"/api/admin/opportunities/{OPP2}/delete", "fixture_admin", "POST", b"{}", "application/json")
+    result = (b or {}).get("result") if isinstance(b, dict) else None
+    disp = {d.get("documentId"): d for d in ((result or {}).get("documents") or [])}
+    check("lead deletion succeeds", "fixture_admin", s == 200 and isinstance(result, dict), s, code_of(b),
+          documents_deleted=(result or {}).get("deleted", {}).get("documents"), documents_retained=(result or {}).get("deleted", {}).get("documents_retained"))
+    for t in targets:
+        d = disp.get(t) or {}
+        check("lead's document deleted with its stored file", "fixture_admin",
+              d.get("outcome") == "deleted" and (d.get("objectsRemoved") or 0) >= 1, s, None,
+              outcome=d.get("outcome"), objects_removed=d.get("objectsRemoved"), objects_already_absent=d.get("objectsAlreadyAbsent"))
+        s2, b2 = call(f"/api/admin/documents/{t}/signed-url", "fixture_admin")
+        check("deleted document is unreachable", "fixture_admin", s2 == 404, s2, code_of(b2))
+    s3, b3 = call(f"/api/admin/documents/{q1['wu1']['id']}/signed-url", "fixture_admin")
+    check("another lead's document is untouched", "fixture_admin", s3 == 200, s3, code_of(b3))
+    summary = {"passed": sum(r["pass"] for r in results), "total": len(results), "qa_run_id": RUN, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    print("\nSUMMARY", json.dumps(summary))
+    json.dump({"summary": summary, "results": results}, open(os.path.join(HERE, f"d1b_lead_delete_results.{RUN}.json"), "w"), indent=2)
+    sys.exit(0 if summary["passed"] == summary["total"] else 1)
 
 if PHASE == "teardown":
     ids = json.load(open(STATE_FILE)) if os.path.exists(STATE_FILE) else {}

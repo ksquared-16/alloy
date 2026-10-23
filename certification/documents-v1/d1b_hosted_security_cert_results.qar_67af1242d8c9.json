@@ -1,0 +1,221 @@
+{
+  "summary": {
+    "passed": 25,
+    "total": 25,
+    "qa_run_id": "qar_67af1242d8c9",
+    "at": "2026-10-23T13:22:42Z"
+  },
+  "results": [
+    {
+      "case": "deployed build",
+      "persona": null,
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sha": "b640b454636c69b63bbdbd08bf7f113c1cfbdb8f",
+      "project": "ikaxilmwmrmbagoidedu"
+    },
+    {
+      "case": "medical signed-url expect 200",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_url": true
+    },
+    {
+      "case": "medical signed-url expect 403",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT",
+      "has_url": false
+    },
+    {
+      "case": "medical signed-url expect 403",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT",
+      "has_url": false
+    },
+    {
+      "case": "medical signed-url expect 403",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT",
+      "has_url": false
+    },
+    {
+      "case": "medical signed-url expect 403",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": "INSUFFICIENT_ROLE",
+      "has_url": false
+    },
+    {
+      "case": "medical signed-url expect 404",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND",
+      "has_url": false
+    },
+    {
+      "case": "medical listed = True",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "medical_listed": true
+    },
+    {
+      "case": "medical listed = False",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "medical_listed": false
+    },
+    {
+      "case": "medical listed = False",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "medical_listed": false
+    },
+    {
+      "case": "medical listed = False",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "medical_listed": false
+    },
+    {
+      "case": "drawer serves the intake document without OCR text",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "has_extracted_key": false
+    },
+    {
+      "case": "drawer refuses a medical document without health.view",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "drawer refuses an actor without document read",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "upload refuses bytes that are not the claimed format",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 415,
+      "code": "CONTENT_MISMATCH",
+      "stored": false
+    },
+    {
+      "case": "form-draft as ocr returns the OCR preview",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": true
+    },
+    {
+      "case": "form-draft as processing_only blanks the OCR preview",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": false
+    },
+    {
+      "case": "case detail OCR preview present = True",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": true
+    },
+    {
+      "case": "case detail OCR preview present = False",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": false
+    },
+    {
+      "case": "case detail OCR preview present = False",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": false
+    },
+    {
+      "case": "case detail OCR preview present = False",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "preview_present": false
+    },
+    {
+      "case": "vendor application: oversize body refused",
+      "persona": null,
+      "pass": true,
+      "status": 413,
+      "code": null,
+      "layer": "platform_edge"
+    },
+    {
+      "case": "enrollment upload: rate-limited per caller",
+      "persona": null,
+      "pass": true,
+      "status": 429,
+      "code": null,
+      "attempts": 31,
+      "first_429_at": 31,
+      "other_statuses": [
+        404
+      ]
+    },
+    {
+      "case": "enrollment signature: rate-limited per caller",
+      "persona": null,
+      "pass": true,
+      "status": 429,
+      "code": null,
+      "attempts": 21,
+      "first_429_at": 21,
+      "other_statuses": [
+        404
+      ]
+    },
+    {
+      "case": "vendor application: rate-limited per caller",
+      "persona": null,
+      "pass": true,
+      "status": 429,
+      "code": null,
+      "attempts": 6,
+      "first_429_at": 6,
+      "other_statuses": [
+        400
+      ]
+    }
+  ]
+}
