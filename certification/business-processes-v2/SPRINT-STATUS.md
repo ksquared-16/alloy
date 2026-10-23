@@ -1,215 +1,150 @@
-# Business Processes V2: sprint status
+# Business Processes V2: sprint status (authoritative)
 
-**As of:** 2026-10-22T19:30Z
+**As of:** 2026-10-23T01:30Z
 **Lane:** `lane_581d120e4e41` (`agent/business-processes`)
-**Deployed staging:** `f12d000d21c1` (`/api/build-info`). It contains every BP V2 merge below.
-**Vacilando:** toolkit `1d35ef4690f2`.
+**Deployed staging:** `8bb731eadbf3` (project `ikaxilmwmrmbagoidedu`). It contains every BP V2 merge below.
+**Vacilando toolkit:** `2cc54168bf80`.
 
-**Overall: PARTIAL.** Everything planned for V2 is merged and deployed. The only open acceptance gate is the **hosted three-process certification (Slice 8A)**. It is **BLOCKED** (§4). The first attempt failed on the runner's audit origin, which Vacilando fixed in `1d35ef4690f2`. The second attempt granted access, but then **cannot be closed clean**: Alloy's audited removal deletes roles and leaves the access profile. Run `qar_17c26a706ca7` is held in CLOSING (`NOT_CLEAN`), and it holds QA Shared.
+**Overall: PARTIAL, not certified.**
+- Every planned V2 slice is merged and deployed.
+- On hosted staging, Assignments and Billing are configured and walked by all four personas, and the No-Finance refusal is proven.
+- **Full V2 certification still needs the populated-record three-process walkthrough.** It is blocked by the Enrollment template defect (§5.1): without a published Enrollment process, no household, and so no fixture, can be created.
 
 ## 1. Scope
 
-**Goal.** Business Processes V2 lets an organization run **Enrollment**, **Assignments** and **Billing** side by side on `/workspace`, all through the *existing* process catalog, tiles, Work Views and Focus Panel:
-- Enrollment stays a staged lifecycle and is unchanged.
-- Assignments and Billing are stage-less **domain projections**. They read Scheduling's and Financials' own authorities, and they introduce no second engine, record authority or financial calculation.
+**Goal.** Enrollment, Assignments and Billing run side by side on `/workspace`, through the existing process catalog, tiles, Work Views and Focus Panel.
+- Enrollment is a staged lifecycle and is unchanged.
+- Assignments and Billing are stage-less domain projections. They read Scheduling's and Financials' own authorities, with no second engine, record authority or financial calculation.
 
 **Agreed scope.**
-- **Slice 1:** a process model, plus the three processes as tiles.
-- **Slice 2:** domain-backed Work Views.
-- **Slices 3–4A:** Assignments: five views, Focus on the Scheduling card, and site-scoped commands.
-- **Slices 5–6A:** Billing: five views, Focus on the Financials card, and one Due / Past due classification.
-- **Slice 7:** the tile's Work Items line.
-- **Slice 8A:** hosted three-process certification in an isolated QA organization, a Director walkthrough, and financial quiescence.
+
+| Slices | What |
+|---|---|
+| 1 | Process model; three processes as tiles |
+| 2 | Domain-backed Work Views |
+| 3, 4, 4A | Assignments: five views, Scheduling card focus, site-scoped commands |
+| 5, 6, 6A | Billing: five views, Financials card focus, one Due / Past due classification |
+| 7 | Tile Work Items line |
+| 8A | Hosted certification in the shared QA organization: four personas, walkthrough, financial quiescence |
 
 **Changes and deferrals.**
-- Billing-period variances were dropped as a view: Financials has no such comparison.
-- Failed-payment exceptions are limited to provider collections that were never recognized.
-- Slice 8A originally assumed a disposable organization that would be retired at the end. The Director instead chose a permanent shared QA organization with quiesced, retained records. That change added the financial-quiescence work (census v2).
+- Billing-period variances were dropped as a view, because no such comparison exists.
+- Payment exceptions are limited to unrecognized provider collections.
+- QA moved to a permanent shared organization with quiesced, retained records, which is why census v2 exists.
+
+**Director rulings in force.**
+- **No-Finance** uses a dedicated bounded QA role with no financial permissions. Implemented (`qa_bp_no_finance`).
+- **Pending subsidy:** the Overdue figure shows the family's currently payable overdue amount as the primary figure, with pending subsidy identified separately. To be confirmed as an approved product rule before implementation; not implemented.
+- **Empty views are not a PASS.** A view not exercised with records is "configured / navigable", never PASS.
+- **Enrollment views:** stage-based views are acceptable if their counts match deployed data.
+- **Backdated fixtures** need an explicitly supported, isolated QA mechanism. None exists today.
 
 ## 2. Delivery inventory
 
-The lane owns every slice.
-
 | Slice | What | Status | PR → staging merge | Local certification | Hosted certification |
 |---|---|---|---|---|---|
-| 1 | `process_model_v1`; three processes, as tiles, with no Enrollment fallbacks | COMPLETE | #1513 → `4d795dcf0` | `threeProcessShell` (24), `threeProcessTiles` (2); publish rollback 12/12 | Deployed configuration census `gar_49a1b7a56ae00b` |
-| 1A | Hosted evidence and the Slice 2 contract (no code) | COMPLETE (evidence) | #1516 closed; content landed with #1521 | — | `slice1a/` tenant-identity census |
-| 2 | Domain-backed Work View runtime, with one reference projection per domain | COMPLETE | #1521 → `e67863e5d` | `live-projections.local-cert.json` | `slice2/hosted/` (read-only) |
-| 3 | Assignments: 5 Work Views; workspace site scope | COMPLETE | #1526 → `2f2d4ca59` | `live-assignments.local-cert.json` | `slice3/hosted/` (read-only; Firefly has no Assignments process) |
-| 4 | Assignment rows open the existing Scheduling card on their source | COMPLETE | #1535 → `19aa6a5ed` | `live-focus-panel.local-cert.json` | `slice4/hosted/` (read-only) |
-| 4A | Assignment commands enforce the actor's site scope | COMPLETE | #1547 → `5fa727260` | `live-assignment-site-scope.local-cert.json` | `slice4a/hosted/` (read-only) |
-| 5 | Billing review views: charges needing review, payment exceptions, funding variances | COMPLETE | #1549 → `488ed0b3e` | `live-billing.local-cert.json` | `slice5/hosted/` (read-only) |
-| 6 | Billing on the existing Focus Panel and Financials card | COMPLETE | #1551 → `bac802bb9` | `live-billing-focus.local-cert.json` | `slice6/hosted/` (read-only) |
-| 6A | One Financials Due / Past due classification; Payments due and Overdue views | COMPLETE | #1553 → `6cff6cb9c` | `live-due-parity.local-cert.json` | `slice6a/hosted/` (read-only, deployed `6cff6cb9c`) |
-| 7 | Tile Work Items line (open / overdue) | COMPLETE | #1554 → `ed5abbcd1` | `live-tile-work-items.local-cert.json` | `slice7/hosted/` (read-only, deployed `ed5abbcd1`; Enrollment 111 open · 89 overdue, matching the server summary) |
-| 8A-R | Hosted QA readiness, Decision classification, Director walkthrough | COMPLETE | #1567 → `a12b8808d` | — | — |
-| 8A-Q | Financial quiescence: contract, census v2 (`c1b6c335…b05648`, 13 checks), handoffs | COMPLETE | #1567 → `a12b8808d` | `financialQuiescence.live.test.ts` (3 tests) on lane and staging | Deployed baselines `gar_f04e0a9aaae37e` and `gar_51efecdc15c6a5`: 13/13 |
-| 8A-H | **Hosted three-process certification** (configure, fixtures, walkthrough per persona, quiesce, census) | **BLOCKED** | — | — | Attempt 1, `qar_f9a9275db057`: origin defect; recovered `QUIESCED_RETAINED`. Attempt 2, `qar_17c26a706ca7`: session verification failed at open (transient); recovery close `NOT_CLEAN` (profiles remain); census 12/13 (§4) |
+| 1 | Process model; three processes as tiles | COMPLETE | #1513 → `4d795dcf0` | `threeProcessShell` (24), `threeProcessTiles` (2), publish rollback 12/12 | Configuration census `gar_49a1b7a56ae00b` |
+| 1A | Hosted evidence and the Slice 2 contract | COMPLETE (evidence) | #1516 closed; content landed with #1521 | — | Tenant-identity census |
+| 2 | Domain-backed Work View runtime | COMPLETE | #1521 → `e67863e5d` | `live-projections` | Read-only (Firefly) |
+| 3 | Assignments: 5 views; site scope | COMPLETE | #1526 → `2f2d4ca59` | `live-assignments` | §4 |
+| 4 | Assignments → Scheduling card | COMPLETE | #1535 → `19aa6a5ed` | `live-focus-panel` | Not exercised on records |
+| 4A | Assignment commands enforce site scope | COMPLETE | #1547 → `5fa727260` | `live-assignment-site-scope` | Not exercised on records |
+| 5 | Billing review views | COMPLETE | #1549 → `488ed0b3e` | `live-billing` | §4 |
+| 6 | Billing → Financials card | COMPLETE | #1551 → `bac802bb9` | `live-billing-focus` | Not exercised on records |
+| 6A | Due / Past due classification; Payments due and Overdue views | COMPLETE | #1553 → `6cff6cb9c` | `live-due-parity` | §4 |
+| 7 | Tile Work Items line | COMPLETE | #1554 → `ed5abbcd1` | `live-tile-work-items` | Firefly read-only (111 open · 89 overdue = server); QA Shared tiles show "No open work items" |
+| 8A-R | Hosted QA readiness, Decision classification, walkthrough | COMPLETE | #1567 → `a12b8808d` | — | — |
+| 8A-Q | Financial quiescence: census v2 `c1b6c335…`, 13 checks | COMPLETE | #1567 → `a12b8808d` | `financialQuiescence.live.test.ts` (3) | Every BP run's close certified 13/13 (§3) |
+| **8A-H** | **Hosted three-process walkthrough with populated records** | **PARTIAL / BLOCKED** | — | — | §4; blocked by §5.1 |
 
-**What "hosted" means in this table.** Every hosted pass before 8A was a **read-only** check of a deployed build in Firefly, where only Enrollment is configured. Assignments and Billing have **never been exercised with real rows on a hosted deployment**. That is exactly what 8A-H is for.
+Local commits not pushed, all evidence with no code: `241daa6d6`, `a0bc3bddf`, `3c9f211f5`, `25d5437af`, `830ce1a5f`, `8ef9baf28`, and this update.
 
-**Not yet merged.** This status record and the 8A-H attempt evidence (`slice8a/hosted/`) are local lane commits only.
+## 3. Hosted QA runs (Vacilando ledger)
 
-## 3. Product capability status
+| Run | Toolkit | What happened | Final verdict | Census bound |
+|---|---|---|---|---|
+| `qar_f9a9275db057` | `7414457452d7` | Failed at open: audit origin; recovered | **QUIESCED_RETAINED** | `gar_51efecdc15c6a5` 13/13 |
+| `qar_17c26a706ca7` | `1d35ef4690f2` → `23626b9e6b87` | Session verification failed at open; residual profiles; recovered after the Access & Identity (#1571) and runner repairs | **QUIESCED_RETAINED** | `gar_afd84a85847332` 13/13 |
+| `qar_2765465b1e2b` | `23626b9e6b87` | Assignments and Billing configured and walked by 4 personas | **QUIESCED_RETAINED** | `gar_91e81845df7173` 13/13 (bind `gar_7eb0e4f868993c`) |
+| `qar_1546aa9036c7` | `43ce22941af3` | No-Finance role certified; Billing refused | **QUIESCED_RETAINED** | `gar_91261ae7a0d440` 13/13 (bind `gar_2ab6bd0873f4eb`) |
 
-| Area | Status |
-|---|---|
-| **Enrollment** | Unchanged by V2; tile, views and Focus Panel proven read-only on hosted Firefly. Known debt: the Decision tab counts 12 but lists 11 (the count and the list read stage from different sources; Runtime + Enrollment). The certified Work-View filters (New Leads, Decision, Registration) are recorded nowhere in the repository. |
-| **Assignments** | Five views (current, ending soon, upcoming changes, schedule gaps, proposed / incomplete) open the Scheduling card on their source. Commands enforce site scope. Certified locally; hosted only read-only. |
-| **Billing** | Five views over Financials' own readers. Due and Past due match the Financials card to the cent (locally). Billing-period variances are not offered. Certified locally; hosted only read-only. |
-| **Workspace tiles and navigation** | One tile per published process. Work Items line shows open and overdue counts, says "unavailable" when the source fails rather than showing zero, and flags a department shared by two processes. Enrollment hosted-proven. |
-| **Work Views and projections** | Domain projections are registered per process, and publish refuses mixed configuration. Count = rows is proven locally for every projection. |
-| **Focus Panel and record detail** | The existing panel and cards are reused: Scheduling for Assignments, Financials leading for Billing. |
-| **Site-scoped authorization** | Views and assignment commands are site-scoped (S3, S4A). Debt: charge-detail route site scope; a child reachable through a household at a held site. |
-| **Financial visibility** | Billing views require `fin.read`; refusals are proven locally. The default admin package now carries `fin.*`. |
-| **Fixtures and QA lifecycle** | Shared QA organizations, identities and no-send guards are ready, and census v2 is registered. Hosted runs are blocked (§4). Some fixtures cannot be created through product commands (§5). |
+- Every BP run is terminal. All four pool identities have 0 roles and 0 access profiles. No sessions remain. QA Shared is free; every Documents run is also CLOSED.
+- **Retained in QA Shared** (census `gar_91e81845df7173`):
+  - 0 charges, payments and variances;
+  - 2 published process configurations (Assignments and Billing);
+  - 83 access audit rows;
+  - an empty `qa_bp_no_finance` role definition;
+  - an unpublished Enrollment draft process with no stages.
 
-## 4. QA and reliability
+Evidence: `slice8a/hosted/` (`qa-ledger-closeout.json`, and one folder per run).
 
-**Hosted attempt 2, Slice 8A** (toolkit `1d35ef4690f2`, staging `f12d000d21c1`).
-- `gar_260e6ab8aed8e5` opened `qar_17c26a706ca7`, and the grants succeeded. The admin session then failed verification at open.
-- That same stored session verified PASS as `qa-pool-01@example.com` with the toolkit's own `agent-verify.mjs` minutes later, so the open-time failure was transient.
-- **The blocker is the recovery close.** `gar_4a6bc40d2b76e8` removed every role (1, 2, 2 and 1) and signed out every session, but left **one `user_access_profiles` row per pool identity**. `gar_f2b7947ee45fa7` repeated it with the identical result.
-- Census v2 `gar_6c59b57eb1d7d1`: **12/13**. Only `bp_qr_pool_access` fails. Financial checks all true, 0 sends, 11 audit rows.
-- **Root cause:** `remove_member_access_audited` (`supabase/migrations/20260911240000_d2_removal_records_prior_scope_ids.sql`) deletes only `user_roles`, and no audited function deletes the profile. The runner requires 0 profiles (`qa-run-db.mjs:209`), as census v2 does.
-- **Owner:** Alloy Access & Identity, with Vacilando Backend.
-- **Smallest fix:** the audited removal also deletes the user's access profile for the org once its last role goes. Site and department scope rows cascade, and the event already records the prior scopes. Then re-close `qar_17c26a706ca7`, run census v2, and bind it.
-- Accepting a role-less profile as clean is **not** recommended: it keeps scope, for example `qa_pool_03`'s QA North restriction, which a later grant would re-activate.
-- Until this is fixed, QA Shared is held by this run, which also blocks Documents.
-- **Update 2026-10-22, after the Alloy repair.** PR #1571 at `50b067cd1` makes the audited removal clear profiles: migration `20261205090000`, ledger census `gar_6221411a0a43d4`, function census `gar_8a22d14363804c` 5/5. The retried close `gar_98543f0123f2bc` was **still `NOT_CLEAN`**. The runner's `closeQaRun` (`qa-run-db.mjs`) calls removal only for orgs where the identity still has **roles**, so role-less profiles are never reached. **Owner:** Vacilando Backend. **Fix:** also call removal for QA orgs where only a profile remains.
+## 4. Hosted certification results (deployed `8bb731eadbf3`)
 
-Evidence: `slice8a/hosted/qa-run-qar_17c26a706ca7.hosted.json`.
-
-**Hosted attempt 1, Slice 8A.**
-- `environment.qa_run_open` (`gar_5d90847cba7444`; plan `bp_v2`, target `alloy_staging_web`) created run `qar_f9a9275db057`.
-- Personas: admin = `qa_pool_01`, director = `qa_pool_02`, restricted operator = `qa_pool_03` (QA North only), no-finance operator = `qa_pool_04`.
-- The run failed **before any grant** with `qa_audited_function_failed: assign_member_role_audited — mutation_events_origin_check`.
-
-**Root cause.**
-- The Vacilando runner passes `p_origin: "vacilando_qa_run"` (`toolkit lib/qa-run-db.mjs:28`).
-- Alloy's `mutation_events.origin` CHECK allows only `operator`, `automation`, `api` and `system` (`supabase/migrations/20260630121000_mutation_events_outbox.sql:16-17`).
-- So every audited access write is refused. The Documents run `qar_46a50c686b62` (`authz_q1`) failed identically at 17:34Z.
-- **Owner:** Vacilando Backend.
-- **Smallest fix:** pass an allowed origin (`automation`) and keep the run id in `p_correlation_id`, which the runner already sends. Add a test that the origin is in Alloy's CHECK set.
-
-**Cleanup is accounted for.**
-1. Recovery close `gar_9d0be10c850567`: access clean, 0 rows removed, 0 roles and 0 profiles left for each pool identity, sessions signed out.
-2. Census v2 `gar_51efecdc15c6a5`, run after close: all 13 checks true, with 0 charges, payments, variances, publications and audit rows in QA Shared.
-3. Census bound to the run with `gar_8c0a22cfabba7a`. Verdict **`QUIESCED_RETAINED`**.
-4. QA Shared was never written.
-
-Evidence: `slice8a/hosted/`.
-
-**Local versus hosted.** Every slice's behavior is certified locally against independent SQL, on a cert stack whose migration ledger trails staging. Hosted evidence is read-only on Firefly. No hosted write-path or persona-refusal certification exists yet.
-
-**Known regressions.** None attributed to V2. Every PR's CI passed at merge. The staging context-package manifest is out of date for `financials-canonical-authorities.md`; that was not caused by V2, CI does not check it, and the docs owner should fix it.
-
-**Fixtures that cannot be created through product commands** (traced on `9d96c7e88`):
-
-| View row | Why | Unblock owner |
+| Scenario | Personas | Result |
 |---|---|---|
-| Funding variance (open short-paid) | No API returns claim-line ids, and variances are written by `reconcile_remittance` | Financials: expose claim-line ids |
-| Failed post | Written only on an unexpected error in automatic posting | Certify the view as empty (not seedable by design) |
-| Payment exception (unrecognized provider collection) | QA Shared has no provider, by design | Certify the view as empty |
-| Past-due charge | Needs `charge.add` with a back-dated `payload.today` | Director accepts this input |
+| Sessions verify as their exact registered identities | all 4 | **PASS** (runs `2765…` and `1546…`) |
+| Assignments and Billing configured through product APIs and published (revision 1, `1e1f598f…` and `b2dea6e2…`, host work units created) | admin | **PASS** |
+| Both tiles render; Work Items line "No open work items" | all 4 | **PASS** |
+| Each of the 10 views opens its own projection, tab count = rows; no page or HTTP errors; no writes | admin, director, restricted | **PASS for navigation and configuration.** Contents are **not exercised**, because every view is empty (ruling: empty ≠ PASS) |
+| No-Finance holds no `fin.*` / `billing.*` / `staff.compensation.*` / `enrollment.pricing.override`, keeps `portal.access` (57 keys = `ops` minus prohibited) | no-finance | **PASS** |
+| No-Finance refused on all 5 Billing views; tile hides counts; 8 finance APIs return 403; no figures | no-finance | **PASS** |
+| Assignments still available to No-Finance | no-finance | **PASS** |
+| Enrollment configured from the certified template | admin | **BLOCKED** (§5.1) |
+| Populated-record scenarios (below) | — | **NOT EXERCISED** |
 
-**Hosted QA prerequisites the attempt surfaced** (all available through product APIs; none done yet):
-- one builder-owned department per process, plus publish;
-- Enrollment template, entry points, Work Views and stage work units (`create_lead` returns 422 without them);
-- rooms, schedule patterns and an assignment type per site;
-- per-household billing calendar and due-date policies, and fixed-amount charge templates.
+**Populated-record walkthrough scenarios still to run** (`QA-READINESS.md §5`):
+- **Enrollment:** New Leads, Decision, Registration and Waitlist counts match rows (including the known Decision 12-vs-11 check); the opportunity Focus Panel; complete an overdue Work Item and see the tile line drop.
+- **Assignments:**
+  - Ending soon, Upcoming changes, Schedule gaps, Proposed and Current each open the Scheduling card on the exact source;
+  - archive an ending assignment;
+  - the Restricted Operator is refused changing a QA South assignment and cannot see QA South rows.
+- **Billing:**
+  - Charges needing review (Financials card leads on the charge);
+  - Payments due and Overdue equal the card's figures;
+  - Funding variances and Payment exceptions (not seedable, §5.3);
+  - the subsidy display under the pending-subsidy ruling.
+- **Director:** reads and decides across all three processes.
+- **Quiescence after real fixtures:** cancel drafts, reverse charges, resolve variances, then census 13/13.
 
-## 5. Completion assessment
+## 5. Defects and blockers
 
-**Planned increments.** Twelve are merged and deployed: Slices 1, 1A, 2, 3, 4, 4A, 5, 6, 6A, 7, and 8A readiness and quiescence. One acceptance increment, **8A-H**, is blocked.
+1. **Enrollment template references a stage it doesn't create.** **Not corrected and not deployed**; no open PR.
+   - `apply_enrollment_v2_template` is refused (422 `dangling_stage_reference`).
+   - The template creates family stage `closed` (`web/lib/businessProcessTemplates/enrollmentProcessTemplate.ts:38`).
+   - Its operating plans move outcomes to `closed_lost` (`web/lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts`, 11 references).
+   - No new tenant can configure the certified Enrollment process. Because `create_lead` is the only household writer, **no Enrollment, Assignments or Billing fixture can be created.**
+   - Owner: Enrollment / Business Process configuration.
+   - **Smallest fix (one side only):** rename the template's family stage to `closed_lost`, or point the plans at `closed`. Add a test that applies the template to an empty process with zero dangling references.
+2. **Director persona versus contract.**
+   - `QA-READINESS §1` says the Director has `fin.read` but no `fin.write`. Through seeded `ops`, the Director effectively holds `fin.read`, `fin.write`, `billing.read` and `billing.write`.
+   - No product acceptance criterion depends on the Director lacking write, but the approved contract is untrue as written.
+   - **Director decision:** amend the contract (recommended), or add a plan role `qa_bp_director` without write.
+3. **Fixtures product commands cannot create:**
+   - **Open funding variance:** no API returns claim-line ids, and variances are written by `reconcile_remittance`. Owner: Financials.
+   - **Failed post:** written only on an unexpected automatic-posting error.
+   - **Unrecognized provider collection:** QA Shared has no provider, by design.
+   - **Past-due charge:** needs a backdated `payload.today`; the ruling requires a supported isolated QA mechanism, which doesn't exist.
+4. **Domain debt** (non-blocking):
+   - Decision 12-vs-11 count;
+   - charge-detail route site scope;
+   - household-based record reachability;
+   - Work Items "due today" uses the server day;
+   - billing-period variance comparison;
+   - failed-payment, autopay and dispute readers;
+   - variance targeting in the card;
+   - per-process record layout authoring;
+   - QA-org provider refusal;
+   - a periodic-billing stop.
+5. **Docs:** the staging context-package manifest is out of date for `financials-canonical-authorities.md`. It predates V2.
 
-**Not ready for final acceptance.** The V2 acceptance requires Assignments and Billing to work with real rows, per persona, on a hosted deployment. That hasn't happened yet.
-
-**Critical path.**
-1. ~~Vacilando fixes the origin~~ (done, `1d35ef4690f2`).
-2. Access & Identity: the audited removal deletes the access profile. Then re-close `qar_17c26a706ca7`, run census v2 (13/13), and bind it.
-3. Open `bp_v2` (re-measure the no-send revisions and the Documents run first).
-4. Configure the three processes.
-5. Create fixtures under the `qar_` id.
-6. Walkthrough per persona.
-7. Quiesce through product commands.
-8. Close, run the census, bind it.
-
-**Independent work.**
-- Financials: claim-line id exposure; QA-org provider refusal; a periodic-billing stop.
-- Runtime and Enrollment: confirm the Decision 12-vs-11 count.
-- Docs: manifest drift.
-
-**Director decisions** (also in `slice8a/QA-READINESS.md §5`):
-- (a) Should the Overdue queue show total past due, or what the family currently owes, when a subsidy claim is pending?
-- (b) Accept "certified empty" for the funding-variance, failed-post and payment-exception views, or require the Financials endpoint first?
-- (c) Accept the stage-based Enrollment Work-View filters for QA Shared: New Leads = `lead`; Decision = `decision`; Registration = `enrolling`; Waitlist = `waitlist`; Tours = `tour`; All = no filter.
-- (d) Accept back-dated `payload.today` for the past-due fixture?
-- (e) Promote this local evidence with the next code-bearing PR? The recommendation is yes, rather than a PR for evidence only.
-
-## 6. After V2 (not started)
-
-- **Must finish in V2:** 8A-H, including the walkthrough with all three processes and four personas.
-- **Domain debt that doesn't block V2:**
-  1. Billing-period variance comparison.
-  2. Failed-payment, autopay and dispute readers.
-  3. Subsidy labelling (decision a).
-  4. Variance id targeting and resolution in the card.
-  5. Charge-detail route site scope.
-  6. Decision 12-vs-11 count.
-  7. Per-process record layout authoring.
-  8. Work Items "due today" uses the server day, not the org day.
-  9. Household-based record reachability.
-  10. QA-org provider refusal.
-  11. A periodic-billing stop.
-- **Future enhancements:**
-  - Work Items producers for Assignments and Billing;
-  - a Work Items destination filtered by process;
-  - signals and KPIs for Assignments;
-  - a Billing-period close view;
-  - a third domain projection, for example Staff;
-  - a recorded, versioned Enrollment Work-View template so QA organizations and new tenants get certified views without hand authoring.
-
-## Update 2026-10-22T21:50Z: first real hosted run (toolkit `23626b9e6b87`, staging `8bb731eadbf3`)
-
-**Recovery.**
-- `qar_17c26a706ca7` closed clean on `gar_91685f8fc8e135`, sweeping 5 access rows.
-- Census v2 `gar_afd84a85847332` passed 13/13 and was bound by `gar_621aa80f36736d`. Verdict **`QUIESCED_RETAINED`**. Lease released.
-
-**Fresh run `qar_2765465b1e2b`.**
-- Opened by `gar_01416471c73ee5`. All four sessions verified as their exact identities (`qa-pool-01` to `qa-pool-04@example.com`).
-- **Configured and published:**
-  - **Assignments:** revision 1 `1e1f598f…`, 5 views, host work unit created.
-  - **Billing:** revision 1 `b2dea6e2…`, 5 views, host work unit created.
-- **Walkthrough, read-only, all four personas:** both tiles render. All 10 views open their own projection, with tab count = rows (0 = 0). No page errors, HTTP errors or blocked writes.
-- Closed clean by `gar_3f0e59b2923e2d` (1, 2, 2 and 1 roles removed; 0 profiles; all signed out). No QA run is open.
-
-**New product-specific blockers.**
-1. **The Enrollment template cannot be applied.** `apply_enrollment_v2_template` returns 422 `dangling_stage_reference`: the template's family stage is `closed` (`enrollmentProcessTemplate.ts:38`), but its default operating plans move to `closed_lost` (`defaultEnrollmentStageOperatingPlans.ts:39-41,198-200,321-323`). No new tenant can configure the certified Enrollment process. Because `create_lead` is the only household writer, **no Enrollment, Assignments or Billing fixture can be created.** Owner: Enrollment / Business Process configuration.
-2. **The No-Finance persona is not finance-less.** In the current default seed, `ops` holds `fin.read` and `fin.write`, so the `fin.read` refusal cannot be exercised. Owner: the BP plan contract and the Vacilando registry. Fix: a plan custom role (the `authz_q1` mechanism) with no `fin.*`.
-3. **Census binding for `qar_2765465b1e2b`.** The census filed after close was deduplicated onto this lane run's earlier same-hash census, which ran before the close. Next step: file census v2 in a new lane run, then `qa_run_close {qaRunId, residueCensusRequestId}`.
-
-**Left in QA Shared** (published process configuration, kept by design): Assignments and Billing, both published. The Enrollment department holds an unpublished draft process with no stages.
-
-## Update 2026-10-23T00:50Z: No-Finance persona certified (toolkit `43ce22941af3`, staging `8bb731eadbf3`)
-
-**Run `qar_1546aa9036c7`.**
-- Opened by `gar_9ad7f3df3a90fb`. All four sessions verified as their exact identities.
-- `qa_bp_no_finance` = seeded `ops` minus `fin.*`, `billing.*`, `staff.compensation.*` and `enrollment.pricing.override`: 57 keys, exact, with `portal.access` kept.
-- **Billing is refused for the No-Finance Operator.**
-  - All five Billing views refuse with "You don't have access to view financial information".
-  - The tile shows no counts.
-  - Eight finance APIs return 403. As the Director, the same APIs return 200, except `statements`, which returns 400 without parameters.
-  - No financial figures were disclosed.
-- Closed clean by `gar_788652e7bece89`; the custom role was emptied to 0 grants.
-- Census v2 `gar_91261ae7a0d440`: **13/13**.
-- Bound by `gar_2ab6bd0873f4eb`. Verdict **`QUIESCED_RETAINED`**.
-
-**`qar_2765465b1e2b`.** The same census qualifies for it: it ran after that run's 21:47Z close. The bind was refused at filing because the lane run had completed, so it is one filing in the next lane run.
-
-**Director persona discrepancy (needs a Director decision).**
-- The contract (`QA-READINESS.md §1`) says the Director has `fin.read` but no `fin.write`.
-- The Director's effective grants, through seeded `ops`, include `fin.read`, `fin.write`, `billing.read` and `billing.write`.
-- No BP V2 product acceptance criterion depends on the Director lacking write. The walkthrough has the Director read and decide; it never refuses the Director a write.
-- But the approved persona contract states something the deployment does not do.
-
+## 6. Smallest path to V2 completion (no new sprint)
+1. **Enrollment / BP config:** fix the template stage key, with its test; PR, CI, merge, deploy.
+2. **Director:** decide on the Director persona. The recommended path is a contract amendment, a docs-only change.
+3. **Financials:** expose claim-line ids, or rule that funding variances are certified on local evidence only. Also decide the past-due mechanism: a supported isolated `today` override, or past-due certified locally only.
+4. **Hosted run.** One `bp_v2` run, coordinated with Documents:
+   1. publish Enrollment from the template, with stage-based views and stage work units;
+   2. create run-attributed fixtures through product commands, recorded in `fixture-manifest.json`;
+   3. walk the populated scenarios (§4) for all four personas;
+   4. quiesce through product commands;
+   5. close, run census v2 13/13, and bind.
+5. **V2 acceptance.**
