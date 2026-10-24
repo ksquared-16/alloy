@@ -91,6 +91,22 @@ const nextConfig: NextConfig = {
    *  See lib/pos/processingCase/structure/{pdfTextExtract,ocrExtract}.ts.
    */
   serverExternalPackages: ["unpdf", "tesseract.js", "mupdf"],
+  /**
+   * BUILD MEMORY OPT-1 (experimental, isolated branch).
+   *
+   * Next 16.0.8 defaults `experimental.cpus` to `max(1, os.cpus().length - 1)` (11 on this host).
+   * That value sizes the *static worker pool* used after webpack compile for
+   * "Collecting page data" and "Generating static pages" (`getNumberOfWorkers` in
+   * `next/dist/build/index.js`). It does **not** cap webpack compilation threads.
+   *
+   * Cap at 4 to reduce concurrent page-data / prerender RSS. Do not enable
+   * `memoryBasedWorkersCount` here (OPT-2 held). `staticGenerationMaxConcurrency`
+   * left at Next default (8): it limits in-worker page export concurrency, not the
+   * worker count observed in build logs.
+   */
+  experimental: {
+    cpus: 4,
+  },
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",
