@@ -9,6 +9,10 @@
  *
  * The URLs are built from credentials minted by the existing invitation authority
  * (`mintActionsFor`). No second token type and no second token table.
+ *
+ * There is no "confirm the booking" URL. Approving a booking that requires approval is a
+ * staff decision (`confirmTourBooking` behind `tours.book`); a family link must never be
+ * able to make it.
  */
 
 import type { MintedAction } from "@/lib/tours/invitation/mintTourInvitation";
@@ -26,12 +30,6 @@ export type TourParentActionModel = {
      * credential minted. There is deliberately no `cancelUrl` here.
      */
     manageUrl: string | null;
-    /**
-     * Present ONLY when confirmation is a distinct required lifecycle step — i.e. the
-     * booking is not already confirmed. An action is not offered merely because a
-     * route for it exists.
-     */
-    confirmUrl: string | null;
     /**
      * Attendance affirmation ("Confirm I'm coming") for a confirmed Tour reminder.
      * Does not gate booking validity.
@@ -55,7 +53,7 @@ export function buildTourParentActionModel(args: {
     bookingStatusKey: string;
 }): TourParentActionModel {
     const base = String(args.baseUrl ?? "").trim();
-    if (!base) return { rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null };
+    if (!base) return { rescheduleUrl: null, manageUrl: null, confirmAttendanceUrl: null };
 
     const find = (kind: string) => args.actions.find((a) => a.actionKind === kind)?.rawToken ?? null;
 
@@ -63,13 +61,12 @@ export function buildTourParentActionModel(args: {
     if (terminal) {
         // Nothing is actionable on a tour that is over or called off. Offering a
         // reschedule link here would be an invitation to a dead end.
-        return { rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null };
+        return { rescheduleUrl: null, manageUrl: null, confirmAttendanceUrl: null };
     }
 
     const reschedule = find("reschedule_tour");
     // `view_tour_details` is the Manage credential: reusable, and it can only READ.
     const manage = find("view_tour_details");
-    const confirm = args.bookingStatusKey === "confirmed" ? null : find("confirm_tour");
     const confirmAttendance =
         args.bookingStatusKey === "confirmed" || args.bookingStatusKey === "rescheduled"
             ? find("confirm_attendance")
@@ -78,7 +75,6 @@ export function buildTourParentActionModel(args: {
     return {
         rescheduleUrl: reschedule ? actionUrl(base, reschedule) : null,
         manageUrl: manage ? actionUrl(base, manage) : null,
-        confirmUrl: confirm ? actionUrl(base, confirm) : null,
         confirmAttendanceUrl: confirmAttendance ? actionUrl(base, confirmAttendance) : null,
     };
 }

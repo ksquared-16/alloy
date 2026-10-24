@@ -200,6 +200,7 @@ describe("tour availability internalCompute", () => {
                 endAt: "2026-05-11T10:00:00.000Z",
                 timezone: "UTC",
                 remainingCapacity: 1,
+                capacity: 1,
                 ruleId: "r",
                 locationId: "loc-1",
                 userId: null as string | null,

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
+import { isTourSlotCapacityConflict } from "@/lib/tours/bookings/tourSlotCapacity";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
@@ -264,6 +265,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             { status: 201 }
         );
     } catch (e) {
+        // Lost the race for the last seat: the database refused the write, nothing was
+        // booked, and the honest answer is the same one a stale slot gets.
+        if (isTourSlotCapacityConflict(e)) {
+            return tourPublicErr("That time is no longer available. Please choose another.", 409, {
+                code: "SLOT_UNAVAILABLE",
+            });
+        }
         console.warn("[public tour-booking] createTourBooking failed", e instanceof Error ? e.message : e);
         return tourPublicErr("Booking could not be completed. Please try again or contact the site.", 400, { code: "BOOKING_FAILED" });
     }

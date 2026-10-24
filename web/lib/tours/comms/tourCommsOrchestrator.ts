@@ -33,6 +33,12 @@ import {
     type TourSchedulingReminderSnapshot,
 } from "@/lib/tours/comms/tourSchedulingScheduledSends";
 import { sendTourInternalCalendarInvite } from "@/lib/tours/comms/tourInternalCalendarInvite";
+import {
+    loadTourCommsAuthoritativeState,
+    mayCommunicateForTour,
+    type TourCommsEligibility,
+    type TourCommsIntent,
+} from "@/lib/tours/comms/tourCommsEligibility";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -69,6 +75,8 @@ export type TourCommsOrchestratorDeps = {
     loadContext?: typeof loadTourCommsContext;
     resolveConfig?: typeof resolveTourCommsConfigWithLibrary;
     hasExistingImmediateSend?: typeof hasExistingTourCommsImmediateSend;
+    loadBookingState?: typeof loadTourCommsAuthoritativeState;
+    sendInternalCalendarInvite?: typeof sendTourInternalCalendarInvite;
 };
 
 export type TourCommsOrchestrateInput = {
@@ -85,11 +93,16 @@ export type TourCommsOrchestrateInput = {
     reminderAction?: "schedule" | "replace" | "cancel" | "none";
     scheduleGeneration?: number;
     /**
+     * Status the booking held before the transition that triggered this send. Only a
+     * cancellation reads it (see `mayCommunicateForTour`).
+     */
+    previousStatusKey?: string | null;
+    /**
      * Parent-safe action URLs for THIS booking's current state, minted by the caller
      * after the booking committed. Only URLs cross this boundary — never an action
      * kind, id, or status.
      */
-    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmUrl?: string | null; confirmAttendanceUrl?: string | null } | null;
+    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmAttendanceUrl?: string | null } | null;
     deps?: TourCommsOrchestratorDeps;
 };
 
@@ -443,6 +456,29 @@ async function runReminderAction(params: {
     };
 }
 
+/** Which eligibility question an immediate lifecycle send asks. */
+const IMMEDIATE_EVENT_INTENT: Partial<Record<TourCommsEventKey, TourCommsIntent>> = {
+    tour_confirmation: "booking_confirmation",
+    tour_reschedule: "reschedule_notice",
+    tour_cancel: "cancellation_notice",
+    tour_no_show_followup: "no_show_followup",
+    tour_reminder: "reminder",
+};
+
+const CALENDAR_ACTION_INTENT: Record<"request" | "update" | "cancel", TourCommsIntent> = {
+    request: "booking_confirmation",
+    update: "reschedule_notice",
+    cancel: "cancellation_notice",
+};
+
+/**
+ * Every outbound side effect below is gated by `mayCommunicateForTour`, evaluated against
+ * the booking as it is IN THE DATABASE NOW — not the row the caller passed in, which may
+ * have been read before an approval, a cancellation or a reschedule committed. Rendering
+ * uses the same re-read row, so the message describes the booking that actually exists.
+ *
+ * Cancelling reminders is never gated: withdrawing a send is always safe.
+ */
 export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrateInput): Promise<TourCommsOrchestrationResult> {
     const deps: Required<TourCommsOrchestratorDeps> = {
         enqueueImmediate: input.deps?.enqueueImmediate ?? enqueueCanonicalOutboundMessage,
@@ -453,14 +489,68 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
         loadContext: input.deps?.loadContext ?? loadTourCommsContext,
         resolveConfig: input.deps?.resolveConfig ?? resolveTourCommsConfigWithLibrary,
         hasExistingImmediateSend: input.deps?.hasExistingImmediateSend ?? hasExistingTourCommsImmediateSend,
+        loadBookingState: input.deps?.loadBookingState ?? loadTourCommsAuthoritativeState,
+        sendInternalCalendarInvite: input.deps?.sendInternalCalendarInvite ?? sendTourInternalCalendarInvite,
     };
 
     const skippedReasons: string[] = [];
     const immediate: TourCommsImmediateSendResult[] = [];
 
+    const authoritative = await deps.loadBookingState(input.supabase, {
+        orgId: input.orgId,
+        bookingId: input.booking.id,
+    });
+    /** True when the policy refuses `intent`; the refusal is recorded, never silent. */
+    const denied = (intent: TourCommsIntent): boolean => {
+        const verdict: TourCommsEligibility = mayCommunicateForTour(intent, authoritative, {
+            previousStatusKey: input.previousStatusKey ?? null,
+        });
+        if (verdict.allowed) return false;
+        skippedReasons.push(`ineligible:${intent}:${verdict.reason}`);
+        return true;
+    };
+
+    let immediateEventKey = input.immediateEventKey ?? null;
+    if (immediateEventKey) {
+        const intent = IMMEDIATE_EVENT_INTENT[immediateEventKey];
+        // An event with no declared intent is not authorised by default.
+        if (!intent) {
+            skippedReasons.push(`ineligible:undeclared_event:${immediateEventKey}`);
+            immediateEventKey = null;
+        } else if (denied(intent)) {
+            immediateEventKey = null;
+        }
+    }
+
+    let reminderAction = input.reminderAction ?? "none";
+    if (reminderAction === "schedule" || reminderAction === "replace") {
+        if (denied("reminder")) {
+            // A replace still withdraws the previous generation; it just schedules nothing new.
+            reminderAction = reminderAction === "replace" ? "cancel" : "none";
+        }
+    }
+
+    const requestedCalendarAction =
+        input.lifecycleAction === "confirm"
+            ? "request"
+            : input.lifecycleAction === "reschedule"
+              ? "update"
+              : input.lifecycleAction === "cancel"
+                ? "cancel"
+                : null;
+    const internalCalendarAction =
+        requestedCalendarAction && !denied(CALENDAR_ACTION_INTENT[requestedCalendarAction]) ? requestedCalendarAction : null;
+
+    if (!immediateEventKey && reminderAction === "none" && !internalCalendarAction) {
+        return { ok: true, disabled: false, skippedReasons, immediate, reminders: { action: "none" } };
+    }
+
+    // Everything below renders and decides from the booking as it is now.
+    const booking = authoritative.row ?? input.booking;
+
     const { config } = await deps.resolveConfig(input.supabase, {
         orgId: input.orgId,
-        locationId: input.booking.location_id,
+        locationId: booking.location_id,
     });
 
     if (!config.enabled) {
@@ -476,8 +566,8 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     const loaded = await deps.loadContext({
         supabase: input.supabase,
         orgId: input.orgId,
-        bookingId: input.booking.id,
-        booking: input.booking,
+        bookingId: booking.id,
+        booking,
     });
     if (!loaded) {
         skippedReasons.push("context_load_failed");
@@ -487,15 +577,15 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     const recipient = await resolveTourCommsParentRecipient({
         supabase: input.supabase,
         orgId: input.orgId,
-        booking: input.booking,
+        booking,
         opportunity: loaded.opportunity,
     });
 
-    const actorUserId = resolveTourCommsActorUserId(input.booking, input.actorUserId);
-    const scheduleGeneration = input.scheduleGeneration ?? resolveTourCommsScheduleGeneration(input.booking);
+    const actorUserId = resolveTourCommsActorUserId(booking, input.actorUserId);
+    const scheduleGeneration = input.scheduleGeneration ?? resolveTourCommsScheduleGeneration(booking);
     const generationToken = String(input.immediateGenerationToken ?? scheduleGeneration).trim() || String(scheduleGeneration);
 
-    const baseContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, input.booking);
+    const baseContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, booking);
     // Caller-supplied action URLs win: they were minted for the state the booking is
     // actually in now. Without them the templates render their optional action lines
     // empty and the lines are stripped, which is how a confirmation ended up offering
@@ -507,7 +597,6 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
               // `cancelUrl` in the template context is the MANAGE surface, never a
               // direct destructive link — cancellation is a bounded flow.
               cancelUrl: input.actionModel.manageUrl ?? baseContext.cancelUrl ?? null,
-              ctaUrl: input.actionModel.confirmUrl ?? baseContext.ctaUrl ?? null,
               confirmAttendanceUrl: config.ask_parent_confirm_attendance
                   ? (input.actionModel.confirmAttendanceUrl ?? baseContext.confirmAttendanceUrl ?? null)
                   : null,
@@ -526,16 +615,15 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
           };
     const reminderSnapshots = renderReminderSnapshots(templateContext, config);
 
-    const reminderAction = input.reminderAction ?? "none";
     let reminders: TourCommsReminderActionResult = { action: "none" };
 
-    if (input.immediateEventKey && recipient) {
+    if (immediateEventKey && recipient) {
         for (const channel of TOUR_COMMS_CHANNELS) {
             if (!config.channels[channel]) continue;
             if (!tourCommsRecipientHasChannel(recipient, channel)) {
                 immediate.push({
                     channel,
-                    eventKey: input.immediateEventKey,
+                    eventKey: immediateEventKey,
                     status: "skipped",
                     reason: channel === "email" ? "missing_email" : "missing_sms",
                 });
@@ -547,13 +635,13 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                 await sendImmediateTourComms({
                     supabase: input.supabase,
                     orgId: input.orgId,
-                    subject: tourCommsSubjectFromBooking(input.booking),
+                    subject: tourCommsSubjectFromBooking(booking),
                     config,
                     context: templateContext,
                     recipientPersonId: recipient.personId,
                     recipientTo: to,
                     channel,
-                    eventKey: input.immediateEventKey,
+                    eventKey: immediateEventKey,
                     generationToken,
                     scheduleGeneration,
                     lifecycleAction: input.lifecycleAction,
@@ -565,7 +653,7 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                 })
             );
         }
-    } else if (input.immediateEventKey && !recipient) {
+    } else if (immediateEventKey && !recipient) {
         skippedReasons.push("missing_recipient");
     }
 
@@ -577,7 +665,7 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
             reminders = await runReminderAction({
                 supabase: input.supabase,
                 orgId: input.orgId,
-                booking: input.booking,
+                booking,
                 config,
                 actorUserId,
                 recipientPersonId: recipient.personId,
@@ -588,8 +676,8 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                 conditionFacts: {
                     lifecycle_stage_key: loaded.opportunity.stage_key,
                     stage_key: loaded.opportunity.stage_key,
-                    site_id: loaded.opportunity.location_id ?? input.booking.location_id,
-                    location_id: loaded.opportunity.location_id ?? input.booking.location_id,
+                    site_id: loaded.opportunity.location_id ?? booking.location_id,
+                    location_id: loaded.opportunity.location_id ?? booking.location_id,
                     status_key: loaded.opportunity.status_key,
                     has_active_tour: true,
                 },
@@ -602,21 +690,14 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
         }
     }
 
-    // Internal calendar invite (ICS) — configured staff recipients, not parent CC.
-    const internalCalendarAction =
-        input.lifecycleAction === "confirm"
-            ? "request"
-            : input.lifecycleAction === "reschedule"
-              ? "update"
-              : input.lifecycleAction === "cancel"
-                ? "cancel"
-                : null;
+    // Internal calendar invite (ICS) — configured staff recipients, not parent CC. Gated
+    // above: a pending booking puts nothing on anyone's calendar.
     if (internalCalendarAction) {
         try {
-            await sendTourInternalCalendarInvite({
+            await deps.sendInternalCalendarInvite({
                 supabase: input.supabase,
                 orgId: input.orgId,
-                booking: input.booking,
+                booking: booking,
                 config,
                 action: internalCalendarAction,
                 actorUserId: input.actorUserId ?? null,
@@ -758,6 +839,8 @@ export async function orchestrateTourBookingCanceled(
     params: {
         orgId: string;
         booking: TourBookingRow;
+        /** The status before cancellation. A never-confirmed request gets no "your tour was canceled". */
+        previousStatusKey: string | null;
         actorUserId?: string | null;
         actionModel?: TourCommsOrchestrateInput["actionModel"];
         deps?: TourCommsOrchestratorDeps;
@@ -767,6 +850,7 @@ export async function orchestrateTourBookingCanceled(
         supabase,
         orgId: params.orgId,
         booking: params.booking,
+        previousStatusKey: params.previousStatusKey,
         actionModel: params.actionModel ?? null,
         actorUserId: params.actorUserId,
         immediateEventKey: "tour_cancel",

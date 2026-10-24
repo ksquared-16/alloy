@@ -317,6 +317,11 @@ export async function executeLegacyCommunicationsSendAdapter(
         orgId,
         primaryEntityType,
         primaryEntityId,
+        // The recipient this adapter resolved `to` from, as the typed canonical field.
+        // Carried in metadata only, canonical eligibility saw no identity and failed closed
+        // with RECIPIENT_UNRESOLVED — which blocked every due scheduled send (tour
+        // reminders included) instead of evaluating opt-out and suppression for the person.
+        recipientPersonId: recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? recipientPersonIdRaw : null,
         channelRaw: channel,
         toRaw,
         bodyRaw: textRaw,

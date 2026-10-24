@@ -207,6 +207,9 @@ export function buildTourParentView(input: {
         }
 
         const actions: TourParentAction[] = [];
+        // A family cannot approve its own visit. On a booking awaiting the school's
+        // approval, "Yes, I'll be there" is an attendance acknowledgement only — offered
+        // here solely for a `confirm_tour` link issued before that boundary existed.
         if (!confirmed && can("confirm_tour")) {
             actions.push({ intent: "confirm", label: "Yes, I'll be there", tone: "primary" });
         }
@@ -219,16 +222,32 @@ export function buildTourParentView(input: {
         if (can("view_tour_details") || can("cancel_tour")) {
             actions.push({ intent: "cancel", label: "Cancel tour", tone: "quiet" });
         }
+        if (confirmed) {
+            return {
+                ...base,
+                headline: "Tour confirmed",
+                bodyLine: bookingLabel
+                    ? `We'll see you at ${location} on ${bookingLabel}.`
+                    : `We'll see you at ${location}.`,
+                state: "booked_confirmed",
+                showsOptions: false,
+                actions,
+                notice: "We look forward to seeing you.",
+                autoIntent: null,
+            };
+        }
+        // Requested, not yet approved: say so. The parent must not read this page — or any
+        // message — as a confirmed visit until the school approves it.
         return {
             ...base,
-            headline: confirmed ? "Tour confirmed" : "Your visit is booked",
+            headline: "Your tour request is in",
             bodyLine: bookingLabel
-                ? `We'll see you at ${location} on ${bookingLabel}.`
-                : `We'll see you at ${location}.`,
-            state: confirmed ? "booked_confirmed" : "booked_pending",
+                ? `You asked to visit ${location} on ${bookingLabel}. The school will confirm this time with you.`
+                : `You asked to visit ${location}. The school will confirm a time with you.`,
+            state: "booked_pending",
             showsOptions: false,
             actions,
-            notice: confirmed ? "We look forward to seeing you." : "Let us know you're coming so we can have someone ready for you.",
+            notice: "This visit is not confirmed yet. You'll hear from us once it is.",
             autoIntent: null,
         };
     }

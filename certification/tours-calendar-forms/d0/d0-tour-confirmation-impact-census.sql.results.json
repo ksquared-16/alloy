@@ -1,0 +1,56 @@
+{
+  "trusted_host_action_id": "tha_55db8d0a7317f1",
+  "query_hash": "18763b62c8862387a314685d657450f4f18bcfe45f2c3aa9587c273b4dd6ea8f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-21T22:30:52.664Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_55db8d0a7317f1",
+    "query_hash": "18763b62c8862387a314685d657450f4f18bcfe45f2c3aa9587c273b4dd6ea8f",
+    "authorization_id": "grnt_fc82f38d8b2f4976",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-21T22:30:58.375Z",
+    "question_ids": [
+      "b1_bookings_by_status_source",
+      "m1_confirmation_sent_while_unconfirmed",
+      "r1_rules_approval_required"
+    ],
+    "questions": {
+      "b1_bookings_by_status_source": {
+        "question_id": "b1_bookings_by_status_source",
+        "row_count": null,
+        "rows": [
+          "canceled | admin | 33",
+          "canceled | public_link | 6",
+          "confirmed | admin | 3",
+          "confirmed | public_link | 3"
+        ]
+      },
+      "m1_confirmation_sent_while_unconfirmed": {
+        "question_id": "m1_confirmation_sent_while_unconfirmed",
+        "row_count": null,
+        "rows": [
+          "booking_now=canceled | source=admin | 66",
+          "booking_now=canceled | source=public_link | 8",
+          "booking_now=confirmed | source=admin | 6",
+          "booking_now=confirmed | source=public_link | 5"
+        ]
+      },
+      "r1_rules_approval_required": {
+        "question_id": "r1_rules_approval_required",
+        "row_count": null,
+        "rows": [
+          "approval_required=false | active=true | 15",
+          "approval_required=true | active=true | 1"
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}
