@@ -1,16 +1,10 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
 import "./globals.css";
 import StagingBanner from "@/components/StagingBanner";
 import { QuoteModalProvider } from "@/lib/quoteModal";
 import ConditionalSiteLayout from "@/components/ConditionalSiteLayout";
 import MetaPixel from "@/components/MetaPixel";
-
-const poppins = Poppins({
-  weight: ["300", "400", "500", "600", "700"],
-  subsets: ["latin"],
-  variable: "--font-poppins",
-});
+import { poppins } from "@/lib/fonts/poppins";
 
 export const metadata: Metadata = {
   title: {
