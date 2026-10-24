@@ -2,7 +2,8 @@ import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomai
 import { TOUR_TOO_SOON_MESSAGE, isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
-import { isSlotOffered } from "@/lib/tours/availability/internalCompute";
+import { offeredSlotCapacity } from "@/lib/tours/availability/internalCompute";
+import { TOUR_BOOKING_SLOT_CAPACITY_METADATA_KEY } from "@/lib/tours/bookings/tourSlotCapacity";
 import type {
     CancelTourBookingInput,
     CreateTourBookingInput,
@@ -70,6 +71,19 @@ async function assertNoOtherActiveBooking(
     }
 }
 
+/**
+ * Re-check, at write time, that the slot is offered with room left — and return its capacity.
+ *
+ * `excludeBookingId` is the booking being written: confirming or moving a booking must not
+ * count that booking against itself (a pending booking already occupies its seat, so on a
+ * capacity-one slot it would otherwise block its own approval). Every OTHER booking still
+ * counts.
+ *
+ * This read is not the guarantee. Two writers can both pass it; the returned capacity is
+ * recorded on the row (`metadata.slot_capacity`) and the database trigger
+ * `enforce_tour_booking_slot_capacity` re-counts under a per-location lock before the write
+ * commits. See {@link isTourSlotCapacityConflict}.
+ */
 async function assertSlotAvailableForWrite(
     supabase: SupabaseClient,
     params: {
@@ -80,7 +94,7 @@ async function assertSlotAvailableForWrite(
         endAt: Date;
         excludeBookingId?: string | null;
     }
-): Promise<void> {
+): Promise<number> {
     const padMs = 5 * 60 * 1000;
     const from = new Date(params.startAt.getTime() - padMs);
     const to = new Date(params.endAt.getTime() + padMs);
@@ -90,19 +104,17 @@ async function assertSlotAvailableForWrite(
         userId: params.userId ?? null,
         from,
         to,
+        excludeBookingId: params.excludeBookingId ?? null,
     });
-    const ok = isSlotOffered(
-        slots,
-        {
-            startAt: params.startAt.toISOString(),
-            endAt: params.endAt.toISOString(),
-            locationId: params.locationId,
-        },
-        1
-    );
-    if (!ok) {
+    const capacity = offeredSlotCapacity(slots, {
+        startAt: params.startAt.toISOString(),
+        endAt: params.endAt.toISOString(),
+        locationId: params.locationId,
+    });
+    if (capacity == null) {
         throw new Error("tour_bookings: selected slot is not available (overlap, capacity, or rules)");
     }
+    return capacity;
 }
 
 function resolveInitialStatus(input: CreateTourBookingInput): "requested" | "pending_approval" | "confirmed" {
@@ -227,6 +239,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
     let row: TourBookingRow | null = null;
     let mirrorUndo: (() => Promise<void>) | undefined;
     let stageSyncFailure: TourStageSyncFailure | undefined;
+    let slotCapacity: number | null = null;
 
     return commitTourBookingTransaction({
         capability: "schedule_tour",
@@ -244,7 +257,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
             try {
                 await assertNoOtherActiveBooking(supabase, orgId, opportunityId, null);
                 if (status !== "requested") {
-                    await assertSlotAvailableForWrite(supabase, {
+                    slotCapacity = await assertSlotAvailableForWrite(supabase, {
                         orgId,
                         locationId,
                         userId: input.requestedByUserId ?? null,
@@ -267,6 +280,9 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                     // Parent attendance affirmation starts awaiting once the visit is scheduled.
                     if (status === "confirmed" || status === "pending_approval") {
                         metadata = withAttendanceConfirmation(metadata, { status: "awaiting_response" });
+                    }
+                    if (slotCapacity != null) {
+                        metadata = { ...metadata, [TOUR_BOOKING_SLOT_CAPACITY_METADATA_KEY]: slotCapacity };
                     }
                     const insertRow = {
                         org_id: orgId,
@@ -657,7 +673,7 @@ export async function rescheduleTourBooking(
                 return { ok: false, message: TOUR_TOO_SOON_MESSAGE };
             }
 
-            await assertSlotAvailableForWrite(supabase, {
+            const slotCapacity = await assertSlotAvailableForWrite(supabase, {
                 orgId,
                 locationId: nextLoc,
                 userId: existing.requested_by_user_id,
@@ -667,9 +683,11 @@ export async function rescheduleTourBooking(
             });
 
             // Material time change: re-affirm parent attendance; bump ICS SEQUENCE.
-            const { metadata: bumpedMeta } = bumpIcsSequence(
+            const { metadata: bumped } = bumpIcsSequence(
                 resetAttendanceAwaitingResponse(existing.metadata),
             );
+            // The new slot's limit, which the capacity trigger enforces on this update.
+            const bumpedMeta = { ...bumped, [TOUR_BOOKING_SLOT_CAPACITY_METADATA_KEY]: slotCapacity };
 
             return {
                 ok: true,
@@ -776,7 +794,13 @@ export async function cancelTourBooking(
                 ? null
                 : {
                       label: "cancel",
-                      run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
+                      run: () =>
+                          orchestrateTourBookingCanceled(supabase, {
+                              orgId,
+                              booking: row,
+                              previousStatusKey: existing.status_key,
+                              actorUserId: input.canceledBy,
+                          }),
                   },
     });
 }

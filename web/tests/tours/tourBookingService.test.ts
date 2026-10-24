@@ -9,6 +9,7 @@ vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
             endAt: "2026-05-11T15:00:00.000Z",
             timezone: "UTC",
             remainingCapacity: 1,
+            capacity: 1,
             ruleId: "rule-1",
             locationId: "loc-1",
             userId: null,

@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-22
 supersedes: []
 ---
 
@@ -630,6 +630,7 @@ See `docs/sprints/archive/06_2026/command_surface_v3.md`, `command_surface_v2.md
 - Workflow events: JWT SELECT-only; inserts via service role
 - Do not bypass state machines, permissions, or audit for operational writes
 - Configuration places actions; it never creates executable behavior. Configured keys + placements must resolve to a registered capability (`validateConfiguredPlacement`) or be hidden/disabled.
+- **A domain may refuse a workflow's messaging without refusing the workflow.** `executeWorkflowRun(…, { outboundMessagingRefusedReason })` skips every messaging action (`create_message`, `send_message`, `send_communication_template` — `WORKFLOW_OUTBOUND_MESSAGE_ACTION_TYPES`) and records `workflow_action_runs.status = skipped`, `meta.reason = outbound_refused:<reason>`; logging, assignments, work and entity updates still run. Tour lifecycle events set it from the tour communications policy evaluated against the booking's current state (`emitTourBookingLifecycleEvent`), so a workflow on `tour_booking_pending` cannot tell a family an unapproved visit is booked. A workflow's message is not authorised by the event that triggered it.
 
 ---
 

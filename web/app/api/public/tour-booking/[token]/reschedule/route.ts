@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { rescheduleTourBooking } from "@/lib/tours/bookings/tourBookingService";
+import { isTourSlotCapacityConflict } from "@/lib/tours/bookings/tourSlotCapacity";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         userId: null,
         from: new Date(startAt.getTime() - 60_000),
         to: new Date(endAt.getTime() + 60_000),
+        // The family's own booking must not count against the time they are moving to.
+        excludeBookingId: booking.id,
     });
     // Inferred against the real `AvailableTourSlot` (camelCase `startAt`), not a
     // hand-written shape — see the same note in the `book` route.
@@ -132,7 +135,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             booking: publicTourBookingView(replacement),
             previous_booking_id: booking.id,
         });
-    } catch {
+    } catch (e) {
+        if (isTourSlotCapacityConflict(e)) {
+            return tourPublicErr("That time is no longer available. Please choose another.", 409, { code: "SLOT_UNAVAILABLE" });
+        }
         return tourPublicErr("We could not move your tour. Your original time is unchanged.", 400, { code: "RESCHEDULE_FAILED" });
     }
 }
