@@ -1,0 +1,83 @@
+{
+  "schema": "alloy.build_completion.migration_census_handoff.v1",
+  "generated_at": "2026-10-24T03:54:11.958Z",
+  "generated_by_lane": "lane_73a897409906",
+  "generated_by_run": "erun2_a7c25116be28baf6",
+  "authority": "READ_ONLY \u2014 no ledger writes, no SQL apply",
+  "requested_owner": {
+    "primary": "Enrollment lane_2cea84351d90 (Tours S1 cert target / S1 migration author)",
+    "secondary_consult": "Access Identity / Trust lanes that own deployed-primary ledger repair patterns (e.g. lane_141c9c1f3f2f historical ACCESSID_DEPLOYED_MIGRATION_*)",
+    "reason": "S1 cert ledger discrepancy is Tours-specific; deployed-primary ledger repair is a separate environment identity."
+  },
+  "refs": {
+    "staging": "488eb0f873e34214d4c241b776487ada7e47298d",
+    "s1": "a984ac0d1b6efac07c366e9b994e88c08b3dc5ca",
+    "s_build_1": "97e04b4627b76277593a96c20031a830f5447dac"
+  },
+  "repo_counts": {
+    "staging_migrations": 545,
+    "s1_migrations": 540
+  },
+  "only_on_s1": [
+    "supabase/migrations/20261210090000_tour_booking_slot_capacity_guard.sql"
+  ],
+  "only_on_staging_since_s1_base": [
+    "supabase/migrations/20261207181500_documents_direct_access_revocation.sql",
+    "supabase/migrations/20261207181600_org_documents_bucket_governance.sql",
+    "supabase/migrations/20261208090000_documents_d2_canonical_foundation.sql",
+    "supabase/migrations/20261209090000_documents_sensitive_read_capabilities.sql",
+    "supabase/migrations/20261209090100_documents_d3_studio_configuration.sql",
+    "supabase/migrations/20261209090200_documents_d3_publish_conflict_not_retryable.sql"
+  ],
+  "only_on_staging_count": 6,
+  "rename_probe": {
+    "old_on_s1": false,
+    "new_on_s1": true,
+    "old_on_staging": false,
+    "new_on_staging": false,
+    "new_sha_s1": "770f70326487535263a9b4eb02ea1f6c422427c052f2be4969d9710a5bca9708"
+  },
+  "known_ledger_observation": {
+    "source": "/Users/vacilando/.local/state/alloy-dev/gateway/vacilando/trusted-host-actions/tmp/ledger-readback-20261206090000.out",
+    "observed_line": "ledger|20261206090000|tour_booking_slot_capacity_guard|1|770f70326487535263a9b4eb02ea1f6c422427c052f2be4969d9710a5bca9708",
+    "classification": "CERT_LEDGER_HAS_OLD_VERSION_NAME",
+    "note": "Repository S1 carries renamed 20261210090000; cert ledger readback still names 20261206090000. Trigger reported installed. Do not reapply SQL."
+  },
+  "required_comparisons_for_owner": [
+    "repository migration identities (version + sha256) on staging and S1",
+    "certification ledger schema_migrations / supabase_migrations rows",
+    "installed database objects for tour_booking_slot_capacity_guard (function/trigger presence + definition hash)",
+    "environment identity (which certenv / database URL / project ref was measured)"
+  ],
+  "discrepancy_classes_to_emit": [
+    "VERSION_RENAME_SAME_BYTES",
+    "LEDGER_AHEAD_OF_REPO",
+    "LEDGER_BEHIND_REPO",
+    "OBJECT_PRESENT_LEDGER_MISSING",
+    "OBJECT_MISSING_LEDGER_PRESENT",
+    "ENVIRONMENT_MISMATCH",
+    "UNRELATED_BASE_GAP"
+  ],
+  "repair_status": "NOT_AUTHORIZED \u2014 classify first; Director-approved plan required before any ledger write",
+  "classified_discrepancies_preliminary": [
+    {
+      "id": "S1_CAPACITY_GUARD_VERSION_RENAME",
+      "class": "VERSION_RENAME_SAME_BYTES",
+      "repo_version": "20261210090000",
+      "ledger_version_observed": "20261206090000",
+      "content_sha256": "770f70326487535263a9b4eb02ea1f6c422427c052f2be4969d9710a5bca9708",
+      "match": "repo file sha256 equals ledger hash for old version name",
+      "object_status_reported_by_enrollment": "trigger already installed",
+      "proposed_repair_shape": "ledger identity rename/record only \u2014 no SQL reapply",
+      "authorized": false
+    },
+    {
+      "id": "CERT_DB_BASE_GAP_REPORTED",
+      "class": "UNRELATED_BASE_GAP",
+      "reported": "~124 earlier repository migrations missing from cert ledger",
+      "staging_vs_s1_only_staging_count": 6,
+      "note": "staging-vs-S1 delta is only 6 migrations on staging not in S1 tip; the ~124 figure is a cert-environment base gap requiring owner census against full repo, not an S1 merge conflict",
+      "authorized": false
+    }
+  ]
+}
