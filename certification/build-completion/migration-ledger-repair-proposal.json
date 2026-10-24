@@ -1,0 +1,54 @@
+{
+  "schema": "alloy.build_completion.migration_ledger_repair_proposal.v1",
+  "generated_at": "2026-10-24T04:01:05.841939Z",
+  "generated_by_lane": "lane_73a897409906",
+  "generated_by_run": "erun2_6db42d5edf8797c8",
+  "status": "PROPOSAL_ONLY \u2014 NOT AUTHORIZED; requires Director approval before any ledger mutation",
+  "target_environment": {
+    "stack": "alloy-cert",
+    "database": "postgres",
+    "container": "supabase_db_alloy-cert",
+    "not": [
+      "alloy_deployed_primary",
+      "ALLOY_STAGING",
+      "production"
+    ]
+  },
+  "ownership": {
+    "primary": "Enrollment lane_2cea84351d90 (Tours S1 migration author / cert apply owner)",
+    "integration_consult": "Runtime Performance lane_73a897409906 (census + integrated candidate)",
+    "secondary_consult": "Access Identity / Trust lanes for base-gap repair patterns on shared cert stacks"
+  },
+  "items": [
+    {
+      "id": "S1_CAPACITY_GUARD_VERSION_RENAME",
+      "class": "VERSION_RENAME_SAME_BYTES",
+      "priority": 1,
+      "proposed_action": "Ledger identity repair only: record version 20261210090000 with same statements; remove or supersede 20261206090000 without re-applying SQL (objects already installed).",
+      "evidence": {
+        "content_match": "EQUAL_AFTER_TRAILING_NEWLINE_NORMALIZE",
+        "sha256_repo": "770f70326487535263a9b4eb02ea1f6c422427c052f2be4969d9710a5bca9708",
+        "objects_present": [
+          "enforce_tour_booking_slot_capacity",
+          "trg_tour_bookings_slot_capacity"
+        ]
+      },
+      "authorized": false
+    },
+    {
+      "id": "ALLOY_CERT_UNRELATED_BASE_GAP",
+      "class": "UNRELATED_BASE_GAP",
+      "priority": 2,
+      "count": 128,
+      "proposed_action": "Separate cert-stack reconciliation: either replay the 128 missing versions onto alloy-cert under a governed cert apply plan, or document alloy-cert as intentionally divergent and move Tours certification to a clean certenv. Do NOT conflate with S1 rename repair.",
+      "versions_artifact": "certification/build-completion/migration-census-full.json",
+      "authorized": false
+    }
+  ],
+  "explicitly_not_requested": [
+    "privileged certification database repair execution",
+    "migration-history edits without Director approval",
+    "apply to alloy_deployed_primary / staging / production",
+    "merge or deployment"
+  ]
+}

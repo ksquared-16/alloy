@@ -1,0 +1,704 @@
+{
+  "schema": "alloy.build_completion.migration_census.v1",
+  "generated_at": "2026-10-24T04:01:05.841939Z",
+  "generated_by_lane": "lane_73a897409906",
+  "generated_by_run": "erun2_6db42d5edf8797c8",
+  "authority": "READ_ONLY \u2014 no ledger writes, no SQL apply, no migration-history edits",
+  "environment": {
+    "stack": "alloy-cert",
+    "container": "supabase_db_alloy-cert",
+    "compose_project": "alloy-cert",
+    "host_port": 54422,
+    "created": "2026-10-14T19:13:36Z",
+    "workdir_label": "/Users/vacilando/Code/alloy-worktrees/wt6-surfaces-faacca/certification"
+  },
+  "refs": {
+    "integrated": "3dc3feec2dc031cfd3838b16be2e3eeeedaea3ae",
+    "staging": "488eb0f873e34214d4c241b776487ada7e47298d",
+    "s1": "a984ac0d1b6efac07c366e9b994e88c08b3dc5ca",
+    "s_build_1": "97e04b4627b76277593a96c20031a830f5447dac"
+  },
+  "counts": {
+    "repo": 546,
+    "ledger": 418,
+    "missing": 129,
+    "extra": 1,
+    "unrelated_base_gap": 128
+  },
+  "rename_probe": {
+    "repo_version": "20261210090000",
+    "ledger_version": "20261206090000",
+    "repo_file_sha256": "770f70326487535263a9b4eb02ea1f6c422427c052f2be4969d9710a5bca9708",
+    "ledger_statements_sha256": "a11c32199db9db1061a392aaee2623bbc3b72f97c44dd73f9ce63e1351468656",
+    "byte_identity": "EQUAL_AFTER_TRAILING_NEWLINE_NORMALIZE",
+    "repo_len": 4747,
+    "ledger_len": 4748,
+    "installed_function": "public.enforce_tour_booking_slot_capacity",
+    "installed_function_md5": "32beb206dbc58d45f45bc5aee21af6b5",
+    "installed_trigger": "trg_tour_bookings_slot_capacity",
+    "trigger_enabled": "O",
+    "trigger_table": "tour_bookings"
+  },
+  "discrepancies": [
+    {
+      "version": "20260910190000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260910200000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260910210000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911180000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911190000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911230000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911240000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911250000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260911260000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912000000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912010000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912020000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912030000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912040000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912113000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912114000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260912150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260913030000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260913160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260913161000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260913173000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260914113000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260914114000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260914183000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260914184000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260914200000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915140000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915170000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915180000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915190000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915200000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260915210000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260916020000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260916030000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260916040000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260916050000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260918120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260918150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260918160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260919160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260920120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260921120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260921130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260921140000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260922120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260923120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260924120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260925120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260926120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260927120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260928120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260929120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20260930120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261001120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261002120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261003120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261004120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261007120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261008120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261009120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261010120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261011120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261012120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261013120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261014120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261015120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261015130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261015140000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261016120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261016130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261016150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261018120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261019120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261020120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261021120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261022120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261023120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261024120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261025120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261026120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261102120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261103120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261104120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261104130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261105120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261106120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261107120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261108120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261109120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261110120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261111120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261112120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261113120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261114120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261115120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261116120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261117120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261118120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261119120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261120120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261121120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122120000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122130000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122140000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122150000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122170000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122180000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261122190000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261123141500",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261123160000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261124090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261125090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261126090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261127090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261128090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261129090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261201090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261201100000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261208090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261209090000",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261209090100",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261209090200",
+      "class": "UNRELATED_BASE_GAP",
+      "note": "present in integrated repo; absent from alloy-cert schema_migrations"
+    },
+    {
+      "version": "20261210090000",
+      "class": "VERSION_RENAME_SAME_BYTES",
+      "note": "repo renamed; ledger still has 20261206090000"
+    },
+    {
+      "version": "20261206090000",
+      "class": "VERSION_RENAME_SAME_BYTES",
+      "note": "cert ledger old name; content matches repo 20261210090000"
+    }
+  ],
+  "class_summary": {
+    "VERSION_RENAME_SAME_BYTES": 2,
+    "UNRELATED_BASE_GAP": 128,
+    "LEDGER_AHEAD_OF_REPO": 0,
+    "LEDGER_BEHIND_REPO": 128,
+    "OBJECT_PRESENT_LEDGER_MISSING": 0,
+    "OBJECT_MISSING_LEDGER_PRESENT": 0,
+    "ENVIRONMENT_MISMATCH": 0
+  },
+  "note_on_124_figure": "Prior handoff reported ~124 missing. Full alloy-cert vs integrated HEAD census: 129 versions in repo absent from ledger, of which 1 is the renamed S1 version (20261210090000) and 128 are UNRELATED_BASE_GAP. Extra in ledger not in repo: only 20261206090000 (old S1 name)."
+}
