@@ -1,4 +1,4 @@
-import { Poppins } from "next/font/google";
+import { poppinsAdminV2 as poppins } from "@/lib/fonts/poppins";
 
 /**
  * Isolated layout for the Layout Configuration UI.
@@ -9,13 +9,6 @@ import { Poppins } from "next/font/google";
  * `/adminV2/layout-proof`. AdminV2 visual language (Poppins + neutral surface);
  * no shell, sidebar, command bar, canvas, or VM runtime mounts.
  */
-
-const poppins = Poppins({
-    weight: ["400", "500", "600", "700"],
-    subsets: ["latin"],
-    variable: "--font-poppins-adminv2",
-    display: "swap",
-});
 
 export const dynamic = "force-dynamic";
 

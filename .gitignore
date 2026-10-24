@@ -38,6 +38,11 @@ node_modules
 
 web/.next/
 
+# Next.js regenerates this during build/dev (routes import flips between
+# `.next/types` and `.next/dev/types`). Tracking it dirties exact-source
+# certification; `web/scripts/ensureNextEnvDts.mjs` restores a stub when absent.
+web/next-env.d.ts
+
 # Generated / cache
 *.tsbuildinfo
 .DS_Store
