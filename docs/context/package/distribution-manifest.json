@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "0ed61810f1b2f014cef6d6ef28f8c01c80d27a4d",
+      "blob_sha": "ee6ee9899faef9e59bba92fa9811552c40bf4210",
       "exists": true
     },
     {
@@ -77,7 +77,7 @@
     {
       "path": "docs/platform/core/status-and-state-system.md",
       "tier": 2,
-      "blob_sha": "35068b2af14275e867cf0c98bce3d3e7467b1985",
+      "blob_sha": "9e90934a8b255593cfd44c38f14f74caea953311",
       "exists": true
     },
     {
@@ -197,7 +197,7 @@
     {
       "path": "docs/platform/core/work-view-membership-and-navigation.md",
       "tier": 3,
-      "blob_sha": "e042d70baaa63503d41cdd9c0b020c84cc56db27",
+      "blob_sha": "18dddf431d17f06e1c2a9cbbc8978e40f2d282ac",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "55d8ca32b4b98b38aec9d9666081a219640a4fab",
+      "blob_sha": "6ea24ebb0cb142f2342bb640570478935a987d2b",
       "exists": true
     },
     {
