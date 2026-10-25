@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatTourInstantForOperator } from "@/lib/tours/schedules/tourTimeFormat";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
@@ -28,17 +29,8 @@ type SlotPhase = "bootstrapping" | "duplicate_guard" | "schedule" | "reschedule"
 const SUCCESS_DISMISS_MS = 2000;
 
 function formatBookingWhen(row: TourBookingRow, viewerTz: string | null | undefined): string {
-    try {
-        const d = new Date(row.start_at);
-        if (Number.isNaN(d.getTime())) return row.start_at;
-        return new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: row.timezone || viewerTz || undefined,
-        }).format(d);
-    } catch {
-        return row.start_at;
-    }
+    // The booking's own zone snapshot, on a 12-hour clock — never the browser's locale (S3-D).
+    return formatTourInstantForOperator(row.start_at, row.timezone || viewerTz || null);
 }
 
 function statusLabel(sk: string): string {

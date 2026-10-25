@@ -5055,6 +5055,32 @@
         "reason": "Creates a tour availability rule (writes `tour_availability_rules`), setting when and where tours may be booked at a location. Mounted at Settings -> Tours -> Availability. `requireAdminOrOps()` stood here and, despite its name, resolves PORTAL ADMISSION and no role, so every principal who could enter the portal could perform this - accidental reach on a customer-facing surface, not a package. Effective authority was traced per handler through the shared service, not inferred from the route: there is no downstream role title, no portal fallback and no feature flag in the authority path."
       }
     },
+    "app/api/admin/tours/schedules/[scheduleId]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Deletes a weekly tour schedule's availability rules at the named scope only; bookings are never read or written. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Reconciles a weekly tour schedule's availability rules to the submitted weekday x window shape. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
+      }
+    },
+    "app/api/admin/tours/schedules/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only default time zone for authoring a schedule at the caller's own org scope or one of its locations (location -> organization). Returns an IANA zone id and its source, nothing tenant-sensitive; it is behind portal admission like the rule list it accompanies, and writes nothing."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Creates a weekly tour schedule (one availability rule per weekday x window); duplicating a schedule is this call with copied configuration. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
+      }
+    },
     "app/api/admin/tours/bookings/[bookingId]/cancel/route.ts": {
       "POST": {
         "status": "declared",

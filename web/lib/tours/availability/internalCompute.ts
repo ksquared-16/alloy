@@ -176,7 +176,39 @@ export function computeSlotsFromRulesAndBookings(
     }
 
     slots.sort((a, b) => a.startAt.localeCompare(b.startAt) || a.ruleId.localeCompare(b.ruleId));
-    return slots;
+    return offerEachTimeOnce(slots, new Map(activeRules.map((r) => [r.id, r])));
+}
+
+/**
+ * Two rules covering the same time (two schedules, an org-wide and a site rule, a hand-made copy)
+ * used to list that time twice. It is one time at one site: offer it once.
+ *
+ * Bookings already share one overlap count, so the merged slot's room is the most generous rule's
+ * (the same limit `offeredSlotCapacity` and the database guard apply). The rule the booking is
+ * attributed to is the STRICTER one — an approval-required rule wins over an auto-confirm one,
+ * so merging can never turn a time that needs staff approval into an auto-confirmed booking.
+ */
+function offerEachTimeOnce(slots: AvailableTourSlot[], rulesById: Map<string, TourAvailabilityRuleRow>): AvailableTourSlot[] {
+    const byKey = new Map<string, AvailableTourSlot>();
+    const order: string[] = [];
+    for (const slot of slots) {
+        const key = `${slot.locationId}|${slot.startAt}|${slot.endAt}`;
+        const held = byKey.get(key);
+        if (!held) {
+            byKey.set(key, slot);
+            order.push(key);
+            continue;
+        }
+        const heldStrict = rulesById.get(held.ruleId)?.approval_required === true;
+        const nextStrict = rulesById.get(slot.ruleId)?.approval_required === true;
+        const attributed = nextStrict && !heldStrict ? slot : held;
+        byKey.set(key, {
+            ...attributed,
+            capacity: Math.max(held.capacity, slot.capacity),
+            remainingCapacity: Math.max(held.remainingCapacity, slot.remainingCapacity),
+        });
+    }
+    return order.map((k) => byKey.get(k)!);
 }
 
 export function isSlotOffered(
