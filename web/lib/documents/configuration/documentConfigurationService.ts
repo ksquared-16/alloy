@@ -259,6 +259,34 @@ export async function saveDraft(
     return { ok: true, value: { version_id: (data as { id: string }).id, version_number: next, created: true } };
 }
 
+/**
+ * Discard the type's open (draft or validated) version. Only an unpublished version is ever removed: the delete is
+ * filtered to open statuses and the database refuses a published or superseded one. A type whose open draft is its
+ * only version is deleted as a type, not left with no versions.
+ */
+export async function discardDraft(
+    supabase: SupabaseClient,
+    input: { orgId: string; typeId: string },
+): Promise<ConfigResult<{ version_id: string; version_number: number }>> {
+    const got = await getType(supabase, input.orgId, input.typeId);
+    if (!got.ok) return got;
+    const open = got.value.versions.find((v) => v.status === "draft" || v.status === "validated");
+    if (!open) return { ok: false, code: "NO_OPEN_DRAFT", status: 404, message: "the type has no unpublished draft" };
+    if (got.value.versions.length === 1) {
+        return { ok: false, code: "ONLY_VERSION", status: 409, message: "the draft is the type's only version; delete the type instead" };
+    }
+    const { data, error } = await supabase
+        .from("document_type_versions")
+        .delete()
+        .eq("org_id", input.orgId)
+        .eq("id", open.id)
+        .in("status", ["draft", "validated"])
+        .select("id");
+    if (error) return refusal(error);
+    if (!data || data.length === 0) return { ok: false, code: "NO_OPEN_DRAFT", status: 404, message: "the draft is no longer open" };
+    return { ok: true, value: { version_id: open.id, version_number: open.version_number } };
+}
+
 export async function validateVersion(
     supabase: SupabaseClient,
     input: { orgId: string; versionId: string; actorUserId: string },

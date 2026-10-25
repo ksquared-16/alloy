@@ -148,7 +148,9 @@ The Digital Mailroom's Studio has a **Documents** tab (Forms | Packets | Documen
 organization maintains the document categories and types it tracks.
 
 - **Categories:** vocabulary, saved immediately.
-- **Types:** versioned (draft → validated → published).
+- **Types:** versioned (draft → validated → published). An unpublished revision can be discarded
+  (`DELETE …/types/[id]/draft`); the published version stays live. A type whose only version is the draft is deleted
+  as a type instead.
 - **Where it lives:** `web/app/adminV2/pos/ProcessingDocumentsStudio.tsx`.
 - **Internal API:** `/api/admin/documents/configuration/*`.
 - **Authority:** writes need `processing.documents.manage`, reads need `documents.read`.

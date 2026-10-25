@@ -31,7 +31,7 @@ import { GET as categoriesGET, POST as categoriesPOST } from "@/app/api/admin/do
 import { PATCH as categoryPATCH, DELETE as categoryDELETE } from "@/app/api/admin/documents/configuration/categories/[id]/route";
 import { GET as typesGET, POST as typesPOST } from "@/app/api/admin/documents/configuration/types/route";
 import { GET as typeGET, PATCH as typePATCH } from "@/app/api/admin/documents/configuration/types/[id]/route";
-import { PUT as draftPUT } from "@/app/api/admin/documents/configuration/types/[id]/draft/route";
+import { PUT as draftPUT, DELETE as draftDELETE } from "@/app/api/admin/documents/configuration/types/[id]/draft/route";
 import { POST as validatePOST } from "@/app/api/admin/documents/configuration/types/[id]/validate/route";
 import { POST as publishPOST } from "@/app/api/admin/documents/configuration/types/[id]/publish/route";
 import { GET as compatibilityGET } from "@/app/api/admin/documents/configuration/compatibility/route";
@@ -138,6 +138,7 @@ describe("authority: Studio writes need processing.documents.manage; reads need 
             expect((await invokeRoute(typesPOST, json("POST", { ...GOOD }))).status).toBe(403);
             expect((await invokeRoute(typePATCH, json("PATCH", { action: "archive" }), routeParams({ id: TYPE }))).status).toBe(403);
             expect((await invokeRoute(publishPOST, json("POST", { version_id: V1 }), routeParams({ id: TYPE }))).status).toBe(403);
+            expect((await invokeRoute(draftDELETE, json("DELETE"), routeParams({ id: TYPE }))).status).toBe(403);
         }
         expect(db.rows("document_categories")).toHaveLength(2);
         expect(audits("document_category_changed")).toHaveLength(0);
@@ -152,6 +153,7 @@ describe("authority: Studio writes need processing.documents.manage; reads need 
         as(P.otherOrgAdmin);
         expect((await invokeRoute(typeGET, buildRequest({ path: "/x" }), routeParams({ id: TYPE }))).status).toBe(404);
         expect((await invokeRoute(draftPUT, json("PUT", { ...GOOD }), routeParams({ id: TYPE }))).status).toBe(404);
+        expect((await invokeRoute(draftDELETE, json("DELETE"), routeParams({ id: TYPE }))).status).toBe(404);
     });
 });
 
@@ -232,6 +234,39 @@ describe("types: draft → validate → publish", () => {
         expect(res.status).toBe(200);
         expect(rpcCalls.at(-1)).toMatchObject({ name: "document_type_publish", args: { p_type_id: TYPE, p_version_id: V2, p_expected_published_version_id: V1 } });
         expect(audits("document_type_changed").at(-1)?.payload).toMatchObject({ action: "publish", sensitivity_from: "medical", sensitivity_to: "restricted", superseded_version_id: V1 });
+    });
+
+    it("discarding a revision removes only the open draft; the published version stays live and the discard is audited", async () => {
+        as(P.admin);
+        expect((await invokeRoute(draftPUT, json("PUT", { ...GOOD, label: "Immunization" }), routeParams({ id: TYPE }))).status).toBe(200);
+        // The in-memory client has no column defaults; the database stores a new version as 'draft'.
+        for (const v of db.rows("document_type_versions")) v.status ??= "draft";
+        const draft = db.rows("document_type_versions").find((v) => v.version_number === 2);
+        expect(draft).toMatchObject({ status: "draft" });
+        const res = await invokeRoute(draftDELETE, json("DELETE"), routeParams({ id: TYPE }));
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ discarded: true, version_id: draft?.id, version_number: 2 });
+        expect(db.rows("document_type_versions").map((v) => v.id)).toEqual([V1]);
+        expect(db.rows("document_type_versions")[0]).toMatchObject({ status: "published", label: "Immunization record" });
+        expect(db.rows("document_types").find((t) => t.id === TYPE)?.published_version_id).toBe(V1);
+        expect(audits("document_type_changed").at(-1)?.payload).toMatchObject({ action: "discard_draft", key: "immunization_record", version_number: 2 });
+    });
+
+    it("discard refuses when there is no draft (nothing recorded), and when the draft is the type's only version (nothing removed)", async () => {
+        as(P.admin);
+        const none = await invokeRoute(draftDELETE, json("DELETE"), routeParams({ id: TYPE }));
+        expect(none.status).toBe(404);
+        expect((none.body as { code: string }).code).toBe("NO_OPEN_DRAFT");
+        expect(audits("document_type_changed")).toHaveLength(0);
+
+        const created = (await invokeRoute(typesPOST, json("POST", { ...GOOD }))).body as { type_id: string };
+        for (const v of db.rows("document_type_versions")) v.status ??= "draft";
+        const before = db.rows("document_type_versions").length;
+        const only = await invokeRoute(draftDELETE, json("DELETE"), routeParams({ id: created.type_id }));
+        expect(only.status).toBe(409);
+        expect((only.body as { code: string }).code).toBe("ONLY_VERSION");
+        expect(db.rows("document_type_versions")).toHaveLength(before);
+        expect(db.rows("document_types").some((t) => t.id === created.type_id)).toBe(true);
     });
 
     it("a stale publish surfaces the conflict, and an unknown version is 404", async () => {

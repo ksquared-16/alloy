@@ -1937,6 +1937,12 @@
         "capability": "processing.documents.manage",
         "helper": "requireDocumentConfigurationWrite",
         "reason": "Documents V1 / D3 (2026-10-23). Saves a type draft or opens a new revision; a published version is never edited; nothing becomes live; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 closeout (2026-10-24). Discards a type's unpublished draft or validated version; a published or superseded version is never removed; audited first."
       }
     },
     "app/api/admin/documents/configuration/types/[id]/publish/route.ts": {
