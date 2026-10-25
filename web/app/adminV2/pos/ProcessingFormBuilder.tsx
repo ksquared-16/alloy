@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { groupFieldsIntoRows, fieldLayoutFlexClass } from "@/lib/forms/formRowComposition";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { FORM_SUBMIT_LABEL_MAX, formSubmitLabel } from "@/lib/forms/schema";
+import { participantOnAccent } from "@/lib/public/forms/participantBrandTheme";
 import { findFieldDeep } from "@/lib/forms/formBuilderSchema";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas from "./ProcessingFormCanvas";
@@ -516,6 +518,28 @@ export default function ProcessingFormBuilder({
                                                 />
                                             </label>
                                             <label className="block">
+                                                <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Submit button label</span>
+                                                <input
+                                                    type="text"
+                                                    value={schema.submit_label ?? ""}
+                                                    maxLength={FORM_SUBMIT_LABEL_MAX}
+                                                    placeholder="Submit"
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        // Cleared means the runtime's default wording — the key is removed, never saved empty.
+                                                        setSchema((cur) => {
+                                                            if (!cur) return cur;
+                                                            const next: FormSchemaV1 = { ...cur, submit_label: value };
+                                                            if (!value.trim()) delete next.submit_label;
+                                                            return next;
+                                                        });
+                                                        setDirty(true);
+                                                    }}
+                                                    className="w-full rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-[12px]"
+                                                    data-testid="form-builder-submit-label"
+                                                />
+                                            </label>
+                                            <label className="block">
                                                 <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Description</span>
                                                 <textarea
                                                     value={branding.description}
@@ -755,12 +779,14 @@ function FormPreview({
                     );
                 })}
             </div>
+            {/* Mirrors the public runtime: same label, same contrast-chosen text, full width on mobile only. */}
             <button
                 type="button"
-                className="mt-8 w-full rounded-lg py-3 text-[13px] font-semibold text-white"
-                style={{ backgroundColor: accent }}
+                className="mt-8 w-full rounded-lg px-8 py-3 text-[13px] font-semibold sm:w-auto sm:min-w-[10rem]"
+                style={{ backgroundColor: accent, color: participantOnAccent(accent) }}
+                data-testid="form-builder-preview-submit"
             >
-                Submit
+                {formSubmitLabel(schema) ?? "Submit"}
             </button>
             </div>
         </div>

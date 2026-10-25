@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
+import { DEFAULT_FORM_ACCENT } from "@/lib/forms/processingFormBranding";
 import {
     PARTICIPANT_DEFAULT_ACCENT,
     participantBrandStyle,
@@ -166,23 +167,28 @@ describe("an authored date cannot degrade into a text box", () => {
 
 describe("one theme owner brands every phase", () => {
     it("resolves the tenant's authored tokens", () => {
+        // A colour that is NOT the platform default, so a resolver ignoring the tenant cannot pass.
         const brand = resolveParticipantBrand({
-            accent_color: "#00A283",
+            accent_color: "#7C3AED",
             brand_name: "Firefly Early Learning",
             logo_url: "https://cdn.example.com/logo.png",
         });
         expect(brand).toEqual({
-            accentColor: "#00A283",
+            accentColor: "#7C3AED",
             brandName: "Firefly Early Learning",
             logoUrl: "https://cdn.example.com/logo.png",
         });
-        expect(participantBrandStyle(brand)).toEqual({ "--participant-accent": "#00A283" });
+        expect(participantBrandStyle(brand)).toEqual({
+            "--participant-accent": "#7C3AED",
+            "--participant-on-accent": "#FFFFFF",
+        });
     });
 
-    it("falls back to the platform, never to a tenant's colour", () => {
+    it("falls back to the platform default — the same one the builder shows", () => {
         expect(resolveParticipantBrand(null).accentColor).toBe(PARTICIPANT_DEFAULT_ACCENT);
-        // Nothing tenant-specific is hardcoded anywhere in the resolver.
-        expect(code("lib/public/forms/participantBrandTheme.ts")).not.toContain("#00A283");
+        expect(PARTICIPANT_DEFAULT_ACCENT).toBe(DEFAULT_FORM_ACCENT);
+        // One default, imported — not a second literal that can drift from the builder's.
+        expect(code("lib/public/forms/participantBrandTheme.ts")).not.toMatch(/#00A283|#1F2937/i);
     });
 
     it("refuses values that would reach a style attribute or an image tag unchecked", () => {

@@ -54,12 +54,14 @@ describe("one response model", () => {
         expect(CARD).toMatch(/!NEEDS_ITS_OWN_CONTROL\.has\(answerControl\.inputType\)/);
     });
 
-    it("uses Bend Pine for the primary action, never Midnight Forge", () => {
-        // `alloy-midnight` is the navy the Director flagged as masquerading as Pine.
-        const primary = CARD.match(/className="[^"]*rounded-xl bg-alloy-[a-z-]+ px-4[^"]*"/g) ?? [];
+    it("uses the participant accent for the primary action, never Midnight Forge", () => {
+        // `alloy-midnight` is the navy the Director flagged as masquerading as Pine. The accent is the
+        // tenant's authored colour, Bend Pine when none is authored (participantBrandTheme.ts, F01).
+        const primary = CARD.match(/className="[^"]*rounded-xl bg-(?:alloy|participant)-[a-z-]+ px-4[^"]*"/g) ?? [];
         expect(primary.length).toBeGreaterThan(0);
         for (const cls of primary) {
-            expect(cls, "primary actions must be Bend Pine").toContain("bg-alloy-bend-pine");
+            expect(cls, "primary actions must be the participant accent").toContain("bg-participant-accent");
+            expect(cls, "text on the accent is contrast-chosen, never a fixed white").toContain("text-participant-on-accent");
             expect(cls).not.toContain("bg-alloy-midnight");
         }
     });
@@ -139,9 +141,9 @@ describe("a cluster reads as a topic, not a card of fields", () => {
         expect(CODE).toContain("composeAddress(parts)");
     });
 
-    it("recedes settled questions and marks them in Bend Pine", () => {
+    it("recedes settled questions and marks them in the participant accent", () => {
         expect(CODE).toMatch(/text-alloy-midnight\/45/);
-        expect(CODE).toContain("text-alloy-bend-pine");
+        expect(CODE).toContain("text-participant-accent");
     });
 
     it("renders a topic only when the wire supplies one", () => {

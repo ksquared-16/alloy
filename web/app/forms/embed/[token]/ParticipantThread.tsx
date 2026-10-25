@@ -205,7 +205,7 @@ export function ConversationProgress({ label, percent }: { label: string; percen
                 aria-label="Enrollment progress"
             >
                 <span
-                    className="block h-full rounded-full bg-alloy-juniper transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                    className="block h-full rounded-full bg-participant-accent transition-[width] duration-500 ease-out motion-reduce:transition-none"
                     style={{ width: `${clamped}%` }}
                 />
             </div>
@@ -253,8 +253,8 @@ export function ThreadTurn({
                     "text-[10.5px] font-semibold uppercase tracking-[0.13em]",
                     depth === "current"
                         ? isParent
-                            ? "text-alloy-bend-pine/55"
-                            : "text-alloy-juniper"
+                            ? "text-participant-accent/55"
+                            : "text-participant-accent"
                         : "text-alloy-midnight/25",
                 )}
             >
@@ -290,10 +290,10 @@ export function ThreadSaid({
                 className={clsx(
                     "leading-snug",
                     depth === "current"
-                        ? "text-[15px] font-medium text-alloy-bend-pine"
+                        ? "text-[15px] font-medium text-participant-accent"
                         : depth === "recent"
-                          ? "text-[14px] font-medium text-alloy-bend-pine/70"
-                          : "text-[13.5px] font-medium text-alloy-bend-pine/45",
+                          ? "text-[14px] font-medium text-participant-accent/70"
+                          : "text-[13.5px] font-medium text-participant-accent/45",
                 )}
             >
                 {children}

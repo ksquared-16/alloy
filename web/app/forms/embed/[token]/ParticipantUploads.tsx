@@ -93,7 +93,7 @@ function UploadRow({
                     <div className="pt-0.5 text-[13px] leading-relaxed text-alloy-midnight/55">{request.description}</div>
                 ) : null}
                 {attached ? (
-                    <div className="pt-1 text-[13px] text-alloy-bend-pine" data-upload-attached={request.field_id}>
+                    <div className="pt-1 text-[13px] text-participant-accent" data-upload-attached={request.field_id}>
                         Attached — {attached.filename}
                     </div>
                 ) : null}
@@ -115,7 +115,7 @@ function UploadRow({
                     "rounded-xl px-4 py-2.5 text-[14px] font-medium",
                     attached
                         ? "border border-alloy-midnight/15 text-alloy-midnight"
-                        : "bg-alloy-bend-pine text-white",
+                        : "bg-participant-accent text-participant-on-accent",
                     busy && "opacity-60",
                 )}
             >

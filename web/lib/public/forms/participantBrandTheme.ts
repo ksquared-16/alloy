@@ -14,14 +14,29 @@
  *
  * ## Nothing tenant-specific is hardcoded
  *
- * The fallback is the platform's own neutral accent, not any tenant's colour. Firefly renders in its
- * established treatment because its forms carry `accent_color: #00A283` — resolved, not special-cased.
+ * The fallback is the platform's own accent (Bend Pine), the same default the Form Builder shows
+ * and saves — one default, so the builder preview and the public form can no longer disagree about
+ * what an unbranded form looks like. A tenant's authored accent always wins.
+ *
+ * ## Painting it
+ *
+ * `participantBrandStyle` sets `--participant-accent` and `--participant-on-accent` on the shell.
+ * `globals.css` maps them to the `participant-accent` / `participant-on-accent` colour utilities with
+ * `@theme inline`, so every accent surface inside the shell reads the tenant's colour. The on-accent
+ * text colour is chosen for contrast: a light accent gets dark text instead of failing WCAG AA with
+ * white.
  *
  * Pure. No I/O — the caller already holds the form metadata.
  */
 
-/** Platform default when a tenant has authored no accent. Never a tenant's colour. */
-export const PARTICIPANT_DEFAULT_ACCENT = "#1F2937";
+import { DEFAULT_FORM_ACCENT } from "@/lib/forms/processingFormBranding";
+
+/** Platform default when a tenant has authored no accent — the builder's default, not a second one. */
+export const PARTICIPANT_DEFAULT_ACCENT = DEFAULT_FORM_ACCENT;
+
+/** Text on the accent: white where it is legible, otherwise the platform's dark ink. */
+export const PARTICIPANT_ON_ACCENT_LIGHT = "#FFFFFF";
+export const PARTICIPANT_ON_ACCENT_DARK = "#18273A";
 
 export type ParticipantBrand = {
     readonly accentColor: string;
@@ -57,7 +72,45 @@ export function resolveParticipantBrand(formMetadata: unknown): ParticipantBrand
     };
 }
 
+function channel(value: number): number {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/** WCAG 2.x relative luminance of a `#rgb` / `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
+    const raw = hex.replace("#", "");
+    const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+export function contrastRatio(a: string, b: string): number {
+    const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+}
+
+/**
+ * The text colour for a surface painted in `accent`: white while it holds at least 3:1 (the WCAG
+ * floor for large text and UI components), otherwise whichever of the two inks contrasts more — so a
+ * pale tenant accent (yellow, light blue) gets dark text instead of near-invisible white.
+ *
+ * Known limit: 3:1 is below AA's 4.5:1 for 14px button labels. The platform default itself is
+ * white-on-Bend-Pine at about 3.2:1, the look every public form has today; raising the floor would
+ * restyle every unbranded form and is a brand decision, not this resolver's.
+ */
+export function participantOnAccent(accent: string): string {
+    const white = contrastRatio(accent, PARTICIPANT_ON_ACCENT_LIGHT);
+    if (white >= 3) return PARTICIPANT_ON_ACCENT_LIGHT;
+    return contrastRatio(accent, PARTICIPANT_ON_ACCENT_DARK) > white ? PARTICIPANT_ON_ACCENT_DARK : PARTICIPANT_ON_ACCENT_LIGHT;
+}
+
 /** CSS custom properties, so both phases inherit one theme from the shell that wraps them. */
 export function participantBrandStyle(brand: ParticipantBrand): Record<string, string> {
-    return { "--participant-accent": brand.accentColor };
+    return {
+        "--participant-accent": brand.accentColor,
+        "--participant-on-accent": participantOnAccent(brand.accentColor),
+    };
 }

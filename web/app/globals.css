@@ -47,6 +47,16 @@
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
 
+/* Participant (public form) accent. `inline` is required: a normal @theme variable is resolved once on
+   :root, so a tenant colour set on the participant shell would never reach it. Inline, every
+   `bg-participant-accent` / `text-participant-on-accent` (opacity modifiers included) reads the
+   shell's `--participant-accent` / `--participant-on-accent` (participantBrandTheme.ts), falling back
+   to the platform default outside a branded shell. */
+@theme inline {
+  --color-participant-accent: var(--participant-accent, #00A283);
+  --color-participant-on-accent: var(--participant-on-accent, #FFFFFF);
+}
+
 /* ============================================================================
    Operational Motion System (Experience Layer — Capability 1)
    Doctrine: docs/platform/experience/operational-motion-doctrine.md
@@ -1910,5 +1920,5 @@ body {
  */
 .alloy-participant-surface input[type="checkbox"],
 .alloy-participant-surface input[type="radio"] {
-  accent-color: var(--color-alloy-bend-pine);
+  accent-color: var(--participant-accent, var(--color-alloy-bend-pine));
 }

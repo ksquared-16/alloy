@@ -165,7 +165,7 @@ function ConversationTopic({
                 <ul className="mb-2 space-y-1" data-participant-topic-settled={settled.length}>
                     {settled.map((q) => (
                         <li key={q.need_key} className="flex gap-2 text-[13px] leading-snug text-alloy-midnight/45">
-                            <span aria-hidden className="text-alloy-bend-pine">✓</span>
+                            <span aria-hidden className="text-participant-accent">✓</span>
                             <span>
                                 {q.question}
                                 {q.answer ? <span className="text-alloy-midnight/60"> — {q.answer}</span> : null}
@@ -284,7 +284,7 @@ function ConfirmationGroupCard({
                                         type="button"
                                         onClick={() => onEdit(fact.ref)}
                                         disabled={busy}
-                                        className="text-[12px] font-medium text-alloy-bend-pine underline underline-offset-2 disabled:opacity-50"
+                                        className="text-[12px] font-medium text-participant-accent underline underline-offset-2 disabled:opacity-50"
                                     >
                                         Change
                                     </button>
@@ -427,7 +427,7 @@ function StructuredFactEditor({
                     type="button"
                     disabled={busy || !ready}
                     onClick={() => onSave(value())}
-                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                    className="rounded-lg bg-participant-accent px-3 py-1.5 text-[13px] font-medium text-participant-on-accent disabled:opacity-50"
                 >
                     Save
                 </button>
@@ -503,7 +503,7 @@ function NewPartyForm({
                     type="button"
                     disabled={busy || name.trim().length === 0}
                     onClick={() => onSave({ full_name: name.trim(), phone: phone.trim(), email: email.trim(), ...(relationship ? { relationship_type: relationship } : {}) })}
-                    className="rounded-lg bg-alloy-bend-pine px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+                    className="rounded-lg bg-participant-accent px-4 py-2 text-[14px] font-medium text-participant-on-accent disabled:opacity-50"
                 >
                     Save
                 </button>
@@ -622,7 +622,7 @@ function CollectedAnswers({
                             <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
                                 <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
                                 {justUpdated.has(fact.ref) ? (
-                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent/70">
                                         Updated
                                     </span>
                                 ) : null}
@@ -630,7 +630,7 @@ function CollectedAnswers({
                                     type="button"
                                     onClick={() => onEdit(fact.ref)}
                                     disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-participant-accent disabled:opacity-50"
                                 >
                                     Edit
                                 </button>
@@ -684,7 +684,7 @@ function SettledGroup({
             className="rounded-xl border border-alloy-midnight/8 bg-alloy-midnight/[0.015] px-3.5 py-2.5"
             data-participant-settled-group={group.heading}
         >
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-bend-pine/70">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-participant-accent/70">
                 {group.heading}
             </p>
             {group.headline ? (
@@ -712,7 +712,7 @@ function SettledGroup({
                             <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/60">
                                 <span data-participant-settled-value={fact.ref}>{fact.value || "—"}</span>
                                 {justUpdated.has(fact.ref) ? (
-                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent/70">
                                         Updated
                                     </span>
                                 ) : null}
@@ -720,7 +720,7 @@ function SettledGroup({
                                     type="button"
                                     onClick={() => onEdit(fact.ref)}
                                     disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-participant-accent disabled:opacity-50"
                                 >
                                     Edit
                                 </button>
@@ -1101,7 +1101,7 @@ export function EnrollmentConversationCard({
                                         onClick={() =>
                                             void submit({ party: { select_ref: candidate.ref }, settledAs: candidate.name })
                                         }
-                                        className="flex items-baseline justify-between rounded-xl border border-alloy-midnight/12 px-4 py-3 text-left hover:border-alloy-bend-pine disabled:opacity-50"
+                                        className="flex items-baseline justify-between rounded-xl border border-alloy-midnight/12 px-4 py-3 text-left hover:border-participant-accent disabled:opacity-50"
                                     >
                                         <span className="text-[15px] font-medium text-alloy-midnight">{candidate.name}</span>
                                         {candidate.detail ? (
@@ -1114,7 +1114,7 @@ export function EnrollmentConversationCard({
                                     disabled={busy}
                                     data-participant-party-new="true"
                                     onClick={() => setAddingParty(true)}
-                                    className="rounded-xl border border-dashed border-alloy-midnight/20 px-4 py-3 text-left text-[15px] text-alloy-midnight/70 hover:border-alloy-bend-pine disabled:opacity-50"
+                                    className="rounded-xl border border-dashed border-alloy-midnight/20 px-4 py-3 text-left text-[15px] text-alloy-midnight/70 hover:border-participant-accent disabled:opacity-50"
                                 >
                                     Someone else
                                 </button>
@@ -1717,7 +1717,7 @@ function TypedAnswer({
                         disabled={busy}
                         rows={2}
                         onChange={(e) => setText(e.target.value)}
-                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-alloy-juniper/45"
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-participant-accent/45"
                     />
                 ) : (
                     <input
@@ -1729,7 +1729,7 @@ function TypedAnswer({
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && ready) onSubmit(text.trim(), shown);
                         }}
-                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-alloy-juniper/45"
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-participant-accent/45"
                     />
                 )}
             </div>
@@ -1737,7 +1737,7 @@ function TypedAnswer({
                 type="button"
                 disabled={busy || !ready}
                 onClick={() => onSubmit(text.trim(), shown)}
-                className="min-h-[44px] rounded-xl bg-alloy-bend-pine px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine disabled:opacity-40"
+                className="min-h-[44px] rounded-xl bg-participant-accent px-4 text-[14px] font-medium text-participant-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-participant-accent disabled:opacity-40"
             >
                 Done
             </button>

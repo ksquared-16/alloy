@@ -62,7 +62,7 @@ export function SuggestedReplies({
                         // 36px tall with generous horizontal padding — a real touch target that still
                         // reads as a chip rather than a primary action.
                         "min-h-[36px] rounded-full px-3.5 py-1.5 text-[13.5px] font-medium transition-colors",
-                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper",
+                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-participant-accent",
                         "disabled:opacity-45",
                         reply.emphasis
                             ? "bg-alloy-midnight/[0.06] text-alloy-midnight hover:bg-alloy-midnight/[0.10]"
@@ -127,7 +127,7 @@ export function Composer({
             data-participant-composer="true"
             className={clsx(
                 "flex items-end gap-2 rounded-2xl border bg-white px-3 py-2 transition-colors",
-                "border-alloy-midnight/12 focus-within:border-alloy-juniper/45 focus-within:ring-2 focus-within:ring-alloy-juniper/15",
+                "border-alloy-midnight/12 focus-within:border-participant-accent/45 focus-within:ring-2 focus-within:ring-participant-accent/15",
             )}
         >
             <label htmlFor="participant-composer" className="sr-only">
@@ -163,7 +163,7 @@ export function Composer({
                 className={clsx(
                     // Fixed 36px square in both states — the dock never changes height mid-reply.
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
-                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-participant-accent",
                     ready
                         ? "bg-alloy-midnight text-white"
                         : "bg-alloy-midnight/[0.07] text-alloy-midnight/30",

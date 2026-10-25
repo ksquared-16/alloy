@@ -19,7 +19,7 @@ import {
     participantUploadRequests,
     uploadIsOnFile,
 } from "@/lib/enrollment/participantRuntime/participantUploadRequests";
-import { validateFormSchema } from "@/lib/forms/schema";
+import { formSubmitLabel, validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { withListedFieldsShown } from "@/lib/forms/submissionSemantics";
 import {
@@ -990,6 +990,8 @@ export function FormEmbedClient({
     const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors, schema) : [];
+    // The published version's own submit wording (F02); signing steps keep "Sign and finish".
+    const authoredSubmitLabel = formSubmitLabel(schema);
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
     /**
      * The guided WIZARD is for packets the participant fills from scratch.
@@ -1516,13 +1518,14 @@ export function FormEmbedClient({
                                 setReviewStep(first ? "people" : "review");
                             }}
                             /*
-                             * BEND PINE, like every other primary action in Participant Runtime.
+                             * THE ACCENT, like every other primary action in Participant Runtime
+                             * (the tenant's colour, Bend Pine when none is authored).
                              *
                              * This one was Midnight, so the single most important action on the
                              * surface was the only one not speaking the runtime's primary language.
                              * Pinned by a token regression control rather than a literal colour.
                              */
-                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white"
+                            className="mt-4 w-full rounded-xl bg-participant-accent px-5 py-3.5 text-[16px] font-medium text-participant-on-accent sm:w-auto sm:min-w-[12rem]"
                             data-review-paperwork="true"
                         >
                             Review paperwork
@@ -1607,7 +1610,7 @@ export function FormEmbedClient({
                                                 setPeopleFocus(next?.fieldId ?? null);
                                                 setReviewStep(next ? "people" : "review");
                                             }}
-                                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white disabled:bg-alloy-midnight/25"
+                                            className="mt-4 w-full rounded-xl bg-participant-accent px-5 py-3.5 text-[16px] font-medium text-participant-on-accent disabled:bg-alloy-midnight/25 sm:w-auto sm:min-w-[12rem]"
                                         >
                                             {complete < needed ? `${needed - complete} more needed` : optional && complete === 0 ? "Skip" : next ? "Continue" : "Continue to your paperwork"}
                                         </button>
@@ -1976,7 +1979,7 @@ export function FormEmbedClient({
                             errorLines={errorLines}
                             message={message}
                             onBack={famIdx > 0 ? () => setFamilyStepIdx((i) => Math.max(0, i - 1)) : undefined}
-                            primaryLabel={famIsLast ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            primaryLabel={famIsLast ? (submitting ? "Submitting…" : authoredSubmitLabel ?? "Confirm & submit") : "Continue"}
                             onPrimary={
                                 famIsLast
                                     ? () => void handleSubmit()
@@ -2018,7 +2021,7 @@ export function FormEmbedClient({
                             errorLines={errorLines}
                             message={message}
                             onBack={stepIdx > 0 ? () => setGuidedStepIdx((i) => Math.max(0, i - 1)) : undefined}
-                            primaryLabel={isLastStep ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            primaryLabel={isLastStep ? (submitting ? "Submitting…" : authoredSubmitLabel ?? "Confirm & submit") : "Continue"}
                             onPrimary={
                                 isLastStep
                                     ? () => void handleSubmit()
@@ -2060,7 +2063,7 @@ export function FormEmbedClient({
                                     : "Sign and finish"
                                 : submitting
                                   ? "Submitting…"
-                                  : "Submit"
+                                  : authoredSubmitLabel ?? "Submit"
                         }
                         onPrimary={() => void handleSubmit()}
                         primaryDisabled={submitting || !submissionId}

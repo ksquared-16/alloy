@@ -336,6 +336,16 @@ export const formSectionSchema = z
 
 export type FormSection = z.infer<typeof formSectionSchema>;
 
+export const FORM_SUBMIT_LABEL_MAX = 40;
+
+/** The authored submit label, or null when the form uses the runtime's default wording. */
+export function formSubmitLabel(schema: { submit_label?: string | null } | null | undefined): string | null {
+    const raw = schema?.submit_label;
+    if (typeof raw !== "string") return null;
+    const label = raw.trim();
+    return label ? label.slice(0, FORM_SUBMIT_LABEL_MAX) : null;
+}
+
 export const formSchemaV1Schema = z
     .object({
         schema_version: z.literal(1),
@@ -344,6 +354,12 @@ export const formSchemaV1Schema = z
         fields: z.array(formFieldSchema),
         /** Optional document composition layer — ignored by public renderer until staged (FD-4). */
         document_composition: documentCompositionSchema.optional(),
+        /**
+         * The final submit button's text on the public form ("Submit" when absent). Lives in the
+         * schema, not form metadata, so it is versioned with the published form: a draft edit never
+         * relabels a live form. Signing steps keep their own platform wording.
+         */
+        submit_label: z.string().trim().min(1).max(FORM_SUBMIT_LABEL_MAX).optional(),
     })
     .strict()
     .superRefine((data, ctx) => {
