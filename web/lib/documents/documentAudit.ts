@@ -33,6 +33,8 @@ export type DocumentAuditEvent =
     // D3: a Studio configuration change (category or type), recorded before the change.
     | "document_category_changed"
     | "document_type_changed"
+    // D4: an operator upload, recorded before the file is stored.
+    | "document_upload_authorized"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
