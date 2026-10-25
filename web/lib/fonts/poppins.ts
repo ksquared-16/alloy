@@ -9,27 +9,33 @@
  * Assets: `web/fonts/poppins/*.woff2` (SIL Open Font License 1.1; vendored from
  * @fontsource/poppins 5.3.0 latin normals). Runtime Stripe Elements still loads
  * Poppins for iframes via cssSrc — that is browser runtime, not next build.
+ *
+ * Turbopack (Next 16 default production bundler) requires `src` path/weight/style
+ * to be written as object-literal arrays — not a shared variable or array methods.
  */
 import localFont from "next/font/local";
 
-const poppinsSrc = [
-  { path: "../../fonts/poppins/poppins-latin-300-normal.woff2", weight: "300" as const, style: "normal" as const },
-  { path: "../../fonts/poppins/poppins-latin-400-normal.woff2", weight: "400" as const, style: "normal" as const },
-  { path: "../../fonts/poppins/poppins-latin-500-normal.woff2", weight: "500" as const, style: "normal" as const },
-  { path: "../../fonts/poppins/poppins-latin-600-normal.woff2", weight: "600" as const, style: "normal" as const },
-  { path: "../../fonts/poppins/poppins-latin-700-normal.woff2", weight: "700" as const, style: "normal" as const },
-];
-
 /** Root / marketing shell — weights 300–700. */
 export const poppins = localFont({
-  src: poppinsSrc,
+  src: [
+    { path: "../../fonts/poppins/poppins-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-poppins",
   display: "swap",
 });
 
-/** AdminV2 + proof shells — same family files; distinct CSS variable. */
+/** AdminV2 + proof shells — same family files; distinct CSS variable (no weight 300). */
 export const poppinsAdminV2 = localFont({
-  src: poppinsSrc.filter((e) => e.weight !== "300"),
+  src: [
+    { path: "../../fonts/poppins/poppins-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../fonts/poppins/poppins-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-poppins-adminv2",
   display: "swap",
 });
