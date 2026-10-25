@@ -229,6 +229,7 @@ export async function buildRosterReadModel(
         placements: inputsWithAgeGroups.placements,
         assignments: inputsWithAgeGroups.assignments,
         patternsById: inputsWithAgeGroups.patternsById,
+        weekdaysByAssignmentId: inputsWithAgeGroups.weekdaysByAssignmentId,
         config: inputsWithAgeGroups.config,
         ageGroupByRoomLocationId: inputsWithAgeGroups.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: inputsWithAgeGroups.ageGroupByProgramCategoryId,

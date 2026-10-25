@@ -80,6 +80,8 @@ export type BuildScheduleExpectationsInput = {
     placements: readonly OperationalPlacementInput[];
     assignments: readonly OperationalAssignmentInput[];
     patternsById: ReadonlyMap<string, SchedulePatternInput>;
+    /** Each assignment's own weekdays (Assignment Time); they win over its pattern's. */
+    weekdaysByAssignmentId?: ReadonlyMap<string, readonly number[]>;
     config: ChildcareConfigRuleBundle;
     /** Optional age-group resolution by room/program (e.g. classroom_age_group). */
     ageGroupByRoomLocationId?: Readonly<Record<string, string | null>>;
@@ -100,6 +102,7 @@ export function buildScheduleExpectations(
         placements: input.placements,
         assignments: input.assignments,
         patternsById: input.patternsById,
+        weekdaysByAssignmentId: input.weekdaysByAssignmentId,
     });
 
     // Room -> resolution context (site/program/age-group) + tier/capacity closures.
@@ -131,6 +134,7 @@ export function buildScheduleExpectations(
         dateEnd: input.dateEnd,
         proposedAssignments: input.proposedAssignments ?? [],
         patternsById: input.patternsById,
+        weekdaysByAssignmentId: input.weekdaysByAssignmentId,
     });
     const plannedOccupancyByRoomDate = aggregatePlannedOccupancyByRoomDate(plannedAttendance);
 

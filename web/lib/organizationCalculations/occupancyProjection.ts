@@ -33,6 +33,7 @@ export async function resolveOccupancyExpectedForRoom(args: {
         placements: loaded.placements,
         assignments: loaded.assignments,
         patternsById: loaded.patternsById,
+        weekdaysByAssignmentId: loaded.weekdaysByAssignmentId,
         config: loaded.config,
         ageGroupByRoomLocationId: {
             ...(loaded.ageGroupByRoomLocationId ?? {}),
