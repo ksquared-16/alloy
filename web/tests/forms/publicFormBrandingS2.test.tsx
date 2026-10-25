@@ -36,10 +36,11 @@ const code = (rel: string) =>
 const RUNTIME_DIR = "app/forms/embed/[token]";
 
 describe("F01 — the tenant accent paints the public runtime", () => {
-    it("the shell publishes the accent and a contrast-chosen text colour", () => {
+    it("the shell publishes the accent, a contrast-chosen text colour and the accent ink", () => {
         expect(participantBrandStyle(resolveParticipantBrand({ accent_color: "#B91C1C" }))).toEqual({
             "--participant-accent": "#B91C1C",
             "--participant-on-accent": PARTICIPANT_ON_ACCENT_LIGHT,
+            "--participant-accent-ink": "#B91C1C",
         });
     });
 
@@ -50,15 +51,16 @@ describe("F01 — the tenant accent paints the public runtime", () => {
         }
     });
 
-    it("the platform default keeps today's white label", () => {
-        expect(participantOnAccent(DEFAULT_FORM_ACCENT)).toBe(PARTICIPANT_ON_ACCENT_LIGHT);
-        expect(contrastRatio(DEFAULT_FORM_ACCENT, PARTICIPANT_ON_ACCENT_LIGHT)).toBeGreaterThanOrEqual(3);
+    it("S4-D: the platform default no longer keeps a failing white label", () => {
+        // White on Bend Pine is about 3.2:1 — under the Director's 4.5:1 floor — so it carries dark ink.
+        expect(contrastRatio(DEFAULT_FORM_ACCENT, PARTICIPANT_ON_ACCENT_LIGHT)).toBeLessThan(4.5);
+        expect(participantOnAccent(DEFAULT_FORM_ACCENT)).toBe(PARTICIPANT_ON_ACCENT_DARK);
     });
 
-    it("whatever the accent, the chosen text never falls under 3:1", () => {
+    it("whatever the accent, the chosen text never falls under 4.5:1", () => {
         for (let i = 0; i < 4096; i += 7) {
             const hex = `#${i.toString(16).padStart(3, "0")}`;
-            expect(contrastRatio(hex, participantOnAccent(hex)), hex).toBeGreaterThanOrEqual(3);
+            expect(contrastRatio(hex, participantOnAccent(hex)), hex).toBeGreaterThanOrEqual(4.5);
         }
     });
 
@@ -67,6 +69,7 @@ describe("F01 — the tenant accent paints the public runtime", () => {
         const inline = css.match(/@theme inline\s*\{([^}]*)\}/)?.[1] ?? "";
         expect(inline).toMatch(/--color-participant-accent:\s*var\(--participant-accent,\s*#00A283\)/);
         expect(inline).toMatch(/--color-participant-on-accent:\s*var\(--participant-on-accent,/);
+        expect(inline).toMatch(/--color-participant-accent-ink:\s*var\(--participant-accent-ink,/);
         // Native checkboxes and radios follow the tenant too.
         expect(css).toMatch(/accent-color:\s*var\(--participant-accent/);
     });

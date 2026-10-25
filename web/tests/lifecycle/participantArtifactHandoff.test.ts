@@ -181,6 +181,7 @@ describe("one theme owner brands every phase", () => {
         expect(participantBrandStyle(brand)).toEqual({
             "--participant-accent": "#7C3AED",
             "--participant-on-accent": "#FFFFFF",
+            "--participant-accent-ink": "#7C3AED",
         });
     });
 

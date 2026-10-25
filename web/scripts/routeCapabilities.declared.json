@@ -4516,6 +4516,28 @@
         "reason": "Programs are published organization configuration: a draft/validate/publish lifecycle that distributes to Locations, writing configuration_publications and the configuration_distribution_* tables, met by the operator at Settings -> Programs. No capability was invented \u2014 settings.manage was already the declared owner of the canonical publication route, and this extends the same authority to the surfaces that had none. Was ORG-CONTEXT-ONLY: portal admission was the entire gate. NOT Financials: every commercial_products / commercial_policies / commercial_tuition_rates access on this surface is a read, and the tuition-rate reads only COUNT, to refuse retiring an offering whose rates are in use. NOT Business Process: nothing here writes a process definition, stage or lifecycle."
       }
     },
+    "app/api/admin/public-brand/locations/[locationId]/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Sets a location's override of the organization's public brand (name, colour, logo on that location's tour page and location-scoped forms), writing only `locations.metadata.public_brand_v1` for a location in the caller's org. Edited with the location's tour settings, so it carries Tours configuration authority at the call site; no portal fallback, role title or flag."
+      }
+    },
+    "app/api/admin/public-brand/organization/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "settings.manage",
+        "helper": "requirePublicBrandOrganizationCapability",
+        "reason": "Sets the organization's default public brand shown to families on every form and tour page that does not override it (`org_settings.metadata.public_brand_v1`). It is organization identity, so organization settings authority (`settings.manage`) at the call site, not Tours authority; no portal fallback, role title or flag."
+      }
+    },
+    "app/api/admin/public-brand/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only: the caller's own organization brand, one of its locations' overrides and the effective result. All of it is shown publicly to families on forms and tour pages anyway; behind portal admission, org-filtered, writes nothing."
+      }
+    },
     "app/api/admin/qa/financials-director/route.ts": {
       "GET": {
         "status": "declared",

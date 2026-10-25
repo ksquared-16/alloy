@@ -93,7 +93,7 @@ function UploadRow({
                     <div className="pt-0.5 text-[13px] leading-relaxed text-alloy-midnight/55">{request.description}</div>
                 ) : null}
                 {attached ? (
-                    <div className="pt-1 text-[13px] text-participant-accent" data-upload-attached={request.field_id}>
+                    <div className="pt-1 text-[13px] text-participant-accent-ink" data-upload-attached={request.field_id}>
                         Attached — {attached.filename}
                     </div>
                 ) : null}

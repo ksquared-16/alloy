@@ -825,8 +825,24 @@ function BrandingInspectorFields({
     if (!editable) {
         return <p className="text-[12px] text-alloy-midnight/60">{branding.brand_name || "No brand name set"}</p>;
     }
+    // Legacy forms (no brand_source) behave as before: their own values, except the builder's old
+    // auto-saved default accent, which falls through to the school's brand (lib/branding/publicBrand.ts).
+    const inherit = branding.brand_source === "inherit";
     return (
         <div className="space-y-3">
+            <fieldset className="space-y-1 text-[12px] text-alloy-midnight" data-testid="form-builder-brand-source">
+                <legend className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">Branding on the public form</legend>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="brand-source" checked={inherit} onChange={() => onBrandingChange({ brand_source: "inherit" })} />
+                    Use the school&apos;s branding (location, then organization)
+                </label>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="brand-source" checked={!inherit} onChange={() => onBrandingChange({ brand_source: "form" })} />
+                    Customize for this form
+                </label>
+                <p className="text-[11px] text-alloy-midnight/50">Branding changes reach families when you publish.</p>
+            </fieldset>
+            {inherit ? null : <>
             <label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-alloy-midnight/60">School / brand name</span>
                 <input
@@ -863,6 +879,7 @@ function BrandingInspectorFields({
                     data-testid="form-builder-logo-url"
                 />
             </label>
+            </>}
         </div>
     );
 }

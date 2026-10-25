@@ -136,7 +136,7 @@ export function IntakeProgress({
         <div className="mb-5">
             <div className="mb-2 flex items-center justify-between gap-3">
                 {phaseLabel ? (
-                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-participant-accent">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-participant-accent-ink">
                         {phaseLabel}
                     </span>
                 ) : (
@@ -188,7 +188,7 @@ export function IntakeChips({ known, missing, uploads }: { known: number; missin
 function Chip({ tone, label }: { tone: "accent" | "amber" | "sky"; label: string }) {
     const cls =
         tone === "accent"
-            ? "bg-participant-accent/10 text-participant-accent"
+            ? "bg-participant-accent/10 text-participant-accent-ink"
             : tone === "amber"
               ? "bg-amber-50 text-amber-700"
               : "bg-sky-50 text-sky-700";
@@ -232,7 +232,7 @@ export function IntakePacketChecklist({
                                 done
                                     ? "bg-participant-accent text-participant-on-accent"
                                     : active
-                                      ? "bg-participant-accent/15 text-participant-accent ring-1 ring-participant-accent/40"
+                                      ? "bg-participant-accent/15 text-participant-accent-ink ring-1 ring-participant-accent/40"
                                       : "bg-alloy-midnight/[0.06] text-alloy-midnight/40"
                             )}
                         >
@@ -251,7 +251,7 @@ export function IntakePacketChecklist({
                             {s.form_name}
                         </span>
                         {active ? (
-                            <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-participant-accent">
+                            <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-participant-accent-ink">
                                 Now
                             </span>
                         ) : null}
@@ -335,7 +335,7 @@ export function IntakeCompletion({
             <div
                 className={clsx(
                     "mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full",
-                    tone === "success" ? "bg-participant-accent/12 text-participant-accent" : "bg-alloy-midnight/[0.06] text-alloy-midnight/60"
+                    tone === "success" ? "bg-participant-accent/12 text-participant-accent-ink" : "bg-alloy-midnight/[0.06] text-alloy-midnight/60"
                 )}
             >
                 <Check className="h-8 w-8" strokeWidth={2.5} />

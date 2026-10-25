@@ -253,8 +253,8 @@ export function ThreadTurn({
                     "text-[10.5px] font-semibold uppercase tracking-[0.13em]",
                     depth === "current"
                         ? isParent
-                            ? "text-participant-accent/55"
-                            : "text-participant-accent"
+                            ? "text-participant-accent-ink/55"
+                            : "text-participant-accent-ink"
                         : "text-alloy-midnight/25",
                 )}
             >
@@ -290,10 +290,10 @@ export function ThreadSaid({
                 className={clsx(
                     "leading-snug",
                     depth === "current"
-                        ? "text-[15px] font-medium text-participant-accent"
+                        ? "text-[15px] font-medium text-participant-accent-ink"
                         : depth === "recent"
-                          ? "text-[14px] font-medium text-participant-accent/70"
-                          : "text-[13.5px] font-medium text-participant-accent/45",
+                          ? "text-[14px] font-medium text-participant-accent-ink/70"
+                          : "text-[13.5px] font-medium text-participant-accent-ink/45",
                 )}
             >
                 {children}

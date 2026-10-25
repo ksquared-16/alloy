@@ -293,7 +293,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
     return (
         <section data-participant-payment="card" data-payment-state={view.state} className={PANEL}>
             <h3 className={PANEL_TITLE}>Payment</h3>
-            <p data-participant-payment="headline" className={view.state === "SATISFIED" ? "text-[15px] font-semibold text-participant-accent" : "text-[15px] font-semibold text-alloy-midnight"}>
+            <p data-participant-payment="headline" className={view.state === "SATISFIED" ? "text-[15px] font-semibold text-participant-accent-ink" : "text-[15px] font-semibold text-alloy-midnight"}>
                 {headline(view)}
             </p>
 
@@ -304,7 +304,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                             <span className="text-alloy-midnight/80">{l.label}</span>
                             <span className="sr-only"> — </span>
                             {/* A paid fee says Paid — never "$0.00", which reads like a fee of nothing. */}
-                            <span className={l.state === "SATISFIED" ? "font-medium text-participant-accent" : "font-medium text-alloy-midnight"}>
+                            <span className={l.state === "SATISFIED" ? "font-medium text-participant-accent-ink" : "font-medium text-alloy-midnight"}>
                                 {l.state === "SATISFIED" ? "Paid" : money(l.collectibleNowCents, view.currencyCode)}
                             </span>
                         </li>

@@ -165,7 +165,7 @@ function ConversationTopic({
                 <ul className="mb-2 space-y-1" data-participant-topic-settled={settled.length}>
                     {settled.map((q) => (
                         <li key={q.need_key} className="flex gap-2 text-[13px] leading-snug text-alloy-midnight/45">
-                            <span aria-hidden className="text-participant-accent">✓</span>
+                            <span aria-hidden className="text-participant-accent-ink">✓</span>
                             <span>
                                 {q.question}
                                 {q.answer ? <span className="text-alloy-midnight/60"> — {q.answer}</span> : null}
@@ -284,7 +284,7 @@ function ConfirmationGroupCard({
                                         type="button"
                                         onClick={() => onEdit(fact.ref)}
                                         disabled={busy}
-                                        className="text-[12px] font-medium text-participant-accent underline underline-offset-2 disabled:opacity-50"
+                                        className="text-[12px] font-medium text-participant-accent-ink underline underline-offset-2 disabled:opacity-50"
                                     >
                                         Change
                                     </button>
@@ -622,7 +622,7 @@ function CollectedAnswers({
                             <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
                                 <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
                                 {justUpdated.has(fact.ref) ? (
-                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent/70">
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent-ink/70">
                                         Updated
                                     </span>
                                 ) : null}
@@ -630,7 +630,7 @@ function CollectedAnswers({
                                     type="button"
                                     onClick={() => onEdit(fact.ref)}
                                     disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-participant-accent disabled:opacity-50"
+                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-participant-accent-ink disabled:opacity-50"
                                 >
                                     Edit
                                 </button>
@@ -684,7 +684,7 @@ function SettledGroup({
             className="rounded-xl border border-alloy-midnight/8 bg-alloy-midnight/[0.015] px-3.5 py-2.5"
             data-participant-settled-group={group.heading}
         >
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-participant-accent/70">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-participant-accent-ink/70">
                 {group.heading}
             </p>
             {group.headline ? (
@@ -712,7 +712,7 @@ function SettledGroup({
                             <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/60">
                                 <span data-participant-settled-value={fact.ref}>{fact.value || "—"}</span>
                                 {justUpdated.has(fact.ref) ? (
-                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent/70">
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-participant-accent-ink/70">
                                         Updated
                                     </span>
                                 ) : null}
@@ -720,7 +720,7 @@ function SettledGroup({
                                     type="button"
                                     onClick={() => onEdit(fact.ref)}
                                     disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-participant-accent disabled:opacity-50"
+                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-participant-accent-ink disabled:opacity-50"
                                 >
                                     Edit
                                 </button>
@@ -1737,7 +1737,7 @@ function TypedAnswer({
                 type="button"
                 disabled={busy || !ready}
                 onClick={() => onSubmit(text.trim(), shown)}
-                className="min-h-[44px] rounded-xl bg-participant-accent px-4 text-[14px] font-medium text-participant-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-participant-accent disabled:opacity-40"
+                className="min-h-[44px] rounded-xl bg-participant-accent px-4 text-[14px] font-medium text-participant-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-participant-accent-ink disabled:opacity-40"
             >
                 Done
             </button>

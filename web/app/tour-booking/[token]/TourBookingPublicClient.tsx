@@ -16,6 +16,8 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourParentView";
+import { participantBrandStyle } from "@/lib/public/forms/participantBrandTheme";
+import type { CSSProperties } from "react";
 import {
     buildTourCalendarWeeks,
     formatParentDayLabel,
@@ -29,7 +31,9 @@ import {
     tourSlotDayKey,
 } from "@/lib/tours/public/tourParentView";
 
-type ResolveJson = { ok?: boolean; view?: TourParentView };
+/** The school's brand, resolved server-side for this link's org and location (S4). Display only. */
+type TourPublicBrand = { displayName: string | null; accentColor: string; logoUrl: string | null };
+type ResolveJson = { ok?: boolean; view?: TourParentView; brand?: TourPublicBrand };
 
 /**
  * How many times to show at once. A full availability set runs to dozens of rows,
@@ -46,6 +50,7 @@ const SLOT_GONE = "That time is no longer available. Please choose another.";
 
 export default function TourBookingPublicClient({ token }: { token: string }) {
     const [view, setView] = useState<TourParentView | null>(null);
+    const [brand, setBrand] = useState<TourPublicBrand | null>(null);
     const [slots, setSlots] = useState<AvailableTourSlot[]>([]);
     const [pick, setPick] = useState<AvailableTourSlot | null>(null);
     const [trouble, setTrouble] = useState<string | null>(null);
@@ -92,6 +97,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             const j = (await r.json()) as ResolveJson;
             const v = j.view ?? null;
             setView(v);
+            setBrand(j.brand ?? null);
             setTrouble(null);
 
             if (v?.showsOptions) {
@@ -387,12 +393,21 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const otherActions = view.actions.filter((a) => a.intent !== "book");
 
     return (
-        <main className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-6">
-            {/* Brandmark only — the wordmark carries "SERVICES", which is our
-                internal org naming and means nothing to a parent booking a visit. */}
-            <div className="flex items-center gap-2 pb-1">
-                <Image src="/brand/alloy-brandmark-gradient.svg" alt="Alloy" width={28} height={28} className="h-7 w-7" priority />
-                <span className="text-[15px] font-semibold tracking-tight text-alloy-midnight">Alloy</span>
+        <main
+            className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-6"
+            style={brand ? (participantBrandStyle({ accentColor: brand.accentColor, logoUrl: brand.logoUrl, brandName: brand.displayName }) as CSSProperties) : undefined}
+            data-tour-brand={brand?.displayName || brand?.logoUrl ? "school" : "platform"}
+        >
+            {/* The school's identity when it has one; otherwise Alloy's brandmark only — the
+                wordmark carries "SERVICES", which is our internal org naming. */}
+            <div className="flex items-center gap-2 pb-1" data-testid="tour-brand-header">
+                {brand?.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={brand.logoUrl} alt="" className="h-7 w-7 rounded object-contain" />
+                ) : brand?.displayName ? null : (
+                    <Image src="/brand/alloy-brandmark-gradient.svg" alt="Alloy" width={28} height={28} className="h-7 w-7" priority />
+                )}
+                <span className="text-[15px] font-semibold tracking-tight text-alloy-midnight">{brand?.displayName ?? "Alloy"}</span>
             </div>
 
             <header className="space-y-1.5">
@@ -442,7 +457,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                         disabled={!canGoBack}
                                         aria-label="Previous month"
                                         onClick={() => setMonth(prevMonth)}
-                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-alloy-bend-pine/[0.10] disabled:pointer-events-none disabled:text-alloy-midnight/20"
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-participant-accent/[0.10] disabled:pointer-events-none disabled:text-alloy-midnight/20"
                                     >
                                         <span aria-hidden>&lsaquo;</span>
                                     </button>
@@ -453,7 +468,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                         type="button"
                                         aria-label="Next month"
                                         onClick={() => setMonth(shiftTourMonthKey(displayedMonth, 1))}
-                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-alloy-bend-pine/[0.10]"
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-participant-accent/[0.10]"
                                     >
                                         <span aria-hidden>&rsaquo;</span>
                                     </button>
@@ -487,9 +502,9 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                                         // 44px tap target — thumb-sized on a phone.
                                                         className={`flex h-11 w-full items-center justify-center rounded-xl text-[15px] transition ${
                                                             isActive
-                                                                ? "bg-alloy-bend-pine font-semibold text-white"
+                                                                ? "bg-participant-accent font-semibold text-participant-on-accent"
                                                                 : has
-                                                                  ? "font-medium text-alloy-midnight hover:bg-alloy-bend-pine/[0.10]"
+                                                                  ? "font-medium text-alloy-midnight hover:bg-participant-accent/[0.10]"
                                                                   : "text-alloy-midnight/25"
                                                         }`}
                                                     >
@@ -526,8 +541,8 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                                     onClick={() => setPick(chosen ? null : s)}
                                                     className={`rounded-xl border px-3 py-3.5 text-center text-[15px] font-medium transition ${
                                                         chosen
-                                                            ? "border-alloy-bend-pine bg-alloy-bend-pine text-white shadow-sm"
-                                                            : "border-alloy-midnight/15 bg-white text-alloy-midnight hover:border-alloy-bend-pine"
+                                                            ? "border-participant-accent bg-participant-accent text-participant-on-accent shadow-sm"
+                                                            : "border-alloy-midnight/15 bg-white text-alloy-midnight hover:border-participant-accent"
                                                     }`}
                                                 >
                                                     {formatParentTimeOnly(s.startAt, s.timezone)}
@@ -557,7 +572,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                         type="button"
                                         disabled={busy}
                                         onClick={() => void act(bookAction)}
-                                        className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
+                                        className="w-full rounded-xl bg-participant-accent px-4 py-3.5 text-[15px] font-semibold text-participant-on-accent transition disabled:opacity-40"
                                     >
                                         {bookAction.label}
                                     </button>
@@ -583,7 +598,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                         type="button"
                         disabled={busy}
                         onClick={() => void act({ intent: "cancel", label: "Cancel tour", tone: "quiet" })}
-                        className="w-full rounded-xl border border-alloy-bend-pine bg-white px-4 py-3.5 text-[15px] font-semibold text-[#007d68] transition disabled:opacity-40"
+                        className="w-full rounded-xl border border-participant-accent bg-white px-4 py-3.5 text-[15px] font-semibold text-participant-accent-ink transition disabled:opacity-40"
                     >
                         Yes, cancel my tour
                     </button>
@@ -591,7 +606,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                         type="button"
                         disabled={busy}
                         onClick={() => setConfirmingCancel(false)}
-                        className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
+                        className="w-full rounded-xl bg-participant-accent px-4 py-3.5 text-[15px] font-semibold text-participant-on-accent transition disabled:opacity-40"
                     >
                         Keep my tour
                     </button>
@@ -603,9 +618,9 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                     const disabled = busy || (needsPick && a.intent === "book" && !pick);
                     const cls =
                         a.tone === "primary"
-                            ? "bg-alloy-bend-pine text-white"
+                            ? "bg-participant-accent text-participant-on-accent"
                             : a.tone === "secondary"
-                              ? "border border-alloy-bend-pine/40 text-[#007d68]"
+                              ? "border border-participant-accent/40 text-participant-accent-ink"
                               : "text-alloy-midnight/60";
                     return (
                         <button

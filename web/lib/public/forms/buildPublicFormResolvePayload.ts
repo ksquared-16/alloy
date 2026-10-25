@@ -8,7 +8,8 @@
  * looser rule than the API does.
  */
 
-import { resolveParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
+import { participantBrandFromEffective } from "@/lib/public/forms/participantBrandTheme";
+import { publicFormLinkLocationId, resolvePublicFormBrand } from "@/lib/branding/loadPublicBrand";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ZodError } from "zod";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
@@ -76,6 +77,17 @@ export async function buildPublicFormResolvePayload(
         };
     }
 
+    // Form override → location → organization → platform, from the PUBLISHED version's brand
+    // snapshot (S4): a draft edit cannot restyle what families already see.
+    const brand = participantBrandFromEffective(
+        await resolvePublicFormBrand(supabase, {
+            orgId: v.orgId,
+            formDefinitionVersionId: v.formDefinitionVersionId,
+            formMetadata: v.formMetadata,
+            locationId: publicFormLinkLocationId(v.linkMetadata),
+        })
+    );
+
     if (v.packetTerminal) {
         return {
             ok: true,
@@ -87,7 +99,7 @@ export async function buildPublicFormResolvePayload(
                 schema_json: null,
                 pdf_mapping_json: null,
                 form: { key: v.formKey, name: v.formName, kind: v.formKind },
-                brand: resolveParticipantBrand(v.formMetadata),
+                brand,
                 link: {
                     expires_at: v.expiresAt,
                     allowed_embed_origins: v.allowedEmbedOrigins,
@@ -125,7 +137,7 @@ export async function buildPublicFormResolvePayload(
             schema_json: v.schemaJson,
             pdf_mapping_json: v.pdfMappingJson,
             form: { key: v.formKey, name: v.formName, kind: v.formKind },
-            brand: resolveParticipantBrand(v.formMetadata),
+            brand,
             link: {
                 expires_at: v.expiresAt,
                 allowed_embed_origins: v.allowedEmbedOrigins,

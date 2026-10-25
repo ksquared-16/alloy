@@ -20,23 +20,37 @@
  *
  * ## Painting it
  *
- * `participantBrandStyle` sets `--participant-accent` and `--participant-on-accent` on the shell.
- * `globals.css` maps them to the `participant-accent` / `participant-on-accent` colour utilities with
- * `@theme inline`, so every accent surface inside the shell reads the tenant's colour. The on-accent
- * text colour is chosen for contrast: a light accent gets dark text instead of failing WCAG AA with
- * white.
+ * `participantBrandStyle` sets `--participant-accent`, `--participant-on-accent` and
+ * `--participant-accent-ink` on the shell. `globals.css` maps them to colour utilities with
+ * `@theme inline`, so every accent surface inside the shell reads the tenant's colour. Text ON the
+ * accent and the accent AS text on white both hold WCAG AA 4.5:1 (S4-D) — chosen automatically, so a
+ * light accent gets dark text and a pale accent's links are a darker shade of the same hue.
+ *
+ * The effective brand (form → location → organization → platform) is resolved server-side
+ * (`resolveEffectivePublicBrand`); `participantBrandFromEffective` adapts it to this shape.
  *
  * Pure. No I/O — the caller already holds the form metadata.
  */
 
 import { DEFAULT_FORM_ACCENT } from "@/lib/forms/processingFormBranding";
+import {
+    BRAND_INK_DARK,
+    BRAND_INK_LIGHT,
+    brandAccentInk,
+    brandOnAccent,
+    contrastRatio,
+    relativeLuminance,
+    type EffectivePublicBrand,
+} from "@/lib/branding/publicBrand";
+
+export { contrastRatio, relativeLuminance };
 
 /** Platform default when a tenant has authored no accent — the builder's default, not a second one. */
 export const PARTICIPANT_DEFAULT_ACCENT = DEFAULT_FORM_ACCENT;
 
-/** Text on the accent: white where it is legible, otherwise the platform's dark ink. */
-export const PARTICIPANT_ON_ACCENT_LIGHT = "#FFFFFF";
-export const PARTICIPANT_ON_ACCENT_DARK = "#18273A";
+/** Text on the accent: white where it is legible, otherwise the platform's dark ink (then black). */
+export const PARTICIPANT_ON_ACCENT_LIGHT = BRAND_INK_LIGHT;
+export const PARTICIPANT_ON_ACCENT_DARK = BRAND_INK_DARK;
 
 export type ParticipantBrand = {
     readonly accentColor: string;
@@ -72,39 +86,17 @@ export function resolveParticipantBrand(formMetadata: unknown): ParticipantBrand
     };
 }
 
-function channel(value: number): number {
-    const c = value / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-/** WCAG 2.x relative luminance of a `#rgb` / `#rrggbb` colour. */
-export function relativeLuminance(hex: string): number {
-    const raw = hex.replace("#", "");
-    const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-    const r = parseInt(full.slice(0, 2), 16);
-    const g = parseInt(full.slice(2, 4), 16);
-    const b = parseInt(full.slice(4, 6), 16);
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-export function contrastRatio(a: string, b: string): number {
-    const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-    return (hi! + 0.05) / (lo! + 0.05);
-}
-
 /**
- * The text colour for a surface painted in `accent`: white while it holds at least 3:1 (the WCAG
- * floor for large text and UI components), otherwise whichever of the two inks contrasts more — so a
- * pale tenant accent (yellow, light blue) gets dark text instead of near-invisible white.
- *
- * Known limit: 3:1 is below AA's 4.5:1 for 14px button labels. The platform default itself is
- * white-on-Bend-Pine at about 3.2:1, the look every public form has today; raising the floor would
- * restyle every unbranded form and is a brand decision, not this resolver's.
+ * Text on a surface painted in `accent`, at least 4.5:1 (S4-D, Director-approved floor for normal-size
+ * button text). Bend Pine itself carries dark ink under this rule: white on it is about 3.2:1.
  */
 export function participantOnAccent(accent: string): string {
-    const white = contrastRatio(accent, PARTICIPANT_ON_ACCENT_LIGHT);
-    if (white >= 3) return PARTICIPANT_ON_ACCENT_LIGHT;
-    return contrastRatio(accent, PARTICIPANT_ON_ACCENT_DARK) > white ? PARTICIPANT_ON_ACCENT_DARK : PARTICIPANT_ON_ACCENT_LIGHT;
+    return brandOnAccent(accent);
+}
+
+/** The participant theme from a server-resolved effective brand. */
+export function participantBrandFromEffective(brand: EffectivePublicBrand): ParticipantBrand {
+    return { accentColor: brand.accentColor, logoUrl: brand.logoUrl, brandName: brand.displayName };
 }
 
 /** CSS custom properties, so both phases inherit one theme from the shell that wraps them. */
@@ -112,5 +104,6 @@ export function participantBrandStyle(brand: ParticipantBrand): Record<string, s
     return {
         "--participant-accent": brand.accentColor,
         "--participant-on-accent": participantOnAccent(brand.accentColor),
+        "--participant-accent-ink": brandAccentInk(brand.accentColor),
     };
 }

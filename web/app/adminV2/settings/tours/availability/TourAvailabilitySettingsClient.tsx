@@ -27,6 +27,7 @@ import {
     wallTimeToInputValue,
     wallTimeToMinutes,
 } from "@/lib/tours/schedules/tourTimeFormat";
+import TourPublicBrandPanel from "./TourPublicBrandPanel";
 
 type LocationOpt = { id: string; label: string | null };
 
@@ -401,6 +402,8 @@ export default function TourAvailabilitySettingsClient({
                     Add weekly schedule
                 </ConfigurationPrimaryButton>
             }
+
+            <TourPublicBrandPanel key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} />
         </div>
     );
 }
