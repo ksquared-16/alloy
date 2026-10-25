@@ -160,6 +160,28 @@ organization maintains the document categories and types it tracks.
   D5–D7, and the Studio says so beside each field.
 - **Security model:** `docs/platform/governance/document-security-model.md` §7.
 
+## Focus Panel → Documents: the household library (D4)
+
+The Focus Panel's Documents surface (Activity → Documents, and the Documents card on drill) is one library for the
+household behind the case: the household, its adults, its children and its cases.
+
+- **Where it lives:** `web/components/admin/documents/DocumentLibraryPanel.tsx` (UI),
+  `web/lib/documents/library/documentLibrary.ts` (read model), `GET /api/admin/documents/library`.
+- **Organization:** grouped by the owning subject, then the Studio category and type. Filing is logical — subjects and
+  types — never storage folders. Search and type/category filters work over the authorized list.
+- **Ownership vs association:** each document is filed under its primary owner; other members it relates to are shown
+  as "Also relates to". A document owned outside the household appears under "Related from another record", unnamed.
+- **Narrowing:** the selected child (`child.customer_member_id`) opens the library narrowed to that child; the chips
+  widen it to the household or switch to another member. Narrowing is done by the server.
+- **What it shows:** title, type and category, version (n of m), received date, size, sensitivity class and Forms
+  provenance; review and validity only when the version stores them. Nothing derives "missing" or "expiring" — that is D7.
+- **Actions:** open (a signed link, per version too), version history and the document's history (loaded when a row is
+  expanded), replacement with a reason, and upload to a chosen member with a Studio type. Uploads go through
+  `POST /api/admin/documents/upload` (content check, D1c screening, quarantine, the type's default sensitivity).
+- **Performance:** the Activity prewarm warms the library, and no longer requests the legacy related-list documents;
+  revisiting a record renders from its snapshot; a write invalidates the cache so a refresh is never stale.
+- **Security:** `docs/platform/governance/document-security-model.md` §7a.
+
 ## Integration points
 
 - Opportunity drawer — packet review modal, form status
