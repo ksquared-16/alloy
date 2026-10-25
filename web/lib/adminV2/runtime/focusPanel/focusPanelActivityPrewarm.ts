@@ -16,6 +16,7 @@
 
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
+import { prefetchDocumentLibrary } from "@/lib/documents/library/documentLibraryClient";
 import { prefetchDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import { threadChannelToWorkspaceMode } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 
@@ -24,7 +25,9 @@ export function prewarmFocusPanelActivityMode(opportunityId: string): void {
     const id = opportunityId.trim();
     if (!id) return;
     scheduleDeferredCommunicationsDrawerPrefetch("opportunities", id);
-    scheduleOpportunityDrawerTabPrefetch(id);
+    // Activity timeline only: the cockpit's Documents panel is the D4 library, warmed below — not the legacy list.
+    scheduleOpportunityDrawerTabPrefetch(id, { documents: false });
+    prefetchDocumentLibrary({ subject_type: "opportunity", subject_id: id });
     // The V2 family-communication workspace is what the Activity Communications panel actually reads.
     void prewarmActivityFamilyCommunications(id);
 }
