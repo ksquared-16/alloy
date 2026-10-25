@@ -15,6 +15,7 @@ import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePerso
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
+import { documentSubjectTypeForLegacy, setPrimaryDocumentSubject } from "@/lib/documents/documentSubjects";
 
 export type PortContext = {
     supabase: SupabaseClient;
@@ -432,20 +433,25 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async attachDocument(ctx, input) {
-            const { data, error } = await ctx.supabase
-                .from("documents")
-                .update({
-                    entity_type: input.target_entity_type,
-                    entity_id: input.target_entity_id,
-                    ...(input.doc_type ? { doc_type: input.doc_type } : {}),
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", input.document_id)
-                .eq("org_id", ctx.orgId)
-                .select("id");
-            if (error) return { ok: false, error: error.message };
-            if (!data || (Array.isArray(data) && data.length === 0)) {
-                return { ok: false, error: "document_not_found" };
+            // D2: filing a document makes the target its PRIMARY OWNER through the canonical association; the legacy
+            // entity_type / entity_id follow as the projection. The target must be an owning subject of this org.
+            const subjectType = documentSubjectTypeForLegacy(input.target_entity_type);
+            if (!subjectType) return { ok: false, error: "document_subject_type_unsupported" };
+            const filed = await setPrimaryDocumentSubject(ctx.supabase, {
+                orgId: ctx.orgId,
+                documentId: input.document_id,
+                subjectType,
+                subjectId: input.target_entity_id,
+                actorUserId: ctx.actorId ?? null,
+            });
+            if (!filed.ok) return { ok: false, error: filed.code === "NOT_FOUND" ? "document_not_found" : filed.error };
+            if (input.doc_type) {
+                const { error } = await ctx.supabase
+                    .from("documents")
+                    .update({ doc_type: input.doc_type, updated_at: new Date().toISOString() })
+                    .eq("id", input.document_id)
+                    .eq("org_id", ctx.orgId);
+                if (error) return { ok: false, error: error.message };
             }
             return { ok: true };
         },

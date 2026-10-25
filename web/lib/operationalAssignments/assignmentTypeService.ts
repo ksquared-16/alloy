@@ -115,6 +115,8 @@ export async function createOrgAssignmentType(
         );
     }
 
+    assertHomeroomForChildren(input.behavior, subjectTypes);
+
     const key = slugAssignmentTypeKey(label);
     const { data, error } = await supabase
         .from("operational_assignment_types")
@@ -140,6 +142,16 @@ export async function createOrgAssignmentType(
     return mapAdminRow(data as AssignmentTypeRow);
 }
 
+/** A homeroom is a child's: a category that cannot hold child assignments cannot provide one. */
+function assertHomeroomForChildren(behavior: AssignmentTypeBehavior | undefined, subjectTypes: readonly string[]): void {
+    if (behavior?.providesHomeroom === true && !subjectTypes.includes("child")) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            "Only a category for children can provide a homeroom.",
+        );
+    }
+}
+
 export async function updateOrgAssignmentType(
     supabase: SupabaseClient,
     orgId: string,
@@ -161,6 +173,7 @@ export async function updateOrgAssignmentType(
         (existing as { default_behavior?: unknown }).default_behavior,
     );
     const mergedBehavior = { ...priorBehavior, ...input.behavior };
+    assertHomeroomForChildren(mergedBehavior, input.subjectTypes?.length ? input.subjectTypes : ["child"]);
 
     /*
      * AN UNRELATED EDIT MUST NOT RESET STAFFING PARTICIPATION.

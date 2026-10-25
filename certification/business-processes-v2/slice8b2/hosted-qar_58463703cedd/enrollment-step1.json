@@ -1,0 +1,46 @@
+{
+  "create_lead": {
+    "resumed": true,
+    "opportunity_id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+    "note": "create_lead committed earlier in this run (api-log); not re-issued"
+  },
+  "child_add": {
+    "status": 200,
+    "child_b": "41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+    "error": null
+  },
+  "participation": {
+    "A": {
+      "id": "dc2c0f43-410f-4431-a58a-89923b68d3e3",
+      "org_id": "4acc9386-c485-486f-aa1f-05d83499d142",
+      "opportunity_id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+      "customer_member_id": "84d16ebf-7222-4b8e-937c-83f9703dfb40",
+      "program_category_id": null,
+      "schedule_type": null,
+      "start_date": null,
+      "outcome_status_key": "new_inquiry",
+      "notes": null,
+      "updated_at": null
+    },
+    "B": {
+      "id": "1e9cb04d-e06a-49e6-be60-8f0744b2c022",
+      "org_id": "4acc9386-c485-486f-aa1f-05d83499d142",
+      "opportunity_id": "d9b1fbfb-bc6a-49ac-82f3-ab58685e05fb",
+      "customer_member_id": "41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "program_category_id": null,
+      "schedule_type": null,
+      "start_date": null,
+      "outcome_status_key": "new_inquiry",
+      "notes": null,
+      "updated_at": null
+    }
+  },
+  "stage_work": [
+    {
+      "id": "7bb443b3-a20a-4819-b184-951cfe97ff30",
+      "title": "Contact Family",
+      "status": "open",
+      "due_at": "2026-10-24T02:58:35.906+00:00"
+    }
+  ]
+}

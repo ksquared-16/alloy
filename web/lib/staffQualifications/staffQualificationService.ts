@@ -211,6 +211,17 @@ export async function attachQualificationEvidence(
     formSubmissionId: string | null,
     actorUserId: string | null,
 ) {
+    // D1b.6: the evidence must be a document of THIS organization. Before, any UUID was linked, and the
+    // foreign key accepts a document of any tenant.
+    const { data: doc, error: docErr } = await supabase
+        .from("documents")
+        .select("id")
+        .eq("id", documentId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (docErr) throw new StaffQualificationError("db_error", docErr.message);
+    if (!doc) throw new StaffQualificationError("not_found", "That document does not belong to this organization.");
+
     const { error } = await supabase.from("staff_qualification_evidence").insert({
         org_id: orgId,
         staff_qualification_id: qualificationId,

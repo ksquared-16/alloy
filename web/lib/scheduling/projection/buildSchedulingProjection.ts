@@ -45,6 +45,8 @@ import type {
     SchedulingProjection,
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import { resolveAssignmentTimes, uniformDailyInterval, type AssignmentTime } from "@/lib/assignmentTime/resolveAssignmentTime";
+import { deriveHomerooms, type HomeroomPlacement } from "@/lib/location/homerooms";
+import { homeroomAssignmentFromRow, homeroomPlacementFromRow, loadHomeroomContext } from "@/lib/location/loadHomeroomContext";
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -67,6 +69,28 @@ function uniformDailyIntervalAsHours(
     if (!time) return null;
     const uniform = uniformDailyInterval(time);
     return uniform ? { arrive: uniform.startTime, depart: uniform.endTime } : null;
+}
+
+/**
+ * The days an Assignment recurs and the hours of each, from its own intervals. An Assignment with
+ * interval rows recurs on THOSE days — a custom week saved against a pattern keeps its own days
+ * (V7 S3 / audit A6). Without rows, recurrence falls back to the pattern, as `resolveAssignmentTimes`
+ * documents; hours never do.
+ */
+function assignmentWeek(
+    time: AssignmentTime | null,
+    patternWeekdays: number[] | undefined,
+): { weekdays: number[]; dailyHours: Record<number, { arrive: string; depart: string }> } {
+    const dailyHours: Record<number, { arrive: string; depart: string }> = {};
+    if (time?.hasIntervals) {
+        for (const day of time.days) {
+            if (day.intervals.length === 1) {
+                dailyHours[day.weekday] = { arrive: day.intervals[0].startTime, depart: day.intervals[0].endTime };
+            }
+        }
+        return { weekdays: [...time.weekdays], dailyHours };
+    }
+    return { weekdays: patternWeekdays ?? [], dailyHours };
 }
 
 const EMPTY_TYPE: AssignmentTypePresentation = {
@@ -104,6 +128,7 @@ export type AssignmentInput = {
     patternLabel: string | null;
     arriveTime: string | null;
     departTime: string | null;
+    dailyHours?: Record<number, { arrive: string; depart: string }>;
     room: AssignmentRoom;
     assignmentType: AssignmentTypePresentation;
 };
@@ -119,7 +144,7 @@ export type PureChildSchedulingInput = {
 };
 
 function mapAssignment(input: AssignmentInput): Assignment {
-    const { row, weekdays, room, assignmentType, patternLabel, arriveTime, departTime } = input;
+    const { row, weekdays, room, assignmentType, patternLabel, arriveTime, departTime, dailyHours } = input;
     const openEnded = !row.end_date;
     const subjectType = row.subject_type === "staff" ? "staff" : "child";
     const subjectId =
@@ -135,6 +160,7 @@ function mapAssignment(input: AssignmentInput): Assignment {
         weekdays,
         arriveTime,
         departTime,
+        ...(dailyHours && Object.keys(dailyHours).length ? { dailyHours } : {}),
         effectiveFrom: row.start_date,
         effectiveTo: row.end_date ?? null,
         openEnded,
@@ -153,7 +179,10 @@ function mapAssignment(input: AssignmentInput): Assignment {
 type Bucket = "current" | "upcoming" | "temporary" | "history";
 
 function bucketFor(row: ScheduleAssignmentRow, asOf: string): Bucket {
-    if (isScheduleAssignmentTerminalStatus(row.status)) return "history";
+    // A superseded row is still what applies until its end date (audit E2): a future-dated change must
+    // not hide the schedule the child is on today. Its window decides, like any live row's.
+    const datedSupersession = row.status === "superseded" && row.end_date != null;
+    if (isScheduleAssignmentTerminalStatus(row.status) && !datedSupersession) return "history";
     if (row.end_date && compareIsoDates(row.end_date, asOf) < 0) return "history";
     if (row.assignment_kind === "temporary") return "temporary";
     if (compareIsoDates(row.start_date, asOf) > 0) return "upcoming";
@@ -719,6 +748,7 @@ export async function loadSchedulingProjectionForStaff(
     for (const row of assignmentRows) {
         const pattern = patterns.get(row.schedule_pattern_id) ?? null;
         const hours = uniformDailyIntervalAsHours(staffAssignmentTimes.get(row.id) ?? null);
+        const week = assignmentWeek(staffAssignmentTimes.get(row.id) ?? null, pattern?.weekdays);
         // Assignment-owned room only. There is no placement fallback for staff, because a placement
         // is a child's occupancy record — a staff row states its own room or it has none.
         const roomId = row.room_location_id ?? null;
@@ -734,11 +764,12 @@ export async function loadSchedulingProjectionForStaff(
                 : null) ?? EMPTY_TYPE;
         assignments.push({
             row,
-            weekdays: pattern?.weekdays ?? [],
+            weekdays: week.weekdays,
             patternResolved: pattern != null,
             patternLabel: pattern?.label?.trim() || null,
             arriveTime: hours?.arrive ?? null,
             departTime: hours?.depart ?? null,
+            dailyHours: week.dailyHours,
             room,
             assignmentType: type,
         });
@@ -770,16 +801,6 @@ export async function loadSchedulingProjectionForStaff(
 
     const projection = buildSchedulingProjectionForChild(staffScheduling, todayYmd, computedAt);
     return { ...projection, subject: { type: "staff", id: personId, name: params.subjectName } };
-}
-
-/** Re-export for callers that only have an agreement id. */
-export async function agreementStatusById(
-    supabase: SupabaseClient,
-    orgId: string,
-    agreementId: string
-): Promise<string | null> {
-    const agreement = await getAgreementById(supabase, orgId, agreementId);
-    return agreement?.status ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1051,6 +1072,12 @@ export async function loadSchedulingProjectionsForChildren(
         assignmentIds: [...assignmentsByMember.values()].flat().map((r) => r.id),
     });
 
+    // Homeroom facts for the batch — the same loader the roster uses, fed the placements read above.
+    const homeroomContext = await loadHomeroomContext(supabase, orgId, {
+        roomIds: assignmentRowsAll.map((r) => r.room_location_id ?? ""),
+        placements: placementRows.map(homeroomPlacementFromRow).filter((p): p is HomeroomPlacement => p != null),
+    });
+
     // ── Stitch. No I/O below this line: every child is built from the rows above by the same pure
     //    path the single-child owner has always used.
     for (const memberId of memberIds) {
@@ -1075,6 +1102,14 @@ export async function loadSchedulingProjectionsForChildren(
             proposedPatternByType,
             assignmentTimesById,
         });
+        const homerooms = deriveHomerooms({
+            onDate: params.todayYmd,
+            assignments: assignmentRows.map(homeroomAssignmentFromRow),
+            spacesById: homeroomContext.spacesById,
+            homeroomCategoryIds: homeroomContext.homeroomCategoryIds,
+            placementsByAgreement: homeroomContext.placementsByAgreement,
+        });
+        for (const child of projection.children) child.homerooms = homerooms;
         out.set(memberId, projection);
     }
     // EVERY requested child has an entry. A child with no agreement, no assignment and no draft is
@@ -1138,6 +1173,7 @@ function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): Schedu
     for (const row of p.assignmentRows) {
         const pattern = p.patternsById.get(row.schedule_pattern_id) ?? null;
         const hours = uniformDailyIntervalAsHours(p.assignmentTimesById.get(row.id) ?? null);
+        const week = assignmentWeek(p.assignmentTimesById.get(row.id) ?? null, pattern?.weekdays);
         const placement = placementForAssignment(p.placements, row);
         const roomId = row.room_location_id ?? placement?.room_location_id ?? null;
         const programId = row.program_category_id ?? placement?.program_category_id ?? null;
@@ -1145,11 +1181,12 @@ function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): Schedu
         const type = (row.operational_assignment_type_id ? p.typesById.get(row.operational_assignment_type_id) : null) ?? EMPTY_TYPE;
         assignments.push({
             row,
-            weekdays: pattern?.weekdays ?? [],
+            weekdays: week.weekdays,
             patternResolved: pattern != null,
             patternLabel: pattern?.label?.trim() || null,
             arriveTime: hours?.arrive ?? null,
             departTime: hours?.depart ?? null,
+            dailyHours: week.dailyHours,
             room,
             assignmentType: type,
         });

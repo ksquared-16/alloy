@@ -48,8 +48,9 @@ are the groups children belong to; Physical spaces are places.
 
 **+ Add space** → **Kind** = *Physical* → name it `Room A` → Capacity **24** → Save.
 
-**You should see** exactly two choices under Kind: Operational and Physical. You should
-not be asked for Programs, a schedule or a ratio — those belong to a group, not a room.
+**You should see** three choices under Kind: Operational, Shared and Physical. For a Physical
+space you should not be asked for Uses, Programs, a schedule or a ratio — those belong to a group
+(or, for Uses, a shared space), not to the licensed room that contains them.
 
 ☐ PASS ☐ FAIL
 

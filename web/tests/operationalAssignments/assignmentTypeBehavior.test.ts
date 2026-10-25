@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
     ASSIGNMENT_CATEGORY_DEFAULT_TONE_BY_LABEL,
     defaultVisualToneForAssignmentTypeLabel,
-    filterRoomsForPurposeBehavior,
     readAssignmentTypeBehavior,
+    scopeRoomsForAssignmentPicker,
     roomsForEveryCategory,
     writeAssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
@@ -33,21 +33,17 @@ describe("assignmentTypeBehavior", () => {
             { roomId: "a", programCategoryId: "p1" },
             { roomId: "b", programCategoryId: "p2" },
         ];
-        const filtered = filterRoomsForPurposeBehavior(
-            rooms,
-            { roomRequirement: "optional", eligibleSpaceMode: "selected", eligibleRoomIds: ["b"] },
-            null
-        );
+        const filtered = scopeRoomsForAssignmentPicker(rooms, {
+            roomRequirement: "optional",
+            eligibleSpaceMode: "selected",
+            eligibleRoomIds: ["b"],
+        });
         expect(filtered.map((r) => r.roomId)).toEqual(["b"]);
     });
 
     it("returns no rooms when space is not used", () => {
         expect(
-            filterRoomsForPurposeBehavior(
-                [{ roomId: "a" }],
-                { roomRequirement: "not_used" },
-                null
-            )
+            scopeRoomsForAssignmentPicker([{ roomId: "a" }], { roomRequirement: "not_used" })
         ).toEqual([]);
     });
 
@@ -80,12 +76,13 @@ describe("assignmentTypeBehavior", () => {
         expect(roomsForEveryCategory(rooms, []).map((r) => r.roomId)).toEqual(["toddler", "infant"]);
         // One Category with an explicit allow-list offers only its rooms.
         const toddlerOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["toddler"] };
-        expect(roomsForEveryCategory(rooms, [toddlerOnly]).map((r) => r.roomId)).toEqual(["toddler"]);
+        const as = (behavior: object) => ({ behavior, use: { categoryId: null, subjectType: "child" as const } });
+        expect(roomsForEveryCategory(rooms, [as(toddlerOnly)]).map((r) => r.roomId)).toEqual(["toddler"]);
         // Two selected rows: a room must suit BOTH Categories.
         const infantOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["infant"] };
-        expect(roomsForEveryCategory(rooms, [toddlerOnly, infantOnly])).toEqual([]);
-        expect(roomsForEveryCategory(rooms, [toddlerOnly, {}]).map((r) => r.roomId)).toEqual(["toddler"]);
+        expect(roomsForEveryCategory(rooms, [as(toddlerOnly), as(infantOnly)])).toEqual([]);
+        expect(roomsForEveryCategory(rooms, [as(toddlerOnly), as({})]).map((r) => r.roomId)).toEqual(["toddler"]);
         // A Category that uses no room offers none.
-        expect(roomsForEveryCategory(rooms, [{ roomRequirement: "not_used" as const }])).toEqual([]);
+        expect(roomsForEveryCategory(rooms, [as({ roomRequirement: "not_used" as const })])).toEqual([]);
     });
 });

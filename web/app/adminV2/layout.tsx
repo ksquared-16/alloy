@@ -1,17 +1,10 @@
 import { redirect } from "next/navigation";
-import { Poppins } from "next/font/google";
 
 import { getAdminAuth } from "@/lib/adminAuth";
+import { poppinsAdminV2 as poppins } from "@/lib/fonts/poppins";
 import AdminV2RootAuthProvider from "./AdminV2RootAuthProvider";
 import AdminV2Shell from "./components/AdminV2Shell";
 import "./adminV2.css";
-
-const poppins = Poppins({
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
-  variable: "--font-poppins-adminv2",
-  display: "swap",
-});
 
 export const dynamic = "force-dynamic";
 

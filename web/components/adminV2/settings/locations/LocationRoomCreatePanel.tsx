@@ -23,11 +23,13 @@ import {
     DEFAULT_ROOM_TYPE,
     ROOM_TYPE_OPTIONS,
     roleAcceptsInside,
+    roleAcceptsUses,
     roleUsesProgramFields,
     roomTypeHint,
     type InsideOption,
 } from "@/lib/locations/roomTypeVocabulary";
 import { topologyRefusalCopy } from "@/lib/locations/topologyRefusalCopy";
+import SpaceUsesSection from "@/components/adminV2/settings/locations/SpaceUsesSection";
 import { topologyRefusalCodeOf } from "@/lib/locations/topologyRefusalError";
 
 export default function LocationRoomCreatePanel({
@@ -50,6 +52,8 @@ export default function LocationRoomCreatePanel({
     const [roomType, setRoomType] = useState<CanonicalUnitRole>(DEFAULT_ROOM_TYPE);
     const [insideId, setInsideId] = useState("");
     const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
+    // A NEW space is configured from birth: an explicit (possibly empty) list, never "legacy".
+    const [spaceUses, setSpaceUses] = useState<string[]>([]);
     const [capacity, setCapacity] = useState("");
     const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
@@ -65,6 +69,8 @@ export default function LocationRoomCreatePanel({
     const changeRoomType = (next: CanonicalUnitRole) => {
         setRoomType(next);
         if (!roleAcceptsInside(next)) setInsideId("");
+        // What a space may be used for depends on its kind; a kind change starts the choice over.
+        setSpaceUses([]);
         if (!roleUsesProgramFields(next)) {
             setSupportedKeys([]);
             setSchedulePatternId("");
@@ -176,6 +182,16 @@ export default function LocationRoomCreatePanel({
                     </label>
                 </ConfigEditorSection>
 
+                {roleAcceptsUses(roomType) ?
+                    <SpaceUsesSection
+                        role={roomType}
+                        value={spaceUses}
+                        onChange={setSpaceUses}
+                        disabled={saving}
+                        testId="locations-room-create-uses"
+                    />
+                :   null}
+
                 {showsProgramFields ?
                 <>
                 <ConfigEditorSection
@@ -257,6 +273,7 @@ export default function LocationRoomCreatePanel({
                                         existing: {},
                                         supportedProgramKeys: showsProgramFields ? supportedKeys : [],
                                         schedulePatternId: showsProgramFields ? schedulePatternId || null : null,
+                                        spaceUses: roleAcceptsUses(roomType) ? spaceUses : undefined,
                                     });
                                     await onCreate({
                                         capacity: parsedCapacity.value,

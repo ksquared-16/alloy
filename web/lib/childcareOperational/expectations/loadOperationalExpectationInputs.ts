@@ -11,6 +11,7 @@ import {
     type ChildcareConfigRuleBundle,
 } from "@/lib/childcareOperational/config/childcareConfigRuleService";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
+import { resolveAssignmentTimes } from "@/lib/assignmentTime/resolveAssignmentTime";
 import type {
     OperationalAgreementInput,
     OperationalAssignmentInput,
@@ -21,6 +22,15 @@ import type {
 
 const AGREEMENT_OPERATIONAL = ["pending_start", "active", "ending"];
 const ROW_OPERATIONAL = ["planned", "active", "ending"];
+/**
+ * Live rows plus `superseded` ones: a superseded row is still the effective one until its end date
+ * (audit E2), and it is what applied on past dates. The core picks the row covering each date.
+ * Live rows come first, so readers that take the first row per room (`buildRoomConfigResolvers`)
+ * keep their answer.
+ */
+const ROW_DATED = [...ROW_OPERATIONAL, "superseded"];
+const liveFirst = <T extends { status: string }>(rows: T[]): T[] =>
+    [...rows].sort((a, b) => Number(!ROW_OPERATIONAL.includes(a.status)) - Number(!ROW_OPERATIONAL.includes(b.status)));
 
 export type LoadOperationalExpectationInputsArgs = {
     orgId: string;
@@ -36,6 +46,11 @@ export type OperationalExpectationInputs = {
     /** Proposed (planning-only) child assignments — no agreement, own room/program. */
     proposedAssignments: OperationalProposedAssignmentInput[];
     patternsById: Map<string, SchedulePatternInput>;
+    /**
+     * Each assignment's own recurring weekdays (its Assignment Time), when it has interval rows. A
+     * custom week saved against a pattern recurs on THESE days; without rows the pattern decides.
+     */
+    weekdaysByAssignmentId?: Map<string, number[]>;
     config: ChildcareConfigRuleBundle;
     ageGroupByRoomLocationId?: Record<string, string | null>;
     ageGroupByProgramCategoryId?: Record<string, string | null>;
@@ -77,12 +92,12 @@ export async function loadOperationalExpectationInputs(
                   )
                   .eq("org_id", orgId)
                   .in("enrollment_agreement_id", agreementIds)
-                  .in("status", ROW_OPERATIONAL)
+                  .in("status", ROW_DATED)
             : Promise.resolve(EMPTY_QUERY_RESULT),
         /*
          * THE ENROLLMENT'S PRIMARY — the one schedule per agreement `expandExpectedAttendance`
-         * documents. Every committed live row used to come back, and `indexOperationalByAgreement`
-         * kept the last: a five-day child whose Before Care was added after enrolment was expected
+         * documents. Every committed live row used to come back, and the per-agreement index (since replaced by
+         * the per-date pick) kept the last: a five-day child whose Before Care was added after enrolment was expected
          * only on the Before Care days, and a child with no primary was expected from a secondary.
          * Proven live: `tests/childcareOperational/live/expectedAttendancePrimarySchedule.live.test.ts`.
          * Expecting a child per SESSION (each assignment's own room and hours) is a separate, unratified
@@ -97,7 +112,7 @@ export async function loadOperationalExpectationInputs(
                   .in("enrollment_agreement_id", agreementIds)
                   .eq("is_primary", true)
                   .eq("commitment_kind", "committed")
-                  .in("status", ROW_OPERATIONAL)
+                  .in("status", ROW_DATED)
             : Promise.resolve(EMPTY_QUERY_RESULT),
         supabase
             .from("schedule_assignments")
@@ -115,8 +130,8 @@ export async function loadOperationalExpectationInputs(
     if (assignmentError) throw new OperationalEnrollmentServiceError("db_error", assignmentError.message);
     if (proposedError) throw new OperationalEnrollmentServiceError("db_error", proposedError.message);
 
-    const placements = (placementData ?? []) as OperationalPlacementInput[];
-    const assignments = (assignmentData ?? []) as OperationalAssignmentInput[];
+    const placements = liveFirst((placementData ?? []) as OperationalPlacementInput[]);
+    const assignments = liveFirst((assignmentData ?? []) as OperationalAssignmentInput[]);
     const proposedAssignments = (proposedData ?? []) as OperationalProposedAssignmentInput[];
 
     const patternIds = [
@@ -172,12 +187,28 @@ export async function loadOperationalExpectationInputs(
           })
         : null;
 
-    const [patternsSettled, ageGroupsSettled] = await Promise.allSettled([
+    /*
+     * THE WEEK EACH ASSIGNMENT RUNS — the canonical Assignment Time read, asked once for every row
+     * alongside the pattern read (same dependency: the assignment ids). Only rows that own intervals
+     * are kept; the rest fall back to their pattern in the core, as `resolveAssignmentTimes` documents.
+     */
+    const weekdaysPromise = (async () => {
+        const ids = [...assignments.map((a) => a.id), ...proposedAssignments.map((a) => a.id)];
+        const out = new Map<string, number[]>();
+        if (ids.length === 0) return out;
+        const times = await resolveAssignmentTimes(supabase, { orgId, assignmentIds: ids });
+        for (const [id, t] of times) if (t.hasIntervals) out.set(id, t.weekdays);
+        return out;
+    })();
+
+    const [patternsSettled, ageGroupsSettled, weekdaysSettled] = await Promise.allSettled([
         patternsPromise,
         ageGroupsPromise ?? Promise.resolve(null),
+        weekdaysPromise,
     ]);
     if (patternsSettled.status === "rejected") throw patternsSettled.reason;
     if (ageGroupsSettled.status === "rejected") throw ageGroupsSettled.reason;
+    if (weekdaysSettled.status === "rejected") throw weekdaysSettled.reason;
 
     const patternsById = new Map<string, SchedulePatternInput>();
     for (const p of patternsSettled.value) {
@@ -196,6 +227,7 @@ export async function loadOperationalExpectationInputs(
         assignments,
         proposedAssignments,
         patternsById,
+        weekdaysByAssignmentId: weekdaysSettled.value,
         config,
         ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId,

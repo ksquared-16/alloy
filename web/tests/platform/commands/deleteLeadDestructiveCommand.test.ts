@@ -153,6 +153,7 @@ describe("P4.S3 commit adapter", () => {
             deleted: { opportunities: 1 },
             orphans: { opportunities: 0 },
             audit_logged: true,
+            documents: [],
         }));
         const previewSpy = vi.fn(async () => state.domainPreview);
 
@@ -279,6 +280,7 @@ describe("P4.S3 executeCommandInvocation", () => {
             deleted: { opportunities: 1 },
             orphans: { opportunities: 0 },
             audit_logged: true,
+            documents: [],
         }));
 
         const previewed = await executeCommandInvocation({

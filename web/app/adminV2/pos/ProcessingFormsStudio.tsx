@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ProcessingCreateFormDialog from "./ProcessingCreateFormDialog";
 import ProcessingFormsAssetLibrary, { type FormAssetFilter } from "./ProcessingFormsAssetLibrary";
 import ProcessingFormBuilder from "./ProcessingFormBuilder";
+import ProcessingDocumentsStudio from "./ProcessingDocumentsStudio";
 import ProcessingPacketsStudio from "./ProcessingPacketsStudio";
 import ProcessingStudioShell, { ProcessingStudioPlaceholder, type ProcessingStudioTab } from "./ProcessingStudioShell";
 import { useProcessingFormApi } from "./useProcessingFormApi";
@@ -103,6 +104,8 @@ export default function ProcessingFormsStudio({
                     />
                 ) : studioTab === "packets" ? (
                     <ProcessingPacketsStudio />
+                ) : studioTab === "documents" ? (
+                    <ProcessingDocumentsStudio />
                 ) : studioTab === "fields" ? (
                     <ProcessingStudioPlaceholder
                         title="Fields"

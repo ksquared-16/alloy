@@ -124,6 +124,16 @@ export type ExpectedStaffingEntry = {
 };
 
 const OPERATIONAL_STATUSES = new Set(["planned", "active", "ending"]);
+/**
+ * Statuses whose dated window is a fact about what applied (V7 Package 1 / audit E2).
+ *
+ * A supersession marks the prior row `superseded` at once and closes it the day before its successor
+ * starts — so between a future-dated edit and its start date the child's CURRENT schedule is a
+ * `superseded` row. Reading live statuses only lost it, and the child disappeared from expected
+ * attendance until the change began. The same window rule `deriveHomerooms` uses decides here.
+ * `ended` (archive) keeps its "ends now" meaning and is not dated.
+ */
+export const DATED_ROW_STATUSES = new Set(["planned", "active", "ending", "superseded"]);
 const AGREEMENT_OPERATIONAL_STATUSES = new Set(["pending_start", "active", "ending"]);
 
 function isWithin(dateYmd: string, start: string | null | undefined, end: string | null | undefined): boolean {
@@ -162,16 +172,39 @@ export function enumerateDates(startYmd: string, endYmd: string): string[] {
     return out;
 }
 
-function indexOperationalByAgreement<T extends { enrollment_agreement_id: string; status: string }>(
-    rows: readonly T[]
-): Map<string, T> {
-    const map = new Map<string, T>();
+type DatedRow = { enrollment_agreement_id: string; status: string; start_date: string; end_date: string | null };
+
+/** Whether a row's window is a fact at all. A superseded row without an end has no knowable window. */
+function isDated(row: DatedRow): boolean {
+    return DATED_ROW_STATUSES.has(row.status) && !(row.status === "superseded" && !row.end_date);
+}
+
+function groupDatedByAgreement<T extends DatedRow>(rows: readonly T[]): Map<string, T[]> {
+    const map = new Map<string, T[]>();
     for (const row of rows) {
-        if (OPERATIONAL_STATUSES.has(row.status)) {
-            map.set(row.enrollment_agreement_id, row);
-        }
+        if (!isDated(row)) continue;
+        const list = map.get(row.enrollment_agreement_id) ?? [];
+        list.push(row);
+        map.set(row.enrollment_agreement_id, list);
     }
     return map;
+}
+
+/**
+ * THE row effective on `date` — at most one, so a supersession can neither leave a gap nor count a
+ * child twice. Supersession windows do not overlap by construction (the prior closes the day before
+ * its successor); should stored rows ever overlap, a live row beats a superseded one, then the later
+ * start wins.
+ */
+export function rowEffectiveOn<T extends DatedRow>(rows: readonly T[] | undefined, date: string): T | null {
+    let pick: T | null = null;
+    for (const row of rows ?? []) {
+        if (!isDated(row) || !isWithin(date, row.start_date, row.end_date)) continue;
+        if (!pick) { pick = row; continue; }
+        const live = OPERATIONAL_STATUSES.has(row.status), pickLive = OPERATIONAL_STATUSES.has(pick.status);
+        if (live !== pickLive ? live : compareIsoDates(row.start_date, pick.start_date) > 0) pick = row;
+    }
+    return pick;
 }
 
 export type ExpandExpectedAttendanceInput = {
@@ -181,38 +214,50 @@ export type ExpandExpectedAttendanceInput = {
     placements: readonly OperationalPlacementInput[];
     assignments: readonly OperationalAssignmentInput[];
     patternsById: ReadonlyMap<string, SchedulePatternInput>;
+    /** An assignment's own weekdays (Assignment Time) — they win over its pattern's. */
+    weekdaysByAssignmentId?: ReadonlyMap<string, readonly number[]>;
 };
 
+/** The days a row recurs: its own Assignment Time when it has one, else its pattern's. */
+function recurringWeekdays(
+    assignmentId: string,
+    pattern: SchedulePatternInput,
+    own: ReadonlyMap<string, readonly number[]> | undefined,
+): readonly number[] {
+    return own?.get(assignmentId) ?? pattern.weekdays ?? [];
+}
+
 /**
- * Expected attendance per child per date: operational schedule assignment x
- * pattern weekdays x committed placement (for room/program), bounded by each
- * row's effective dates. No room is attributed when no operational placement
- * covers the date (surfaced as a warning by the assembler).
+ * Expected attendance per child per date: the schedule assignment effective ON that date x its
+ * pattern weekdays x the placement effective on that date (room/program). Date-true: across a
+ * supersession the prior row answers through its end and the successor from its start — never both,
+ * never neither. No room is attributed when no placement covers the date (surfaced as a warning by
+ * the assembler).
  */
 export function expandExpectedAttendance(
     input: ExpandExpectedAttendanceInput
 ): ExpectedAttendanceEntry[] {
-    const placementByAgreement = indexOperationalByAgreement(input.placements);
-    const assignmentByAgreement = indexOperationalByAgreement(input.assignments);
+    const placementsByAgreement = groupDatedByAgreement(input.placements);
+    const assignmentsByAgreement = groupDatedByAgreement(input.assignments);
     const dates = enumerateDates(input.dateStart, input.dateEnd);
     const entries: ExpectedAttendanceEntry[] = [];
 
     for (const agreement of input.agreements) {
         if (!AGREEMENT_OPERATIONAL_STATUSES.has(agreement.status)) continue;
-        const assignment = assignmentByAgreement.get(agreement.id);
-        if (!assignment) continue;
-        const pattern = input.patternsById.get(assignment.schedule_pattern_id);
-        if (!pattern) continue;
-        const weekdays = new Set(pattern.weekdays ?? []);
-        const placement = placementByAgreement.get(agreement.id);
+        const rows = assignmentsByAgreement.get(agreement.id);
+        if (!rows) continue;
 
         for (const date of dates) {
             if (!isWithin(date, agreement.start_date, agreement.end_date)) continue;
-            if (!isWithin(date, assignment.start_date, assignment.end_date)) continue;
+            const assignment = rowEffectiveOn(rows, date);
+            if (!assignment) continue;
+            const pattern = input.patternsById.get(assignment.schedule_pattern_id);
+            if (!pattern) continue;
             const weekday = weekdayOf(date);
-            if (!weekdays.has(weekday)) continue;
+            if (!recurringWeekdays(assignment.id, pattern, input.weekdaysByAssignmentId).includes(weekday)) continue;
 
-            const placementCovers = placement && isWithin(date, placement.start_date, placement.end_date);
+            const placement = rowEffectiveOn(placementsByAgreement.get(agreement.id), date);
+            const placementCovers = placement != null;
 
             entries.push({
                 date,
@@ -264,6 +309,7 @@ export type ExpandPlannedAttendanceInput = {
     dateEnd: string;
     proposedAssignments: readonly OperationalProposedAssignmentInput[];
     patternsById: ReadonlyMap<string, SchedulePatternInput>;
+    weekdaysByAssignmentId?: ReadonlyMap<string, readonly number[]>;
 };
 
 /**
@@ -283,7 +329,7 @@ export function expandPlannedAttendance(
         if (!OPERATIONAL_STATUSES.has(a.status)) continue;
         const pattern = input.patternsById.get(a.schedule_pattern_id);
         if (!pattern) continue;
-        const weekdays = new Set(pattern.weekdays ?? []);
+        const weekdays = new Set(recurringWeekdays(a.id, pattern, input.weekdaysByAssignmentId));
 
         for (const date of dates) {
             if (!isWithin(date, a.start_date, a.end_date)) continue;

@@ -1,0 +1,416 @@
+{
+  "persona": "director",
+  "run": "qar_08296c326232",
+  "build": "502d597537a753125c0e11d2f299cb134c60fb1b",
+  "steps": [
+    {
+      "name": "view-entry",
+      "panel": "empty",
+      "header": "Select a record to begin The record you open appears here.",
+      "scheduling": false,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments",
+      "bos_visible": true,
+      "bos_rect": [
+        1017,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-entry-first",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room N 584637 Mon–Fri Starts Sep 22, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "assignments-list",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS B5 Ben Walk 584637 2/10/2023 (3y8m) Active ASSIGNMENTS + Add Assignment All Mon Tue Wed Thu Fri PRI",
+      "scheduling": true,
+      "add": true,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "explicit-add-assignment",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS What category of assignment is this? Choose an Assignment Category — Primary Classroom, Before Care",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        25,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "editor-after-type-pick",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS B5 Ben Walk 584637 2/10/2023 (3y8m) New · Classroom 584637 Independent commitment ROOM Select a roo",
+      "scheduling": true,
+      "add": false,
+      "editor": true,
+      "editor_text": "B5 Ben Walk 584637 2/10/2023 (3y8m) New · Classroom 584637 Independent commitment ROOM Select a room Select Site · QA North DAYS M T W T F S S Use a pattern DATES Start End Open-ended DAILY HOURS Start 🕒 End 🕒 RECURRING TUITION Pending — becomes final when Billing is configured for this schedule. ",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        25,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2,
+      "editor_controls": [
+        "Select",
+        "M",
+        "T",
+        "W",
+        "T",
+        "F",
+        "S",
+        "S",
+        "Use a pattern",
+        "Arrive",
+        "Show time suggestions",
+        "Depart",
+        "Show time suggestions",
+        "Cancel",
+        "Save assignment"
+      ]
+    },
+    {
+      "name": "after-cancel",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Sep 22 Ben Walk 584637 Child Household ASSIGNMENTS B5 Ben Walk 584637 2/10/2023 (3y8m) Active ASSIGNMENTS + Add Assignment All Mon Tue Wed Thu Fri PRI",
+      "scheduling": true,
+      "add": true,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3A41ec45f8-5e69-4a4d-abb3-94d547fbf4d8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-switch",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Oct 12 Eve Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room S 584637 Mon–Fri Starts Oct 12, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3Acf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 2
+    },
+    {
+      "name": "record-refresh",
+      "panel": "record",
+      "header": "Assignments · Current assignments — Primary since Oct 12 Eve Walk 584637 Child Household ASSIGNMENTS ← Assignments Assignment PRIMARY Active Room S 584637 Mon–Fri Starts Oct 12, 2026 Edit Assignment V",
+      "scheduling": true,
+      "add": false,
+      "editor": false,
+      "editor_text": "",
+      "url": "/workspace/work-unit/current-assignments?subject_id=child%3Acf02f5d6-56a3-47c8-932b-478cdb1fbde8",
+      "bos_visible": true,
+      "bos_rect": [
+        852,
+        333,
+        398,
+        618
+      ],
+      "focus_rect": [
+        476,
+        184,
+        944,
+        804
+      ],
+      "overlap_fraction_of_focus": 0.32,
+      "bos_pref": null,
+      "fin_so_far": [],
+      "writes_so_far": 4
+    }
+  ],
+  "bos_dom": {
+    "attrs": [
+      "data-adminv2-bos-rail-overlay=true",
+      "data-bos-overlay-mode=floating",
+      "class=adminv2-bos-rail-overlay pointer-events-auto relative flex min-h-0 flex-col",
+      "data-alloy-section-id=WU-14",
+      "data-alloy-section-name=BOS Rail",
+      "data-alloy-section-owner=web/app/adminV2/components/CommandRailBosMount.tsx",
+      "data-alloy-section-blocking=false",
+      "data-alloy-section-cache=network",
+      "style=position: fixed; inset: 332px auto auto 851px; width: 400px; max-width: 400px; h"
+    ],
+    "display": "flex",
+    "opacity": "1",
+    "kids": [
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=adminv2-ws-command-rail-bos-dock relative flex min-h-0 flex-"
+        ],
+        "rect": [
+          852,
+          333,
+          398,
+          618
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "flex",
+        "text": ""
+      },
+      {
+        "tag": "FOOTER",
+        "attrs": [
+          "data-adminv2-ai-command-surface=true",
+          "data-adminv2-command-surface-layer=rail",
+          "data-command-surface-presentation=rail",
+          "role=contentinfo",
+          "aria-label=Orchestrator assistant",
+          "class=pointer-events-auto relative flex h-full w-full min-h-0 flex"
+        ],
+        "rect": [
+          852,
+          333,
+          398,
+          618
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "flex",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=flex min-h-0 w-full min-w-0 flex-1 flex-col"
+        ],
+        "rect": [
+          852,
+          333,
+          398,
+          618
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "flex",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=bos-rail-header px-2 pb-2.5 pt-2 cursor-grab active:cursor-g",
+          "data-command-surface-rail-header=true",
+          "data-bos-rail-header-bend-pine=true",
+          "data-bos-float-drag-surface=true",
+          "style=background-color: rgb(0, 162, 131);"
+        ],
+        "rect": [
+          852,
+          333,
+          398,
+          99
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "block",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=mt-2.5",
+          "data-command-surface-rail-context=true"
+        ],
+        "rect": [
+          860,
+          382,
+          382,
+          44
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "block",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=bos-rail-upper shrink-0"
+        ],
+        "rect": [
+          852,
+          432,
+          398,
+          210
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "flex",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=bos-rail-starters px-2 pb-2",
+          "data-command-surface-rail-starters=true"
+        ],
+        "rect": [
+          852,
+          456,
+          398,
+          185
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "block",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "attrs": [
+          "class=flex flex-col gap-1.5"
+        ],
+        "rect": [
+          860,
+          481,
+          382,
+          157
+        ],
+        "vis": "hidden",
+        "op": "1",
+        "disp": "flex",
+        "text": ""
+      }
+    ]
+  },
+  "writes": [
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    },
+    {
+      "method": "POST",
+      "url": "/api/admin/queue-view-totals"
+    }
+  ],
+  "financial_config": [],
+  "api_errors": []
+}

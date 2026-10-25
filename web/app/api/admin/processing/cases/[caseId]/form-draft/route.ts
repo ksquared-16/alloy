@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { buildFormDraftForCaseSafe, type FormDraftStageTiming } from "@/lib/pos/processingCase/formDraft/buildFormDraftForCaseSafe";
 import { dbRecordFormDraftDetection } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { buildPacketIntakeForCaseSafe } from "@/lib/pos/packetIntake/buildPacketIntakeForCaseSafe";
 import { dbLoadPacketReview } from "@/lib/pos/packetIntake/packetIntakeDb";
+
+
+/** D1b: the OCR text preview in a form draft is disclosed only to an actor who may read it. */
+async function textActor() {
+    const access = await getAdminAccessContextCached();
+    return access.ok ? access : { roleKeys: [], permissionKeys: [] };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             caseId,
             record: { status: "ok", stages, total_ms: Date.now() - startedAt, at: new Date().toISOString() },
         });
-        return jsonData({ caseId, form_draft_preview: draft, detection: { stages, total_ms: Date.now() - startedAt } });
+        return jsonData({ caseId, form_draft_preview: await discloseFormDraftTextPreview(supabase, ctx.orgId, await textActor(), draft), detection: { stages, total_ms: Date.now() - startedAt } });
     } catch (e) {
         const isTimeout = e instanceof DetectTimeout;
         const isAbort = e instanceof DOMException && e.name === "AbortError";

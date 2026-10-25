@@ -32,6 +32,7 @@ import {
     validateEndOnOrAfterStart,
 } from "@/lib/childcareOperational/effectiveDating";
 import { planSupersede } from "@/lib/adminV2/operationalConfig/effectiveDatedVersioning";
+import { canonicalUnitRoleFromStorage, isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import {
     CAPACITY_KINDS,
     CONFIG_RULE_SCOPE_TYPES,
@@ -627,11 +628,34 @@ export type CreateRatioRuleInput = ScopeInput & {
     actorUserId?: string | null;
 };
 
+/**
+ * A STAFFING RATIO BELONGS TO A CLASSROOM (V7 S4). A room-scoped ratio is the operational group's
+ * staffing law; a physical container or a shared space (playground, gym) is never a staffing unit,
+ * whatever it is used for. The Rooms editor already hid the field for them; the server did not.
+ */
+async function assertRatioRoomIsClassroom(supabase: SupabaseClient, orgId: string, roomLocationId: string | null): Promise<void> {
+    if (!roomLocationId) return;
+    const { data, error } = await supabase
+        .from("locations")
+        .select("location_type, unit_role")
+        .eq("org_id", orgId)
+        .eq("id", roomLocationId)
+        .maybeSingle();
+    if (error) fail("db_error", error.message);
+    const row = data as { location_type?: unknown; unit_role?: unknown } | null;
+    if (!isOperationalGroupRole(canonicalUnitRoleFromStorage(row?.location_type, row?.unit_role))) {
+        fail("invalid_input", "A staffing ratio belongs to a classroom (operational group), not a physical or shared space.", {
+            room_location_id: roomLocationId,
+        });
+    }
+}
+
 export async function createRatioRule(
     supabase: SupabaseClient,
     input: CreateRatioRuleInput,
 ): Promise<{ rule: ChildcareRatioRuleRow; tierCount: number }> {
     const scope = buildScopeColumns(input);
+    if (scope.scope_type === "room") await assertRatioRoomIsClassroom(supabase, input.orgId, scope.room_location_id);
     const effectiveStart = requireEffectiveStart(input.effectiveStart);
     const effectiveEnd = optionalEffectiveEnd(input.effectiveEnd, effectiveStart);
     const tiers = normalizeTiers(input.tiers);
@@ -672,6 +696,15 @@ export async function createRatioRuleVersion(
 ): Promise<{ row: ChildcareRatioRuleRow; priorId: string; priorCloseDate: string; tierCount: number }> {
     const orgId = input.orgId;
     let tierCount = 0;
+    const { data: priorScope, error: priorScopeError } = await supabase
+        .from(RATIO)
+        .select("scope_type, room_location_id")
+        .eq("org_id", orgId)
+        .eq("id", input.priorId)
+        .maybeSingle();
+    if (priorScopeError) fail("db_error", priorScopeError.message);
+    const ps = priorScope as { scope_type?: string; room_location_id?: string | null } | null;
+    if (ps?.scope_type === "room") await assertRatioRoomIsClassroom(supabase, orgId, ps.room_location_id ?? null);
     const result = await supersedeRow<ChildcareRatioRuleRow>(supabase, {
         table: RATIO,
         orgId,

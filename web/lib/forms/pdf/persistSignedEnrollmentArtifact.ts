@@ -114,7 +114,15 @@ export async function persistSignedEnrollmentArtifact(
         // stand-in — the mark on paper must be the mark that was captured.
         let drawnPng: Uint8Array | null = null;
         if (row.drawn_asset_document_id) {
-            const asset = await downloadDocumentBytesSafe(supabase, {
+            // D1b.6: only a captured signature mark is ever drawn onto paper, never another document.
+            const { data: assetRow } = await supabase
+                .from("documents")
+                .select("doc_type")
+                .eq("org_id", input.orgId)
+                .eq("id", row.drawn_asset_document_id)
+                .maybeSingle();
+            const isSignatureAsset = (assetRow as { doc_type?: string | null } | null)?.doc_type === "signature_asset";
+            const asset = !isSignatureAsset ? null : await downloadDocumentBytesSafe(supabase, {
                 orgId: input.orgId,
                 documentId: row.drawn_asset_document_id,
             });
@@ -342,14 +350,14 @@ async function persistComposedSignedArtifact(
         if (ref) {
             const { data: doc } = await supabase
                 .from("documents")
-                .select("id, title, file_name, checksum_sha256")
+                .select("id, title, original_filename, checksum_sha256")
                 .eq("org_id", input.orgId)
                 .eq("id", ref)
                 .maybeSingle();
-            const d = doc as { id?: string; title?: string; file_name?: string; checksum_sha256?: string } | null;
+            const d = doc as { id?: string; title?: string; original_filename?: string; checksum_sha256?: string } | null;
             sourceDocumentId = d?.id ?? null;
             sourceSha = d?.checksum_sha256 ?? null;
-            sourceTitle = d?.title ?? d?.file_name ?? null;
+            sourceTitle = d?.title ?? d?.original_filename ?? null;
         }
     }
 

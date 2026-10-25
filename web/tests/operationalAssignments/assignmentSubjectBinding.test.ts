@@ -198,8 +198,8 @@ describe("staff binds to canonical staff identifiers", () => {
 });
 
 describe("applicability restates the write layer, and does not widen it", () => {
-    it("set_primary is valid for BOTH subjects", () => {
-        expect(assignmentSubjectApplicability(committedChild).canSetPrimary).toBe(true);
+    it("set_primary is offered for staff only — a child's primary is edited (V7 P1)", () => {
+        expect(assignmentSubjectApplicability(committedChild).canSetPrimary).toBe(false);
         expect(assignmentSubjectApplicability(staff).canSetPrimary).toBe(true);
     });
 
@@ -219,11 +219,9 @@ describe("applicability restates the write layer, and does not widen it", () => 
         expect(assignmentSubjectApplicability(staff).canUseChildSchedulePath).toBe(false);
     });
 
-    it("child applicability is unchanged from what the card previously assumed unconditionally", () => {
-        // Before generalization the card assumed ALL of these, for every subject, because every
-        // subject was a child. Child must keep every one of them.
+    it("child applicability: everything the card assumed, except Make Primary (retired, V7 P1)", () => {
         expect(assignmentSubjectApplicability(committedChild)).toStrictEqual({
-            canSetPrimary: true,
+            canSetPrimary: false,
             canCreatePrimaryDirectly: true,
             canPromoteProposed: true,
             hasEnrollmentAgreement: true,

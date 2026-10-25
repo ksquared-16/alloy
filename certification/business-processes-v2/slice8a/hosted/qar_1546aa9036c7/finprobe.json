@@ -1,0 +1,70 @@
+{
+  "no_finance_operator": {
+    "/api/admin/financials/subjects": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/overview-metrics": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/work-queue": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/charge-index": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/payments-health": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/accounts": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/statements": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    },
+    "/api/admin/financials/needs-recognition": {
+      "status": 403,
+      "body": "{\"error\":\"You don't have access to view financial information for this organization. Contact an administrator to request access.\",\"required_"
+    }
+  },
+  "director": {
+    "/api/admin/financials/subjects": {
+      "status": 200,
+      "body": "{\"ok\":true,\"subjects\":[],\"scope\":{\"siteLocationId\":null,\"siteScope\":\"all\"},\"truncated\":false,\"scanCap\":2000}"
+    },
+    "/api/admin/financials/overview-metrics": {
+      "status": 200,
+      "body": "{\"ok\":true,\"window\":\"rolling_30d\",\"site_location_id\":null,\"metrics\":[{\"metric_key\":\"financials.outstanding_amount\",\"label\":\"Outstanding\",\"fo"
+    },
+    "/api/admin/financials/work-queue": {
+      "status": 200,
+      "body": "{\"ok\":true,\"rows\":[],\"counts\":{\"actionable\":0,\"siteScoped\":0,\"orgScoped\":0,\"households\":0,\"needsAPerson\":0,\"waitingOnADate\":0},\"scope\":{\"sit"
+    },
+    "/api/admin/financials/charge-index": {
+      "status": 200,
+      "body": "{\"ok\":true,\"rows\":[],\"counts\":{\"attention\":0,\"scheduled\":0,\"posted\":0,\"cancelled\":0,\"legacy\":0},\"typeOptions\":[],\"periodOptions\":[],\"truncat"
+    },
+    "/api/admin/financials/payments-health": {
+      "status": 200,
+      "body": "{\"ok\":true,\"configuration\":{\"providerApi\":{\"status\":\"present\",\"mode\":\"test\",\"variable\":\"STRIPE_SECRET_KEY\"},\"webhookVerification\":{\"status\":"
+    },
+    "/api/admin/financials/accounts": {
+      "status": 200,
+      "body": "{\"data\":[]}"
+    },
+    "/api/admin/financials/statements": {
+      "status": 400,
+      "body": "{\"error\":\"start and end required for P&L\"}"
+    },
+    "/api/admin/financials/needs-recognition": {
+      "status": 200,
+      "body": "{\"ok\":true,\"rows\":[]}"
+    }
+  }
+}

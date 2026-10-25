@@ -53,7 +53,7 @@ import {
     openDraft,
     saveDraft,
 } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
-import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+import { applyEnrollmentTemplateWithCommandsInConfig } from "@/lib/businessProcessTemplates/enrollmentTemplateCommandSelection";
 import { trackAdoptionTemplateForProcessKey } from "@/lib/businessProcessTemplates/processTrackTemplates";
 import {
     adoptProcessTracks,
@@ -953,7 +953,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
                 if (missingProcess) return missingProcess;
                 try {
-                    config = applyEnrollmentTemplateInConfig(config, pid);
+                    config = applyEnrollmentTemplateWithCommandsInConfig(config, pid);
                 } catch (e) {
                     return NextResponse.json(
                         { error: e instanceof Error ? e.message : "Template apply failed" },

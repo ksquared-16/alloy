@@ -9,17 +9,19 @@
  * request selects nothing — the asset is attached to the session's OWN child (the D-95 process
  * anchor's subject), never to a caller-named entity. The body carries image bytes, never a target.
  *
- * Narrow by design: PNG only, magic-bytes verified, 300KB cap. This is a signature mark, not a
- * general upload channel.
+ * Narrow by design: PNG only, magic-bytes verified, 300KB cap, rate-limited per caller (D1b.4). This is
+ * a signature mark, not a general upload channel.
  */
 
 import { NextRequest } from "next/server";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import { enforcePublicUploadRateLimit, refuseOversizedPublicBody } from "@/lib/documents/publicUploadGuard";
+import { decideIngestion } from "@/lib/documents/screenedIngestion";
 
 const MAX_BYTES = 300 * 1024;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -53,6 +55,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { token: rawToken } = await params;
     const supabase = createServiceRoleClient();
 
+    // D1b.4: size and rate gates run before the token is resolved or the body is read.
+    const oversized = refuseOversizedPublicBody(request.headers, Math.ceil((MAX_BYTES * 4) / 3) + 16 * 1024);
+    if (oversized) return oversized;
+    const limited = await enforcePublicUploadRateLimit(supabase, "enrollment_signature_asset", request.headers);
+    if (limited) return limited;
+
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
@@ -68,6 +76,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const png = typeof body.png_base64 === "string" ? decodePng(body.png_base64) : null;
     if (!png) return publicErr("A PNG signature image under 300KB is required.", 400, { code: "BAD_IMAGE" });
+    // D1c-1: a signature mark must decode as a PNG. Anything else, including a file this engine cannot fully inspect, is
+    // refused rather than held: a signature is never quarantined into a submission.
+    const screenedSignature = decideIngestion(png, "png");
+    if (!screenedSignature.store || screenedSignature.status !== "uploaded") {
+        return publicErr("A PNG signature image under 300KB is required.", 400, { code: "BAD_IMAGE" });
+    }
 
     // The session's own child — the D-95 anchor's subject — is the only entity this can attach to.
     const { data: pi } = await supabase
@@ -98,10 +112,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             original_filename: "signature.png",
             mime_type: "image/png",
             byte_size: png.length,
+            checksum_sha256: createHash("sha256").update(png).digest("hex"),
             bucket,
             storage_path: storagePath,
             status: "uploaded",
             metadata: {
+                screening: screenedSignature.screening,
                 source: "participant_signature_capture_v1",
                 packet_session_id: access.value.sessionId,
             },

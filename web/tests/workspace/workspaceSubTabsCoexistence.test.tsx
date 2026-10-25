@@ -21,7 +21,7 @@ import WorkspaceSubTabs from "@/components/workspace/WorkspaceSubTabs";
 // The real key sets, verbatim from each surface's section definitions.
 const COMMUNICATIONS = ["overview", "inbox", "announcements", "scheduled", "templates", "channels", "rules"];
 const OPERATIONS = ["roster", "attendance", "staff", "children", "types", "patterns", "validation"];
-const MAILROOM = ["overview", "work", "forms", "packets", "fields", "branding"];
+const MAILROOM = ["overview", "work", "forms", "packets", "documents", "fields", "branding"];
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

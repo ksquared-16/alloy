@@ -45,6 +45,7 @@ import {
     scopeRoomsForAssignmentPicker,
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
+import type { UseForSpace } from "@/lib/location/spaceUse";
 import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 import {
     programCategoryIdForRoom,
@@ -62,7 +63,7 @@ import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDra
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
-import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { resolveSchedulingCaseOpportunityId } from "@/lib/adminV2/runtime/focusPanel/scheduling/resolveSchedulingCaseOpportunityId";
 import {
     resolveSchedulingFocus,
     schedulingFocusNotice,
@@ -111,6 +112,26 @@ const T = {
 };
 
 type DailyHours = { arrive: string; depart: string };
+/** One weekday of Assignment Time, as `assignment.set_time` / `assignment.create` take it. */
+type AssignmentTimeDayPayload = { weekday: number; start_time: string | null; end_time: string | null };
+
+/**
+ * The editor's week as Assignment Time: every selected day, with that day's own hours when "different
+ * times per day" gives it some, else the daily hours, else UNKNOWN (the day recurs, hours unrecorded).
+ * The same rule the primary route applies to `weekdays` + `times`.
+ */
+function editorWeek(
+    days: readonly number[],
+    daily: { arrive: string; depart: string },
+    perDay: Record<number, DailyHours> | null,
+): AssignmentTimeDayPayload[] {
+    const valid = (h: DailyHours | undefined | null) => Boolean(h && h.arrive && h.depart && h.depart > h.arrive);
+    return [...new Set(days)].sort((a, b) => a - b).map((weekday) => {
+        const own = perDay?.[weekday];
+        const h = valid(own) ? own! : valid(daily) ? daily : null;
+        return { weekday, start_time: h?.arrive ?? null, end_time: h?.depart ?? null };
+    });
+}
 type Money = { amountCents: number; currency: string };
 type BillingProjection = {
     status: "resolved" | "pending" | "unconfigured" | "stale";
@@ -424,6 +445,51 @@ function existingView(p: SubjectProj | null): ProjView | null {
 }
 
 /**
+ * The scheduled changes behind today's rows: upcoming committed rows that supersede a current one
+ * (directly or along a chain). Listed beside the row they replace, so the card shows what applies
+ * now AND what it changes to (V7 Package 1 / audit E2) — not one or the other.
+ */
+function pendingSuccessors(p: SubjectProj | null, kind: "child" | "staff"): ProjAssignment[] {
+    const upcoming = (((p as { upcoming?: ProjView[] } | null)?.upcoming ?? []) as ProjView[])
+        .flatMap((v) => v.assignments)
+        .filter((a) => (a.subjectType ?? "child") === kind);
+    const chain = new Set((p?.current?.assignments ?? []).map((a) => a.id));
+    const out: ProjAssignment[] = [];
+    for (let grew = true; grew; ) {
+        grew = false;
+        for (const a of upcoming) {
+            if (a.supersedes && chain.has(a.supersedes) && !chain.has(a.id)) {
+                chain.add(a.id);
+                out.push(a);
+                grew = true;
+            }
+        }
+    }
+    return out.sort((x, y) => x.effectiveFrom.localeCompare(y.effectiveFrom));
+}
+
+/**
+ * The view the primary editor opens. With a change already scheduled behind today's primary, the
+ * editor opens THAT change (the live row) — editing today's row would have to overwrite the pending
+ * change, and the server would refuse it as stale. Null when nothing is pending.
+ */
+function pendingPrimaryEditView(p: SubjectProj | null, kind: "child" | "staff"): ProjView | null {
+    const latest = pendingSuccessors(p, kind).filter((a) => a.isPrimary).at(-1);
+    if (!latest) return null;
+    const view = (((p as { upcoming?: ProjView[] } | null)?.upcoming ?? []) as ProjView[]).find((v) =>
+        v.assignments.some((a) => a.id === latest.id),
+    );
+    return {
+        effectiveFrom: latest.effectiveFrom,
+        effectiveTo: latest.effectiveTo,
+        openEnded: latest.openEnded,
+        scheduleType: view?.scheduleType ?? p?.current?.scheduleType ?? null,
+        scheduleTypeLabel: view?.scheduleTypeLabel ?? p?.current?.scheduleTypeLabel ?? null,
+        assignments: [latest],
+    };
+}
+
+/**
  * Plural list: committed + proposed planning rows (proposed never replaces committed).
  *
  * The rows are filtered to the SUBJECT'S OWN KIND. That filter used to be the constant
@@ -434,7 +500,7 @@ function existingView(p: SubjectProj | null): ProjView | null {
  */
 function listAssignments(p: SubjectProj | null, kind: "child" | "staff"): ProjAssignment[] {
     const mine = (a: ProjAssignment) => (a.subjectType ?? "child") === kind;
-    const committed = (p?.current?.assignments ?? []).filter(mine);
+    const committed = [...(p?.current?.assignments ?? []).filter(mine), ...pendingSuccessors(p, kind)];
     const proposed = (p?.proposed?.assignments ?? []).filter(mine);
     if (committed.length === 0) return proposed;
     if (proposed.length === 0) return committed;
@@ -501,14 +567,11 @@ export default function SchedulingCard({ model, context, receded = false, coordi
      * The resolver is not wrong; it was written for grains that always have a case. The question
      * simply does not apply to a staff subject, so it is not asked.
      */
-    const opportunityId =
-        subjectKind === "staff"
-            ? null
-            : resolveFocusPanelMutationOpportunityId({
-                  subjectId: context.subject.id,
-                  grain: context.grain,
-                  truth: context.truth as Record<string, unknown>,
-              });
+    // BP V2 D6 — a durable child record has no case of its own; its child id is never an opportunity id.
+    const opportunityId = resolveSchedulingCaseOpportunityId({
+        subjectKind,
+        context: context as Parameters<typeof resolveSchedulingCaseOpportunityId>[0]["context"],
+    });
 
     // Prebuilt projection: composed server-side into context.truth by the Focus Panel
     // first-paint runtime (like Household), so the card reveals WITH the panel and opens
@@ -825,7 +888,17 @@ function ScheduleWorkSurface({
 }) {
     const [proj, setProj] = useState<SubjectProj | null>(projection);
     const existing = existingView(proj);
-    const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
+    /*
+     * ENTERING IS PASSIVE (BP V2 D8). The surface opens on the subject's assignments — the list, or
+     * "No assignments yet" with "+ Add Assignment" — and authoring starts only when the operator asks:
+     * `beginCreateAssignment`, Edit, a type pick, or an assignment focus source.
+     *
+     * It used to open straight into `create` whenever the subject had no assignment. Because a card
+     * with a single subject opens that subject directly ("one subject is not a decision", above), opening
+     * any one-child family whose child had no assignment — a closed/lost family included — launched the
+     * Create Assignment editor without a click.
+     */
+    const [mode, setMode] = useState<SurfaceMode>("detail");
     const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
     const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
@@ -851,6 +924,11 @@ function ScheduleWorkSurface({
     const subject = useMemo(() => operationalSubjectFor(child, proj), [child, proj]);
     const binding = useMemo(() => assignmentActionBinding(subject), [subject]);
     const applicability = useMemo(() => assignmentSubjectApplicability(subject), [subject]);
+    // A child's primary is the enrollment's own schedule: it is edited, and ends with the enrollment
+    // (V7 decision P1). A staff primary is replaced by making another assignment primary.
+    const primaryArchiveBlockedReason = applicability.canSetPrimary
+        ? "Make another assignment primary before archiving this one."
+        : "This is the enrollment's own schedule — change it with Edit; it ends with the enrollment.";
 
     /*
      * BP V2 S4 — THE ROW'S SOURCE, RESOLVED AGAINST THIS CARD'S OWN READ.
@@ -1065,8 +1143,8 @@ function ScheduleWorkSurface({
                         setMode("pick-type");
                     }}
                     onSetPrimary={
-                        // Valid for BOTH subjects: `setPrimaryOperationalAssignment` resolves a staff
-                        // subject explicitly and refuses a promote target belonging to another person.
+                        // STAFF only (V7 decision P1): a child's primary is changed by editing it,
+                        // so `canSetPrimary` is false for a child and no control is offered.
                         activeAssignment.isPrimary || !applicability.canSetPrimary
                             ? undefined
                             : () =>
@@ -1075,13 +1153,6 @@ function ScheduleWorkSurface({
                                       ...binding,
                                       payload: {
                                           ...assignmentAnchorPayload(subject),
-                                          // Kept as `?? ""` — an EMPTY STRING, not undefined — because
-                                          // that is what the child path has always sent and the action
-                                          // distinguishes them. Omitted entirely for staff, who have
-                                          // no agreement to name.
-                                          ...(applicability.hasEnrollmentAgreement
-                                              ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
-                                              : {}),
                                           effective_date: activeAssignment.effectiveFrom,
                                           promote_assignment_id: activeAssignment.id,
                                           subject_label: child.name,
@@ -1116,11 +1187,7 @@ function ScheduleWorkSurface({
                                       payload: { assignment_id: activeAssignment.id },
                                   })
                     }
-                    archiveBlockedReason={
-                        activeAssignment.isPrimary
-                            ? "Make another assignment primary before archiving this one."
-                            : null
-                    }
+                    archiveBlockedReason={activeAssignment.isPrimary ? primaryArchiveBlockedReason : null}
                     onDelete={
                         activeAssignment.commitmentKind === "proposed"
                             ? () => setDeleteConfirmOpen(true)
@@ -1241,9 +1308,6 @@ function ScheduleWorkSurface({
                                 ...binding,
                                 payload: {
                                     ...assignmentAnchorPayload(subject),
-                                    ...(applicability.hasEnrollmentAgreement
-                                        ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
-                                        : {}),
                                     effective_date: a.effectiveFrom,
                                     promote_assignment_id: a.id,
                                     subject_label: child.name,
@@ -1276,8 +1340,7 @@ function ScheduleWorkSurface({
                                 payload: { assignment_id: a.id },
                             });
                         },
-                        archiveBlockedReasonFor: (a) =>
-                            a.isPrimary ? "Make another assignment primary before archiving this one." : null,
+                        archiveBlockedReasonFor: (a) => (a.isPrimary ? primaryArchiveBlockedReason : null),
                     }}
                 />
             </div>
@@ -1333,6 +1396,7 @@ function ScheduleWorkSurface({
               }
             : null);
 
+    const pendingEdit = mode === "edit" ? pendingPrimaryEditView(proj, child.kind) : null;
     return (
         <div data-schedule-surface="true" data-schedule-ready="true" data-scheduling-focus={focusResolution.status}>
             {header}
@@ -1340,13 +1404,19 @@ function ScheduleWorkSurface({
             {actionError ? (
                 <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
             ) : null}
+            {pendingEdit ? (
+                <p data-schedule-pending-change={pendingEdit.effectiveFrom} style={{ fontSize: 12, color: T.slate, margin: "0 0 8px" }}>
+                    A change is scheduled from {formatDate(pendingEdit.effectiveFrom)}. You are editing that change; today&apos;s
+                    schedule applies until then.
+                </p>
+            ) : null}
             <ScheduleEditor
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
                 config={config}
                 truth={truth}
-                existing={mode === "edit" ? existing : editingAssignment ? {
+                existing={mode === "edit" ? pendingEdit ?? existing : editingAssignment ? {
                     effectiveFrom: editingAssignment.effectiveFrom,
                     effectiveTo: editingAssignment.effectiveTo,
                     openEnded: editingAssignment.openEnded,
@@ -1358,6 +1428,7 @@ function ScheduleWorkSurface({
                 createAsSecondary={createAsSecondary}
                 assignmentTypeLabel={selectedType?.label ?? null}
                 assignmentTypeBehavior={selectedType?.behavior}
+                assignmentTypeId={selectedType?.id ?? null}
                 // Real program from assignment/child context — never a hardcoded null. When
                 // editing an existing assignment, its room already implies a canonical
                 // program (if any); ScheduleEditor keeps this current as the room changes.
@@ -1369,6 +1440,7 @@ function ScheduleWorkSurface({
                 onSaved={onSaved}
                 reloadSaved={reloadChild}
                 onNotice={setActionError}
+                binding={binding}
                 onCreateSecondary={async (payload) => {
                     if (!selectedType?.id) {
                         throw new Error("Choose an Assignment Category before creating.");
@@ -1379,6 +1451,8 @@ function ScheduleWorkSurface({
                         payload: assignmentCreatePayload(subject, {
                             schedule_pattern_id: payload.schedule_pattern_id,
                             start_date: payload.start_date,
+                            end_date: payload.end_date,
+                            days: payload.days,
                             room_location_id: payload.room_location_id,
                             assignment_type_id: selectedType.id,
                             assignment_type_label: selectedType.label,
@@ -1792,13 +1866,17 @@ function ScheduleEditor({
     createAsSecondary = false,
     assignmentTypeLabel = null,
     assignmentTypeBehavior,
+    assignmentTypeId = null,
     programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
     onNotice,
     reloadSaved,
     onCreateSecondary,
+    binding,
 }: {
+    /** The subject's action binding (entity_type/entity_id), for corrections of an existing row. */
+    binding?: { entity_type: string; entity_id: string };
     child: SchedSubject;
     opportunityId: string | null;
     proj: SubjectProj | null;
@@ -1810,6 +1888,8 @@ function ScheduleEditor({
     createAsSecondary?: boolean;
     assignmentTypeLabel?: string | null;
     assignmentTypeBehavior?: AssignmentTypeBehavior;
+    /** The chosen category's id — the USE the space's configuration is checked against. */
+    assignmentTypeId?: string | null;
     /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
     programCategoryId?: string | null;
     onCancel: () => void;
@@ -1821,8 +1901,11 @@ function ScheduleEditor({
     onCreateSecondary?: (payload: {
         schedule_pattern_id: string | null;
         start_date: string;
+        end_date: string | null;
         room_location_id: string | null;
         assignment_type_label: string;
+        /** The week as Assignment Time — the days and each day's hours, written with the row. */
+        days: AssignmentTimeDayPayload[];
     }) => Promise<void>;
 }) {
     const ex = existing?.assignments[0] ?? null;
@@ -1836,11 +1919,18 @@ function ScheduleEditor({
     // AND for an existing secondary, which is edited under mode "create" (its Save writes a successor).
     // It used to hydrate only under "edit", so a secondary opened with no days and no start.
     const editingRow = mode === "edit" || (createAsSecondary && ex != null);
+    // An enrolled child's primary ends with the enrollment: its editor changes it, never ends it.
+    const enrolledPrimaryEdit = mode === "edit" && !createAsSecondary && Boolean(proj?.enrollmentAgreementId);
     const [days, setDays] = useState<number[]>(editingRow && ex?.weekdays.length ? [...ex.weekdays] : []);
     const [arrive, setArrive] = useState(ex?.arriveTime || "");
     const [depart, setDepart] = useState(ex?.departTime || "");
-    const [perDayOpen, setPerDayOpen] = useState(false);
-    const [perDay, setPerDay] = useState<Record<number, DailyHours>>({});
+    // A week whose days differ reopens as it was saved: each day's own hours, the per-day grid open.
+    const seededPerDay =
+        editingRow && ex && !(ex.arriveTime && ex.departTime) && ex.dailyHours && Object.keys(ex.dailyHours).length > 0
+            ? (ex.dailyHours as Record<number, DailyHours>)
+            : null;
+    const [perDayOpen, setPerDayOpen] = useState(seededPerDay != null);
+    const [perDay, setPerDay] = useState<Record<number, DailyHours>>(seededPerDay ? { ...seededPerDay } : {});
     const [start, setStart] = useState(editingRow ? existing?.effectiveFrom || "" : "");
     const [end, setEnd] = useState(existing?.effectiveTo || "");
     const [openEnded, setOpenEnded] = useState(existing ? existing.openEnded : true);
@@ -1860,6 +1950,8 @@ function ScheduleEditor({
             && initialProgramCategoryId != null
     );
     const [roomPicking, setRoomPicking] = useState(false);
+    // The use this schedule is for — stable across renders so the room picker does not refetch.
+    const purposeUse = useMemo<UseForSpace>(() => ({ categoryId: assignmentTypeId, subjectType: child.kind }), [assignmentTypeId, child.kind]);
     const [patternPicking, setPatternPicking] = useState(false);
 
     // Patterns are PRELOADED via first-paint (config.patterns), so the shortcut opens
@@ -2608,24 +2700,70 @@ function ScheduleEditor({
         try {
             // The written pattern: chosen or implied by the days — never a default (patterns are warm;
             // the shared load is awaited only if the editor saved before it answered).
-            const pid = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days, chosenPatternId }).patternId;
+            const resolved = resolveWrittenSchedulePattern({ patterns: await ensurePatterns(), chosenScheduleType: scheduleType, days, chosenPatternId });
+            const pid = resolved.patternId;
+            if (!pid) {
+                setError(
+                    resolved.ambiguous
+                        ? "More than one pattern fits these days — choose one with Use a pattern."
+                        : "Choose a schedule pattern before saving this assignment.",
+                );
+                return;
+            }
+            const week = editorWeek(days, { arrive, depart }, perDayOpen ? perDay : null);
+            const endDate = openEnded ? null : end || null;
             if (createAsSecondary && onCreateSecondary) {
-                // An existing secondary saved unchanged is not a change: nothing is written (a successor
-                // must start after the row it replaces, and there is nothing to replace it with).
-                if (ex && pid === ex.patternId && start === (existing?.effectiveFrom ?? "") && (roomId || null) === (ex.room.id ?? null)) {
-                    await onSaved();
-                    return;
-                }
-                if (!pid) {
-                    setError("Choose a schedule pattern before saving this assignment.");
-                    setBusy(false);
-                    return;
+                if (ex) {
+                    /*
+                     * AN EXISTING SECONDARY. What changed decides the write (V7 S3 / audit A4):
+                     *   - a later start → the atomic replacement, carrying end date and week;
+                     *   - the same start → corrections of THIS row: its week (`assignment.set_time`) and
+                     *     its end (`assignment.archive`, which keeps a future-dated end live until then).
+                     *     A changed pattern or room needs the date it takes effect.
+                     */
+                    const sameStart = start === (existing?.effectiveFrom ?? "");
+                    const factsChanged = pid !== ex.patternId || (roomId || null) !== (ex.room.id ?? null);
+                    const priorEnd = existing?.openEnded ? null : existing?.effectiveTo ?? null;
+                    const exWeek = editorWeek(ex.weekdays, { arrive: ex.arriveTime ?? "", depart: ex.departTime ?? "" }, (ex.dailyHours as Record<number, DailyHours> | undefined) ?? null);
+                    const weekChanged = JSON.stringify(week) !== JSON.stringify(exWeek);
+                    if (sameStart) {
+                        if (factsChanged) {
+                            setError(`Choose the date this change takes effect — after ${existing?.effectiveFrom}.`);
+                            return;
+                        }
+                        if (endDate !== priorEnd && endDate == null) {
+                            setError("An end date can't be removed here. Add a new assignment from the day after it ends.");
+                            return;
+                        }
+                        if (!weekChanged && endDate === priorEnd) {
+                            await onSaved();
+                            return;
+                        }
+                        if (weekChanged) {
+                            await executeAssignmentAction({
+                                action_key: "assignment.set_time",
+                                ...binding,
+                                payload: { assignment_id: ex.id, days: week },
+                            });
+                        }
+                        if (endDate !== priorEnd && endDate) {
+                            await executeAssignmentAction({
+                                action_key: "assignment.archive",
+                                ...binding,
+                                payload: { assignment_id: ex.id, end_date: endDate },
+                            });
+                        }
+                        await finishAfterWrite();
+                        return;
+                    }
                 }
                 await onCreateSecondary({
                     schedule_pattern_id: pid,
                     start_date: start,
+                    end_date: endDate,
                     room_location_id: roomId || null,
                     assignment_type_label: assignmentTypeLabel || "Assignment",
+                    days: week,
                 });
                 await finishAfterWrite();
                 return;
@@ -2661,12 +2799,14 @@ function ScheduleEditor({
                     // assignment prices exactly as the editor's draft tuition did.
                     program_category_id: programCategoryId || null,
                     start_date: start || null,
-                    end_date: openEnded ? null : end || null,
+                    // An enrolled primary ends with the enrollment; its editor offers no end date.
+                    end_date: enrolledPrimaryEdit ? null : endDate,
                     weekdays: days,
                     times,
                     site_location_id: siteId,
-                    // Effective-dated intent: Create makes the next schedule; Edit changes the current.
-                    change_kind: mode === "create" && existing ? "successor" : "current",
+                    // Edit: the primary the operator opened. The server refuses the edit as stale if it
+                    // is no longer current, rather than applying it over someone else's change.
+                    ...(mode === "edit" && ex ? { expected_assignment_id: ex.id } : {}),
                 }),
             });
             await finishAfterWrite();
@@ -2687,6 +2827,7 @@ function ScheduleEditor({
                 selectedRoomId={roomId}
                 seedRooms={config.operationalRooms}
                 purposeBehavior={assignmentTypeBehavior}
+                purposeUse={purposeUse}
                 programCategoryId={childProgramForFit}
                 onProgramResolved={(resolvedProgramCategoryId) => {
                     // Adopt the server-resolved child program only when none is known at all.
@@ -3190,10 +3331,15 @@ function ScheduleEditor({
                         </button>
                         {!patternPicking && patterns && days.length > 0 && !written.scheduleType ? (
                             // Said, not guessed: Save records no schedule type until one is chosen.
-                            <span data-schedule-type-unset="true" style={{ fontSize: 11, color: T.muted }}>
+                            <span data-schedule-type-unset={written.ambiguous ? "ambiguous" : "true"} style={{ fontSize: 11, color: T.muted }}>
                                 {written.ambiguous
-                                    ? "These days match more than one schedule type — use a pattern to choose."
+                                    ? "More than one pattern fits these days — use a pattern to choose."
                                     : "No pattern matches these days — use a pattern to set the schedule type."}
+                            </span>
+                        ) : null}
+                        {!patternPicking && written.custom ? (
+                            <span data-schedule-custom-days="true" style={{ fontSize: 11, color: T.muted }}>
+                                Custom days — kept on this assignment.
                             </span>
                         ) : null}
                         {patternPicking &&
@@ -3334,14 +3480,22 @@ function ScheduleEditor({
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
                                 <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
-                            <label style={{ display: "grid", gap: 3 }}>
-                                <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
-                            </label>
-                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
-                                <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
-                                Open-ended
-                            </label>
+                            {enrolledPrimaryEdit ? (
+                                <span data-primary-ends-with-enrollment="true" style={{ fontSize: 11.5, color: T.muted, paddingBottom: 7 }}>
+                                    Ends with the enrollment. A change takes effect on the start date.
+                                </span>
+                            ) : (
+                                <>
+                                    <label style={{ display: "grid", gap: 3 }}>
+                                        <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
+                                        <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} data-assignment-end-date="true" className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
+                                    </label>
+                                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
+                                        <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
+                                        Open-ended
+                                    </label>
+                                </>
+                            )}
                         </div>
                     </div>
                 }
@@ -3511,6 +3665,7 @@ function RoomPicker({
     selectedRoomId,
     seedRooms,
     purposeBehavior,
+    purposeUse,
     programCategoryId,
     onProgramResolved,
     onPick,
@@ -3523,6 +3678,8 @@ function RoomPicker({
     selectedRoomId: string | null;
     seedRooms: SiteOperationalRoom[];
     purposeBehavior?: AssignmentTypeBehavior;
+    /** The use being scheduled; the space's configured uses decide first (V7-02a). */
+    purposeUse?: UseForSpace;
     programCategoryId?: string | null;
     /** Server-resolved Program from child/assignment context (`?view=options`), adopted
      *  only when no Program is already known client-side — never overrides a Program
@@ -3533,7 +3690,7 @@ function RoomPicker({
 }) {
     const seedOptions = useMemo((): PlacementOption[] => {
         const active = seedRooms.filter((r) => r.active !== false);
-        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {});
+        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {}, purposeUse);
         return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
@@ -3542,7 +3699,7 @@ function RoomPicker({
             reason: "",
             programCategoryId: r.programCategoryId,
         }));
-    }, [seedRooms, purposeBehavior]);
+    }, [seedRooms, purposeBehavior, purposeUse]);
 
     const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [fitContext, setFitContext] = useState<{
@@ -3568,14 +3725,22 @@ function RoomPicker({
                 if (cancelled) return;
                 const raw = (o.options ?? []) as PlacementOption[];
                 // Keep Category allow-list / not_used scoping — do not drop program mismatches.
+                // Placement fit scores CLASSROOMS only; the seed's space data (kind, uses) decides
+                // which of them this use may take, and any use-eligible shared space the scorer
+                // does not rank is kept after them rather than vanishing once scoring lands.
+                const seedById = new Map(seedRooms.map((r) => [r.roomId, r]));
                 const scoped = scopeRoomsForAssignmentPicker(
                     raw.map((r) => ({
                         ...r,
                         programCategoryId: r.programCategoryId ?? null,
+                        unitRole: seedById.get(r.roomId)?.unitRole,
+                        spaceUses: seedById.get(r.roomId)?.spaceUses ?? null,
                     })),
                     purposeBehavior ?? {},
+                    purposeUse,
                 );
-                setScored(scoped);
+                const scoredIds = new Set(scoped.map((r) => r.roomId));
+                setScored([...scoped, ...seedOptions.filter((o) => !scoredIds.has(o.roomId))]);
                 if (o.fitContext && typeof o.fitContext === "object") {
                     setFitContext(o.fitContext as {
                         dateOfBirth: string | null;
@@ -3597,7 +3762,7 @@ function RoomPicker({
         // `onProgramResolved` intentionally omitted — an inline callback from the parent;
         // depending on it would refetch every render without changing behavior.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteId, patternId, childId, start, purposeBehavior, programCategoryId]);
+    }, [siteId, patternId, childId, start, purposeBehavior, purposeUse, seedOptions, seedRooms, programCategoryId]);
 
     const options = useMemo(() => {
         const list = scored ?? seedOptions;

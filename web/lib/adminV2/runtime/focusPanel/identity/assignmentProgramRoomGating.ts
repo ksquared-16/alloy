@@ -1,9 +1,9 @@
 /**
- * When a committed primary operational assignment exists, Program/Room display
- * derives from the assignment classroom. Proposed drafts (pre-enrollment or
- * OA `commitment_kind=proposed`) do **not** own those identity fields — Desired
- * Program stays independently editable until a committed schedule exists.
- * Room without a primary still routes to Assignments.
+ * When a committed primary operational assignment exists, Program derives from the assignment
+ * classroom and Program/Room become Assignments-owned. Proposed drafts (pre-enrollment or OA
+ * `commitment_kind=proposed`) do **not** own those identity fields — Desired Program stays
+ * independently editable until a committed schedule exists. The Room VALUE is the derived homeroom
+ * set (`deriveHomerooms`, V7-03), never the primary row's room.
  */
 
 import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
@@ -14,7 +14,7 @@ const LOCATION_FIELD_REFS = new Set(["inquiry_child.location_id", "child.locatio
 
 export function primaryAssignmentFromScheduling(
     scheduling: ChildScheduling | null | undefined,
-): { program: string | null; room: string | null } | null {
+): { program: string | null } | null {
     if (!scheduling) return null;
     const status = scheduling.status;
     // Proposed-only / needs-placement never lock Program/Room on identity cards.
@@ -30,10 +30,7 @@ export function primaryAssignmentFromScheduling(
         primary.room.program?.trim()
         || scheduling.child.program?.trim()
         || null;
-    return {
-        program,
-        room: primary.room.name?.trim() || null,
-    };
+    return { program };
 }
 
 export function isProgramIdentityFieldRef(fieldRef: string): boolean {

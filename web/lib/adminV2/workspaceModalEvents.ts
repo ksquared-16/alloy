@@ -12,7 +12,7 @@ export const ADMIN_V2_OPEN_PROCESSING_MODAL = "adminv2:open-processing-modal";
 export const ADMIN_V2_CLOSE_WORKSPACE_MODALS = "adminv2:close-workspace-modals";
 
 /** Digital Mailroom Studio tabs a deep-link may target (mirror of `ProcessingStudioTab`). */
-export type ProcessingStudioTabKey = "forms" | "packets" | "fields" | "branding";
+export type ProcessingStudioTabKey = "forms" | "packets" | "documents" | "fields" | "branding";
 
 /**
  * Deep-link intent carried into the Digital Mailroom when opening the Processing modal.

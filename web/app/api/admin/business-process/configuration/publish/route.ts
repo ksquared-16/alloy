@@ -36,6 +36,7 @@ import {
 import { validateBusinessProcessForPublish } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
 import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 import { ensureHostsForPublishedProjections } from "@/lib/businessProcesses/projections/domainProjectionHost";
+import { ensureEnrollmentOpportunityDrawerOverride } from "@/lib/admin/enrollmentDrawerOverrideProvisioning";
 
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -140,6 +141,21 @@ export async function POST(request: NextRequest) {
             publishedPayload,
         });
 
+        // BP V2 D1 — an Enrollment staged process needs the org's workflow_v1 opportunity drawer override
+        // or its records cannot open in the Focus Panel. Same contract as the hosts above: absent-only,
+        // idempotent, reported and never a failed publish.
+        const opportunityDrawerOverride = await ensureEnrollmentOpportunityDrawerOverride(supabase, {
+            orgId: ctx.orgId,
+            publishedPayload,
+        });
+        if (opportunityDrawerOverride.status === "blocked" || opportunityDrawerOverride.status === "failed") {
+            console.warn("[business-process publish] opportunity drawer override not provisioned", {
+                orgId: ctx.orgId,
+                departmentId,
+                outcome: opportunityDrawerOverride,
+            });
+        }
+
         const state =
             publishedDraft &&
             buildBusinessProcessEditorState({
@@ -164,6 +180,9 @@ export async function POST(request: NextRequest) {
             },
             warnings: validation.warnings,
             ...(projectionHosts.length ? { projection_hosts: projectionHosts } : {}),
+            ...(opportunityDrawerOverride.status !== "not_applicable"
+                ? { opportunity_drawer_override: opportunityDrawerOverride }
+                : {}),
             ...(state
                 ? {
                       state,

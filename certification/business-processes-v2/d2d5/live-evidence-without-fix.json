@@ -1,0 +1,91 @@
+{
+  "run": "8a91f076",
+  "at": "2026-10-23T13:16:24.903Z",
+  "scenarios": {
+    "setup": {
+      "org": "c5932683-3e2a-4023-b18d-80e202cd9db9",
+      "opportunityId": "dd3e0487-4b80-454d-8b71-ef8387a5f386",
+      "kids": {
+        "ava": {
+          "memberId": "4ccdfafa-f8a9-4400-b589-2dd56d2d665f",
+          "ocmId": "8501b476-a6e9-49ce-9fb7-8b574dee79f4"
+        },
+        "ben": {
+          "memberId": "02185089-6819-45c7-8edd-df40f5f44a44",
+          "ocmId": "88afca81-4b61-4dba-94d3-29a5bf35d7d0"
+        }
+      },
+      "state": {
+        "family": {
+          "stage_key": "decision",
+          "status_key": "open"
+        },
+        "ava": {
+          "status": "new_inquiry",
+          "journeys": [],
+          "journey_states": []
+        },
+        "ben": {
+          "status": "new_inquiry",
+          "journeys": [],
+          "journey_states": []
+        }
+      },
+      "tasks": [
+        {
+          "id": "93b6457f-0bb0-42a0-981e-65d7fdc052b6",
+          "title": "Conduct Tour",
+          "status": "completed",
+          "child": null,
+          "stage": "tour"
+        },
+        {
+          "id": "4268f86f-50bb-487e-9e9b-e7a63dc5654e",
+          "title": "Contact Family",
+          "status": "completed",
+          "child": null,
+          "stage": "lead"
+        },
+        {
+          "id": "9cc9409a-e7c7-44eb-af9d-180bb0cc29c7",
+          "title": "Support Enrollment Decision",
+          "status": "open",
+          "child": null,
+          "stage": "decision"
+        }
+      ]
+    },
+    "refusals": {
+      "repeat": {
+        "status": 400,
+        "changed": false,
+        "error": "That option is no longer configured for this step."
+      },
+      "missing_input": {
+        "status": 400,
+        "error": "That option is no longer configured for this step."
+      },
+      "unknown_decision": {
+        "status": 400,
+        "error": "That option is no longer configured for this step."
+      },
+      "seeded_roles": [
+        "admin",
+        "ops",
+        "regional_lead",
+        "school_director"
+      ],
+      "unauthorized": {
+        "via": "northwind mcert_proc_portal_only (no work.operate)",
+        "status": 403,
+        "error": "Forbidden"
+      }
+    },
+    "family_completion": {
+      "already_completed_by_runtime": true
+    }
+  },
+  "fixture_orgs_for_teardown": [
+    "c5932683-3e2a-4023-b18d-80e202cd9db9"
+  ]
+}

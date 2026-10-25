@@ -2,6 +2,8 @@
  * Extended Assignment Category behavior stored in `operational_assignment_types.default_behavior`.
  * Internal key remains assignment_type; operator language is Assignment Category.
  */
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { spaceEligibleForUse, type UseForSpace } from "@/lib/location/spaceUse";
 
 export type RequirementMode = "required" | "optional" | "not_used";
 
@@ -13,19 +15,6 @@ export type EligibleSpaceMode = "any" | "selected" | "program_match";
  * Derives the column value: none → none, anything else → eligible.
  */
 export type BillingExpectation = "none" | "optional" | "expected" | "funding_eligible";
-
-/**
- * Fixed catalog-category vocabulary for "what this Category may bill against".
- * No dedicated billing catalog taxonomy exists yet in the platform — this fixed
- * list is intentionally small and stored only in behavior (not a new column).
- */
-export const ELIGIBLE_CATALOG_CATEGORIES = [
-    { value: "tuition", label: "Tuition" },
-    { value: "recurring_service", label: "Recurring service" },
-    { value: "activity_enrichment", label: "Activity / enrichment" },
-    { value: "transportation", label: "Transportation" },
-    { value: "registration_one_time", label: "Registration (one-time)" },
-] as const;
 
 export type AssignmentTypeBehavior = {
     description?: string | null;
@@ -44,8 +33,12 @@ export type AssignmentTypeBehavior = {
     locationIds?: string[];
     /** Finer financial relationship; derives billing_participation column on write. */
     billingExpectation?: BillingExpectation;
-    /** Catalog-category keys this Category may bill against (behavior-only). */
-    eligibleCatalogCategories?: string[];
+    /**
+     * This category, when configured as a use of a classroom, makes that classroom a homeroom for the
+     * children assigned there (V7-03, Director H-ID Option A). Child categories only. Never inferred
+     * from the category's name — an operator sets it.
+     */
+    providesHomeroom?: boolean;
 };
 
 function asRequirement(raw: unknown, fallbackRequired: boolean): RequirementMode {
@@ -80,9 +73,6 @@ export function readAssignmentTypeBehavior(raw: unknown): AssignmentTypeBehavior
         bag.eligibleSpaceMode === "selected" || bag.eligibleSpaceMode === "program_match"
             ? bag.eligibleSpaceMode
             : "any";
-    const eligibleCatalogCategories = Array.isArray(bag.eligibleCatalogCategories)
-        ? (bag.eligibleCatalogCategories as unknown[]).map(String).filter(Boolean)
-        : undefined;
     return {
         description: typeof bag.description === "string" ? bag.description : null,
         primaryEligible: bag.primaryEligible === true,
@@ -95,7 +85,7 @@ export function readAssignmentTypeBehavior(raw: unknown): AssignmentTypeBehavior
         eligibleRoomIds,
         locationIds,
         billingExpectation: asBillingExpectation(bag.billingExpectation, "none"),
-        eligibleCatalogCategories,
+        providesHomeroom: bag.providesHomeroom === true,
     };
 }
 
@@ -115,7 +105,7 @@ export function writeAssignmentTypeBehavior(behavior: AssignmentTypeBehavior): A
         eligibleRoomIds: behavior.eligibleRoomIds ?? [],
         locationIds: behavior.locationIds ?? [],
         billingExpectation: behavior.billingExpectation ?? "none",
-        eligibleCatalogCategories: behavior.eligibleCatalogCategories ?? [],
+        providesHomeroom: behavior.providesHomeroom === true,
     };
 }
 
@@ -156,25 +146,6 @@ export function slugAssignmentTypeKey(label: string): string {
     return `${base}_${Date.now().toString(36).slice(-5)}`.replace(/[^a-z0-9_]/g, "").slice(0, 63);
 }
 
-/** Filter operational room options by Category eligibility. */
-export function filterRoomsForPurposeBehavior<T extends { roomId: string; programCategoryId?: string | null }>(
-    rooms: T[],
-    behavior: AssignmentTypeBehavior,
-    programCategoryId: string | null | undefined
-): T[] {
-    const roomReq = behavior.roomRequirement ?? (behavior.requiresRoom ? "required" : "optional");
-    if (roomReq === "not_used") return [];
-    const mode = behavior.eligibleSpaceMode ?? "any";
-    let scoped = rooms;
-    if (mode === "selected") {
-        const allow = new Set(behavior.eligibleRoomIds ?? []);
-        if (allow.size > 0) scoped = scoped.filter((r) => allow.has(r.roomId));
-    } else if (mode === "program_match" && programCategoryId) {
-        scoped = scoped.filter((r) => !r.programCategoryId || r.programCategoryId === programCategoryId);
-    }
-    return scoped;
-}
-
 /**
  * Scope rooms for the Assignment picker when operators may override ineligible rooms.
  *
@@ -182,10 +153,19 @@ export function filterRoomsForPurposeBehavior<T extends { roomId: string; progra
  * Does **not** drop `program_match` misses — age/program fit is owned by
  * `placement.room_fit` classification so ineligible rooms stay visible for override.
  */
-export function scopeRoomsForAssignmentPicker<T extends { roomId: string; programCategoryId?: string | null }>(
+export function scopeRoomsForAssignmentPicker<
+    T extends { roomId: string; programCategoryId?: string | null; unitRole?: CanonicalUnitRole; spaceUses?: readonly string[] | null },
+>(
     rooms: T[],
     behavior: AssignmentTypeBehavior,
+    /** The use being scheduled: when given, the space's own configuration decides first (V7-02a). */
+    use?: UseForSpace,
 ): T[] {
+    if (use) {
+        rooms = rooms.filter(
+            (r) => !r.unitRole || spaceEligibleForUse({ unitRole: r.unitRole, spaceUses: r.spaceUses ?? null }, use).ok,
+        );
+    }
     const roomReq = behavior.roomRequirement ?? (behavior.requiresRoom ? "required" : "optional");
     if (roomReq === "not_used") return [];
     const mode = behavior.eligibleSpaceMode ?? "any";
@@ -199,16 +179,15 @@ export function scopeRoomsForAssignmentPicker<T extends { roomId: string; progra
 /**
  * The rooms one choice may apply to SEVERAL assignments — the Roster's bulk pickers.
  *
- * Active rooms only, then {@link scopeRoomsForAssignmentPicker} once per Category involved: a room
- * is offered only if every selected row's Category would offer it in the Assignment editor. No
- * Category (an unknown or missing behavior) narrows nothing, exactly as in the editor.
+ * Active rooms only, then {@link scopeRoomsForAssignmentPicker} once per selected row's use: a room
+ * is offered only if every selected row could use it — the space's configured uses first, then the
+ * Category's own room rules, exactly as in the editor.
  */
-export function roomsForEveryCategory<T extends { roomId: string; active?: boolean; programCategoryId?: string | null }>(
-    rooms: T[],
-    behaviors: AssignmentTypeBehavior[],
-): T[] {
-    return behaviors.reduce(
-        (offered, behavior) => scopeRoomsForAssignmentPicker(offered, behavior),
+export function roomsForEveryCategory<
+    T extends { roomId: string; active?: boolean; programCategoryId?: string | null; unitRole?: CanonicalUnitRole; spaceUses?: readonly string[] | null },
+>(rooms: T[], uses: ReadonlyArray<{ behavior: AssignmentTypeBehavior; use: UseForSpace }>): T[] {
+    return uses.reduce(
+        (offered, u) => scopeRoomsForAssignmentPicker(offered, u.behavior, u.use),
         rooms.filter((r) => r.active !== false),
     );
 }

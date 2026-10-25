@@ -24,6 +24,7 @@ const {
     mockAssertFinancialsReadAllowed,
     mockBuildFinancialsCardVM,
     mockProjectPhotos,
+    mockGetAdminAccessContextCached,
 } = vi.hoisted(() => ({
     mockRequireAdminOrOps: vi.fn(),
     mockGetAdminContextCached: vi.fn(),
@@ -32,6 +33,7 @@ const {
     mockAssertFinancialsReadAllowed: vi.fn(),
     mockBuildFinancialsCardVM: vi.fn(),
     mockProjectPhotos: vi.fn(),
+    mockGetAdminAccessContextCached: vi.fn(),
 }));
 
 vi.mock("@/lib/adminAuth", () => ({
@@ -45,6 +47,15 @@ vi.mock("@/lib/admin/getAdminContext", async () => {
     return { ...actual, getAdminContextCached: mockGetAdminContextCached };
 });
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: mockCreateAdminClient }));
+/*
+ * BP V2 D4 — the route also reads the caller's SITE scope. These cases are about the fin.read verdict, so
+ * the actor is org-wide (siteScope "all"), which the scope module answers without a single read; the
+ * restricted case is the last test below and, on real records, tests/financials/live/financialDetailSiteScope.live.test.ts.
+ */
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>("@/lib/admin/getAdminAccessContext");
+    return { ...actual, getAdminAccessContextCached: mockGetAdminAccessContextCached };
+});
 vi.mock("@/lib/financials/financialsPermissions", async () => {
     const actual = await vi.importActual<typeof import("@/lib/financials/financialsPermissions")>(
         "@/lib/financials/financialsPermissions",
@@ -93,6 +104,7 @@ beforeEach(() => {
     mockGetAdminAuthCached.mockResolvedValue({ userId: "user-1" });
     mockCreateAdminClient.mockReturnValue({});
     mockProjectPhotos.mockResolvedValue([]);
+    mockGetAdminAccessContextCached.mockResolvedValue({ ok: true, userId: "user-1", orgId: "org-1", siteScope: "all", allowedSiteLocationIds: null });
 });
 
 describe("the fin.read verdict still decides, and decides first", () => {
@@ -208,5 +220,26 @@ describe("the fin.read verdict still decides, and decides first", () => {
         const res = await GET(req());
         expect(res.status).toBe(200);
         expect(await res.text()).toContain("12345");
+    });
+});
+
+describe("BP V2 D4 — site scope is part of the verdict", () => {
+    it("a site-restricted caller whose sites hold none of the household's money gets 404 and no model", async () => {
+        mockGetAdminAccessContextCached.mockResolvedValue({ ok: true, userId: "user-1", orgId: "org-1", siteScope: "restricted", allowedSiteLocationIds: ["site-x"] });
+        // The scope module reads the household's agreements and money sources; this household has an
+        // agreement at another site only.
+        const table = (rows: unknown[]) => {
+            const q: Record<string, unknown> = {};
+            Object.assign(q, { select: () => q, eq: () => q, in: () => q, limit: () => q, maybeSingle: async () => ({ data: rows[0] ?? null, error: null }), then: (r: (v: unknown) => unknown) => r({ data: rows, error: null }) });
+            return q;
+        };
+        mockCreateAdminClient.mockReturnValue({
+            from: (t: string) =>
+                t === "customers" ? table([{ id: "cust-1" }]) : t === "child_enrollment_agreements" ? table([{ site_location_id: "site-other" }]) : table([]),
+        });
+        mockBuildFinancialsCardVM.mockResolvedValue(VM);
+        const res = await GET(req());
+        expect(res.status).toBe(404);
+        expect(JSON.stringify(await res.json())).not.toContain("vm");
     });
 });

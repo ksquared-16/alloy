@@ -48,6 +48,32 @@ Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DR
 
 **Phase 5:** When visual config adoption is active, legacy workflow v1 **section/order** editors are read-only and PATCH routes return 409. Field placement (`field_placements_v1`) remains on `record_drawer_layouts` until a follow-up migration. Use Layout Gallery to edit composition; publishing updates the live opportunity drawer when runtime gates are on.
 
+### The opportunity drawer-mode override is a gate, not the layout (BP V2 D1)
+
+The two stores above are **two separate configuration lifecycles**. Neither is "the" authority for an Enrollment record's panel. Each answers a different question:
+
+| Question | Answered by | Owned by |
+|---|---|---|
+| May this org's opportunity records open in the workflow drawer / Focus Panel at all? | `record_drawer_layouts` (`opportunity` / `drawer` / `default`), `config_json.inquiry_drawer_mode = "workflow_v1"` | Provisioning (below) and the legacy workflow v1 editors |
+| What does the Focus Panel / drawer show, in what order? | `entity_layouts` (Surfaces → Layout Gallery), published versions | Operators, through Surfaces |
+
+- **The gate.** The opportunity drawer view-model (`sharedCanonicalDeps`) reads the org's **effective** drawer layout. That is the org override, or else the global `record_layouts` default, whose mode is null.
+  - When the effective mode is not `workflow_v1`, the view-model answers `classic_layout_deferred` and the record does not open.
+  - The gate never reads `entity_layouts`, and Surfaces never writes `record_drawer_layouts`.
+- **Provisioning.**
+  - **Where:** `POST /api/admin/business-process/configuration/publish` → `ensureEnrollmentOpportunityDrawerOverride` (`web/lib/admin/enrollmentDrawerOverrideProvisioning.ts`).
+  - **When:** a publication succeeds whose published configuration carries an active Enrollment staged process, meaning a staged lifecycle with the Enrollment `family_track` + `child_track` model.
+  - **What:** it inserts the org override, `ENROLLMENT_WORKFLOW_V1_DRAWER_DEFAULT`. That is the config the April 2026 seed migrations gave every childcare org then (`20260430203000`), verbatim, with no tenant edits.
+  - **Contract:** it runs after the publication commits and is reported on the response as `opportunity_drawer_override`. A provisioning failure never fails the publish, and a blocked or failed publish never provisions.
+  - **Not triggered by:** Assignments, Billing, or any process without the Enrollment tracks.
+- **Preservation.** Provisioning is insert-only (`persistOpportunityDrawerLayoutConfig(..., { onlyIfAbsent: true })`). It writes only when the org has no override row at all.
+  - An existing `workflow_v1` row, customized or not, is left byte-identical (`already_present`).
+  - A classic, inactive or malformed row is reported as `blocked` with its classification (`conflicting` / `inactive` / `invalid`) and is never overwritten.
+  - A row that cannot be read is reported as `unreadable`.
+  - Concurrent publishes are arbitrated by `UNIQUE (org_id, entity_type, surface, key)`.
+  - It writes no migration and no tenant rewrite. Orgs that already carry the override, Firefly included, are untouched.
+- **Regression invariant.** For a new org, the first successful Enrollment publication must leave a `workflow_v1` override, and a record created by Create Lead must open through `GET /api/admin/view-models/drawer/opportunity/<id>` (200, not `classic_layout_deferred`). Locked by `web/tests/businessProcesses/enrollmentDrawerProvisioning.live.test.ts`, which fails without the hook, and `web/tests/layout/enrollmentDrawerOverrideProvisioning.test.ts`.
+
 ---
 
 ## Business process builder

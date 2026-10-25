@@ -46,6 +46,8 @@ import {
 import type { AdminAccessContextResult } from "@/lib/admin/getAdminAccessContext";
 import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes";
 import { isStoragePathWithinOrg } from "@/lib/documents/storagePathAuthority";
+import { UNAVAILABLE_DOCUMENT_STATUSES } from "@/lib/documents/documentAvailability";
+import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 
 export type DocumentAccessOperation = "preview" | "download" | "attachment";
 
@@ -61,6 +63,7 @@ export type DocumentBlockCode =
     | "ORG_MISMATCH"
     | "SCOPE_DENIED"
     | "DOCUMENT_RESTRICTED"
+    | "SENSITIVE_DOCUMENT"
     | "STORAGE_LOCATION_MISSING"
     | "PATH_MISMATCH"
     | "PATH_OUTSIDE_ORG"
@@ -219,7 +222,7 @@ export { isStoragePathWithinOrg };
  * Document statuses that must never be signed regardless of actor.
  * `null` status is treated as normal — most rows predate any status vocabulary.
  */
-const RESTRICTED_STATUSES: readonly string[] = ["deleted", "quarantined", "restricted"] as const;
+const RESTRICTED_STATUSES: readonly string[] = UNAVAILABLE_DOCUMENT_STATUSES;
 
 export type DocumentAccessInput = {
     supabase: SupabaseClient;
@@ -331,7 +334,7 @@ export async function assertDocumentAccess(input: DocumentAccessInput): Promise<
     // 5. Document row ownership — org-scoped read.
     const { data, error } = await input.supabase
         .from("documents")
-        .select("id, org_id, bucket, storage_path, entity_type, entity_id, status")
+        .select("id, org_id, bucket, storage_path, entity_type, entity_id, status, doc_type")
         .eq("id", input.documentId)
         .eq("org_id", actor.orgId)
         .maybeSingle();
@@ -361,6 +364,20 @@ export async function assertDocumentAccess(input: DocumentAccessInput): Promise<
     // 6. Relationship / operational scope. Same predicate as the list.
     if (!(await documentSubjectInActorScope(input.supabase, orgId, actor.scope, { entityType, entityId }))) {
         return { outcome: "not_found" };
+    }
+
+    // 6b. Sensitive classes (D1b.6). A readable subject is not blanket authorization: a medical
+    //     document needs Medical's permission, and safeguarding evidence needs the safeguarding view
+    //     authority. If the classification cannot be read, the document is treated as sensitive.
+    const sensitivity = await resolveDocumentSensitivity(input.supabase, orgId, [
+        { id: String(row.id), doc_type: row.doc_type ? String(row.doc_type) : null },
+    ]);
+    if (!actorMayReadSensitivity(actor, sensitivity.get(String(row.id)) ?? new Set())) {
+        return {
+            outcome: "blocked",
+            code: "SENSITIVE_DOCUMENT",
+            message: "You do not have permission to view this document.",
+        };
     }
 
     // 7. Document status / visibility.

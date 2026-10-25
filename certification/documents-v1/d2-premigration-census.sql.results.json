@@ -1,0 +1,226 @@
+{
+  "trusted_host_action_id": "tha_979bc549bae116",
+  "query_hash": "58fc43b9eceee91602b801ca22af7f3adb8e915f2b34a80464e176fbe48eebcd",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T15:13:28.649Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_979bc549bae116",
+    "query_hash": "58fc43b9eceee91602b801ca22af7f3adb8e915f2b34a80464e176fbe48eebcd",
+    "authorization_id": "grnt_6c532311068b48b8",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T15:13:37.334Z",
+    "question_ids": [
+      "p00_totals",
+      "p01_entity_type",
+      "p02_status",
+      "p03_doc_type",
+      "p04_mime",
+      "p05_references",
+      "p06_storage",
+      "p07_metadata_markers",
+      "p08_status_definitions"
+    ],
+    "questions": {
+      "p00_totals": {
+        "question_id": "p00_totals",
+        "row_count": null,
+        "rows": [
+          {
+            "measured_at": "2026-10-23T15:13:36.375394+00:00",
+            "documents": 378,
+            "orgs": 1,
+            "document_versions": 0,
+            "documents_with_versions": 0,
+            "document_field_values": 0,
+            "null_storage_path": 0,
+            "null_bucket": 0,
+            "null_mime": 0,
+            "null_byte_size": 0,
+            "with_checksum": 267,
+            "path_outside_org_prefix": 0,
+            "duplicate_storage_path": 0,
+            "generated_from_set": 28,
+            "owner_contact_set": 0,
+            "identity_hash": "6e7ff5693393b627d22d0a39ec0ae8f1"
+          }
+        ]
+      },
+      "p01_entity_type": {
+        "question_id": "p01_entity_type",
+        "row_count": null,
+        "rows": [
+          {
+            "entity_type": "<null>",
+            "documents": 48,
+            "entity_id_null": 48,
+            "subject_resolves_in_org": 0,
+            "subject_missing": 0,
+            "unmapped_type": 0
+          },
+          {
+            "entity_type": "customer_member",
+            "documents": 326,
+            "entity_id_null": 0,
+            "subject_resolves_in_org": 168,
+            "subject_missing": 158,
+            "unmapped_type": 0
+          },
+          {
+            "entity_type": "person",
+            "documents": 4,
+            "entity_id_null": 0,
+            "subject_resolves_in_org": 4,
+            "subject_missing": 0,
+            "unmapped_type": 0
+          }
+        ]
+      },
+      "p02_status": {
+        "question_id": "p02_status",
+        "row_count": null,
+        "rows": [
+          {
+            "status": "uploaded",
+            "documents": 378
+          }
+        ]
+      },
+      "p03_doc_type": {
+        "question_id": "p03_doc_type",
+        "row_count": null,
+        "rows": [
+          {
+            "doc_type": "<null>",
+            "documents": 49
+          },
+          {
+            "doc_type": "generated_form_pdf",
+            "documents": 220
+          },
+          {
+            "doc_type": "immunization_record",
+            "documents": 35
+          },
+          {
+            "doc_type": "profile_photo",
+            "documents": 3
+          },
+          {
+            "doc_type": "signature_asset",
+            "documents": 71
+          }
+        ]
+      },
+      "p04_mime": {
+        "question_id": "p04_mime",
+        "row_count": null,
+        "rows": [
+          {
+            "mime_type": "application/pdf",
+            "documents": 254
+          },
+          {
+            "mime_type": "image/jpeg",
+            "documents": 3
+          },
+          {
+            "mime_type": "image/png",
+            "documents": 91
+          },
+          {
+            "mime_type": "text/html",
+            "documents": 30
+          }
+        ]
+      },
+      "p05_references": {
+        "question_id": "p05_references",
+        "row_count": null,
+        "rows": [
+          {
+            "form_submission_documents": 285,
+            "form_submission_documents_by_role": {
+              "signature_asset": 65,
+              "generated_pdf": 220
+            },
+            "drawn_signature_refs": 65,
+            "processing_document_sources": 48,
+            "processing_sources_dangling": 0,
+            "staff_qualification_evidence": 1,
+            "safeguarding_evidence": 0,
+            "medical_consent_evidence": 3,
+            "medical_consent_evidence_dangling": 0,
+            "subsidy_authorization_sources": 0,
+            "subsidy_remittance_sources": 0,
+            "vendor_doc_file_ids": 0,
+            "profile_photo_pointers": 2,
+            "profile_photo_dangling": 0
+          }
+        ]
+      },
+      "p06_storage": {
+        "question_id": "p06_storage",
+        "row_count": null,
+        "rows": [
+          {
+            "documents_with_object": 378,
+            "documents_missing_object": 0,
+            "org_documents_objects": 412,
+            "object_size_mismatch": 0
+          }
+        ]
+      },
+      "p07_metadata_markers": {
+        "question_id": "p07_metadata_markers",
+        "row_count": null,
+        "rows": [
+          {
+            "legal_hold": 0,
+            "retention_until": 0,
+            "screening": 0,
+            "version_role": 220
+          }
+        ]
+      },
+      "p08_status_definitions": {
+        "question_id": "p08_status_definitions",
+        "row_count": null,
+        "rows": [
+          {
+            "status_key": "archived",
+            "definitions": 1,
+            "active": 1
+          },
+          {
+            "status_key": "failed",
+            "definitions": 1,
+            "active": 1
+          },
+          {
+            "status_key": "processed",
+            "definitions": 1,
+            "active": 1
+          },
+          {
+            "status_key": "processing",
+            "definitions": 1,
+            "active": 1
+          },
+          {
+            "status_key": "uploaded",
+            "definitions": 1,
+            "active": 1
+          }
+        ]
+      }
+    },
+    "row_count": 22
+  }
+}

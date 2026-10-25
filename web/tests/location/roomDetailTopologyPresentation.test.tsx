@@ -96,11 +96,10 @@ describe("9-11. detail shows Type, Site and — when it applies — Inside", () 
         expect(metric("inside")).toBeNull();
     });
 
-    it("a stored Shared space now shows Physical space and no Inside", async () => {
-        // The compatibility fold: the row keeps its stored role, and the operator
-        // is shown the word the product still uses.
+    it("a stored Shared space shows Shared and no Inside", async () => {
+        // V7 S2: Shared is its own kind again — no fold into Physical.
         await renderDetail(PLAY);
-        expect(metricValue("type")).toBe("Physical");
+        expect(metricValue("type")).toBe("Shared");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });

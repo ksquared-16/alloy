@@ -127,6 +127,7 @@ export async function fetchStaffingProjection(
         placements: loaded.placements,
         assignments: loaded.assignments,
         patternsById: loaded.patternsById,
+        weekdaysByAssignmentId: loaded.weekdaysByAssignmentId,
     });
     const { resolveTiers } = buildRoomConfigResolvers({
         agreements: loaded.agreements,

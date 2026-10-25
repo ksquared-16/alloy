@@ -6,6 +6,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { documentStoredObjects } from "@/lib/documents/documentVersions";
+
 export const PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN = "RESET-PROCESSING-TEST-DATA";
 
 export type ProcessingDevCleanupCounts = {
@@ -253,16 +255,12 @@ export async function applyProcessingDevCleanup(
     }
 
     if (plan.documentIds.length > 0) {
-        const { data: docs } = await supabase
-            .from("documents")
-            .select("id, bucket, storage_path")
-            .eq("org_id", orgId)
-            .in("id", plan.documentIds);
-        for (const doc of (docs ?? []) as DocumentRow[]) {
-            if (doc.bucket && doc.storage_path) {
-                const { error } = await supabase.storage.from(doc.bucket).remove([doc.storage_path]);
-                if (error) console.warn("[processing-dev-cleanup] storage remove failed", doc.storage_path, error.message);
-            }
+        // Every version's file as well as the row's own; the version rows go with the document (ON DELETE CASCADE).
+        const stored = await documentStoredObjects(supabase, orgId, plan.documentIds);
+        if (!stored.ok) throw new Error(`stored objects could not be listed: ${stored.error}`);
+        for (const object of stored.objects) {
+            const { error } = await supabase.storage.from(object.bucket).remove([object.storagePath]);
+            if (error) console.warn("[processing-dev-cleanup] storage remove failed", object.storagePath, error.message);
         }
         await supabase.from("documents").delete().eq("org_id", orgId).in("id", plan.documentIds);
     }

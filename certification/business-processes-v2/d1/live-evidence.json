@@ -1,0 +1,208 @@
+{
+  "run": "67470892",
+  "at": "2026-10-23T04:16:34.519Z",
+  "scenarios": {
+    "1_new_org": {
+      "org": "4b975139-cd95-40e1-830e-d362cc4cd306",
+      "override_rows": 0,
+      "permission_keys": 95
+    },
+    "13_projection_publications": {
+      "assignments": {
+        "department_id": "e07ea47d-b1c4-4eed-a744-debe74a1ff13",
+        "revision_id": "ee8d3d84-6c26-43e8-8c3a-77b32bbc32e0",
+        "revision_number": 1,
+        "publication_id": "6660574e-dcdc-47c2-86cf-e367b5ff71ca",
+        "published_at": "2026-10-23T04:16:35.287199+00:00",
+        "already_published": false
+      },
+      "billing": {
+        "department_id": "6a4f4067-848f-4eca-a4cf-8e15e76f61eb",
+        "revision_id": "45443063-deab-45e9-b55c-1244ab23f1d4",
+        "revision_number": 1,
+        "publication_id": "65543628-02ad-4130-b3db-47ed006c0bee",
+        "published_at": "2026-10-23T04:16:35.423027+00:00",
+        "already_published": false
+      },
+      "override_rows": 0
+    },
+    "12_failed_publish": {
+      "status": 409,
+      "code": "business_process_draft_edit_conflict",
+      "override_rows_after": 0
+    },
+    "4_provisioned": {
+      "published": {
+        "department_id": "41b50ffd-b6e9-4974-8869-9174fce2151c",
+        "revision_id": "c88f9470-1bb8-42b3-a6b3-f171e0b49f19",
+        "revision_number": 1,
+        "publication_id": "dd355286-6e6a-4d76-9f6a-e354aa03dc38",
+        "published_at": "2026-10-23T04:16:35.780932+00:00",
+        "already_published": false
+      },
+      "override_id": "d9893328-4447-44b8-afb5-6f059e9196f0",
+      "config_keys": [
+        "inquiry_drawer_mode",
+        "inquiry_workflow_sections",
+        "overview_hidden_sections",
+        "overview_section_order",
+        "suppress_body_status",
+        "version"
+      ]
+    },
+    "9_republish": {
+      "already_published": true,
+      "rows": 1,
+      "byte_identical": true
+    },
+    "5_6_create_lead_and_view_model": {
+      "opportunity": "00268c07-62b8-4c23-8dfc-12a563127cab",
+      "stage_key": "lead",
+      "vm_status": 200,
+      "vm_keys": [
+        "generation",
+        "structureSettled",
+        "compose_version",
+        "entity",
+        "workspace",
+        "first_paint",
+        "header",
+        "actions",
+        "layout",
+        "activity",
+        "above_fold",
+        "summaries",
+        "background_refresh",
+        "timing"
+      ]
+    },
+    "D3_closed_record": {
+      "opportunity": {
+        "stage_key": "closed",
+        "status_key": "closed",
+        "work_unit_id": "e548ab2c-ea83-4651-9e9b-9e142c7eb593"
+      },
+      "closed_stage_work_templates": 0,
+      "drawer_view_model": {
+        "status": 200,
+        "reason": null,
+        "keys": [
+          "generation",
+          "structureSettled",
+          "compose_version",
+          "entity",
+          "workspace",
+          "first_paint",
+          "header",
+          "actions",
+          "layout",
+          "activity",
+          "above_fold",
+          "summaries",
+          "background_refresh",
+          "timing"
+        ]
+      },
+      "provisioning_answer": {
+        "status": 200,
+        "body": "{\"terminal\":\"error\",\"code\":\"no_truthful_primary_action\",\"message\":\"stage \\\"closed\\\" offers no work templates — the answer will not claim operational on identity alone\",\"orgId\":\"4b975139-cd95-40e1-830e-d362cc4cd306\",\"workUnit\":{\"id\":\"e548ab2c-ea83-4651-9e9b-9e142c7eb593\",\"key\":\"lifecycle_wu_lead\",\"name\":\"New Leads\",\"departmentId\":\"41b50ffd-b6e9-4974-8869-9174fce2151c\"},\"navigationFrame\":{\"lensSet\":[{\"id\":\"new_leads\",\"label\":\"New Leads\",\"displayOrder\":1},{\"id\":\"tours\",\"label\":\"Tours\",\"displayOrder\":2},{\"id\":\"decision\",\"label\":\"Decision\",\"displayOrder\":3},{\"id\":\"registration\",\"label\":\"Registration\",\"displayOrder\":4},{\"id\":\"waitlist\",\"label\":\"Waitlist\",\"displayOrder\":5},{\"id\":\"all\",\"label\":\"All\",\"displayOrder\":6}],\"activeWorkView\":{\"id\":\"all\",\"label\":\"All\"}},\"timings\":{\"authorization_ms\":0.024041999997280072,\"work_unit_ms\":4.080500000003667,\"configuration_ms\":5.048417000005429,\"presentation_ms\":99.19625000000087,\"records_ms\":14.178083000006154,\"projection_ms\":3.9779169999965234,\"composition_ms\":0,\"total_ms\":127.16416699999536},\"queueFrame\":{\"rows\":[{\"id\":\"00268c07-62b8-4c23-8dfc-12a563127cab\",\"stageKey\":\"closed\",\"statusKey\":\"closed\",\"updatedAt\":\"2026-10-23T04:16:37.882366+00:00\",\"title"
+      }
+    },
+    "D3_scope": {
+      "closed_subject": {
+        "status": 200,
+        "terminal": "error",
+        "code": "no_truthful_primary_action",
+        "rows": [
+          "closed",
+          "lead"
+        ]
+      },
+      "open_subject": {
+        "status": 200,
+        "terminal": "operational",
+        "code": null,
+        "rows": []
+      },
+      "no_subject": {
+        "status": 200,
+        "terminal": "error",
+        "code": "no_truthful_primary_action",
+        "rows": [
+          "closed",
+          "lead"
+        ]
+      }
+    },
+    "7_8_focus_summary": {
+      "status": 200,
+      "keys": [
+        "published",
+        "draft"
+      ]
+    },
+    "10_customized_preserved": {
+      "updated_at": "2026-10-23T04:16:39.777361+00:00",
+      "byte_identical": true
+    },
+    "11_conflicting_reported": {
+      "classic": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "conflicting",
+          "id": "8842372b-df7a-48d0-8419-637aa9fba744",
+          "inquiry_drawer_mode": null
+        }
+      },
+      "inactive": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "inactive",
+          "id": "32cd5d90-6ff2-43e7-8cf0-e265ffec7371"
+        }
+      },
+      "malformed": {
+        "status": "blocked",
+        "processKeys": [
+          "enrollment"
+        ],
+        "state": {
+          "kind": "invalid",
+          "id": "d6d7f7ec-c0d7-4549-b3b2-d3e71e9a8dd3",
+          "reason": "config_json is not an object"
+        }
+      }
+    },
+    "14_concurrency": {
+      "statuses": [
+        "provisioned_concurrently",
+        "provisioned_concurrently",
+        "provisioned_concurrently",
+        "provisioned",
+        "provisioned_concurrently",
+        "provisioned_concurrently"
+      ],
+      "rows": 1
+    }
+  },
+  "fixture_orgs_for_teardown": [
+    "4b975139-cd95-40e1-830e-d362cc4cd306",
+    "51f0d965-6d9c-48b2-bfaf-63b99be443cf",
+    "f81dee35-9d08-463c-b6b8-f8a698c7a437",
+    "b7d6b238-c094-415d-b8da-daa61f9e80b2",
+    "42bcce00-b2e5-4a05-bb16-b22b262675ca"
+  ],
+  "fixture_users_for_teardown": [
+    "407e6612-37f0-4cfa-921e-3937709fc419",
+    "270a16a1-36bc-427a-a377-cf52e6706e13",
+    "8a181f5e-182b-4476-931f-d8abeb102fe5",
+    "d5409859-fed9-4e7e-b212-bf9b61721ec1",
+    "c873f63c-3123-43ad-9987-856f39c1b874"
+  ]
+}

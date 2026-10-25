@@ -1829,6 +1829,22 @@
         "reason": "Documents V1 / D1a (2026-10-20). Was ctx.role !== \"admin\", the compatibility projection, which refused ops (granted documents.write in every organization) and could express no custom role. The document's subject must also be inside the caller's department/site scope, with the same predicate the list and the signer use."
       }
     },
+    "app/api/admin/documents/[id]/screening/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D1c-1 (2026-10-23). Releases a quarantined document after review. Requires processing.documents.manage AND documents read admission, the subject inside the reviewer's scope, and every sensitive class cleared. Only a quarantined document; a written reason is required; document_released is recorded before the status changes (503 if the audit cannot be written). Not an antivirus result."
+      }
+    },
+    "app/api/admin/documents/[id]/sensitivity/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Raises a document's declared sensitivity class (raise-only, enforced by the database). documents.write AND the access decision AND the actor's own clearance for the class; document_sensitivity_raised recorded before the change."
+      }
+    },
     "app/api/admin/documents/[id]/signed-url/route.ts": {
       "GET": {
         "status": "declared",
@@ -1841,6 +1857,158 @@
         "status": "declared",
         "capability": "documents.read",
         "helper": "assertDocumentAccess"
+      }
+    },
+    "app/api/admin/documents/[id]/subjects/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D2 (2026-10-23). A document's typed subject associations (owners, one primary, and context links incl. derived Forms/Processing links). Full document access decision."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Sets the primary owner, links or unlinks an owning subject. documents.write AND the access decision on the document AND the target subject inside the actor's scope; document_subject_changed recorded before the change. Access stays decided by the primary owner only."
+      }
+    },
+    "app/api/admin/documents/[id]/versions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D2 (2026-10-23). Lists a document's immutable versions (metadata only, never a storage path). Admission is the full document access decision: read admission, subject scope, every sensitive class, availability."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D2 (2026-10-23). Replaces a document's file with a new immutable version. documents.write AND the full access decision; content signature and D1c-1 screening, only a clean file is stored; a written reason; document_version_added recorded before the version exists. The previous version is kept."
+      }
+    },
+    "app/api/admin/documents/[id]/history/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D4 (2026-10-25). A document's history built from committed rows (versions, subject links, review, release) with refused audited attempts labelled as such. Admission is the full document access decision; never a storage path."
+      }
+    },
+    "app/api/admin/documents/library/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D4 (2026-10-25). Household document library for a household, adult, child or case. The anchor must be readable in the actor's scope (else 404); every document passes availability, primary-owner subject scope and sensitivity before it is listed or counted; a focus narrows on the server."
+      }
+    },
+    "app/api/admin/documents/screening/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D1c-1 (2026-10-23). The structural-screening review queue: this organization's quarantined documents, which no other list shows. Requires the Processing source-document authority that already governs deleting a document, AND documents read admission (requireDocumentRead), with department/site scope and sensitive-class filters applied. Returns the screening record only, never bytes, links or text."
+      }
+    },
+    "app/api/admin/documents/configuration/categories/[id]/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Document Studio category update/archive/activate. The database refuses cycles, foreign parents, archiving a category with active children or types, and key changes; document_category_changed recorded first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Deletes a category only if no type ever used it and it has no children; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/categories/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D3 (2026-10-23). Lists the organization's document categories (vocabulary). documents.read or processing.documents.manage."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Creates a document category; stable key; document_category_changed recorded before the row exists."
+      }
+    },
+    "app/api/admin/documents/configuration/compatibility/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D3 (2026-10-23). Counts of stored doc_type values against the organization's document types; never a document; nothing reclassified."
+      }
+    },
+    "app/api/admin/documents/configuration/types/[id]/draft/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Saves a type draft or opens a new revision; a published version is never edited; nothing becomes live; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 closeout (2026-10-24). Discards a type's unpublished draft or validated version; a published or superseded version is never removed; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/types/[id]/publish/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Publishes a validated type version through document_type_publish (compare-and-swap, re-validated, raise-only sensitivity); audit names sensitivity before and after."
+      }
+    },
+    "app/api/admin/documents/configuration/types/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D3 (2026-10-23). A document type and its versions. documents.read or processing.documents.manage."
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Archives or re-activates a type; identity, versions and documents kept; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Deletes a type only if no document ever used its key; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/types/[id]/validate/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Validates a type draft on the server (document_type_validate); audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/types/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D3 (2026-10-23). Lists document types with published version, open draft and policy enforcement status."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D3 (2026-10-23). Creates a document type and its first draft; nothing live until validated and published; audited first."
       }
     },
     "app/api/admin/documents/entity-options/route.ts": {

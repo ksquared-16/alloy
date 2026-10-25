@@ -1,9 +1,9 @@
 {
-  "trusted_host_action_id": "tha_1dd07db4fe5963",
+  "trusted_host_action_id": "tha_8745757d7bd423",
   "query_hash": "7a5c03c94b63618859bc6a078b79280a6e419ca4ba2d58e50f96e5c7de96f272",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-09T20:54:06.535Z",
+    "census_run_at": "2026-10-23T23:44:23.775Z",
     "question_ids": [
       "ledger",
       "ledger_head",
@@ -197,34 +197,57 @@
           20261122130000,
           20261122140000,
           20261122150000,
-          20261122160000
+          20261122160000,
+          20261122170000,
+          20261122180000,
+          20261122190000,
+          20261123141500,
+          20261123160000,
+          20261124090000,
+          20261125090000,
+          20261126090000,
+          20261127090000,
+          20261128090000,
+          20261129090000,
+          20261201090000,
+          20261201100000,
+          20261202090000,
+          20261203090000,
+          20261204090000,
+          20261205090000,
+          20261207181500,
+          20261207181600,
+          20261208090000,
+          20261209090000,
+          20261209090100,
+          20261209090200
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20261122160000
+          20261209090200
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          522
+          545
         ]
       }
     },
-    "row_count": 186
+    "row_count": 209
   },
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-09T20:54:01.776Z",
+    "executed_at": "2026-10-23T23:44:18.738Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_1dd07db4fe5963",
+    "trusted_host_action_id": "tha_8745757d7bd423",
     "query_hash": "7a5c03c94b63618859bc6a078b79280a6e419ca4ba2d58e50f96e5c7de96f272",
-    "authorization_id": "grnt_5c87a6955c1c429a",
+    "authorization_id": "grnt_22fe7404fc8e44a1",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null

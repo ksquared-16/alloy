@@ -48,6 +48,7 @@ export async function fetchActualComplianceReadModel(
         placements: loaded.placements,
         assignments: loaded.assignments,
         patternsById: loaded.patternsById,
+        weekdaysByAssignmentId: loaded.weekdaysByAssignmentId,
     });
 
     const events = await listAttendanceEvents(supabase, input.orgId, {

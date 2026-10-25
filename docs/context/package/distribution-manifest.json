@@ -17,7 +17,7 @@
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "tier": 1,
-      "blob_sha": "41349b0e01e1741812ba85489e462f5ce959df8f",
+      "blob_sha": "d27c6ddfe0f420fc01159f7869559355c7c0bae5",
       "exists": true
     },
     {
@@ -53,7 +53,7 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "5faf4e4cee8edd0d5a45ae86783e791f55764861",
+      "blob_sha": "ee6ee9899faef9e59bba92fa9811552c40bf4210",
       "exists": true
     },
     {
@@ -77,7 +77,7 @@
     {
       "path": "docs/platform/core/status-and-state-system.md",
       "tier": 2,
-      "blob_sha": "35068b2af14275e867cf0c98bce3d3e7467b1985",
+      "blob_sha": "9e90934a8b255593cfd44c38f14f74caea953311",
       "exists": true
     },
     {
@@ -125,7 +125,7 @@
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "ef8b0d9c782325ad43ca37073bb6b38aa21a5e7e",
+      "blob_sha": "64f040e80df72e53a43d3eedb97c2c3d92fe7f55",
       "exists": true
     },
     {
@@ -197,7 +197,7 @@
     {
       "path": "docs/platform/core/work-view-membership-and-navigation.md",
       "tier": 3,
-      "blob_sha": "e042d70baaa63503d41cdd9c0b020c84cc56db27",
+      "blob_sha": "18dddf431d17f06e1c2a9cbbc8978e40f2d282ac",
       "exists": true
     },
     {
@@ -245,7 +245,7 @@
     {
       "path": "docs/platform/modules/configuration-platform.md",
       "tier": 3,
-      "blob_sha": "145459f7583cb441568e3b7e2c12064b908c34d2",
+      "blob_sha": "cca1d61ed65e4e6d4a4429bfd92060455d6d8c43",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "eaf127b53dff8b6f083118cf37dc19d416faf281",
+      "blob_sha": "0d0c92ec32f92c1618bc951cc8f0bb68f88128ca",
       "exists": true
     },
     {

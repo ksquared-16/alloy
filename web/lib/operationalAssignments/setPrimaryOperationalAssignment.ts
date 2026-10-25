@@ -37,6 +37,7 @@ import {
     assignmentDateRangesOverlap,
     windowCoversDate,
 } from "@/lib/operationalAssignments/primaryOverlap";
+import { assertSpaceEligibleForAssignment } from "@/lib/operationalAssignments/assertSpaceEligible";
 import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export const ASSIGNMENT_SET_PRIMARY_ACTION_KEY = "assignment.set_primary";
@@ -351,6 +352,17 @@ export async function setPrimaryOperationalAssignment(
     if (!patternCheck.ok) {
         throw new OperationalEnrollmentServiceError("validation_failed", patternCheck.error.message, {
             field: "schedule_pattern_id",
+        });
+    }
+    // The same space rule as every other assignment writer; promoting a row in place keeps its room
+    // and use, so it is never refused by configuration made after the fact.
+    if (candidate.roomLocationId) {
+        await assertSpaceEligibleForAssignment(supabase, {
+            orgId: input.orgId,
+            roomLocationId: candidate.roomLocationId,
+            categoryId: candidate.assignmentTypeId,
+            subjectType: subject.subjectType,
+            supersedesAssignmentId: candidate.promoteFromId,
         });
     }
 

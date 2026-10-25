@@ -38,7 +38,13 @@ const TODAY = "2026-06-29";
 const ACTOR = "user-1";
 
 function setup() {
-    const store = createOperationalEnrollmentMockStore();
+    // A ratio belongs to a classroom (V7 S4): the room it is authored on must exist as one.
+    const store = createOperationalEnrollmentMockStore({
+        locations: [
+            { id: "room-1", org_id: ORG_ID, label: "Toddler 1", location_type: "unit", unit_role: "operational_group" },
+            { id: "room-shell", org_id: ORG_ID, label: "Room 1", location_type: "unit", unit_role: "physical_space" },
+        ],
+    } as never);
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 
@@ -103,6 +109,17 @@ describe("ratio authoring emits exactly one config-changed event per mutation", 
         const p = lastPayload();
         expect(p).toMatchObject({ rule_type: "ratio", change_kind: "create" });
         expect(p.affected_calculation_keys).toHaveLength(4);
+    });
+
+    it("a ratio on a physical space is refused and emits nothing", async () => {
+        const { supabase } = setup();
+        await expect(
+            createRatioRule(supabase, {
+                orgId: ORG_ID, scopeType: "room", roomLocationId: "room-shell",
+                tiers: [{ maxChildren: 5, requiredStaff: 1 }], effectiveStart: "2026-01-01", actorUserId: ACTOR,
+            }),
+        ).rejects.toMatchObject({ code: "invalid_input" });
+        expect(emitEventMock).not.toHaveBeenCalled();
     });
 
     it("version / retire / void each emit exactly once", async () => {

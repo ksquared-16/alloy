@@ -21,6 +21,8 @@ import {
     profilePhotoDocumentId,
     resolveProfilePhotosForActor,
 } from "@/lib/documents/profilePhotoPresentation";
+import { deriveHomerooms, type DerivedHomeroom } from "@/lib/location/homerooms";
+import { loadHomeroomAssignments, loadHomeroomContext } from "@/lib/location/loadHomeroomContext";
 
 export type AssignmentRosterRow = {
     assignmentId: string;
@@ -67,7 +69,10 @@ export type AssignmentRosterSubject = {
     positionLabel?: string | null;
     subjectType: "child" | "staff";
     assignmentCount: number;
-    primaryRoom: string | null;
+    /** Children: derived homerooms today (`deriveHomerooms`) — zero, one or many; never a chosen room. Staff: []. */
+    homerooms: DerivedHomeroom[];
+    /** Staff only: the room of the staff member's primary assignment (a staffing fact). Children: null. */
+    staffPrimaryRoom: string | null;
     assignments: AssignmentRosterRow[];
     /** Profile image URL when the child's person record carries one, else null → initials avatar. */
     imageUrl?: string | null;
@@ -232,29 +237,6 @@ async function resolveLocationLabels(
         .in("id", distinct);
     for (const row of (data ?? []) as { id: string; label: string | null }[]) {
         map.set(row.id, row.label?.trim() || "Room");
-    }
-    return map;
-}
-
-/** Latest enrollment draft's room per pre-enrolment child (`process_instances.metadata.program_room_cohort_key`). */
-async function resolveDraftPrimaryRooms(
-    supabase: SupabaseClient,
-    orgId: string,
-    memberIds: string[]
-): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
-    if (memberIds.length === 0) return map;
-    const { data } = await supabase
-        .from("process_instances")
-        .select("subject_id, metadata, created_at")
-        .eq("org_id", orgId)
-        .eq("process_key", "enrollment")
-        .in("subject_id", memberIds)
-        .order("created_at", { ascending: false });
-    for (const row of (data ?? []) as { subject_id: string; metadata: Record<string, unknown> | null }[]) {
-        if (map.has(row.subject_id)) continue; // latest instance wins, as in the projection
-        const room = String(row.metadata?.program_room_cohort_key ?? "").trim();
-        if (room) map.set(row.subject_id, room);
     }
     return map;
 }
@@ -443,29 +425,13 @@ export async function buildAssignmentRosterReadModel(
         documentActor,
     );
 
-    /*
-     * A PRE-ENROLMENT CHILD'S PRIMARY IS ITS DRAFT, NOT A ROW. Before enrolment the primary proposal
-     * lives on the child's enrollment process instance; a proposed secondary (Before Care) is a ledger
-     * row. The summary used to take the first row when no row was primary — so a child whose primary
-     * is Toddler 2 read "Primary: Infant A", its Before Care room. The draft's room is read for exactly
-     * those children (latest instance, as the scheduling projection reads it).
-     */
-    const membersWithPrimaryRow = new Set(
-        rows.filter((r) => r.is_primary && r.customer_member_id).map((r) => r.customer_member_id as string)
-    );
-    const draftMembers = memberIds.filter((id) => !agreementByMember.has(id) && !membersWithPrimaryRow.has(id));
-    const draftRoomByMember = await resolveDraftPrimaryRooms(supabase, orgId, draftMembers);
-
-    const roomIds = [
-        ...rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id)),
-        ...draftRoomByMember.values(),
-    ];
+    const roomIds = rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id));
     const patternIds = rows.map((r) => r.schedule_pattern_id).filter((id): id is string => Boolean(id));
     const typeIds = rows
         .map((r) => r.operational_assignment_type_id)
         .filter((id): id is string => Boolean(id));
 
-    const [roomLabels, { weekdaysById: patternWeekdays }, typeMap, staffPositions, assignmentTimes] =
+    const [roomLabels, { weekdaysById: patternWeekdays }, typeMap, staffPositions, assignmentTimes, homeroomRowsByMember] =
         await Promise.all([
             resolveLocationLabels(supabase, orgId, roomIds),
             resolvePatternWeekdays(supabase, orgId, patternIds),
@@ -475,7 +441,13 @@ export async function buildAssignmentRosterReadModel(
                 orgId,
                 assignmentIds: rows.map((r) => r.id),
             }),
+            loadHomeroomAssignments(supabase, orgId, { memberIds, onDate: asOf }),
         ]);
+    const homeroomRows = [...homeroomRowsByMember.values()].flat();
+    const homeroomContext = await loadHomeroomContext(supabase, orgId, {
+        roomIds: homeroomRows.map((r) => r.roomLocationId ?? ""),
+        agreementIds: homeroomRows.map((r) => r.enrollmentAgreementId ?? ""),
+    });
 
     const bySubject = new Map<string, AssignmentRosterRow[]>();
     for (const row of rows) {
@@ -581,10 +553,18 @@ export async function buildAssignmentRosterReadModel(
             if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
             return a.effectiveFrom.localeCompare(b.effectiveFrom);
         });
-        const primaryRow = assignments.find((a) => a.isPrimary) ?? null;
-        // Identity fields may come from any row; the PRIMARY ROOM never comes from a secondary.
-        const primary = primaryRow ?? assignments[0];
-        const draftRoomId = !primaryRow && primary.customerMemberId ? draftRoomByMember.get(primary.customerMemberId) ?? null : null;
+        // Identity fields are the same on every row of a subject; the first is as good as any.
+        const primary = assignments[0];
+        const homerooms =
+            primary.subjectType === "child"
+                ? deriveHomerooms({
+                      onDate: asOf,
+                      assignments: primary.customerMemberId ? (homeroomRowsByMember.get(primary.customerMemberId) ?? []) : [],
+                      spacesById: homeroomContext.spacesById,
+                      homeroomCategoryIds: homeroomContext.homeroomCategoryIds,
+                      placementsByAgreement: homeroomContext.placementsByAgreement,
+                  })
+                : [];
         subjects.push({
             subjectKey,
             subjectName: primary.subjectName,
@@ -593,7 +573,9 @@ export async function buildAssignmentRosterReadModel(
             positionLabel: primary.positionLabel ?? null,
             subjectType: primary.subjectType,
             assignmentCount: assignments.length,
-            primaryRoom: primaryRow ? primaryRow.roomName : draftRoomId ? roomLabels.get(draftRoomId) ?? null : null,
+            homerooms,
+            staffPrimaryRoom:
+                primary.subjectType === "staff" ? (assignments.find((a) => a.isPrimary)?.roomName ?? null) : null,
             assignments,
             imageUrl: primary.personId ? imageUrlByPersonId.get(primary.personId) ?? null : null,
         });

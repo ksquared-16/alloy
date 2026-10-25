@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
@@ -37,6 +38,8 @@ import {
 import { proposeImportDisplayName, resolveDisplayNameWithCollision } from "@/lib/pos/documentInstanceNaming";
 import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
+import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKind } from "@/lib/documents/documentContentSignature";
+import { auditQuarantine, decideIngestion } from "@/lib/documents/screenedIngestion";
 import { CANONICAL_DOCUMENT_ENTITY_TYPE } from "@/lib/documents/documentEntityTypes";
 import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
 
@@ -214,6 +217,31 @@ export async function POST(request: NextRequest) {
     if (buffer.length > ADMIN_DOCUMENT_UPLOAD_MAX_BYTES) {
         return tooLargeResponse();
     }
+    // D1b.3: the bytes must be the format the name and type claim. A stored format always has a
+    // canonical content type, and that, not the browser's label, is what the governed bucket accepts.
+    const contentKind = sourceFormat as DocumentContentKind;
+    if (!bytesMatchDocumentKind(buffer, contentKind)) {
+        return NextResponse.json(
+            {
+                error: `This file is not a valid ${formatCaps.label}.`,
+                code: "CONTENT_MISMATCH",
+                format: sourceFormat,
+            },
+            { status: 415 }
+        );
+    }
+    const storedMimeType = CANONICAL_DOCUMENT_MIME[contentKind];
+    // D1c-1: structural screening, BEFORE storage and before any parser (PDF text extraction, OCR) touches the bytes.
+    // Refused: nothing stored. Flagged: stored unavailable (`quarantined`), with no extraction and no Processing case,
+    // until an authorized release.
+    const screened = decideIngestion(buffer, contentKind);
+    if (!screened.store) {
+        return NextResponse.json(
+            { error: screened.message, code: "SCREENING_REFUSED", reason: screened.result.reason, format: sourceFormat },
+            { status: 415 }
+        );
+    }
+    const quarantined = screened.status === "quarantined";
     // Content hash of the bytes we are about to store.
     //
     // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every
@@ -226,8 +254,29 @@ export async function POST(request: NextRequest) {
     const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
     const storagePath = `${ctx.orgId}/${pathSegment}/${objectId}-${safeName}`;
 
+    // D4: the upload is recorded BEFORE anything is stored, like every other document write — no record, no file. The
+    // document id is assigned here so the attempt and the committed row name the same document. Never the path.
+    const documentId = randomUUID();
+    const uploadAudit = await recordDocumentAudit({
+        orgId: ctx.orgId,
+        actorUserId: ctx.userId,
+        event: "document_upload_authorized",
+        subject: { type: "documents", id: documentId },
+        route: "admin/documents/upload",
+        detail: {
+            entity_type: canonicalType,
+            entity_id: rowEntityId,
+            doc_type: docType,
+            byte_size: buffer.length,
+            screening_status: screened.status,
+        },
+    });
+    if (!uploadAudit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+    }
+
     const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
-        contentType: file.type || "application/octet-stream",
+        contentType: storedMimeType,
         upsert: false,
     });
 
@@ -266,22 +315,27 @@ export async function POST(request: NextRequest) {
     const { data: row, error: insErr } = await supabase
         .from("documents")
         .insert({
+            id: documentId,
             org_id: ctx.orgId,
             entity_type: canonicalType,
             entity_id: rowEntityId,
             doc_type: docType,
             title,
             original_filename: origName !== "upload" ? origName : null,
-            mime_type: mimeType || null,
+            mime_type: storedMimeType,
             byte_size: buffer.length,
             checksum_sha256: checksumSha256,
             bucket,
             storage_path: storagePath,
-            status: "uploaded",
+            status: screened.status,
             metadata: {
+                screening: screened.screening,
                 processing_intent: processingIntent,
                 ...processingIntentMetadata(processingIntent),
                 source_format: sourceFormat,
+                // Read by the D2 insert trigger as version 1's `created_by`.
+                uploaded_by: ctx.userId,
+                upload_audit_event_id: uploadAudit.eventId,
                 ...(isProfilePhoto ? { profile_photo: true } : {}),
             },
         })
@@ -303,6 +357,23 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+
+    if (quarantined) {
+        await auditQuarantine({ orgId: ctx.orgId, actor: ctx.userId, documentId: docId, decision: screened, route: "admin/documents/upload" });
+        return NextResponse.json({
+            document,
+            raw: row,
+            processing_case_id: null,
+            classification_key: null,
+            extraction_candidate_count: null,
+            screening: {
+                verdict: "quarantine",
+                reason: screened.result.verdict === "quarantine" ? screened.result.reason : null,
+                findings: screened.result.verdict === "quarantine" ? screened.result.findings : [],
+                note: "Held for review: structural screening found content it will not serve. This is not an antivirus result.",
+            },
+        });
+    }
 
     if (isProfilePhoto) {
         try {

@@ -435,6 +435,14 @@ detail reads assert readability. `accessScope.ts` already provides all three fam
 `assertEntityDrawerRecordReadable`). The model requires symmetry: a capability that can read a row scope-
 filtered **MUST NOT** be able to mutate that same row unfiltered.
 
+**Financial detail reads (BP V2 D4, October 2026).** Site scope for money is owned by the Financials
+location contract (`isFinancialWorkVisible`), not by CRM reachability.
+- Financials list readers applied it; the detail reads did not. That was the defect.
+- Financials detail reads now assert it through `lib/financials/workspace/financialReadScope.ts`. Out of
+  scope answers the same 404 as not-found.
+- Opening a household, child or case (CRM scope) does not confer reading its financial items.
+- No grant or capability changed; `fin.read` remains necessary.
+
 ---
 
 ## 10. Where authority is decided

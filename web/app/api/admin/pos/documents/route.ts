@@ -5,6 +5,8 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { filterDocumentRowsInActorScope, requireDocumentRead } from "@/lib/documents/assertDocumentAccess";
+import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import {
     buildPosDocumentsList,
     type PosDocumentCaseInfo,
@@ -53,16 +55,23 @@ export async function GET(request: NextRequest) {
     try {
         const { data: docRows, error: docErr } = await supabase
             .from("documents")
-            .select("id, title, original_filename, doc_type, created_at, entity_type, entity_id")
+            .select("id, title, original_filename, doc_type, created_at, entity_type, entity_id, status")
             .eq("org_id", ctx.orgId)
             .order("created_at", { ascending: false })
             .limit(limit);
         if (docErr) throw new Error(docErr.message);
-        const scoped = await filterDocumentRowsInActorScope(
+        const scoped = await filterDocumentRowsBySensitivity(
             supabase,
             ctx.orgId,
-            scopeDimensionsFromAccess(access),
-            (docRows ?? []) as Array<PosDocumentRow & { entity_type: string | null; entity_id: string | null }>,
+            access,
+            await filterDocumentRowsInActorScope(
+                supabase,
+                ctx.orgId,
+                scopeDimensionsFromAccess(access),
+                ((docRows ?? []) as Array<PosDocumentRow & { entity_type: string | null; entity_id: string | null; status?: string | null }>).filter(
+                    (r) => !isDocumentUnavailable(r.status),
+                ),
+            ),
         );
         const docs: PosDocumentRow[] = scoped.map((d) => ({
             id: d.id,

@@ -21,39 +21,26 @@ import { LOCATION_WORKSPACE_TABS } from "@/lib/locations/locationWorkspaceModel"
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 
-describe("two operator kinds, not three types", () => {
-    it("offers exactly Operational and Physical", () => {
-        expect(ROOM_TYPE_OPTIONS.map((o) => o.label)).toEqual(["Operational", "Physical"]);
-    });
-
-    it("never offers Shared space to author", () => {
-        expect(ROOM_TYPE_OPTIONS.some((o) => o.role === "shared_space")).toBe(false);
+describe("three operator kinds (V7 S2)", () => {
+    it("offers Operational, Shared and Physical", () => {
+        expect(ROOM_TYPE_OPTIONS.map((o) => o.label)).toEqual(["Operational", "Shared", "Physical"]);
+        expect(ROOM_TYPE_OPTIONS.map((o) => o.role)).toEqual(["operational_group", "shared_space", "physical_space"]);
     });
 
     it("calls the structural distinction Physical, not Classroom-versus-room", () => {
-        // "Classroom" was withdrawn as the STRUCTURAL word: semantic_kind is the
-        // constant "classroom" on every unit that has it, and metadata.category
-        // is the Programs vocabulary wearing a different hat.
         expect(roomTypeLabel("physical_space")).toBe("Physical");
     });
 });
 
-describe("a stored shared space keeps working", () => {
-    it("presents as Physical", () => {
-        expect(roomTypeLabel("shared_space")).toBe("Physical");
+describe("a shared space is its own kind again", () => {
+    it("presents as Shared, never folded into Physical", () => {
+        expect(roomTypeLabel("shared_space")).toBe("Shared");
     });
 
-    it("is offered in its own editor without a duplicate Physical entry", () => {
-        const options = roomTypeOptionsFor("shared_space");
-        expect(options.map((o) => o.label)).toEqual(["Operational", "Physical"]);
-        // The Physical slot is the STORED role, so saving without touching Kind
-        // leaves storage exactly as it was.
-        expect(options.find((o) => o.label === "Physical")?.role).toBe("shared_space");
-    });
-
-    it("an ordinary object never sees the shared role", () => {
-        expect(roomTypeOptionsFor("operational_group").some((o) => o.role === "shared_space")).toBe(false);
-        expect(roomTypeOptionsFor(null).some((o) => o.role === "shared_space")).toBe(false);
+    it("every space is offered the same three kinds, so a stored role is never rewritten by opening the editor", () => {
+        for (const role of ["operational_group", "shared_space", "physical_space", null] as const) {
+            expect(roomTypeOptionsFor(role).map((o) => o.role)).toEqual(["operational_group", "shared_space", "physical_space"]);
+        }
     });
 
     it("carries no operational-only fields, exactly like a physical space", () => {

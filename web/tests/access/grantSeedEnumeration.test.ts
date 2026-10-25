@@ -63,7 +63,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * Forms moved it here; Organization Vocabulary, then Tours, then Work moved it since, and
  * Enrollment Record Authority V1 moves it now.
  */
-const LIVE_SEED = "20260916050000_enrollment_record_authority.sql";
+const LIVE_SEED = "20261209090000_documents_sensitive_read_capabilities.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -128,6 +128,12 @@ const OPS_WITHHELD = [
      */
     "admin.access_scope.write",
     "attendance.devices.manage",
+    /*
+     * Documents D3 (20261209090000): the sensitive-document read clearances, admin only by the Director's decision
+     * (the health.view precedent). ops reads ordinary documents; it does not acquire identity papers or restricted ones.
+     */
+    "documents.identity.read",
+    "documents.restricted.read",
     /*
      * Defining the organization's vocabulary. Withheld from ops for the reason the slice states:
      * three of the four included families denied ops by role title already, and the fourth was

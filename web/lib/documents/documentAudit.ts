@@ -24,6 +24,17 @@ export type DocumentAuditEvent =
     | "document_link_issued"
     | "document_delete_authorized"
     | "document_delete_failed"
+    | "document_quarantined"
+    | "document_released"
+    // D2: a replacement version, an association change, a raised sensitivity class. Each is recorded BEFORE the change.
+    | "document_version_added"
+    | "document_subject_changed"
+    | "document_sensitivity_raised"
+    // D3: a Studio configuration change (category or type), recorded before the change.
+    | "document_category_changed"
+    | "document_type_changed"
+    // D4: an operator upload, recorded before the file is stored.
+    | "document_upload_authorized"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
@@ -31,8 +42,8 @@ export type DocumentAuditInput = {
     orgId: string;
     actorUserId: string;
     event: DocumentAuditEvent;
-    /** `documents` for an event about one document, `persons` for the photo pointer. */
-    subject: { type: "documents" | "persons"; id: string };
+    /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3. */
+    subject: { type: "documents" | "persons" | "document_categories" | "document_types"; id: string };
     /** Where the action came from, e.g. `admin/documents/signed-url`. */
     route: string;
     detail?: Record<string, unknown>;

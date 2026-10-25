@@ -1,0 +1,582 @@
+{
+  "trusted_host_action_id": "tha_fe75b43116e2d4",
+  "query_hash": "6442eba7d8ff660e112dfa4d2f752ffe405a8cf93803e69dfa2e76f7400c3711",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-23T12:59:21.854Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_fe75b43116e2d4",
+    "query_hash": "6442eba7d8ff660e112dfa4d2f752ffe405a8cf93803e69dfa2e76f7400c3711",
+    "authorization_id": "grnt_3a566349988942d6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-23T12:59:43.301Z",
+    "question_ids": [
+      "dd_01_stages",
+      "dd_02_enter_child_enrollment_rules",
+      "dd_03_command_set"
+    ],
+    "questions": {
+      "dd_01_stages": {
+        "question_id": "dd_01_stages",
+        "row_count": null,
+        "rows": [
+          [
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "lead",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "reached_family",
+                "left_message",
+                "needs_follow_up",
+                "interested",
+                "tour_scheduled",
+                "not_interested"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "contact_family",
+                  "outcome_refs": [
+                    "reached_family",
+                    "left_message",
+                    "needs_follow_up",
+                    "interested",
+                    "tour_scheduled",
+                    "not_interested"
+                  ],
+                  "completion_policy": {
+                    "sufficient_command_results": [
+                      {
+                        "result": "sent",
+                        "capability": "communications_send",
+                        "satisfies_outcome_key": "left_message"
+                      },
+                      {
+                        "result": "confirmed",
+                        "capability": "schedule_tour",
+                        "satisfies_outcome_key": "tour_scheduled"
+                      }
+                    ]
+                  },
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "tour",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "tour_scheduled",
+                "tour_completed",
+                "no_show",
+                "needs_follow_up",
+                "family_declined",
+                "no_availability"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "conduct_tour",
+                  "outcome_refs": [
+                    "tour_scheduled",
+                    "tour_completed",
+                    "no_show",
+                    "needs_follow_up",
+                    "family_declined",
+                    "no_availability"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "decision",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "family_enrolling",
+                "needs_time",
+                "wants_waitlist",
+                "declined"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "support_enrollment_decision",
+                  "outcome_refs": [
+                    "family_enrolling",
+                    "needs_time",
+                    "wants_waitlist",
+                    "declined"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "closed",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "acknowledged"
+              ],
+              "work_templates": null
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "waitlist",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "spot_offered",
+                "candidate_paused",
+                "no_response"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "review_waitlist_position",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "offer_spot",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "enrolling",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "enrollment_complete",
+                "packet_sent",
+                "packet_pending",
+                "family_withdrew"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "send_enrollment_packet",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "confirm_start_date",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "enrolled",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "acknowledged"
+              ],
+              "work_templates": null
+            },
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "closed_withdrawn",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "acknowledged"
+              ],
+              "work_templates": null
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "lead",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "left_message",
+                "awaiting_response",
+                "unable_to_reach",
+                "contact_closed_lost",
+                "tour_scheduled",
+                "outreach_sent"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "contact_family",
+                  "outcome_refs": [
+                    "left_message",
+                    "awaiting_response",
+                    "unable_to_reach",
+                    "contact_closed_lost"
+                  ],
+                  "completion_policy": {
+                    "sufficient_command_results": [
+                      {
+                        "result": "sent",
+                        "capability": "communications_send",
+                        "satisfies_outcome_key": "outreach_sent"
+                      },
+                      {
+                        "result": "confirmed",
+                        "capability": "schedule_tour",
+                        "satisfies_outcome_key": "tour_scheduled"
+                      }
+                    ]
+                  },
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "follow_up_family",
+                  "outcome_refs": [
+                    "left_message",
+                    "awaiting_response",
+                    "unable_to_reach",
+                    "contact_closed_lost"
+                  ],
+                  "completion_policy": {
+                    "sufficient_command_results": [
+                      {
+                        "result": "sent",
+                        "capability": "communications_send",
+                        "satisfies_outcome_key": "left_message"
+                      },
+                      {
+                        "result": "confirmed",
+                        "capability": "schedule_tour",
+                        "satisfies_outcome_key": "tour_scheduled"
+                      }
+                    ]
+                  },
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "tour",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "outcome_1",
+                "outcome_2",
+                "outcome_3",
+                "outcome_4",
+                "outcome_5",
+                "outcome_6",
+                "outcome_7",
+                "outcome_8",
+                "outcome_9",
+                "outcome_10"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "work_1",
+                  "outcome_refs": [
+                    "outcome_1",
+                    "outcome_2"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "work_2",
+                  "outcome_refs": [
+                    "outcome_6"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "work_3",
+                  "outcome_refs": [
+                    "outcome_7",
+                    "outcome_8",
+                    "outcome_10",
+                    "outcome_5"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "decision",
+              "stage_active": true,
+              "grain": "family",
+              "segment": "family",
+              "outcomes": [
+                "paths_chosen",
+                "needs_follow_up",
+                "followed_up"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "review_child_paths",
+                  "outcome_refs": null,
+                  "completion_policy": {
+                    "requires_all_participants_resolved": true
+                  },
+                  "participant_decisions": [
+                    {
+                      "decision_key": "child_offer_spot",
+                      "action_ref": "waitlist_child",
+                      "available": null,
+                      "target_kinds": [
+                        "update_child_enrollment_status",
+                        "move_to_stage"
+                      ],
+                      "stage_keys": [
+                        "enrolling"
+                      ]
+                    },
+                    {
+                      "decision_key": "child_waitlist",
+                      "action_ref": "waitlist_child",
+                      "available": null,
+                      "target_kinds": [
+                        "update_child_enrollment_status",
+                        "move_to_stage"
+                      ],
+                      "stage_keys": [
+                        "waitlist"
+                      ]
+                    },
+                    {
+                      "decision_key": "child_not_enrolling",
+                      "action_ref": "update_child_enrollment_status",
+                      "available": null,
+                      "target_kinds": [
+                        "update_child_enrollment_status"
+                      ],
+                      "stage_keys": null
+                    },
+                    {
+                      "decision_key": "child_begin_enrolling",
+                      "action_ref": "enroll_child",
+                      "available": false,
+                      "target_kinds": [
+                        "update_child_enrollment_status",
+                        "move_to_stage"
+                      ],
+                      "stage_keys": [
+                        "enrolling"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "template_key": "decision_follow_up",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "waitlist",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "spot_offered",
+                "candidate_paused",
+                "no_response"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "review_waitlist_position",
+                  "outcome_refs": [
+                    "candidate_paused"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "offer_spot",
+                  "outcome_refs": [
+                    "spot_offered",
+                    "no_response",
+                    "candidate_paused"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "offered",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "offer_accepted",
+                "offer_declined",
+                "offer_declined_waitlist",
+                "offer_no_response",
+                "offer_expired"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "offer_response",
+                  "outcome_refs": [
+                    "offer_accepted",
+                    "offer_declined",
+                    "offer_declined_waitlist",
+                    "offer_no_response",
+                    "offer_expired"
+                  ],
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "enrolling",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "enrollment_complete",
+                "packet_pending",
+                "family_withdrew"
+              ],
+              "work_templates": [
+                {
+                  "template_key": "send_enrollment_packet",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                },
+                {
+                  "template_key": "confirm_start_date",
+                  "outcome_refs": null,
+                  "completion_policy": null,
+                  "participant_decisions": null
+                }
+              ]
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "process_active": true,
+              "stage_key": "enrolled",
+              "stage_active": true,
+              "grain": "child",
+              "segment": "child",
+              "outcomes": [
+                "acknowledged"
+              ],
+              "work_templates": null
+            }
+          ]
+        ]
+      },
+      "dd_02_enter_child_enrollment_rules": {
+        "question_id": "dd_02_enter_child_enrollment_rules",
+        "row_count": null,
+        "rows": [
+          []
+        ]
+      },
+      "dd_03_command_set": {
+        "question_id": "dd_03_command_set",
+        "row_count": null,
+        "rows": [
+          [
+            {
+              "org": "qa_shared",
+              "department_key": "enrollment",
+              "process_key": "enrollment",
+              "enabled": null
+            },
+            {
+              "org": "firefly",
+              "department_key": "lead_management",
+              "process_key": "enrollment",
+              "enabled": [
+                "enroll_child",
+                "update_child_enrollment_status",
+                "waitlist_child"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
