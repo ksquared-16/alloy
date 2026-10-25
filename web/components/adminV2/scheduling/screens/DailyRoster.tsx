@@ -545,11 +545,14 @@ export default function DailyRoster({
                                         >
                                             {cell.expectedChildCount}
                                         </span>
+                                        {/* HERE NOW is physical: the children whose whereabouts put
+                                            them in this room — the count the actual ratio below uses
+                                            (V7 K1), beside staff counted the same way. */}
                                         <span
                                             className="text-right text-[15px] font-semibold tabular-nums text-alloy-midnight"
-                                            data-roster-children-present={cell.actualChildrenPresent}
+                                            data-roster-children-present={cell.actualChildrenInRoom}
                                         >
-                                            {cell.actualChildrenPresent}
+                                            {cell.actualChildrenInRoom}
                                         </span>
 
                                         <span className="text-[11.5px] text-alloy-midnight/60">Staff</span>
