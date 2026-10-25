@@ -134,7 +134,7 @@ A refused attempt is never rendered as a completed change.
 | `tests/documents/documentsD4Library.test.ts` | 17/17. Covers a household with two adults and two children; household-only, adult-only, child-only, case and Forms documents; a shared document listed once; ownership vs context; server-side narrowing; medical withheld without `health.view`; quarantine; cross-org; scoped 404 and the context-link-grants-nothing case; history classification and its access decision |
 | Mutation check | removing the sensitivity filter fails the medical test; removing the primary-owner scope filter fails the context-link test |
 | `tests/documents/documentsD4LibraryUi.test.tsx` | 7/7. Covers grouping, the stored-only review and validity, narrowing to a child and widening, warm re-mount with no second read, upload to the child, deferred history with refused shown as "Not applied", and error with Retry |
-| Access, Forms, Processing and Focus Panel suites | no new failures against the unchanged base: access 18/1956 failing on both, Forms 32/1347 on both, Processing 1/1461 on both, Focus Panel 155/155 |
+| Regression against the unchanged base (`fa13b0f4b`, a separate worktree) | no new failures. The red counts are identical on both trees: access 18 of 1956, Forms 32 of 1347, Processing 1 of 1461, Focus Panel 0 of 155, communications 18 of 1644, runtime 46 of 1610, adminV2 runtime 123 of 1734, docs 3 of 169 |
 | Prebuild guards | route-capabilities (two new routes declared), service-client-principal, unauthenticated-side-effects and governed-documents all pass |
 | Typecheck | narrow `tsc` over every changed file: clean. The full typecheck runs out of memory on this host (see the sprint record) and must run in the broker at the checkpoint |
 
@@ -147,6 +147,13 @@ These gates need the D4 build deployed to staging, and therefore a certified che
 - **Hosted Human-QA** of the Focus Panel library.
 - **Hosted refusals:** out of scope, cross-org, sensitive and quarantined.
 - **Q1/D1b/D2/D3 hosted regressions**, and the audit and ZERO_RESIDUE cleanup.
+
+## Promotion
+
+- **Checkpoint:** sprint checkpoint `ick_8fcd5a88f9e9` was registered on `7a29fc28f` (slices `d3-discard-draft`, `d4-household-library`, base `488eb0f87`). It is **PROPOSED, not certified: `NO_LEDGER`**.
+- **Why it cannot certify:** a checkpoint certifies only from a `vacilando-suite` Tier 1 receipt for the exact tree. The installed `vacilando-suite` runs the toolkit's own suite, and the Alloy repository declares no `.vacilando/tier1.json`. No receipt can exist for an Alloy tree.
+- **What follows:** `request-release` refuses the checkpoint, and the sprint hold refuses every other promotion.
+- **Who must act:** Vacilando, the Director or the operator, not this lane.
 
 ## Status
 
