@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_72b9e64f8b6b0e",
+  "trusted_host_action_id": "tha_4fe8af1ff3bae6",
   "query_hash": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-23T20:10:03.295Z",
+    "executed_at": "2026-10-23T22:14:41.972Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_72b9e64f8b6b0e",
+    "trusted_host_action_id": "tha_4fe8af1ff3bae6",
     "query_hash": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
-    "authorization_id": "grnt_b7d0b2986e3740be",
+    "authorization_id": "grnt_7711ca51009e43cf",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-23T20:10:10.187Z",
+    "census_run_at": "2026-10-23T22:14:52.895Z",
     "question_ids": [
       "doc_zr_00",
       "doc_zr_vendors",
@@ -84,7 +84,7 @@
             "artifact": "access audit history (mutation_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_shared_mutation_event_rows": 293
+            "qa_shared_mutation_event_rows": 314
           }
         ]
       },
@@ -152,7 +152,7 @@
             "artifact": "D1a document audit (workflow_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_org_rows": 165
+            "qa_org_rows": 225
           }
         ]
       }

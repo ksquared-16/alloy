@@ -96,7 +96,8 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 /** Arm documents + activity prefetch after paint — does not block drawer reveal. */
-export function scheduleOpportunityDrawerTabPrefetch(drawerId: string): void {
+export function scheduleOpportunityDrawerTabPrefetch(drawerId: string, opts: { documents?: boolean } = {}): void {
+    const withDocuments = opts.documents !== false;
     const id = slotKey(drawerId);
     if (!id) return;
     if (slots.has(id)) {
@@ -165,7 +166,8 @@ export function scheduleOpportunityDrawerTabPrefetch(drawerId: string): void {
         if (!slots.has(id)) return;
         log("fetch_start", { opportunity_id: id });
 
-        slot.documents = (async (): Promise<DocumentsSnapshot> => {
+        // D4: the Focus Panel reads documents from the household library, not this list; it opts out of the read.
+        if (withDocuments) slot.documents = (async (): Promise<DocumentsSnapshot> => {
             try {
                 const res = await fetch(opportunityRelatedListPath(id), {
                     credentials: "include",

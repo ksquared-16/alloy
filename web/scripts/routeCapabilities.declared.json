@@ -1887,6 +1887,22 @@
         "reason": "Documents V1 / D2 (2026-10-23). Replaces a document's file with a new immutable version. documents.write AND the full access decision; content signature and D1c-1 screening, only a clean file is stored; a written reason; document_version_added recorded before the version exists. The previous version is kept."
       }
     },
+    "app/api/admin/documents/[id]/history/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D4 (2026-10-25). A document's history built from committed rows (versions, subject links, review, release) with refused audited attempts labelled as such. Admission is the full document access decision; never a storage path."
+      }
+    },
+    "app/api/admin/documents/library/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D4 (2026-10-25). Household document library for a household, adult, child or case. The anchor must be readable in the actor's scope (else 404); every document passes availability, primary-owner subject scope and sensitivity before it is listed or counted; a focus narrows on the server."
+      }
+    },
     "app/api/admin/documents/screening/route.ts": {
       "GET": {
         "status": "declared",
@@ -1937,6 +1953,12 @@
         "capability": "processing.documents.manage",
         "helper": "requireDocumentConfigurationWrite",
         "reason": "Documents V1 / D3 (2026-10-23). Saves a type draft or opens a new revision; a published version is never edited; nothing becomes live; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 closeout (2026-10-24). Discards a type's unpublished draft or validated version; a published or superseded version is never removed; audited first."
       }
     },
     "app/api/admin/documents/configuration/types/[id]/publish/route.ts": {

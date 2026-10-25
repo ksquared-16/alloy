@@ -177,6 +177,34 @@ Migration `supabase/migrations/20261209090100_documents_d3_studio_configuration.
 - **Authority:** writes need `processing.documents.manage`; reads need `documents.read`. Every change is audited before
   it happens (`document_category_changed`, `document_type_changed`).
 
+## 7a. The household document library (D4)
+
+Read model `web/lib/documents/library/documentLibrary.ts`, served at `GET /api/admin/documents/library` (`documents.read`).
+Record: `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.
+
+- **What it reads.** The household (`customers`), its adults (`customer_persons` → `persons`), its children
+  (`customer_members`) and its cases (`opportunities.customer_id`), then `document_subject_links` for those subjects plus the
+  derived Forms links of the cases' submissions (`form_submissions.opportunity_id`). No document is copied; one document
+  linked to several members is one entry.
+- **The anchor is authorized first.** The record the operator opened must be readable in their scope
+  (`assertEntityDrawerRecordReadable`); otherwise the library is 404, so it is no existence oracle. A focus outside the
+  household is 404 too.
+- **Disclosure is the canonical one, per row, before anything is counted.** Availability (deleted, quarantined and
+  restricted are never listed), then subject scope by the PRIMARY OWNER (`filterDocumentRowsInActorScope` on the
+  projection), then sensitivity (`filterDocumentRowsBySensitivity`). A secondary association is how the library FINDS a
+  document, never why it may be shown: a document reached through a context link is listed only when its own owner
+  passes, and when that owner is outside the household it is not named.
+- **Narrowing is on the server.** A focused library (one child or adult) holds only documents linked to that subject; a
+  sibling's own documents are not in the response at all, so they are neither listed nor counted.
+- **Household, adult and child documents remain unrestricted-scope only** (§6): a department- or site-restricted
+  operator gets 404 for a household and, from an in-scope case, sees only the case's own documents.
+- **History** (`GET /api/admin/documents/[id]/history`) is admitted by the full document access decision. It is built
+  from committed rows (versions, subject links, review, release) and shows an audited attempt as `refused` unless the
+  committed row it produced is found.
+- **Uploads are recorded before they are stored.** `POST /api/admin/documents/upload` writes
+  `document_upload_authorized` (no storage path) for the document id it then inserts, and refuses with 503
+  `AUDIT_UNAVAILABLE` when it cannot. Version 1 records its uploader (`metadata.uploaded_by` → `document_versions.created_by`).
+
 ## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
@@ -185,3 +213,4 @@ Migration `supabase/migrations/20261209090100_documents_d3_studio_configuration.
 - **D1b / D1c-1 final:** `certification/documents-v1/D1B-D1C1-SECURITY-CERTIFICATION.md`.
 - **D2:** `certification/documents-v1/D2-CANONICAL-FOUNDATION.md`; database invariants `certification/invariants/documents-d2-canonical-foundation.sql`.
 - **D3:** `certification/documents-v1/D3-DOCUMENT-STUDIO.md`; database invariants `certification/invariants/documents-d3-studio-configuration.sql`.
+- **D4:** `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.

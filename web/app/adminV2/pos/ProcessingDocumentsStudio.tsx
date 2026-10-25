@@ -343,6 +343,16 @@ function TypeEditor({
             if (r.ok) await load();
             return r;
         });
+    const discard = () =>
+        run("Draft discarded.", async () => {
+            if (!typeId || !open) return { ok: false, error: "No unpublished draft." };
+            const r = await documentStudioApi.discardDraft(typeId);
+            if (r.ok) {
+                setProblems([]);
+                await load();
+            }
+            return r;
+        });
     const setStatus = (action: "archive" | "activate") =>
         run(action === "archive" ? "Archived." : "Re-activated.", async () => {
             if (!typeId) return { ok: false, error: "Not saved yet." };
@@ -381,6 +391,11 @@ function TypeEditor({
                     <button type="button" className={PRIMARY} disabled={busy || open?.status !== "validated"} onClick={publish} data-testid="documents-studio-publish">
                         Publish
                     </button>
+                    {type && open && versions.length > 1 ? (
+                        <button type="button" className={BTN} disabled={busy} onClick={discard} data-testid="documents-studio-discard">
+                            Discard draft
+                        </button>
+                    ) : null}
                     {type ? (
                         <button type="button" className={BTN} disabled={busy} onClick={() => setStatus(type.status === "active" ? "archive" : "activate")} data-testid="documents-studio-archive">
                             {type.status === "active" ? "Archive" : "Re-activate"}

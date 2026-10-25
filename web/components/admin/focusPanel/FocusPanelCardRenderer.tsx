@@ -33,6 +33,7 @@ const OpportunityDrawerVmTabPanes = dynamic(
     () => import("@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes"),
     { ssr: false },
 );
+const FocusPanelDocumentLibrary = dynamic(() => import("@/components/admin/documents/FocusPanelDocumentLibrary"), { ssr: false });
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import FocusPanelAuthoringPreview, {
@@ -344,14 +345,7 @@ export default function FocusPanelCardRenderer({
             break;
         case "documents":
             if (drillDownAllowed) {
-                drillBody = (
-                    <OpportunityDrawerVmTabPanes
-                        drawerId={drawerId}
-                        drawerTab="documents"
-                        record={record}
-                        onSelectTab={compat.onSelectTab}
-                    />
-                );
+                drillBody = <FocusPanelDocumentLibrary opportunityId={drawerId} record={record} />;
             }
             break;
         case "notes":

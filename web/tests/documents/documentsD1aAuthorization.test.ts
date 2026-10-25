@@ -545,6 +545,28 @@ describe("POST /api/admin/documents/upload — documents.write, Processing autho
         expect(db.uploadCalls).toHaveLength(0);
     });
 
+    it("D4: records the upload before storing it, names the stored document, never the path, and keeps the uploader", async () => {
+        as(P.admin);
+        const res = await upload({ entity_type: "customer", entity_id: CUSTOMER }, text);
+        expect(res.status).toBe(200);
+        const stored = db.rows("documents").find((r) => String(r.storage_path).startsWith(`${ORG_A}/customer/${CUSTOMER}/`));
+        const event = db.rows("workflow_events").find((e) => e.event_type === "document_upload_authorized");
+        expect(event).toMatchObject({ entity_type: "documents", entity_id: stored?.id });
+        expect(JSON.stringify(event?.payload)).not.toContain(String(stored?.storage_path));
+        expect((stored?.metadata as Record<string, unknown>).uploaded_by).toBe(USER_ID);
+        expect((stored?.metadata as Record<string, unknown>).upload_audit_event_id).toBe(event?.id);
+    });
+
+    it("D4: an upload that cannot be recorded stores nothing (503 AUDIT_UNAVAILABLE)", async () => {
+        as(P.admin);
+        db.failInsertInto.add("workflow_events");
+        const before = db.rows("documents").length;
+        const res = await upload({ entity_type: "customer", entity_id: CUSTOMER }, text);
+        expect(res.status).toBe(503);
+        expect(db.uploadCalls).toHaveLength(0);
+        expect(db.rows("documents")).toHaveLength(before);
+    });
+
     it("accepts a file exactly at the limit", async () => {
         as(P.admin);
         const atLimit = new Blob([new Uint8Array(ADMIN_DOCUMENT_UPLOAD_MAX_BYTES).fill(0x61)], { type: "text/plain" });

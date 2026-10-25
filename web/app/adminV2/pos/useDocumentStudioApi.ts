@@ -39,6 +39,7 @@ export const documentStudioApi = {
     createType: (body: DocumentTypeDraft & { key?: string }) => call<{ type_id: string; version_id: string }>(`${BASE}/types`, { method: "POST", body: JSON.stringify(body) }),
     saveDraft: (id: string, draft: DocumentTypeDraft) =>
         call<{ version_id: string; version_number: number; problems: PolicyProblem[] }>(`${BASE}/types/${id}/draft`, { method: "PUT", body: JSON.stringify(draft) }),
+    discardDraft: (id: string) => call<{ discarded: true; version_id: string; version_number: number }>(`${BASE}/types/${id}/draft`, { method: "DELETE" }),
     validate: (id: string, versionId: string) =>
         call<{ valid: boolean; problems: PolicyProblem[] }>(`${BASE}/types/${id}/validate`, { method: "POST", body: JSON.stringify({ version_id: versionId }) }),
     publish: (id: string, versionId: string, expected: string | null) =>

@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
@@ -253,6 +254,27 @@ export async function POST(request: NextRequest) {
     const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
     const storagePath = `${ctx.orgId}/${pathSegment}/${objectId}-${safeName}`;
 
+    // D4: the upload is recorded BEFORE anything is stored, like every other document write — no record, no file. The
+    // document id is assigned here so the attempt and the committed row name the same document. Never the path.
+    const documentId = randomUUID();
+    const uploadAudit = await recordDocumentAudit({
+        orgId: ctx.orgId,
+        actorUserId: ctx.userId,
+        event: "document_upload_authorized",
+        subject: { type: "documents", id: documentId },
+        route: "admin/documents/upload",
+        detail: {
+            entity_type: canonicalType,
+            entity_id: rowEntityId,
+            doc_type: docType,
+            byte_size: buffer.length,
+            screening_status: screened.status,
+        },
+    });
+    if (!uploadAudit.ok) {
+        return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
+    }
+
     const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
         contentType: storedMimeType,
         upsert: false,
@@ -293,6 +315,7 @@ export async function POST(request: NextRequest) {
     const { data: row, error: insErr } = await supabase
         .from("documents")
         .insert({
+            id: documentId,
             org_id: ctx.orgId,
             entity_type: canonicalType,
             entity_id: rowEntityId,
@@ -310,6 +333,9 @@ export async function POST(request: NextRequest) {
                 processing_intent: processingIntent,
                 ...processingIntentMetadata(processingIntent),
                 source_format: sourceFormat,
+                // Read by the D2 insert trigger as version 1's `created_by`.
+                uploaded_by: ctx.userId,
+                upload_audit_event_id: uploadAudit.eventId,
                 ...(isProfilePhoto ? { profile_photo: true } : {}),
             },
         })

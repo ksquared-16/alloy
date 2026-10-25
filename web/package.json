@@ -104,6 +104,8 @@
     "dev:qa:authz-fixture-reset": "node scripts/qaAuthzFixtureReset.mjs",
     "dev:qa:authz-subject-fixture-ensure": "node scripts/qaAuthzSubjectFixtureEnsure.mjs",
     "dev:qa:authz-subject-fixture-reset": "node scripts/qaAuthzSubjectFixtureReset.mjs",
+    "dev:qa:documents-household-fixture-ensure": "node scripts/qaDocumentsHouseholdFixtureEnsure.mjs",
+    "dev:qa:documents-household-fixture-reset": "node scripts/qaDocumentsHouseholdFixtureReset.mjs",
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",

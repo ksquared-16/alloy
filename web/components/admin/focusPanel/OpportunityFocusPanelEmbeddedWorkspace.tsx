@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
+import FocusPanelDocumentLibrary from "@/components/admin/documents/FocusPanelDocumentLibrary";
 import LayoutRuntimeActivityTimelineWidget from "@/components/layout/LayoutRuntimeActivityTimelineWidget";
 import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
 import { resolveLayoutRuntimeActivityTimeline } from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
@@ -38,7 +39,7 @@ const RIBBON_EVENT_COUNT = 3;
  *   Recent Activity ribbon  ← LayoutRuntimeActivityTimelineWidget (horizontal_timeline)
  *   Communications (hero)    ← CommunicationsDrawerSection (embedded comms runtime)
  *   Work (Items / Notes)     ← LayoutRuntimeTasksWidget + notes pane
- *   Documents (status)       ← documents pane (uploaded / missing / upload)
+ *   Documents (library)      ← FocusPanelDocumentLibrary (D4 household document library)
  *
  * The EmbeddedWorkspace surface set survives as secondary "open full surface" navigation,
  * so the composed cockpit is the primary experience while the doctrine surfaces stay reachable.
@@ -235,12 +236,8 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                             </button>
                         </header>
                         <div className="alloy-os-activity-cockpit__panel-body">
-                            <OpportunityDrawerVmTabPanes
-                                drawerId={drawerId}
-                                drawerTab="documents"
-                                record={record}
-                                onSelectTab={onSelectTab}
-                            />
+                            {/* D4: the household document library (household, adults, children, cases). */}
+                            <FocusPanelDocumentLibrary opportunityId={drawerId} record={record} />
                         </div>
                     </section>
                 </div>

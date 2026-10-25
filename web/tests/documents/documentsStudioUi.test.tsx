@@ -102,6 +102,35 @@ describe("Studio → Documents", () => {
         expect(q("documents-studio-message")?.textContent).toContain("Forbidden");
     });
 
+    it("discards the open revision through the server; a type whose only version is the draft offers Delete instead", async () => {
+        await act(async () => root.render(<ProcessingDocumentsStudio />));
+        await flush();
+        await act(async () => q("documents-studio-type-immunization_record")!.click());
+        await flush();
+        await act(async () => q("documents-studio-discard")!.click());
+        await flush();
+        expect(calls.some((c) => c.url.endsWith("/types/t1/draft") && c.method === "DELETE")).toBe(true);
+        expect(q("documents-studio-message")?.textContent).toContain("Draft discarded.");
+
+        act(() => root.unmount());
+        root = createRoot(container);
+        const only = { ...TYPE, published_version_id: null, published: null };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((url: string) => {
+                if (url.endsWith("/categories")) return respond({ ok: true, categories: [CAT] });
+                if (url.endsWith("/types")) return respond({ ok: true, types: [only], enforcement: {} });
+                return respond({ ok: true, type: only, versions: [{ ...DRAFT, version_number: 1 }], enforcement: {} });
+            }),
+        );
+        await act(async () => root.render(<ProcessingDocumentsStudio />));
+        await flush();
+        await act(async () => q("documents-studio-type-immunization_record")!.click());
+        await flush();
+        expect(q("documents-studio-discard")).toBeNull();
+        expect(q("documents-studio-delete")).not.toBeNull();
+    });
+
     it("every request goes to the configuration routes", async () => {
         await act(async () => root.render(<ProcessingDocumentsStudio />));
         await flush();

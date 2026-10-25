@@ -151,6 +151,8 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         expect(workspace).toContain("LayoutRuntimeActivityTimelineWidget"); // Recent Activity ribbon
         expect(workspace).toContain("CommunicationsDrawerSection"); // Communications hero
         expect(workspace).toContain("Work Items"); // Work panel tab
-        expect(workspace).toContain('drawerTab="documents"'); // persistent Documents utility
+        // Persistent Documents utility — D4: the household document library, not the case-only list.
+        expect(workspace).toContain("<FocusPanelDocumentLibrary opportunityId={drawerId} record={record} />");
+        expect(workspace).not.toContain('drawerTab="documents"');
     });
 });
