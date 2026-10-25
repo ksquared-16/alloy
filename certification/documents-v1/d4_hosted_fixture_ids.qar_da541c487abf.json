@@ -1,0 +1,27 @@
+{
+  "opportunity": "ee760692-024d-43b6-bcc3-cc230f9b7de0",
+  "household": "acc093ca-fcef-4d38-a1eb-e2cb0e8ae593",
+  "adult1": "b6dad606-d268-4191-914e-ade41cd06218",
+  "child1": "0c91f3d7-0d3d-4f6f-9f88-532ceec08921",
+  "child1_person": "f4677df3-3b3e-4363-8aee-47dbf6d6c8a8",
+  "child2": "b2dfe419-86dc-489c-a1b6-4804fca37c64",
+  "child2_person": "3b96ed53-b48c-46db-967d-e4a36583b493",
+  "adult2": "17307155-34c2-46ce-a106-e1f73f30ec2e",
+  "docs": {
+    "hh": "2c370d53-cfab-4ed8-9c5f-23fb498adf5c",
+    "a1": "4d8d5ad9-83fd-4fce-b428-ada658e4cd3f",
+    "a2": "4f765fec-7a68-4dc0-a53e-6763da424016",
+    "c1": "8cbc1926-391e-4a8b-bc53-8465ee6502a0",
+    "c2": "0bf05dc7-ff83-44d2-8faf-0cfc6b9c541f",
+    "case": "f9eb1c3d-e64a-4810-aa38-b3583eaf981d",
+    "med": "0eeb0fce-8529-4f04-b9a7-c96508c43a4b",
+    "shared": "939abf49-f9ad-4f92-b969-c8475447a842",
+    "held": "819242b5-c094-47e9-8215-2ff5b7e65771"
+  },
+  "shared_linked": true,
+  "a1_replaced": true,
+  "outside": "d4f230ef-f405-4ff2-b440-b3f5c8c7b0ec",
+  "outside_linked": true,
+  "orphan_lead": "c050957d-2130-4111-a8a5-0e2b5f237d3f",
+  "adult2_removed": true
+}

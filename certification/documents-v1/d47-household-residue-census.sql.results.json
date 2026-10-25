@@ -1,0 +1,128 @@
+{
+  "trusted_host_action_id": "tha_64acf03de03b42",
+  "query_hash": "fa725f3ac42caba47ea7ebed7bedf1715758cad7ac054508652fc9c79b4550cb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-25T22:38:05.301Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_64acf03de03b42",
+    "query_hash": "fa725f3ac42caba47ea7ebed7bedf1715758cad7ac054508652fc9c79b4550cb",
+    "authorization_id": "grnt_0557269497554b9f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-25T22:38:12.824Z",
+    "question_ids": [
+      "d47_hh_customers",
+      "d47_hh_persons",
+      "d47_hh_customer_persons",
+      "d47_hh_customer_members",
+      "d47_hh_contacts",
+      "d47_hh_customer_member_contacts",
+      "d47_hh_opportunity_persons",
+      "d47_hh_opportunity_customer_members",
+      "d47_hh_person_child_relationships",
+      "d47_hh_run_tagged",
+      "d47_hh_data"
+    ],
+    "questions": {
+      "d47_hh_customers": {
+        "question_id": "d47_hh_customers",
+        "row_count": null,
+        "rows": [
+          "customers ~ qa_shared ~ equals_baseline_3 ~ true"
+        ]
+      },
+      "d47_hh_persons": {
+        "question_id": "d47_hh_persons",
+        "row_count": null,
+        "rows": [
+          "persons ~ qa_shared ~ equals_baseline_4 ~ false"
+        ]
+      },
+      "d47_hh_customer_persons": {
+        "question_id": "d47_hh_customer_persons",
+        "row_count": null,
+        "rows": [
+          "customer_persons ~ qa_shared ~ equals_baseline_3 ~ true"
+        ]
+      },
+      "d47_hh_customer_members": {
+        "question_id": "d47_hh_customer_members",
+        "row_count": null,
+        "rows": [
+          "customer_members ~ qa_shared ~ equals_baseline_8 ~ true"
+        ]
+      },
+      "d47_hh_contacts": {
+        "question_id": "d47_hh_contacts",
+        "row_count": null,
+        "rows": [
+          "contacts ~ qa_shared ~ equals_baseline_0 ~ true"
+        ]
+      },
+      "d47_hh_customer_member_contacts": {
+        "question_id": "d47_hh_customer_member_contacts",
+        "row_count": null,
+        "rows": [
+          "customer_member_contacts ~ qa_shared ~ equals_baseline_0 ~ true"
+        ]
+      },
+      "d47_hh_opportunity_persons": {
+        "question_id": "d47_hh_opportunity_persons",
+        "row_count": null,
+        "rows": [
+          "opportunity_persons ~ qa_shared ~ equals_baseline_0 ~ true"
+        ]
+      },
+      "d47_hh_opportunity_customer_members": {
+        "question_id": "d47_hh_opportunity_customer_members",
+        "row_count": null,
+        "rows": [
+          "opportunity_customer_members ~ qa_shared ~ equals_baseline_5 ~ true"
+        ]
+      },
+      "d47_hh_person_child_relationships": {
+        "question_id": "d47_hh_person_child_relationships",
+        "row_count": null,
+        "rows": [
+          "person_child_relationships ~ qa_shared ~ equals_baseline_3 ~ true"
+        ]
+      },
+      "d47_hh_run_tagged": {
+        "question_id": "d47_hh_run_tagged",
+        "row_count": null,
+        "rows": [
+          "persons+customers+members ~ qa_shared ~ run_tagged_da541c487abf_zero ~ false"
+        ]
+      },
+      "d47_hh_data": {
+        "question_id": "d47_hh_data",
+        "row_count": null,
+        "rows": [
+          {
+            "org": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "baseline_census": "d47-household-baseline-census.sql (gar_3f1d7e690f37f7, 2026-10-25T22:05:12Z)",
+            "customers": 3,
+            "persons": 6,
+            "customer_persons": 3,
+            "customer_members": 8,
+            "contacts": 0,
+            "customer_member_contacts": 0,
+            "opportunity_persons": 0,
+            "opportunity_customer_members": 5,
+            "person_child_relationships": 3,
+            "opportunities": 5,
+            "document_subject_links": 5,
+            "documents": 5
+          }
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}
