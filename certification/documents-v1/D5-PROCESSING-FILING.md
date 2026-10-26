@@ -117,7 +117,19 @@ Refusals for out-of-scope and other-organization targets are 404, indistinguisha
 | Prebuild guards | all pass (route capabilities with two new routes declared) |
 | Typecheck | narrow `tsc` over every changed source file: clean |
 
+## Promotion
+
+| Step | Evidence |
+|---|---|
+| Merge | PR #1604 merged as `81556597838bb4cff9f5c1233dd56970efe44a2f` (`gar_843b86504ad7db`, 2026-10-26T21:10:34Z) |
+| Migration, first census | `gar_e064d44a5c5342` (21:11:51Z, 77 s after the merge): `20261210093500` and all eight D5 functions ABSENT on `alloy_deployed_primary`. A governed apply (`gar_69b16ede884472`) was refused `migration_owned_by_pending_merge`, because the Supabase integration applies the migration on merge |
+| Migration, ledger | identity census `gar_ec4c10421d1e84` (`tha_69064259a1103f`, 22:29:08Z): ledger head `20261210093500`, total 546 (`certification/migrations/hosted-migration-identity-census.sql.results.json`) |
+| Migration, objects | physical-state census `tha_2ec522e7ab91cc` (22:29:13Z): **11/11 true**: ledger row, the eight D5 functions, and `document_file` / `document_file_as_version` callable by service role only (`d5-filing-physical-state-census.sql.results.json`) |
+| Deployment | staging `/api/build-info` gitSha `81556597838bb4cff9f5c1233dd56970efe44a2f`, Supabase `ikaxilmwmrmbagoidedu` (polled 2026-10-26 ~22:30Z) |
+| Hosted certification | not run. `environment.qa_run_open` (authz_q1, `alloy_staging_web`, hosted authority declared) was refused `run_not_active`: run `erun2_11befb9e1158c6c0` went FAILED at ~22:30Z, before filing |
+
 ## Status
 
-PARTIAL: implementation, automated evidence and documentation are complete. Promotion, deployment, the staging
-migration and hosted certification follow.
+PARTIAL: implementation, automated evidence, merge, deployment and the staging migration are complete and measured.
+Hosted certification (`d5_hosted_filing_cert.py <qar> ensure|certify|reset` under a new authz_q1 run) remains; it
+needs an active run to open the QA run.
