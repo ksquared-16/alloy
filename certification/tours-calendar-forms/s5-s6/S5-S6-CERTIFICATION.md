@@ -88,7 +88,7 @@ No stored flag, no Work Item, no parallel booking state.
 | Affected batch (720 files: tours, operatingCalendar, location(s), opportunities, roster, childcareOperational, operationalExpectations, access, lifecycle, platform/commands, metrics/attendance, combinedRoster) | 164 failing tests, **all identical on base `aab778872`** (probe worktree); one extra (`adminAddChargeRegression.live`) passes 5/5 alone — shared-stack collision. **0 new** |
 | `npm run prebuild` (6 guards; route declared: GET `none`, POST `settings.manage` / `requireOperatingCalendarCapability`) | rc=0 on both slices |
 | `vac validation-classify` | `build_sensitive` (route added) |
-| Typecheck / typecheck:tests | **not run in-session** — the broker held for memory (8.6 GB predicted, ~7 GB headroom); filed with Vacilando on the final candidate (see the run report) |
+| Typecheck + test typecheck (`tsc --noEmit -p tsconfig.json` — includes `app/`, `lib/`, `components/` AND `tests/**`, a superset of `tsconfig.build.json`) | **PASSED** on exact candidate `56ea0a1ed2e91d6583e4f41d3a18630536044c58`, Vacilando detached request `vreq_64ab71374c6f` (receipt: claim `vcl_mvoxg4o3_1`, waited 106 s, ran 119 s, exit 0). Two earlier requests never ran (`vreq_f25295856ada` capacity TIMEOUT; `vreq_3451cfe59a62` broker died in capacity recovery) — infrastructure, not code |
 | Production build | **Deferred** to the sprint's integrated checkpoint (one build, mandatory) |
 | Browser QA | Not run (rendered-markup tests only; no authenticated browser session was restored) |
 
