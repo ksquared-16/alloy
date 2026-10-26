@@ -72,7 +72,6 @@ export default function SchedulingStudio({
                     siteName={siteName}
                     sites={sites}
                     onChanged={onAssignmentTypesChanged}
-                    operationalRooms={editorConfig.operationalRooms}
                 />
             : null}
 

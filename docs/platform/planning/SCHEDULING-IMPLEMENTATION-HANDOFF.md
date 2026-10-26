@@ -36,7 +36,7 @@ supersedes: []
 
 **Backend decision loop (unit-tested — `web/tests/scheduling/*`, 32 tests):**
 - Canonical projection read model — `web/lib/scheduling/projection/` (`schedulingProjectionTypes.ts`, `buildSchedulingProjection.ts`). Subject-scoped, lifecycle bucketing, pure-stitch + thin-I/O over existing services.
-- Identity/Work derivation — `web/lib/scheduling/work/deriveSchedulingWork.ts`.
+- Identity/Work derivation — `deriveSchedulingWork` was retired in V7 (it had no runtime caller).
 - Deterministic option generator — `web/lib/scheduling/options/generatePlacementOptions.ts` (injects a hypothetical child, re-runs `buildScheduleExpectations` = preview-is-execution; classifies Recommended/Eligible/Blocked).
 - `schedule.create` command + commit adapter — `web/lib/scheduling/commit.ts`, `web/lib/scheduling/commands/scheduleCreateInputs.ts`, `web/lib/adminV2/actions/definitions/scheduleCreateAction.ts` (registered in `actionRegistry.ts`).
 - Interim `BillingScheduleProjection` mapper — `web/lib/scheduling/billing/billingScheduleProjection.ts` (read-shaping over the commercial pipeline).
