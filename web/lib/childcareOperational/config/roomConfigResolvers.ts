@@ -20,6 +20,7 @@ import type {
 } from "@/lib/childcareOperational/config/configRuleTypes";
 import type {
     OperationalAgreementInput,
+    OperationalAssignmentInput,
     OperationalPlacementInput,
 } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 
@@ -33,6 +34,8 @@ export type RoomConfigResolvers = {
 export type BuildRoomConfigResolversInput = {
     agreements: readonly OperationalAgreementInput[];
     placements: readonly OperationalPlacementInput[];
+    /** Qualifying secondary sessions (V7 S6): a space reached only by one still has a site and its own age group. */
+    assignments?: readonly OperationalAssignmentInput[];
     config: ChildcareConfigRuleBundle;
     ageGroupByRoomLocationId?: Readonly<Record<string, string | null>>;
     ageGroupByProgramCategoryId?: Readonly<Record<string, string | null>>;
@@ -69,6 +72,19 @@ export function buildRoomConfigResolvers(input: BuildRoomConfigResolversInput): 
                 ageGroupKey,
             });
         }
+    }
+
+    /*
+     * A SPACE REACHED ONLY BY A SECONDARY SESSION (V7 S6) has no placement to lend it a program, so its
+     * context is the site and the space's own configured age group. A shared space with none resolves
+     * no ratio tiers — shared-space ratios are an open policy (P3), not decided here.
+     */
+    for (const a of input.assignments ?? []) {
+        const room = a.is_primary === false ? a.room_location_id ?? null : null;
+        if (!room || roomContext.has(room)) continue;
+        const siteLocationId = siteByAgreement.get(a.enrollment_agreement_id);
+        if (!siteLocationId) continue;
+        roomContext.set(room, { siteLocationId, programCategoryId: null, ageGroupKey: input.ageGroupByRoomLocationId?.[room] ?? null });
     }
 
     const tiersByRatioRuleId = new Map<string, RatioTier[]>();

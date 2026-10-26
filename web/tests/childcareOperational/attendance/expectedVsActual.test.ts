@@ -15,6 +15,7 @@ function expected(p: Partial<ExpectedAttendanceEntry> = {}): ExpectedAttendanceE
         assignmentId: "asg-1",
         schedulePatternId: "pat-1",
         scheduleTypeKey: "full_time",
+        isPrimary: true,
         ...p,
     };
 }

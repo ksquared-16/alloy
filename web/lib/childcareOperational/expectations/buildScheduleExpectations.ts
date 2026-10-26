@@ -109,6 +109,7 @@ export function buildScheduleExpectations(
     const { contextForRoom, resolveTiers } = buildRoomConfigResolvers({
         agreements: input.agreements,
         placements: input.placements,
+        assignments: input.assignments,
         config,
         ageGroupByRoomLocationId: input.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: input.ageGroupByProgramCategoryId,
@@ -180,9 +181,12 @@ function deriveWarnings(args: {
         }
     }
 
-    // Per-attendance eligibility, missing room, and operating-window coverage.
+    // Per-attendance eligibility, missing room, and operating-window coverage — judged on the
+    // enrollment's own schedule. A secondary session (V7 S6) adds expected occupancy and demand above,
+    // not days a week, schedule-type or placement-room findings.
     const daysPerWeekByAgreement = new Map<string, Set<number>>();
     for (const e of expectedAttendance) {
+        if (e.isPrimary === false) continue;
         const set = daysPerWeekByAgreement.get(e.agreementId) ?? new Set<number>();
         set.add(e.weekday);
         daysPerWeekByAgreement.set(e.agreementId, set);
@@ -257,7 +261,7 @@ function deriveWarnings(args: {
 
     // Days-per-week policy per agreement.
     for (const [agreementId, weekdays] of daysPerWeekByAgreement) {
-        const sample = expectedAttendance.find((e) => e.agreementId === agreementId);
+        const sample = expectedAttendance.find((e) => e.agreementId === agreementId && e.isPrimary !== false);
         if (!sample) continue;
         const context: ConfigRuleScopeContext = {
             siteLocationId: sample.siteLocationId,

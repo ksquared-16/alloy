@@ -9,7 +9,7 @@
  *    (web/lib/childcareOperational/attendance/attendanceFold.ts)
  */
 
-import type { ExpectedAttendanceEntry } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
+import { primaryEntryFor, type ExpectedAttendanceEntry } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 import type { DayAttendanceSummary } from "@/lib/childcareOperational/attendance/attendanceFold";
 
 export type AttendanceVarianceCode =
@@ -49,16 +49,24 @@ export function diffExpectedVsActual(
     for (const s of daySummaries) {
         summaryByKey.set(key(s.enrollmentAgreementId, s.serviceDate), s);
     }
-    const expectedByKey = new Map<string, ExpectedAttendanceEntry>();
+    /*
+     * ONE EXPECTATION PER CHILD·DATE, HOWEVER MANY SESSIONS (V7 S6). A child expected at Before Care
+     * and in their homeroom is one child who should be here today: presence variances are judged once,
+     * against the primary session, and a room mismatch only when no session's space was observed.
+     */
+    const expectedByKey = new Map<string, ExpectedAttendanceEntry[]>();
     for (const e of expectedAttendance) {
-        expectedByKey.set(key(e.agreementId, e.date), e);
+        const k = key(e.agreementId, e.date);
+        expectedByKey.set(k, [...(expectedByKey.get(k) ?? []), e]);
     }
 
     const variances: AttendanceVariance[] = [];
     let matchedCount = 0;
 
     // Expected side: not checked in, absent, late-without-time, room mismatch.
-    for (const e of expectedAttendance) {
+    for (const sessions of expectedByKey.values()) {
+        const e = primaryEntryFor(sessions)!;
+        const expectedRooms = new Set(sessions.map((x) => x.roomLocationId).filter((r): r is string => Boolean(r)));
         const summary = summaryByKey.get(key(e.agreementId, e.date));
         const base = {
             serviceDate: e.date,
@@ -99,9 +107,9 @@ export function diffExpectedVsActual(
             });
         }
         if (
-            e.roomLocationId &&
+            expectedRooms.size > 0 &&
             summary.roomsObserved.length > 0 &&
-            !summary.roomsObserved.includes(e.roomLocationId)
+            !summary.roomsObserved.some((r) => expectedRooms.has(r))
         ) {
             variances.push({
                 ...base,
@@ -131,7 +139,7 @@ export function diffExpectedVsActual(
     return {
         variances,
         matchedCount,
-        expectedCount: expectedAttendance.length,
+        expectedCount: expectedByKey.size,
         actualPresentCount,
     };
 }

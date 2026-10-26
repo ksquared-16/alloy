@@ -58,6 +58,58 @@ export type OperationalExpectationInputs = {
 
 const EMPTY_QUERY_RESULT = { data: [] as Record<string, unknown>[], error: null };
 
+type SessionRow = OperationalAssignmentInput & { operational_assignment_type_id?: string | null };
+
+/**
+ * The rows that produce expectations (V7 S6): every primary, and the secondaries whose category
+ * expects attendance (`operational_assignment_types.attendance_participation = 'expected'`). An
+ * agreement with no primary row keeps no secondary — a child is never expected from a secondary
+ * alone. Pure; exported for tests.
+ */
+export function selectQualifyingSessions(
+    rows: readonly SessionRow[],
+    expectedTypeIds: ReadonlySet<string>,
+): OperationalAssignmentInput[] {
+    const withPrimary = new Set(rows.filter((r) => r.is_primary !== false).map((r) => r.enrollment_agreement_id));
+    return rows
+        .filter(
+            (r) =>
+                r.is_primary !== false ||
+                (withPrimary.has(r.enrollment_agreement_id) &&
+                    !!r.operational_assignment_type_id &&
+                    expectedTypeIds.has(r.operational_assignment_type_id)),
+        )
+        .map((r) => ({ ...r, is_primary: r.is_primary !== false }));
+}
+
+async function qualifyingSessions(
+    supabase: SupabaseClient,
+    orgId: string,
+    rows: SessionRow[],
+): Promise<OperationalAssignmentInput[]> {
+    const typeIds = [
+        ...new Set(
+            rows
+                .filter((r) => r.is_primary === false)
+                .map((r) => r.operational_assignment_type_id)
+                .filter((id): id is string => Boolean(id)),
+        ),
+    ];
+    const expectedTypes = new Set<string>();
+    if (typeIds.length > 0) {
+        const { data, error } = await supabase
+            .from("operational_assignment_types")
+            .select("id, attendance_participation")
+            .eq("org_id", orgId)
+            .in("id", typeIds);
+        if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+        for (const t of (data ?? []) as Array<{ id: string; attendance_participation: string | null }>) {
+            if (t.attendance_participation === "expected") expectedTypes.add(t.id);
+        }
+    }
+    return selectQualifyingSessions(rows, expectedTypes);
+}
+
 export async function loadOperationalExpectationInputs(
     supabase: SupabaseClient,
     args: LoadOperationalExpectationInputsArgs
@@ -95,22 +147,22 @@ export async function loadOperationalExpectationInputs(
                   .in("status", ROW_DATED)
             : Promise.resolve(EMPTY_QUERY_RESULT),
         /*
-         * THE ENROLLMENT'S PRIMARY — the one schedule per agreement `expandExpectedAttendance`
-         * documents. Every committed live row used to come back, and the per-agreement index (since replaced by
-         * the per-date pick) kept the last: a five-day child whose Before Care was added after enrolment was expected
-         * only on the Before Care days, and a child with no primary was expected from a secondary.
-         * Proven live: `tests/childcareOperational/live/expectedAttendancePrimarySchedule.live.test.ts`.
-         * Expecting a child per SESSION (each assignment's own room and hours) is a separate, unratified
-         * design question, not this read.
+         * THE SESSIONS A CHILD IS EXPECTED AT (V7 S6, Director 2026-10-25): the enrollment's primary,
+         * always, plus each committed secondary whose category says `attendance_participation =
+         * 'expected'` — in its own space, on its own days and hours. A secondary of a category that does
+         * not expect attendance (or of no category) never produces an expectation, and a child with no
+         * primary is still not expected from a secondary alone (`expectedAttendancePrimarySchedule.live`).
+         * The category filter is applied below, once the categories are read.
          */
         agreementIds.length > 0
             ? supabase
                   .from("schedule_assignments")
-                  .select("id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
+                  .select(
+                      "id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status, is_primary, room_location_id, operational_assignment_type_id, supersedes_assignment_id"
+                  )
                   .eq("org_id", orgId)
                   .eq("subject_type", "child")
                   .in("enrollment_agreement_id", agreementIds)
-                  .eq("is_primary", true)
                   .eq("commitment_kind", "committed")
                   .in("status", ROW_DATED)
             : Promise.resolve(EMPTY_QUERY_RESULT),
@@ -131,7 +183,9 @@ export async function loadOperationalExpectationInputs(
     if (proposedError) throw new OperationalEnrollmentServiceError("db_error", proposedError.message);
 
     const placements = liveFirst((placementData ?? []) as OperationalPlacementInput[]);
-    const assignments = liveFirst((assignmentData ?? []) as OperationalAssignmentInput[]);
+    const assignments = liveFirst(
+        await qualifyingSessions(supabase, orgId, (assignmentData ?? []) as SessionRow[]),
+    );
     const proposedAssignments = (proposedData ?? []) as OperationalProposedAssignmentInput[];
 
     const patternIds = [
@@ -183,6 +237,8 @@ export async function loadOperationalExpectationInputs(
               roomLocationIds: [
                   ...placements.map((p) => p.room_location_id),
                   ...proposedAssignments.map((a) => a.room_location_id),
+                  // A qualifying secondary session's own space (V7 S6).
+                  ...assignments.map((a) => a.room_location_id ?? null),
               ].filter((id): id is string => Boolean(id)),
           })
         : null;

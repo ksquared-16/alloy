@@ -230,6 +230,12 @@ function plannedPlaceFor(
     return null;
 }
 
+/** One ref per child (V7 S6: a child with several sessions is one child). */
+function uniqueChildRefs(refs: ChildRef[]): ChildRef[] {
+    const seen = new Set<string>();
+    return refs.filter((r) => (seen.has(r.customerMemberId) ? false : (seen.add(r.customerMemberId), true)));
+}
+
 export function buildStaffingProjectionDay(
     input: BuildStaffingProjectionDayInput
 ): StaffingProjectionDay {
@@ -351,12 +357,18 @@ export function buildStaffingProjectionDay(
         for (const roomLocationId of roomIds) {
             const k = roomKey(roomLocationId);
 
-            const expected = children
-                .filter((c) => c.roomLocationId === roomLocationId && c.intervals.some((i) => covers(i, segment)))
-                .map<ChildRef>((c) => ({ customerMemberId: c.customerMemberId, agreementId: c.agreementId }));
-            const unknownHours = children
-                .filter((c) => c.roomLocationId === roomLocationId && !c.hoursKnown)
-                .map<ChildRef>((c) => ({ customerMemberId: c.customerMemberId, agreementId: c.agreementId }));
+            // Unique children per room × segment: two overlapping sessions of one child in one room are
+            // one child to supervise; sessions in different rooms each count in their own room (V7 S6).
+            const expected = uniqueChildRefs(
+                children
+                    .filter((c) => c.roomLocationId === roomLocationId && c.intervals.some((i) => covers(i, segment)))
+                    .map<ChildRef>((c) => ({ customerMemberId: c.customerMemberId, agreementId: c.agreementId })),
+            );
+            const unknownHours = uniqueChildRefs(
+                children
+                    .filter((c) => c.roomLocationId === roomLocationId && !c.hoursKnown)
+                    .map<ChildRef>((c) => ({ customerMemberId: c.customerMemberId, agreementId: c.agreementId })),
+            );
 
             const actualChildIds = new Set(
                 childActuals

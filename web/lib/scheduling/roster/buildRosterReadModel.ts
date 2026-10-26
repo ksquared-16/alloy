@@ -239,6 +239,7 @@ export async function buildRosterReadModel(
     const { resolveCapacityBinding } = buildRoomConfigResolvers({
         agreements: inputsWithAgeGroups.agreements,
         placements: inputsWithAgeGroups.placements,
+        assignments: inputsWithAgeGroups.assignments,
         config: inputsWithAgeGroups.config,
         ageGroupByRoomLocationId: inputsWithAgeGroups.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: inputsWithAgeGroups.ageGroupByProgramCategoryId,
