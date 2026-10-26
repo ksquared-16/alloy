@@ -44,11 +44,20 @@ export type ActivatedAuthoringPurpose =
      * production consumer; the meaning lives in
      * `web/lib/childcareOperational/attendance/serviceDayExpectations.ts`.
      */
-    "attendance.service_day_exception";
+    "attendance.service_day_exception"
+    /**
+     * The Operating Calendar — holidays, closures (full-day, multi-day, partial)
+     * and modified hours for the organization or one site. Subjects
+     * `organization` / `site`; frames on the location's local dates. The meaning
+     * lives in `web/lib/operatingCalendar/` and is read by Tours and, for
+     * full-day site closures, by Attendance's service-day projection.
+     */
+    | "location.operating_calendar";
 
 /** Every purpose activated for production authoring. */
 export const ACTIVATED_AUTHORING_PURPOSES: ReadonlySet<string> = new Set<ActivatedAuthoringPurpose>([
     "attendance.service_day_exception",
+    "location.operating_calendar",
 ]);
 
 export function isActivatedAuthoringPurpose(purpose: string | null | undefined): boolean {

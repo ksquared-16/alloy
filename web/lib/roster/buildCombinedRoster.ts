@@ -35,6 +35,7 @@ import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/room
 // `tests/childcareOperational/calculations/staffingSeamOffenderLedger.test.ts` may shrink and never
 // grow. Actual demand resolves exactly the way planned demand does.
 import { resolveRequiredStaffForChildren } from "@/lib/childcareOperational/capacity/resolveRatio";
+import { loadCalendarSiteClosureForServiceDay } from "@/lib/operatingCalendar/operatingCalendarServer";
 import { buildScheduleExpectations } from "@/lib/childcareOperational/expectations/buildScheduleExpectations";
 import {
     countsPresent,
@@ -370,6 +371,15 @@ export async function buildCombinedRoster(
         createSupabaseExpectationQueryGateway(supabase),
     );
 
+    // The Operating Calendar's full-day closure of this site (an organization holiday
+    // closure, or one set for this location), through the one calendar resolver. Like
+    // the read above, a failure throws rather than reading as an open day.
+    const calendarSiteClosure = await loadCalendarSiteClosureForServiceDay(supabase, {
+        orgId,
+        siteLocationId,
+        serviceDate: date,
+    });
+
     const serviceDayByChild = new Map(
         interpretServiceDay({
             siteLocationId,
@@ -377,6 +387,7 @@ export async function buildCombinedRoster(
             groupByChildId: new Map(expectedToday.map((e) => [e.customerMemberId, e.roomLocationId])),
             effective: serviceDayExpectations.effective,
             unresolved: serviceDayExpectations.unresolved,
+            calendarSiteClosure,
         }).map((row) => [row.childId, row]),
     );
 

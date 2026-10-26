@@ -29,6 +29,7 @@ import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/Loc
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
 import LocationSchedulingSurface from "@/components/adminV2/settings/locations/LocationSchedulingSurface";
+import { LocationOperatingCalendarPanel } from "@/components/adminV2/settings/locations/LocationOperatingCalendarPanel";
 import { warmLocationSchedulingDayTypes } from "@/lib/locations/useLocationSchedulingVm";
 import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
@@ -826,18 +827,22 @@ export default function LocationsConfigurationPage({
                 </div>
             );
             return (
-                <LocationSchedulingSurface
-                    orgId={orgId}
-                    locationId={selectedSite.id}
-                    locationMetadata={siteMetadata}
-                    patternCount={selectedSchedules.length}
-                    canMutate={canMutate}
-                    onAddPattern={() => setCreatingSchedule(true)}
-                    onSaveMetadata={async (metadata) => {
-                        await patchLocation(selectedSite.id, { metadata });
-                    }}
-                    patternsPanel={patternsPanel}
-                />
+                <div className="space-y-4">
+                    <LocationSchedulingSurface
+                        orgId={orgId}
+                        locationId={selectedSite.id}
+                        locationMetadata={siteMetadata}
+                        patternCount={selectedSchedules.length}
+                        canMutate={canMutate}
+                        onAddPattern={() => setCreatingSchedule(true)}
+                        onSaveMetadata={async (metadata) => {
+                            await patchLocation(selectedSite.id, { metadata });
+                        }}
+                        patternsPanel={patternsPanel}
+                    />
+                    {/* Dated exceptions to the weekly pattern: holidays, closures, changed hours. */}
+                    <LocationOperatingCalendarPanel key={selectedSite.id} orgId={orgId} locationId={selectedSite.id} />
+                </div>
             );
         }
         if (activeTab === "operational-rules") {

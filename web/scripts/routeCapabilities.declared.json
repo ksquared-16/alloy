@@ -3543,6 +3543,18 @@
         "status": "pending"
       }
     },
+    "app/api/admin/operating-calendar/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only Operating Calendar for one location the caller's site scope admits (refused otherwise): the organization defaults it inherits, its own entries, closures recorded in Attendance and the resolved days, plus whether the caller may edit each scope. Org-filtered, behind portal admission, writes nothing."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.manage",
+        "helper": "requireOperatingCalendarCapability",
+        "reason": "Previews or authors an Operating Calendar entry (holiday, closure, partial closure, modified hours) as an Operational Expectation under the reviewed purpose `location.operating_calendar`, through the one ledger intake. It changes when a location operates for Attendance and Tours, so organization settings authority (`settings.manage`) at the call site; an organization default additionally needs unrestricted site scope and a location entry needs that site in scope. No portal fallback, role title or flag in the authority path."
+      }
+    },
     "app/api/admin/operational-config-rules/route.ts": {
       "GET": {
         "status": "pending"
