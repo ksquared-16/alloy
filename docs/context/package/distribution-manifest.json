@@ -107,7 +107,7 @@
     {
       "path": "docs/platform/modules/attendance-system.md",
       "tier": 2,
-      "blob_sha": "bd79b1fed0b30d4d72e4d074aafa07b018a03c85",
+      "blob_sha": "7cb71c9ed43e4e8a3f33ab9e88e599cb89adfec6",
       "exists": true
     },
     {
@@ -119,7 +119,7 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "332b5f48b1d1fc44ab7f0cd3285b21bf148ead57",
+      "blob_sha": "121944110e8a4515618c48a3bff333862d892f5f",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "0d0c92ec32f92c1618bc951cc8f0bb68f88128ca",
+      "blob_sha": "3186f33828d865d9cbb35efbe571ec89b04c75e0",
       "exists": true
     },
     {

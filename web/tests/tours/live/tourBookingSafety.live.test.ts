@@ -354,15 +354,21 @@ describeLive("S1 tour booking & communication safety — live certification data
             bindingIdOpt: row.communication_provider_binding_id ?? "",
             recipientPersonIdRaw: row.recipient_person_id,
             toRawInput: "",
+            // I1 (C1 integrated): the dispatcher passes the category frozen for tour reminders.
+            category: "transactional",
+            audience: "external",
+            purpose: "tour_coordination",
+            callSite: "processDueCommunicationScheduledSends:tour_scheduling",
             sendMetadataAugment: buildCommunicationScheduledSendProcessMetadataAugment(row),
         });
         const blocked = (await ok(
             db
                 .from("communication_messages")
-                .select("id, status, metadata")
+                .select("id, status, category, metadata")
                 .eq("org_id", ORG)
                 .filter("metadata->>communication_scheduled_send_id", "eq", row.id)
-        )) as Array<{ status: string; metadata: Record<string, unknown> }>;
+        )) as Array<{ status: string; category: string; metadata: Record<string, unknown> }>;
+        for (const m of blocked) expect(m.category).toBe("transactional");
         // Whatever the provider set-up on this tenant, the gate must have evaluated a PERSON.
         const codes = blocked.map((m) => JSON.stringify(m.metadata ?? {}));
         expect(codes.some((c) => c.includes("RECIPIENT_UNRESOLVED")), JSON.stringify({ exec, codes })).toBe(false);

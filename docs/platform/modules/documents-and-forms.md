@@ -127,6 +127,15 @@ submit rather than being dropped. After `commitApprovedLeadForCase`, Approve res
 Re-running Approve retries; the booking (`tour_bookings.metadata.processing_case_id`) is the truth.
 Evidence: `certification/tours-calendar-forms/s7/`.
 
+**Optional marketing consent (Tours I1).** On the same links, the Forms runtime (`FormEmbedClient`)
+renders a Communications-owned control below the form — two unchecked boxes, email and texts, each with
+its own versioned wording — when the resolve payload's server-derived `marketing_consent_offered` is
+true. It is not a form field: it is not in the schema, not in the submission payload values, and the
+form author does not place it. Submit sends the boxes' actual state as `marketing_consent`; the route
+refuses an answer from a link that does not offer it and records the evidence on the Processing case
+beside `requested_tour`. Approve commits it through Communications (see `communications-platform.md`
+§ Tours). Packet and enrollment journeys never show it. Evidence: `certification/tours-calendar-forms/i1/`.
+
 ### Studio — Forms and Builder
 
 Canvas-first interaction translated from Surface Builder:

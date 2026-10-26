@@ -44,7 +44,7 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 - **Marketing:** requires explicit `opted_in` per channel (`email_marketing` / `sms_marketing`). Email consent never authorizes SMS marketing.
 - **Unsubscribe:** HMAC tokens (`unsubscribeToken.ts`) minted at enqueue into `metadata.unsubscribe_url` for marketing/operational email; List-Unsubscribe emitted at provider send (TS + Python). Route: `/api/communications/unsubscribe`.
 - **SMS keywords:** STOP opts out all SMS categories; START restores transactional + operational only (not marketing).
-- **Public intake handoff:** `commitMarketingConsentFromIntakeCapture` — Forms/Processing capture evidence before Person exists; commit preserves prior opt-outs.
+- **Public intake handoff:** `commitMarketingConsentFromIntakeCapture` — Forms/Processing capture evidence before Person exists; commit preserves prior opt-outs. Wired for the S7 public tour journey (Tours I1, below): evidence record `intakeMarketingConsentRecord.ts`, commit-once handoff `lib/pos/processingCase/commitIntakeMarketingConsentForCase.ts`. Intake never re-subscribes an opted-out person — there is no intake re-subscription path.
 - **Tour parent mail:** lifecycle notices are `transactional` (`tour_coordination`); invitations are `operational`. Gated by S1 `mayCommunicateForTour`.
 
 ---
@@ -165,10 +165,14 @@ communications boundary Tours now relies on. Evidence: `certification/tours-cale
   Scheduled sends now carry the resolved `recipientPersonId` into canonical enqueue
   (`executeLegacyCommunicationsSendAdapter`); before 2026-10-22 every due scheduled send — tour reminders
   included — was blocked `RECIPIENT_UNRESOLVED`.
-- **Classification (open, for C-D0):** every tour intent is transactional by nature
-  (`TOUR_COMMS_MESSAGE_CLASS`), but tour sends do not yet pass a `category`; canonical enqueue records
-  the `operational` fallback, so an operational opt-out blocks tour confirmations and reminders. Passing
-  `transactional` would bypass operational opt-outs and is deliberately left to the consent discovery.
+- **Classification (settled by C1, integrated in Tours I1):** parent lifecycle notices — confirmation,
+  reminder, reschedule, cancel, no-show follow-up — pass `category: transactional`
+  (`tourCommsMessageCategory.ts`); the invitation is `operational`; due reminders carry it through
+  `processDueCommunicationScheduledSends`. **Consequence:** canonical eligibility does not let a
+  preference opt-out suppress a transactional notice, so a parent with `email_transactional` /
+  `email_operational` opted out now RECEIVES the confirmation of a tour they requested; only channel
+  suppression (bounce / complaint), STOP holds and channel usability still block it. Before C1 the send
+  fell back to `operational` and an opt-out blocked it (live: `publicTourIntake` 14·17).
 - **Public tour requests (S7, 2026-10-26):** a time a family picks on a school's public tour calendar
   is pending intent on the Processing case — there is no booking and no Opportunity, so no tour message
   of any kind can be produced before Approve, and the family's screen says "received", never "booked".
@@ -177,8 +181,19 @@ communications boundary Tours now relies on. Evidence: `certification/tours-cale
   enqueue eligibility; the outcome (`sent` / `suppressed` with the policy code / `not_applicable`) is
   recorded on the case for the operator. A rule that requires tour approval yields `pending_approval`
   and stays silent until staff confirm under `tours.book`. There is no family ICS today (only the staff
-  calendar invite) and no marketing-consent capture: C1 is not integrated, and the public form offers
-  no consent control (`certification/tours-calendar-forms/s7/`).
+  calendar invite).
+- **Public intake marketing consent (Tours I1, 2026-10-26):** a lead-capture intake link whose tour
+  calendar is published (`publicLinkOffersMarketingConsent` — the link decides, never the body) shows
+  two optional, unchecked boxes in the Forms runtime: marketing email and marketing texts, each with its
+  own versioned wording (`INTAKE_MARKETING_CONSENT_LANGUAGE`). Submit records the answer — only a
+  literal `true` is consent; unchecked or absent is recorded as "no"; malformed is refused (400) — as
+  evidence on the Processing case (`metadata.marketing_consent`, wording, version, time, link,
+  submission). No person, preference or message exists before Approve. Approve commits it once for the
+  resolved person (created, or the existing one linked) through C1's commit authority: an existing
+  opt-out is preserved (`preserved_opt_out`); a replay writes nothing; an ambiguous identity holds the
+  evidence uncommitted with the case. Capturing consent sends nothing. The preference event carries
+  `source=public_intake`, `method=form_checkbox`; the full evidence stays on the case
+  (`certification/tours-calendar-forms/i1/`).
 
 ---
 
@@ -285,12 +300,15 @@ legacy pair, reachable only from `legacy-admin/messages-outbox`.
 | PROVIDER_STATUS | `providerDeliveryPersistence.ts` (messages, recipients, delivery events) |
 | SYSTEM_GENERATED | `v2/scheduleAnnouncementSendout.ts`, `tours/comms/tourSchedulingScheduledSends.ts`, `tours/comms/tourSystemTemplates.ts` |
 | IDENTITY PROJECTION | `identity/applyBindingIdentityProjection.ts` |
-| CROSS-DOMAIN | `lib/pos/processingIdentity/commands/ports.ts` — **the only writer of `communication_preferences`** |
+| CROSS-DOMAIN | `lib/pos/processingIdentity/commands/ports.ts` — a caller of the one preference authority (below) |
 | SCRIPT | two seed scripts |
 
-**Consent is authored from the POS processing-identity command path, not from any communications
-surface**, and `communication_preferences` holds 0 rows here. That is worth knowing before assuming a
-consent record exists.
+**Consent has one writer: `lib/communications/v2/persistCommunicationPreference.ts`** (row + append-only
+event). Since Tours I1 (C1 integrated) its callers are exactly: the Processing identity commit (`ports.ts`,
+opt-out preserving), the public intake commit (`intakeMarketingConsent.ts`, opt-out preserving), recipient
+unsubscribe (`applyUnsubscribe.ts`), and the operator preference route/service. Bound by
+`tests/docs/communicationsCertificationClaims.test.ts`. At the time of this census
+`communication_preferences` held 0 rows here — worth knowing before assuming a consent record exists.
 
 ### Surface and authority census — exact
 
