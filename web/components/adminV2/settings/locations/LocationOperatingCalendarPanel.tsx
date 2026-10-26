@@ -26,6 +26,25 @@ import {
 } from "@/lib/operatingCalendar/operatingCalendarPresentation";
 import type { CalendarEntryView } from "@/lib/operatingCalendar/operatingCalendarEntries";
 import type { DateImpact } from "@/lib/operatingCalendar/operatingCalendarImpact";
+import { durableRecordHref } from "@/lib/runtime/focus/durableRecordRoute";
+import { formatTourInstantForOperator } from "@/lib/tours/schedules/tourTimeFormat";
+
+export type AttentionBooking = {
+    booking_id: string;
+    opportunity_id: string | null;
+    primary_person_id: string | null;
+    start_at: string;
+    timezone: string | null;
+    status_key: string;
+    reason: "closed" | "outside_hours" | "undetermined";
+    entry_names: string[];
+};
+
+const ATTENTION_REASON: Record<AttentionBooking["reason"], string> = {
+    closed: "Location closed",
+    outside_hours: "Outside that day's hours",
+    undetermined: "Calendar undetermined",
+};
 import type {
     OperatingCalendarDesignation,
     OperatingCalendarEffect,
@@ -33,7 +52,7 @@ import type {
     OperatingCalendarScope,
 } from "@/lib/operatingCalendar/operatingCalendarVocabulary";
 
-type CalendarResponse = {
+export type CalendarResponse = {
     site_id: string;
     site_label: string;
     timezone: string;
@@ -42,6 +61,7 @@ type CalendarResponse = {
     today: string;
     rooms: Array<{ id: string; label: string }>;
     entries: CalendarEntryView[];
+    bookings_needing_attention: AttentionBooking[];
     can_edit_organization: boolean;
     can_edit_location: boolean;
 };
@@ -65,10 +85,12 @@ type EditorState = {
     draft: Draft;
 };
 
-type PreviewState = {
+export type PreviewState = {
     dates: DateImpact[];
     sites: Array<{ siteId: string; siteLabel: string }>;
     sites_not_previewed: number;
+    bookings_newly_affected: AttentionBooking[];
+    bookings_no_longer_affected: AttentionBooking[];
     action: "create" | "revise" | "withdraw" | "restore";
     entryId: string | null;
     draft: Draft | null;
@@ -129,9 +151,18 @@ function scopeBadge(e: CalendarEntryView, rooms: Map<string, string>): string {
     return e.scope === "organization" ? "Organization default · inherited" : "This location";
 }
 
-export function LocationOperatingCalendarPanel({ orgId, locationId }: { orgId: string; locationId: string }) {
-    const [data, setData] = useState<CalendarResponse | null>(null);
-    const [loading, setLoading] = useState(true);
+export function LocationOperatingCalendarPanel({
+    orgId,
+    locationId,
+    initialData,
+}: {
+    orgId: string;
+    locationId: string;
+    /** A calendar already read (server render, tests); it is still refreshed on mount. */
+    initialData?: CalendarResponse | null;
+}) {
+    const [data, setData] = useState<CalendarResponse | null>(initialData ?? null);
+    const [loading, setLoading] = useState(!initialData);
     const [error, setError] = useState<string | null>(null);
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -206,7 +237,16 @@ export function LocationOperatingCalendarPanel({ orgId, locationId }: { orgId: s
         setNotice(null);
         try {
             const j = await send({ mode: "preview", ...bodyFor(action, entryId, draft) });
-            setPreview({ dates: j.dates ?? [], sites: j.sites ?? [], sites_not_previewed: j.sites_not_previewed ?? 0, action, entryId, draft });
+            setPreview({
+                dates: j.dates ?? [],
+                sites: j.sites ?? [],
+                sites_not_previewed: j.sites_not_previewed ?? 0,
+                bookings_newly_affected: j.bookings_newly_affected ?? [],
+                bookings_no_longer_affected: j.bookings_no_longer_affected ?? [],
+                action,
+                entryId,
+                draft,
+            });
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "The change could not be reviewed.");
         } finally {
@@ -298,6 +338,19 @@ export function LocationOperatingCalendarPanel({ orgId, locationId }: { orgId: s
 
             {preview ?
                 <ImpactReview preview={preview} busy={busy} onConfirm={() => void commit()} onBack={() => setPreview(null)} />
+            :   null}
+
+            {data && data.bookings_needing_attention.length > 0 ?
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="operating-calendar-attention">
+                    <div className="text-xs font-semibold text-amber-900">
+                        {data.bookings_needing_attention.length} tour {data.bookings_needing_attention.length === 1 ? "booking needs" : "bookings need"} attention
+                    </div>
+                    <p className="mt-0.5 text-[11.5px] text-amber-900/80">
+                        Booked before the calendar changed. They are unchanged and still hold their places; nothing was sent to the families. Open each to
+                        reschedule or cancel.
+                    </p>
+                    <BookingList bookings={data.bookings_needing_attention} testId="operating-calendar-attention-booking" />
+                </div>
             :   null}
 
             {loading && !data ?
@@ -518,7 +571,7 @@ function CalendarEntryEditor({
     );
 }
 
-function ImpactReview({ preview, busy, onConfirm, onBack }: { preview: PreviewState; busy: boolean; onConfirm: () => void; onBack: () => void }) {
+export function ImpactReview({ preview, busy, onConfirm, onBack }: { preview: PreviewState; busy: boolean; onConfirm: () => void; onBack: () => void }) {
     const bySite = new Map<string, DateImpact[]>();
     for (const d of preview.dates) {
         const list = bySite.get(d.siteLabel);
@@ -554,6 +607,24 @@ function ImpactReview({ preview, busy, onConfirm, onBack }: { preview: PreviewSt
                     :   null}
                 </div>
             }
+            {preview.bookings_newly_affected.length > 0 ?
+                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2" data-testid="operating-calendar-impact-bookings">
+                    <div className="text-[11.5px] font-semibold text-amber-900">
+                        {preview.bookings_newly_affected.length} existing tour {preview.bookings_newly_affected.length === 1 ? "booking falls" : "bookings fall"} in
+                        this change
+                    </div>
+                    <p className="text-[11px] text-amber-900/80">
+                        They will not be cancelled, moved or messaged. They will be listed here as needing attention.
+                    </p>
+                    <BookingList bookings={preview.bookings_newly_affected} testId="operating-calendar-impact-booking" />
+                </div>
+            :   null}
+            {preview.bookings_no_longer_affected.length > 0 ?
+                <p className="mt-2 text-[11.5px] text-alloy-midnight/70" data-testid="operating-calendar-impact-cleared">
+                    {preview.bookings_no_longer_affected.length} {preview.bookings_no_longer_affected.length === 1 ? "booking" : "bookings"} will no longer need
+                    attention.
+                </p>
+            :   null}
             <div className="mt-3 flex gap-2">
                 <ConfigurationPrimaryButton disabled={busy} onClick={onConfirm} data-testid="operating-calendar-confirm">
                     Save
@@ -563,5 +634,28 @@ function ImpactReview({ preview, busy, onConfirm, onBack }: { preview: PreviewSt
                 </ConfigurationSecondaryButton>
             </div>
         </div>
+    );
+}
+
+function BookingList({ bookings, testId }: { bookings: AttentionBooking[]; testId: string }) {
+    return (
+        <ul className="mt-1.5 space-y-0.5">
+            {bookings.slice(0, 25).map((b) => (
+                <li key={b.booking_id} className="text-[11.5px] text-alloy-midnight/80" data-testid={testId} data-booking-id={b.booking_id}>
+                    {formatTourInstantForOperator(b.start_at, b.timezone)} · {ATTENTION_REASON[b.reason]}
+                    {b.entry_names.length > 0 ? ` (${b.entry_names.join(", ")})` : ""}
+                    {b.primary_person_id ?
+                        <>
+                            {" "}
+                            ·{" "}
+                            <a className="font-semibold text-alloy-bend-pine underline-offset-2 hover:underline" href={durableRecordHref("person", b.primary_person_id)}>
+                                Open record
+                            </a>
+                        </>
+                    :   null}
+                </li>
+            ))}
+            {bookings.length > 25 ? <li className="text-[11px] text-alloy-midnight/55">…and {bookings.length - 25} more</li> : null}
+        </ul>
     );
 }

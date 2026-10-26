@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
+import { describeTourAttention, judgeTourBookingsAgainstCalendar } from "@/lib/tours/calendar/tourCalendarAttention";
 
 const ACTIVE = [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS];
 
@@ -38,5 +39,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const activeSet = new Set<string>(ACTIVE);
     const active = (rows ?? []).filter((r) => activeSet.has(String((r as { status_key?: string }).status_key ?? "")));
-    return NextResponse.json({ bookings: rows ?? [], active_bookings: active });
+
+    // Active bookings the location's Operating Calendar now puts outside operating time. The
+    // booking itself is unchanged; this only makes the disagreement visible to the operator.
+    // An unreadable calendar must not hide the family's bookings: it is reported as
+    // unknown (null), never as "nothing needs attention" ({}).
+    let calendar_attention: Record<string, { reason: string; message: string; entry_names: string[] }> | null = null;
+    try {
+        const affected = await judgeTourBookingsAgainstCalendar(supabase, {
+            orgId: ctx.orgId,
+            bookings: active.filter((r) => Date.parse(String((r as { end_at?: string }).end_at)) > Date.now()) as never,
+        });
+        calendar_attention = Object.fromEntries(
+            affected.map((b) => [b.bookingId, { reason: b.reason, message: describeTourAttention(b), entry_names: b.entryNames }]),
+        );
+    } catch (e) {
+        console.error("[tour bookings] operating calendar attention unavailable", e);
+    }
+    return NextResponse.json({ bookings: rows ?? [], active_bookings: active, calendar_attention });
 }

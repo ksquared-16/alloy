@@ -21,6 +21,8 @@ import {
 } from "@/lib/operatingCalendar/operatingCalendarAuthoring";
 import { requireOperatingCalendarCapability } from "@/lib/access/operatingCalendarAuthority";
 import { previewCalendarDates } from "@/lib/operatingCalendar/operatingCalendarImpact";
+import { listCalendarAffectedTourBookings, type CalendarAffectedTourBooking } from "@/lib/tours/calendar/tourCalendarAttention";
+import { localMidnight } from "@/lib/operatingCalendar/operatingCalendarTime";
 import { addCalendarDays, isValidIanaTimeZone, localDateOf } from "@/lib/operatingCalendar/operatingCalendarTime";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -95,6 +97,15 @@ export async function GET(request: NextRequest) {
     const org = await fetchOperationalTimezoneForOrg(supabase, orgId);
     const accessForAuthoring = { permissionKeys: access.permissionKeys, dim };
 
+    // Tour bookings from today on that the calendar now puts outside operating time.
+    // Derived on read; nothing about the bookings was changed.
+    const attention = await listCalendarAffectedTourBookings(supabase, {
+        orgId,
+        siteIds: [siteId],
+        fromUtc: localMidnight(today, cal.timezone),
+        toUtc: localMidnight(addCalendarDays(toDate, 1), cal.timezone),
+    });
+
     return NextResponse.json({
         site_id: siteId,
         site_label: (site as { label: string | null }).label ?? "Location",
@@ -115,6 +126,7 @@ export async function GET(request: NextRequest) {
                 d.conflicts.length > 0 ||
                 d.applied.length > 0,
         ),
+        bookings_needing_attention: attention.map(attentionJson),
         can_edit_organization: await canAuthorCalendarScope(supabase, orgId, accessForAuthoring, "organization", null),
         can_edit_location: await canAuthorCalendarScope(supabase, orgId, accessForAuthoring, "location", siteId),
     });
@@ -185,6 +197,17 @@ export async function POST(request: NextRequest) {
 
     if (mode === "preview") {
         const preview = await previewCalendarDates(supabase, { orgId, prepared });
+        // Bookings this act WOULD put outside operating time, beside those already there.
+        const span = {
+            orgId,
+            siteIds: prepared.draft.scope === "location" ? [String(prepared.siteId)] : null,
+            fromUtc: new Date(Math.max(Date.now(), localMidnight(preview.fromDate, prepared.timezone).getTime() - 86_400_000)),
+            toUtc: localMidnight(addCalendarDays(preview.toDate, 2), prepared.timezone),
+        };
+        const before = await listCalendarAffectedTourBookings(supabase, span);
+        const after = await listCalendarAffectedTourBookings(supabase, { ...span, hypotheticalRows: [preview.hypotheticalRow] });
+        const already = new Set(before.map((b) => b.bookingId));
+        const still = new Set(after.map((b) => b.bookingId));
         return NextResponse.json({
             mode: "preview",
             timezone: prepared.timezone,
@@ -193,6 +216,8 @@ export async function POST(request: NextRequest) {
             sites: preview.sites,
             sites_not_previewed: preview.sitesNotPreviewed,
             dates: preview.dates,
+            bookings_newly_affected: after.filter((b) => !already.has(b.bookingId)).map(attentionJson),
+            bookings_no_longer_affected: before.filter((b) => !still.has(b.bookingId)).map(attentionJson),
         });
     }
 
@@ -212,4 +237,19 @@ export async function POST(request: NextRequest) {
         default:
             return NextResponse.json({ error: "The calendar entry could not be saved." }, { status: 500 });
     }
+}
+
+function attentionJson(b: CalendarAffectedTourBooking) {
+    return {
+        booking_id: b.bookingId,
+        opportunity_id: b.opportunityId,
+        primary_person_id: b.primaryPersonId,
+        location_id: b.locationId,
+        start_at: b.startAt,
+        end_at: b.endAt,
+        timezone: b.timezone,
+        status_key: b.statusKey,
+        reason: b.reason,
+        entry_names: b.entryNames,
+    };
 }

@@ -2,6 +2,7 @@ import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomai
 import { TOUR_TOO_SOON_MESSAGE, isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
+import { assertTourIntervalOperating } from "@/lib/operatingCalendar/operatingCalendarServer";
 import { offeredSlotCapacity } from "@/lib/tours/availability/internalCompute";
 import { TOUR_BOOKING_SLOT_CAPACITY_METADATA_KEY } from "@/lib/tours/bookings/tourSlotCapacity";
 import type {
@@ -256,7 +257,17 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
             if (!isTourStartAllowed(input.startAt, tz)) return { ok: false, message: TOUR_TOO_SOON_MESSAGE };
             try {
                 await assertNoOtherActiveBooking(supabase, orgId, opportunityId, null);
-                if (status !== "requested") {
+                if (status === "requested") {
+                    // A request is not a slot claim, so it skips slot validation — but it
+                    // still may not name a time the location's calendar closes.
+                    await assertTourIntervalOperating(supabase, {
+                        orgId,
+                        locationId,
+                        startAt: input.startAt,
+                        endAt: input.endAt,
+                        timezone: tz,
+                    });
+                } else {
                     slotCapacity = await assertSlotAvailableForWrite(supabase, {
                         orgId,
                         locationId,
