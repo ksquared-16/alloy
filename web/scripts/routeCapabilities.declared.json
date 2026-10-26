@@ -5763,6 +5763,12 @@
         "reason": "Reads the bookable slots for the token's own booking link so the family can choose one. Token-scoped admission like the rest of this public surface; it exposes availability windows for that link only and no organization data beyond them."
       }
     },
+    "app/api/public/tours/[token]/slots/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "A school's public tour calendar (S7): bookable times for the one location a published, location-scoped intake link names. Token-scoped admission (active, unexpired link carrying the tours-authorized calendar flag; embed-origin allowlist enforced), rate-limited, 45-day window cap; org and location come from the link, never the request. Returns intervals and their timezone only — no capacity, rules, bookings or family data — and writes nothing."
+      }
+    },
     "app/api/runtime-info/route.ts": {
       "GET": {
         "status": "none",

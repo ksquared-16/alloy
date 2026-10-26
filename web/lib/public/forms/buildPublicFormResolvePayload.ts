@@ -8,6 +8,7 @@
  * looser rule than the API does.
  */
 
+import { stripTourCalendarLinkConfig } from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
 import { participantBrandFromEffective } from "@/lib/public/forms/participantBrandTheme";
 import { publicFormLinkLocationId, resolvePublicFormBrand } from "@/lib/branding/loadPublicBrand";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -103,7 +104,7 @@ export async function buildPublicFormResolvePayload(
                 link: {
                     expires_at: v.expiresAt,
                     allowed_embed_origins: v.allowedEmbedOrigins,
-                    metadata: v.linkMetadata,
+                    metadata: stripTourCalendarLinkConfig(v.linkMetadata),
                 },
                 option_values_by_field_id: {},
                 option_choices_by_field_id: {},
@@ -141,7 +142,7 @@ export async function buildPublicFormResolvePayload(
             link: {
                 expires_at: v.expiresAt,
                 allowed_embed_origins: v.allowedEmbedOrigins,
-                metadata: v.linkMetadata,
+                metadata: stripTourCalendarLinkConfig(v.linkMetadata),
             },
             packet: v.packet,
             packet_terminal: false,
