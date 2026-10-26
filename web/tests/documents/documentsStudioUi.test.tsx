@@ -81,7 +81,9 @@ describe("Studio → Documents", () => {
         const editor = q("documents-studio-type-editor")!;
         expect(editor.textContent).toContain("Enforced for new documents");
         expect(editor.textContent).toContain("Declared — enforced from D7");
-        expect(editor.textContent).toContain("Declared — enforced from D5");
+        expect(editor.textContent).toContain("Enforced when a document is filed or uploaded");
+        expect(editor.textContent).toContain("Enforced when a document is filed or replaced");
+        expect(editor.textContent).not.toContain("enforced from D5");
         expect((q("documents-studio-publish") as HTMLButtonElement).disabled).toBe(true);
         // The sensitivity a revision may choose never goes below the published medical class.
         const options = [...(q("documents-studio-sensitivity") as HTMLSelectElement).options].map((o) => o.value);

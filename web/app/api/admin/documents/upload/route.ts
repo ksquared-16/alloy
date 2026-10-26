@@ -42,6 +42,8 @@ import { bytesMatchDocumentKind, CANONICAL_DOCUMENT_MIME, type DocumentContentKi
 import { auditQuarantine, decideIngestion } from "@/lib/documents/screenedIngestion";
 import { CANONICAL_DOCUMENT_ENTITY_TYPE } from "@/lib/documents/documentEntityTypes";
 import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
+import { checkDocumentTypeForWrite, markVersionPendingReview } from "@/lib/documents/configuration/documentTypeEnforcement";
+import { documentSubjectTypeForLegacy } from "@/lib/documents/documentSubjects";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -242,6 +244,18 @@ export async function POST(request: NextRequest) {
         );
     }
     const quarantined = screened.status === "quarantined";
+    // D5: a doc_type that names one of the organization's Studio types is held to that type's published policy — the
+    // subject it is uploaded to and the format of the bytes. Checked before anything is recorded or stored. A key the
+    // catalog does not know is a legacy free-text label and is accepted as before.
+    const typeCheck = await checkDocumentTypeForWrite(supabase, ctx.orgId, {
+        docType,
+        subjectType: canonicalType ? documentSubjectTypeForLegacy(canonicalType) : null,
+        format: contentKind,
+        mode: "operator",
+    });
+    if (!typeCheck.ok) {
+        return NextResponse.json({ error: typeCheck.message, code: typeCheck.code, problems: typeCheck.problems }, { status: typeCheck.status });
+    }
     // Content hash of the bytes we are about to store.
     //
     // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every
@@ -357,6 +371,10 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+    // D5: a review-required type starts with its version pending review; filing needs an accepted review.
+    if (typeCheck.policy?.review_required) {
+        await markVersionPendingReview(supabase, ctx.orgId, docId).catch(() => undefined);
+    }
 
     if (quarantined) {
         await auditQuarantine({ orgId: ctx.orgId, actor: ctx.userId, documentId: docId, decision: screened, route: "admin/documents/upload" });

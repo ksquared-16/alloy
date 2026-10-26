@@ -28,6 +28,7 @@ import { NextRequest } from "next/server";
 import { createHash, randomUUID } from "crypto";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { checkDocumentTypeForWrite, markVersionPendingReview } from "@/lib/documents/configuration/documentTypeEnforcement";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { resolveParticipantUploadDestination } from "@/lib/enrollment/participantRuntime/resolveParticipantUploadDestination";
@@ -131,6 +132,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const subjectId = ((pi as { subject_id?: string | null } | null)?.subject_id ?? "").trim();
     if (!subjectId) return publicErr("Journey has no subject to attach the document to.", 409);
 
+    // D5: the destination's document type, when it is a published Studio type, decides the formats it accepts and that
+    // it applies to a child. Checked before anything is stored. An archived or uncatalogued type keeps the old behaviour:
+    // a Studio change never silently closes a family's enrollment.
+    const typeCheck = await checkDocumentTypeForWrite(supabase, access.value.orgId, {
+        docType: destination.docType,
+        subjectType: "child",
+        format: sniffed,
+        mode: "public",
+    });
+    if (!typeCheck.ok) {
+        return publicErr(typeCheck.status === 503 ? "Please try again in a moment." : typeCheck.message, typeCheck.status === 503 ? 503 : 400, { code: typeCheck.code });
+    }
+
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || "org_documents";
     const filename = safeFilename(body.filename, kind.ext);
     const storagePath = `${access.value.orgId}/customer_member/${subjectId}/${randomUUID()}-${filename}`;
@@ -173,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const documentId = (docRow as { id: string }).id;
+    if (typeCheck.policy?.review_required) await markVersionPendingReview(supabase, access.value.orgId, documentId).catch(() => undefined);
     await auditQuarantine({
         orgId: access.value.orgId,
         actor: "public:enrollment_upload",

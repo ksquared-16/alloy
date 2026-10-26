@@ -11,7 +11,9 @@
  *   * RETAIN, untouched (row and file), when anything else still relies on it:
  *       - another subject (`entity_id` outside the subjects being deleted);
  *       - Forms (a remaining submission link or drawn signature);
- *       - Processing (a case source);
+ *       - Processing (a case source) — EXCEPT the completed D5 filing case of that same document: it is the provenance
+ *         of how the document arrived, not a reliance. It goes with the document (its proposal names the family);
+ *       - (D5) a received document superseded into a deleted document (filed as its next version) goes with it;
  *       - staff-qualification, safeguarding, medical-consent or subsidy evidence;
  *       - a vendor's document pointer, or a remaining person's profile-photo pointer;
  *       - a retention or legal hold: D2's `documents.legal_hold` / `documents.retention_until`, and the interim
@@ -146,6 +148,45 @@ async function profilePhotoPointers(
     return out;
 }
 
+/**
+ * Processing references to each document. A reference RETAINS the document, except the completed D5 filing case of that
+ * same document (`operational_result.kind = "document_filed"`), which is RELEASED: the case and its source go with it.
+ */
+async function processingReferences(
+    supabase: SupabaseClient,
+    orgId: string,
+    ids: readonly string[],
+): Promise<{ retaining: Set<string>; released: Map<string, string[]> }> {
+    const retaining = new Set<string>();
+    const released = new Map<string, string[]>();
+    const sources: Array<{ processing_case_id: string; source_id: string }> = [];
+    for (const part of chunks(ids)) {
+        const { data, error } = await supabase
+            .from("processing_case_sources")
+            .select("processing_case_id, source_id")
+            .eq("org_id", orgId)
+            .eq("source_kind", "document")
+            .in("source_id", part as string[]);
+        if (error) throw new DocumentDisposalError("reference_lookup_failed", null, `processing_case_sources.source_id: ${error.message}`);
+        sources.push(...((data ?? []) as Array<{ processing_case_id: string; source_id: string }>));
+    }
+    const caseIds = [...new Set(sources.map((s) => s.processing_case_id))];
+    const cases = new Map<string, { status: string; metadata: Record<string, unknown> | null }>();
+    for (const part of chunks(caseIds)) {
+        const { data, error } = await supabase.from("processing_cases").select("id, status, metadata").eq("org_id", orgId).in("id", part as string[]);
+        if (error) throw new DocumentDisposalError("reference_lookup_failed", null, `processing_cases: ${error.message}`);
+        for (const c of (data ?? []) as Array<{ id: string; status: string; metadata: Record<string, unknown> | null }>) cases.set(c.id, c);
+    }
+    for (const s of sources) {
+        const c = cases.get(s.processing_case_id);
+        const result = (c?.metadata?.operational_result ?? null) as Record<string, unknown> | null;
+        const isOwnFiling = c?.status === "completed" && result?.kind === "document_filed" && result.document_id === s.source_id;
+        if (isOwnFiling) released.set(s.source_id, [...(released.get(s.source_id) ?? []), s.processing_case_id]);
+        else retaining.add(s.source_id);
+    }
+    return { retaining, released };
+}
+
 function holdReasons(row: DocRow, now: Date): DocumentRetentionReason[] {
     const meta = row.metadata ?? {};
     const reasons: DocumentRetentionReason[] = [];
@@ -185,14 +226,12 @@ export async function disposeDocumentsOfDeletedSubjects(
     const ids = [...present];
 
     // Every consumer that may still rely on a document. Any read failure refuses the whole disposal.
+    const processing = ids.length ? await processingReferences(supabase, orgId, ids) : { retaining: new Set<string>(), released: new Map<string, string[]>() };
     const referenced: Array<[DocumentRetentionReason, Set<string>]> = ids.length
         ? [
               ["form_submission", await idsReferencedBy(supabase, orgId, "form_submission_documents", "document_id", ids)],
               ["form_signature", await idsReferencedBy(supabase, orgId, "form_submission_signatures", "drawn_asset_document_id", ids)],
-              [
-                  "processing_case_source",
-                  await idsReferencedBy(supabase, orgId, "processing_case_sources", "source_id", ids, ["source_kind", "document"]),
-              ],
+              ["processing_case_source", processing.retaining],
               ["staff_qualification_evidence", await idsReferencedBy(supabase, orgId, "staff_qualification_evidence", "document_id", ids)],
               ["safeguarding_evidence", await idsReferencedBy(supabase, orgId, "child_safeguarding_restrictions", "evidence_document_id", ids)],
               ["medical_consent_evidence", await idsReferencedBy(supabase, orgId, "person_medical_consents", "evidence_document_id", ids)],
@@ -251,6 +290,7 @@ export async function disposeDocumentsOfDeletedSubjects(
                 document_entity_id: row.entity_id,
                 doc_type: row.doc_type,
                 stored_objects: paths.length,
+                processing_case_ids: processing.released.get(row.id) ?? [],
             },
         });
         if (!audit.ok) throw new DocumentDisposalError("audit_unavailable", row.id, "the deletion could not be recorded, so it was not performed");
@@ -277,6 +317,19 @@ export async function disposeDocumentsOfDeletedSubjects(
             absent = Math.max(0, uniquePaths.length - removed);
         }
 
+        // 2b. (D5) The document's own completed filing case, and its source: provenance of the document, removed with it
+        //     (the proposal names the family). Before the row, so a failure leaves the document for a retry.
+        const filingCases = processing.released.get(row.id) ?? [];
+        if (filingCases.length) {
+            for (const [table, column] of [
+                ["processing_case_sources", "processing_case_id"],
+                ["processing_cases", "id"],
+            ] as const) {
+                const { error } = await supabase.from(table).delete().eq("org_id", orgId).in(column, filingCases);
+                if (error) throw new DocumentDisposalError("row_delete_failed", row.id, `${table}: ${error.message}`);
+            }
+        }
+
         // 3. The rows, children first. Each delete is a no-op on retry. The versions and subject associations go with the
         //    document row (ON DELETE CASCADE): D2 refuses to delete a version while its document remains.
         for (const [table, column] of [
@@ -297,6 +350,22 @@ export async function disposeDocumentsOfDeletedSubjects(
             }
         }
         out.push({ documentId: row.id, outcome: "deleted", objectsRemoved: removed, objectsAlreadyAbsent: absent });
+    }
+
+    // D5: received documents filed as a version of a document deleted here are its provenance, and go with it.
+    const deletedIds = new Set(out.filter((d) => d.outcome === "deleted").map((d) => d.documentId));
+    if (deletedIds.size) {
+        const { data: superseded, error: supErr } = await supabase
+            .from("documents")
+            .select("id, metadata")
+            .eq("org_id", orgId)
+            .eq("status", "superseded");
+        if (supErr) throw new DocumentDisposalError("reference_lookup_failed", null, `documents.superseded: ${supErr.message}`);
+        const provenance = ((superseded ?? []) as Array<{ id: string; metadata: Record<string, unknown> | null }>)
+            .filter((d) => deletedIds.has(String(((d.metadata?.filing ?? {}) as Record<string, unknown>).target_document_id ?? "")))
+            .map((d) => d.id)
+            .filter((id) => !candidates.includes(id));
+        if (provenance.length) out.push(...(await disposeDocumentsOfDeletedSubjects(supabase, { ...input, documentIds: provenance })));
     }
     return out;
 }

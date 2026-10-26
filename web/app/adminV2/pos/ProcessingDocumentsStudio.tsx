@@ -25,8 +25,9 @@ import { documentStudioApi, useDocumentStudioLibrary } from "./useDocumentStudio
  * Studio → Documents (D3). The organization's document categories and types.
  *
  * Categories are vocabulary and save immediately. Types are versioned: edits go to a draft, the server validates it,
- * and only a published version is live. The Studio shows which policy fields are ENFORCED today (default sensitivity,
- * for new documents) and which are DECLARED for D5/D7 — an unimplemented rule is never presented as active.
+ * and only a published version is live. The Studio shows where each policy field is ENFORCED today (sensitivity for new
+ * documents; subjects, formats and review on filing and upload; replacement on filing and replacement — D5) and which
+ * are only DECLARED (validity, D7) — an unimplemented rule is never presented as active.
  *
  * Every action is a server route gated by `processing.documents.manage` (reads: `documents.read`). Hiding a control is
  * not the boundary; a refused write surfaces the server's code.
@@ -72,7 +73,8 @@ const PROBLEM_TEXT: Record<string, string> = {
 };
 const ENFORCEMENT_LABEL: Record<string, string> = {
     enforced: "Enforced for new documents",
-    declared_d5: "Declared — enforced from D5",
+    enforced_filing: "Enforced when a document is filed or uploaded",
+    enforced_replacement: "Enforced when a document is filed or replaced",
     declared_d7: "Declared — enforced from D7",
 };
 

@@ -2,7 +2,8 @@
  * D4.5 — a document's history, built from what the record actually holds.
  *
  * Every entry says what kind of fact it is:
- *   committed  a change the record holds: a version, a subject link (or its end), a review, a release from quarantine;
+ *   committed  a change the record holds: a version, a subject link (or its end), a review, a release from quarantine, a
+ *              filing from Processing (D5: `documents.metadata.filing`, written in the filing transaction);
  *   system     something the platform did on its own: screening's quarantine verdict, a migration backfill;
  *   refused    an audited attempt the record does not reflect: the change was authorized and recorded, then not made;
  *   access     a download link was issued (an access, not a change).
@@ -98,7 +99,10 @@ export async function buildDocumentHistory(
         const at = str(v.created_at) ?? "";
         const auditId = str(v.provenance?.audit_event_id);
         if (auditId) committedAuditIds.add(auditId);
-        if (v.source === "replacement") {
+        if (v.source === "replacement" && str(v.provenance?.filed_from_document_id)) {
+            // D5: a received document filed from Processing as this document's next version.
+            entries.push({ at, kind: "committed", action: `Filed from Processing as version ${v.version_number}`, detail: null, version_number: v.version_number });
+        } else if (v.source === "replacement") {
             entries.push({ at, kind: "committed", action: `Replaced with version ${v.version_number}`, detail: str(v.replacement_reason), version_number: v.version_number });
         } else if (v.source === "legacy_backfill") {
             entries.push({ at, kind: "system", action: "Recorded as version 1 when versioning began", detail: null, version_number: v.version_number });
@@ -116,6 +120,17 @@ export async function buildDocumentHistory(
         const auditId = str(release.audit_event_id);
         if (auditId) committedAuditIds.add(auditId);
         entries.push({ at: str(release.at) ?? "", kind: "committed", action: "Released from quarantine", detail: str(release.reason), version_number: null });
+    }
+    // D5: the committed filing record (written in the filing transaction itself).
+    const filing = (metadata.filing ?? null) as Record<string, unknown> | null;
+    if (filing && str(filing.filed_at)) {
+        entries.push({
+            at: str(filing.filed_at) ?? "",
+            kind: "committed",
+            action: filing.mode === "new_version" ? "Filed from Processing as a new version of the record's document" : "Filed from Processing",
+            detail: str(filing.doc_type)?.replace(/_/g, " ") ?? null,
+            version_number: null,
+        });
     }
     for (const s of subjectRows) {
         const what = `${s.is_primary ? "primary owner" : s.association === "owner" ? "owner" : "related"}: ${SUBJECT_LABEL[s.subject_type] ?? s.subject_type}`;
@@ -155,6 +170,13 @@ export async function buildDocumentHistory(
                 else entries.push({ at, kind: "refused", action: "Sensitivity change attempted — not applied", detail: null, version_number: null });
                 break;
             }
+            case "document_filing_authorized":
+                // Committed only when the filing record names THIS audited attempt (an earlier, failed attempt of the same case
+                // shares the key); the committed entry itself comes from that record.
+                if (!filing || (str(filing.audit_event_id) ? str(filing.audit_event_id) !== e.id : str(filing.key) !== str(p.filing_key))) {
+                    entries.push({ at, kind: "refused", action: "Filing attempted — not filed", detail: null, version_number: null });
+                }
+                break;
             case "document_delete_failed":
                 entries.push({ at, kind: "refused", action: "Deletion attempted — the document was kept", detail: null, version_number: null });
                 break;

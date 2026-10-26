@@ -1,14 +1,14 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-26
 supersedes: []
 ---
 
 # Document security model
 
-**Status:** canonical owner for document access, storage, ingestion, identity and type-policy security (Documents V1, D1a–D3).
-**Last reviewed:** 2026-10-23, at staging `267d9400`.
+**Status:** canonical owner for document access, storage, ingestion, identity, type-policy and filing security (Documents V1, D1a–D5).
+**Last reviewed:** 2026-10-26, at staging `d18d4e524` plus the D5 candidate.
 **Higher authority:** the code and migrations named below. Where this prose disagrees with them, they win.
 
 ## 1. The one door
@@ -60,7 +60,7 @@ canonical content type its bytes prove (`web/lib/documents/documentContentSignat
 
 | Path | Who | Checks |
 |---|---|---|
-| `POST /api/admin/documents/upload` | `documents.write`; `processing.operate` to open or attach a case | 10 MiB; bytes must match the claimed format (415 `CONTENT_MISMATCH`); structural screening (415 `SCREENING_REFUSED`, or quarantine with no extraction and no Processing case) |
+| `POST /api/admin/documents/upload` | `documents.write`; `processing.operate` to open or attach a case | 10 MiB; bytes must match the claimed format (415 `CONTENT_MISMATCH`); structural screening (415 `SCREENING_REFUSED`, or quarantine with no extraction and no Processing case); a named Studio type's subject and format (422, D5) |
 | `POST /api/public/forms/[token]/enrollment-upload` | form-link token; the session's pinned schema decides the destination | Content-Length precheck; rate limit; PDF/PNG/JPEG by magic bytes; 10 MiB |
 | `POST /api/public/forms/[token]/enrollment-signature-asset` | form-link token | Content-Length precheck; rate limit; PNG by magic bytes; 300 KB |
 | `POST /api/vendor-application` | unauthenticated | Content-Length precheck; rate limit; PDF/PNG/JPEG by magic bytes; 10 MiB per file |
@@ -170,10 +170,17 @@ Migration `supabase/migrations/20261209090100_documents_d3_studio_configuration.
 - **Types** are a stable identity (`document_types`) with immutable versions (`document_type_versions`): draft →
   validated → published, published by compare-and-swap through `document_type_publish`. `documents.doc_type` stores the
   type key, so every existing value keeps its meaning.
-- **The one enforced policy:** a published type's default sensitivity applies to NEW documents of that type, and to a
-  document re-typed onto it, raise-only. A revision may not lower it, the four medical type keys never publish below
-  `medical`, and no existing document is reclassified by a type change. Review, replacement, formats, subjects and validity are
-  declared intent for D5–D7 and are labelled as such.
+- **Sensitivity:** a published type's default sensitivity applies to NEW documents of that type, and to a document
+  re-typed onto it, raise-only. A revision may not lower it, the four medical type keys never publish below `medical`, and
+  no existing document is reclassified by a type change.
+- **Enforced since D5** (`web/lib/documents/configuration/documentTypeEnforcement.ts`, the one check; `public.document_file`
+  for filing): applicable subject types and allowed formats on filing, the operator upload, the replacement route and the
+  public Forms and vendor uploads; review-required on filing (an accepted review), with uploads and replacements of such a
+  type recorded PENDING review; the replacement policy on filing and replacement (`not_allowed` refuses a second document
+  or version, `new_document` refuses a version, `new_version` files a second received document as the next version). An
+  operator write that names an archived or unpublished type is refused; a public write keeps the old behaviour then (a
+  Studio change never silently closes public intake); a key the catalog does not know is a legacy label and is accepted.
+- **Still declared:** validity (expiration, periodic reconfirmation, renewal) is D7 and is not enforced.
 - **Authority:** writes need `processing.documents.manage`; reads need `documents.read`. Every change is audited before
   it happens (`document_category_changed`, `document_type_changed`).
 
@@ -205,6 +212,31 @@ Record: `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.
   `document_upload_authorized` (no storage path) for the document id it then inserts, and refuses with 503
   `AUDIT_UNAVAILABLE` when it cannot. Version 1 records its uploader (`metadata.uploaded_by` → `document_versions.created_by`).
 
+## 7b. Filing a received document (D5)
+
+Migration `supabase/migrations/20261210093500_documents_d5_filing.sql`. Command `web/lib/documents/filing/documentFiling.ts`.
+Record: `certification/documents-v1/D5-PROCESSING-FILING.md`.
+
+- **The one filing door.** A received document reaches a customer record only through `commitDocumentFiling`, called by a
+  Processing document case's approval. Processing chooses (type, record, related records, review); Documents files.
+- **Decided again at commit**, in order: `documents.write`; the full access decision on the received document (a
+  quarantined or otherwise unavailable document is refused — `DOCUMENT_QUARANTINED`); every destination subject inside the
+  actor's scope (404 otherwise, as absent) and related to the primary owner (same household); the published type's policy
+  (§7); clearance for the class the document WILL have (type default, medical floor, explicit raise). `processing.operate`
+  on the case is necessary and never sufficient.
+- **Recorded before the effect:** `document_filing_authorized` (no storage path); 503 `AUDIT_UNAVAILABLE` when it cannot be
+  written. `document_filed` after the commit. The committed fact is `documents.metadata.filing`, which names the audited
+  attempt (`audit_event_id`); history shows a filing as committed only from it.
+- **One transaction:** `document_file` writes the type, the raise-only sensitivity, the primary owner, the context
+  associations, the version's accepted review and the filing record, or nothing. `document_file_as_version` adds the
+  received bytes as the target's next version (provenance `filed_from_document_id`) and marks the received document
+  `superseded` — unavailable everywhere, kept as provenance. The object copy that a version needs (one object per version)
+  happens before the transaction at a deterministic path and is removed if the transaction fails, unless a version
+  already references it.
+- **Idempotent:** a retry with the same filing key replays without writing; a different filing of a filed document is
+  refused (`ALREADY_FILED`); the database refuses a new owner for an owned document.
+- **Service role only:** the filing functions are revoked from every client role.
+
 ## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
@@ -214,3 +246,4 @@ Record: `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.
 - **D2:** `certification/documents-v1/D2-CANONICAL-FOUNDATION.md`; database invariants `certification/invariants/documents-d2-canonical-foundation.sql`.
 - **D3:** `certification/documents-v1/D3-DOCUMENT-STUDIO.md`; database invariants `certification/invariants/documents-d3-studio-configuration.sql`.
 - **D4:** `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.
+- **D5:** `certification/documents-v1/D5-PROCESSING-FILING.md`; database invariants `certification/invariants/documents-d5-filing.sql`.

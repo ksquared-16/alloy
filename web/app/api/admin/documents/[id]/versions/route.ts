@@ -17,6 +17,8 @@ import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents
 import { ADMIN_DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/documentUploadLimits";
 import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { addDocumentVersion, listDocumentVersions } from "@/lib/documents/documentVersions";
+import { checkDocumentTypeForWrite, markVersionPendingReview } from "@/lib/documents/configuration/documentTypeEnforcement";
+import { documentSubjectTypeForLegacy } from "@/lib/documents/documentSubjects";
 
 /**
  * D2 — a document's versions.
@@ -106,6 +108,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         );
     }
 
+    // D5: the type's replacement policy decides whether a document takes a new version at all, and the new file must be
+    // an allowed format. A document whose type was archived keeps its history replaceable (it is not a new filing).
+    const { data: typed } = await supabase.from("documents").select("doc_type").eq("org_id", document.orgId).eq("id", document.id).maybeSingle();
+    const typeCheck = await checkDocumentTypeForWrite(supabase, document.orgId, {
+        docType: (typed as { doc_type?: string | null } | null)?.doc_type ?? null,
+        subjectType: documentSubjectTypeForLegacy(document.entityType),
+        format: kind,
+        mode: "public",
+        replacement: true,
+    });
+    if (!typeCheck.ok) {
+        return NextResponse.json({ error: typeCheck.message, code: typeCheck.code, problems: typeCheck.problems }, { status: typeCheck.status === 422 ? 409 : typeCheck.status });
+    }
+
     const checksumSha256 = createHash("sha256").update(buffer).digest("hex");
     const mimeType = CANONICAL_DOCUMENT_MIME[kind];
     const segment = document.entityType && document.entityId ? `${document.entityType}/${document.entityId}` : "pos_intake";
@@ -146,6 +162,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         await supabase.storage.from(document.bucket).remove([storagePath]).catch(() => console.error("[DOCUMENT_VERSION_ROLLBACK]", { document_id: document.id }));
         const status = added.code === "DOCUMENT_UNAVAILABLE" ? 409 : added.code === "NOT_FOUND" ? 404 : 500;
         return NextResponse.json({ ok: false, error: "The new version could not be recorded.", code: added.code }, { status });
+    }
+    if (typeCheck.policy?.review_required) {
+        await markVersionPendingReview(supabase, document.orgId, document.id).catch(() => undefined);
     }
 
     return NextResponse.json({

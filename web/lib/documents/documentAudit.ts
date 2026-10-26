@@ -35,6 +35,10 @@ export type DocumentAuditEvent =
     | "document_type_changed"
     // D4: an operator upload, recorded before the file is stored.
     | "document_upload_authorized"
+    // D5: filing a received document to a customer record. `document_filing_authorized` is recorded BEFORE the filing
+    // transaction; `document_filed` after it committed (the committed fact itself is `documents.metadata.filing`).
+    | "document_filing_authorized"
+    | "document_filed"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
