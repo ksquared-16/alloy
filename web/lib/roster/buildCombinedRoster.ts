@@ -39,6 +39,7 @@ import { buildScheduleExpectations } from "@/lib/childcareOperational/expectatio
 import {
     countsPresent,
     NO_RECORD,
+    presentChildRoom,
     resolveActualStaffing,
     staffActualFromDayState,
     type SubjectActualState,
@@ -179,7 +180,14 @@ export type RosterCell = {
     staffingReason: "evaluated" | "no_ratio_configuration";
 
     // ── Actual operating state ────────────────────────────────────────────────
+    /** ROSTER PRESENCE: children expected in this room who are present anywhere ("is my class here"). */
     actualChildrenPresent: number;
+    /**
+     * PHYSICAL OCCUPANCY: present children whose whereabouts put them in this room now (a present
+     * child with no recorded room counts in their expected room). The actual ratio is computed from
+     * this, never from roster presence (V7 K1).
+     */
+    actualChildrenInRoom: number;
     actualStaffPresent: number;
     /** Demand for the children ACTUALLY present — not the expected count. */
     actualRequiredStaff: number | null;
@@ -522,6 +530,23 @@ export async function buildCombinedRoster(
 
     const staffByRoomKey = new Map(staffSupply.cells.map((c) => [staffSupplyCellKey(c.roomLocationId, c.date), c]));
 
+    /*
+     * ACTUAL CHILDREN BY WHERE THEY ARE (V7 Package 1 / audit K1).
+     *
+     * A room's ACTUAL RATIO is about the children standing in it — per the whereabouts fold, as of
+     * this roster's instant — not the children expected there who are present somewhere. A child moved
+     * from the classroom to the gym leaves the classroom's ratio and enters the gym's. Roster presence
+     * (`actualChildrenPresent`, "is my class here") keeps its certified meaning, and the expected side
+     * (`children`, `expectedChildCount`) still describes the expected room.
+     */
+    const presentByActualRoom = new Map<string, number>();
+    for (const [expectedRoomId, list] of childrenByRoom) {
+        for (const c of list) {
+            const at = presentChildRoom(c.actual, expectedRoomId);
+            if (at) presentByActualRoom.set(at, (presentByActualRoom.get(at) ?? 0) + 1);
+        }
+    }
+
     // A roster cell is a STAFFING row: occupancy, required staff, ratio breach.
     // Those are facts about an operational GROUP, so only groups are seeded here —
     // otherwise adding a physical room or a playground manufactures an empty cell
@@ -536,6 +561,9 @@ export async function buildCombinedRoster(
         ...new Set([
             ...operationalGroupRooms(rooms).map((r) => r.id),
             ...childrenByRoom.keys(),
+            // NOT seeded from actual presence alone: a shared space a child walked into has no ratio
+            // obligation of its own until P3 (ratio in a shared space) is decided. The child still
+            // leaves the origin's ratio, and counts wherever the destination already has a row.
             ...staffSupply.cells
                 .map((c) => c.roomLocationId)
                 .filter((v): v is string => Boolean(v)),
@@ -603,13 +631,14 @@ export async function buildCombinedRoster(
             }));
 
         const actualChildrenPresent = countsPresent(children.map((c) => c.actual));
+        const actualChildrenInRoom = presentByActualRoom.get(roomId) ?? 0;
         const actualStaffPresent =
             countsPresent(staff.map((s) => s.actual)) +
             countsPresent(unscheduledStaffPresent.map((s) => s.actual));
 
-        const actualDemand = resolveRequiredStaffForChildren(resolveTiers(roomId, date), actualChildrenPresent);
+        const actualDemand = resolveRequiredStaffForChildren(resolveTiers(roomId, date), actualChildrenInRoom);
         const { actualRequiredStaff, actualStaffingSufficiency } = resolveActualStaffing({
-            actualChildrenPresent,
+            actualChildrenPresent: actualChildrenInRoom,
             actualStaffPresent,
             requiredStaffForActualChildren: actualDemand.requiredStaff,
             exceedsDefinedTiers: actualDemand.exceedsDefinedTiers,
@@ -628,6 +657,7 @@ export async function buildCombinedRoster(
             staffingSufficiency,
             staffingReason: requiredStaff == null ? "no_ratio_configuration" : "evaluated",
             actualChildrenPresent,
+            actualChildrenInRoom,
             actualStaffPresent,
             actualRequiredStaff,
             actualStaffingSufficiency,
