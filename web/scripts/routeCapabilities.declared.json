@@ -4453,6 +4453,12 @@
         "status": "pending"
       }
     },
+    "app/api/admin/processing/cases/[caseId]/requested-tour/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only view of the tour a family requested on the school's public tour calendar (S7), for the Processing case it belongs to: the request, whether the time is still offered, the booking Approve made and its confirmation outcome, and current openings from the canonical slot engine. Same admission as the case detail it accompanies (portal admin context, org-filtered); writes nothing."
+      }
+    },
     "app/api/admin/processing/dev-cleanup/route.ts": {
       "POST": {
         "status": "declared",

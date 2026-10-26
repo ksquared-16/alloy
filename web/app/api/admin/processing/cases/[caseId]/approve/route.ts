@@ -20,6 +20,29 @@ import {
 } from "@/lib/pos/processingCase/processingCaseSubjectRemoved";
 import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
+import {
+    materializeRequestedTourForCase,
+    type RequestedTourHandoffOutcome,
+} from "@/lib/tours/publicCalendar/materializeRequestedTour";
+import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
+
+/**
+ * S7 — the requested tour is a SEPARATE consequence of acceptance. It runs after the lead is
+ * committed and the case completed, and nothing it does (an unavailable time, an error) can undo
+ * that approval. Re-running Approve on a completed case retries it; the handoff is idempotent.
+ */
+async function resolveRequestedTourSafe(
+    supabase: ReturnType<typeof createAdminClient>,
+    args: { orgId: string; caseId: string; opportunityId: string | null; actorUserId: string | null }
+): Promise<RequestedTourHandoffOutcome | { kind: "failed"; error: string }> {
+    try {
+        return await materializeRequestedTourForCase(supabase, args);
+    } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        console.warn("[processing approve] requested tour handoff failed", error);
+        return { kind: "failed", error };
+    }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -70,11 +93,24 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
         const row = caseRow as { status: string; case_type?: string | null; metadata?: Record<string, unknown> };
         if (row.status === "completed" || row.status === "archived") {
+            const prior = (row.metadata?.operational_result ?? null) as { kind?: unknown; recordId?: unknown } | null;
+            // A retry of an ACCEPTED lead with a requested tour finishes the tour step (idempotent).
+            // A rejected or archived case is never booked: only a lead result carries an Opportunity.
+            const tourRequest =
+                row.status === "completed" && prior?.kind === "lead" && readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: typeof prior.recordId === "string" ? prior.recordId : null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
             return jsonData({
                 caseId,
                 status: row.status,
                 operationalResult: row.metadata?.operational_result ?? null,
                 alreadyDone: true,
+                ...(tourRequest ? { tourRequest } : {}),
             });
         }
         // Evidence only: there is no family to hand this case's outcome to, so nothing is "approved".
@@ -226,7 +262,15 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                         console.warn("[processing approve] lead_created emit failed", e instanceof Error ? e.message : e);
                     }
                 }
-                return jsonData({ caseId, status: "completed", operationalResult, attempt });
+                const tourRequest = readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: leadId,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+                return jsonData({ caseId, status: "completed", operationalResult, attempt, ...(tourRequest ? { tourRequest } : {}) });
             } catch (e) {
                 // identity_review_required (plausible match needs an operator decision), stale
                 // plan, unauthorized, etc. — surface with the operator error mapping.

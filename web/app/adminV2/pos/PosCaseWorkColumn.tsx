@@ -18,6 +18,7 @@ import PosPanel from "./PosPanel";
 import ClassificationPanel from "./ClassificationPanel";
 import WhatAlloyFound from "./WhatAlloyFound";
 import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
+import RequestedTourPanel from "@/components/pos/RequestedTourPanel";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat";
 import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
@@ -149,6 +150,14 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                     </ul>
                 </div>
             </PosPanel>
+
+            {/* 1a — The tour the family asked for on the school's public calendar (S7): pending intent,
+                not a booking, until Approve resolves it. */}
+            {detail.requestedTour ? (
+                <PosPanel eyebrow="Requested tour" className="!h-auto">
+                    <RequestedTourPanel caseId={detail.id} refreshKey={`${detail.status}:${detail.updatedAt ?? ""}`} />
+                </PosPanel>
+            ) : null}
 
             {/* 1b — What Alloy found: the existing records it matched, next to "What came in" so the
                 operator can compare the two before deciding (§1). This is the primary place for

@@ -6,6 +6,7 @@
  * persistence. These are query-time projections only.
  */
 
+import type { RequestedTourRecord } from "@/lib/tours/publicCalendar/requestedTour";
 import type {
     ProcessingCaseSourceKind,
     ProcessingCaseSourceRole,
@@ -130,6 +131,12 @@ export interface ProcessingCaseDetail {
     formDraftCreated: FormDraftCreatedLink | null;
     /** Persisted import intent from case metadata (`processing_intent` / `import_purpose`). */
     processingIntent: ProcessingImportIntent | null;
+    /**
+     * S7 — the tour time the family requested on the school's public calendar
+     * (`metadata.requested_tour`). Pending intent until Approve resolves it; never a booking.
+     * Live eligibility, the booking and its confirmation are read by the requested-tour route.
+     */
+    requestedTour?: RequestedTourRecord | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";

@@ -46,6 +46,13 @@ import {
     extractCollectionSubmissionEnvelope,
     validateCollectionPayloadOrgSecurity,
 } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
+import { takeTourPublicRateLimit } from "@/lib/tours/public/tourPublicRateLimit";
+import { findOfferedTourSlot, resolvePublicTourCalendar } from "@/lib/tours/publicCalendar/publicTourCalendarServer";
+import {
+    buildRequestedTourRecord,
+    parsePublicTourSelection,
+    type RequestedTourRecord,
+} from "@/lib/tours/publicCalendar/requestedTour";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -133,6 +140,56 @@ export async function POST(
 
     if (sub.status !== "draft") {
         return publicErr("Only draft submissions can be submitted", 409, { code: "NOT_DRAFT" });
+    }
+
+    /*
+     * S7 — A REQUESTED TOUR. A time picked on the school's public tour calendar rides with the lead
+     * form as pending intent on the Processing case. The browser sends two instants and nothing
+     * else: org and location come from THIS link, the slot must be one the canonical slot engine
+     * offers right now, and a refusal happens before anything is written — the draft stays a draft,
+     * so the family can pick another time without losing their answers. Nothing here books a seat
+     * or sends a message: acceptance is the administrator's Approve.
+     */
+    let requestedTour: RequestedTourRecord | null = null;
+    if (body.requested_tour !== undefined && body.requested_tour !== null) {
+        const retryAfter = takeTourPublicRateLimit(request, "calendar_request", token);
+        if (retryAfter != null) {
+            return publicErr("Too many requests", 429, { code: "RATE_LIMIT" });
+        }
+        const selection = parsePublicTourSelection(body.requested_tour);
+        if (!selection.ok) return publicErr(selection.message, 400, { code: "TOUR_REQUEST_INVALID" });
+        if (ctx.packet) {
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        const calendar = await resolvePublicTourCalendar(supabase, token, { embedOrigin: origin });
+        if (!calendar.ok || calendar.value.linkId !== ctx.linkId) {
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        let offered: Awaited<ReturnType<typeof findOfferedTourSlot>> = null;
+        try {
+            offered = await findOfferedTourSlot(supabase, {
+                orgId: calendar.value.orgId,
+                locationId: calendar.value.locationId,
+                startAt: selection.value.startAt,
+                endAt: selection.value.endAt,
+            });
+        } catch {
+            return publicErr("We couldn't check that time just now. Please try again.", 503, { code: "TOUR_CHECK_UNAVAILABLE" });
+        }
+        if (!offered) {
+            return publicErr("That time is no longer available. Please choose another time.", 409, {
+                code: "TOUR_SLOT_UNAVAILABLE",
+            });
+        }
+        requestedTour = buildRequestedTourRecord({
+            locationId: calendar.value.locationId,
+            startAt: selection.value.startAt,
+            endAt: selection.value.endAt,
+            timezone: offered.timezone,
+            ruleId: offered.ruleId ?? null,
+            formPublicLinkId: ctx.linkId,
+            formSubmissionId: submissionId,
+        });
     }
 
     const { data: ver } = await supabase
@@ -267,6 +324,10 @@ export async function POST(
             schema,
         });
 
+        if (!built.ok && requestedTour) {
+            // No Processing case could be opened, so there is nowhere to hold the request.
+            return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
         if (!built.ok) {
             finalPayload = {
                 ...finalPayload,
@@ -328,6 +389,7 @@ export async function POST(
                     intakeMeta: built.intake,
                     payload: finalPayload,
                     linkMetadata: metaRecord,
+                    requestedTour,
                 });
                 if (!intake.ok) {
                     throw new Error(intake.error);
@@ -344,6 +406,12 @@ export async function POST(
                     },
                 };
             } catch (e) {
+                if (requestedTour) {
+                    // Never tell a family "request received" for a request Processing does not hold.
+                    return publicErr("We couldn't record your request just now. Please try again.", 503, {
+                        code: "TOUR_REQUEST_NOT_RECORDED",
+                    });
+                }
                 const msg = e instanceof Error ? e.message : "Intake failed";
                 const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
                 delete cleanedMeta.intake;
@@ -604,5 +672,10 @@ export async function POST(
 
     const { org_id: _o, ...rest } = submittedRow;
     void _o;
-    return publicOk({ ...rest, ...packetExtras });
+    return publicOk({
+        ...rest,
+        ...packetExtras,
+        // Received, not booked: the family's screen says exactly this.
+        ...(requestedTour ? { tour_request: { state: requestedTour.state } } : {}),
+    });
 }

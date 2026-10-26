@@ -19,6 +19,7 @@ import {
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import { resolveCaseTitle } from "@/lib/pos/caseTitlePresentation";
 import { intentPurposeLabel } from "@/lib/pos/decisionPresentation";
+import { REQUESTED_TOUR_METADATA_KEY, type RequestedTourRecord } from "@/lib/tours/publicCalendar/requestedTour";
 
 export type IngestPublicFormInput = {
     orgId: string;
@@ -27,6 +28,11 @@ export type IngestPublicFormInput = {
     intakeMeta: FormIntakeMeta;
     payload: FormPayload;
     linkMetadata?: Record<string, unknown>;
+    /**
+     * S7 — a time the family picked on the school's public tour calendar. Pending intent on the
+     * case: no booking, no Opportunity, no message. Approval resolves it.
+     */
+    requestedTour?: RequestedTourRecord | null;
 };
 
 export type IngestPublicFormResult =
@@ -93,7 +99,7 @@ export async function ingestPublicFormThroughProcessing(
             });
         }
 
-        await supabase
+        const metadataWrite = await supabase
             .from("processing_cases")
             .update({
                 metadata: {
@@ -106,12 +112,19 @@ export async function ingestPublicFormThroughProcessing(
                     intake_authority: "processing",
                     ...(adminCategory ? { admin_category: adminCategory } : {}),
                     ...(caseTitle ? { case_title: caseTitle } : {}),
+                    ...(input.requestedTour ? { [REQUESTED_TOUR_METADATA_KEY]: input.requestedTour } : {}),
                 },
                 status: "needs_resolution",
                 status_changed_at: new Date().toISOString(),
             })
             .eq("org_id", input.orgId)
             .eq("id", opened.processingCaseId);
+        // A requested tour that did not reach the case would be silently lost — the family was told
+        // their request was received. Fail the intake instead, so the submission stays a retryable draft.
+        const metadataWriteError = (metadataWrite as { error?: { message?: string } | null } | null | undefined)?.error;
+        if (input.requestedTour && metadataWriteError) {
+            return { ok: false, error: `requested tour not recorded: ${metadataWriteError.message ?? "write failed"}` };
+        }
 
         await runCanonicalIdentityResolution({
             supabase,

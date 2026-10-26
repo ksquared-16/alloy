@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTourInstantForOperator } from "@/lib/tours/schedules/tourTimeFormat";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import type { RequestedTourAttention } from "@/lib/tours/publicCalendar/requestedTourOperatorView";
 import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
@@ -77,6 +78,8 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     const [activeBookings, setActiveBookings] = useState<TourBookingRow[]>([]);
     const [bootstrapErr, setBootstrapErr] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    /** S7 — an accepted public tour request on this lead that still needs a time. */
+    const [requestedTourAttention, setRequestedTourAttention] = useState<RequestedTourAttention[]>([]);
 
     const defaultSuccessMessage = useMemo(() => {
         const label = (submitLabel ?? title ?? "").toLowerCase();
@@ -109,9 +112,11 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             });
             const j = (await res.json().catch(() => ({}))) as {
                 active_bookings?: TourBookingRow[];
+                requested_tour_attention?: RequestedTourAttention[] | null;
                 error?: string;
             };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
+            setRequestedTourAttention(j.requested_tour_attention ?? []);
             const act = j.active_bookings ?? [];
             setActiveBookings(act);
             setSlotPhase(act.length > 0 ? "duplicate_guard" : "schedule");
@@ -129,6 +134,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setActiveBookings([]);
             setBootstrapErr(null);
             setSuccessMessage(null);
+            setRequestedTourAttention([]);
             return;
         }
         setPanel(hasSite ? "slots" : "legacy");
@@ -220,6 +226,17 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                             title="Checking tour bookings…"
                             data-testid="schedule-tour-bootstrap-loader"
                         />
+                    </div>
+                ) : null}
+
+                {showSlotChrome && slotPhase !== "bootstrapping" && requestedTourAttention.length ? (
+                    <div className="space-y-1 border-b border-amber-200 bg-amber-50 px-5 py-3" data-testid="requested-tour-attention">
+                        {requestedTourAttention.map((a) => (
+                            <p key={a.caseId} className="text-xs leading-relaxed text-amber-950">
+                                <strong>Requested at intake: {a.requestedLabel}.</strong> {a.message} The family has not been sent a
+                                confirmation for this time.
+                            </p>
+                        ))}
                     </div>
                 ) : null}
 

@@ -4,6 +4,10 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { describeTourAttention, judgeTourBookingsAgainstCalendar } from "@/lib/tours/calendar/tourCalendarAttention";
+import {
+    listRequestedTourAttentionForOpportunity,
+    type RequestedTourAttention,
+} from "@/lib/tours/publicCalendar/requestedTourOperatorView";
 
 const ACTIVE = [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS];
 
@@ -56,5 +60,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     } catch (e) {
         console.error("[tour bookings] operating calendar attention unavailable", e);
     }
-    return NextResponse.json({ bookings: rows ?? [], active_bookings: active, calendar_attention });
+    // A public tour request accepted with this lead that could not be booked (S7): the original
+    // time and why, so the operator schedules from current availability. Null = unknown, not none.
+    let requested_tour_attention: RequestedTourAttention[] | null = null;
+    try {
+        requested_tour_attention = await listRequestedTourAttentionForOpportunity(supabase, {
+            orgId: ctx.orgId,
+            opportunityId: oid,
+            hasActiveBooking: active.length > 0,
+        });
+    } catch (e) {
+        console.error("[tour bookings] requested tour attention unavailable", e);
+    }
+    return NextResponse.json({ bookings: rows ?? [], active_bookings: active, calendar_attention, requested_tour_attention });
 }
