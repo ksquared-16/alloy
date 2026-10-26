@@ -129,7 +129,45 @@ Refusals for out-of-scope and other-organization targets are 404, indistinguisha
 | Effect freeze | `efz_db8413255730df` (db_migration on ALLOY_STAGING, UNVERIFIABLE, opened 21:19Z from obligation `eob_cf5359b4cd509b`) cleared by `repository.clear_effect_freeze` `gar_2b46a009683395` (`tha_849fd1a002de12`, 22:43Z), disposition **verified_applied**, evidence identity census `gar_ec4c10421d1e84`. The migration was not re-applied |
 | Hosted certification | run `erun2_11befb9e1158c6c0` lost its provider session after the migration wait resolved; resumed on `erun2_dd7acff3de070285` from the measured database state. authz_q1 run `qar_c6e20cc02979` (opened by `gar_521a8b2145b7e2`, target `alloy_staging_web`, hosted authority declared) on staging `81556597838b`: **ensure** built one household (one adult, two children, one case) and ten Processing uploads (nine with filing cases; the scripted PDF quarantined, so it has no case); **certify** passed **59/59** (`d5_hosted_filing_cert_results.qar_c6e20cc02979.json`); **reset** used the audited POS deletes plus lead deletion, and every document, filing case and the household library now return 404 (`all_gone: true`, `d5_hosted_reset_results.qar_c6e20cc02979.json`) |
 
+### Hosted regressions (same run `qar_c6e20cc02979`, staging `81556597838b`)
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Q1 authorization | 90/90 | `q1_hosted_authz_cert_results.qar_c6e20cc02979.json` |
+| D1b security | 25/25 | `d1b_hosted_security_cert_results.qar_c6e20cc02979.json` |
+| D2 foundation | 40/40 | `d2_hosted_foundation_cert_results.qar_c6e20cc02979.json` |
+| D3 Studio | 40/40 | `d3_hosted_studio_cert_results.qar_c6e20cc02979.json` |
+| D4 household library | 41/41 | `d4_hosted_library_cert_results.qar_c6e20cc02979.json` |
+
+The authz_q1 subject and vendor fixtures were seeded for this run (`gar_0ccb225d65f982`, `gar_8855ebbb7ebe16`,
+`gar_4170e6dde4c0ee`); D4.7's close had reset them.
+
+**Two regression drivers were changed because D5 enforces each Studio type's applicable subjects.** Both failures
+were the intended refusal, not a product regression:
+- D1b uploaded an `immunization_record` onto the seeded opportunity and was refused `TYPE_SUBJECT_NOT_APPLICABLE`.
+  Every medical type in the catalog is child-only, so a medical document can no longer be filed on an opportunity.
+  The driver now owns a run-scoped household (`create_lead` in WU1 / QA D1, one child), puts the medical document on
+  the child and removes the household with the audited lead deletion. `scoped_ops` now expects **404**, not 403:
+  `customer_member` subjects have no department/site linkage and are readable only by an unrestricted-scope actor
+  (`assertDocumentAccess`, fail closed, D2). That rule did not change in D5. The medical document is still never
+  served to a persona without `health.view`.
+- D3's test type applied to `child, household`, while its upload targets an opportunity (422). The type now also
+  lists `opportunity`; every D3 assertion is unchanged.
+
+### Cleanup
+
+D5 and D1b households were removed by lead deletion. D4's reset and `orphans` phase removed its household and the
+orphaned guardian (the CRM-owned gap D4.7 recorded). Q1, D2 and D3 teardowns ran. The subject, secondary and vendor fixtures were reset
+(`gar_d47a8c127a3243`, `gar_ff94436cdd60ef`, `gar_01d1efd91c924c`). QA run closed by `gar_2f601e0c56cf34`.
+**ZERO_RESIDUE** was bound by `gar_6e26d9de66401e` with census `gar_a141bd704fbf29` (`tha_8b6a2c4ea8d634`, 12/12 zero checks).
+
+### Sprint
+
+`OPWORK_AA660DC9554D_SPRINT_25DFEB831C01` conditions c1 (merged and deployed), c2 (hosted D5 + regressions) and
+c3 (ZERO_RESIDUE) are evidenced on run `erun2_dd7acff3de070285`; the sprint reads VERIFIED, closable.
+
 ## Status
 
 COMPLETE: implementation, automated evidence, merge (PR #1604), deployment to staging (`81556597838b`), the staging
-migration (11/11 objects, ledger 546) and hosted certification (59/59, fixture fully disposed of) are done and measured.
+migration (11/11 objects, ledger 546), hosted certification (59/59), the hosted regressions (Q1 90, D1b 25, D2 40,
+D3 40, D4 41) and ZERO_RESIDUE are done and measured.

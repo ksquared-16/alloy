@@ -4,7 +4,9 @@ Usage: d1b_hosted_security_cert.py <qa_run_id> setup|certify|lead_delete|teardow
 
 Runs alongside the certified Q1 driver (q1_hosted_authz_cert.py), which owns the five Q1 fixture
 documents and the positive server-side regression matrix. This driver adds what D1b changed:
-  * a MEDICAL document (immunization_record) on the in-scope subject: refused without health.view;
+  * a MEDICAL document (immunization_record) on a child of an in-scope household: refused without health.view.
+    Since D5 enforces each Studio type's applicable subjects, a medical type is child-only, so this driver owns a
+    run-scoped household (create_lead in WU1 / QA D1, one child) and removes it with the audited lead deletion;
   * content proven by bytes: a PNG named .pdf is refused and nothing is stored;
   * the record drawer: never OCR text, and no drawer for an actor without document read;
   * OCR text in a Processing case's stored form-draft preview: only for an actor who may read it;
@@ -25,6 +27,8 @@ TAG = f"qa-authz-{RUN}"
 Q1_IDS = os.path.join(HERE, f"q1_hosted_fixture_ids.{RUN}.json")
 STATE_FILE = os.path.join(HERE, f"d1b_hosted_fixture_ids.{RUN}.json")
 OPP1 = "aa000000-0000-4000-8000-000000000111"
+WU1_UNIT = "aa000000-0000-4000-8000-000000000101"  # QA D1 (in scope for scoped_ops)
+HOUSEHOLD_FILE = os.path.join(HERE, f"d1b_hosted_household.{RUN}.json")
 _cookies = {}
 
 
@@ -106,8 +110,43 @@ def check(case, persona, ok, status, code=None, **extra):
 
 if PHASE == "setup":
     ids = json.load(open(STATE_FILE)) if os.path.exists(STATE_FILE) else {}
+    hh = json.load(open(HOUSEHOLD_FILE)) if os.path.exists(HOUSEHOLD_FILE) else {}
+    if "opportunity" not in hh:
+        s, b = call("/api/admin/actions/execute", "fixture_admin", "POST", json.dumps({
+            "action_key": "create_lead", "entity_type": "opportunity", "mode": "execute",
+            "payload": {"first_name": "QA D1b Adult", "last_name": RUN.split("_", 1)[1], "email": f"qa-d1b-{RUN.split('_', 1)[1]}-a1@example.com"},
+            "context": {"work_unit_id": WU1_UNIT, "surface": "work_unit"},
+        }).encode(), "application/json")
+        data = (b or {}).get("data") or {} if isinstance(b, dict) else {}
+        er = data.get("execution_result") or {}
+        detail = er.get("detail") or {} if isinstance(er, dict) else {}
+        opp = data.get("affected_id") or detail.get("opportunity_id") or (er.get("affectedId") if isinstance(er, dict) else None)
+        print(f"create_lead: status={s} code={code_of(b)} has_opp={bool(opp)}")
+        if not opp:
+            sys.exit(1)
+        hh["opportunity"] = opp
+        json.dump(hh, open(HOUSEHOLD_FILE, "w"), indent=2)
+    if "child" not in hh:
+        s, b = call(f"/api/admin/documents/library?subject_type=opportunity&subject_id={hh['opportunity']}", "fixture_admin")
+        household = (((b or {}).get("library") or {}).get("household") or {}).get("id") if isinstance(b, dict) else None
+        if not household:
+            print(f"library(case): status={s} household=False")
+            sys.exit(1)
+        s, b = call("/api/admin/customer-members", "fixture_admin", "POST", json.dumps({
+            "customer_id": household, "display_name": f"QA D1b Kid {RUN.split('_', 1)[1]}", "relationship": "child",
+            "first_name": "QA D1b Kid", "last_name": RUN.split("_", 1)[1],
+        }).encode(), "application/json")
+        row = ((b or {}).get("member") or (b or {}).get("row") or (b or {}).get("data") or b) if isinstance(b, dict) else {}
+        if isinstance(row, dict) and isinstance(row.get("member"), dict):
+            row = row["member"]
+        mid = row.get("id") if isinstance(row, dict) else None
+        print(f"customer-member child: status={s} code={code_of(b)} has_id={bool(mid)}")
+        if not mid:
+            sys.exit(1)
+        hh["child"] = mid
+        json.dump(hh, open(HOUSEHOLD_FILE, "w"), indent=2)
     if "medical" not in ids:
-        s, b = upload("fixture_admin", "medical", {"entity_type": "opportunity", "entity_id": OPP1, "doc_type": "immunization_record"},
+        s, b = upload("fixture_admin", "medical", {"entity_type": "customer_member", "entity_id": hh["child"], "doc_type": "immunization_record"},
                       tiny_pdf("medical"), "pdf", "application/pdf")
         did = ((b or {}).get("document") or {}).get("id") if isinstance(b, dict) else None
         print(f"upload medical as fixture_admin: status={s} code={code_of(b)} has_id={bool(did)}")
@@ -165,7 +204,13 @@ if PHASE == "teardown":
         s2, _ = call(f"/api/admin/documents/{v['id']}/signed-url", v["owner"])
         ok_all &= (deleted or s == 404) and s2 == 404
         print(f"delete {key} as {v['owner']}: status={s} deleted={deleted} after_signed_url={s2}")
-    print("TEARDOWN", json.dumps({"ok": bool(ok_all), "count": len(ids)}))
+    hh = json.load(open(HOUSEHOLD_FILE)) if os.path.exists(HOUSEHOLD_FILE) else {}
+    if hh.get("opportunity"):
+        s, b = call(f"/api/admin/opportunities/{hh['opportunity']}/delete", "fixture_admin", "POST", b"{}", "application/json")
+        s2, _ = call(f"/api/admin/documents/library?subject_type=opportunity&subject_id={hh['opportunity']}", "fixture_admin")
+        ok_all &= s in (200, 404) and s2 == 404
+        print(f"lead delete household: status={s} code={code_of(b)} after_library={s2}")
+    print("TEARDOWN", json.dumps({"ok": bool(ok_all), "count": len(ids), "household": bool(hh.get("opportunity"))}))
     sys.exit(0 if ok_all else 1)
 
 # ---------------- certify ----------------
@@ -179,7 +224,9 @@ s, info = call("/api/build-info")
 check("deployed build", None, s == 200, s, sha=(info or {}).get("gitSha"), project=(info or {}).get("supabaseProjectRef"))
 
 # 1. Medical documents need health.view (D1b.6). doc_reader / ocr / scoped_ops hold documents.read, not health.view.
-for p, exp in {"fixture_admin": 200, "doc_reader": 403, "ocr": 403, "scoped_ops": 403, "no_docs": 403, "cross_org_admin": 404}.items():
+# scoped_ops (QA D1 only) gets 404, not 403: the medical document is owned by a child (customer_member), a subject type
+# with no department/site linkage, which only an unrestricted-scope actor may read (assertDocumentAccess, fail closed).
+for p, exp in {"fixture_admin": 200, "doc_reader": 403, "ocr": 403, "scoped_ops": 404, "no_docs": 403, "cross_org_admin": 404}.items():
     s, b = call(f"/api/admin/documents/{MED}/signed-url", p)
     has_url = isinstance(b, dict) and bool(b.get("signedUrl"))
     want_code = {403: ("SENSITIVE_DOCUMENT" if p != "no_docs" else "INSUFFICIENT_ROLE"), 404: "NOT_FOUND"}.get(exp)
