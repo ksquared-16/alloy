@@ -28,6 +28,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveAssignmentTimes } from "@/lib/assignmentTime/resolveAssignmentTime";
+import { DATED_ROW_STATUSES, rowEffectiveOn } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 import type { AssignmentPricingFacts } from "@/lib/commercial/execution/evaluate/resolveOptions";
 import { REQUESTED_DAYS_PER_WEEK_METADATA_KEY } from "@/lib/enrollment/effectiveDateAuthority";
 import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
@@ -62,6 +64,20 @@ export type AssignmentPricingFactsRead =
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
+
+type DatedPricingRow = Record<string, unknown> & {
+    enrollment_agreement_id: string;
+    start_date: string;
+    end_date: string | null;
+    status: string;
+};
+
+/** The row in effect on `date`; without a date, or when none covers it, the newest open-ended live row (rows arrive newest first). */
+function rowInEffect(rows: DatedPricingRow[], date: string | null): DatedPricingRow | null {
+    return (date ? rowEffectiveOn(rows, date) : null) ?? rows.find((r) => r.end_date == null && LIVE_ROW_STATUSES.has(r.status)) ?? null;
+}
+
+const LIVE_ROW_STATUSES = new Set(["planned", "active", "ending"]);
 
 function todayYmd(): string {
     return new Date().toISOString().slice(0, 10);
@@ -134,14 +150,26 @@ export async function readAssignmentPricingFacts(
     let scheduleDays: number | null = null;
     let scheduleTypeKey: string | null = null;
     if (agreement) {
+        /*
+         * THE ROWS IN EFFECT ON THE DATE BEING PRICED (V7 C1). A future-dated change closes today's
+         * primary and placement (`superseded`, ending the day before) and opens their successors from
+         * the change date. Reading "the open-ended row" priced today at the successor's schedule
+         * before it began. A caller that names the date being priced now gets the row whose window
+         * covers it — the window rule expectations and homerooms already use (`rowEffectiveOn`).
+         * Without a named date, or on a date no row covers (an enrolment priced before it starts), the
+         * former answer stands: the newest open-ended live row. (Unnamed, `asOf` defaults to the
+         * enrolment's start, and pricing today's quote at the schedule of that day would be a new
+         * rule, not this repair.) Proven live: `tests/enrollment/live/c1PricingFactsProbe.live.test.ts`.
+         */
+        const pricedOn = t(args.asOf) || null;
         const { data: placementRows } = await supabase
             .from("child_placements")
-            .select("id, site_location_id, program_category_id, room_location_id, start_date, status")
+            .select("id, enrollment_agreement_id, site_location_id, program_category_id, room_location_id, start_date, end_date, status")
             .eq("org_id", args.orgId)
             .eq("enrollment_agreement_id", agreement.id)
-            .is("end_date", null)
+            .in("status", [...DATED_ROW_STATUSES])
             .order("start_date", { ascending: false });
-        placement = ((placementRows ?? [])[0] as Record<string, unknown>) ?? null;
+        placement = rowInEffect((placementRows ?? []) as DatedPricingRow[], pricedOn);
 
         /*
          * THE PRIMARY's schedule, never "the latest open row". A committed secondary (Before Care,
@@ -152,13 +180,14 @@ export async function readAssignmentPricingFacts(
          */
         const { data: assignmentRows } = await supabase
             .from("schedule_assignments")
-            .select("id, schedule_pattern_id, start_date, status")
+            .select("id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
             .eq("org_id", args.orgId)
             .eq("enrollment_agreement_id", agreement.id)
             .eq("is_primary", true)
-            .is("end_date", null)
+            .in("status", [...DATED_ROW_STATUSES])
             .order("start_date", { ascending: false });
-        const patternId = t(((assignmentRows ?? [])[0] as Record<string, unknown> | undefined)?.schedule_pattern_id);
+        const primary = rowInEffect((assignmentRows ?? []) as DatedPricingRow[], pricedOn);
+        const patternId = t(primary?.schedule_pattern_id);
         if (patternId) {
             const { data: pattern } = await supabase
                 .from("schedule_patterns")
@@ -169,6 +198,21 @@ export async function readAssignmentPricingFacts(
             const weekdays = (pattern as { weekdays?: unknown[] } | null)?.weekdays;
             if (Array.isArray(weekdays)) scheduleDays = weekdays.length;
             scheduleTypeKey = t((pattern as { schedule_type_key?: unknown } | null)?.schedule_type_key) || null;
+        }
+        /*
+         * THE DAYS THE CHILD ATTENDS — the primary's own Assignment Time when it has one (V7 C1). A
+         * custom week (S3/A6) is carried by a pattern whose weekdays are not the chosen days; counting
+         * the pattern priced a Tue/Thu child at five days. Without intervals the pattern decides, as
+         * in expectations (`recurringWeekdays`).
+         */
+        const primaryId = t(primary?.id);
+        if (primaryId) {
+            try {
+                const own = (await resolveAssignmentTimes(supabase, { orgId: args.orgId, assignmentIds: [primaryId] })).get(primaryId);
+                if (own?.hasIntervals) scheduleDays = new Set(own.weekdays).size;
+            } catch {
+                // An unreadable Assignment Time leaves the pattern's count — the former answer.
+            }
         }
     }
 
