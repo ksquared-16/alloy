@@ -468,13 +468,50 @@ only**. The browser certification
 primary evidence, and it restores the tenant through the operator's own controls
 rather than the database.
 
+### The Operating Calendar as a closure source (Tours S5/S6, 2026-10-25)
+
+Holidays, closures (full-day, multi-day, partial-day) and modified hours for an
+**organization** or one **site** are authored in Locations → Scheduling →
+Operating calendar. They are **not** a second closure record: each entry is an
+Operational Expectation under a second activated purpose,
+`location.operating_calendar`, in the same ledger, whose frame runs local midnight
+to local midnight in the location's IANA zone. `resolveOperatingCalendar`
+(`web/lib/operatingCalendar/`) is the one resolver for every consumer, and it reads
+Attendance's own `attendance.service_day_exception` closures **through Attendance's
+own relevance function at Attendance's own coordinate**, so those rows keep exactly
+their recorded meaning.
+
+What Attendance consumes, and what it does not:
+
+| Calendar effect | Roster / kiosk / overview |
+|---|---|
+| Full-day closure (org default or location; after precedence) | `closed`, exactly like an Attendance site closure (`interpretServiceDay` → `calendarSiteClosure`). Kiosk refuses; unreadable calendar refuses. |
+| Location "open as usual" over an org closure | Not closed. |
+| Partial closure, modified hours | **Not consumed.** They do not change who is expected; a child's day is not `closed` because the centre shuts at 3 PM. Future contract: early-dismissal / ratio-window consumers. |
+| Holiday with no effect | Nothing. |
+| Attendance's own site / room closures | Unchanged path; not double-read. A room closure never closes a site. |
+
+No attendance fact is created, no silence becomes an absence, and a child who
+comes on a closed day is `attended_despite_plan` as before.
+
+**Shared seam correction (affects this module).** The query seam previously
+returned only rows whose window touched the coordinate, so a revision that
+shortened a window never reached the fold: "away Mon–Fri, back Thursday" still read
+`known_away` on Thursday and Friday. `completeExpectationLineages` now loads every
+act of a touching lineage. A reopen inside a multi-day closure therefore follows the
+ratified fold ("re-plan forward": a revision truncates its predecessor at its own
+`valid_from`). Attendance's UI only authors single-day closures and same-range
+reopens, so existing operator-authored rows read as before; API-authored multi-day
+closures that were partly reopened now read as the fold says.
+
 ### Convergence debt
 
 | Debt | Consequence today |
 |---|---|
 | **Governed-authority policy for operational expectations** — which organisation roles, if any, should hold governed authority for expectation classes such as site closures, schedule exceptions and staffing constraints. Owned by Operational Expectations / Access & Roles, **not** Attendance. | Closures land `proposed`. When the policy exists, the same authoring path produces stronger standing through the ledger's existing machinery — no Thread 4 schema or product rewrite. |
 | **Location subject in the Operational Command Runtime** — the runtime's entity vocabulary has no site/room subject. | Closure authoring uses a dedicated server route instead of the action bus. Both call the identical authorization primitive, so they cannot disagree about who may write. |
-| **Partial-day closure operator product** | See classification above. |
+| **Partial-day closure operator product** | Authorable now as an Operating Calendar entry (Tours S5); Tours consumes it. The Attendance projection still reads a service day whole (see the calendar section). |
+| **Service-day UTC boundary** — Attendance's own closures and absences are UTC-bounded service dates (`serviceDayValidWindow`). | Unchanged by design (historical meaning). Calendar entries use local time; the resolver reads both correctly. Converging Attendance's closure command onto the calendar (so one authoring path remains) is the recommended next step. |
 | **Hosted Supabase migration verification / deployment governance** | Hosted migration state is not verified by CI. |
 | **`schedule_override` dead vocabulary** | Named in doctrine, implemented nowhere; superseded by authored expectations. |
 | **`attendance.plan` capability** — stating what is EXPECTED is a different act from witnessing what HAPPENED. | Planning uses `attendance.record` + site scope. The boundary that protects a child (may this person affect this child's day at this site) is enforced; the name is imprecise. |
