@@ -5,9 +5,10 @@
  * and again on publish. This module mirrors it so the editor can show the same problems before a round trip; a test
  * pins the two to the same codes. Never decide authorization from this module alone.
  *
- * Only `default_sensitivity` is enforced in D3 (by the database, for new documents, raise-only). Review, replacement,
- * formats and validity are DECLARED INTENT: stored and validated now, enforced from D5/D7. `POLICY_ENFORCEMENT` says so,
- * and the Studio labels each field accordingly.
+ * `default_sensitivity` is enforced by the database for new and re-typed documents, raise-only (D3). Since D5, subject
+ * types, formats and review are enforced when a document is filed or uploaded, and replacement when it is filed or
+ * replaced (`documentTypeEnforcement.ts`, `public.document_file`). Validity is still DECLARED INTENT, for D7.
+ * `POLICY_ENFORCEMENT` says so, and the Studio labels each field accordingly.
  */
 import { DECLARED_DOCUMENT_SENSITIVITIES, type DeclaredDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 import { DOCUMENT_SUBJECT_TYPES, type DocumentSubjectType } from "@/lib/documents/documentSubjects";
@@ -27,10 +28,10 @@ export const MEDICAL_TYPE_KEYS: readonly string[] = Object.freeze(["physical", "
 
 export const POLICY_ENFORCEMENT = Object.freeze({
     default_sensitivity: "enforced",
-    review_required: "declared_d5",
-    replacement_policy: "declared_d5",
-    allowed_formats: "declared_d5",
-    subject_types: "declared_d5",
+    review_required: "enforced_filing",
+    replacement_policy: "enforced_replacement",
+    allowed_formats: "enforced_filing",
+    subject_types: "enforced_filing",
     validity_policy: "declared_d7",
 } as const);
 

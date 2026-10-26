@@ -74,8 +74,8 @@ const key = (r: LibrarySubjectRef) => `${r.subject_type}:${r.subject_id}`;
 const personLabel = (p: { full_name?: unknown; first_name?: unknown; last_name?: unknown; display_name?: unknown } | null | undefined) =>
     str(p?.display_name) ?? str(p?.full_name) ?? ([str(p?.first_name), str(p?.last_name)].filter(Boolean).join(" ") || "Unnamed");
 
-/** The household a subject belongs to, or null (a case with no household, a person with none). */
-async function householdForAnchor(
+/** The household a subject belongs to, or null (a case with no household, a person with none). Also read by D5 filing. */
+export async function householdForAnchor(
     supabase: SupabaseClient,
     orgId: string,
     anchor: LibrarySubjectRef,
@@ -115,8 +115,8 @@ async function householdForAnchor(
     }
 }
 
-/** The household graph: the household, its adults, its children and its cases. */
-async function householdSubjects(
+/** The household graph: the household, its adults, its children and its cases. Also read by D5 filing. */
+export async function householdSubjects(
     supabase: SupabaseClient,
     orgId: string,
     householdId: string,

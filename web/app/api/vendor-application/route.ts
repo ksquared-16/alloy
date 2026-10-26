@@ -4,6 +4,7 @@ import { submitPublicVendorApplication } from "@/lib/vendors/publicVendorApplica
 import { emitEvent } from "@/lib/emitEvent";
 import { CANONICAL_DOCUMENT_MIME, DOCUMENT_CONTENT_EXT, sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
 import { auditQuarantine, decideIngestion, type IngestionDecision } from "@/lib/documents/screenedIngestion";
+import { checkDocumentTypeForWrite, documentFormatForMime } from "@/lib/documents/configuration/documentTypeEnforcement";
 import {
   enforcePublicUploadRateLimit,
   PUBLIC_UPLOAD_MAX_FILE_BYTES,
@@ -139,6 +140,23 @@ export async function POST(request: NextRequest) {
     if (!insurance.ok) return insurance.response;
     const drivers = vettedPublicFile(drivers_license, driversBuf, "Drivers license");
     if (!drivers.ok) return drivers.response;
+
+    // D5: each file is held to its Studio type's published formats (and the type must apply to a vendor). Checked before
+    // anything is stored; an archived or uncatalogued type keeps the old behaviour.
+    for (const [docType, vetted, label] of [["insurance", insurance, "Proof of insurance"], ["drivers_license", drivers, "Drivers license"]] as const) {
+      const typeCheck = await checkDocumentTypeForWrite(supabase, orgId, {
+        docType,
+        subjectType: "vendor",
+        format: documentFormatForMime(vetted.contentType),
+        mode: "public",
+      });
+      if (!typeCheck.ok) {
+        return NextResponse.json(
+          { ok: false, error: typeCheck.status === 503 ? "Please try again in a moment." : `${label}: ${typeCheck.message}`, code: typeCheck.code },
+          { status: typeCheck.status === 503 ? 503 : 415 },
+        );
+      }
+    }
 
     const result = await submitPublicVendorApplication(supabase, {
       orgId,
