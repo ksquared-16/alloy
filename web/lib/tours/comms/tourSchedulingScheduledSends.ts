@@ -15,6 +15,10 @@ import {
     type TourReminderSchedulePlan,
     type TourReminderSuppressionReason,
 } from "@/lib/tours/comms/tourReminderTiming";
+import {
+    TOUR_COMMS_PURPOSE,
+    messageCategoryForTourEvent,
+} from "@/lib/tours/comms/tourCommsMessageCategory";
 
 export const TOUR_REMINDER_EVENT_KEY = "tour_reminder" as const;
 
@@ -44,6 +48,8 @@ export type TourSchedulingReminderMetadata = {
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.eventKey]: typeof TOUR_REMINDER_EVENT_KEY;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.tourStartAt]: string;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.locationId]: string;
+    [TOUR_COMMS_SCHEDULED_SEND_METADATA.messageCategory]: "transactional";
+    [TOUR_COMMS_SCHEDULED_SEND_METADATA.purpose]: typeof TOUR_COMMS_PURPOSE;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.quietHoursAdjusted]?: boolean;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.reason]?: string;
 };
@@ -177,6 +183,10 @@ export function buildTourSchedulingReminderMetadata(input: {
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.eventKey]: TOUR_REMINDER_EVENT_KEY,
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.tourStartAt]: input.tourStartAtIso,
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.locationId]: input.locationId,
+        [TOUR_COMMS_SCHEDULED_SEND_METADATA.messageCategory]: messageCategoryForTourEvent(
+            TOUR_REMINDER_EVENT_KEY
+        ) as "transactional",
+        [TOUR_COMMS_SCHEDULED_SEND_METADATA.purpose]: TOUR_COMMS_PURPOSE,
     };
     if (input.quietHoursAdjusted) {
         metadata[TOUR_COMMS_SCHEDULED_SEND_METADATA.quietHoursAdjusted] = true;

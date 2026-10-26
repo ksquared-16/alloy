@@ -194,11 +194,16 @@ async function loadFamilyChannelData(supabase: AdminClient, orgId: string, famil
         }
 
         const { data: personRows } = await supabase.from("persons").select("id, email, phone, archived_at").eq("org_id", orgId).in("id", personIdsCapped);
+        // Announcements are marketing-class at enqueue. Suppress anyone opted out of
+        // the dedicated announcements category OR the channel marketing preference —
+        // email consent must not be treated as SMS consent and vice versa, so the
+        // fan-out path still tags opted_out per person; channel filtering happens
+        // when addresses are chosen.
         const { data: prefRows } = await supabase
             .from("communication_preferences")
-            .select("person_id")
+            .select("person_id, category")
             .eq("org_id", orgId)
-            .eq("category", "announcements")
+            .in("category", ["announcements", "email_marketing", "sms_marketing"])
             .eq("state", "opted_out")
             .in("person_id", personIdsCapped);
         const optedOutSet = new Set((prefRows ?? []).map((r) => String((r as { person_id: string }).person_id)));

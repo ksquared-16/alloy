@@ -37,6 +37,16 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 - **Bindings:** `communication_provider_bindings` per org/channel
 - **Enqueue:** `canonicalOutboundEnqueue.ts` — server-only writes (service role)
 
+### Consent & preferences (C1)
+
+- **Authority:** `communication_preferences` (org + person + category) with append-only `communication_preference_events`.
+- **Eligibility:** `evaluateEligibility` at enqueue + Python `dispatch_eligibility` revalidation. Message `category` is platform-owned (`transactional` | `operational` | `marketing` | `emergency`); `purpose` is compliance-inert.
+- **Marketing:** requires explicit `opted_in` per channel (`email_marketing` / `sms_marketing`). Email consent never authorizes SMS marketing.
+- **Unsubscribe:** HMAC tokens (`unsubscribeToken.ts`) minted at enqueue into `metadata.unsubscribe_url` for marketing/operational email; List-Unsubscribe emitted at provider send (TS + Python). Route: `/api/communications/unsubscribe`.
+- **SMS keywords:** STOP opts out all SMS categories; START restores transactional + operational only (not marketing).
+- **Public intake handoff:** `commitMarketingConsentFromIntakeCapture` — Forms/Processing capture evidence before Person exists; commit preserves prior opt-outs.
+- **Tour parent mail:** lifecycle notices are `transactional` (`tour_coordination`); invitations are `operational`. Gated by S1 `mayCommunicateForTour`.
+
 ---
 
 ## Rules

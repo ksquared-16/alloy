@@ -11,6 +11,10 @@ import {
     type TourCommsConfig,
     type TourCommsEventKey,
 } from "@/lib/tours/comms/tourCommsConfig";
+import {
+    TOUR_COMMS_PURPOSE,
+    messageCategoryForTourEvent,
+} from "@/lib/tours/comms/tourCommsMessageCategory";
 import { loadTourCommsContext } from "@/lib/tours/comms/loadTourCommsContext";
 import type { TourAutomationConditionFacts } from "@/lib/tours/comms/tourCommsAutomationConditions";
 import { resolveTourCommsConfigWithLibrary } from "@/lib/tours/comms/resolveTourCommsConfigWithLibrary";
@@ -344,6 +348,10 @@ async function sendImmediateTourComms(params: {
         // evaluated for opt-out, suppression or channel usability. The identity was
         // already resolved here; it just never crossed the boundary.
         recipientPersonId: params.recipientPersonId,
+        audience: "external",
+        category: messageCategoryForTourEvent(params.eventKey),
+        purpose: TOUR_COMMS_PURPOSE,
+        callSite: `tourCommsOrchestrator:${params.eventKey}`,
         channelRaw: params.channel,
         toRaw: params.recipientTo,
         bodyRaw: body,

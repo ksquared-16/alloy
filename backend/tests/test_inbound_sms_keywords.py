@@ -19,6 +19,8 @@ from unittest.mock import patch
 from app.services.inbound_keyword_handler import handle_inbound_keyword, resolve_person_id  # noqa: E402
 from app.services.sms_keywords import (  # noqa: E402
     AFFECTED_CATEGORIES,
+    START_CATEGORIES,
+    STOP_CATEGORIES,
     build_preference_changes,
     keyword_response,
     parse_sms_keyword,
@@ -157,8 +159,10 @@ class TestHistoryIsPreserved(unittest.TestCase):
         stop_events = [c for c in h.events if c["to_state"] == "opted_out"]
         start_events = [c for c in h.events if c["to_state"] == "opted_in"]
 
-        self.assertEqual(len(stop_events), len(AFFECTED_CATEGORIES))
-        self.assertEqual(len(start_events), len(AFFECTED_CATEGORIES))
+        self.assertEqual(len(stop_events), len(STOP_CATEGORIES))
+        self.assertEqual(len(start_events), len(START_CATEGORIES))
+        # START must not re-opt into sms_marketing.
+        self.assertTrue(all(c["category"] != "sms_marketing" for c in start_events))
         # The START events record the transition truthfully.
         self.assertTrue(all(c["from_state"] == "opted_out" for c in start_events))
 
@@ -168,8 +172,10 @@ class TestHistoryIsPreserved(unittest.TestCase):
         run_keyword(h, "STOP")
 
         self.assertEqual(len(h.applied), 2)
+        start_batch = h.applied[0]
+        self.assertEqual(len(start_batch), len(START_CATEGORIES))
         final = [c for c in h.applied[-1]]
-        self.assertTrue(all(c["from_state"] == "opted_in" for c in final))
+        self.assertEqual(len(final), len(STOP_CATEGORIES))
         self.assertTrue(all(c["to_state"] == "opted_out" for c in final))
 
     def test_repeated_stop_is_recorded_not_silently_dropped(self):
@@ -256,11 +262,12 @@ class TestQueuedMessageInteraction(unittest.TestCase):
         for category in AFFECTED_CATEGORIES:
             self.assertEqual(h.states[category], "opted_out", category)
 
-    def test_start_leaves_every_sms_category_opted_in_for_a_later_dispatch_check(self):
+    def test_start_restores_service_sms_but_not_marketing(self):
         h = KeywordHarness({c: "opted_out" for c in AFFECTED_CATEGORIES})
         run_keyword(h, "START")
-        for category in AFFECTED_CATEGORIES:
+        for category in START_CATEGORIES:
             self.assertEqual(h.states[category], "opted_in", category)
+        self.assertEqual(h.states["sms_marketing"], "opted_out")
 
 
 class TestCrossRuntimeParity(unittest.TestCase):

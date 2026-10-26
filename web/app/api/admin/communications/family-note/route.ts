@@ -83,6 +83,9 @@ export async function POST(req: Request) {
         bindingIdOpt: "",
         recipientPersonIdRaw: "",
         toRawInput: "",
+        audience: "internal",
+        category: "operational",
+        callSite: "family-note",
         sendMetadataAugment: {
             kind: "note",
             source: "comms_v2_note_compose",

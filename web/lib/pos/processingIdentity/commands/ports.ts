@@ -16,6 +16,12 @@ import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/en
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
 import { documentSubjectTypeForLegacy, setPrimaryDocumentSubject } from "@/lib/documents/documentSubjects";
+import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
+import {
+    PREFERENCE_CATEGORIES,
+    type PreferenceCategory,
+    type PreferenceState,
+} from "@/lib/communications/v2/preferences";
 
 export type PortContext = {
     supabase: SupabaseClient;
@@ -457,20 +463,49 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async updateCommunicationPreferences(ctx, input) {
-            const { error } = await ctx.supabase.from("communication_preferences").upsert(
-                {
-                    org_id: ctx.orgId,
-                    person_id: input.person_id,
-                    category: input.category,
-                    state: input.state,
-                    method: input.method,
-                    source: input.source ?? "processing_identity",
-                    updated_by_user_id: ctx.actorId ?? null,
-                    updated_at: new Date().toISOString(),
-                },
-                { onConflict: "org_id,person_id,category", ignoreDuplicates: false },
-            );
-            if (error) return { ok: false, error: error.message };
+            // Single preference write authority — upsert + append-only event.
+            // Marketing opt-in never silently overwrites an existing opt-out
+            // (repeat inquiry / identity commit must preserve suppression).
+            const category = String(input.category ?? "").trim();
+            if (!(PREFERENCE_CATEGORIES as readonly string[]).includes(category)) {
+                return { ok: false, error: `unknown_preference_category:${category}` };
+            }
+            const toStateRaw = String(input.state ?? "").trim();
+            if (toStateRaw !== "opted_in" && toStateRaw !== "opted_out" && toStateRaw !== "unset") {
+                return { ok: false, error: `invalid_preference_state:${toStateRaw}` };
+            }
+            const toState = toStateRaw as PreferenceState;
+
+            const { data: existing } = await ctx.supabase
+                .from("communication_preferences")
+                .select("state")
+                .eq("org_id", ctx.orgId)
+                .eq("person_id", input.person_id)
+                .eq("category", category)
+                .maybeSingle();
+            const fromState =
+                existing && typeof existing === "object" && "state" in existing
+                    ? ((existing as { state: PreferenceState }).state ?? null)
+                    : null;
+
+            const isMarketing =
+                category === "email_marketing" || category === "sms_marketing";
+            const effectiveToState: PreferenceState =
+                isMarketing && fromState === "opted_out" && toState === "opted_in"
+                    ? "opted_out"
+                    : toState;
+
+            const result = await persistCommunicationPreference(ctx.supabase, {
+                orgId: ctx.orgId,
+                personId: input.person_id,
+                category: category as PreferenceCategory,
+                fromState,
+                toState: effectiveToState,
+                source: input.source ?? "processing_identity",
+                method: input.method,
+                actorUserId: ctx.actorId ?? null,
+            });
+            if (!result.ok) return { ok: false, error: result.message };
             return { ok: true };
         },
     };

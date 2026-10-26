@@ -33,7 +33,7 @@ import {
     resolveOutboundThreadLocation,
     type ThreadLocationCandidate,
 } from "@/lib/communications/threadLocationResolution";
-import type { RenderContext, RenderSnapshot } from "@/lib/communications/render/renderOutboundMessage";
+import type { RenderContext } from "@/lib/communications/render/renderOutboundMessage";
 import {
     ELIGIBILITY_SNAPSHOT_VERSION,
     recordCategoryFallback,
@@ -42,6 +42,11 @@ import {
     type MessageCategory,
     type QuietHoursWindow,
 } from "@/lib/communications/eligibility/types";
+import {
+    appendUnsubscribeFooterHtml,
+    appendUnsubscribeFooterPlain,
+    resolveOutboundUnsubscribeUrl,
+} from "@/lib/communications/preferences/unsubscribeForOutbound";
 
 /**
  * Resolve — and when necessary create — the conversation this outbound message
@@ -620,9 +625,9 @@ export async function enqueueCanonicalOutboundMessage(params: {
         });
     }
 
-    const deliverableBody = linkOrigin.body;
+    let deliverableBody = linkOrigin.body;
     const deliverableSubject = linkOrigin.subject ?? null;
-    const deliverableRenderedSnapshot = linkOrigin.renderedSnapshot;
+    let deliverableRenderedSnapshot = linkOrigin.renderedSnapshot;
 
     // ---- ELIGIBILITY GATE ---------------------------------------------------
     // Evaluated immediately before the insert, so no TypeScript path can create
@@ -634,6 +639,35 @@ export async function enqueueCanonicalOutboundMessage(params: {
     const category: MessageCategory =
         params.category ?? recordCategoryFallback(params.callSite ?? "canonicalOutboundEnqueue:unspecified");
     const toAddress = params.toRaw?.trim() || null;
+
+    // ---- UNSUBSCRIBE LINK (marketing / operational email only) --------------
+    // Minted at the enqueue choke point so every delivery runtime — TypeScript
+    // Resend path and Python dispatcher — can emit List-Unsubscribe from the
+    // same frozen URL without re-deriving token claims at send time.
+    if (mc === "email" && audience === "external") {
+        const unsub = resolveOutboundUnsubscribeUrl({
+            messageCategory: category,
+            personId: params.recipientPersonId ?? null,
+            orgId: orgIdTrim,
+        });
+        if (unsub) {
+            meta.unsubscribe_url = unsub.url;
+            meta.unsubscribe_category = unsub.category;
+            deliverableBody = appendUnsubscribeFooterPlain(deliverableBody, unsub.url);
+            if (deliverableRenderedSnapshot && typeof deliverableRenderedSnapshot === "object") {
+                const snap = deliverableRenderedSnapshot as { html?: string | null; text?: string | null };
+                const nextHtml =
+                    typeof snap.html === "string" && snap.html.trim()
+                        ? appendUnsubscribeFooterHtml(snap.html, unsub.url)
+                        : snap.html;
+                const nextText =
+                    typeof snap.text === "string" && snap.text.trim()
+                        ? appendUnsubscribeFooterPlain(snap.text, unsub.url)
+                        : appendUnsubscribeFooterPlain(deliverableBody, unsub.url);
+                deliverableRenderedSnapshot = { ...snap, html: nextHtml, text: nextText };
+            }
+        }
+    }
 
     const context = await loadEligibilityContext({
         supabase: params.supabase,

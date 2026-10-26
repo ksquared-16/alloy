@@ -48,8 +48,18 @@ import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/comm
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
+import {
+    MESSAGE_CATEGORIES,
+    type MessageAudience,
+    type MessageCategory,
+} from "@/lib/communications/eligibility/types";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+function parseMessageCategory(raw: string | null | undefined): MessageCategory | null {
+    const c = String(raw ?? "").trim();
+    return (MESSAGE_CATEGORIES as readonly string[]).includes(c) ? (c as MessageCategory) : null;
+}
 
 async function resolveContextLocationId(
     supabase: SupabaseClient,
@@ -91,6 +101,14 @@ export type ExecuteCommunicationsSendParams = {
      * Use for Task Assist telemetry; keep small and non-sensitive.
      */
     sendMetadataAugment?: Record<string, unknown> | null;
+    /**
+     * Platform compliance class. Required for external email/sms — omission is refused
+     * rather than silently defaulting (C1-B). Internal/in_app may omit.
+     */
+    category?: MessageCategory | string | null;
+    audience?: MessageAudience | null;
+    purpose?: string | null;
+    callSite?: string | null;
 };
 
 export type ExecuteCommunicationsSendSuccess = {
@@ -131,8 +149,30 @@ export async function executeLegacyCommunicationsSendAdapter(
         recipientPersonIdRaw,
         toRawInput,
         sendMetadataAugment,
+        category: categoryRaw,
+        audience: audienceRaw,
+        purpose: purposeRaw,
+        callSite,
     } = params;
 
+    const category =
+        channel === "in_app"
+            ? parseMessageCategory(categoryRaw) ?? ("operational" as MessageCategory)
+            : parseMessageCategory(categoryRaw);
+    if (channel !== "in_app" && !category) {
+        return {
+            ok: false,
+            status: 400,
+            error: "category is required (transactional, operational, marketing, or emergency).",
+            code: "missing_category",
+        };
+    }
+    const audience: MessageAudience =
+        audienceRaw === "internal" || audienceRaw === "external"
+            ? audienceRaw
+            : channel === "in_app"
+              ? "internal"
+              : "external";
 
     // PKG-18A: platform consent enforcement (DARK — only runs under comms_v2_compliance; no-op when off).
     if (
@@ -322,6 +362,10 @@ export async function executeLegacyCommunicationsSendAdapter(
         // with RECIPIENT_UNRESOLVED — which blocked every due scheduled send (tour
         // reminders included) instead of evaluating opt-out and suppression for the person.
         recipientPersonId: recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? recipientPersonIdRaw : null,
+        audience,
+        category: category!,
+        purpose: purposeRaw ?? null,
+        callSite: callSite ?? "executeLegacyCommunicationsSendAdapter",
         channelRaw: channel,
         toRaw,
         bodyRaw: textRaw,
