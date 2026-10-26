@@ -28,7 +28,7 @@ export type ProcessingModalIntent =
       }
     | {
           mode: "work";
-          workView?: "overview" | "work";
+          workView?: "overview" | "work" | "documents";
           caseId?: string | null;
       };
 

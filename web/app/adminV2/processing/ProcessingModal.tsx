@@ -14,6 +14,7 @@ import DigitalMailroomShell, {
 } from "@/app/adminV2/pos/DigitalMailroomShell";
 import ProcessingOverviewLanding from "@/app/adminV2/pos/ProcessingOverviewLanding";
 import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
+import ProcessingDocumentsWork from "@/app/adminV2/pos/ProcessingDocumentsWork";
 import ProcessingFormsStudio from "@/app/adminV2/pos/ProcessingFormsStudio";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
 import { ADMIN_V2_OPEN_PROCESSING_CASE, type OpenProcessingCaseDetail } from "@/lib/workItems/workItemsNavigation";
@@ -173,6 +174,8 @@ export default function ProcessingModal({
                                 onOpenStudio={() => setMode("studio")}
                                 onOpenCase={openCase}
                             />
+                        ) : workView === "documents" ? (
+                            <ProcessingDocumentsWork onLeaveProcessing={handleClose} />
                         ) : (
                             <PosProcessingWorkspace
                                 selectedCaseId={selectedCaseId}

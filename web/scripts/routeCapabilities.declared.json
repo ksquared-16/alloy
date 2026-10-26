@@ -4318,6 +4318,20 @@
         "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
+    "app/api/admin/processing/cases/[caseId]/document-filing/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D5 (2026-10-26). The filing workspace of a document case. Also requires documents.read and the document access decision on the case's document; offers only a household the actor can see."
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D5 (2026-10-26). Saves the operator's filing proposal on the case. Also requires documents.write; every chosen record is re-resolved against a household graph inside the actor's scope. Files nothing: filing is the approval, through the Documents filing command."
+      }
+    },
     "app/api/admin/processing/cases/[caseId]/form-draft/apply-discovery/route.ts": {
       "POST": {
         "status": "declared",
@@ -4447,6 +4461,14 @@
         "capability": "processing.dev_cleanup",
         "helper": "requireProcessingCapability",
         "reason": "POS + Processing authority cleanup. Test-data reset. The capability is necessary and not sufficient: the route and the planner both refuse in production through assertProcessingDevCleanupAllowed, independently of any grant."
+      }
+    },
+    "app/api/admin/processing/documents/queue/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "Documents V1 / D5 (2026-10-26). Processing -> Work -> Documents: document cases awaiting filing, with derived lanes. Also requires documents.read (requireDocumentRead), and every row passes the canonical document disclosure (scope, sensitivity) before it is listed."
       }
     },
     "app/api/admin/processing/folders/route.ts": {

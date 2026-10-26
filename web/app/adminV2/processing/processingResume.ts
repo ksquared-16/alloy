@@ -21,8 +21,9 @@ const STUDIO_TABS = new Set(["forms", "packets", "documents", "fields", "brandin
 
 export function isValidProcessingPosition(position: StableWorkspacePosition): boolean {
     if (position.mode !== "work" && position.mode !== "studio") return false;
-    // "work" requires a case that was never persisted — see the note above.
-    if (position.workView !== "overview") return false;
+    // "work" requires a case that was never persisted — see the note above. "documents" (D5) is the Documents queue,
+    // stable navigation that needs no case.
+    if (position.workView !== "overview" && position.workView !== "documents") return false;
     if (!STUDIO_TABS.has(position.studioTab)) return false;
     return true;
 }
