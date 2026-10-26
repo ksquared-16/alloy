@@ -1052,7 +1052,8 @@ export default function AttendanceWorkspace({
             label: `${a.displayName} is in ${a.nowIn}`,
             room: a.placedIn,
         })),
-    ];
+    // A child expected in two spaces (V7 S6) is one exception, said once.
+    ].filter((x, i, all) => all.findIndex((y) => y.key === x.key) === i);
 
     return (
         <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-overview="true">

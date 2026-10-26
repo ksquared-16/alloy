@@ -67,7 +67,10 @@ function membersForExpectedInRoom(args: {
 }): { members: PopulationMemberPreview[]; unavailableReason: string | null } {
     const seen = new Set<string>();
     const members: PopulationMemberPreview[] = [];
-    for (const e of args.entries) {
+    // The primary session first, so a child's weight comes from the enrollment's own schedule when a
+    // secondary session (V7 S6) shares the room.
+    const primaryFirst = [...args.entries].sort((a, b) => Number(b.isPrimary !== false) - Number(a.isPrimary !== false));
+    for (const e of primaryFirst) {
         if (e.date !== args.effectiveAt) continue;
         if (e.roomLocationId !== args.roomLocationId) continue;
         if (seen.has(e.customerMemberId)) continue;

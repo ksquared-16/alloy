@@ -35,6 +35,7 @@ import {
 import { listAttendanceEvents } from "@/lib/childcareOperational/attendance/attendanceService";
 import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import { fetchScheduleExpectations } from "@/lib/childcareOperational/expectations/fetchScheduleExpectations";
+import { primaryEntryFor } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 
 export type AttendanceMovementVM = {
     eventId: string;
@@ -328,8 +329,12 @@ export async function buildAttendanceCardVM(
         }),
     ]);
 
-    const expectedToday = (expectations?.expectedAttendance ?? []).find(
-        (e) => e.customerMemberId === args.customerMemberId && e.date === date,
+    // The child's expectation today: the primary session when they have several (V7 S6) — its room is
+    // "where they are expected", whatever else they attend.
+    const expectedToday = primaryEntryFor(
+        (expectations?.expectedAttendance ?? []).filter(
+            (e) => e.customerMemberId === args.customerMemberId && e.date === date,
+        ),
     );
 
     const read = buildChildAttendanceReadModel({
@@ -414,6 +419,8 @@ export async function buildAttendanceCardVM(
             new Map(
                 (expectations?.expectedAttendance ?? [])
                     .filter((e) => e.customerMemberId === args.customerMemberId)
+                    // One expected room per day: a later secondary session never overwrites the primary's.
+                    .sort((a, b) => Number(a.isPrimary !== false) - Number(b.isPrimary !== false))
                     .map((e) => [e.date, e.roomLocationId ? roomLabels.get(e.roomLocationId) ?? null : null]),
             ),
         ),

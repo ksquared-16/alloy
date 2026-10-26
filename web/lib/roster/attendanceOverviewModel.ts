@@ -106,8 +106,25 @@ export function buildAttendanceOverviewModel(
         planUnclear: 0,
     };
 
+    /*
+     * ONE CHILD, ONE COUNT (V7 S6). A child expected in two spaces (homeroom and Before Care) sits on
+     * both cards but is one expected child, here or not, in one room — and is "away" only when she is
+     * in none of the spaces that expect her.
+     */
+    const expectedRoomsByChild = new Map<string, Set<string>>();
     for (const cell of cells) {
         for (const child of cell.children) {
+            const rooms = expectedRoomsByChild.get(child.customerMemberId) ?? new Set<string>();
+            rooms.add(cell.roomLocationId);
+            expectedRoomsByChild.set(child.customerMemberId, rooms);
+        }
+    }
+    const counted = new Set<string>();
+
+    for (const cell of cells) {
+        for (const child of cell.children) {
+            if (counted.has(child.customerMemberId)) continue;
+            counted.add(child.customerMemberId);
             counts.expected += 1;
 
             /*
@@ -145,7 +162,7 @@ export function buildAttendanceOverviewModel(
             if (!at) continue;
             hereNowByRoom.set(at, (hereNowByRoom.get(at) ?? 0) + 1);
 
-            if (at !== cell.roomLocationId) {
+            if (!expectedRoomsByChild.get(child.customerMemberId)?.has(at)) {
                 awayFromPlacement.push({
                     key: `away:${child.customerMemberId}`,
                     customerMemberId: child.customerMemberId,
