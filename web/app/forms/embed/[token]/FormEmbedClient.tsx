@@ -283,13 +283,57 @@ function PreviewBanner() {
     );
 }
 
+/**
+ * S7 — the tour time the family picked on step one of the school's public tour journey.
+ * Present only on `/tours/[token]`; every other runtime passes nothing and is unchanged.
+ */
+export type PublicFormTourRequest = {
+    startAt: string;
+    endAt: string;
+    /** "Tuesday, November 3 · 10:00 AM" in the school's zone. */
+    label: string;
+    locationLabel: string;
+    /** Back to step one. The draft is autosaved and kept, so no answer is lost. */
+    onChangeTime: () => void;
+};
+
+function RequestedTourSummary({ tour, slotGone }: { tour: PublicFormTourRequest; slotGone: boolean }) {
+    return (
+        <div
+            className="mb-5 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-participant-accent/30 bg-participant-accent/[0.06] px-4 py-3"
+            data-testid="public-tour-request-summary"
+        >
+            <div className="min-w-0">
+                <p className="text-[13px] font-medium text-alloy-midnight/60">Requested tour</p>
+                <p className="text-[15px] font-semibold text-alloy-midnight">{tour.label}</p>
+                <p className="text-[14px] text-alloy-midnight/70">{tour.locationLabel}</p>
+                <p className="pt-1 text-[13px] text-alloy-midnight/60">
+                    {slotGone
+                        ? "That time is no longer available. Please choose another time — your answers are saved."
+                        : "Your tour is not confirmed until the school reviews your request."}
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={tour.onChangeTime}
+                className="rounded-lg border border-participant-accent/50 px-3 py-2 text-[14px] font-semibold text-participant-accent-ink"
+                data-testid="public-tour-change-time"
+            >
+                {slotGone ? "Choose another time" : "Change time"}
+            </button>
+        </div>
+    );
+}
+
 export function FormEmbedClient({
     token,
     showPreviewBanner = false,
     initialResolve = null,
+    tourRequest = null,
 }: {
     token: string;
     showPreviewBanner?: boolean;
+    tourRequest?: PublicFormTourRequest | null;
     /**
      * Resolve payload rendered by the server (same shape as `/resolve`), so the first paint already
      * has the form. Null when the server could not resolve it — bootstrap then fetches as before.
@@ -310,6 +354,11 @@ export function FormEmbedClient({
     >({});
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    /** The requested tour time was taken or closed between step one and submit. */
+    const [tourSlotGone, setTourSlotGone] = useState(false);
+    useEffect(() => {
+        setTourSlotGone(false);
+    }, [tourRequest?.startAt, tourRequest?.endAt]);
     /**
      * The Enrollment objective for this token, when there is one.
      *
@@ -738,6 +787,8 @@ export function FormEmbedClient({
                 body: JSON.stringify({
                     payload: submitPayload,
                     option_values_by_field_id: optionValuesByFieldId,
+                    // Two instants and nothing else: the server binds org and location from the link.
+                    ...(tourRequest ? { requested_tour: { start_at: tourRequest.startAt, end_at: tourRequest.endAt } } : {}),
                 }),
             });
             const json = (await res.json()) as
@@ -751,6 +802,7 @@ export function FormEmbedClient({
                   };
             if (!json.ok) {
                 const errBody = json as ApiErr;
+                if (errBody.code === "TOUR_SLOT_UNAVAILABLE") setTourSlotGone(true);
                 setValidationErrors(errBody.validation_errors ?? null);
                 setMessage(errBody.error ?? "Submit failed");
                 return;
@@ -779,7 +831,7 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices, tourRequest]);
 
     // Seed per-child value slices once when a family intake starts (first child inherits prefill).
     useEffect(() => {
@@ -952,6 +1004,16 @@ export function FormEmbedClient({
                         <ParticipantPaymentCard token={token} />
                         <FamilyEnrollmentCard token={token} />
                     </>
+                ) : tourRequest ? (
+                    // S7 — received, NOT booked. Nothing is confirmed, held or sent until the school accepts it.
+                    <div data-testid="public-tour-request-received">
+                        <IntakeCompletion
+                            tone="neutral"
+                            title="Your tour request was received"
+                            body={`You asked to visit ${tourRequest.locationLabel} on ${tourRequest.label}. This time is not confirmed yet — the school will review your request and contact you to confirm your tour.`}
+                            hint="You can close this window."
+                        />
+                    </div>
                 ) : (
                     <IntakeCompletion
                         title="Thank you — your form was submitted."
@@ -2034,6 +2096,7 @@ export function FormEmbedClient({
                 </div>
             ) : (
                 <IntakeCard>
+                    {tourRequest ? <RequestedTourSummary tour={tourRequest} slotGone={tourSlotGone} /> : null}
                     {/* Single-form (non-packet) experience — same renderer, premium shell. Embedded in
                         an organization's page, the form's own title is the host page's job. */}
                     <div className={chrome === "none" ? "[&_header]:hidden" : undefined}>
