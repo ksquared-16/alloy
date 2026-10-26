@@ -1,0 +1,47 @@
+{
+  "trusted_host_action_id": "tha_e7bdb771281bd5",
+  "query_hash": "77e5c157be483b0f5307eefcaff6f26f495aee599e8ab7f5d1ea689b1e4cddf8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-25T22:05:04.738Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e7bdb771281bd5",
+    "query_hash": "77e5c157be483b0f5307eefcaff6f26f495aee599e8ab7f5d1ea689b1e4cddf8",
+    "authorization_id": "grnt_0639941d215b4f14",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-25T22:05:12.301Z",
+    "question_ids": [
+      "d47_household_baseline"
+    ],
+    "questions": {
+      "d47_household_baseline": {
+        "question_id": "d47_household_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "org": "4acc9386-c485-486f-aa1f-05d83499d142",
+            "customers": 3,
+            "persons": 4,
+            "customer_persons": 3,
+            "customer_members": 8,
+            "contacts": 0,
+            "customer_member_contacts": 0,
+            "opportunity_persons": 0,
+            "opportunity_customer_members": 5,
+            "person_child_relationships": 3,
+            "opportunities": 5,
+            "document_subject_links": 3,
+            "documents": 3
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

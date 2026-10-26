@@ -1,0 +1,27 @@
+{
+  "wu1": {
+    "id": "84b744af-ca94-40dc-8e3e-5fb1460af21d",
+    "owner": "fixture_admin",
+    "processing_case": false
+  },
+  "wu2": {
+    "id": "d4f230ef-f405-4ff2-b440-b3f5c8c7b0ec",
+    "owner": "fixture_admin",
+    "processing_case": false
+  },
+  "v1": {
+    "id": "1cd0ea45-ce6a-48fe-8e76-0f5a05d03416",
+    "owner": "fixture_admin",
+    "processing_case": false
+  },
+  "intake": {
+    "id": "dbe4d4a4-3f3d-44b2-b07f-e9d77de3205b",
+    "owner": "fixture_admin",
+    "processing_case": true
+  },
+  "x": {
+    "id": "1baf9991-6951-4dc4-b4ae-e9e63d30b3df",
+    "owner": "cross_org_admin",
+    "processing_case": false
+  }
+}
