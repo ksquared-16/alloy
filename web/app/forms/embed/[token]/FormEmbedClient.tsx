@@ -59,6 +59,10 @@ import {
 } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import { participantSignaturePrompt } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
+import {
+    INTAKE_MARKETING_CONSENT_LANGUAGE,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     IntakeFrame,
@@ -217,6 +221,8 @@ type ResolveOk = {
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
         link?: { metadata?: Record<string, unknown> };
+        /** S7 × C1 — the link offers the optional marketing-consent control (server-derived). */
+        marketing_consent_offered?: boolean;
     };
 };
 
@@ -325,6 +331,45 @@ function RequestedTourSummary({ tour, slotGone }: { tour: PublicFormTourRequest;
     );
 }
 
+/**
+ * S7 × C1 — optional marketing consent. One unchecked box per channel, each with its own wording
+ * (Communications-owned, versioned). Nothing here is required, and nothing here is sent until submit.
+ */
+function MarketingConsentControl({
+    value,
+    onChange,
+    disabled,
+}: {
+    value: IntakeMarketingConsentChoice;
+    onChange: (next: IntakeMarketingConsentChoice) => void;
+    disabled: boolean;
+}) {
+    const L = INTAKE_MARKETING_CONSENT_LANGUAGE;
+    return (
+        <fieldset
+            className="mt-6 rounded-xl border border-alloy-midnight/10 px-4 py-3"
+            data-testid="public-marketing-consent"
+            data-consent-language-version={L.version}
+        >
+            <legend className="px-1 text-[13px] font-medium text-alloy-midnight/60">{L.heading}</legend>
+            {(["email", "sms"] as const).map((channel) => (
+                <label key={channel} className="flex items-start gap-3 py-1.5 text-[14px] text-alloy-midnight/80">
+                    <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-participant-accent"
+                        checked={value[channel]}
+                        disabled={disabled}
+                        onChange={(e) => onChange({ ...value, [channel]: e.target.checked })}
+                        data-testid={`public-marketing-consent-${channel}`}
+                    />
+                    <span>{L[channel]}</span>
+                </label>
+            ))}
+            <p className="pt-1 text-[13px] text-alloy-midnight/60">{L.note}</p>
+        </fieldset>
+    );
+}
+
 export function FormEmbedClient({
     token,
     showPreviewBanner = false,
@@ -356,6 +401,9 @@ export function FormEmbedClient({
     const [submitted, setSubmitted] = useState(false);
     /** The requested tour time was taken or closed between step one and submit. */
     const [tourSlotGone, setTourSlotGone] = useState(false);
+    /** S7 × C1 — offered by the link (server-derived); both boxes start unchecked. */
+    const [marketingConsentOffered, setMarketingConsentOffered] = useState(false);
+    const [marketingConsent, setMarketingConsent] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
     useEffect(() => {
         setTourSlotGone(false);
     }, [tourRequest?.startAt, tourRequest?.endAt]);
@@ -651,6 +699,7 @@ export function FormEmbedClient({
             })();
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
+            setMarketingConsentOffered(json.data.marketing_consent_offered === true);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
             setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
@@ -789,6 +838,10 @@ export function FormEmbedClient({
                     option_values_by_field_id: optionValuesByFieldId,
                     // Two instants and nothing else: the server binds org and location from the link.
                     ...(tourRequest ? { requested_tour: { start_at: tourRequest.startAt, end_at: tourRequest.endAt } } : {}),
+                    // The control's actual state — unchecked is sent as false, never omitted into a guess.
+                    ...(marketingConsentOffered
+                        ? { marketing_consent: { email: marketingConsent.email === true, sms: marketingConsent.sms === true } }
+                        : {}),
                 }),
             });
             const json = (await res.json()) as
@@ -831,7 +884,7 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices, tourRequest]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices, tourRequest, marketingConsentOffered, marketingConsent]);
 
     // Seed per-child value slices once when a family intake starts (first child inherits prefill).
     useEffect(() => {
@@ -2116,6 +2169,9 @@ export function FormEmbedClient({
                         validationErrors={validationErrors ?? undefined}
                     />
                     </div>
+                    {marketingConsentOffered ? (
+                        <MarketingConsentControl value={marketingConsent} onChange={setMarketingConsent} disabled={submitting} />
+                    ) : null}
                     <IntakeFooter
                         errorLines={errorLines}
                         message={message}

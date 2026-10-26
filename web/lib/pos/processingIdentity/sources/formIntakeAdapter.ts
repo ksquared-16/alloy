@@ -20,6 +20,10 @@ import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTempla
 import { resolveCaseTitle } from "@/lib/pos/caseTitlePresentation";
 import { intentPurposeLabel } from "@/lib/pos/decisionPresentation";
 import { REQUESTED_TOUR_METADATA_KEY, type RequestedTourRecord } from "@/lib/tours/publicCalendar/requestedTour";
+import {
+    INTAKE_MARKETING_CONSENT_METADATA_KEY,
+    type IntakeMarketingConsentRecord,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 
 export type IngestPublicFormInput = {
     orgId: string;
@@ -33,6 +37,11 @@ export type IngestPublicFormInput = {
      * case: no booking, no Opportunity, no message. Approval resolves it.
      */
     requestedTour?: RequestedTourRecord | null;
+    /**
+     * S7 × C1 — the family's optional marketing-consent answer, as evidence. Not a preference until
+     * Approve commits it for the resolved person.
+     */
+    marketingConsent?: IntakeMarketingConsentRecord | null;
 };
 
 export type IngestPublicFormResult =
@@ -113,6 +122,7 @@ export async function ingestPublicFormThroughProcessing(
                     ...(adminCategory ? { admin_category: adminCategory } : {}),
                     ...(caseTitle ? { case_title: caseTitle } : {}),
                     ...(input.requestedTour ? { [REQUESTED_TOUR_METADATA_KEY]: input.requestedTour } : {}),
+                    ...(input.marketingConsent ? { [INTAKE_MARKETING_CONSENT_METADATA_KEY]: input.marketingConsent } : {}),
                 },
                 status: "needs_resolution",
                 status_changed_at: new Date().toISOString(),
@@ -124,6 +134,10 @@ export async function ingestPublicFormThroughProcessing(
         const metadataWriteError = (metadataWrite as { error?: { message?: string } | null } | null | undefined)?.error;
         if (input.requestedTour && metadataWriteError) {
             return { ok: false, error: `requested tour not recorded: ${metadataWriteError.message ?? "write failed"}` };
+        }
+        // Same for a consent answer the family gave: never drop it while telling them it was received.
+        if (input.marketingConsent && metadataWriteError) {
+            return { ok: false, error: `marketing consent not recorded: ${metadataWriteError.message ?? "write failed"}` };
         }
 
         await runCanonicalIdentityResolution({

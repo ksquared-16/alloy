@@ -31,6 +31,10 @@ import {
     buildRequestedTourOperatorView,
     listRequestedTourAttentionForOpportunity,
 } from "@/lib/tours/publicCalendar/requestedTourOperatorView";
+import { buildPublicFormResolvePayload } from "@/lib/public/forms/buildPublicFormResolvePayload";
+import { readIntakeMarketingConsent, INTAKE_MARKETING_CONSENT_LANGUAGE } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { commitIntakeMarketingConsentForCase } from "@/lib/pos/processingCase/commitIntakeMarketingConsentForCase";
+import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
 import { createSupabaseAuthoringGateway } from "@/lib/operationalExpectations/intake/supabaseAuthoringGateway";
 import { commitCalendarAct, prepareCalendarAct, type CalendarAuthoringAction } from "@/lib/operatingCalendar/operatingCalendarAuthoring";
 import { OPERATING_CALENDAR_PURPOSE, type OperatingCalendarEntryDraft } from "@/lib/operatingCalendar/operatingCalendarVocabulary";
@@ -137,7 +141,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
     let verticalId = "";
     let otherOrg = "";
     let otherSite = "";
-    const tokens = { calendar: "", unpublished: "", restricted: "", other: "" };
+    const tokens = { calendar: "", unpublished: "", restricted: "", other: "", plain: "" };
     const latestCalendarActs = new Map<string, string>();
     const linkIds: string[] = [];
     const caseIds: string[] = [];
@@ -217,14 +221,19 @@ describeLive("S7 public tour booking, intake and approval — live certification
     }
 
     /** The family's two steps through the real routes. Returns the submit response and the case. */
-    async function familySubmits(n: string, tour: { start_at: string; end_at: string } | null, token = tokens.calendar) {
-        const email = `qa+${RUN}-${n}@example.invalid`;
+    async function familySubmits(
+        n: string,
+        tour: { start_at: string; end_at: string } | null,
+        token = tokens.calendar,
+        opts: { consent?: unknown; email?: string } = {}
+    ) {
+        const email = opts.email ?? `qa+${RUN}-${n}@example.invalid`;
         const draftRes = await draftPost(req("http://localhost/api/public/forms/x/submissions", { method: "POST", body: { payload: { values: {} } } }), { params: Promise.resolve({ token }) });
         const draft = (await draftRes.json()) as { ok: boolean; data?: { id: string } };
         if (!draft.ok || !draft.data) throw new Error(`draft failed ${draftRes.status} ${JSON.stringify(draft)}`);
         const values = { guardian_full_name: `Zz Parent${n} ${RUN}`, guardian_email: email, child_first_name: `Zz Kid${n}`, child_last_name: RUN, child_dob: "2030-05-01" };
         const submitRes = await submitPost(
-            req(`http://localhost/api/public/forms/x/submissions/${draft.data.id}/submit`, { method: "POST", body: { payload: { values }, ...(tour ? { requested_tour: tour } : {}) } }),
+            req(`http://localhost/api/public/forms/x/submissions/${draft.data.id}/submit`, { method: "POST", body: { payload: { values }, ...(tour ? { requested_tour: tour } : {}), ...(opts.consent !== undefined ? { marketing_consent: opts.consent } : {}) } }),
             { params: Promise.resolve({ token, submissionId: draft.data.id }) }
         );
         const submit = (await submitRes.json()) as Json;
@@ -265,6 +274,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
         formId = await publishForm(ORG);
         tokens.calendar = await mintLink(ORG, site, formId, { default_work_unit_id: NEW_LEADS_WU, tour_calendar_v1: { enabled: true } });
         tokens.unpublished = await mintLink(ORG, site, formId, { default_work_unit_id: NEW_LEADS_WU });
+        tokens.plain = await mintLink(ORG, site, formId, { default_work_unit_id: NEW_LEADS_WU });
         tokens.restricted = await mintLink(ORG, site, formId, { default_work_unit_id: NEW_LEADS_WU, tour_calendar_v1: { enabled: true } }, { allowed_embed_origins: ["https://school.example"] });
 
         otherOrg = idOf(await ok(db.from("orgs").insert({ name: `ZZ ${RUN} other`, slug: `zz-${RUN}-other` }).select("id").single()));
@@ -497,13 +507,176 @@ describeLive("S7 public tour booking, intake and approval — live certification
             expect((await caseMeta(caseId)).status).not.toBe("completed");
             return;
         }
-        // Linked to the existing person (no duplicate identity) and booked; the confirmation is refused by eligibility.
+        // Linked to the existing person (no duplicate identity) and booked.
         expect(await personsWithEmail(email)).toHaveLength(1);
         const [b] = await bookingsForCase(caseId);
         expect(b).toBeTruthy();
-        const confirmations = await confirmationsFor(String(b!.id));
-        for (const m of confirmations) expect(m.status).toBe("blocked");
+        /*
+         * I1 (C1 integrated): the confirmation of a tour the family asked for is TRANSACTIONAL, and canonical
+         * eligibility (policy 2026-07-31.1) does not let a preference opt-out suppress a transactional
+         * notice — only channel suppression (bounce / complaint / STOP hold) does. S1 recorded this switch as
+         * C-D0's decision; C1 made it. Pre-C1 the send fell back to `operational` and was blocked here.
+         * What still holds: the confirmation is exactly the classified tour notice, nothing marketing is
+         * sent, and the opt-outs themselves are untouched by the intake or the link.
+         */
+        const { data: conf } = await db.from("communication_messages").select("status, error, category, metadata").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", String(b!.id));
+        const confirmations = ((conf ?? []) as Array<{ status: string; error: string | null; category: string; metadata: Json }>).filter((m) => m.metadata?.event_key === "tour_confirmation");
+        expect(confirmations.length).toBeGreaterThanOrEqual(1);
+        for (const m of confirmations) {
+            expect(m.category).toBe("transactional");
+            expect(m.error ?? "").not.toMatch(/OPTED_OUT/);
+        }
         const recorded = readRequestedTour((await caseMeta(caseId)).metadata)!.comms;
-        expect(recorded?.status, JSON.stringify({ recorded, confirmations })).toBe("suppressed");
+        expect(recorded?.status, JSON.stringify({ recorded, confirmations })).toBe("sent");
+        const { data: marketing } = await db.from("communication_messages").select("id").eq("org_id", ORG).ilike("to_address", email).eq("category", "marketing");
+        expect(marketing ?? []).toEqual([]);
+        const { data: prefsAfter } = await db.from("communication_preferences").select("category, state").eq("org_id", ORG).eq("person_id", existing);
+        expect(((prefsAfter ?? []) as Array<{ category: string; state: string }>).filter((p) => p.state !== "opted_out")).toEqual([]);
+    });
+    /*
+     * I1 — OPTIONAL MARKETING CONSENT (S7 × C1). The answer is evidence on the case; Approve commits it
+     * for the resolved person through Communications' one preference authority, once.
+     */
+    async function marketingPrefs(personId: string) {
+        const rows = (await ok(db.from("communication_preferences").select("category, state, source").eq("org_id", ORG).eq("person_id", personId))) as Array<{ category: string; state: string; source: string | null }>;
+        return Object.fromEntries(rows.filter((r) => r.category.includes("marketing")).map((r) => [r.category, r.state]));
+    }
+    async function marketingEvents(personId: string) {
+        return (await ok(db.from("communication_preference_events").select("category, from_state, to_state, source, method").eq("org_id", ORG).eq("person_id", personId))) as Array<Json>;
+    }
+    async function marketingMessagesTo(email: string) {
+        return (await ok(db.from("communication_messages").select("id, category").eq("org_id", ORG).ilike("to_address", email).eq("category", "marketing"))) as Array<Json>;
+    }
+
+    it("C·1 · the link decides whether the control is offered; the tour flag itself never reaches the browser", async () => {
+        const offered = await buildPublicFormResolvePayload(db, tokens.calendar, null);
+        const plain = await buildPublicFormResolvePayload(db, tokens.plain, null);
+        expect(offered.ok && offered.data.marketing_consent_offered).toBe(true);
+        expect(plain.ok && plain.data.marketing_consent_offered).toBe(false);
+        expect(JSON.stringify(offered.ok ? offered.data.link : null)).not.toContain("tour_calendar_v1");
+    });
+
+    it("C·2 · a malformed answer, or an answer on a link that never offered the control, is refused before any write", async () => {
+        const bad = await familySubmits("cbad", null, tokens.calendar, { consent: { email: "yes" } });
+        expect(bad.status).toBe(400);
+        expect(bad.submit).toMatchObject({ code: "MARKETING_CONSENT_INVALID" });
+        expect(bad.submissionStatus).toBe("draft");
+        expect(bad.caseId).toBeNull();
+        const notOffered = await familySubmits("cplain", null, tokens.plain, { consent: { email: true } });
+        expect(notOffered.status).toBe(400);
+        expect(notOffered.submit).toMatchObject({ code: "MARKETING_CONSENT_NOT_ACCEPTED" });
+        expect(notOffered.submissionStatus).toBe("draft");
+        // Negative control: the same link without a consent answer still takes the lead.
+        const plainOk = await familySubmits("cplain2", null, tokens.plain);
+        expect(plainOk.status).toBe(200);
+        expect(readIntakeMarketingConsent((await caseMeta(plainOk.caseId!)).metadata)).toBeNull();
+    });
+
+    it("C·3 · unchecked boxes are recorded as 'no' and approval writes no marketing preference", async () => {
+        const fam = await familySubmits("cnone", null, tokens.calendar, { consent: { email: false, sms: false } });
+        expect(fam.status).toBe(200);
+        const rec = readIntakeMarketingConsent((await caseMeta(fam.caseId!)).metadata)!;
+        expect(rec).toMatchObject({ response: "submitted", choices: { email: false, sms: false }, committed: null, language: { version: INTAKE_MARKETING_CONSENT_LANGUAGE.version } });
+        expect(rec.provenance).toMatchObject({ form_submission_id: fam.submissionId });
+        const r = await approve(fam.caseId!);
+        expect(r.status, JSON.stringify(r.json)).toBe(200);
+        expect(r.json.data?.marketingConsent).toMatchObject({ kind: "committed", outcomes: [{ channel: "email", outcome: "skipped_unset" }, { channel: "sms", outcome: "skipped_unset" }] });
+        const [person] = await personsWithEmail(fam.email);
+        expect(await marketingPrefs(person!.id)).toEqual({});
+        expect(await marketingMessagesTo(fam.email)).toEqual([]);
+    });
+
+    it("C·4 · an absent answer on an offering link is recorded as 'no' — submitting is never consent", async () => {
+        const fam = await familySubmits("cabsent", null, tokens.calendar);
+        const rec = readIntakeMarketingConsent((await caseMeta(fam.caseId!)).metadata)!;
+        expect(rec).toMatchObject({ response: "absent", choices: { email: false, sms: false } });
+        await approve(fam.caseId!);
+        const [person] = await personsWithEmail(fam.email);
+        expect(await marketingPrefs(person!.id)).toEqual({});
+    });
+
+    let emailFamily: Awaited<ReturnType<typeof familySubmits>>;
+    let emailPerson = "";
+
+    it("C·5 · explicit email consent: evidence before approval, email marketing only after it, a transactional confirmation, no marketing message", async () => {
+        const start = at("2033-03-02", "14:30");
+        emailFamily = await familySubmits("cemail", { start_at: start, end_at: plus30(start) }, tokens.calendar, { consent: { email: true, sms: false } });
+        expect(emailFamily.status).toBe(200);
+        // Before acceptance: evidence on the case, no person, no preference, no message.
+        expect(readIntakeMarketingConsent((await caseMeta(emailFamily.caseId!)).metadata)).toMatchObject({ choices: { email: true, sms: false }, committed: null });
+        expect(await personsWithEmail(emailFamily.email)).toEqual([]);
+        const { data: before } = await db.from("communication_messages").select("id").eq("org_id", ORG).ilike("to_address", emailFamily.email);
+        expect(before ?? []).toEqual([]);
+
+        const r = await approve(emailFamily.caseId!);
+        expect(r.status, JSON.stringify(r.json)).toBe(200);
+        expect(r.json.data?.marketingConsent).toMatchObject({ kind: "committed", replayed: false, outcomes: [{ channel: "email", outcome: "opted_in" }, { channel: "sms", outcome: "skipped_unset" }] });
+        const [person] = await personsWithEmail(emailFamily.email);
+        emailPerson = person!.id;
+        expect(await marketingPrefs(emailPerson)).toEqual({ email_marketing: "opted_in" });
+        expect(await marketingEvents(emailPerson)).toEqual([expect.objectContaining({ category: "email_marketing", from_state: null, to_state: "opted_in", source: "public_intake", method: "form_checkbox" })]);
+        expect(readIntakeMarketingConsent((await caseMeta(emailFamily.caseId!)).metadata)!.committed).toMatchObject({ person_id: emailPerson });
+        // Capturing consent generated no marketing message; the tour confirmation is transactional (C1).
+        expect(await marketingMessagesTo(emailFamily.email)).toEqual([]);
+        const [b] = await bookingsForCase(emailFamily.caseId!);
+        const { data: conf } = await db.from("communication_messages").select("category, metadata").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", String(b!.id));
+        const confirmations = ((conf ?? []) as Array<{ category: string; metadata: Json }>).filter((m) => m.metadata?.event_key === "tour_confirmation");
+        expect(confirmations.length).toBeGreaterThanOrEqual(1);
+        for (const m of confirmations) expect(m.category).toBe("transactional");
+    });
+
+    it("C·6 · a replayed Approve commits nothing twice", async () => {
+        const eventsBefore = (await marketingEvents(emailPerson)).length;
+        const again = await approve(emailFamily.caseId!);
+        expect(again.json.data).toMatchObject({ alreadyDone: true, marketingConsent: { kind: "committed", replayed: true, personId: emailPerson } });
+        expect((await marketingEvents(emailPerson)).length).toBe(eventsBefore);
+        expect(await marketingPrefs(emailPerson)).toEqual({ email_marketing: "opted_in" });
+    });
+
+    it("C·7 · SMS consent is its own answer: SMS marketing only", async () => {
+        const fam = await familySubmits("csms", null, tokens.calendar, { consent: { sms: true } });
+        const r = await approve(fam.caseId!);
+        expect(r.json.data?.marketingConsent).toMatchObject({ outcomes: [{ channel: "email", outcome: "skipped_unset" }, { channel: "sms", outcome: "opted_in" }] });
+        const [person] = await personsWithEmail(fam.email);
+        expect(await marketingPrefs(person!.id)).toEqual({ sms_marketing: "opted_in" });
+    });
+
+    it("C·8 · a repeat inquiry after unsubscribing, and an existing email + SMS opt-out: the opt-outs hold, whatever identity path runs", async () => {
+        // The family who opted in (C·5) later unsubscribes through the canonical authority.
+        const unsub = await persistCommunicationPreference(db, { orgId: ORG, personId: emailPerson, category: "email_marketing", fromState: "opted_in", toState: "opted_out", source: "recipient_unsubscribe", method: "email_link" });
+        expect(unsub.ok).toBe(true);
+        // An existing parent with both marketing channels opted out.
+        const existingEmail = `qa+${RUN}-optedout@example.invalid`;
+        const existing = idOf(await ok(db.from("persons").insert({ org_id: ORG, first_name: "Zz", last_name: `Parentoo ${RUN}`, email: existingEmail }).select("id").single()));
+        for (const category of ["email_marketing", "sms_marketing"]) {
+            await ok(db.from("communication_preferences").upsert({ org_id: ORG, person_id: existing, category, state: "opted_out", source: "recipient_unsubscribe" }, { onConflict: "org_id,person_id,category" }));
+        }
+
+        for (const [n, email, personId] of [["crepeat", emailFamily.email, emailPerson], ["coo", existingEmail, existing]] as const) {
+            const fam = await familySubmits(n, null, tokens.calendar, { consent: { email: true, sms: true }, email });
+            expect(fam.status).toBe(200);
+            // Intake creates nobody and writes no preference.
+            expect(await personsWithEmail(email)).toHaveLength(1);
+            const first = await approve(fam.caseId!);
+            if (first.status !== 200) {
+                // Ambiguous identity: the governed review path holds the case — and the consent with it.
+                expect(readIntakeMarketingConsent((await caseMeta(fam.caseId!)).metadata)!.committed).toBeNull();
+            } else {
+                expect(first.json.data?.marketingConsent).toMatchObject({ kind: "committed", personId });
+            }
+            // Whichever way identity resolves to this person (operator link decision or automatic link), the
+            // commit authority preserves both opt-outs.
+            const handoff = await commitIntakeMarketingConsentForCase(db, { orgId: ORG, caseId: fam.caseId!, personId, actorUserId: ACTOR });
+            expect(handoff.kind).toBe("committed");
+            const outcomes = (handoff as { outcomes: Array<{ channel: string; outcome: string }> }).outcomes;
+            expect(outcomes.find((o) => o.channel === "email")?.outcome).toBe("preserved_opt_out");
+            const prefs = await marketingPrefs(personId);
+            expect(prefs.email_marketing).toBe("opted_out");
+            if (personId === existing) {
+                expect(outcomes.find((o) => o.channel === "sms")?.outcome).toBe("preserved_opt_out");
+                expect(prefs.sms_marketing).toBe("opted_out");
+            }
+            expect(await marketingMessagesTo(email)).toEqual([]);
+        }
     });
 });

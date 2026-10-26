@@ -53,6 +53,12 @@ import {
     parsePublicTourSelection,
     type RequestedTourRecord,
 } from "@/lib/tours/publicCalendar/requestedTour";
+import { publicLinkOffersMarketingConsent } from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
+import {
+    buildIntakeMarketingConsentRecord,
+    parsePublicMarketingConsentChoice,
+    type IntakeMarketingConsentRecord,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -190,6 +196,29 @@ export async function POST(
             formPublicLinkId: ctx.linkId,
             formSubmissionId: submissionId,
         });
+    }
+
+    /*
+     * S7 × C1 — OPTIONAL MARKETING CONSENT. Only a link that offers the control can carry an answer
+     * (decided by the link, never the body). The answer is evidence on the Processing case, not a
+     * preference: Approve commits it for the resolved person through Communications. An unchecked
+     * or missing answer is recorded as "no" — submitting the form is never consent.
+     */
+    let marketingConsent: IntakeMarketingConsentRecord | null = null;
+    {
+        const parsed = parsePublicMarketingConsentChoice(body.marketing_consent);
+        if (!parsed.ok) return publicErr(parsed.message, 400, { code: "MARKETING_CONSENT_INVALID" });
+        const offered = publicLinkOffersMarketingConsent(ctx.linkMetadata, { packet: Boolean(ctx.packet) });
+        if (parsed.value && !offered) {
+            return publicErr("This form can't take a consent answer.", 400, { code: "MARKETING_CONSENT_NOT_ACCEPTED" });
+        }
+        if (offered) {
+            marketingConsent = buildIntakeMarketingConsentRecord({
+                choice: parsed.value,
+                formPublicLinkId: ctx.linkId,
+                formSubmissionId: submissionId,
+            });
+        }
     }
 
     const { data: ver } = await supabase
@@ -390,6 +419,7 @@ export async function POST(
                     payload: finalPayload,
                     linkMetadata: metaRecord,
                     requestedTour,
+                    marketingConsent,
                 });
                 if (!intake.ok) {
                     throw new Error(intake.error);
@@ -406,10 +436,10 @@ export async function POST(
                     },
                 };
             } catch (e) {
-                if (requestedTour) {
-                    // Never tell a family "request received" for a request Processing does not hold.
+                if (requestedTour || marketingConsent?.choices.email || marketingConsent?.choices.sms) {
+                    // Never tell a family "request received" for a request — or a consent — Processing does not hold.
                     return publicErr("We couldn't record your request just now. Please try again.", 503, {
-                        code: "TOUR_REQUEST_NOT_RECORDED",
+                        code: requestedTour ? "TOUR_REQUEST_NOT_RECORDED" : "MARKETING_CONSENT_NOT_RECORDED",
                     });
                 }
                 const msg = e instanceof Error ? e.message : "Intake failed";

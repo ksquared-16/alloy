@@ -19,6 +19,8 @@
  * tour availability.
  */
 
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+
 export const TOUR_CALENDAR_LINK_METADATA_KEY = "tour_calendar_v1" as const;
 
 export type TourCalendarLinkConfig = {
@@ -38,6 +40,18 @@ export function readTourCalendarLinkConfig(linkMetadata: unknown): TourCalendarL
         enabledAt: typeof r.enabled_at === "string" ? r.enabled_at : null,
         enabledByUserId: typeof r.enabled_by_user_id === "string" ? r.enabled_by_user_id : null,
     };
+}
+
+/**
+ * Whether this link's form offers the optional marketing-consent control (S7 × C1). Decided by the
+ * link alone — never by the browser: a lead-capture Processing intake link whose tour calendar is
+ * published. Both the hosted calendar's step two and the same token's embed render it; the submit
+ * route refuses a consent answer from any other link.
+ */
+export function publicLinkOffersMarketingConsent(linkMetadata: unknown, opts: { packet: boolean }): boolean {
+    if (opts.packet) return false;
+    if (!linkMetadata || typeof linkMetadata !== "object" || Array.isArray(linkMetadata)) return false;
+    return linkRequiresLeadCapture(linkMetadata as Record<string, unknown>) && readTourCalendarLinkConfig(linkMetadata).enabled;
 }
 
 /** Client metadata can never carry the flag — only the explicit, authorized field sets it. */
