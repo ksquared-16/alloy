@@ -64,7 +64,7 @@ school brand must select "Customize for this form" (explicit `brand_source: "for
 | Gate | Result |
 |---|---|
 | `vac run typecheck` | rc=0 on the final application tree (only tests and records changed afterwards) |
-| `vac run typecheck:tests` | **NOT EXECUTED on the final tree.** The broker held it about 25 min for memory (8.61 GB predicted, 6.3–7.9 GB headroom). It was stopped rather than waited on and handed to Vacilando as a detached validation. The last measured pass is S3 `e637db1f1` |
+| Test typecheck (`tsc --noEmit -p tsconfig.json` — the `typecheck:tests` config, which includes `tests/**`) | **PASSED** on exact candidate `54d6788db30684b6a1fecc580872842057359dae`, Vacilando detached request `vreq_0c5d583290c0` (receipt: waited 201 s, ran 114 s, exit 0). The in-turn broker had held it for memory, so it was handed off rather than waited on |
 | `npm run prebuild` (6 guards; the three brand routes declared) | rc=0 |
 | Wide regression (242 files: S2 forms/participant, S3 tours/locations, S4 branding, live suites) | 2482 passed / 15 failed; **all 15 fail identically on base `86cab0bd9`** (`operationalNavigationContract` ×8, `rawSelectAdoptionLedger` ×3, `structuredFormSchemaEditor` ×2, `formDraft` ×1, `configurationRuntimeLocations` ×1) |
 | New tests | `tests/branding/publicBrand.test.ts` 17; `tests/tours/tourPublicBrand.test.ts` 2; S2/handoff pins moved to the 4.5:1 contract |
