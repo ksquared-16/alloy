@@ -26,8 +26,13 @@ export type AssignmentTypeBehavior = {
     allowsOverlap?: boolean;
     programRequirement?: RequirementMode;
     roomRequirement?: RequirementMode;
+    /**
+     * Retired (V7 Q-B): a space's eligibility is its own Uses (`spaceEligibleForUse`), enforced on the
+     * server. These keys are read and written back unchanged so stored history survives a save; no
+     * picker or writer consults them.
+     */
     eligibleSpaceMode?: EligibleSpaceMode;
-    /** When eligibleSpaceMode = selected */
+    /** Retired with `eligibleSpaceMode` — stored history only. */
     eligibleRoomIds?: string[];
     /** Empty or absent ⇒ org-wide availability. */
     locationIds?: string[];
@@ -149,9 +154,10 @@ export function slugAssignmentTypeKey(label: string): string {
 /**
  * Scope rooms for the Assignment picker when operators may override ineligible rooms.
  *
- * Hard-removes only `not_used` Categories and explicit `selected` allow-lists.
- * Does **not** drop `program_match` misses — age/program fit is owned by
- * `placement.room_fit` classification so ineligible rooms stay visible for override.
+ * The space's own Uses decide (the same rule the server enforces); a Category that uses no space
+ * offers none. A Category's old room list no longer narrows the picker (V7 Q-B) — the server never
+ * applied it. Age/program fit is owned by `placement.room_fit`, so ineligible rooms stay visible for
+ * override.
  */
 export function scopeRoomsForAssignmentPicker<
     T extends { roomId: string; programCategoryId?: string | null; unitRole?: CanonicalUnitRole; spaceUses?: readonly string[] | null },
@@ -168,11 +174,6 @@ export function scopeRoomsForAssignmentPicker<
     }
     const roomReq = behavior.roomRequirement ?? (behavior.requiresRoom ? "required" : "optional");
     if (roomReq === "not_used") return [];
-    const mode = behavior.eligibleSpaceMode ?? "any";
-    if (mode === "selected") {
-        const allow = new Set(behavior.eligibleRoomIds ?? []);
-        if (allow.size > 0) return rooms.filter((r) => allow.has(r.roomId));
-    }
     return rooms;
 }
 
@@ -180,8 +181,8 @@ export function scopeRoomsForAssignmentPicker<
  * The rooms one choice may apply to SEVERAL assignments — the Roster's bulk pickers.
  *
  * Active rooms only, then {@link scopeRoomsForAssignmentPicker} once per selected row's use: a room
- * is offered only if every selected row could use it — the space's configured uses first, then the
- * Category's own room rules, exactly as in the editor.
+ * is offered only if every selected row could use it — the space's configured uses, and a Category
+ * that uses no space offers none, exactly as in the editor.
  */
 export function roomsForEveryCategory<
     T extends { roomId: string; active?: boolean; programCategoryId?: string | null; unitRole?: CanonicalUnitRole; spaceUses?: readonly string[] | null },

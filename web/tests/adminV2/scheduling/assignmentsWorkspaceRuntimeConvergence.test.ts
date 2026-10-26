@@ -120,11 +120,12 @@ describe("Operations Studio runtime", () => {
         expect(studio).toContain("mapRawPattern");
     });
 
-    it("Assignment Categories consume snapshot operationalRooms", () => {
-        const studio = read("components/adminV2/scheduling/screens/SchedulingStudio.tsx");
-        expect(studio).toContain("operationalRooms={editorConfig.operationalRooms}");
+    it("Assignment Categories edit no room list and load no rooms — a space's Uses decide (V7 Q-B)", () => {
         const panel = read("components/adminV2/scheduling/screens/AssignmentTypesStudioPanel.tsx");
-        expect(panel).toContain("if (operationalRooms)");
+        expect(panel).not.toContain("operationalRooms");
+        expect(panel).not.toContain("data-purpose-selected-rooms");
+        expect(panel).not.toContain("view=studio_config");
+        expect(panel).toContain('data-purpose-space-eligibility="space-uses"');
     });
 });
 

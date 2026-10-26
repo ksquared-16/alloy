@@ -28,17 +28,24 @@ describe("assignmentTypeBehavior", () => {
         expect(read.eligibleSpaceMode).toBe("selected");
     });
 
-    it("filters rooms by selected eligibility", () => {
+    it("a Category's stored room list is history: it round-trips but never narrows the picker (V7 Q-B)", () => {
+        const stored = readAssignmentTypeBehavior({ eligibleSpaceMode: "selected", eligibleRoomIds: ["b"] });
+        expect(writeAssignmentTypeBehavior(stored)).toMatchObject({ eligibleSpaceMode: "selected", eligibleRoomIds: ["b"] });
         const rooms = [
             { roomId: "a", programCategoryId: "p1" },
             { roomId: "b", programCategoryId: "p2" },
         ];
-        const filtered = scopeRoomsForAssignmentPicker(rooms, {
-            roomRequirement: "optional",
-            eligibleSpaceMode: "selected",
-            eligibleRoomIds: ["b"],
-        });
-        expect(filtered.map((r) => r.roomId)).toEqual(["b"]);
+        expect(scopeRoomsForAssignmentPicker(rooms, { roomRequirement: "optional", ...stored }).map((r) => r.roomId)).toEqual(["a", "b"]);
+    });
+
+    it("the space's own Uses decide, as on the server", () => {
+        const rooms = [
+            { roomId: "classroom", unitRole: "operational_group" as const, spaceUses: ["before_care_id"] },
+            { roomId: "gym", unitRole: "shared_space" as const, spaceUses: ["enrichment_id"] },
+            { roomId: "shell", unitRole: "physical_space" as const, spaceUses: null },
+        ];
+        const use = { categoryId: "before_care_id", subjectType: "child" as const };
+        expect(scopeRoomsForAssignmentPicker(rooms, {}, use).map((r) => r.roomId)).toEqual(["classroom"]);
     });
 
     it("returns no rooms when space is not used", () => {
@@ -74,15 +81,11 @@ describe("assignmentTypeBehavior", () => {
         ];
         // No Category narrows nothing, but an inactive room is never offered.
         expect(roomsForEveryCategory(rooms, []).map((r) => r.roomId)).toEqual(["toddler", "infant"]);
-        // One Category with an explicit allow-list offers only its rooms.
-        const toddlerOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["toddler"] };
         const as = (behavior: object) => ({ behavior, use: { categoryId: null, subjectType: "child" as const } });
-        expect(roomsForEveryCategory(rooms, [as(toddlerOnly)]).map((r) => r.roomId)).toEqual(["toddler"]);
-        // Two selected rows: a room must suit BOTH Categories.
-        const infantOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["infant"] };
-        expect(roomsForEveryCategory(rooms, [as(toddlerOnly), as(infantOnly)])).toEqual([]);
-        expect(roomsForEveryCategory(rooms, [as(toddlerOnly), as({})]).map((r) => r.roomId)).toEqual(["toddler"]);
-        // A Category that uses no room offers none.
+        // A Category's stored room list no longer narrows the bulk picker (V7 Q-B).
+        const toddlerOnly = { eligibleSpaceMode: "selected" as const, eligibleRoomIds: ["toddler"] };
+        expect(roomsForEveryCategory(rooms, [as(toddlerOnly)]).map((r) => r.roomId)).toEqual(["toddler", "infant"]);
+        // A Category that uses no room offers none — and a room must suit every selected row.
         expect(roomsForEveryCategory(rooms, [as({ roomRequirement: "not_used" as const })])).toEqual([]);
     });
 });

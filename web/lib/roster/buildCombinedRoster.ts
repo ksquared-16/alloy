@@ -52,6 +52,7 @@ import {
 } from "@/lib/staffReadiness/staffReadinessSignals";
 import { listStaffPresenceForSiteDate } from "@/lib/staffPresence/staffPresenceService";
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
+import { oneEntryPerChildRoomDate } from "@/lib/childcareOperational/expectations/scheduleExpectationCore";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import { operationalGroupRooms, resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import { resolveCurrentWhereabouts } from "@/lib/roster/resolveCurrentWhereabouts";
@@ -221,6 +222,28 @@ export type CombinedRosterReadModel = {
     unroomedStaff: RosterStaffSubject[];
 };
 
+/**
+ * Site·date staff totals (P5): a person counts ONCE, however many rooms they cover that day. Each
+ * room cell still counts everyone scheduled or present in it — summing the cells would count a
+ * two-room staff member twice and label it unique site staff.
+ */
+export function siteStaffTotals(
+    cells: Pick<RosterCell, "staff" | "unscheduledStaffPresent">[],
+): { scheduledStaff: number; actualStaffPresent: number } {
+    const scheduled = new Set<string>();
+    const present = new Set<string>();
+    for (const c of cells) {
+        for (const s of c.staff) {
+            scheduled.add(s.personId);
+            if (countsPresent([s.actual]) > 0) present.add(s.personId);
+        }
+        for (const s of c.unscheduledStaffPresent ?? []) {
+            if (countsPresent([s.actual]) > 0) present.add(s.personId);
+        }
+    }
+    return { scheduledStaff: scheduled.size, actualStaffPresent: present.size };
+}
+
 export type BuildCombinedRosterInput = {
     orgId: string;
     siteLocationId: string;
@@ -344,7 +367,14 @@ export async function buildCombinedRoster(
         proposedAssignments: withAgeGroups.proposedAssignments,
     });
 
-    const expectedToday = expectations.expectedAttendance.filter((e) => e.date === date);
+    /*
+     * Today's sessions, primary first (V7 S6). A child may be expected in several spaces — their
+     * homeroom and Before Care — and appears on each space's card once; readers that need ONE room per
+     * child (the closure interpretation) take the primary session's.
+     */
+    const expectedToday = expectations.expectedAttendance
+        .filter((e) => e.date === date)
+        .sort((a, b) => Number(b.isPrimary !== false) - Number(a.isPrimary !== false));
 
     /*
      * KNOWN OPERATIONAL INTENT FOR THIS SERVICE DAY.
@@ -384,7 +414,7 @@ export async function buildCombinedRoster(
         interpretServiceDay({
             siteLocationId,
             scheduledChildIds: expectedToday.map((e) => e.customerMemberId),
-            groupByChildId: new Map(expectedToday.map((e) => [e.customerMemberId, e.roomLocationId])),
+            groupByChildId: new Map(expectedToday.map((e) => [e.customerMemberId, e.roomLocationId]).reverse() as Array<[string, string | null]>),
             effective: serviceDayExpectations.effective,
             unresolved: serviceDayExpectations.unresolved,
             calendarSiteClosure,
@@ -468,7 +498,8 @@ export async function buildCombinedRoster(
     }
 
     const childrenByRoom = new Map<string, RosterChildSubject[]>();
-    for (const e of expectedToday) {
+    // Once per child per space: two sessions in one room are one child on its card (V7 S6).
+    for (const e of oneEntryPerChildRoomDate(expectedToday)) {
         // A child with no committed room is expected at the site but not placeable
         // on a room card; it must not be silently attributed to an arbitrary room.
         if (!e.roomLocationId) continue;
@@ -551,10 +582,15 @@ export async function buildCombinedRoster(
      * (`children`, `expectedChildCount`) still describes the expected room.
      */
     const presentByActualRoom = new Map<string, number>();
+    // A child expected in two spaces is still one child standing in one (V7 S6).
+    const placedPresent = new Set<string>();
     for (const [expectedRoomId, list] of childrenByRoom) {
         for (const c of list) {
+            if (placedPresent.has(c.customerMemberId)) continue;
             const at = presentChildRoom(c.actual, expectedRoomId);
-            if (at) presentByActualRoom.set(at, (presentByActualRoom.get(at) ?? 0) + 1);
+            if (!at) continue;
+            placedPresent.add(c.customerMemberId);
+            presentByActualRoom.set(at, (presentByActualRoom.get(at) ?? 0) + 1);
         }
     }
 
@@ -586,6 +622,7 @@ export async function buildCombinedRoster(
     const { resolveTiers } = buildRoomConfigResolvers({
         agreements: withAgeGroups.agreements,
         placements: withAgeGroups.placements,
+        assignments: withAgeGroups.assignments,
         config: withAgeGroups.config,
         ageGroupByRoomLocationId: withAgeGroups.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: withAgeGroups.ageGroupByProgramCategoryId,
@@ -710,16 +747,20 @@ export async function buildCombinedRoster(
     }
 
     const anyUnknownDemand = cells.some((c) => c.requiredStaff == null);
+    // Site totals count each child once, however many spaces expect them (V7 S6); per-space counts stay per space.
+    const uniqueChildren = (pick: (c: RosterChildSubject) => boolean) =>
+        new Set(cells.flatMap((c) => c.children.filter(pick).map((k) => k.customerMemberId))).size;
+    const siteStaff = siteStaffTotals(cells);
     const totals = {
-        expectedChildren: cells.reduce((n, c) => n + c.expectedChildCount, 0),
-        scheduledStaff: cells.reduce((n, c) => n + c.scheduledStaffCount, 0),
+        expectedChildren: uniqueChildren(() => true),
+        scheduledStaff: siteStaff.scheduledStaff,
         requiredStaff: anyUnknownDemand
             ? null
             : cells.reduce((n, c) => n + (c.requiredStaff ?? 0), 0),
         roomsShort: cells.filter((c) => c.staffingSufficiency === "short").length,
         roomsUnknown: cells.filter((c) => c.staffingSufficiency === "unknown").length,
-        actualChildrenPresent: cells.reduce((n, c) => n + c.actualChildrenPresent, 0),
-        actualStaffPresent: cells.reduce((n, c) => n + c.actualStaffPresent, 0),
+        actualChildrenPresent: uniqueChildren((k) => countsPresent([k.actual]) > 0),
+        actualStaffPresent: siteStaff.actualStaffPresent,
         roomsActuallyShort: cells.filter((c) => c.actualStaffingSufficiency === "short").length,
     };
 

@@ -46,6 +46,7 @@ const expected: ExpectedAttendanceEntry[] = [
         assignmentId: "asg-1",
         schedulePatternId: "pat-1",
         scheduleTypeKey: "full_day",
+        isPrimary: true,
     },
 ];
 

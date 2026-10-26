@@ -45,6 +45,15 @@ export type OperationalAssignmentInput = {
     start_date: string;
     end_date: string | null;
     status: string;
+    /**
+     * The enrollment's own schedule (V7 S6). Absent reads as primary, so a caller that supplies only
+     * the primary — the pre-S6 contract — is unchanged.
+     */
+    is_primary?: boolean;
+    /** A qualifying secondary session's own space; a primary's room comes from its placement. */
+    room_location_id?: string | null;
+    /** The row this one replaced — a secondary's sessions over time form one lineage. */
+    supersedes_assignment_id?: string | null;
 };
 
 export type SchedulePatternInput = {
@@ -85,6 +94,12 @@ export type ExpectedAttendanceEntry = {
     /** Recurrence template only. Hours live on the Assignment, not here. */
     schedulePatternId: string;
     scheduleTypeKey: string;
+    /**
+     * The enrollment's own schedule, or a qualifying secondary session (V7 S6). A child may have
+     * several entries on one date — one per session — so readers that need ONE expected room or
+     * schedule per child·date take the primary entry (`primaryEntryFor`), and counts dedupe by child.
+     */
+    isPrimary: boolean;
 };
 
 export type ExpectedOccupancyEntry = {
@@ -228,11 +243,39 @@ function recurringWeekdays(
 }
 
 /**
- * Expected attendance per child per date: the schedule assignment effective ON that date x its
- * pattern weekdays x the placement effective on that date (room/program). Date-true: across a
- * supersession the prior row answers through its end and the successor from its start — never both,
- * never neither. No room is attributed when no placement covers the date (surfaced as a warning by
- * the assembler).
+ * An agreement's sessions over time (V7 S6): its primary lineage — every primary row, one effective
+ * per date, exactly as before — and one lineage per qualifying secondary, keyed by the row its
+ * replacements descend from (`supersedes_assignment_id`). Within a lineage `rowEffectiveOn` picks one
+ * row per date, so a supersession never doubles a session; distinct lineages are distinct sessions.
+ */
+function sessionLineages<T extends OperationalAssignmentInput>(rows: readonly T[]): T[][] {
+    const primaries = rows.filter((r) => r.is_primary !== false);
+    const secondaries = rows.filter((r) => r.is_primary === false);
+    const byId = new Map(secondaries.map((r) => [r.id, r]));
+    const rootOf = (row: T): string => {
+        let cur = row;
+        const seen = new Set<string>();
+        while (cur.supersedes_assignment_id && byId.has(cur.supersedes_assignment_id) && !seen.has(cur.id)) {
+            seen.add(cur.id);
+            cur = byId.get(cur.supersedes_assignment_id)!;
+        }
+        return cur.id;
+    };
+    const lineages = new Map<string, T[]>();
+    for (const row of secondaries) {
+        const root = rootOf(row);
+        lineages.set(root, [...(lineages.get(root) ?? []), row]);
+    }
+    return [...(primaries.length ? [primaries] : []), ...lineages.values()];
+}
+
+/**
+ * Expected attendance per child per date per session: for each session lineage, the row effective ON
+ * that date x its own weekdays (Assignment Time, else pattern). The primary's room/program is the
+ * placement effective on that date; a qualifying secondary session is expected in its own space (no
+ * space → expected at the site with no room). Date-true: across a supersession the prior row answers
+ * through its end and the successor from its start — never both, never neither. Which secondaries
+ * qualify is the loader's decision (category `attendance_participation = 'expected'`, V7 S6).
  */
 export function expandExpectedAttendance(
     input: ExpandExpectedAttendanceInput
@@ -246,43 +289,75 @@ export function expandExpectedAttendance(
         if (!AGREEMENT_OPERATIONAL_STATUSES.has(agreement.status)) continue;
         const rows = assignmentsByAgreement.get(agreement.id);
         if (!rows) continue;
+        const lineages = sessionLineages(rows);
 
         for (const date of dates) {
             if (!isWithin(date, agreement.start_date, agreement.end_date)) continue;
-            const assignment = rowEffectiveOn(rows, date);
-            if (!assignment) continue;
-            const pattern = input.patternsById.get(assignment.schedule_pattern_id);
-            if (!pattern) continue;
             const weekday = weekdayOf(date);
-            if (!recurringWeekdays(assignment.id, pattern, input.weekdaysByAssignmentId).includes(weekday)) continue;
+            for (const lineage of lineages) {
+                const assignment = rowEffectiveOn(lineage, date);
+                if (!assignment) continue;
+                const pattern = input.patternsById.get(assignment.schedule_pattern_id);
+                if (!pattern) continue;
+                if (!recurringWeekdays(assignment.id, pattern, input.weekdaysByAssignmentId).includes(weekday)) continue;
 
-            const placement = rowEffectiveOn(placementsByAgreement.get(agreement.id), date);
-            const placementCovers = placement != null;
-
-            entries.push({
-                date,
-                weekday,
-                agreementId: agreement.id,
-                customerMemberId: agreement.customer_member_id,
-                siteLocationId: agreement.site_location_id,
-                roomLocationId: placementCovers ? placement!.room_location_id : null,
-                programCategoryId: placementCovers ? placement!.program_category_id : null,
-                assignmentId: assignment.id,
-                schedulePatternId: pattern.id,
-                scheduleTypeKey: pattern.schedule_type_key,
-            });
+                const isPrimary = assignment.is_primary !== false;
+                const placement = rowEffectiveOn(placementsByAgreement.get(agreement.id), date);
+                entries.push({
+                    date,
+                    weekday,
+                    agreementId: agreement.id,
+                    customerMemberId: agreement.customer_member_id,
+                    siteLocationId: agreement.site_location_id,
+                    roomLocationId: isPrimary ? (placement?.room_location_id ?? null) : (assignment.room_location_id ?? null),
+                    programCategoryId: placement?.program_category_id ?? null,
+                    assignmentId: assignment.id,
+                    schedulePatternId: pattern.id,
+                    scheduleTypeKey: pattern.schedule_type_key,
+                    isPrimary,
+                });
+            }
         }
     }
 
     return entries;
 }
 
-/** Shared room·date tally — entries without a room are skipped. */
+/**
+ * THE one expectation per child·date for readers that need a single expected room or schedule (the
+ * Attendance card's expected room, the days-a-week policy, population weights): the primary session,
+ * else the earliest-listed session. Pure.
+ */
+export function primaryEntryFor<T extends { isPrimary?: boolean }>(entries: readonly T[]): T | null {
+    return entries.find((e) => e.isPrimary !== false) ?? entries[0] ?? null;
+}
+
+/** Entries of a child on a date reduced to one per room (V7 S6: a child counts once per room per date). */
+export function oneEntryPerChildRoomDate<T extends { customerMemberId?: string | null; roomLocationId: string | null; date: string }>(
+    entries: readonly T[],
+): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const e of entries) {
+        const key = e.customerMemberId ? `${e.customerMemberId}::${e.roomLocationId ?? ""}::${e.date}` : null;
+        if (key) {
+            if (seen.has(key)) continue;
+            seen.add(key);
+        }
+        out.push(e);
+    }
+    return out;
+}
+
+/**
+ * Shared room·date tally — entries without a room are skipped; a child counts once per room per date
+ * however many sessions place them there (V7 S6).
+ */
 function tallyByRoomDate(
-    entries: readonly { roomLocationId: string | null; date: string }[]
+    entries: readonly { roomLocationId: string | null; date: string; customerMemberId?: string | null }[]
 ): { roomLocationId: string; date: string; childCount: number }[] {
     const counts = new Map<string, { roomLocationId: string; date: string; childCount: number }>();
-    for (const e of entries) {
+    for (const e of oneEntryPerChildRoomDate(entries)) {
         if (!e.roomLocationId) continue;
         const key = `${e.roomLocationId}::${e.date}`;
         const existing = counts.get(key);

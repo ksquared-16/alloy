@@ -36,6 +36,7 @@ export async function fetchActualComplianceReadModel(
     const { resolveTiers, resolveCapacityBinding } = buildRoomConfigResolvers({
         agreements: loaded.agreements,
         placements: loaded.placements,
+        assignments: loaded.assignments,
         config: loaded.config,
         ageGroupByRoomLocationId: loaded.ageGroupByRoomLocationId,
         ageGroupByProgramCategoryId: loaded.ageGroupByProgramCategoryId,

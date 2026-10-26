@@ -44,13 +44,13 @@ describe("scopeRoomsForAssignmentPicker", () => {
         expect(scoped.map((r) => r.roomId)).toEqual(["infant", "toddler", "open"]);
     });
 
-    it("still respects not_used and selected allow-lists", () => {
+    it("respects not_used; a Category's stored room list no longer narrows the picker (V7 Q-B)", () => {
         expect(scopeRoomsForAssignmentPicker(rooms, { roomRequirement: "not_used" })).toEqual([]);
         const selected = scopeRoomsForAssignmentPicker(rooms, {
             roomRequirement: "required",
             eligibleSpaceMode: "selected",
             eligibleRoomIds: ["toddler"],
         });
-        expect(selected.map((r) => r.roomId)).toEqual(["toddler"]);
+        expect(selected.map((r) => r.roomId)).toEqual(["infant", "toddler", "open"]);
     });
 });
