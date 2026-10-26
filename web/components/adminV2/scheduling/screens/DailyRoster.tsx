@@ -474,7 +474,8 @@ export default function DailyRoster({
                     </div>
                 ) : null}
 
-                <div className="grid gap-3 lg:grid-cols-2" data-roster-rooms="true">
+                {/* Room tiles: one per row, two from lg, three on a wide desktop (2xl). */}
+                <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3" data-roster-rooms="true">
                     {orderedCells.map((cell) => {
                         const isOpen = openRoom === cell.roomLocationId;
                         return (

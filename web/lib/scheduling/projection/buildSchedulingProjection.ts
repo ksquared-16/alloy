@@ -589,8 +589,11 @@ async function loadAssignmentTypes(
     return map;
 }
 
-/** Choose the placement whose effective window covers the assignment start. */
-function placementForAssignment(
+/**
+ * The placement whose effective window covers the assignment start — or none. Never another
+ * date's placement: a row no placement covers names no room rather than a room it never had (R4).
+ */
+export function placementForAssignment(
     placements: ChildPlacementRow[],
     assignment: ScheduleAssignmentRow
 ): ChildPlacementRow | null {
@@ -600,7 +603,7 @@ function placementForAssignment(
             !p.end_date || compareIsoDates(p.end_date, assignment.start_date) >= 0;
         return startsOnOrBefore && endsOnOrAfter;
     });
-    return covering ?? placements[0] ?? null;
+    return covering ?? null;
 }
 
 export type LoadSchedulingProjectionParams = {

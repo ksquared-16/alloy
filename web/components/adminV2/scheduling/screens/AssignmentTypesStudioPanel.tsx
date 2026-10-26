@@ -60,12 +60,6 @@ const REQUIREMENT_OPTIONS: { value: RequirementMode; label: string }[] = [
     { value: "not_used", label: "Not used" },
 ];
 
-const SPACE_MODE_OPTIONS = [
-    { value: "any", label: "Any valid space" },
-    { value: "selected", label: "Selected spaces" },
-    { value: "program_match", label: "Spaces matching the selected Program" },
-];
-
 type FormState = {
     label: string;
     iconKey: string;
@@ -253,18 +247,14 @@ function AppearancePicker({ value, onChange }: { value: string; onChange: (v: st
 export default function AssignmentTypesStudioPanel({
     types,
     loading,
-    siteName,
     sites,
     onChanged,
-    operationalRooms,
 }: {
     types: AssignmentTypeAdminRecord[];
     loading: boolean;
     siteName: string;
     sites: { id: string; name: string }[];
     onChanged: () => void;
-    /** From shared Workspace studio_config snapshot — skips a cold refetch when present. */
-    operationalRooms?: { roomId: string; roomName: string | null }[];
 }) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
@@ -272,9 +262,6 @@ export default function AssignmentTypesStudioPanel({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [iconQuery, setIconQuery] = useState("");
-    const [siteRooms, setSiteRooms] = useState<{ roomId: string; roomName: string | null }[]>(
-        () => operationalRooms ?? [],
-    );
     // Suggest a distinct default Appearance from the typed Name (Before Care → Blue,
     // Therapy → Amber, etc.) until the operator picks one manually — create only, so
     // editing an existing Category never silently changes its stored tone.
@@ -290,32 +277,6 @@ export default function AssignmentTypesStudioPanel({
         setToneTouched(false);
     }, [editingId, creating, types]);
 
-    // Prefer shared Workspace snapshot rooms; only fetch when snapshot omitted them.
-    useEffect(() => {
-        if (operationalRooms) {
-            setSiteRooms(operationalRooms.filter((r) => r?.roomId));
-            return;
-        }
-        const siteId = sites[0]?.id;
-        if (!siteId) return;
-        let cancelled = false;
-        void fetch(`/api/admin/scheduling?view=studio_config&site_location_id=${encodeURIComponent(siteId)}`)
-            .then((r) => r.json())
-            .then((body) => {
-                if (cancelled) return;
-                const rooms = (body?.config?.operationalRooms ?? []) as {
-                    roomId: string;
-                    roomName: string | null;
-                }[];
-                setSiteRooms(rooms.filter((r) => r?.roomId));
-            })
-            .catch(() => {
-                if (!cancelled) setSiteRooms([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [operationalRooms, sites]);
     const iconOptions = useMemo(() => {
         const q = iconQuery.trim().toLowerCase();
         if (!q) return ASSIGNMENT_PURPOSE_ICONS;
@@ -534,57 +495,9 @@ export default function AssignmentTypesStudioPanel({
                             />
                         </label>
                         {(form.behavior.roomRequirement ?? "optional") !== "not_used" ? (
-                            <>
-                                <label>
-                                    <FieldLabel>Eligible spaces</FieldLabel>
-                                    <AlloySelect
-                                        value={form.behavior.eligibleSpaceMode ?? "any"}
-                                        onChange={(v) =>
-                                            patchBehavior({
-                                                eligibleSpaceMode: v as "any" | "selected" | "program_match",
-                                            })
-                                        }
-                                        options={SPACE_MODE_OPTIONS}
-                                        aria-label="Eligible spaces"
-                                    />
-                                </label>
-                                {(form.behavior.eligibleSpaceMode ?? "any") === "selected" ? (
-                                    <div className="sm:col-span-2" data-purpose-selected-rooms="true">
-                                        <FieldLabel>Selected spaces</FieldLabel>
-                                        <p className="mb-1.5 text-[11px] text-alloy-slate">
-                                            Limit this Category to specific spaces at {siteName || "the site"} (e.g.
-                                            Gym, Multipurpose Room, Playground).
-                                        </p>
-                                        <div className="grid max-h-44 gap-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white p-2">
-                                            {siteRooms.length === 0 ? (
-                                                <p className="text-[11.5px] text-alloy-slate">No operational rooms found.</p>
-                                            ) : (
-                                                siteRooms.map((r) => {
-                                                    const on = (form.behavior.eligibleRoomIds ?? []).includes(r.roomId);
-                                                    return (
-                                                        <label
-                                                            key={r.roomId}
-                                                            className="flex cursor-pointer items-center gap-2 text-[12px] text-alloy-midnight"
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={on}
-                                                                onChange={() => {
-                                                                    const cur = new Set(form.behavior.eligibleRoomIds ?? []);
-                                                                    if (on) cur.delete(r.roomId);
-                                                                    else cur.add(r.roomId);
-                                                                    patchBehavior({ eligibleRoomIds: [...cur] });
-                                                                }}
-                                                            />
-                                                            {r.roomName ?? "Room"}
-                                                        </label>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : null}
-                            </>
+                            <p className="sm:col-span-2 text-[11px] text-alloy-slate" data-purpose-space-eligibility="space-uses">
+                                Which spaces this Category can use is set on each space, under Rooms → Uses.
+                            </p>
                         ) : null}
                     </Section>
 
