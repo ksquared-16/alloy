@@ -159,6 +159,16 @@ communications boundary Tours now relies on. Evidence: `certification/tours-cale
   (`TOUR_COMMS_MESSAGE_CLASS`), but tour sends do not yet pass a `category`; canonical enqueue records
   the `operational` fallback, so an operational opt-out blocks tour confirmations and reminders. Passing
   `transactional` would bypass operational opt-outs and is deliberately left to the consent discovery.
+- **Public tour requests (S7, 2026-10-26):** a time a family picks on a school's public tour calendar
+  is pending intent on the Processing case — there is no booking and no Opportunity, so no tour message
+  of any kind can be produced before Approve, and the family's screen says "received", never "booked".
+  After Approve books the time, the ONE confirmation goes through `orchestrateTourBookingConfirmed`
+  (per-booking idempotency key; a retry completes a missing send and never doubles one), then canonical
+  enqueue eligibility; the outcome (`sent` / `suppressed` with the policy code / `not_applicable`) is
+  recorded on the case for the operator. A rule that requires tour approval yields `pending_approval`
+  and stays silent until staff confirm under `tours.book`. There is no family ICS today (only the staff
+  calendar invite) and no marketing-consent capture: C1 is not integrated, and the public form offers
+  no consent control (`certification/tours-calendar-forms/s7/`).
 
 ---
 

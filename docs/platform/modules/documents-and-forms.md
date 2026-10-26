@@ -111,6 +111,22 @@ canonical identity rows early. `applyFormIntakeSafe` is retired and throw-only; 
 comparison helpers are retained for audit, not runtime authority. There is no source-cutover
 feature flag.
 
+### Public tour request on intake (S7, 2026-10-26)
+
+A school's public tour calendar (`/tours/[token]`) is step one in front of its published lead form:
+the token is a location-scoped Processing intake link (`form_public_links`) carrying the
+server-controlled `metadata.tour_calendar_v1` flag, which only `PATCH …/public-links/[linkId]`
+`{ tour_calendar }` sets, under `forms.author` **and** `tours.configure`. The submitted time is
+**pending intent** on the Processing case (`processing_cases.metadata.requested_tour`,
+`processing.requested_tour.v1`): no Opportunity, no booking, no seat hold and no message before
+Approve. The submit route revalidates the time against the canonical slot engine and refuses it
+before any write (`TOUR_SLOT_UNAVAILABLE`, draft kept); a request that cannot be recorded fails the
+submit rather than being dropped. After `commitApprovedLeadForCase`, Approve resolves it through
+`materializeRequestedTourForCase` (`web/lib/tours/publicCalendar/`): revalidate, book through
+`createTourBooking`, or record `needs_rescheduling` with a reason — never rolling back the lead.
+Re-running Approve retries; the booking (`tour_bookings.metadata.processing_case_id`) is the truth.
+Evidence: `certification/tours-calendar-forms/s7/`.
+
 ### Studio — Forms and Builder
 
 Canvas-first interaction translated from Surface Builder:
