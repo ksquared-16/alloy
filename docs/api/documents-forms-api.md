@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-26
 supersedes: []
 ---
 # Documents / Forms API
@@ -51,12 +51,27 @@ Form authoring (definitions, versions, publish/archive), submissions and linkage
 | `/api/admin/documents/[id]` | PATCH | `documents.write` + subject in scope | Document workflow status |
 | `/api/admin/documents/[id]/signed-url` | GET | document decision | Time-limited signed download URL (10 min) |
 | `/api/admin/documents/[id]/source-preview` | GET | document decision | Sandboxed text render of an HTML/TXT/CSV source |
-| `/api/admin/documents/upload` | POST | `documents.write` (+ `processing.operate` to open/attach a Processing case) | Upload, max 10 MB |
+| `/api/admin/documents/upload` | POST | `documents.write` (+ `processing.operate` to open/attach a Processing case) | Upload, max 10 MB. A `doc_type` naming a Studio type must be published and fit the subject and format (422 `TYPE_UNAVAILABLE` / `TYPE_SUBJECT_NOT_APPLICABLE` / `TYPE_FORMAT_NOT_ALLOWED`, D5) |
+| `/api/admin/documents/[id]/versions` | GET POST | GET: document decision; POST: `documents.write` + decision | Version history; a replacement version (409 `TYPE_REPLACEMENT_NOT_ALLOWED` / `TYPE_NEW_DOCUMENT_REQUIRED` when the type's replacement policy forbids it, D5) |
 | `/api/admin/documents/entity-options` | GET | `documents.write` | Records a new upload may attach to |
 | `/api/admin/vendors/[id]/documents/signed-url` | GET | document decision + document belongs to vendor `[id]` | Vendor document link |
 | `/api/admin/persons/[id]/profile-photo` | GET POST DELETE | GET: document decision; POST/DELETE: `documents.write` (POST also the decision) | Canonical person photo pointer |
 
 `/api/admin/document-field-definitions` was retired with the Document Field subsystem and no longer exists.
+
+### Processing document filing (D5)
+
+| Path | Methods | Requires | Purpose |
+|------|---------|----------|---------|
+| `/api/admin/processing/documents/queue` | GET | `processing.operate` + `documents.read`, rows disclosed per document | Processing → Work → Documents: document cases awaiting filing, with derived lanes |
+| `/api/admin/processing/cases/[caseId]/document-filing` | GET PUT | `processing.operate`; GET: `documents.read` + document decision; PUT: `documents.write` | The filing workspace; save the type / record / related records / review proposal |
+| `/api/admin/processing/cases/[caseId]/approve` | POST | `processing.operate`; for a customer-document case also `documents.write`, subject scope and clearance (the filing command) | Files the document (one transaction) and completes the case only when the filing committed. Refusals: 403 `DOCUMENTS_WRITE_REQUIRED` / `SENSITIVITY_CLEARANCE_REQUIRED`, 404 `SUBJECT_NOT_FOUND`, 409 `DOCUMENT_QUARANTINED` / `REVIEW_REQUIRED` / `NEW_VERSION_REQUIRED` / `TYPE_REPLACEMENT_NOT_ALLOWED` / `ALREADY_FILED`, 422 `TYPE_*` / `SUBJECT_NOT_RELATED`, 503 `AUDIT_UNAVAILABLE` |
+
+All three are internal (admin session) routes. **D9 consequences:** an external Documents API must call the same filing
+command (`commitDocumentFiling`) rather than writing associations, so it inherits the transaction, the Studio policy, the
+clearance check and the audit; its idempotency key should be caller-supplied (Processing uses
+`processing_case:<case>:document:<doc>`); the stable refusal codes above are the contract to publish. No external route
+is published by D5.
 
 ### POS documents & packets
 
@@ -124,4 +139,4 @@ Evidence: `certification/documents-v1/` (D0 census, D1a hosted certification and
 - **Envelopes:** Lists `{ <name>: [...] }`; single objects bare or `{ ok }`.
 - **Side effects:** `submit` and `generate-document` create documents and may emit events; signed-url issues storage credentials (time-limited) and must remain server-only. Public submission writes are append-style into org-scoped submission tables.
 
-Source root: `web/app/api/admin/{forms,documents,pos,vendors/[id]/documents,persons/[id]/profile-photo}`, `web/app/api/public/{forms,field-definitions}`.
+Source root: `web/app/api/admin/{forms,documents,pos,processing/documents,processing/cases/[caseId]/document-filing,vendors/[id]/documents,persons/[id]/profile-photo}`, `web/app/api/public/{forms,field-definitions}`.

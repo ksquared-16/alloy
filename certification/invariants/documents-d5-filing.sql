@@ -1,10 +1,12 @@
--- Documents V1 — D5 filing invariants. Run inside a transaction that is ROLLED BACK (it seeds its own fixture rows in
--- the first organization and leaves nothing behind). Every check raises on failure; the final NOTICE lists the passes.
+-- Documents D5 — filing a received document to a customer record holds at the database. Rollback-only.
+-- Run by database.run_rollback_invariant_test against an isolated certification environment (certenv-*) carrying
+-- migrations 20261208090000, 20261209090000, 20261209090100, 20261209090200 and 20261210093500. The executor owns the
+-- transaction and discards it. The invariants seed their own rows in the first organization and RAISE when one fails.
 --
 -- Covers: one-transaction filing (type + owner + contexts + review + record); replay on the same key; refusal of a
--- second filing; quarantined / superseded refusal; unpublished type, subject-type, format, review-required,
--- unrelated context, cross-organization subject; sensitivity raised by type and never lowered; not_allowed and
--- new_version replacement; file-as-version reusing nothing but provenance; an atomic rollback when a late step fails.
+-- second filing; quarantined / superseded refusal; unpublished type, subject-type, format, review-required, unrelated
+-- context, cross-organization subject; sensitivity raised by type and never lowered; not_allowed and new_version
+-- replacement; file-as-version keeping one object per version; pending review; service-role only.
 DO $$
 DECLARE
     v_org uuid := (SELECT id FROM public.orgs ORDER BY created_at NULLS LAST, id LIMIT 1);
