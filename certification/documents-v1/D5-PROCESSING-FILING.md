@@ -126,10 +126,10 @@ Refusals for out-of-scope and other-organization targets are 404, indistinguisha
 | Migration, ledger | identity census `gar_ec4c10421d1e84` (`tha_69064259a1103f`, 22:29:08Z): ledger head `20261210093500`, total 546 (`certification/migrations/hosted-migration-identity-census.sql.results.json`) |
 | Migration, objects | physical-state census `tha_2ec522e7ab91cc` (22:29:13Z): **11/11 true**: ledger row, the eight D5 functions, and `document_file` / `document_file_as_version` callable by service role only (`d5-filing-physical-state-census.sql.results.json`) |
 | Deployment | staging `/api/build-info` gitSha `81556597838bb4cff9f5c1233dd56970efe44a2f`, Supabase `ikaxilmwmrmbagoidedu` (polled 2026-10-26 ~22:30Z) |
-| Hosted certification | not run. `environment.qa_run_open` (authz_q1, `alloy_staging_web`, hosted authority declared) was refused `run_not_active`: run `erun2_11befb9e1158c6c0` went FAILED at ~22:30Z, before filing |
+| Effect freeze | `efz_db8413255730df` (db_migration on ALLOY_STAGING, UNVERIFIABLE, opened 21:19Z from obligation `eob_cf5359b4cd509b`) cleared by `repository.clear_effect_freeze` `gar_2b46a009683395` (`tha_849fd1a002de12`, 22:43Z), disposition **verified_applied**, evidence identity census `gar_ec4c10421d1e84`. The migration was not re-applied |
+| Hosted certification | run `erun2_11befb9e1158c6c0` lost its provider session after the migration wait resolved; resumed on `erun2_dd7acff3de070285` from the measured database state. authz_q1 run `qar_c6e20cc02979` (opened by `gar_521a8b2145b7e2`, target `alloy_staging_web`, hosted authority declared) on staging `81556597838b`: **ensure** built one household (one adult, two children, one case) and ten Processing uploads (nine with filing cases; the scripted PDF quarantined, so it has no case); **certify** passed **59/59** (`d5_hosted_filing_cert_results.qar_c6e20cc02979.json`); **reset** used the audited POS deletes plus lead deletion, and every document, filing case and the household library now return 404 (`all_gone: true`, `d5_hosted_reset_results.qar_c6e20cc02979.json`) |
 
 ## Status
 
-PARTIAL: implementation, automated evidence, merge, deployment and the staging migration are complete and measured.
-Hosted certification (`d5_hosted_filing_cert.py <qar> ensure|certify|reset` under a new authz_q1 run) remains; it
-needs an active run to open the QA run.
+COMPLETE: implementation, automated evidence, merge (PR #1604), deployment to staging (`81556597838b`), the staging
+migration (11/11 objects, ledger 546) and hosted certification (59/59, fixture fully disposed of) are done and measured.
