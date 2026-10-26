@@ -37,6 +37,7 @@ import { POST as uploadPOST } from "@/app/api/admin/documents/upload/route";
 import { POST as versionsPOST } from "@/app/api/admin/documents/[id]/versions/route";
 import { GET as historyGET } from "@/app/api/admin/documents/[id]/history/route";
 import { commitDocumentFiling } from "@/lib/documents/filing/documentFiling";
+import { disposeDocumentsOfDeletedSubjects } from "@/lib/documents/documentDisposal";
 import { documentActorForRequest } from "@/lib/documents/assertDocumentAccess";
 import type { DocumentFilingQueueRow, DocumentFilingWorkspace } from "@/lib/pos/documentFiling/documentFilingService";
 import { deriveDocumentFilingLane, EMPTY_PROPOSAL, isFilingIntent, processingFilingKey } from "@/lib/pos/documentFiling/documentFilingModel";
@@ -147,7 +148,7 @@ function rpc(fn: string, args: Record<string, unknown>) {
         const target = docs.find((r) => r.id === args.p_target_document_id);
         if (!d || !target) return { data: null, error: { message: "document_not_found" } };
         const filing = (d.metadata as Record<string, unknown>)?.filing as Record<string, unknown> | undefined;
-        if (filing?.key === args.p_filing_key) return { data: { replay: true, document_id: d.id, version_id: filing.version_id, filing }, error: null };
+        if (filing?.key === args.p_filing_key) return { data: { replay: true, document_id: d.id, version_id: filing?.version_id, filing }, error: null };
         const versionId = "e5000000-0000-4000-8000-0000000000ff";
         db.seed("document_versions", [{ id: versionId, org_id: ORG, document_id: target.id, version_number: 2, storage_path: args.p_storage_path, bucket: args.p_bucket, source: "replacement" }]);
         const owner = db.rows("document_subjects").find((s) => s.document_id === target.id && s.is_primary);
@@ -610,6 +611,42 @@ describe("D5.5 the same policy on the operator upload and the replacement route"
         expect(res.status).toBe(409);
         expect((res.body as { code: string }).code).toBe("TYPE_REPLACEMENT_NOT_ALLOWED");
         expect(db.uploadCalls).toHaveLength(0);
+    });
+});
+
+describe("D5 lifecycle: deleting the family disposes of what was filed to it", () => {
+    const dispose = (documentIds: string[]) =>
+        disposeDocumentsOfDeletedSubjects(db as never, { orgId: ORG, actorUserId: USER, documentIds, deletedSubjectIds: [OPP, H, P1, C1, C2], route: "admin/opportunities/delete" });
+
+    it("a filed document goes with its subject, and so does its own completed filing case (it names the family)", async () => {
+        as(P.admin);
+        await propose(CASE.intake, { doc_type: "enrollment_document", household_id: H, primary: child(C1) });
+        expect((await approve(CASE.intake)).status).toBe(200);
+        const out = await dispose([D.intake]);
+        expect(out).toEqual([expect.objectContaining({ documentId: D.intake, outcome: "deleted" })]);
+        expect(db.rows("documents").some((d) => d.id === D.intake)).toBe(false);
+        expect(db.rows("processing_cases").some((c) => c.id === CASE.intake)).toBe(false);
+        expect(db.rows("processing_case_sources").some((s) => s.processing_case_id === CASE.intake)).toBe(false); // no dangling source
+        expect(events("document_delete_authorized").at(-1)?.payload).toMatchObject({ processing_case_ids: [CASE.intake] });
+    });
+
+    it("an open Processing case still retains its document", async () => {
+        as(P.admin);
+        db.rows("documents").find((d) => d.id === D.secondCustody)!.entity_type = "customer_member";
+        db.rows("documents").find((d) => d.id === D.secondCustody)!.entity_id = C1;
+        const out = await dispose([D.secondCustody]);
+        expect(out).toEqual([{ documentId: D.secondCustody, outcome: "retained", reasons: ["processing_case_source"] }]);
+        expect(db.rows("processing_cases").some((c) => c.id === CASE.secondCustody)).toBe(true);
+    });
+
+    it("a received document filed as a version goes with the document it became a version of", async () => {
+        as(P.admin);
+        await propose(CASE.secondImm, { doc_type: "immunization_record", household_id: H, primary: child(C1), review_accepted: true, mode: "new_version", target_document_id: D.existingImm });
+        expect((await approve(CASE.secondImm)).status).toBe(200);
+        const out = await dispose([D.existingImm]);
+        expect(out.map((d) => `${d.documentId}:${d.outcome}`).sort()).toEqual([`${D.existingImm}:deleted`, `${D.secondImm}:deleted`].sort());
+        expect(db.rows("processing_cases").some((c) => c.id === CASE.secondImm)).toBe(false);
+        expect(db.removeCalls.flatMap((r) => r.paths)).toEqual(expect.arrayContaining([expect.stringMatching(new RegExp(`/filed/${D.existingImm}/`)), `${ORG}/pos_intake/${D.secondImm}.pdf`]));
     });
 });
 

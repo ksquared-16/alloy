@@ -81,6 +81,18 @@ The vendor application's review-required types are not marked pending (its inser
 
 A filed document is listed by the D4 library under its primary owner, with "Also relates to" for the related records. It keeps one identity and one version history. "Open record" lands on the record's Documents card. The history shows "Filed from Processing" (or "Filed from Processing as version n") from the committed filing record. An audited attempt that did not commit shows as "Filing attempted — not filed". Forms and generated-PDF links are untouched: the derived `document_subject_links` view still adds them.
 
+## Lifecycle: deleting a family disposes of what was filed to it
+
+After D5, every filed document has a Processing case source: its own completed filing case. Disposal
+(`disposeDocumentsOfDeletedSubjects`, D2) retained any document a case source referenced, so lead deletion would never
+have removed a filed document. Filed documents would have outlived their family.
+
+Disposal now treats the document's own completed filing case (`operational_result.kind = "document_filed"` for that
+document) as provenance, not reliance. The document is disposed with its subject, and that case and its source go with
+it, because the proposal names the family. A received document superseded into a disposed document (filed as its next
+version) goes with it too. Any other Processing reference (an open case, another document's case) still retains. This
+is forward behaviour for D5 filings. No historical document is touched.
+
 ## D5.7 — Security
 
 Re-applied at commit:
@@ -99,9 +111,9 @@ Refusals for out-of-scope and other-organization targets are 404, indistinguisha
 | Suite | Result |
 |---|---|
 | Database invariants `certification/invariants/documents-d5-filing.sql` on Postgres (shared local stack, D2+D3+D5 applied inside a transaction that was rolled back) | **11/11 PASS**: all effects in one transaction, replay, second filing refused, quarantine refused, policy refusals leave nothing, raise-only sensitivity, new_version, not_allowed, one object per version, superseded + pending review, service-role only |
-| `tests/documents` | **380/380** (345 before D5, plus D5 filing routes 29 and D5 UI 6) |
+| `tests/documents` | **383/383**: 345 before D5, plus D5 filing routes and lifecycle (32) and D5 UI (6) |
 | Mutation checks | removing the clearance check fails 2 tests; completing the case on a failed filing fails 9 |
-| Regression against the unchanged base (`d18d4e524`, separate worktree) | access: identical 18 reds on both trees; Processing/POS: the one base red (`formDraft deriveDocumentTitle`) on both trees. Broader suites: see below |
+| Regression against the unchanged base (`d18d4e524`, separate worktree `/tmp/d5-base`) | **no new reds**. Access: identical 18 reds on both trees (1957 tests). Processing + POS: 1767 pass, and the one base red (`formDraft › deriveDocumentTitle`) is red on both trees. Every test file that imports a changed module (27), plus `tests/forms`, `tests/publicForms` and the vendor tests: 1755 tests, the identical 38 reds on both trees (Forms 32, as D4 recorded, and adminV2 `workspaceV3FinalPolish` 6) |
 | Prebuild guards | all pass (route capabilities with two new routes declared) |
 | Typecheck | narrow `tsc` over every changed source file: clean |
 
