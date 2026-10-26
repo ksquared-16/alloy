@@ -35,6 +35,11 @@ import { buildPublicFormResolvePayload } from "@/lib/public/forms/buildPublicFor
 import { readIntakeMarketingConsent, INTAKE_MARKETING_CONSENT_LANGUAGE } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { commitIntakeMarketingConsentForCase } from "@/lib/pos/processingCase/commitIntakeMarketingConsentForCase";
 import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
+import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
+import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
+import { processDueCommunicationScheduledSends } from "@/lib/communications/communicationScheduledSendsService";
+import { issueUnsubscribeToken, verifyUnsubscribeToken } from "@/lib/communications/preferences/unsubscribeToken";
 import { createSupabaseAuthoringGateway } from "@/lib/operationalExpectations/intake/supabaseAuthoringGateway";
 import { commitCalendarAct, prepareCalendarAct, type CalendarAuthoringAction } from "@/lib/operatingCalendar/operatingCalendarAuthoring";
 import { OPERATING_CALENDAR_PURPOSE, type OperatingCalendarEntryDraft } from "@/lib/operatingCalendar/operatingCalendarVocabulary";
@@ -117,6 +122,7 @@ import { GET as slotsGet } from "@/app/api/public/tours/[token]/slots/route";
 import { POST as draftPost } from "@/app/api/public/forms/[token]/submissions/route";
 import { POST as submitPost } from "@/app/api/public/forms/[token]/submissions/[submissionId]/submit/route";
 import { POST as approvePost } from "@/app/api/admin/processing/cases/[caseId]/approve/route";
+import { GET as unsubscribeGet, POST as unsubscribePost } from "@/app/api/communications/unsubscribe/route";
 
 const SCHEMA = {
     schema_version: 1,
@@ -286,6 +292,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
     afterAll(async () => {
         for (const id of latestCalendarActs.values()) await calendarAct("withdraw", { entryId: id }).catch(() => undefined);
         await db.from("communication_scheduled_sends").delete().eq("org_id", ORG).eq("source", "tour_scheduling").filter("metadata->>tour_location_id", "eq", site);
+        await db.from("communication_scheduled_sends").delete().eq("org_id", ORG).filter("metadata->>cert_run", "eq", RUN);
         await db.from("tour_bookings").delete().in("location_id", [site, otherSite].filter(Boolean));
         await db.from("tour_availability_rules").delete().in("location_id", [site, otherSite].filter(Boolean));
         if (linkIds.length) await db.from("form_public_links").update({ is_active: false }).in("id", linkIds);
@@ -678,5 +685,262 @@ describeLive("S7 public tour booking, intake and approval — live certification
             }
             expect(await marketingMessagesTo(email)).toEqual([]);
         }
+    });
+
+    /*
+     * I1 — WHAT A CONSENTED FAMILY ACTUALLY RECEIVES (C1 × S7). A family who opted in through the
+     * public intake is sent marketing on the three outbound paths — direct, HTML provider, scheduled —
+     * and unsubscribes through the link in that mail. Nothing reaches a provider: the Resend call is
+     * captured, and the free-text row is what the Python dispatcher would deliver (`body` as the text
+     * part, `metadata.unsubscribe_url` as List-Unsubscribe).
+     *
+     * The unsubscribe origin is the cert app origin, set only for these scenarios so nothing above
+     * changes. Scheduled rows are due in 2001 and claimed with `now` in 2001, so the claim cannot
+     * reach any other due row in Northwind.
+     */
+    describe("C·9–C·12 · delivered marketing, the recipient's unsubscribe, and scheduled dispatch", () => {
+        const UNSUB_PATH = "/api/communications/unsubscribe";
+        const SCHED = { approved: "2001-01-01T00:00:00.000Z", due: "2001-01-01T00:00:05.000Z", now: "2001-01-01T00:00:10.000Z" };
+        const priorOrigin = process.env.NEXT_PUBLIC_APP_URL;
+        let deliverEmail = "";
+        let deliverPerson = "";
+        let deliverLead = "";
+        let unsubscribeUrl = "";
+
+        beforeAll(() => {
+            let origin = "";
+            try {
+                const file = readFileSync(resolve(__dirname, "../../../.env.certification.local"), "utf8");
+                origin = file.split("\n").find((l) => l.startsWith("NEXT_PUBLIC_APP_URL="))?.slice("NEXT_PUBLIC_APP_URL=".length).trim() ?? "";
+            } catch {
+                origin = "";
+            }
+            process.env.NEXT_PUBLIC_APP_URL = origin || "http://localhost:3000";
+        });
+        afterAll(() => {
+            if (priorOrigin === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+            else process.env.NEXT_PUBLIC_APP_URL = priorOrigin;
+            vi.unstubAllGlobals();
+        });
+
+        type MessageRow = { id: string; status: string; category: string; error: string | null; body: string | null; to_address: string | null; metadata: Json; rendered_snapshot: { html?: string | null; text?: string | null } | null };
+        async function messageRow(id: string): Promise<MessageRow> {
+            return (await ok(db.from("communication_messages").select("id, status, category, error, body, to_address, metadata, rendered_snapshot").eq("id", id).single())) as MessageRow;
+        }
+        const claimsOf = (url: string) => {
+            const v = verifyUnsubscribeToken(new URL(url).searchParams.get("t"));
+            return v.ok ? v.claims : null;
+        };
+        async function directSend(category: "marketing" | "transactional", n: string) {
+            return executeLegacyCommunicationsSendAdapter({
+                supabase: db as never,
+                orgId: ORG,
+                quickMessage: false,
+                primaryEntityType: "opportunities",
+                primaryEntityId: deliverLead,
+                channel: "email",
+                textRaw: `ZZ ${RUN} ${n}`,
+                subjectRawEmail: `ZZ ${RUN} ${n}`,
+                bindingIdOpt: "",
+                recipientPersonIdRaw: deliverPerson,
+                toRawInput: "",
+                category,
+                audience: "external",
+                purpose: null,
+                callSite: `i1-cert:${RUN}:${n}`,
+            });
+        }
+        async function scheduleSend(n: string, category: string | null) {
+            return idOf(
+                await ok(
+                    db
+                        .from("communication_scheduled_sends")
+                        .insert({
+                            org_id: ORG,
+                            created_by: ACTOR,
+                            entity_type: "opportunities",
+                            entity_id: deliverLead,
+                            recipient_person_id: deliverPerson,
+                            channel: "email",
+                            subject_snapshot: `ZZ ${RUN} ${n}`,
+                            body_snapshot: `ZZ ${RUN} scheduled ${n}`,
+                            scheduled_for: SCHED.due,
+                            status: "pending",
+                            approved_at: SCHED.approved,
+                            approved_by: ACTOR,
+                            source: "task_assist",
+                            metadata: { cert_run: RUN, cert_case: n, ...(category ? { message_category: category } : {}) },
+                        })
+                        .select("id")
+                        .single()
+                )
+            );
+        }
+        /** Claims due rows as the cron would — after proving every due row in the window is this run's. */
+        async function dispatchDue(expectIds: string[]) {
+            const due = (await ok(db.from("communication_scheduled_sends").select("id, metadata").eq("org_id", ORG).eq("status", "pending").lte("scheduled_for", SCHED.now))) as Array<{ id: string; metadata: Json }>;
+            expect(due.map((r) => r.id).sort()).toEqual([...expectIds].sort());
+            const r = await processDueCommunicationScheduledSends({ supabase: db as never, limit: 10, now: new Date(SCHED.now), orgIdFilter: ORG });
+            expect(r.ok, JSON.stringify(r)).toBe(true);
+            return (r as { result: { claimed: number; succeeded: number; failed: number } }).result;
+        }
+        async function scheduled(id: string) {
+            return (await ok(db.from("communication_scheduled_sends").select("status, communication_message_id, metadata").eq("id", id).single())) as { status: string; communication_message_id: string | null; metadata: Json };
+        }
+        const smsFamilyEmail = () => `qa+${RUN}-csms@example.invalid`;
+
+        it("C·9 · a consented family's marketing email carries a working unsubscribe link on the direct and provider paths; transactional mail carries none", async () => {
+            const fam = await familySubmits("cdeliver", null, tokens.calendar, { consent: { email: true } });
+            expect(fam.status).toBe(200);
+            const r = await approve(fam.caseId!);
+            expect(r.status, JSON.stringify(r.json)).toBe(200);
+            deliverEmail = fam.email;
+            deliverPerson = (await personsWithEmail(fam.email))[0]!.id;
+            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_in" });
+            const links = (await ok(db.from("opportunity_persons").select("opportunity_id").eq("org_id", ORG).eq("person_id", deliverPerson))) as Array<{ opportunity_id: string }>;
+            expect(links.length, "Approve linked the parent to the lead").toBeGreaterThanOrEqual(1);
+            deliverLead = links[0]!.opportunity_id;
+
+            // Direct path: the drawer adapter → canonical enqueue. The row is what the dispatcher delivers.
+            const direct = await directSend("marketing", "direct-marketing");
+            expect(direct.ok, JSON.stringify(direct)).toBe(true);
+            const row = await messageRow((direct as { communication_message_id: string }).communication_message_id);
+            expect(row).toMatchObject({ status: "queued", category: "marketing" });
+            unsubscribeUrl = String(row.metadata.unsubscribe_url ?? "");
+            expect(unsubscribeUrl).toContain(`${UNSUB_PATH}?t=`);
+            expect(row.metadata.unsubscribe_category).toBe("email_marketing");
+            expect(row.body).toContain(unsubscribeUrl); // the text part the dispatcher sends
+            if (row.rendered_snapshot?.text) expect(row.rendered_snapshot.text).toContain(unsubscribeUrl);
+            expect(claimsOf(unsubscribeUrl)).toMatchObject({ p: deliverPerson, o: ORG, c: "email_marketing" });
+
+            // Provider path: rich content through canonical enqueue, then the real Resend delivery with
+            // the network call captured. The HTML, the text and the List-Unsubscribe header all carry it.
+            const html = await enqueueCanonicalOutboundMessage({
+                supabase: db as never,
+                orgId: ORG,
+                primaryEntityType: "opportunities",
+                primaryEntityId: deliverLead,
+                channelRaw: "email",
+                toRaw: deliverEmail,
+                bodyRaw: `<p>ZZ ${RUN} open house — <a href="https://school.example/open-house">details</a></p>`,
+                bodyIsHtml: true,
+                emailSubjectRaw: `ZZ ${RUN} open house`,
+                metadata: { cert_run: RUN },
+                recipientPersonId: deliverPerson,
+                audience: "external",
+                category: "marketing",
+                callSite: `i1-cert:${RUN}:html-marketing`,
+                emitMessageQueued: false,
+            });
+            expect(html.communicationMessageId, JSON.stringify(html)).toBeTruthy();
+            const htmlRow = await messageRow(html.communicationMessageId!);
+            expect(htmlRow.status).toBe("queued");
+            const htmlUrl = String(htmlRow.metadata.unsubscribe_url ?? "");
+            expect(claimsOf(htmlUrl)).toMatchObject({ p: deliverPerson, o: ORG, c: "email_marketing" });
+
+            // Only the provider call is captured; the database client's own requests pass through.
+            const sent: Array<{ url: string; body: Json }> = [];
+            const realFetch = globalThis.fetch;
+            vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+                if (!url.startsWith("https://api.resend.com/")) return realFetch(input, init);
+                sent.push({ url, body: JSON.parse(String(init?.body ?? "{}")) as Json });
+                return new Response(JSON.stringify({ id: `cert-stub-${RUN}` }), { status: 200, headers: { "content-type": "application/json" } });
+            }));
+            try {
+                const delivered = await deliverQueuedEmailHtml({ supabase: db as never, messageId: html.communicationMessageId!, resendApiKey: "re_cert_stub" });
+                expect(delivered, JSON.stringify(delivered)).toMatchObject({ ok: true });
+            } finally {
+                vi.unstubAllGlobals();
+            }
+            expect(sent).toHaveLength(1);
+            expect(sent[0]!.url).toBe("https://api.resend.com/emails");
+            const payload = sent[0]!.body as { to: string[]; html: string; text?: string; headers?: Record<string, string> };
+            expect(payload.to).toEqual([deliverEmail]);
+            expect(payload.html).toContain(`href="${htmlUrl}"`);
+            expect(payload.text ?? "").toContain(htmlUrl);
+            expect(payload.headers).toMatchObject({ "List-Unsubscribe": `<${htmlUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+
+            // Transactional mail to the same consented person: no link, no footer — classification
+            // decides, not the recipient's marketing state.
+            const tx = await directSend("transactional", "direct-transactional");
+            expect(tx.ok, JSON.stringify(tx)).toBe(true);
+            const txRow = await messageRow((tx as { communication_message_id: string }).communication_message_id);
+            expect(txRow).toMatchObject({ status: "queued", category: "transactional" });
+            expect(txRow.metadata.unsubscribe_url).toBeUndefined();
+            expect(txRow.body ?? "").not.toContain(UNSUB_PATH);
+        });
+
+        it("C·10 · a scheduled marketing send to the opted-in family is dispatched with its own unsubscribe link", async () => {
+            const id = await scheduleSend("sched-optedin", "marketing");
+            const res = await dispatchDue([id]);
+            expect(res).toMatchObject({ claimed: 1, succeeded: 1, failed: 0 });
+            const s = await scheduled(id);
+            expect(s.status).toBe("queued");
+            const row = await messageRow(s.communication_message_id!);
+            expect(row).toMatchObject({ status: "queued", category: "marketing" });
+            const url = String(row.metadata.unsubscribe_url ?? "");
+            expect(row.body).toContain(url);
+            expect(claimsOf(url)).toMatchObject({ p: deliverPerson, o: ORG, c: "email_marketing" });
+        });
+
+        it("C·11 · the link from the delivered email unsubscribes that family — only that family, only that category, only by POST", async () => {
+            const smsPerson = (await personsWithEmail(smsFamilyEmail()))[0]!.id;
+            const smsBefore = await marketingPrefs(smsPerson);
+            expect(smsBefore).toEqual({ sms_marketing: "opted_in" });
+            const token = new URL(unsubscribeUrl).searchParams.get("t")!;
+            const post = (t: string) => unsubscribePost(new Request(`http://localhost${UNSUB_PATH}?t=${encodeURIComponent(t)}`, { method: "POST" }));
+
+            // A forged token naming another family (payload swapped, signature kept) changes nothing.
+            const [, sig] = token.split(".");
+            const forgedPayload = Buffer.from(JSON.stringify({ ...claimsOf(unsubscribeUrl), p: smsPerson }), "utf8").toString("base64url");
+            expect((await post(`${forgedPayload}.${sig}`)).status).toBe(400);
+            // A validly signed token for this person in ANOTHER tenant changes nothing anywhere.
+            const crossTenant = issueUnsubscribeToken({ personId: deliverPerson, orgId: otherOrg, category: "email_marketing" });
+            expect((await post(crossTenant)).status).toBe(400);
+            const { data: otherOrgPrefs } = await db.from("communication_preferences").select("id").eq("org_id", otherOrg);
+            expect(otherOrgPrefs ?? []).toEqual([]);
+            // Opening the link (GET — what a prefetching scanner does) only asks.
+            const get = await unsubscribeGet(new Request(`http://localhost${UNSUB_PATH}?t=${encodeURIComponent(token)}`));
+            expect(get.status).toBe(200);
+            expect(await get.text()).toContain('method="post"');
+            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_in" });
+
+            // The recipient confirms.
+            const res = await post(token);
+            expect(res.status).toBe(200);
+            expect(await res.text()).toContain("You have been unsubscribed");
+            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_out" });
+            const events = await marketingEvents(deliverPerson);
+            expect(events.at(-1)).toMatchObject({ category: "email_marketing", to_state: "opted_out", source: "recipient_unsubscribe" });
+            // The other family, and this family's other channels, are untouched.
+            expect(await marketingPrefs(smsPerson)).toEqual(smsBefore);
+        });
+
+        it("C·12 · after unsubscribing, marketing is suppressed on the direct and scheduled paths, and a send with no category is refused", async () => {
+            const marketingBefore = (await marketingMessagesTo(deliverEmail)).length;
+
+            const direct = await directSend("marketing", "direct-after-unsub");
+            const directRow = await messageRow((direct as { communication_message_id: string }).communication_message_id);
+            expect(directRow).toMatchObject({ status: "blocked", error: "policy:OPTED_OUT" });
+
+            const optedOut = await scheduleSend("sched-after-unsub", "marketing");
+            const uncategorised = await scheduleSend("sched-no-category", null);
+            const res = await dispatchDue([optedOut, uncategorised]);
+            expect(res.claimed).toBe(2);
+            const s = await scheduled(optedOut);
+            const blocked = await messageRow(s.communication_message_id!);
+            expect(blocked).toMatchObject({ status: "blocked", category: "marketing", error: "policy:OPTED_OUT" });
+            const u = await scheduled(uncategorised);
+            expect(u.status).toBe("failed");
+            expect(u.communication_message_id).toBeNull();
+            expect(u.metadata.last_process_error).toMatchObject({ code: "missing_category" });
+
+            // Exactly two new marketing rows, both blocked: nothing deliverable was created.
+            const after = (await ok(db.from("communication_messages").select("id, status").eq("org_id", ORG).ilike("to_address", deliverEmail).eq("category", "marketing"))) as Array<{ id: string; status: string }>;
+            expect(after.length).toBe(marketingBefore + 2);
+            expect(after.filter((m) => m.id === directRow.id || m.id === blocked.id).map((m) => m.status)).toEqual(["blocked", "blocked"]);
+            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_out" });
+        });
     });
 });
