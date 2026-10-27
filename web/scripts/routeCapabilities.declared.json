@@ -1903,6 +1903,44 @@
         "reason": "Documents V1 / D4 (2026-10-25). Household document library for a household, adult, child or case. The anchor must be readable in the actor's scope (else 404); every document passes availability, primary-owner subject scope and sensitivity before it is listed or counted; a focus narrows on the server."
       }
     },
+    "app/api/admin/documents/requirements/readiness/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D6 (2026-10-27). Document readiness for a household graph or one member (Focus Panel). The anchor must be readable in scope (else 404); subjects outside scope are dropped, requirements of a class the actor is not cleared for are hidden, evidence is listed only when the actor may read the document."
+      }
+    },
+    "app/api/admin/documents/requirements/work/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D6 (2026-10-27). Unmet required document requirements as derived work rows (Processing -> Work -> Documents, Work Items); nothing stored; same scope, clearance and evidence disclosure as readiness."
+      }
+    },
+    "app/api/admin/documents/requirements/waivers/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D6 (2026-10-27). Waiver history of one subject; the subject must be readable in scope (else 404); waivers of requirements the actor is not cleared for are hidden."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireRequirementWaiver",
+        "reason": "Documents V1 / D6 (2026-10-27). Grants a Documents-owned waiver of one requirement for one subject. Also requires the subject in scope (404) and clearance for the requirement's document class (403); the database enforces policy eligibility, grain, organization and a single active waiver; audited first."
+      }
+    },
+    "app/api/admin/documents/requirements/waivers/[id]/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireRequirementWaiver",
+        "reason": "Documents V1 / D6 (2026-10-27). Revokes an active waiver with a reason; the row is kept as history. Same scope and clearance checks as granting; audited first."
+      }
+    },
     "app/api/admin/documents/screening/route.ts": {
       "GET": {
         "status": "declared",
@@ -2009,6 +2047,70 @@
         "capability": "processing.documents.manage",
         "helper": "requireDocumentConfigurationWrite",
         "reason": "Documents V1 / D3 (2026-10-23). Creates a document type and its first draft; nothing live until validated and published; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/requirements/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D6 (2026-10-27). Lists document requirements with their published version and open draft. Configuration only; no subject data."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Creates a document requirement and its first draft; nothing applies until validated and published; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/requirements/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentConfigurationRead",
+        "reason": "Documents V1 / D6 (2026-10-27). One document requirement and its version history. Configuration only."
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Archives or re-activates a requirement; versions and waiver history are kept; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Deletes only a requirement never published and never waived (the database refuses otherwise); audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/requirements/[id]/draft/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Saves a requirement draft or opens a new revision; a published version is never edited; audited first."
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Discards a requirement's unpublished draft; audited first."
+      }
+    },
+    "app/api/admin/documents/configuration/requirements/[id]/validate/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Validates a requirement draft in the database (compatibility with the published Studio type, scope, timing, duplicates); makes nothing live."
+      }
+    },
+    "app/api/admin/documents/configuration/requirements/[id]/publish/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireDocumentConfigurationWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Publishes a validated requirement version by compare-and-swap; the database re-validates; audited first."
       }
     },
     "app/api/admin/documents/entity-options/route.ts": {

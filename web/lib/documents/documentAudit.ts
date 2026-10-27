@@ -39,6 +39,11 @@ export type DocumentAuditEvent =
     // transaction; `document_filed` after it committed (the committed fact itself is `documents.metadata.filing`).
     | "document_filing_authorized"
     | "document_filed"
+    // D6: a requirement configuration change, recorded before the change; a waiver grant or revocation, recorded before
+    // the database decides on it (an attempt the database refuses is recorded too).
+    | "document_requirement_changed"
+    | "document_requirement_waiver_granted"
+    | "document_requirement_waiver_revoked"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 
@@ -46,8 +51,11 @@ export type DocumentAuditInput = {
     orgId: string;
     actorUserId: string;
     event: DocumentAuditEvent;
-    /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3. */
-    subject: { type: "documents" | "persons" | "document_categories" | "document_types"; id: string };
+    /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3/D6. */
+    subject: {
+        type: "documents" | "persons" | "document_categories" | "document_types" | "document_requirements" | "document_requirement_waivers";
+        id: string;
+    };
     /** Where the action came from, e.g. `admin/documents/signed-url`. */
     route: string;
     detail?: Record<string, unknown>;
