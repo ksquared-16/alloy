@@ -271,6 +271,45 @@ reads the Documents answer; Enrollment keeps its separate stage exceptions. Reco
   requirement for that type give one answer. Completion sufficiency and Enrollment stage exceptions are unchanged.
 - **Security:** `docs/platform/governance/document-security-model.md` §7c.
 
+## Review, expiration and renewal (D7)
+
+- **Validity is derived, never stored.** One pure evaluator (`web/lib/documents/validity/documentValidity.ts`) reads the
+  type's published validity policy (D3: none, explicit date, duration, periodic reconfirmation, event renewal; warning
+  days) and the version's `effective_on` / `expires_on` (D2), on the **organization-local date**
+  (`documentsClock.ts`, `org_settings.metadata.timezone`). `expires_on` is the last valid day. A duration or
+  reconfirmation derives its expiration from the effective date (else the review or received date); a recorded date
+  overrides it. An explicit-date or event type with no recorded date is *date missing*.
+- **Requirements honour validity.** Accepted evidence that has expired, or is not yet in force, no longer satisfies; the
+  requirement reads **expired** (blocking). Accepted evidence of a type needing a recorded date, without one, reads
+  *pending review* until the date is recorded. Satisfied evidence inside its warning window is *expiring soon*
+  (renewal work, never blocking). Business Process readiness gets this through the same evaluator.
+- **Review lifecycle** (`POST /api/admin/documents/[id]/review`, `document_review_version`): first decision with
+  `documents.write`; rejection and reopen need a reason; changing a decided review needs `processing.documents.manage`
+  and a reason. Every decision and every date change is in `document_version_review_events` and in the history.
+- **Validity dates** (`GET/PUT /api/admin/documents/[id]/validity`, `document_set_version_validity`): current version
+  only; review untouched.
+- **Renewal** is a replacement version (`POST …/[id]/versions`, optional `effective_on` / `expires_on`): same document
+  and subject, history kept; pending review when the type requires review or says `review_on_renewal`. While it awaits
+  review (or after a rejection) the earlier accepted version keeps counting if still in force; a renewal never counts
+  until accepted, and a file screening would quarantine is never stored.
+- **Operational surfaces**: `GET /api/admin/documents/requirements/work` returns requirement rows (missing, pending
+  review, expired, blocked, and *expiring soon* renewal work) and **document attention** rows (expired, expiring soon,
+  review due, date missing) for owned documents no requirement row already names — one derived read for Processing →
+  Work → Documents, Work Items (source Documents, never `operational_tasks`) and the Focus Panel.
+
+## Forms and Documents (D8)
+
+- **Forms already write canonical Documents.** Completed-form PDFs, signed artifacts and signature images are
+  `documents` rows whose immutable version and owner association the D2 insert triggers create;
+  `form_submission_documents` links them to their submission; form uploads are typed documents. D8 adds no storage,
+  identity or association path (inventory: `certification/documents-v1/D8-FORMS-DOCUMENTS-CONVERGENCE.md`).
+- **Provenance** (`web/lib/documents/forms/formArtifactProvenance.ts`): form, submission and status, artifact kind and
+  integrity (a signed artifact's recorded signed hash against the stored checksum) — shown on each library row.
+- **Forms evidence for requirements** (`document_requirement_versions.form_evidence`, Studio "also satisfied by
+  completed forms"): a completed-form PDF of a named form, owned by the subject, from a SUBMITTED submission, with no
+  integrity mismatch, counts — after review (default) or on submission (`submitted`, only where the organization's
+  policy says so). D7 validity applies with the requirement's type policy.
+
 ## Integration points
 
 - Opportunity drawer — packet review modal, form status
