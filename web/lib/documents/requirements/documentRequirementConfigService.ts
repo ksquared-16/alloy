@@ -75,7 +75,7 @@ export type DocumentRequirementSummary = DocumentRequirementIdentity & {
 
 const IDENTITY_COLUMNS = "id, key, status, published_version_id, created_at, archived_at";
 export const REQUIREMENT_VERSION_COLUMNS =
-    "id, requirement_id, version_number, status, label, description, document_type_key, subject_type, scope, timing, policy, waivable, effective_from, effective_until, validation_errors, created_at, published_at, superseded_at";
+    "id, requirement_id, version_number, status, label, description, document_type_key, subject_type, scope, timing, policy, waivable, effective_from, effective_until, form_evidence, validation_errors, created_at, published_at, superseded_at";
 
 export async function listRequirements(supabase: SupabaseClient, orgId: string): Promise<RequirementConfigResult<DocumentRequirementSummary[]>> {
     const [{ data: reqs, error: rErr }, { data: versions, error: vErr }] = await Promise.all([
@@ -132,6 +132,7 @@ function draftColumns(draft: DocumentRequirementDraft) {
         waivable: draft.waivable,
         effective_from: draft.effective_from,
         effective_until: draft.effective_until,
+        form_evidence: draft.form_evidence ?? null,
     };
 }
 
@@ -309,7 +310,15 @@ export async function previewRequirementProblems(
         const { data: active } = await supabase.from("document_requirements").select("id").eq("org_id", input.orgId).eq("status", "active").in("id", liveIds);
         duplicate = ((active ?? []) as unknown[]).length > 0;
     }
-    return documentRequirementDraftProblems(input.draft, { typeSubjectTypes, duplicate });
+    // D8: Forms evidence is checked against the organization's ACTIVE forms and the published Completed form type.
+    let activeFormKeys: string[] | null = null;
+    let completedFormSubjectTypes: string[] | null | undefined = undefined;
+    if (input.draft.form_evidence) {
+        const { data: forms } = await supabase.from("form_definitions").select("key").eq("org_id", input.orgId).eq("is_active", true);
+        activeFormKeys = ((forms ?? []) as Array<{ key: string }>).map((f) => f.key);
+        completedFormSubjectTypes = await publishedTypeSubjectTypes(supabase, input.orgId, "generated_form_pdf");
+    }
+    return documentRequirementDraftProblems(input.draft, { typeSubjectTypes, duplicate, activeFormKeys, completedFormSubjectTypes });
 }
 
 async function publishedTypeSubjectTypes(supabase: SupabaseClient, orgId: string, key: string): Promise<string[] | null> {

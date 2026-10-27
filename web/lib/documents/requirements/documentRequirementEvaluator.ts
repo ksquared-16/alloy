@@ -34,7 +34,7 @@
  * computed validity (no policy known) is treated as not tracked, which is the D6 behaviour.
  */
 import { validityAllowsEvidence, type DocumentValidity } from "@/lib/documents/validity/documentValidity";
-import type { RequirementPolicy, RequirementScope, RequirementSubjectType, RequirementTiming } from "@/lib/documents/requirements/documentRequirementPolicy";
+import type { RequirementFormEvidence, RequirementPolicy, RequirementScope, RequirementSubjectType, RequirementTiming } from "@/lib/documents/requirements/documentRequirementPolicy";
 
 export const REQUIREMENT_STATES = Object.freeze(["missing", "pending_review", "satisfied", "waived", "expired", "blocked"] as const);
 export type RequirementState = (typeof REQUIREMENT_STATES)[number];
@@ -56,6 +56,8 @@ export type EvaluableRequirement = {
     waivable: boolean;
     effective_from: string | null;
     effective_until: string | null;
+    /** D8: completed forms that may also satisfy it (null/absent = documents of the type only). */
+    form_evidence?: RequirementFormEvidence | null;
 };
 
 /** The published Studio type the requirement names, or null when it is not published and active. */
@@ -76,6 +78,13 @@ export type EvidenceDocument = {
      * renewal (the current version) awaits review or was rejected. Never consulted when the document is unavailable.
      */
     prior_accepted?: { version_id: string; validity: DocumentValidity | null } | null;
+    /**
+     * D8: a completed-form PDF counted under the requirement's Forms evidence policy. Its review need is the POLICY's
+     * (`acceptance: "review"` → true), not the Completed form type's, so a submitted form is not accepted evidence
+     * unless the organization's policy says it is. `from_form` is the form definition key.
+     */
+    review_required?: boolean;
+    from_form?: string | null;
 };
 
 export type EvaluableWaiver = {
@@ -117,8 +126,9 @@ export type RequirementEvaluation = {
     /**
      * Evidence ids by class. Callers filter these per actor before disclosing any of them. `pending` includes `undated`
      * (accepted, but the type needs a recorded expiration date); `expired` is accepted evidence no longer in force.
+     * `from_forms` (D8) names which of them are completed-form PDFs counted under the Forms evidence policy.
      */
-    evidence: { accepted: string[]; pending: string[]; undated: string[]; expired: string[]; rejected: string[]; quarantined: string[] };
+    evidence: { accepted: string[]; pending: string[]; undated: string[]; expired: string[]; rejected: string[]; quarantined: string[]; from_forms: string[] };
     waiver_id: string | null;
     waivable: boolean;
     /** YYYY-MM-DD the requirement is due (from timing and the scope anchor), or null when unknown. */
@@ -135,7 +145,8 @@ export type RequirementEvaluation = {
 const NEVER_EVIDENCE = new Set(["deleted", "restricted", "superseded"]);
 
 /** The current version's review outcome alone (D6). */
-function reviewClass(doc: EvidenceDocument, reviewRequired: boolean): "accepted" | "pending" | "rejected" {
+function reviewClass(doc: EvidenceDocument, typeReviewRequired: boolean): "accepted" | "pending" | "rejected" {
+    const reviewRequired = doc.review_required ?? typeReviewRequired;
     if (doc.review_status === "rejected") return "rejected";
     if (doc.review_status === "accepted") return "accepted";
     if (doc.review_status === "pending") return "pending";
@@ -216,13 +227,22 @@ export function evaluateDocumentRequirement(input: {
     const { requirement, type, subject, today } = input;
     if (!requirementApplies(requirement, subject, today)) return null;
 
-    const evidence = { accepted: [] as string[], pending: [] as string[], undated: [] as string[], expired: [] as string[], rejected: [] as string[], quarantined: [] as string[] };
+    const evidence = {
+        accepted: [] as string[],
+        pending: [] as string[],
+        undated: [] as string[],
+        expired: [] as string[],
+        rejected: [] as string[],
+        quarantined: [] as string[],
+        from_forms: [] as string[],
+    };
     const reviewRequired = type?.review_required === true;
     const sorted = [...input.documents].sort((a, b) => (b.received_at ?? "").localeCompare(a.received_at ?? "") || a.document_id.localeCompare(b.document_id));
     const inForce: Array<{ validity: DocumentValidity | null; renewal: boolean }> = [];
     for (const doc of sorted) {
         const cls = classifyEvidence(doc, reviewRequired);
         if (cls === "unavailable") continue;
+        if (doc.from_form) evidence.from_forms.push(doc.document_id);
         if (cls === "undated") {
             evidence.undated.push(doc.document_id);
             evidence.pending.push(doc.document_id);

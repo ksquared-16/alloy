@@ -21,6 +21,15 @@ export type RequirementScope =
     | { kind: "business_process"; process_key: string; stage_keys?: string[] };
 export type RequirementTiming = { kind: "immediate" } | { kind: "within_days"; days: number };
 
+/**
+ * D8: completed forms that may satisfy the requirement. A completed-form PDF of one of `form_keys`, owned by the
+ * subject and linked to a SUBMITTED submission, counts as evidence: after a review (`review`, the default) or as soon
+ * as it is submitted (`submitted`, when the organization's policy accepts that).
+ */
+export const FORM_EVIDENCE_ACCEPTANCE = Object.freeze(["review", "submitted"] as const);
+export type FormEvidenceAcceptance = (typeof FORM_EVIDENCE_ACCEPTANCE)[number];
+export type RequirementFormEvidence = { form_keys: string[]; acceptance: FormEvidenceAcceptance };
+
 export type DocumentRequirementDraft = {
     label: string;
     description?: string | null;
@@ -32,6 +41,8 @@ export type DocumentRequirementDraft = {
     waivable: boolean;
     effective_from: string | null;
     effective_until: string | null;
+    /** D8: null (or absent) = only documents of the type count. */
+    form_evidence?: RequirementFormEvidence | null;
 };
 
 export type RequirementProblem = { field: string; code: string };
@@ -47,7 +58,14 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  */
 export function documentRequirementDraftProblems(
     draft: DocumentRequirementDraft,
-    context: { typeSubjectTypes: readonly string[] | null; duplicate: boolean },
+    context: {
+        typeSubjectTypes: readonly string[] | null;
+        duplicate: boolean;
+        /** D8: the organization's ACTIVE form definition keys (null when unknown to the caller: not checked here). */
+        activeFormKeys?: readonly string[] | null;
+        /** D8: the published Completed form type's subject types (null = not published). Undefined = not checked here. */
+        completedFormSubjectTypes?: readonly string[] | null;
+    },
 ): RequirementProblem[] {
     const p: RequirementProblem[] = [];
     const label = typeof draft.label === "string" ? draft.label.trim() : "";
@@ -90,8 +108,37 @@ export function documentRequirementDraftProblems(
     if (draft.effective_from && draft.effective_until && draft.effective_until < draft.effective_from) {
         p.push({ field: "effective_until", code: "effective_range_inverted" });
     }
+    const fe = draft.form_evidence as unknown;
+    if (fe !== null && fe !== undefined) {
+        if (!isRecord(fe)) {
+            p.push({ field: "form_evidence", code: "form_evidence_shape" });
+        } else {
+            if (Object.keys(fe).some((k) => k !== "form_keys" && k !== "acceptance")) p.push({ field: "form_evidence", code: "form_evidence_field_unknown" });
+            const keys = fe.form_keys;
+            if (!Array.isArray(keys) || keys.length < 1 || keys.length > 10 || keys.some((k) => typeof k !== "string")) {
+                p.push({ field: "form_evidence.form_keys", code: "form_evidence_forms_shape" });
+            } else if (context.activeFormKeys && keys.some((k) => !context.activeFormKeys!.includes(k as string))) {
+                p.push({ field: "form_evidence.form_keys", code: "form_evidence_form_unknown" });
+            }
+            if (!(FORM_EVIDENCE_ACCEPTANCE as readonly string[]).includes(String(fe.acceptance ?? ""))) {
+                p.push({ field: "form_evidence.acceptance", code: "form_evidence_acceptance_unknown" });
+            }
+            if (context.completedFormSubjectTypes !== undefined && (context.completedFormSubjectTypes === null || !context.completedFormSubjectTypes.includes(draft.subject_type))) {
+                p.push({ field: "form_evidence", code: "form_evidence_type_not_accepted" });
+            }
+        }
+    }
     if (context.duplicate) p.push({ field: "document_type_key", code: "requirement_duplicate" });
     return p;
+}
+
+/** D8: normalize an untrusted `form_evidence`: absent/null/empty → null; otherwise its shape is kept for validation. */
+export function parseRequirementFormEvidence(v: unknown): RequirementFormEvidence | null {
+    if (v === null || v === undefined) return null;
+    if (!isRecord(v)) return v as never;
+    const keys = Array.isArray(v.form_keys) ? v.form_keys.map((k) => (typeof k === "string" ? k.trim() : k)).filter((k) => k !== "") : v.form_keys;
+    if (Array.isArray(keys) && keys.length === 0) return null;
+    return { ...v, form_keys: keys, acceptance: v.acceptance === undefined ? "review" : v.acceptance } as RequirementFormEvidence;
 }
 
 /** Normalize an untrusted request body into a draft. Shape errors surface as validation problems, not exceptions. */
@@ -109,5 +156,6 @@ export function parseDocumentRequirementDraft(body: unknown): DocumentRequiremen
         waivable: b.waivable === true,
         effective_from: date(b.effective_from),
         effective_until: date(b.effective_until),
+        form_evidence: parseRequirementFormEvidence(b.form_evidence),
     };
 }

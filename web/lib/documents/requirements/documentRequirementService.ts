@@ -48,6 +48,8 @@ import {
 } from "@/lib/documents/requirements/documentRequirementEvaluator";
 import type { RequirementSubjectType } from "@/lib/documents/requirements/documentRequirementPolicy";
 import { evaluateDocumentValidity, type DocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { formArtifactCountsFor, loadFormArtifactProvenance, type FormArtifactProvenance } from "@/lib/documents/forms/formArtifactProvenance";
+import { parseRequirementFormEvidence } from "@/lib/documents/requirements/documentRequirementPolicy";
 import { localDateOf, resolveDocumentsClock, type DocumentsClock } from "@/lib/documents/validity/documentsClock";
 
 export type RequirementActor = {
@@ -131,6 +133,7 @@ export async function loadLiveRequirements(supabase: SupabaseClient, orgId: stri
             waivable: v.waivable === true,
             effective_from: str(v.effective_from),
             effective_until: str(v.effective_until),
+            form_evidence: parseRequirementFormEvidence(v.form_evidence),
         });
     }
     return out.sort((a, b) => a.requirement_key.localeCompare(b.requirement_key));
@@ -208,7 +211,14 @@ type SubjectFacts = {
     subjects: Map<string, EvaluationSubject>;
     evidence: Map<string, EvidenceRow[]>;
     waivers: EvaluableWaiver[];
+    /** D8: every version of each evidence document, and the Forms provenance of completed-form PDFs. */
+    versions: Map<string, VersionRow[]>;
+    currentVersion: Map<string, string | null>;
+    formProvenance: Map<string, FormArtifactProvenance>;
 };
+
+/** D8: the Studio type of a completed-form PDF — the one Forms artifact that can stand as requirement evidence. */
+export const FORM_EVIDENCE_DOCUMENT_TYPE = "generated_form_pdf" as const;
 
 type JourneyRow = { subject_id: string; process_key: string; stage_key: string | null; state: string | null; close_reason_key: string | null; context_type: string | null; context_id: string | null; created_at: string };
 
@@ -276,7 +286,10 @@ async function loadSubjectFacts(
 ): Promise<SubjectFacts | null> {
     const subjects = new Map<string, EvaluationSubject>();
     const evidence = new Map<string, EvidenceRow[]>();
-    if (refs.length === 0) return { subjects, evidence, waivers: [] };
+    const versionsOut = new Map<string, VersionRow[]>();
+    const currentVersion = new Map<string, string | null>();
+    let formProvenance = new Map<string, FormArtifactProvenance>();
+    if (refs.length === 0) return { subjects, evidence, waivers: [], versions: versionsOut, currentVersion, formProvenance };
 
     // Subjects resolve in this organization, or they are not evaluated at all.
     for (const t of Object.keys(TABLE_FOR) as RequirementSubjectType[]) {
@@ -310,12 +323,33 @@ async function loadSubjectFacts(
     }
     const docIds = [...new Set(ownerLinks.map((l) => l.document_id))];
     if (docIds.length && typeKeys.length) {
-        const docs = await readIn<{ id: string; doc_type: string | null; status: string | null; entity_type: string | null; entity_id: string | null; created_at: string | null; current_version_id: string | null }>(
-            supabase,
-            docIds,
-            (c) => supabase.from("documents").select("id, doc_type, status, entity_type, entity_id, created_at, current_version_id").eq("org_id", orgId).in("id", c).in("doc_type", typeKeys),
+        const docs = await readIn<{
+            id: string;
+            doc_type: string | null;
+            status: string | null;
+            entity_type: string | null;
+            entity_id: string | null;
+            created_at: string | null;
+            current_version_id: string | null;
+            checksum_sha256: string | null;
+            metadata: Record<string, unknown> | null;
+        }>(supabase, docIds, (c) =>
+            supabase
+                .from("documents")
+                .select("id, doc_type, status, entity_type, entity_id, created_at, current_version_id, checksum_sha256, metadata")
+                .eq("org_id", orgId)
+                .in("id", c)
+                .in("doc_type", typeKeys),
         );
         if (!docs) return null;
+        // D8: where each completed-form PDF came from (form, submission, integrity). Unreadable → fail closed.
+        const formDocs = docs.filter((d) => d.doc_type === FORM_EVIDENCE_DOCUMENT_TYPE);
+        if (formDocs.length) {
+            const prov = await loadFormArtifactProvenance(supabase, orgId, formDocs);
+            if (!prov) return null;
+            formProvenance = prov;
+        }
+        for (const d of docs) currentVersion.set(d.id, d.current_version_id);
         // D7: every version of each evidence document — the current one decides, an earlier accepted one may still count.
         const versions = docs.length
             ? await readIn<VersionRow>(supabase, docs.map((d) => d.id), (c) =>
@@ -329,6 +363,7 @@ async function loadSubjectFacts(
         if (!versions) return null;
         const versionsByDoc = new Map<string, VersionRow[]>();
         for (const v of versions) versionsByDoc.set(v.document_id, [...(versionsByDoc.get(v.document_id) ?? []), v]);
+        for (const [k, v] of versionsByDoc) versionsOut.set(k, v);
         const docById = new Map(docs.map((d) => [d.id, d]));
         for (const l of ownerLinks) {
             const d = docById.get(l.document_id);
@@ -366,7 +401,23 @@ async function loadSubjectFacts(
         if (!rows) return null;
         waivers.push(...rows.map((w) => ({ ...w, waiver_id: (w as { id: string }).id })));
     }
-    return { subjects, evidence, waivers };
+    return { subjects, evidence, waivers, versions: versionsOut, currentVersion, formProvenance };
+}
+
+/**
+ * D8: the completed-form PDFs that stand as evidence for this requirement, re-classified under ITS policy: the review
+ * need is the Forms evidence `acceptance`, and validity is the REQUIREMENT's document type policy (a completed
+ * immunization form expires like an immunization record).
+ */
+function formEvidenceFor(requirement: EvaluableRequirement, docs: EvidenceRow[], facts: SubjectFacts, types: RequirementTypeCatalog, clock: DocumentsClock): EvidenceRow[] {
+    const fe = requirement.form_evidence;
+    if (!fe || !Array.isArray(fe.form_keys) || fe.form_keys.length === 0) return [];
+    return docs
+        .filter((d) => d.doc_type === FORM_EVIDENCE_DOCUMENT_TYPE && formArtifactCountsFor(facts.formProvenance.get(d.document_id), fe.form_keys))
+        .map((d) => {
+            const v = evidenceVersionFacts(types, { doc_type: requirement.document_type_key, current_version_id: facts.currentVersion.get(d.document_id) ?? null }, facts.versions.get(d.document_id) ?? [], clock);
+            return { ...d, validity: v.validity, prior_accepted: v.prior_accepted, review_required: fe.acceptance !== "submitted", from_form: facts.formProvenance.get(d.document_id)?.form_key ?? null };
+        });
 }
 
 export type SystemEvaluation = { evaluations: RequirementEvaluation[]; evidence: Map<string, EvidenceRow[]> };
@@ -381,7 +432,7 @@ export async function evaluateSubjects(
     refs: SubjectRef[],
     input: { requirements: EvaluableRequirement[]; types: RequirementTypeCatalog; today: string; clock?: DocumentsClock },
 ): Promise<SystemEvaluation | null> {
-    const typeKeys = [...new Set(input.requirements.map((r) => r.document_type_key))];
+    const typeKeys = [...new Set([...input.requirements.map((r) => r.document_type_key), ...(input.requirements.some((r) => r.form_evidence) ? [FORM_EVIDENCE_DOCUMENT_TYPE] : [])])];
     const clock = input.clock ?? { today: input.today, timeZone: "UTC" };
     const facts = await loadSubjectFacts(supabase, orgId, refs, typeKeys, input.types, clock);
     if (!facts) return null;
@@ -396,7 +447,7 @@ export async function evaluateSubjects(
                 requirement,
                 type: evaluableType(input.types, requirement.document_type_key),
                 subject,
-                documents: docs.filter((d) => d.doc_type === requirement.document_type_key),
+                documents: [...docs.filter((d) => d.doc_type === requirement.document_type_key), ...formEvidenceFor(requirement, docs, facts, input.types, clock)],
                 waivers: facts.waivers,
                 today: input.today,
             });
@@ -409,7 +460,7 @@ export async function evaluateSubjects(
 // ── disclosure ──────────────────────────────────────────────────────────────────────────────────────────────────
 export type DisclosedEvaluation = Omit<RequirementEvaluation, "evidence"> & {
     /** Only documents this actor may read. Quarantined evidence is never listed. */
-    evidence: { accepted: string[]; pending: string[]; undated: string[]; expired: string[]; rejected: string[] };
+    evidence: { accepted: string[]; pending: string[]; undated: string[]; expired: string[]; rejected: string[]; from_forms: string[] };
 };
 
 /** The ids among `rows` this actor may read: available, owner in scope, cleared for the sensitivity. */
@@ -430,6 +481,7 @@ function disclose(e: RequirementEvaluation, readable: Set<string>): DisclosedEva
             undated: e.evidence.undated.filter((id) => readable.has(id)),
             expired: e.evidence.expired.filter((id) => readable.has(id)),
             rejected: e.evidence.rejected.filter((id) => readable.has(id)),
+            from_forms: e.evidence.from_forms.filter((id) => readable.has(id)),
         },
     };
 }

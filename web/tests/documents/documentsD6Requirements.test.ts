@@ -8,7 +8,7 @@
  * This file pins the application half, the evaluator's outcome matrix, disclosure, and the parity between the two
  * validators and between every consumer of the evaluator.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -331,8 +331,12 @@ describe("the evaluator: missing / pending review / satisfied / waived / blocked
 // ── the two validators agree ─────────────────────────────────────────────────────────────────────────────────────
 describe("validation parity: the editor mirrors the database", () => {
     it("emits exactly the database's problem codes", () => {
-        const sql = readFileSync(resolve(join(__dirname, "../../../supabase/migrations/20261212090000_documents_d6_requirements.sql")), "utf8");
-        const fn = sql.slice(sql.indexOf("FUNCTION public.document_requirement_version_problems"), sql.indexOf("FUNCTION public.document_requirement_validate"));
+        // The LATEST migration that (re)defines the validator is the database's current definition (D6, then D8).
+        const dir = resolve(join(__dirname, "../../../supabase/migrations"));
+        const latest = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort().filter((f) => readFileSync(join(dir, f), "utf8").includes("FUNCTION public.document_requirement_version_problems")).at(-1)!;
+        const sql = readFileSync(join(dir, latest), "utf8");
+        const start = sql.indexOf("FUNCTION public.document_requirement_version_problems");
+        const fn = sql.slice(start, sql.indexOf("$$;", start));
         const sqlCodes = new Set([...fn.matchAll(/'code', '([a-z_]+)'/g)].map((m) => m[1]));
         sqlCodes.delete("not_found");
         const ts = readFileSync(resolve(join(__dirname, "../../lib/documents/requirements/documentRequirementPolicy.ts")), "utf8");
