@@ -4,6 +4,7 @@ import {
     loadLocationAccessMembers,
     loadLocationOwnedSetup,
     loadLocationPlacementPolicy,
+    loadLocationTourRules,
     peekLocationAccessMembers,
     peekLocationOwnedSetup,
     peekLocationPlacementPolicy,
@@ -54,6 +55,28 @@ describe("Location concern caches", () => {
         expect(a.inflightJoin || b.inflightJoin).toBe(true);
         expect(peekLocationOwnedSetup(orgId, "other")).toBeNull();
         expect(peekLocationOwnedSetup(orgId, locationId)).not.toBeNull();
+    });
+
+    it("D-T6: a location's tour rules include the organization-wide rules that generate its slots", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () =>
+                new Response(
+                    JSON.stringify({
+                        rules: [
+                            { id: "org-wide", location_id: null, is_active: true },
+                            { id: "elsewhere", location_id: "site-other", is_active: true },
+                        ],
+                    }),
+                    { status: 200, headers: { "Content-Type": "application/json" } },
+                ),
+            ),
+        );
+        const { snapshot } = await loadLocationTourRules(orgId, locationId);
+        expect(snapshot.rules.map((r) => r.id)).toEqual(["org-wide"]);
+        // Inherited availability is availability: the location is configured for tours.
+        const setup = await loadLocationOwnedSetup(orgId, locationId, { force: true });
+        expect(setup.snapshot.toursConfigured).toBe(true);
     });
 
     it("caches access members and publishes Continuity invalidation", async () => {

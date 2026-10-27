@@ -19,7 +19,7 @@ import {
     participantUploadRequests,
     uploadIsOnFile,
 } from "@/lib/enrollment/participantRuntime/participantUploadRequests";
-import { validateFormSchema } from "@/lib/forms/schema";
+import { formSubmitLabel, validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { withListedFieldsShown } from "@/lib/forms/submissionSemantics";
 import {
@@ -59,6 +59,10 @@ import {
 } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import { participantSignaturePrompt } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
+import {
+    INTAKE_MARKETING_CONSENT_LANGUAGE,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     IntakeFrame,
@@ -217,6 +221,8 @@ type ResolveOk = {
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
         link?: { metadata?: Record<string, unknown> };
+        /** S7 × C1 — the link offers the optional marketing-consent control (server-derived). */
+        marketing_consent_offered?: boolean;
     };
 };
 
@@ -283,13 +289,96 @@ function PreviewBanner() {
     );
 }
 
+/**
+ * S7 — the tour time the family picked on step one of the school's public tour journey.
+ * Present only on `/tours/[token]`; every other runtime passes nothing and is unchanged.
+ */
+export type PublicFormTourRequest = {
+    startAt: string;
+    endAt: string;
+    /** "Tuesday, November 3 · 10:00 AM" in the school's zone. */
+    label: string;
+    locationLabel: string;
+    /** Back to step one. The draft is autosaved and kept, so no answer is lost. */
+    onChangeTime: () => void;
+};
+
+function RequestedTourSummary({ tour, slotGone }: { tour: PublicFormTourRequest; slotGone: boolean }) {
+    return (
+        <div
+            className="mb-5 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-participant-accent/30 bg-participant-accent/[0.06] px-4 py-3"
+            data-testid="public-tour-request-summary"
+        >
+            <div className="min-w-0">
+                <p className="text-[13px] font-medium text-alloy-midnight/60">Requested tour</p>
+                <p className="text-[15px] font-semibold text-alloy-midnight">{tour.label}</p>
+                <p className="text-[14px] text-alloy-midnight/70">{tour.locationLabel}</p>
+                <p className="pt-1 text-[13px] text-alloy-midnight/60">
+                    {slotGone
+                        ? "That time is no longer available. Please choose another time — your answers are saved."
+                        : "Your tour is not confirmed until the school reviews your request."}
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={tour.onChangeTime}
+                className="rounded-lg border border-participant-accent/50 px-3 py-2 text-[14px] font-semibold text-participant-accent-ink"
+                data-testid="public-tour-change-time"
+            >
+                {slotGone ? "Choose another time" : "Change time"}
+            </button>
+        </div>
+    );
+}
+
+/**
+ * S7 × C1 — optional marketing consent. One unchecked box per channel, each with its own wording
+ * (Communications-owned, versioned). Nothing here is required, and nothing here is sent until submit.
+ */
+function MarketingConsentControl({
+    value,
+    onChange,
+    disabled,
+}: {
+    value: IntakeMarketingConsentChoice;
+    onChange: (next: IntakeMarketingConsentChoice) => void;
+    disabled: boolean;
+}) {
+    const L = INTAKE_MARKETING_CONSENT_LANGUAGE;
+    return (
+        <fieldset
+            className="mt-6 rounded-xl border border-alloy-midnight/10 px-4 py-3"
+            data-testid="public-marketing-consent"
+            data-consent-language-version={L.version}
+        >
+            <legend className="px-1 text-[13px] font-medium text-alloy-midnight/60">{L.heading}</legend>
+            {(["email", "sms"] as const).map((channel) => (
+                <label key={channel} className="flex items-start gap-3 py-1.5 text-[14px] text-alloy-midnight/80">
+                    <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-participant-accent"
+                        checked={value[channel]}
+                        disabled={disabled}
+                        onChange={(e) => onChange({ ...value, [channel]: e.target.checked })}
+                        data-testid={`public-marketing-consent-${channel}`}
+                    />
+                    <span>{L[channel]}</span>
+                </label>
+            ))}
+            <p className="pt-1 text-[13px] text-alloy-midnight/60">{L.note}</p>
+        </fieldset>
+    );
+}
+
 export function FormEmbedClient({
     token,
     showPreviewBanner = false,
     initialResolve = null,
+    tourRequest = null,
 }: {
     token: string;
     showPreviewBanner?: boolean;
+    tourRequest?: PublicFormTourRequest | null;
     /**
      * Resolve payload rendered by the server (same shape as `/resolve`), so the first paint already
      * has the form. Null when the server could not resolve it — bootstrap then fetches as before.
@@ -310,6 +399,14 @@ export function FormEmbedClient({
     >({});
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    /** The requested tour time was taken or closed between step one and submit. */
+    const [tourSlotGone, setTourSlotGone] = useState(false);
+    /** S7 × C1 — offered by the link (server-derived); both boxes start unchecked. */
+    const [marketingConsentOffered, setMarketingConsentOffered] = useState(false);
+    const [marketingConsent, setMarketingConsent] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
+    useEffect(() => {
+        setTourSlotGone(false);
+    }, [tourRequest?.startAt, tourRequest?.endAt]);
     /**
      * The Enrollment objective for this token, when there is one.
      *
@@ -602,6 +699,7 @@ export function FormEmbedClient({
             })();
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
+            setMarketingConsentOffered(json.data.marketing_consent_offered === true);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
             setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
@@ -738,6 +836,12 @@ export function FormEmbedClient({
                 body: JSON.stringify({
                     payload: submitPayload,
                     option_values_by_field_id: optionValuesByFieldId,
+                    // Two instants and nothing else: the server binds org and location from the link.
+                    ...(tourRequest ? { requested_tour: { start_at: tourRequest.startAt, end_at: tourRequest.endAt } } : {}),
+                    // The control's actual state — unchecked is sent as false, never omitted into a guess.
+                    ...(marketingConsentOffered
+                        ? { marketing_consent: { email: marketingConsent.email === true, sms: marketingConsent.sms === true } }
+                        : {}),
                 }),
             });
             const json = (await res.json()) as
@@ -751,6 +855,7 @@ export function FormEmbedClient({
                   };
             if (!json.ok) {
                 const errBody = json as ApiErr;
+                if (errBody.code === "TOUR_SLOT_UNAVAILABLE") setTourSlotGone(true);
                 setValidationErrors(errBody.validation_errors ?? null);
                 setMessage(errBody.error ?? "Submit failed");
                 return;
@@ -779,7 +884,7 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices, tourRequest, marketingConsentOffered, marketingConsent]);
 
     // Seed per-child value slices once when a family intake starts (first child inherits prefill).
     useEffect(() => {
@@ -952,6 +1057,16 @@ export function FormEmbedClient({
                         <ParticipantPaymentCard token={token} />
                         <FamilyEnrollmentCard token={token} />
                     </>
+                ) : tourRequest ? (
+                    // S7 — received, NOT booked. Nothing is confirmed, held or sent until the school accepts it.
+                    <div data-testid="public-tour-request-received">
+                        <IntakeCompletion
+                            tone="neutral"
+                            title="Your tour request was received"
+                            body={`You asked to visit ${tourRequest.locationLabel} on ${tourRequest.label}. This time is not confirmed yet — the school will review your request and contact you to confirm your tour.`}
+                            hint="You can close this window."
+                        />
+                    </div>
                 ) : (
                     <IntakeCompletion
                         title="Thank you — your form was submitted."
@@ -990,6 +1105,8 @@ export function FormEmbedClient({
     const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors, schema) : [];
+    // The published version's own submit wording (F02); signing steps keep "Sign and finish".
+    const authoredSubmitLabel = formSubmitLabel(schema);
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
     /**
      * The guided WIZARD is for packets the participant fills from scratch.
@@ -1516,13 +1633,14 @@ export function FormEmbedClient({
                                 setReviewStep(first ? "people" : "review");
                             }}
                             /*
-                             * BEND PINE, like every other primary action in Participant Runtime.
+                             * THE ACCENT, like every other primary action in Participant Runtime
+                             * (the tenant's colour, Bend Pine when none is authored).
                              *
                              * This one was Midnight, so the single most important action on the
                              * surface was the only one not speaking the runtime's primary language.
                              * Pinned by a token regression control rather than a literal colour.
                              */
-                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white"
+                            className="mt-4 w-full rounded-xl bg-participant-accent px-5 py-3.5 text-[16px] font-medium text-participant-on-accent sm:w-auto sm:min-w-[12rem]"
                             data-review-paperwork="true"
                         >
                             Review paperwork
@@ -1607,7 +1725,7 @@ export function FormEmbedClient({
                                                 setPeopleFocus(next?.fieldId ?? null);
                                                 setReviewStep(next ? "people" : "review");
                                             }}
-                                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white disabled:bg-alloy-midnight/25"
+                                            className="mt-4 w-full rounded-xl bg-participant-accent px-5 py-3.5 text-[16px] font-medium text-participant-on-accent disabled:bg-alloy-midnight/25 sm:w-auto sm:min-w-[12rem]"
                                         >
                                             {complete < needed ? `${needed - complete} more needed` : optional && complete === 0 ? "Skip" : next ? "Continue" : "Continue to your paperwork"}
                                         </button>
@@ -1976,7 +2094,7 @@ export function FormEmbedClient({
                             errorLines={errorLines}
                             message={message}
                             onBack={famIdx > 0 ? () => setFamilyStepIdx((i) => Math.max(0, i - 1)) : undefined}
-                            primaryLabel={famIsLast ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            primaryLabel={famIsLast ? (submitting ? "Submitting…" : authoredSubmitLabel ?? "Confirm & submit") : "Continue"}
                             onPrimary={
                                 famIsLast
                                     ? () => void handleSubmit()
@@ -2018,7 +2136,7 @@ export function FormEmbedClient({
                             errorLines={errorLines}
                             message={message}
                             onBack={stepIdx > 0 ? () => setGuidedStepIdx((i) => Math.max(0, i - 1)) : undefined}
-                            primaryLabel={isLastStep ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            primaryLabel={isLastStep ? (submitting ? "Submitting…" : authoredSubmitLabel ?? "Confirm & submit") : "Continue"}
                             onPrimary={
                                 isLastStep
                                     ? () => void handleSubmit()
@@ -2031,6 +2149,7 @@ export function FormEmbedClient({
                 </div>
             ) : (
                 <IntakeCard>
+                    {tourRequest ? <RequestedTourSummary tour={tourRequest} slotGone={tourSlotGone} /> : null}
                     {/* Single-form (non-packet) experience — same renderer, premium shell. Embedded in
                         an organization's page, the form's own title is the host page's job. */}
                     <div className={chrome === "none" ? "[&_header]:hidden" : undefined}>
@@ -2050,6 +2169,9 @@ export function FormEmbedClient({
                         validationErrors={validationErrors ?? undefined}
                     />
                     </div>
+                    {marketingConsentOffered ? (
+                        <MarketingConsentControl value={marketingConsent} onChange={setMarketingConsent} disabled={submitting} />
+                    ) : null}
                     <IntakeFooter
                         errorLines={errorLines}
                         message={message}
@@ -2060,7 +2182,7 @@ export function FormEmbedClient({
                                     : "Sign and finish"
                                 : submitting
                                   ? "Submitting…"
-                                  : "Submit"
+                                  : authoredSubmitLabel ?? "Submit"
                         }
                         onPrimary={() => void handleSubmit()}
                         primaryDisabled={submitting || !submissionId}

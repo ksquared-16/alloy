@@ -275,7 +275,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(ownedConcerns).toContain("Location access save was not confirmed");
         expect(ownedConcerns).not.toContain("#00a283");
         expect(ownedConcerns).not.toContain("#007d68");
-        expect(tours).toContain("Tour availability creation was not confirmed");
+        expect(tours).toContain("Tour schedule save was not confirmed");
         expect(tours).toContain("Tour availability save");
         expect(tours).toContain("locations-tour-edit-form");
         expect(tours).toContain("Save tour window");
@@ -506,7 +506,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("resolveLocationsConcernState");
         expect(page).toContain("retainedConcernTab");
         expect(read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx")).toContain(
-            "stale locFilter caused false empties",
+            "a stale scope caused false empties",
         );
         expect(tabs).toContain("onSectionIntent");
     });

@@ -27,6 +27,13 @@ import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildLocationSpecificLinkMetadata, readUuid } from "@/lib/forms/locationSpecificPublicLinkMetadata";
 import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import {
+    buildTourCalendarLinkConfig,
+    stripTourCalendarLinkConfig,
+    TOUR_CALENDAR_LINK_METADATA_KEY,
+} from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
 
 /**
  * The origin these public/embed links are built on.
@@ -143,10 +150,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
     }
 
-    const clientMetadata: Record<string, unknown> =
+    // The public tour calendar flag is never client metadata — only `tour_calendar: true` sets it.
+    const clientMetadata: Record<string, unknown> = stripTourCalendarLinkConfig(
         body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
             ? { ...(body.metadata as Record<string, unknown>) }
-            : {};
+            : {}
+    );
+    const publishTourCalendar = body.tour_calendar === true;
+    if (publishTourCalendar) {
+        const deniedTours = requireToursCapability(ctx, TOURS_CONFIGURE);
+        if (deniedTours) return deniedTours;
+    }
     delete clientMetadata.prefill_field_map;
 
     const locationId =
@@ -252,6 +266,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (linkLabel && !metadata.label) metadata.label = linkLabel;
+
+    if (publishTourCalendar) {
+        // S7 — the location comes from this link; acceptance from its Processing intake.
+        if (!locationId) {
+            return jsonError("A public tour calendar needs a location-specific link", 400, { code: "TOUR_CALENDAR_NEEDS_LOCATION" });
+        }
+        if (!linkRequiresLeadCapture(metadata)) {
+            return jsonError("A public tour calendar needs a lead-capture intake link", 400, { code: "TOUR_CALENDAR_NEEDS_INTAKE" });
+        }
+        if (body.distribution === true) {
+            // A reused distribution link would silently skip the flag; publish on an existing link via PATCH.
+            return jsonError("Publish a tour calendar on an existing link with PATCH tour_calendar", 400, {
+                code: "TOUR_CALENDAR_USE_PATCH",
+            });
+        }
+        metadata[TOUR_CALENDAR_LINK_METADATA_KEY] = buildTourCalendarLinkConfig({ enabled: true, actorUserId: ctx.userId ?? null });
+    }
 
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
 

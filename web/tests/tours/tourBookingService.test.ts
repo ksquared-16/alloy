@@ -9,11 +9,17 @@ vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
             endAt: "2026-05-11T15:00:00.000Z",
             timezone: "UTC",
             remainingCapacity: 1,
+            capacity: 1,
             ruleId: "rule-1",
             locationId: "loc-1",
             userId: null,
         },
     ]),
+}));
+
+const { mockCalendarCheck } = vi.hoisted(() => ({ mockCalendarCheck: vi.fn() }));
+vi.mock("@/lib/operatingCalendar/operatingCalendarServer", () => ({
+    assertTourIntervalOperating: (...args: unknown[]) => mockCalendarCheck(...args),
 }));
 
 vi.mock("@/lib/tours/events/tourLifecycleEvents", () => ({
@@ -249,6 +255,8 @@ describe("createTourBooking", () => {
             initialStatus: "requested",
         });
         expect(computeAvailableTourSlots).not.toHaveBeenCalled();
+        // …but the Operating Calendar is still asked: a request may not name a closed time.
+        expect(mockCalendarCheck).toHaveBeenCalledWith(supabase, expect.objectContaining({ orgId: "org-1", locationId: "loc-1", timezone: "UTC" }));
         expect(emitTourBookingLifecycleEvent).toHaveBeenCalledWith(
             supabase,
             "tour_requested",
@@ -258,5 +266,31 @@ describe("createTourBooking", () => {
         );
         expect(applyTourBookingOpportunityIntegration).not.toHaveBeenCalled();
         expect(mockOrchestrateConfirmed).not.toHaveBeenCalled();
+    });
+
+    it("a requested booking for a time the Operating Calendar closes is refused before any write", async () => {
+        mockCalendarCheck.mockRejectedValueOnce(new Error("tour_bookings: the location is not operating at that time (operating calendar)"));
+        const inserts: unknown[] = [];
+        const supabase = {
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({ eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), limit: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+                insert: vi.fn((r: unknown) => (inserts.push(r), { select: vi.fn().mockReturnThis(), single: vi.fn() })),
+            })),
+        } as never;
+        await expect(
+            createTourBooking(supabase, {
+                orgId: "org-1",
+                opportunityId: "opp-closed",
+                locationId: "loc-1",
+                startAt: new Date("2026-05-12T14:00:00.000Z"),
+                endAt: new Date("2026-05-12T15:00:00.000Z"),
+                timezone: "UTC",
+                source: "public_link",
+                approvalRequired: true,
+                initialStatus: "requested",
+            }),
+        ).rejects.toThrow(/not operating at that time/);
+        expect(inserts).toEqual([]);
+        expect(emitTourBookingLifecycleEvent).not.toHaveBeenCalledWith(supabase, "tour_requested", expect.anything(), expect.anything(), expect.anything());
     });
 });

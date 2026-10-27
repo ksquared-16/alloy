@@ -24,7 +24,7 @@ export function ParticipantArtifactHeader({ status }: { status: ParticipantArtif
                     className={clsx(
                         "rounded-full px-2.5 py-1 text-[12px] font-medium",
                         status.state === "signed" || status.state === "complete"
-                            ? "bg-alloy-bend-pine/12 text-alloy-bend-pine"
+                            ? "bg-participant-accent/12 text-participant-accent-ink"
                             : status.state === "signature_required"
                               ? "bg-alloy-midnight/[0.07] text-alloy-midnight"
                               : "bg-alloy-midnight/[0.05] text-alloy-midnight/70",

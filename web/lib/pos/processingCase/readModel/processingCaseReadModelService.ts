@@ -11,6 +11,7 @@
  * persisted.
  */
 
+import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
 import type {
     ProcessingCaseCountQuery,
     ProcessingCaseDetail,
@@ -167,5 +168,6 @@ export async function getProcessingCaseDetail(
         processingIntent: parseProcessingIntentFromMetadata(c.metadata),
         // Present only when the case was analysed as a packet. Read, never recomputed here.
         packetIntake: ((c.metadata as Record<string, unknown> | null)?.packet_intake ?? null) as unknown,
+        requestedTour: readRequestedTour(c.metadata),
     };
 }

@@ -53,7 +53,9 @@ export const TOUR_ACTION_CAPABILITY: Record<
     decline_tour: { readsAvailability: false, books: false, declines: true, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
     view_tour_details: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
     reschedule_tour: { readsAvailability: true, books: false, declines: false, confirms: false, reschedules: true, cancels: false, confirmsAttendance: false },
-    confirm_tour: { readsAvailability: false, books: false, declines: false, confirms: true, reschedules: false, cancels: false, confirmsAttendance: false },
+    // LEGACY, no longer minted. It never confers booking approval: the route records an
+    // attendance acknowledgement only (see `/confirm`).
+    confirm_tour: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: true },
     cancel_tour: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: true, confirmsAttendance: false },
     confirm_attendance: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: true },
 };

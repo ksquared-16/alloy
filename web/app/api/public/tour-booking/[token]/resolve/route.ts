@@ -5,6 +5,8 @@ import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { buildTourParentView } from "@/lib/tours/public/tourParentView";
 import { listActiveTourInvitationActionKinds } from "@/lib/tours/public/authorizeTourAction";
 import { readAttendanceConfirmation } from "@/lib/tours/bookings/tourBookingAttendance";
+import { resolveLocationPublicBrand } from "@/lib/branding/loadPublicBrand";
+import { PUBLIC_BRAND_PLATFORM_ACCENT, resolveEffectivePublicBrand, type EffectivePublicBrand } from "@/lib/branding/publicBrand";
 
 /**
  * GET /api/public/tour-booking/[token]/resolve
@@ -156,7 +158,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         attendanceAlreadyConfirmed,
     });
 
-    // `view` is the whole contract for the page. No internal status, id or action
-    // key crosses this boundary — which is why the page has nothing to leak.
-    return tourPublicJson({ ok: true, view });
+    // The school's brand (location → organization → platform), resolved for the LINK's own org and
+    // location, so nothing from another tenant can reach this page. A brand lookup failure must never
+    // break an invitation: it falls back to the platform.
+    let effective: EffectivePublicBrand;
+    try {
+        effective = await resolveLocationPublicBrand(supabase, { orgId: auth.link.org_id, locationId: auth.link.location_id });
+    } catch {
+        effective = resolveEffectivePublicBrand({});
+    }
+    const brand = {
+        displayName: effective.displayName,
+        accentColor: effective.accentColor ?? PUBLIC_BRAND_PLATFORM_ACCENT,
+        logoUrl: effective.logoUrl,
+    };
+
+    // `view` (and the display-only `brand`) is the whole contract for the page. No internal status,
+    // id or action key crosses this boundary — which is why the page has nothing to leak.
+    return tourPublicJson({ ok: true, view, brand });
 }

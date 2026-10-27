@@ -25,10 +25,49 @@ import type {
 } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
 
 /** Columns the resolver reads, plus the two facets it deliberately ignores. */
-const EXPECTATION_SELECT =
+export const EXPECTATION_SELECT =
     "id, org_id, lineage_root_id, supersedes_expectation_id, verb, transition_type, modality," +
     " author_class, authority_key, standing, subject_kind, subject_ref, condition," +
     " valid_from, valid_to, authored_at";
+
+/**
+ * Every row of every lineage a touching row belongs to.
+ *
+ * ── WHY THE WINDOW FILTER ALONE IS NOT ENOUGH ──
+ *
+ * The ratified fold decides a lineage from ALL of its acts: a revision truncates
+ * its predecessor at the revision's `valid_from`. A revision whose own window
+ * does not touch the coordinate is still the act that ended the predecessor
+ * there. Fetching only rows that touch the coordinate dropped exactly that act,
+ * so "closed Mon–Fri, revised to Mon–Wed" still read CLOSED on Thursday: the
+ * resolver was handed the original row alone and, correctly for what it was
+ * given, found it effective. Over-fetching is safe, the resolver decides, and a
+ * lineage is never split across the org boundary (the lineage trigger refuses a
+ * cross-org predecessor), so the org filter stays here as well.
+ */
+export async function completeExpectationLineages(
+    supabase: SupabaseClient,
+    orgId: string,
+    touching: readonly ExpectationQueryRow[],
+): Promise<ExpectationQueryRow[]> {
+    if (touching.length === 0) return [];
+    const roots = [...new Set(touching.map((r) => r.lineage_root_id ?? r.id))];
+    const { data, error } = await supabase
+        .from("operational_expectations")
+        .select(EXPECTATION_SELECT)
+        .eq("org_id", orgId)
+        .or(`lineage_root_id.in.(${roots.join(",")}),id.in.(${roots.join(",")})`);
+    if (error) {
+        // An incomplete lineage is a wrong answer, not a smaller one.
+        throw new Error(`operational expectations lineage query failed: ${error.message}`);
+    }
+    const byId = new Map<string, ExpectationQueryRow>();
+    for (const row of touching) byId.set(row.id, row);
+    for (const row of (data ?? []) as unknown as ExpectationQueryRow[]) {
+        if (!byId.has(row.id)) byId.set(row.id, row);
+    }
+    return [...byId.values()];
+}
 
 export function createSupabaseExpectationQueryGateway(
     supabase: SupabaseClient,
@@ -57,9 +96,10 @@ export function createSupabaseExpectationQueryGateway(
             }
 
             const wanted = new Set(ids);
-            return ((data ?? []) as unknown as ExpectationQueryRow[]).filter((row) =>
+            const touching = ((data ?? []) as unknown as ExpectationQueryRow[]).filter((row) =>
                 expectationSubjectRefMatches(row.subject_ref, wanted),
             );
+            return completeExpectationLineages(supabase, query.orgId, touching);
         },
 
         async loadRatifications(

@@ -7,6 +7,8 @@ import {
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
+import { TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE } from "@/lib/tours/comms/tourCommsConfig";
+import { revalidateTourReminderForDispatch } from "@/lib/tours/comms/tourSchedulingScheduledSends";
 import { buildCommunicationScheduledSendProcessMetadataAugment } from "@/lib/communications/communicationScheduledSendProcessMetadata";
 
 export type CommunicationScheduledSendRow = {
@@ -645,11 +647,68 @@ export async function processDueCommunicationScheduledSends(params: {
             continue;
         }
 
+        // A tour reminder is re-decided against the booking NOW, not trusted from when it
+        // was scheduled. Withdrawn rows are canceled (never retried); an unreadable booking
+        // fails the row visibly instead of sending blind.
+        if (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE) {
+            const verdict = await revalidateTourReminderForDispatch({
+                supabase: params.supabase,
+                row: fresh,
+                now: params.now,
+            });
+            if (verdict.kind !== "dispatch") {
+                const suppressed = verdict.kind === "suppress";
+                await params.supabase
+                    .from("communication_scheduled_sends")
+                    .update({
+                        status: suppressed ? "canceled" : "failed",
+                        metadata: mergeMetadata(
+                            fresh.metadata,
+                            suppressed
+                                ? { dispatch_revalidation: { at: params.now.toISOString(), outcome: "suppressed", reason: verdict.reason } }
+                                : {
+                                      last_process_error: {
+                                          at: params.now.toISOString(),
+                                          error: "TOUR_REMINDER_REVALIDATION_FAILED",
+                                          message: verdict.message,
+                                      },
+                                  }
+                        ),
+                    })
+                    .eq("id", fresh.id)
+                    .eq("status", "claimed")
+                    .eq("claim_token", fresh.claim_token)
+                    .is("communication_message_id", null);
+                if (suppressed) out.skipped += 1;
+                else out.failed += 1;
+                continue;
+            }
+        }
+
+        const scheduledMeta =
+            fresh.metadata && typeof fresh.metadata === "object" && !Array.isArray(fresh.metadata)
+                ? (fresh.metadata as Record<string, unknown>)
+                : {};
+        // Category is an authoring fact frozen on the scheduled row. Announcements are
+        // marketing; tour reminders are transactional; anything else without an explicit
+        // category is refused at the adapter rather than silently remapped.
+        const frozenCategory =
+            typeof scheduledMeta.message_category === "string" ? scheduledMeta.message_category.trim() : "";
+        const resolvedCategory =
+            frozenCategory ||
+            (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE
+                ? "transactional"
+                : fresh.source === "announcement"
+                  ? "marketing"
+                  : "");
+        const frozenPurpose =
+            typeof scheduledMeta.purpose === "string" ? scheduledMeta.purpose.trim() : null;
+
         const exec = await executeLegacyCommunicationsSendAdapter({
             supabase: params.supabase,
             orgId: fresh.org_id,
             quickMessage: false,
-            primaryEntityType: "opportunities",
+            primaryEntityType: fresh.entity_type || "opportunities",
             primaryEntityId: fresh.entity_id,
             channel: fresh.channel,
             textRaw: fresh.body_snapshot,
@@ -657,6 +716,10 @@ export async function processDueCommunicationScheduledSends(params: {
             bindingIdOpt: fresh.communication_provider_binding_id ?? "",
             recipientPersonIdRaw: fresh.recipient_person_id,
             toRawInput: "",
+            category: resolvedCategory || null,
+            audience: "external",
+            purpose: frozenPurpose || (fresh.source === TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE ? "tour_coordination" : null),
+            callSite: `processDueCommunicationScheduledSends:${fresh.source || "unknown"}`,
             sendMetadataAugment: buildCommunicationScheduledSendProcessMetadataAugment(fresh),
         });
 

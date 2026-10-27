@@ -125,8 +125,16 @@ def outbound_email_headers(
     message_id: Optional[str],
     in_reply_to: Optional[str],
     references: Optional[str],
+    unsubscribe_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Assemble the header map for the provider, omitting anything absent."""
+    """Assemble the header map for the provider, omitting anything absent.
+
+    ``unsubscribe_url`` is additive and orthogonal to threading headers. When
+    present it emits RFC 8058 one-click List-Unsubscribe; when absent neither
+    unsubscribe header is written (never advertise a capability that does not
+    exist). The URL itself is minted at TypeScript enqueue and frozen on the
+    message metadata — this runtime does not re-derive tokens.
+    """
     out: Dict[str, Any] = {}
     if message_id:
         out["Message-ID"] = message_id
@@ -134,4 +142,8 @@ def outbound_email_headers(
         out["In-Reply-To"] = in_reply_to
     if references:
         out["References"] = references
+    unsub = (unsubscribe_url or "").strip()
+    if unsub:
+        out["List-Unsubscribe"] = f"<{unsub}>"
+        out["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     return out

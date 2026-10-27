@@ -21,6 +21,9 @@ export const TOUR_COMMS_SCHEDULED_SEND_METADATA = {
     locationId: "location_id",
     reason: "reason",
     quietHoursAdjusted: "quiet_hours_adjusted",
+    /** Platform MessageCategory frozen at schedule time for enqueue eligibility. */
+    messageCategory: "message_category",
+    purpose: "purpose",
 } as const;
 
 /** Metadata keys on immediate outbound messages (Batch 5+). */

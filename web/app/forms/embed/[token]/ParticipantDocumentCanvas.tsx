@@ -78,7 +78,7 @@ function paintSignatureTarget(
         target.setAttribute("data-artifact-signature-state", "signed");
     } else {
         target.className =
-            "animate-pulse rounded-md border-2 border-dashed border-alloy-bend-pine/70 bg-alloy-bend-pine/10 text-[13px] font-medium text-alloy-bend-pine";
+            "animate-pulse rounded-md border-2 border-dashed border-participant-accent/70 bg-participant-accent/10 text-[13px] font-medium text-participant-accent-ink";
         target.textContent = "Tap to sign";
         target.setAttribute("data-artifact-signature-state", "unsigned");
     }

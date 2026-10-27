@@ -61,3 +61,18 @@ class TestHeaderAssembly:
 
     def test_a_first_outbound_carries_only_its_own_id(self):
         assert outbound_email_headers(message_id=A, in_reply_to=None, references=None) == {"Message-ID": A}
+
+    def test_list_unsubscribe_emitted_with_one_click_post(self):
+        url = "https://app.example.test/api/communications/unsubscribe?t=abc"
+        got = outbound_email_headers(
+            message_id=None,
+            in_reply_to=None,
+            references=None,
+            unsubscribe_url=url,
+        )
+        assert got["List-Unsubscribe"] == f"<{url}>"
+        assert got["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+
+    def test_list_unsubscribe_omitted_when_url_absent(self):
+        got = outbound_email_headers(message_id=A, in_reply_to=None, references=None, unsubscribe_url="  ")
+        assert "List-Unsubscribe" not in got

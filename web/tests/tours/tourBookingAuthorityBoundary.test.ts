@@ -52,7 +52,7 @@ vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
     computeAvailableTourSlots: async () => availableSlots,
 }));
 vi.mock("@/lib/tours/availability/internalCompute", () => ({
-    isSlotOffered: () => slotOffered,
+    offeredSlotCapacity: () => (slotOffered ? 1 : null),
 }));
 
 import { createTourBooking, TourBookingTransactionError } from "@/lib/tours/bookings/tourBookingService";

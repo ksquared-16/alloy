@@ -62,7 +62,7 @@ const PANEL_NOTE = "mt-2 text-[13px] text-alloy-midnight/60";
 const FIELD_LABEL = "mt-3 flex flex-col gap-1 text-[12px] font-medium text-alloy-midnight/70";
 // 16px: anything smaller zooms the page on iOS when focused.
 const FIELD = "min-h-[44px] w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[16px] text-alloy-midnight";
-const PRIMARY = "mt-4 min-h-[44px] w-full rounded-lg bg-alloy-bend-pine px-4 py-2 text-[15px] font-semibold text-white disabled:opacity-50 sm:w-auto";
+const PRIMARY = "mt-4 min-h-[44px] w-full rounded-lg bg-participant-accent px-4 py-2 text-[15px] font-semibold text-participant-on-accent disabled:opacity-50 sm:w-auto";
 
 const money = (cents: number, currency: string | null) =>
     (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
@@ -293,7 +293,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
     return (
         <section data-participant-payment="card" data-payment-state={view.state} className={PANEL}>
             <h3 className={PANEL_TITLE}>Payment</h3>
-            <p data-participant-payment="headline" className={view.state === "SATISFIED" ? "text-[15px] font-semibold text-alloy-bend-pine" : "text-[15px] font-semibold text-alloy-midnight"}>
+            <p data-participant-payment="headline" className={view.state === "SATISFIED" ? "text-[15px] font-semibold text-participant-accent-ink" : "text-[15px] font-semibold text-alloy-midnight"}>
                 {headline(view)}
             </p>
 
@@ -304,7 +304,7 @@ export default function ParticipantPaymentCard({ token }: { token: string }) {
                             <span className="text-alloy-midnight/80">{l.label}</span>
                             <span className="sr-only"> — </span>
                             {/* A paid fee says Paid — never "$0.00", which reads like a fee of nothing. */}
-                            <span className={l.state === "SATISFIED" ? "font-medium text-alloy-bend-pine" : "font-medium text-alloy-midnight"}>
+                            <span className={l.state === "SATISFIED" ? "font-medium text-participant-accent-ink" : "font-medium text-alloy-midnight"}>
                                 {l.state === "SATISFIED" ? "Paid" : money(l.collectibleNowCents, view.currencyCode)}
                             </span>
                         </li>

@@ -1,23 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
+import { loadLocationTourRules, peekLocationTourRules } from "@/lib/locations/locationConcernCache";
 import {
-    loadLocationTourRules,
-    peekLocationTourRules,
-    type LocationTourRulePreview,
-} from "@/lib/locations/locationConcernCache";
+    buildTourWeekdayView,
+    duplicateTourScheduleDraft,
+    groupTourRulesIntoSchedules,
+    tourScheduleGroupToDraft,
+    TOUR_WEEKDAY_DISPLAY_ORDER,
+    TOUR_WEEKDAY_LABELS,
+    TOUR_WEEKDAY_SHORT,
+    type TourScheduleDraft,
+    type TourScheduleGroup,
+    type TourRuleForAuthoring,
+    type TourScheduleOverlap,
+} from "@/lib/tours/schedules/tourWeeklySchedule";
+import {
+    formatTourWallTime,
+    formatTourWallTimeRange,
+    tourTimeZoneShortName,
+    wallTimeToInputValue,
+    wallTimeToMinutes,
+} from "@/lib/tours/schedules/tourTimeFormat";
+import TourPublicBrandPanel from "./TourPublicBrandPanel";
 
 type LocationOpt = { id: string; label: string | null };
 
-type RuleRow = LocationTourRulePreview;
+type RuleRow = TourRuleForAuthoring;
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
+/**
+ * Tour availability authoring (S3).
+ *
+ * Weekly schedules are the unit an operator authors ("Weekday tours: Mon–Fri, 8:30–10:30 AM and
+ * 2:30–3:30 PM"); the page also shows the week day by day, including organization-wide windows that
+ * a location inherits. Inherited windows are read-only here — they are edited at organization scope,
+ * and the server refuses a location-scoped edit of them.
+ *
+ * Every time is a wall-clock time in the schedule's own zone, said on a 12-hour clock.
+ */
 export default function TourAvailabilitySettingsClient({
     orgId = null,
     locationId = null,
@@ -32,28 +57,38 @@ export default function TourAvailabilitySettingsClient({
     onMutationCommitted?: () => void | Promise<void>;
 }) {
     const [locations, setLocations] = useState<LocationOpt[]>([]);
-    const [locFilter, setLocFilter] = useState(locationId ?? "");
-    const peeked =
-        embedded && orgId && locationId ? peekLocationTourRules(orgId, locationId) : null;
+    /** "" = organization-wide scope. */
+    const [scope, setScope] = useState(locationId ?? "");
+    const peeked = embedded && orgId && locationId ? peekLocationTourRules(orgId, locationId) : null;
     const [rules, setRules] = useState<RuleRow[]>(() => peeked?.rules ?? []);
     const [loading, setLoading] = useState(() => !(peeked != null));
     const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
-    const [adding, setAdding] = useState(false);
+    const [editor, setEditor] = useState<
+        | { mode: "create"; draft: TourScheduleDraft | null }
+        | { mode: "edit"; group: TourScheduleGroup }
+        | null
+    >(null);
     const [editingRule, setEditingRule] = useState<RuleRow | null>(null);
     const hasRulesRef = useRef((peeked?.rules.length ?? 0) > 0);
     const requestSeqRef = useRef(0);
 
+    const scopeLocationId = scope.trim() ? scope.trim() : null;
+    const scopeLabel = scopeLocationId
+        ? (locationLabel ?? locations.find((l) => l.id === scopeLocationId)?.label ?? "this location")
+        : "the organization";
+
     // Embedded Locations keepalive may remount via key, but also sync when locationId changes
-    // without remount — stale locFilter caused false empties after Location switches.
+    // without remount — a stale scope caused false empties after Location switches.
     useEffect(() => {
         const next = String(locationId ?? "").trim();
-        setLocFilter(next);
+        setScope(next);
         if (embedded && orgId && next) {
             const warm = peekLocationTourRules(orgId, next);
             if (warm) {
-                setRules(warm.rules.filter((rule) => rule.location_id === next));
+                setRules(warm.rules);
                 hasRulesRef.current = warm.rules.length > 0;
                 setLoading(false);
             }
@@ -69,27 +104,24 @@ export default function TourAvailabilitySettingsClient({
         }
         setErr(null);
         try {
+            let nextRules: RuleRow[];
             if (embedded && orgId && locationId) {
                 const { snapshot } = await loadLocationTourRules(orgId, locationId, { force: hadRules });
-                if (requestSeq !== requestSeqRef.current) return;
-                const nextRules = snapshot.rules.filter((rule) => rule.location_id === locationId);
-                setRules(nextRules);
-                hasRulesRef.current = nextRules.length > 0;
+                nextRules = snapshot.rules;
             } else {
-                const qs = locFilter.trim() ? `?location_id=${encodeURIComponent(locFilter.trim())}` : "";
-                const res = await fetch(`/api/admin/tours/availability-rules${qs}`, {
-                    credentials: "include",
-                });
+                const qs = scope.trim() ? `?location_id=${encodeURIComponent(scope.trim())}` : "";
+                const res = await fetch(`/api/admin/tours/availability-rules${qs}`, { credentials: "include" });
                 const j = (await res.json()) as { rules?: RuleRow[]; error?: string };
                 if (!res.ok) throw new Error(j.error ?? res.statusText);
-                if (requestSeq !== requestSeqRef.current) return;
-                const loadedRules = j.rules ?? [];
-                const nextRules = locationId
-                    ? loadedRules.filter((rule) => rule.location_id === locationId)
-                    : loadedRules;
-                setRules(nextRules);
-                hasRulesRef.current = nextRules.length > 0;
+                // A location sees its own rules and the organization-wide rules it inherits; the
+                // organization scope sees organization-wide rules.
+                nextRules = (j.rules ?? []).filter((rule) =>
+                    scope.trim() ? rule.location_id === scope.trim() || rule.location_id == null : rule.location_id == null
+                );
             }
+            if (requestSeq !== requestSeqRef.current) return;
+            setRules(nextRules);
+            hasRulesRef.current = nextRules.length > 0;
         } catch (e) {
             if (requestSeq !== requestSeqRef.current) return;
             setErr(e instanceof Error ? e.message : String(e));
@@ -103,15 +135,13 @@ export default function TourAvailabilitySettingsClient({
                 setRefreshing(false);
             }
         }
-    }, [embedded, locFilter, locationId, orgId]);
+    }, [embedded, scope, locationId, orgId]);
 
     useEffect(() => {
         if (embedded && locationId) return;
         void (async () => {
             try {
-                const res = await fetch("/api/admin/locations", {
-                    credentials: "include",
-                });
+                const res = await fetch("/api/admin/locations", { credentials: "include" });
                 const j = (await res.json()) as { locations?: LocationOpt[] };
                 if (res.ok) setLocations(j.locations ?? []);
             } catch {
@@ -124,10 +154,23 @@ export default function TourAvailabilitySettingsClient({
         void loadRules();
     }, [loadRules]);
 
-    const toggle = async (r: RuleRow) => {
+    const groups = useMemo(() => groupTourRulesIntoSchedules(rules, scopeLocationId), [rules, scopeLocationId]);
+    const week = useMemo(() => buildTourWeekdayView(groups), [groups]);
+    const localGroups = groups.filter((g) => !g.inherited);
+    const inheritedGroups = groups.filter((g) => g.inherited);
+
+    const committed = async (message?: string) => {
+        await loadRules();
+        await onMutationCommitted?.();
+        setNotice(message ?? null);
+    };
+
+    const ruleScopeQuery = `scope=${encodeURIComponent(scopeLocationId ?? "org")}`;
+
+    const toggleRule = async (r: RuleRow) => {
         setSaving(true);
         try {
-            const res = await fetch(`/api/admin/tours/availability-rules/${encodeURIComponent(r.id)}`, {
+            const res = await fetch(`/api/admin/tours/availability-rules/${encodeURIComponent(r.id)}?${ruleScopeQuery}`, {
                 method: "PATCH",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
@@ -138,8 +181,7 @@ export default function TourAvailabilitySettingsClient({
             if (!j.rule || !mutationResponseContainsPatch(j.rule as unknown as Record<string, unknown>, { is_active: !r.is_active })) {
                 throw new Error("Tour availability save was not confirmed by the authoritative response.");
             }
-            await loadRules();
-            await onMutationCommitted?.();
+            await committed();
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -147,18 +189,17 @@ export default function TourAvailabilitySettingsClient({
         }
     };
 
-    const remove = async (id: string) => {
-        if (!confirm("Delete this availability rule?")) return;
+    const removeGroup = async (g: TourScheduleGroup) => {
+        if (!confirm(`Delete "${g.name}"? Existing bookings are kept; families just can't book these times any more.`)) return;
         setSaving(true);
         try {
-            const res = await fetch(`/api/admin/tours/availability-rules/${encodeURIComponent(id)}`, {
-                method: "DELETE",
-                credentials: "include",
-            });
-            const j = (await res.json()) as { error?: string };
+            const url = g.scheduleId
+                ? `/api/admin/tours/schedules/${encodeURIComponent(g.scheduleId)}?location_id=${encodeURIComponent(scopeLocationId ?? "org")}`
+                : `/api/admin/tours/availability-rules/${encodeURIComponent(g.rules[0]!.id)}?${ruleScopeQuery}`;
+            const res = await fetch(url, { method: "DELETE", credentials: "include" });
+            const j = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
-            await loadRules();
-            await onMutationCommitted?.();
+            await committed(`Deleted "${g.name}".`);
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -166,44 +207,52 @@ export default function TourAvailabilitySettingsClient({
         }
     };
 
+    const busy = saving || editor != null || editingRule != null;
+
     return (
-        <div className="w-full min-w-0 space-y-4">
+        <div className="w-full min-w-0 space-y-5">
             {!embedded ?
                 <header>
                     <h1 className="text-lg font-semibold text-alloy-midnight">Tour availability</h1>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
-                        Set recurring windows and booking limits for family visits.
+                        Weekly schedules decide when families can book a visit. Organization-wide schedules apply at every location.
                     </p>
                 </header>
             :   null}
             {err ?
                 <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>
             :   null}
-            {!locationId ?
-                <div className="flex flex-wrap items-end gap-3">
-                    <label className="text-xs font-medium text-alloy-midnight/70">
-                        Filter by location
-                        <select
-                            className="mt-1 block w-56 rounded border border-alloy-stone/25 bg-white px-2 py-1.5 text-sm"
-                            value={locFilter}
-                            onChange={(e) => setLocFilter(e.target.value)}
-                        >
-                            <option value="">All locations</option>
-                            {locations.map((l) => (
-                                <option key={l.id} value={l.id}>
-                                    {l.label ?? l.id.slice(0, 8)}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
+            {notice ?
+                <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" data-testid="tours-schedule-notice">
+                    {notice}
+                </p>
             :   null}
+            {!locationId ?
+                <label className="block text-xs font-medium text-alloy-midnight/70">
+                    Configure tours for
+                    <select
+                        className="mt-1 block w-64 rounded border border-alloy-stone/25 bg-white px-2 py-1.5 text-sm"
+                        value={scope}
+                        onChange={(e) => {
+                            setEditor(null);
+                            setEditingRule(null);
+                            setNotice(null);
+                            setScope(e.target.value);
+                        }}
+                        data-testid="tours-scope"
+                    >
+                        <option value="">Organization-wide (all locations)</option>
+                        {locations.map((l) => (
+                            <option key={l.id} value={l.id}>
+                                {l.label ?? l.id.slice(0, 8)}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            :   null}
+
             {loading && !refreshing && rules.length === 0 ?
-                <div
-                    className="rounded-xl border border-dashed border-alloy-forge/15 p-4"
-                    data-testid="tours-availability-pending"
-                    aria-busy="true"
-                >
+                <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4" data-testid="tours-availability-pending" aria-busy="true">
                     <div className="h-3 w-40 animate-pulse rounded bg-alloy-midnight/[0.06]" />
                     <div className="mt-3 h-3 w-64 animate-pulse rounded bg-alloy-midnight/[0.04]" />
                 </div>
@@ -213,154 +262,516 @@ export default function TourAvailabilitySettingsClient({
                     Updating tour windows…
                 </p>
             :   null}
+
             {!loading && rules.length === 0 ?
                 <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4">
                     <p className="text-sm font-medium text-alloy-midnight/80">No tour availability set</p>
-                    <p className="config-typo-sublabel mt-1">
-                        Add a recurring window when families can visit {locationLabel ?? "this location"}.
-                    </p>
+                    <p className="config-typo-sublabel mt-1">Add a weekly schedule for when families can visit {scopeLabel}.</p>
                 </div>
             :   null}
-            <ul className="space-y-2">
-                {rules.map((r) => (
-                    <li key={r.id} className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                                <span className="font-semibold">
-                                    {DOW[r.day_of_week] ?? r.day_of_week} {r.start_time}–{r.end_time}
-                                </span>
-                                <span className="ml-2 text-alloy-midnight/55">{r.timezone}</span>
-                                {r.approval_required ?
-                                    <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">
-                                        approval
-                                    </span>
-                                :   <span className="ml-2 rounded bg-alloy-pine/15 px-1.5 text-[11px] font-semibold text-alloy-pine">
-                                        auto-confirm
+
+            {rules.length > 0 ?
+                <section aria-label="Tour times by weekday" data-testid="tours-weekday-view">
+                    <h2 className="config-typo-field-label">Week at a glance</h2>
+                    <ul className="mt-2 divide-y divide-alloy-stone/15 rounded-lg border border-alloy-stone/15 bg-white">
+                        {week.map(({ day, entries }) => (
+                            <li key={day} className="flex flex-wrap items-start gap-3 px-3 py-2" data-testid={`tours-weekday-${day}`}>
+                                <span className="w-24 shrink-0 text-sm font-semibold text-alloy-midnight">{TOUR_WEEKDAY_LABELS[day]}</span>
+                                {entries.length === 0 ?
+                                    <span className="text-sm text-alloy-midnight/45">No tours</span>
+                                :   <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                                        {entries.map((e) => (
+                                            <span
+                                                key={e.ruleId}
+                                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
+                                                    e.is_active ? "bg-alloy-stone/60 text-alloy-midnight" : "bg-alloy-stone/30 text-alloy-midnight/45 line-through"
+                                                }`}
+                                                title={`${e.scheduleName}${e.inherited ? " · organization-wide" : ""}${e.approval_required ? " · needs approval" : ""}`}
+                                                data-tour-weekday-entry={e.inherited ? "inherited" : "local"}
+                                            >
+                                                {formatTourWallTimeRange(e.start_time, e.end_time)}
+                                                <span className="text-alloy-midnight/50">· {e.scheduleName}</span>
+                                                {e.inherited ?
+                                                    <span className="rounded bg-sky-100 px-1 text-[10px] font-semibold text-sky-800">Org-wide</span>
+                                                :   null}
+                                            </span>
+                                        ))}
                                     </span>
                                 }
-                                {!r.is_active ?
-                                    <span className="ml-2 text-xs text-alloy-midnight/45">inactive</span>
-                                :   null}
-                            </div>
-                            <div className="flex gap-2">
-                                <ConfigurationSecondaryButton
-                                    className="px-2 py-1"
-                                    disabled={saving}
-                                    onClick={() => {
-                                        setAdding(false);
-                                        setEditingRule(r);
-                                    }}
-                                    data-testid={`locations-tour-edit-${r.id}`}
-                                >
-                                    Edit
-                                </ConfigurationSecondaryButton>
-                                <ConfigurationSecondaryButton
-                                    className="px-2 py-1"
-                                    disabled={saving}
-                                    onClick={() => void toggle(r)}
-                                >
-                                    {r.is_active ? "Deactivate" : "Activate"}
-                                </ConfigurationSecondaryButton>
-                                <button
-                                    type="button"
-                                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-800"
-                                    disabled={saving}
-                                    onClick={() => void remove(r.id)}
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                        <div className="mt-1 text-[11px] text-alloy-midnight/50">
-                            {r.slot_duration_minutes} minute tours · {r.buffer_minutes} minute buffer · up to{" "}
-                            {r.max_bookings_per_slot} per window
-                        </div>
-                        {editingRule?.id === r.id ?
-                            <TourWindowForm
-                                locations={locations}
-                                locationId={locationId}
-                                locationLabel={locationLabel}
-                                existingRule={r}
-                                onSaved={async () => {
-                                    await loadRules();
-                                    await onMutationCommitted?.();
-                                    setEditingRule(null);
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            :   null}
+
+            {localGroups.length > 0 ?
+                <section aria-label="Schedules" className="space-y-2">
+                    <h2 className="config-typo-field-label">
+                        {scopeLocationId ? `Schedules at ${scopeLabel}` : "Organization-wide schedules"}
+                    </h2>
+                    <ul className="space-y-2">
+                        {localGroups.map((g) => (
+                            <ScheduleCard
+                                key={g.key}
+                                group={g}
+                                disabled={busy}
+                                onEdit={() => {
+                                    setNotice(null);
+                                    if (g.scheduleId) setEditor({ mode: "edit", group: g });
+                                    else setEditingRule(g.rules[0]!);
                                 }}
-                                onCancel={() => setEditingRule(null)}
-                                disabled={saving}
+                                onDuplicate={() => {
+                                    setNotice(null);
+                                    setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
+                                }}
+                                onDelete={() => void removeGroup(g)}
+                                onToggle={g.scheduleId ? null : () => void toggleRule(g.rules[0]!)}
+                            >
+                                {editingRule && g.rules[0]?.id === editingRule.id ?
+                                    <TourWindowForm
+                                        existingRule={editingRule}
+                                        scopeQuery={ruleScopeQuery}
+                                        onSaved={async () => {
+                                            setEditingRule(null);
+                                            await committed();
+                                        }}
+                                        onCancel={() => setEditingRule(null)}
+                                        disabled={saving}
+                                    />
+                                : editor?.mode === "edit" && editor.group.key === g.key ?
+                                    <ScheduleEditor
+                                        scopeLocationId={scopeLocationId}
+                                        scheduleId={g.scheduleId}
+                                        initial={tourScheduleGroupToDraft(g)}
+                                        onSaved={async (overlaps) => {
+                                            setEditor(null);
+                                            await committed(overlapNotice(overlaps));
+                                        }}
+                                        onCancel={() => setEditor(null)}
+                                    />
+                                :   null}
+                            </ScheduleCard>
+                        ))}
+                    </ul>
+                </section>
+            :   null}
+
+            {inheritedGroups.length > 0 ?
+                <section aria-label="Inherited schedules" className="space-y-2" data-testid="tours-inherited-schedules">
+                    <h2 className="config-typo-field-label">Inherited from the organization</h2>
+                    <p className="config-typo-sublabel">
+                        These organization-wide schedules also offer tours at {scopeLabel}. Change them from the
+                        organization-wide tour settings, or duplicate one to give {scopeLabel} its own version.
+                    </p>
+                    <ul className="space-y-2">
+                        {inheritedGroups.map((g) => (
+                            <ScheduleCard
+                                key={g.key}
+                                group={g}
+                                disabled={busy}
+                                onDuplicate={() => {
+                                    setNotice(null);
+                                    setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
+                                }}
                             />
-                        :   null}
-                    </li>
-                ))}
-            </ul>
-            {adding ?
-                <TourWindowForm
-                    locations={locations}
-                    locationId={locationId}
-                    locationLabel={locationLabel}
-                    onSaved={async () => {
-                        await loadRules();
-                        await onMutationCommitted?.();
-                        setAdding(false);
+                        ))}
+                    </ul>
+                </section>
+            :   null}
+
+            {editor?.mode === "create" ?
+                <ScheduleEditor
+                    scopeLocationId={scopeLocationId}
+                    scheduleId={null}
+                    initial={editor.draft}
+                    onSaved={async (overlaps) => {
+                        setEditor(null);
+                        await committed(overlapNotice(overlaps));
                     }}
-                    onCancel={() => setAdding(false)}
-                    disabled={saving}
+                    onCancel={() => setEditor(null)}
                 />
-            : editingRule ?
+            : busy ?
                 null
             :   <ConfigurationPrimaryButton
                     onClick={() => {
-                        setEditingRule(null);
-                        setAdding(true);
+                        setNotice(null);
+                        setEditor({ mode: "create", draft: null });
                     }}
                     data-testid="locations-tour-add-window"
                 >
-                    Add tour window
+                    Add weekly schedule
                 </ConfigurationPrimaryButton>
             }
+
+            <TourPublicBrandPanel key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} />
         </div>
     );
 }
 
+function overlapNotice(overlaps: TourScheduleOverlap[]): string | undefined {
+    if (!overlaps.length) return undefined;
+    const first = overlaps[0]!;
+    return `Saved. Some times overlap "${first.otherName}" (${TOUR_WEEKDAY_SHORT[first.day]} ${formatTourWallTimeRange(
+        first.window.start_time,
+        first.window.end_time
+    )}${overlaps.length > 1 ? ` and ${overlaps.length - 1} more` : ""}). Families see each time once, and bookings in either count against the same capacity.`;
+}
+
+/** `Mon–Fri`, `Mon, Wed, Fri`, `Every day`. */
+function describeDays(days: number[]): string {
+    if (days.length === 7) return "Every day";
+    const ordered = TOUR_WEEKDAY_DISPLAY_ORDER.filter((d) => days.includes(d));
+    const positions = ordered.map((d) => TOUR_WEEKDAY_DISPLAY_ORDER.indexOf(d));
+    const consecutive = positions.every((p, i) => i === 0 || p === positions[i - 1]! + 1);
+    if (consecutive && ordered.length >= 3) {
+        return `${TOUR_WEEKDAY_SHORT[ordered[0]!]}–${TOUR_WEEKDAY_SHORT[ordered[ordered.length - 1]!]}`;
+    }
+    return ordered.map((d) => TOUR_WEEKDAY_SHORT[d]).join(", ");
+}
+
+function ScheduleCard({
+    group,
+    disabled,
+    onEdit,
+    onDuplicate,
+    onDelete,
+    onToggle,
+    children,
+}: {
+    group: TourScheduleGroup;
+    disabled: boolean;
+    onEdit?: () => void;
+    onDuplicate: () => void;
+    onDelete?: () => void;
+    onToggle?: (() => void) | null;
+    children?: ReactNode;
+}) {
+    return (
+        <li
+            className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
+            data-testid={group.scheduleId ? `tours-schedule-${group.scheduleId}` : `locations-tour-rule-${group.rules[0]?.id}`}
+            data-tour-schedule-scope={group.inherited ? "inherited" : "local"}
+        >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="font-semibold text-alloy-midnight">
+                        {group.name}
+                        {group.inherited ?
+                            <span className="ml-2 rounded bg-sky-100 px-1.5 text-[11px] font-semibold text-sky-800">Organization-wide</span>
+                        :   null}
+                        {group.approval_required ?
+                            <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">needs approval</span>
+                        :   <span className="ml-2 rounded bg-alloy-pine/15 px-1.5 text-[11px] font-semibold text-alloy-pine">auto-confirm</span>}
+                        {!group.is_active ?
+                            <span className="ml-2 text-xs text-alloy-midnight/45">inactive</span>
+                        :   null}
+                    </div>
+                    <div className="mt-0.5 text-alloy-midnight/75">
+                        {describeDays(group.days)} · {group.windows.map((w) => formatTourWallTimeRange(w.start_time, w.end_time)).join(", ")}{" "}
+                        <span className="text-alloy-midnight/50">{tourTimeZoneShortName(group.timezone)}</span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-alloy-midnight/50">
+                        {group.slot_duration_minutes} minute tours · {group.buffer_minutes} minute buffer · up to {group.max_bookings_per_slot}{" "}
+                        {group.max_bookings_per_slot === 1 ? "family" : "families"} per time
+                        {group.mixedSettings ? " · some days differ — saving applies these settings to every day" : ""}
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {onEdit ?
+                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onEdit} data-testid={`locations-tour-edit-${group.rules[0]?.id}`}>
+                            Edit
+                        </ConfigurationSecondaryButton>
+                    :   null}
+                    <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onDuplicate} data-testid="tours-schedule-duplicate">
+                        Duplicate
+                    </ConfigurationSecondaryButton>
+                    {onToggle ?
+                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle}>
+                            {group.is_active ? "Deactivate" : "Activate"}
+                        </ConfigurationSecondaryButton>
+                    :   null}
+                    {onDelete ?
+                        <button
+                            type="button"
+                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-800"
+                            disabled={disabled}
+                            onClick={onDelete}
+                        >
+                            Delete
+                        </button>
+                    :   null}
+                </div>
+            </div>
+            {children}
+        </li>
+    );
+}
+
+/** Tour start times one window yields in a day — the same arithmetic the slot engine uses. */
+function windowStarts(start: string, end: string, duration: number, buffer: number): string[] {
+    const s = wallTimeToMinutes(start);
+    const e = wallTimeToMinutes(end);
+    if (s == null || e == null || duration < 1) return [];
+    const out: string[] = [];
+    for (let t = s; t + duration <= e && out.length < 48; t += duration + Math.max(0, buffer)) {
+        out.push(formatTourWallTime(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`) ?? "");
+    }
+    return out;
+}
+
+const BLANK_DRAFT: TourScheduleDraft = {
+    name: "Weekday tours",
+    days: [1, 2, 3, 4, 5],
+    windows: [{ start_time: "09:00:00", end_time: "11:00:00" }],
+    timezone: "",
+    slot_duration_minutes: 30,
+    buffer_minutes: 0,
+    max_bookings_per_slot: 1,
+    approval_required: false,
+    is_active: true,
+};
+
+function ScheduleEditor({
+    scopeLocationId,
+    scheduleId,
+    initial,
+    onSaved,
+    onCancel,
+}: {
+    scopeLocationId: string | null;
+    scheduleId: string | null;
+    initial: TourScheduleDraft | null;
+    onSaved: (overlaps: TourScheduleOverlap[]) => Promise<void>;
+    onCancel: () => void;
+}) {
+    const [draft, setDraft] = useState<TourScheduleDraft>(() => initial ?? BLANK_DRAFT);
+    const [tzSource, setTzSource] = useState<string | null>(initial ? "schedule" : null);
+    const [msg, setMsg] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+
+    // A new schedule starts in the location's authoritative zone (location → organization),
+    // never the browser's.
+    useEffect(() => {
+        if (draft.timezone) return;
+        let live = true;
+        void (async () => {
+            const qs = `?location_id=${encodeURIComponent(scopeLocationId ?? "org")}`;
+            const res = await fetch(`/api/admin/tours/schedules${qs}`, { credentials: "include" }).catch(() => null);
+            const j = res?.ok ? ((await res.json()) as { timezone?: { timezone: string | null; source: string } }) : null;
+            if (!live) return;
+            if (j?.timezone?.timezone) {
+                setDraft((d) => (d.timezone ? d : { ...d, timezone: j.timezone!.timezone! }));
+                setTzSource(j.timezone.source);
+            } else {
+                setTzSource("unresolved");
+            }
+        })();
+        return () => {
+            live = false;
+        };
+    }, [draft.timezone, scopeLocationId]);
+
+    const set = <K extends keyof TourScheduleDraft>(key: K, value: TourScheduleDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+    const perDay = draft.windows.flatMap((w) => windowStarts(w.start_time, w.end_time, draft.slot_duration_minutes, draft.buffer_minutes));
+
+    const submit = async () => {
+        setMsg(null);
+        setSubmitting(true);
+        try {
+            const res = await fetch(
+                scheduleId ? `/api/admin/tours/schedules/${encodeURIComponent(scheduleId)}` : "/api/admin/tours/schedules",
+                {
+                    method: scheduleId ? "PUT" : "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ location_id: scopeLocationId, schedule: draft }),
+                }
+            );
+            const j = (await res.json().catch(() => ({}))) as {
+                schedule_id?: string;
+                rules?: unknown[];
+                overlaps?: TourScheduleOverlap[];
+                error?: string;
+            };
+            if (!res.ok) throw new Error(j.error ?? res.statusText);
+            // The authoritative answer must carry one rule per weekday × window.
+            if (!j.schedule_id || (j.rules?.length ?? 0) !== draft.days.length * draft.windows.length) {
+                throw new Error("Tour schedule save was not confirmed by the authoritative response.");
+            }
+            await onSaved(j.overlaps ?? []);
+        } catch (cause) {
+            setMsg(cause instanceof Error ? cause.message : "Tour schedule could not be saved.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="tours-schedule-editor">
+            <div className="text-xs font-semibold text-alloy-midnight/75">
+                {scheduleId ? "Edit weekly schedule" : initial ? "New schedule (copied settings — no bookings are copied)" : "New weekly schedule"}
+            </div>
+            {msg ?
+                <p className="mt-1 text-xs text-red-700">{msg}</p>
+            :   null}
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="text-xs sm:col-span-2">
+                    Schedule name
+                    <input className="config-runtime-input mt-1" value={draft.name} maxLength={80} onChange={(e) => set("name", e.target.value)} data-testid="tours-schedule-name" />
+                </label>
+                <fieldset className="text-xs sm:col-span-2">
+                    <legend>Days</legend>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                        {TOUR_WEEKDAY_DISPLAY_ORDER.map((d) => {
+                            const on = draft.days.includes(d);
+                            return (
+                                <button
+                                    key={d}
+                                    type="button"
+                                    aria-pressed={on}
+                                    onClick={() => set("days", on ? draft.days.filter((x) => x !== d) : [...draft.days, d].sort((a, b) => a - b))}
+                                    className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                                        on ? "border-alloy-midnight bg-alloy-midnight text-white" : "border-alloy-stone/40 bg-white text-alloy-midnight"
+                                    }`}
+                                    data-testid={`tours-schedule-day-${d}`}
+                                >
+                                    {TOUR_WEEKDAY_SHORT[d]}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </fieldset>
+                <fieldset className="text-xs sm:col-span-2">
+                    <legend>Times each day</legend>
+                    <ul className="mt-1 space-y-1.5">
+                        {draft.windows.map((w, i) => (
+                            <li key={i} className="flex flex-wrap items-center gap-2">
+                                <input
+                                    type="time"
+                                    className="config-runtime-input w-32"
+                                    value={wallTimeToInputValue(w.start_time)}
+                                    aria-label={`Window ${i + 1} start`}
+                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, start_time: `${e.target.value}:00` } : x)))}
+                                    data-testid={`tours-schedule-window-start-${i}`}
+                                />
+                                <span>to</span>
+                                <input
+                                    type="time"
+                                    className="config-runtime-input w-32"
+                                    value={wallTimeToInputValue(w.end_time)}
+                                    aria-label={`Window ${i + 1} end`}
+                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, end_time: `${e.target.value}:00` } : x)))}
+                                    data-testid={`tours-schedule-window-end-${i}`}
+                                />
+                                <span className="text-alloy-midnight/55">{formatTourWallTimeRange(w.start_time, w.end_time)}</span>
+                                {draft.windows.length > 1 ?
+                                    <button type="button" className="text-red-700 underline" onClick={() => set("windows", draft.windows.filter((_, j) => j !== i))}>
+                                        Remove
+                                    </button>
+                                :   null}
+                            </li>
+                        ))}
+                    </ul>
+                    <button
+                        type="button"
+                        className="mt-1.5 text-xs font-medium text-alloy-midnight underline"
+                        onClick={() => set("windows", [...draft.windows, { start_time: "14:00:00", end_time: "15:00:00" }])}
+                        data-testid="tours-schedule-add-window"
+                    >
+                        Add another time window
+                    </button>
+                </fieldset>
+                <label className="text-xs sm:col-span-2">
+                    Time zone
+                    <input
+                        className="config-runtime-input mt-1"
+                        value={draft.timezone}
+                        placeholder="America/Los_Angeles"
+                        onChange={(e) => {
+                            setTzSource("edited");
+                            set("timezone", e.target.value);
+                        }}
+                        data-testid="locations-tour-timezone"
+                    />
+                    <span className="mt-0.5 block text-[11px] text-alloy-midnight/50">
+                        {tzSource === "location" ? "The location's time zone."
+                        : tzSource === "organization" ? "The organization's time zone (the location has none of its own)."
+                        : tzSource === "existing_tour_rules" ? "The zone this location's tours already use."
+                        : tzSource === "unresolved" ? "No time zone is configured for this location — enter one (for example America/Chicago)."
+                        : "Times are in this zone, including across daylight saving changes."}
+                    </span>
+                </label>
+                <label className="text-xs">
+                    Tour length (minutes)
+                    <input type="number" min={1} className="config-runtime-input mt-1" value={draft.slot_duration_minutes} onChange={(e) => set("slot_duration_minutes", Number(e.target.value))} data-testid="locations-tour-duration" />
+                </label>
+                <label className="text-xs">
+                    Gap between tours (minutes)
+                    <input type="number" min={0} className="config-runtime-input mt-1" value={draft.buffer_minutes} onChange={(e) => set("buffer_minutes", Number(e.target.value))} data-testid="locations-tour-buffer" />
+                </label>
+                <label className="text-xs">
+                    Families per time
+                    <input type="number" min={1} className="config-runtime-input mt-1" value={draft.max_bookings_per_slot} onChange={(e) => set("max_bookings_per_slot", Number(e.target.value))} data-testid="locations-tour-max-bookings" />
+                </label>
+                <div className="space-y-1 text-xs">
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={draft.approval_required} onChange={(e) => set("approval_required", e.target.checked)} data-testid="locations-tour-approval" />
+                        Staff approve each booking
+                    </label>
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={draft.is_active} onChange={(e) => set("is_active", e.target.checked)} data-testid="locations-tour-active" />
+                        Active
+                    </label>
+                </div>
+                <p className="text-[11px] text-alloy-midnight/60 sm:col-span-2" data-testid="tours-schedule-preview">
+                    {perDay.length ?
+                        `Each selected day offers ${perDay.length} tour ${perDay.length === 1 ? "time" : "times"}: ${perDay.join(", ")} — ${perDay.length * draft.days.length} a week.`
+                    :   "These windows are too short for one tour."}
+                </p>
+            </div>
+            <div className="mt-3 flex gap-2">
+                <ConfigurationPrimaryButton disabled={submitting} onClick={() => void submit()} data-testid="tours-schedule-save">
+                    {submitting ? "Saving…" : scheduleId ? "Save schedule" : "Create schedule"}
+                </ConfigurationPrimaryButton>
+                <ConfigurationSecondaryButton disabled={submitting} onClick={onCancel}>
+                    Cancel
+                </ConfigurationSecondaryButton>
+            </div>
+        </div>
+    );
+}
+
+/** A single legacy window (created before schedules existed) — edited in place, at its own scope. */
 function TourWindowForm({
-    locations,
-    locationId,
-    locationLabel,
     existingRule,
+    scopeQuery,
     onSaved,
     onCancel,
     disabled,
 }: {
-    locations: LocationOpt[];
-    locationId: string | null;
-    locationLabel: string | null;
-    existingRule?: RuleRow;
+    existingRule: RuleRow;
+    scopeQuery: string;
     onSaved: () => Promise<void>;
     onCancel: () => void;
     disabled: boolean;
 }) {
-    const [location_id, setLocationId] = useState(existingRule?.location_id ?? locationId ?? "");
-    const [day_of_week, setDayOfWeek] = useState(existingRule?.day_of_week ?? 1);
-    const [start_time, setStartTime] = useState(existingRule?.start_time.slice(0, 5) ?? "09:00");
-    const [end_time, setEndTime] = useState(existingRule?.end_time.slice(0, 5) ?? "12:00");
-    const [timezone, setTimezone] = useState(existingRule?.timezone ?? "America/Los_Angeles");
-    const [slot_duration_minutes, setSlot] = useState(existingRule?.slot_duration_minutes ?? 60);
-    const [buffer_minutes, setBuf] = useState(existingRule?.buffer_minutes ?? 0);
-    const [max_bookings_per_slot, setMax] = useState(existingRule?.max_bookings_per_slot ?? 1);
-    const [approval_required, setAppr] = useState(existingRule?.approval_required ?? false);
-    const [is_active, setIsActive] = useState(existingRule?.is_active ?? true);
+    const [day_of_week, setDayOfWeek] = useState(existingRule.day_of_week);
+    const [start_time, setStartTime] = useState(wallTimeToInputValue(existingRule.start_time) || "09:00");
+    const [end_time, setEndTime] = useState(wallTimeToInputValue(existingRule.end_time) || "12:00");
+    const [timezone, setTimezone] = useState(existingRule.timezone);
+    const [slot_duration_minutes, setSlot] = useState(existingRule.slot_duration_minutes);
+    const [buffer_minutes, setBuf] = useState(existingRule.buffer_minutes);
+    const [max_bookings_per_slot, setMax] = useState(existingRule.max_bookings_per_slot);
+    const [approval_required, setAppr] = useState(existingRule.approval_required);
+    const [is_active, setIsActive] = useState(existingRule.is_active);
     const [msg, setMsg] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     const submit = async () => {
         setMsg(null);
-        if (!location_id.trim()) {
-            setMsg("Choose a location");
-            return;
-        }
         setSubmitting(true);
         try {
-            const editable = {
+            const payload = {
                 day_of_week,
                 start_time: `${start_time}:00`,
                 end_time: `${end_time}:00`,
@@ -371,28 +782,16 @@ function TourWindowForm({
                 approval_required,
                 is_active,
             };
-            const payload = existingRule ? editable : { location_id: location_id.trim(), ...editable };
-            const endpoint =
-                existingRule ?
-                    `/api/admin/tours/availability-rules/${encodeURIComponent(existingRule.id)}`
-                :   "/api/admin/tours/availability-rules";
-            const res = await fetch(endpoint, {
-                method: existingRule ? "PATCH" : "POST",
+            const res = await fetch(`/api/admin/tours/availability-rules/${encodeURIComponent(existingRule.id)}?${scopeQuery}`, {
+                method: "PATCH",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
             const j = (await res.json().catch(() => ({}))) as { rule?: RuleRow; error?: string };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
-            if (
-                !j.rule ||
-                !mutationResponseContainsPatch(j.rule as unknown as Record<string, unknown>, payload)
-            ) {
-                throw new Error(
-                    existingRule ?
-                        "Tour availability save was not confirmed by the authoritative response."
-                    :   "Tour availability creation was not confirmed by the authoritative response.",
-                );
+            if (!j.rule || !mutationResponseContainsPatch(j.rule as unknown as Record<string, unknown>, payload)) {
+                throw new Error("Tour availability save was not confirmed by the authoritative response.");
             }
             await onSaved();
         } catch (cause) {
@@ -403,47 +802,16 @@ function TourWindowForm({
     };
 
     return (
-        <div
-            className="mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3"
-            data-testid={existingRule ? "locations-tour-edit-form" : "locations-tour-create-form"}
-        >
-            <div className="text-xs font-semibold text-alloy-midnight/75">
-                {existingRule ? "Edit tour window" : "Add tour window"}
-            </div>
+        <div className="mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="locations-tour-edit-form">
+            <div className="text-xs font-semibold text-alloy-midnight/75">Edit tour window</div>
             {msg ?
                 <p className="mt-1 text-xs text-red-700">{msg}</p>
             :   null}
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {locationId ?
-                    <div className="text-xs">
-                        <span className="config-typo-field-label">Location</span>
-                        <p className="config-typo-sublabel mt-1">{locationLabel ?? "Selected location"}</p>
-                    </div>
-                :   <label className="text-xs">
-                        Location
-                        <select
-                            className="config-runtime-select mt-1"
-                            value={location_id}
-                            onChange={(e) => setLocationId(e.target.value)}
-                        >
-                            <option value="">—</option>
-                            {locations.map((l) => (
-                                <option key={l.id} value={l.id}>
-                                    {l.label ?? l.id.slice(0, 8)}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                }
                 <label className="text-xs">
                     Day
-                    <select
-                        className="config-runtime-select mt-1"
-                        value={day_of_week}
-                        onChange={(e) => setDayOfWeek(Number(e.target.value))}
-                        data-testid="locations-tour-day"
-                    >
-                        {DOW.map((day, index) => (
+                    <select className="config-runtime-select mt-1" value={day_of_week} onChange={(e) => setDayOfWeek(Number(e.target.value))} data-testid="locations-tour-day">
+                        {TOUR_WEEKDAY_LABELS.map((day, index) => (
                             <option key={day} value={index}>
                                 {day}
                             </option>
@@ -451,98 +819,45 @@ function TourWindowForm({
                     </select>
                 </label>
                 <label className="text-xs">
-                    Start (HH:MM)
-                    <input
-                        type="time"
-                        className="config-runtime-input mt-1"
-                        value={start_time}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        data-testid="locations-tour-start"
-                    />
-                </label>
-                <label className="text-xs">
-                    End (HH:MM)
-                    <input
-                        type="time"
-                        className="config-runtime-input mt-1"
-                        value={end_time}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        data-testid="locations-tour-end"
-                    />
-                </label>
-                <label className="text-xs sm:col-span-2">
                     Time zone
-                    <input
-                        className="config-runtime-input mt-1"
-                        value={timezone}
-                        onChange={(e) => setTimezone(e.target.value)}
-                        data-testid="locations-tour-timezone"
-                    />
+                    <input className="config-runtime-input mt-1" value={timezone} onChange={(e) => setTimezone(e.target.value)} data-testid="locations-tour-timezone" />
                 </label>
                 <label className="text-xs">
-                    Slot minutes
-                    <input
-                        type="number"
-                        min={1}
-                        className="config-runtime-input mt-1"
-                        value={slot_duration_minutes}
-                        onChange={(e) => setSlot(Number(e.target.value))}
-                        data-testid="locations-tour-duration"
-                    />
+                    Start <span className="text-alloy-midnight/50">{formatTourWallTime(start_time)}</span>
+                    <input type="time" className="config-runtime-input mt-1" value={start_time} onChange={(e) => setStartTime(e.target.value)} data-testid="locations-tour-start" />
                 </label>
                 <label className="text-xs">
-                    Buffer minutes
-                    <input
-                        type="number"
-                        min={0}
-                        className="config-runtime-input mt-1"
-                        value={buffer_minutes}
-                        onChange={(e) => setBuf(Number(e.target.value))}
-                        data-testid="locations-tour-buffer"
-                    />
+                    End <span className="text-alloy-midnight/50">{formatTourWallTime(end_time)}</span>
+                    <input type="time" className="config-runtime-input mt-1" value={end_time} onChange={(e) => setEndTime(e.target.value)} data-testid="locations-tour-end" />
                 </label>
                 <label className="text-xs">
-                    Max / slot
-                    <input
-                        type="number"
-                        min={1}
-                        className="config-runtime-input mt-1"
-                        value={max_bookings_per_slot}
-                        onChange={(e) => setMax(Number(e.target.value))}
-                        data-testid="locations-tour-max-bookings"
-                    />
+                    Tour length (minutes)
+                    <input type="number" min={1} className="config-runtime-input mt-1" value={slot_duration_minutes} onChange={(e) => setSlot(Number(e.target.value))} data-testid="locations-tour-duration" />
                 </label>
-                <label className="flex items-center gap-2 text-xs sm:col-span-2">
-                    <input
-                        type="checkbox"
-                        checked={approval_required}
-                        onChange={(e) => setAppr(e.target.checked)}
-                        data-testid="locations-tour-approval"
-                    />
-                    Require approval for bookings matching this rule
+                <label className="text-xs">
+                    Gap between tours (minutes)
+                    <input type="number" min={0} className="config-runtime-input mt-1" value={buffer_minutes} onChange={(e) => setBuf(Number(e.target.value))} data-testid="locations-tour-buffer" />
                 </label>
-                <label className="flex items-center gap-2 text-xs sm:col-span-2">
-                    <input
-                        type="checkbox"
-                        checked={is_active}
-                        onChange={(e) => setIsActive(e.target.checked)}
-                        data-testid="locations-tour-active"
-                    />
-                    Active tour window
+                <label className="text-xs">
+                    Families per time
+                    <input type="number" min={1} className="config-runtime-input mt-1" value={max_bookings_per_slot} onChange={(e) => setMax(Number(e.target.value))} data-testid="locations-tour-max-bookings" />
                 </label>
+                <div className="space-y-1 text-xs">
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={approval_required} onChange={(e) => setAppr(e.target.checked)} data-testid="locations-tour-approval" />
+                        Staff approve each booking
+                    </label>
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={is_active} onChange={(e) => setIsActive(e.target.checked)} data-testid="locations-tour-active" />
+                        Active tour window
+                    </label>
+                </div>
             </div>
             <div className="mt-3 flex gap-2">
-                <ConfigurationPrimaryButton
-                    disabled={disabled || submitting}
-                    onClick={() => void submit()}
-                    data-testid="locations-tour-save"
-                >
-                    {submitting ? "Saving…" : existingRule ? "Save tour window" : "Add tour window"}
+                <ConfigurationPrimaryButton disabled={disabled || submitting} onClick={() => void submit()} data-testid="locations-tour-save">
+                    {submitting ? "Saving…" : "Save tour window"}
                 </ConfigurationPrimaryButton>
-                <ConfigurationSecondaryButton
-                    disabled={disabled || submitting}
-                    onClick={onCancel}
-                >
+                <ConfigurationSecondaryButton disabled={disabled || submitting} onClick={onCancel}>
                     Cancel
                 </ConfigurationSecondaryButton>
             </div>

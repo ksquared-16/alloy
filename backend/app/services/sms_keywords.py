@@ -43,11 +43,26 @@ _CONTRACT = _load_contract()
 
 KEYWORDS: Dict[str, List[str]] = _CONTRACT["keywords"]
 AFFECTED_CATEGORIES: List[str] = _CONTRACT["affected_preference_categories"]
+STOP_CATEGORIES: List[str] = list(
+    _CONTRACT.get("stop_preference_categories") or AFFECTED_CATEGORIES
+)
+START_CATEGORIES: List[str] = list(
+    _CONTRACT.get("start_preference_categories")
+    or [c for c in AFFECTED_CATEGORIES if c != "sms_marketing"]
+)
 TARGET_STATE: Dict[str, Optional[str]] = _CONTRACT["target_state"]
 HELP_RESPONSE: str = _CONTRACT["help_response"]
 STOP_RESPONSE: str = _CONTRACT["stop_response"]
 START_RESPONSE: str = _CONTRACT["start_response"]
 CONTRACT_VERSION: str = _CONTRACT["version"]
+
+
+def categories_for_keyword(keyword: str) -> List[str]:
+    if keyword == "stop":
+        return list(STOP_CATEGORIES)
+    if keyword == "start":
+        return list(START_CATEGORIES)
+    return []
 
 _LOOKUP = {token: keyword for keyword, tokens in KEYWORDS.items() for token in tokens}
 
@@ -132,7 +147,7 @@ def build_preference_changes(
 
     states = current_states or {}
     changes: List[Dict[str, Any]] = []
-    for category in AFFECTED_CATEGORIES:
+    for category in categories_for_keyword(keyword):
         changes.append(
             {
                 "org_id": org_id,

@@ -150,13 +150,23 @@ describe("a booked tour shows what the parent needs", () => {
         bookingTimezone: "America/Los_Angeles",
     };
 
-    it("pending asks for confirmation first", () => {
-        const v = buildTourParentView({ ...booked, bookingStatusKey: "pending_approval", availableActions: ["confirm_tour", "reschedule_tour", "cancel_tour"] });
+    it("pending says plainly that the school has not confirmed the visit yet", () => {
+        const v = buildTourParentView({ ...booked, bookingStatusKey: "pending_approval", availableActions: ["view_tour_details", "reschedule_tour"] });
         expect(v.state).toBe("booked_pending");
-        expect(v.actions[0].intent).toBe("confirm");
-        expect(v.actions[0].tone).toBe("primary");
+        expect(v.headline).toBe("Your tour request is in");
+        expect(v.notice).toBe("This visit is not confirmed yet. You'll hear from us once it is.");
+        expect(`${v.headline} ${v.bodyLine} ${v.notice}`).not.toMatch(/\bconfirmed\b(?! yet)/i);
         expect(v.bookingLabel).toBe("Monday, August 10 · 9:00 AM");
         expect(v.bodyLine).toContain("Monday, August 10");
+        // A credential minted today carries no way to approve the booking.
+        expect(v.actions.map((a) => a.intent)).toEqual(["reschedule", "cancel"]);
+    });
+
+    it("a LEGACY confirm_tour link on a pending booking offers only an acknowledgement, still unconfirmed", () => {
+        const v = buildTourParentView({ ...booked, bookingStatusKey: "pending_approval", availableActions: ["confirm_tour"] });
+        expect(v.state).toBe("booked_pending");
+        expect(v.actions).toEqual([{ intent: "confirm", label: "Yes, I'll be there", tone: "primary" }]);
+        expect(v.headline).not.toBe("Tour confirmed");
     });
 
     it("confirmed stops asking and still allows change", () => {

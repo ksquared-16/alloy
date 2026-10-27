@@ -24,6 +24,51 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { documentActorForRequest } from "@/lib/documents/assertDocumentAccess";
 import { DOCUMENT_SOURCE_KINDS } from "@/lib/pos/documentFiling/documentFilingModel";
 import { caseRequiresFiling, fileDocumentCase } from "@/lib/pos/documentFiling/documentFilingService";
+import {
+    materializeRequestedTourForCase,
+    type RequestedTourHandoffOutcome,
+} from "@/lib/tours/publicCalendar/materializeRequestedTour";
+import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
+import {
+    commitIntakeMarketingConsentForCase,
+    type IntakeMarketingConsentHandoff,
+} from "@/lib/pos/processingCase/commitIntakeMarketingConsentForCase";
+import { readIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+
+/*
+ * S7 × C1 — the family's intake marketing-consent answer is committed for the person the lead belongs
+ * to, AFTER the lead commits and BEFORE the requested tour (whose confirmation reads preferences). A
+ * failure is reported, never thrown: it cannot undo the lead, and a retried Approve tries again.
+ */
+async function commitMarketingConsentSafe(
+    supabase: ReturnType<typeof createAdminClient>,
+    args: Parameters<typeof commitIntakeMarketingConsentForCase>[1]
+): Promise<IntakeMarketingConsentHandoff> {
+    try {
+        return await commitIntakeMarketingConsentForCase(supabase, args);
+    } catch (error) {
+        console.warn("[processing approve] marketing consent handoff failed", error);
+        return { kind: "failed", error: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * S7 — the requested tour is a SEPARATE consequence of acceptance. It runs after the lead is
+ * committed and the case completed, and nothing it does (an unavailable time, an error) can undo
+ * that approval. Re-running Approve on a completed case retries it; the handoff is idempotent.
+ */
+async function resolveRequestedTourSafe(
+    supabase: ReturnType<typeof createAdminClient>,
+    args: { orgId: string; caseId: string; opportunityId: string | null; actorUserId: string | null }
+): Promise<RequestedTourHandoffOutcome | { kind: "failed"; error: string }> {
+    try {
+        return await materializeRequestedTourForCase(supabase, args);
+    } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        console.warn("[processing approve] requested tour handoff failed", error);
+        return { kind: "failed", error };
+    }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -78,11 +123,39 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
         const row = caseRow as { status: string; case_type?: string | null; metadata?: Record<string, unknown> };
         if (row.status === "completed" || row.status === "archived") {
+            const prior = (row.metadata?.operational_result ?? null) as {
+                kind?: unknown;
+                recordId?: unknown;
+                records?: { person?: unknown } | null;
+            } | null;
+            // A replay commits consent only if it never committed; a committed record writes nothing again.
+            const marketingConsent =
+                row.status === "completed" && prior?.kind === "lead" && readIntakeMarketingConsent(row.metadata)
+                    ? await commitMarketingConsentSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          personId: typeof prior.records?.person === "string" ? prior.records.person : null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+            // A retry of an ACCEPTED lead with a requested tour finishes the tour step (idempotent).
+            // A rejected or archived case is never booked: only a lead result carries an Opportunity.
+            const tourRequest =
+                row.status === "completed" && prior?.kind === "lead" && readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: typeof prior.recordId === "string" ? prior.recordId : null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
             return jsonData({
                 caseId,
                 status: row.status,
                 operationalResult: row.metadata?.operational_result ?? null,
                 alreadyDone: true,
+                ...(marketingConsent ? { marketingConsent } : {}),
+                ...(tourRequest ? { tourRequest } : {}),
             });
         }
         // Evidence only: there is no family to hand this case's outcome to, so nothing is "approved".
@@ -234,7 +307,30 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                         console.warn("[processing approve] lead_created emit failed", e instanceof Error ? e.message : e);
                     }
                 }
-                return jsonData({ caseId, status: "completed", operationalResult, attempt });
+                const marketingConsent = readIntakeMarketingConsent(row.metadata)
+                    ? await commitMarketingConsentSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          personId: records.person ?? null,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+                const tourRequest = readRequestedTour(row.metadata)
+                    ? await resolveRequestedTourSafe(supabase, {
+                          orgId: ctx.orgId,
+                          caseId,
+                          opportunityId: leadId,
+                          actorUserId: ctx.userId ?? null,
+                      })
+                    : undefined;
+                return jsonData({
+                    caseId,
+                    status: "completed",
+                    operationalResult,
+                    attempt,
+                    ...(marketingConsent ? { marketingConsent } : {}),
+                    ...(tourRequest ? { tourRequest } : {}),
+                });
             } catch (e) {
                 // identity_review_required (plausible match needs an operator decision), stale
                 // plan, unauthorized, etc. — surface with the operator error mapping.

@@ -3,10 +3,19 @@ import type { ComputeAvailableTourSlotsParams, TourAvailabilityRuleRow, TourBook
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import { computeSlotsFromRulesAndBookings } from "@/lib/tours/availability/internalCompute";
 import { TOUR_BOOKING_BLOCKING_STATUS_KEYS } from "@/lib/tours/constants";
+import { loadOperatingCalendarForInstants } from "@/lib/operatingCalendar/operatingCalendarServer";
 
 /**
  * Load active availability rules + blocking tour bookings, then compute bookable slots.
  * Rules are interpreted in each rule's `timezone`; bookings compared as UTC instants.
+ *
+ * The location's Operating Calendar is applied LAST, to the generated slots: a closed
+ * day offers nothing, a partial closure removes only the slots it overlaps, and modified
+ * hours keep only the slots wholly inside them. This is the only slot authority, so the
+ * operator picker, the public page, invitations and every booking writer
+ * (`assertSlotAvailableForWrite`, the public book/reschedule revalidation) see the same
+ * exclusions. Bookings are counted before the filter and are never touched by it: a
+ * closure hides times, it does not release or cancel what was booked.
  */
 export async function computeAvailableTourSlots(
     supabase: SupabaseClient,
@@ -57,11 +66,23 @@ export async function computeAvailableTourSlots(
 
     const bookings = (bookingsRaw ?? []) as unknown as TourBookingOverlapRow[];
 
-    return computeSlotsFromRulesAndBookings(rulesForLocation, bookings, {
+    const slots = computeSlotsFromRulesAndBookings(rulesForLocation, bookings, {
         locationId,
         userId,
         fromUtc: from,
         toUtc: to,
         excludeBookingId: params.excludeBookingId ?? null,
     });
+    if (slots.length === 0) return slots;
+
+    // A failed calendar read throws: offering slots on a day we could not check is
+    // the one wrong answer here.
+    const calendar = await loadOperatingCalendarForInstants(supabase, {
+        orgId,
+        locationId,
+        fromUtc: from,
+        toUtc: new Date(Math.max(to.getTime(), ...slots.map((s) => Date.parse(s.endAt)))),
+        fallbackTimezone: slots[0]!.timezone,
+    });
+    return slots.filter((s) => calendar.isOperating(new Date(s.startAt), new Date(s.endAt)));
 }

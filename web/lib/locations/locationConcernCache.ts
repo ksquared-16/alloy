@@ -23,6 +23,8 @@ export type LocationTourRulePreview = {
     max_bookings_per_slot: number;
     approval_required: boolean;
     is_active: boolean;
+    /** Carries `tour_schedule` (S3) — the weekly schedule a rule belongs to. */
+    metadata?: Record<string, unknown> | null;
 };
 
 export type LocationOwnedSetupSnapshot = {
@@ -164,7 +166,9 @@ async function fetchTourRulesNetwork(
     if (!response.ok) {
         throw new Error(json.error ?? "Tour availability could not be loaded.");
     }
-    const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId);
+    // Organization-wide rules (null location) generate slots here too (D-T6): they are part of this
+    // location's tour availability, shown as inherited, never hidden.
+    const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId || rule.location_id == null);
     return {
         orgId,
         locationId,

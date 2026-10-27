@@ -560,6 +560,11 @@ def process_communication_messages(
                         message_id=None,
                         in_reply_to=thread_headers.get("in_reply_to"),
                         references=thread_headers.get("references"),
+                        unsubscribe_url=(
+                            str(meta.get("unsubscribe_url") or "").strip() or None
+                            if isinstance(meta, dict)
+                            else None
+                        ),
                     ),
                     attachments=attachments,
                 )

@@ -108,28 +108,46 @@ describe("Communications certification claims are bound to the implementation", 
         );
     });
 
-    it("consent has exactly one writer, and it is not a communications surface", () => {
+    it("consent has exactly one writer — the Communications preference authority — and every caller is classified", () => {
+        /*
+         * Tours I1 (C1 integrated): `ports.ts` no longer upserts `communication_preferences` itself; it
+         * calls the same authority as operator edits and recipient unsubscribe, which writes the row AND
+         * its append-only event. The table is matched by literal name OR by `COMMS_V2_PREFERENCE_TABLES
+         * .preferences` — the literal-only pattern this replaced could not see that authority at all.
+         */
         const codeOnly = (s: string) =>
             s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
                 .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
         const writers: string[] = [];
+        const callers: string[] = [];
         for (const root of ["lib", "app"]) {
             for (const file of walk(join(WEB, root))) {
                 const code = codeOnly(readFileSync(file, "utf8"));
+                const rel = file.slice(WEB.length + 1);
                 if (
-                    /from\(\s*["'`]communication_preferences["'`]\s*\)[\s\S]{0,400}?\.(insert|update|upsert|delete)\s*\(/.test(
+                    /from\(\s*(?:["'`]communication_preferences["'`]|COMMS_V2_PREFERENCE_TABLES\.preferences)\s*\)[\s\S]{0,400}?\.(insert|update|upsert|delete)\s*\(/.test(
                         code,
                     )
                 ) {
-                    writers.push(file.slice(WEB.length + 1));
+                    writers.push(rel);
+                }
+                if (rel !== "lib/communications/v2/persistCommunicationPreference.ts" && /\bpersistCommunicationPreference\s*\(/.test(code)) {
+                    callers.push(rel);
                 }
             }
         }
+        expect(writers.sort(), "a second writer of communication_preferences bypasses the audited authority").toEqual([
+            "lib/communications/v2/persistCommunicationPreference.ts",
+        ]);
         expect(
-            writers.sort(),
-            "the set of consent writers changed. Consent is authored from the POS processing-identity "
-                + "command path; a new writer needs classifying, and a communications surface writing it "
-                + "would move consent authorship without anyone deciding to.",
-        ).toEqual(["lib/pos/processingIdentity/commands/ports.ts"]);
+            callers.sort(),
+            "the set of consent authors changed — a new caller needs classifying before it may write consent",
+        ).toEqual([
+            "app/api/admin/communications/preferences/route.ts", // operator edit (communications.preferences)
+            "lib/communications/preferences/applyUnsubscribe.ts", // recipient unsubscribe (token)
+            "lib/communications/preferences/intakeMarketingConsent.ts", // public intake commit (opt-out preserving)
+            "lib/communications/v2/personCommunicationPreferences.ts", // operator person-preferences service
+            "lib/pos/processingIdentity/commands/ports.ts", // Processing identity commit (opt-out preserving)
+        ]);
     });
 });
