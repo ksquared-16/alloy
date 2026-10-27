@@ -17,6 +17,7 @@ import { FORM_SUBMIT_LABEL_MAX, formSchemaV1Schema, formSubmitLabel } from "@/li
 import {
     contrastRatio,
     participantBrandStyle,
+    participantButtonColors,
     participantOnAccent,
     PARTICIPANT_ON_ACCENT_DARK,
     PARTICIPANT_ON_ACCENT_LIGHT,
@@ -38,36 +39,46 @@ const RUNTIME_DIR = "app/forms/embed/[token]";
 describe("F01 — the tenant accent paints the public runtime", () => {
     it("the shell publishes the accent, a contrast-chosen text colour and the accent ink", () => {
         expect(participantBrandStyle(resolveParticipantBrand({ accent_color: "#B91C1C" }))).toEqual({
+            "--participant-brand": "#B91C1C",
             "--participant-accent": "#B91C1C",
             "--participant-on-accent": PARTICIPANT_ON_ACCENT_LIGHT,
             "--participant-accent-ink": "#B91C1C",
         });
     });
 
-    it("a pale accent gets dark text, never near-invisible white", () => {
+    it("a pale accent keeps its fill under dark text of its own hue, never near-invisible white", () => {
         for (const pale of ["#FDE68A", "#BAE6FD", "#FFFFFF", "#FFF"]) {
-            expect(participantOnAccent(pale), pale).toBe(PARTICIPANT_ON_ACCENT_DARK);
-            expect(contrastRatio(pale, PARTICIPANT_ON_ACCENT_DARK), pale).toBeGreaterThanOrEqual(4.5);
+            const { fill, ink } = participantButtonColors(pale);
+            expect(fill.toUpperCase(), pale).toBe(pale.length === 4 ? `#${pale.slice(1).split("").map((c) => c + c).join("")}` : pale);
+            expect(ink, pale).not.toBe(PARTICIPANT_ON_ACCENT_LIGHT);
+            expect(contrastRatio(fill, ink), pale).toBeGreaterThanOrEqual(4.5);
         }
     });
 
-    it("S4-D: the platform default no longer keeps a failing white label", () => {
-        // White on Bend Pine is about 3.2:1 — under the Director's 4.5:1 floor — so it carries dark ink.
+    it("P1-B: the platform default is deepened in its own hue under white, not given near-black text", () => {
+        // White on Bend Pine is about 3.2:1 — under the 4.5:1 floor. The action surface becomes a deeper
+        // Bend Pine that holds white, instead of the near-black label the Director rejected.
         expect(contrastRatio(DEFAULT_FORM_ACCENT, PARTICIPANT_ON_ACCENT_LIGHT)).toBeLessThan(4.5);
-        expect(participantOnAccent(DEFAULT_FORM_ACCENT)).toBe(PARTICIPANT_ON_ACCENT_DARK);
+        const { fill, ink } = participantButtonColors(DEFAULT_FORM_ACCENT);
+        expect(ink).toBe(PARTICIPANT_ON_ACCENT_LIGHT);
+        expect(fill).toBe("#00856B");
+        expect(contrastRatio(fill, ink)).toBeGreaterThanOrEqual(4.5);
+        expect(participantOnAccent(DEFAULT_FORM_ACCENT)).not.toBe(PARTICIPANT_ON_ACCENT_DARK);
     });
 
-    it("whatever the accent, the chosen text never falls under 4.5:1", () => {
+    it("whatever the accent, the button pair never falls under 4.5:1", () => {
         for (let i = 0; i < 4096; i += 7) {
             const hex = `#${i.toString(16).padStart(3, "0")}`;
-            expect(contrastRatio(hex, participantOnAccent(hex)), hex).toBeGreaterThanOrEqual(4.5);
+            const { fill, ink } = participantButtonColors(hex);
+            expect(contrastRatio(fill, ink), hex).toBeGreaterThanOrEqual(4.5);
+            expect(contrastRatio(fill, participantOnAccent(hex)), hex).toBeGreaterThanOrEqual(4.5);
         }
     });
 
     it("the accent utilities read the shell's variable, not a value frozen on :root", () => {
         const css = read("app/globals.css");
         const inline = css.match(/@theme inline\s*\{([^}]*)\}/)?.[1] ?? "";
-        expect(inline).toMatch(/--color-participant-accent:\s*var\(--participant-accent,\s*#00A283\)/);
+        expect(inline).toMatch(/--color-participant-accent:\s*var\(--participant-accent,\s*#00856B\)/);
         expect(inline).toMatch(/--color-participant-on-accent:\s*var\(--participant-on-accent,/);
         expect(inline).toMatch(/--color-participant-accent-ink:\s*var\(--participant-accent-ink,/);
         // Native checkboxes and radios follow the tenant too.
@@ -91,7 +102,7 @@ describe("F01 — the tenant accent paints the public runtime", () => {
 
     it("the builder preview paints the same contrast-chosen label as the runtime", () => {
         const builder = code("app/adminV2/pos/ProcessingFormBuilder.tsx");
-        expect(builder).toContain("color: participantOnAccent(accent)");
+        expect(builder).toContain("backgroundColor: participantButtonColors(accent).fill, color: participantButtonColors(accent).ink");
     });
 });
 

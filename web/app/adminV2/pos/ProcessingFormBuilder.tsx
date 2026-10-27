@@ -5,7 +5,7 @@ import { composeRuntimeRows, runtimeCellSpanClass, runtimeRowClass } from "@/lib
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { FORM_SUBMIT_LABEL_MAX, formSubmitLabel } from "@/lib/forms/schema";
-import { participantOnAccent } from "@/lib/public/forms/participantBrandTheme";
+import { participantButtonColors } from "@/lib/public/forms/participantBrandTheme";
 import { findFieldDeep } from "@/lib/forms/formBuilderSchema";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas from "./ProcessingFormCanvas";
@@ -787,7 +787,7 @@ export function FormPreview({
             <button
                 type="button"
                 className="mt-8 w-full rounded-lg px-8 py-3 text-[13px] font-semibold sm:w-auto sm:min-w-[10rem]"
-                style={{ backgroundColor: accent, color: participantOnAccent(accent) }}
+                style={{ backgroundColor: participantButtonColors(accent).fill, color: participantButtonColors(accent).ink }}
                 data-testid="form-builder-preview-submit"
             >
                 {formSubmitLabel(schema) ?? "Submit"}

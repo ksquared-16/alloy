@@ -53,9 +53,10 @@
    shell's `--participant-accent` / `--participant-on-accent` (participantBrandTheme.ts), falling back
    to the platform default outside a branded shell. */
 @theme inline {
-  --color-participant-accent: var(--participant-accent, #00A283);
-  /* Fallbacks are the values brandOnAccent / brandAccentInk compute for Bend Pine (4.67:1, 4.78:1). */
-  --color-participant-on-accent: var(--participant-on-accent, #18273A);
+  /* Fallbacks are the pair brandButtonColors / brandAccentInk compute for Bend Pine #00A283: the action
+     surface deepened in hue to #00856B under white text (4.60:1), and the accent as text (4.78:1). */
+  --color-participant-accent: var(--participant-accent, #00856B);
+  --color-participant-on-accent: var(--participant-on-accent, #FFFFFF);
   /* The accent as text / focus ring on white, darkened in hue when the accent is too pale (S4-D). */
   --color-participant-accent-ink: var(--participant-accent-ink, #008269);
 }
