@@ -75,3 +75,7 @@ web/scripts/.h2-fixture-state.json
 
 # Generated partner/export artifacts — never committed.
 /dist/
+
+# Vacilando provider-seat session artifacts (one per seat, created inside the lane worktree; never source)
+/psess_*/
+/.claude-seat.json
