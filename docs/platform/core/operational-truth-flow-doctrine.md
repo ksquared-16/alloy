@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -79,7 +79,7 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 **Records commitments.** What the organization has agreed to do: Lead, Enrollment proposal, Agreement, Placement, Schedule Assignment.
 
 - Intent is **committed truth** — a system of record — distinct from a proposal/forecast.
-- Intent already has its canonical, complete implementation for enrollment: `child_enrollment_agreements` → `child_placements` → `schedule_assignments`, created via the `approve_enrollment` handoff from the OCM enrollment proposal. See [`./placement-system.md`](./placement-system.md).
+- Intent already has its canonical, complete implementation for enrollment: `child_enrollment_agreements` → `child_placements` → `schedule_assignments`. The **canonical materialization path** is process-instance outcome `enrolled` → `materializeEnrollmentFromProcessInstance` → `applyChildEnrollmentMaterialization` (gated by `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED`). The legacy `approve_enrollment` / OCM-proposal handoff remains for compatibility. See [`./placement-system.md`](./placement-system.md).
 - **Proposal (intent-to-be) and committed Intent stay separate.** The OCM enrollment proposal is pre-commitment; the agreement/placement/schedule rows are the commitment. Do not collapse them.
 - Every future commitment domain copies this template (own participation entity, effective-dated, provenance FKs back to its source).
 

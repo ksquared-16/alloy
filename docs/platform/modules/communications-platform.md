@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -145,8 +145,9 @@ Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.
 
 ## Tour communications authority (S1, 2026-10-22)
 
-Tour booking semantics have **no certified lane** (D0, 2026-10-21); this section records only the
-communications boundary Tours now relies on. Evidence: `certification/tours-calendar-forms/s1/`.
+Tour booking product semantics route provisionally under the **Enrollment / Placement** context lane
+(Director D-02, 2026-10-27); this section records only the **communications** boundary Tours relies
+on (consent preference truth and canonical send enqueue). Evidence: `certification/tours-calendar-forms/s1/`.
 
 - **One policy decides whether a booking may be talked about:** `mayCommunicateForTour(intent, state)`
   (`web/lib/tours/comms/tourCommsEligibility.ts`), evaluated against the booking **re-read from the

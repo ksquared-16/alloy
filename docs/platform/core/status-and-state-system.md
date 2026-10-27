@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -159,7 +159,7 @@ itself is the persisted `stage_key`:
 > `membership_criteria_v1` as a planned successor name, never as current runtime configuration.
 
 - `subject_type: "case"` → family-track stage; membership = `opportunities.stage_key`, count unit `cases`.
-- `subject_type: "child"` → child-track stage; membership = `OCM.stage_key`, count unit `enrollment_tracks`.
+- `subject_type: "child"` → child-track stage; membership = `process_instances.stage_key`, count unit `enrollment_tracks` (not `OCM.stage_key` — see correction above).
 - `subject_type: "candidate"` → placement candidate grain (waitlist), count unit `candidates`.
 
 The old `included_status_keys` / `included_disposition_keys` lists were removed by the
@@ -240,7 +240,7 @@ Resolver output (`resolveOpportunityAttention`) — operational overlay with rea
 
 | Surface | Location |
 |---------|----------|
-| Status definitions | `/admin/settings/statuses` |
+| Status definitions | `/organization/data-model?section=statuses` (legacy `/admin/settings/statuses` redirects) |
 | Stage membership + outcomes | Business process builder (`stage_operating_plan_v1`, `queue_membership_v1`) |
 | Field requirements | Stage required information (`requirement_policy`) |
 
