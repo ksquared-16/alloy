@@ -1,17 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 import { loadLocationTourRules, peekLocationTourRules } from "@/lib/locations/locationConcernCache";
 import {
-    buildTourWeekdayView,
     duplicateTourScheduleDraft,
+    findRepeatedTourSchedules,
     groupTourRulesIntoSchedules,
     tourScheduleGroupToDraft,
+    TOUR_ORGANIZATION_DEFAULTS_HREF,
     TOUR_WEEKDAY_DISPLAY_ORDER,
     TOUR_WEEKDAY_LABELS,
     TOUR_WEEKDAY_SHORT,
@@ -28,18 +31,36 @@ import {
     wallTimeToMinutes,
 } from "@/lib/tours/schedules/tourTimeFormat";
 import TourPublicBrandPanel from "./TourPublicBrandPanel";
+import TourShareSection from "./TourShareSection";
 
 type LocationOpt = { id: string; label: string | null };
 
 type RuleRow = TourRuleForAuthoring;
 
+type ToursSection = "availability" | "booking" | "share";
+
+const SECTIONS: { key: ToursSection; label: string }[] = [
+    { key: "availability", label: "Availability" },
+    { key: "booking", label: "Booking experience" },
+    { key: "share", label: "Preview & Share" },
+];
+
 /**
- * Tour availability authoring (S3).
+ * Tours configuration (S3, reorganized in P1-A).
  *
- * Weekly schedules are the unit an operator authors ("Weekday tours: Mon–Fri, 8:30–10:30 AM and
- * 2:30–3:30 PM"); the page also shows the week day by day, including organization-wide windows that
- * a location inherits. Inherited windows are read-only here — they are edited at organization scope,
- * and the server refuses a location-scoped edit of them.
+ * Three operator concepts, one surface:
+ *
+ *   - Availability — weekly schedules. Each schedule is shown ONCE, with its weekdays and all of its
+ *     windows. (The old "Week at a glance" list repeated every rule per weekday beneath the same
+ *     schedules, so one Monday window read as two entries.) Organization-wide schedules a location
+ *     inherits are listed separately, read-only, with a link to where they are edited.
+ *   - Booking experience — the school's public identity: name, colour, logo, button text.
+ *   - Preview & Share — the hosted calendar, its iframe and a website button (location scope).
+ *
+ * Inheritance is ADDITIVE, as the slot engine has always worked: an organization-wide schedule offers
+ * tours at every location, and a location's own schedules add to it. A location cannot hide an
+ * organization-wide schedule; it is changed (or removed) at organization scope only, and the server
+ * refuses a location-scoped edit of it.
  *
  * Every time is a wall-clock time in the schedule's own zone, said on a 12-hour clock.
  */
@@ -56,6 +77,7 @@ export default function TourAvailabilitySettingsClient({
     embedded?: boolean;
     onMutationCommitted?: () => void | Promise<void>;
 }) {
+    const [section, setSection] = useState<ToursSection>("availability");
     const [locations, setLocations] = useState<LocationOpt[]>([]);
     /** "" = organization-wide scope. */
     const [scope, setScope] = useState(locationId ?? "");
@@ -67,7 +89,7 @@ export default function TourAvailabilitySettingsClient({
     const [notice, setNotice] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [editor, setEditor] = useState<
-        | { mode: "create"; draft: TourScheduleDraft | null }
+        | { mode: "create"; draft: TourScheduleDraft | null; fromInherited?: string }
         | { mode: "edit"; group: TourScheduleGroup }
         | null
     >(null);
@@ -155,9 +177,9 @@ export default function TourAvailabilitySettingsClient({
     }, [loadRules]);
 
     const groups = useMemo(() => groupTourRulesIntoSchedules(rules, scopeLocationId), [rules, scopeLocationId]);
-    const week = useMemo(() => buildTourWeekdayView(groups), [groups]);
     const localGroups = groups.filter((g) => !g.inherited);
     const inheritedGroups = groups.filter((g) => g.inherited);
+    const repeats = useMemo(() => findRepeatedTourSchedules(groups), [groups]);
 
     const committed = async (message?: string) => {
         await loadRules();
@@ -210,22 +232,14 @@ export default function TourAvailabilitySettingsClient({
     const busy = saving || editor != null || editingRule != null;
 
     return (
-        <div className="w-full min-w-0 space-y-5">
+        <div className="w-full min-w-0 space-y-4" data-testid="tours-configuration" data-tours-scope={scopeLocationId ? "location" : "organization"}>
             {!embedded ?
                 <header>
-                    <h1 className="text-lg font-semibold text-alloy-midnight">Tour availability</h1>
+                    <h1 className="text-lg font-semibold text-alloy-midnight">Tours</h1>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
-                        Weekly schedules decide when families can book a visit. Organization-wide schedules apply at every location.
+                        Organization-wide schedules offer tours at every location. Choose a location to see what it adds and how families book.
                     </p>
                 </header>
-            :   null}
-            {err ?
-                <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>
-            :   null}
-            {notice ?
-                <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" data-testid="tours-schedule-notice">
-                    {notice}
-                </p>
             :   null}
             {!locationId ?
                 <label className="block text-xs font-medium text-alloy-midnight/70">
@@ -251,159 +265,205 @@ export default function TourAvailabilitySettingsClient({
                 </label>
             :   null}
 
-            {loading && !refreshing && rules.length === 0 ?
-                <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4" data-testid="tours-availability-pending" aria-busy="true">
-                    <div className="h-3 w-40 animate-pulse rounded bg-alloy-midnight/[0.06]" />
-                    <div className="mt-3 h-3 w-64 animate-pulse rounded bg-alloy-midnight/[0.04]" />
-                </div>
-            :   null}
-            {refreshing ?
-                <p className="text-sm text-alloy-midnight/45" data-testid="tours-availability-refreshing">
-                    Updating tour windows…
-                </p>
+            <SettingsEntityTabBar tabs={SECTIONS} activeKey={section} onSelect={setSection} aria-label="Tours configuration" />
+
+            {err ?
+                <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>
             :   null}
 
-            {!loading && rules.length === 0 ?
-                <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4">
-                    <p className="text-sm font-medium text-alloy-midnight/80">No tour availability set</p>
-                    <p className="config-typo-sublabel mt-1">Add a weekly schedule for when families can visit {scopeLabel}.</p>
-                </div>
-            :   null}
+            {section === "booking" ?
+                <TourPublicBrandPanel key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} />
+            : section === "share" ?
+                <TourShareSection key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} hasSchedules={groups.some((g) => g.is_active)} />
+            :   <div className="space-y-4" data-testid="tours-availability-section">
+                    {notice ?
+                        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" data-testid="tours-schedule-notice">
+                            {notice}
+                        </p>
+                    :   null}
 
-            {rules.length > 0 ?
-                <section aria-label="Tour times by weekday" data-testid="tours-weekday-view">
-                    <h2 className="config-typo-field-label">Week at a glance</h2>
-                    <ul className="mt-2 divide-y divide-alloy-stone/15 rounded-lg border border-alloy-stone/15 bg-white">
-                        {week.map(({ day, entries }) => (
-                            <li key={day} className="flex flex-wrap items-start gap-3 px-3 py-2" data-testid={`tours-weekday-${day}`}>
-                                <span className="w-24 shrink-0 text-sm font-semibold text-alloy-midnight">{TOUR_WEEKDAY_LABELS[day]}</span>
-                                {entries.length === 0 ?
-                                    <span className="text-sm text-alloy-midnight/45">No tours</span>
-                                :   <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                                        {entries.map((e) => (
-                                            <span
-                                                key={e.ruleId}
-                                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                                                    e.is_active ? "bg-alloy-stone/60 text-alloy-midnight" : "bg-alloy-stone/30 text-alloy-midnight/45 line-through"
-                                                }`}
-                                                title={`${e.scheduleName}${e.inherited ? " · organization-wide" : ""}${e.approval_required ? " · needs approval" : ""}`}
-                                                data-tour-weekday-entry={e.inherited ? "inherited" : "local"}
-                                            >
-                                                {formatTourWallTimeRange(e.start_time, e.end_time)}
-                                                <span className="text-alloy-midnight/50">· {e.scheduleName}</span>
-                                                {e.inherited ?
-                                                    <span className="rounded bg-sky-100 px-1 text-[10px] font-semibold text-sky-800">Org-wide</span>
-                                                :   null}
-                                            </span>
-                                        ))}
-                                    </span>
-                                }
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            :   null}
+                    <AvailabilityOwnership
+                        scopeLocationId={scopeLocationId}
+                        scopeLabel={scopeLabel}
+                        localCount={localGroups.length}
+                        inheritedCount={inheritedGroups.length}
+                        embedded={embedded}
+                    />
 
-            {localGroups.length > 0 ?
-                <section aria-label="Schedules" className="space-y-2">
-                    <h2 className="config-typo-field-label">
-                        {scopeLocationId ? `Schedules at ${scopeLabel}` : "Organization-wide schedules"}
-                    </h2>
-                    <ul className="space-y-2">
-                        {localGroups.map((g) => (
-                            <ScheduleCard
-                                key={g.key}
-                                group={g}
-                                disabled={busy}
-                                onEdit={() => {
-                                    setNotice(null);
-                                    if (g.scheduleId) setEditor({ mode: "edit", group: g });
-                                    else setEditingRule(g.rules[0]!);
-                                }}
-                                onDuplicate={() => {
-                                    setNotice(null);
-                                    setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
-                                }}
-                                onDelete={() => void removeGroup(g)}
-                                onToggle={g.scheduleId ? null : () => void toggleRule(g.rules[0]!)}
-                            >
-                                {editingRule && g.rules[0]?.id === editingRule.id ?
-                                    <TourWindowForm
-                                        existingRule={editingRule}
-                                        scopeQuery={ruleScopeQuery}
-                                        onSaved={async () => {
-                                            setEditingRule(null);
-                                            await committed();
+                    {loading && !refreshing && rules.length === 0 ?
+                        <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4" data-testid="tours-availability-pending" aria-busy="true">
+                            <div className="h-3 w-40 animate-pulse rounded bg-alloy-midnight/[0.06]" />
+                            <div className="mt-3 h-3 w-64 animate-pulse rounded bg-alloy-midnight/[0.04]" />
+                        </div>
+                    :   null}
+                    {refreshing ?
+                        <p className="text-sm text-alloy-midnight/45" data-testid="tours-availability-refreshing">
+                            Updating tour windows…
+                        </p>
+                    :   null}
+
+                    {!loading && rules.length === 0 ?
+                        <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4">
+                            <p className="text-sm font-medium text-alloy-midnight/80">No tour availability set</p>
+                            <p className="config-typo-sublabel mt-1">Add a weekly schedule for when families can visit {scopeLabel}.</p>
+                        </div>
+                    :   null}
+
+                    {!loading || rules.length > 0 ?
+                        <section aria-label="Schedules" className="space-y-2" data-testid="tours-local-schedules">
+                            <h2 className="config-typo-field-label">
+                                {scopeLocationId ? `Schedules set for ${scopeLabel}` : "Organization-wide schedules"}
+                            </h2>
+                            {localGroups.length === 0 && scopeLocationId && rules.length > 0 ?
+                                <p className="config-typo-sublabel">None — {scopeLabel} uses only the organization-wide schedules below.</p>
+                            :   null}
+                            <ul className="space-y-2">
+                                {localGroups.map((g) => (
+                                    <ScheduleCard
+                                        key={g.key}
+                                        group={g}
+                                        disabled={busy}
+                                        repeats={repeats.get(g.key) ?? null}
+                                        onEdit={() => {
+                                            setNotice(null);
+                                            if (g.scheduleId) setEditor({ mode: "edit", group: g });
+                                            else setEditingRule(g.rules[0]!);
                                         }}
-                                        onCancel={() => setEditingRule(null)}
-                                        disabled={saving}
-                                    />
-                                : editor?.mode === "edit" && editor.group.key === g.key ?
-                                    <ScheduleEditor
-                                        scopeLocationId={scopeLocationId}
-                                        scheduleId={g.scheduleId}
-                                        initial={tourScheduleGroupToDraft(g)}
-                                        onSaved={async (overlaps) => {
-                                            setEditor(null);
-                                            await committed(overlapNotice(overlaps));
+                                        onDuplicate={() => {
+                                            setNotice(null);
+                                            setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
                                         }}
-                                        onCancel={() => setEditor(null)}
-                                    />
+                                        onDelete={() => void removeGroup(g)}
+                                        onToggle={g.scheduleId ? null : () => void toggleRule(g.rules[0]!)}
+                                    >
+                                        {editingRule && g.rules[0]?.id === editingRule.id ?
+                                            <TourWindowForm
+                                                existingRule={editingRule}
+                                                scopeQuery={ruleScopeQuery}
+                                                onSaved={async () => {
+                                                    setEditingRule(null);
+                                                    await committed();
+                                                }}
+                                                onCancel={() => setEditingRule(null)}
+                                                disabled={saving}
+                                            />
+                                        : editor?.mode === "edit" && editor.group.key === g.key ?
+                                            <ScheduleEditor
+                                                scopeLocationId={scopeLocationId}
+                                                scheduleId={g.scheduleId}
+                                                initial={tourScheduleGroupToDraft(g)}
+                                                onSaved={async (overlaps) => {
+                                                    setEditor(null);
+                                                    await committed(overlapNotice(overlaps));
+                                                }}
+                                                onCancel={() => setEditor(null)}
+                                            />
+                                        :   null}
+                                    </ScheduleCard>
+                                ))}
+                            </ul>
+                            {editor?.mode === "create" ?
+                                <ScheduleEditor
+                                    scopeLocationId={scopeLocationId}
+                                    scheduleId={null}
+                                    initial={editor.draft}
+                                    inheritedSource={editor.fromInherited ?? null}
+                                    onSaved={async (overlaps) => {
+                                        setEditor(null);
+                                        await committed(overlapNotice(overlaps));
+                                    }}
+                                    onCancel={() => setEditor(null)}
+                                />
+                            : busy ?
+                                null
+                            :   <ConfigurationPrimaryButton
+                                    onClick={() => {
+                                        setNotice(null);
+                                        setEditor({ mode: "create", draft: null });
+                                    }}
+                                    data-testid="locations-tour-add-window"
+                                >
+                                    {scopeLocationId ? `Add a schedule for ${scopeLabel}` : "Add organization-wide schedule"}
+                                </ConfigurationPrimaryButton>
+                            }
+                        </section>
+                    :   null}
+
+                    {inheritedGroups.length > 0 ?
+                        <section aria-label="Organization-wide schedules" className="space-y-2" data-testid="tours-inherited-schedules">
+                            <h2 className="config-typo-field-label">Organization-wide schedules (also offered here)</h2>
+                            <p className="config-typo-sublabel">
+                                Managed by the organization, so they can&apos;t be edited from {scopeLabel}.{" "}
+                                {embedded ?
+                                    <Link href={TOUR_ORGANIZATION_DEFAULTS_HREF} className="font-semibold text-alloy-bend-pine underline" data-testid="tours-org-defaults-link">
+                                        Edit organization-wide schedules
+                                    </Link>
                                 :   null}
-                            </ScheduleCard>
-                        ))}
-                    </ul>
-                </section>
-            :   null}
-
-            {inheritedGroups.length > 0 ?
-                <section aria-label="Inherited schedules" className="space-y-2" data-testid="tours-inherited-schedules">
-                    <h2 className="config-typo-field-label">Inherited from the organization</h2>
-                    <p className="config-typo-sublabel">
-                        These organization-wide schedules also offer tours at {scopeLabel}. Change them from the
-                        organization-wide tour settings, or duplicate one to give {scopeLabel} its own version.
-                    </p>
-                    <ul className="space-y-2">
-                        {inheritedGroups.map((g) => (
-                            <ScheduleCard
-                                key={g.key}
-                                group={g}
-                                disabled={busy}
-                                onDuplicate={() => {
-                                    setNotice(null);
-                                    setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
-                                }}
-                            />
-                        ))}
-                    </ul>
-                </section>
-            :   null}
-
-            {editor?.mode === "create" ?
-                <ScheduleEditor
-                    scopeLocationId={scopeLocationId}
-                    scheduleId={null}
-                    initial={editor.draft}
-                    onSaved={async (overlaps) => {
-                        setEditor(null);
-                        await committed(overlapNotice(overlaps));
-                    }}
-                    onCancel={() => setEditor(null)}
-                />
-            : busy ?
-                null
-            :   <ConfigurationPrimaryButton
-                    onClick={() => {
-                        setNotice(null);
-                        setEditor({ mode: "create", draft: null });
-                    }}
-                    data-testid="locations-tour-add-window"
-                >
-                    Add weekly schedule
-                </ConfigurationPrimaryButton>
+                            </p>
+                            <ul className="space-y-2">
+                                {inheritedGroups.map((g) => (
+                                    <ScheduleCard
+                                        key={g.key}
+                                        group={g}
+                                        disabled={busy}
+                                        repeats={repeats.get(g.key) ?? null}
+                                        duplicateLabel="Copy to this location"
+                                        onDuplicate={() => {
+                                            setNotice(null);
+                                            setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g), fromInherited: g.name });
+                                        }}
+                                    />
+                                ))}
+                            </ul>
+                        </section>
+                    :   null}
+                </div>
             }
+        </div>
+    );
+}
 
-            <TourPublicBrandPanel key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} />
+/** Who owns the times shown here, and where the rest are configured. */
+function AvailabilityOwnership({
+    scopeLocationId,
+    scopeLabel,
+    localCount,
+    inheritedCount,
+    embedded,
+}: {
+    scopeLocationId: string | null;
+    scopeLabel: string;
+    localCount: number;
+    inheritedCount: number;
+    embedded: boolean;
+}) {
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    return (
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs leading-5 text-alloy-midnight/80" data-testid="tours-availability-ownership">
+            {scopeLocationId ?
+                <>
+                    <p>
+                        Families booking at <strong>{scopeLabel}</strong> see the times from{" "}
+                        <strong>{plural(localCount, "schedule", "schedules")} set here</strong> plus{" "}
+                        <strong>{plural(inheritedCount, "organization-wide schedule", "organization-wide schedules")}</strong>. Each time is
+                        offered once, even if two schedules cover it, and bookings at that time share its capacity.
+                    </p>
+                    <p className="mt-1">
+                        Organization-wide schedules apply at every location and are changed in{" "}
+                        {embedded ?
+                            <Link href={TOUR_ORGANIZATION_DEFAULTS_HREF} className="font-semibold underline">
+                                Organization › Tours
+                            </Link>
+                        :   <strong>Organization-wide (all locations)</strong>}
+                        . To give {scopeLabel} different times only, add a schedule here; to stop offering an organization-wide time here,
+                        it has to change for every location.
+                    </p>
+                </>
+            :   <p>
+                    These schedules offer tours at <strong>every location</strong>. A location can add its own schedules on top of them in
+                    Organization › Locations › Tours, but cannot switch these off.
+                </p>
+            }
         </div>
     );
 }
@@ -432,6 +492,8 @@ function describeDays(days: number[]): string {
 function ScheduleCard({
     group,
     disabled,
+    repeats,
+    duplicateLabel = "Duplicate",
     onEdit,
     onDuplicate,
     onDelete,
@@ -440,6 +502,9 @@ function ScheduleCard({
 }: {
     group: TourScheduleGroup;
     disabled: boolean;
+    /** Another visible schedule with the same days and times (e.g. a copy of an organization-wide one). */
+    repeats: string | null;
+    duplicateLabel?: string;
     onEdit?: () => void;
     onDuplicate: () => void;
     onDelete?: () => void;
@@ -448,12 +513,12 @@ function ScheduleCard({
 }) {
     return (
         <li
-            className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
+            className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 text-sm"
             data-testid={group.scheduleId ? `tours-schedule-${group.scheduleId}` : `locations-tour-rule-${group.rules[0]?.id}`}
             data-tour-schedule-scope={group.inherited ? "inherited" : "local"}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
+                <div className="min-w-0 space-y-1.5">
                     <div className="font-semibold text-alloy-midnight">
                         {group.name}
                         {group.inherited ?
@@ -466,15 +531,37 @@ function ScheduleCard({
                             <span className="ml-2 text-xs text-alloy-midnight/45">inactive</span>
                         :   null}
                     </div>
-                    <div className="mt-0.5 text-alloy-midnight/75">
-                        {describeDays(group.days)} · {group.windows.map((w) => formatTourWallTimeRange(w.start_time, w.end_time)).join(", ")}{" "}
+                    <div className="flex flex-wrap gap-1" aria-label={`Days: ${describeDays(group.days)}`} data-testid="tours-schedule-days">
+                        {TOUR_WEEKDAY_DISPLAY_ORDER.map((d) => {
+                            const on = group.days.includes(d);
+                            return (
+                                <span
+                                    key={d}
+                                    title={TOUR_WEEKDAY_LABELS[d]}
+                                    data-tour-day={on ? "on" : "off"}
+                                    className={`inline-flex h-6 w-9 items-center justify-center rounded text-[11px] font-semibold ${
+                                        on ? "bg-alloy-midnight text-white" : "bg-alloy-stone/25 text-alloy-midnight/35"
+                                    }`}
+                                >
+                                    {TOUR_WEEKDAY_SHORT[d]}
+                                </span>
+                            );
+                        })}
+                    </div>
+                    <div className="text-alloy-midnight/80" data-testid="tours-schedule-windows">
+                        {group.windows.map((w) => formatTourWallTimeRange(w.start_time, w.end_time)).join(" · ")}{" "}
                         <span className="text-alloy-midnight/50">{tourTimeZoneShortName(group.timezone)}</span>
                     </div>
-                    <div className="mt-0.5 text-[11px] text-alloy-midnight/50">
+                    <div className="text-[11px] text-alloy-midnight/50">
                         {group.slot_duration_minutes} minute tours · {group.buffer_minutes} minute buffer · up to {group.max_bookings_per_slot}{" "}
                         {group.max_bookings_per_slot === 1 ? "family" : "families"} per time
                         {group.mixedSettings ? " · some days differ — saving applies these settings to every day" : ""}
                     </div>
+                    {repeats ?
+                        <p className="text-[11px] text-amber-900" data-testid="tours-schedule-repeats">
+                            Same days and times as “{repeats}”. Families see each time once; both schedules stay active.
+                        </p>
+                    :   null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {onEdit ?
@@ -483,7 +570,7 @@ function ScheduleCard({
                         </ConfigurationSecondaryButton>
                     :   null}
                     <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onDuplicate} data-testid="tours-schedule-duplicate">
-                        Duplicate
+                        {duplicateLabel}
                     </ConfigurationSecondaryButton>
                     {onToggle ?
                         <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle}>
@@ -535,12 +622,15 @@ function ScheduleEditor({
     scopeLocationId,
     scheduleId,
     initial,
+    inheritedSource = null,
     onSaved,
     onCancel,
 }: {
     scopeLocationId: string | null;
     scheduleId: string | null;
     initial: TourScheduleDraft | null;
+    /** Copying an organization-wide schedule: the original keeps applying here. */
+    inheritedSource?: string | null;
     onSaved: (overlaps: TourScheduleOverlap[]) => Promise<void>;
     onCancel: () => void;
 }) {
@@ -611,6 +701,12 @@ function ScheduleEditor({
             <div className="text-xs font-semibold text-alloy-midnight/75">
                 {scheduleId ? "Edit weekly schedule" : initial ? "New schedule (copied settings — no bookings are copied)" : "New weekly schedule"}
             </div>
+            {inheritedSource ?
+                <p className="mt-1 text-[11px] text-amber-900" data-testid="tours-schedule-copy-inherited-note">
+                    “{inheritedSource}” keeps applying here — it is organization-wide. Change the days or times so this copy adds
+                    something; identical times are offered once either way.
+                </p>
+            :   null}
             {msg ?
                 <p className="mt-1 text-xs text-red-700">{msg}</p>
             :   null}
