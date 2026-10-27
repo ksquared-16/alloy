@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-21
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -71,10 +71,18 @@ seven days a week.
 
 ## What this is not
 
-This slice did not implement day-specific Coverage, did not activate
-`staffing_participation`, did not change staffing sufficiency from whole-day evaluation,
-and did not create a Calendar, Time Off or payroll semantics. Those remain future work
-under the approved Staffing/Scheduling/Coverage V1 model.
+Assignment Time owns recurring weekday/hour truth on the Assignment. It does **not** own:
+
+- day-specific Coverage ([`staff-coverage-authority.md`](staff-coverage-authority.md) —
+  implemented; never writes back here)
+- Availability, Presence, or Readiness
+- Calendar, Time Off, or payroll semantics (still absent)
+- child-demand gating via Assignment Type `demand` (still not activated)
+
+**Historical note (Assignment Time slice closeout, superseded as current state):** that
+slice itself did not ship Coverage or activate `staffing_participation`. Both landed in
+later certified slices. Do not read the historical "did not implement" sentence as a claim
+that those capabilities are still absent.
 
 ## Staffing participation — what an Assignment Type decides
 
@@ -107,13 +115,17 @@ carrying live Staff supply while unclassified, and it reasons over usage rather 
 over a hardcoded key — a hardcoded `recurring_service` check would already have missed
 the certification stack, whose staffing type is called `staff_classroom`.
 
-Coverage, Availability, Presence and Readiness remain separate facts. Staffing remains
-whole-day.
+Coverage, Availability, Presence and Readiness remain separate facts. Legacy whole-day
+baseline supply (`buildStaffSupply`) still evaluates Assignment participation without
+day-specific Coverage rows; the time-aware projection composes Coverage for planned place
+(see Coverage owner).
 
 ## Day-specific Coverage is a different authority
 
 An Assignment says what someone's recurring days and hours are. It deliberately does not
 say where they were planned on one particular Tuesday — that is
 [Coverage](staff-coverage-authority.md), a separate day-specific fact with its own
-lifecycle. Coverage never writes back to the Assignment, and as of Slice 3 it does not
-participate in staffing supply arithmetic.
+lifecycle. Coverage never writes back to the Assignment. How Coverage participates in
+staffing arithmetic is owned there and in
+[`time-aware-staffing-projection.md`](time-aware-staffing-projection.md) — do not
+duplicate that contract here.

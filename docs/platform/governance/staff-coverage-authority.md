@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-21
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -125,12 +125,41 @@ means the projection resolves a whole lineage rather than filtering rows by date
 Coverage is **not** Availability (when someone *can* work), **not** Presence (what
 actually happened), and **not** Readiness (whether they are cleared to).
 
-Coverage does **not yet count toward staffing sufficiency.** Slice 3 establishes the
-authority only. Baseline Staff supply arithmetic is unchanged and still whole-day, and a
-room-level Coverage row beside a site-level assignment must not read as two people. The
-time-aware projection that reconciles demand, baseline supply, availability, Coverage
-and presence over derived time segments is a later slice, and it is the slice that gets
-to decide what Coverage means for a ratio.
+Keep the five nouns apart — they are not one staffing state:
+
+| Noun | What it is |
+|---|---|
+| **Assignment** | durable operational commitment (recurring days/hours/place) |
+| **Coverage** | day/time-specific planned allocation (this document) |
+| **Availability** | when a person can work |
+| **Presence** | observed attendance |
+| **Projection** | derived staffing expectations or sufficiency |
+
+### How Coverage participates in staffing arithmetic (remeasured 2026-10-27)
+
+**Previous claim (Coverage Slice 3 closeout):** Coverage does not yet count toward staffing
+sufficiency; the time-aware projection that would reconcile it was "a later slice."
+
+**Measured now:**
+
+- The time-aware projection **does** compose Coverage for planned place and segment
+  sufficiency (`fetchStaffingProjection` → `effectiveCoverageForSite`;
+  `buildStaffingProjection`: Coverage wins for the interval it names; otherwise the
+  Assignment room stands). One employment is counted at most once — a site-level baseline
+  plus a room-level Coverage is one person, never two. Owner:
+  [`time-aware-staffing-projection.md`](time-aware-staffing-projection.md).
+- Legacy whole-day baseline supply (`buildStaffSupply`) still reads Assignment +
+  `staffing_participation` (+ employment eligibility) and does **not** read
+  `staff_coverage_allocations`. Whole-day consumers that need Coverage-aware place use
+  `wholeDayFromProjection` as a reduction of the segmented answer, not a second inventing
+  arithmetic.
+- Coverage still **never rewrites** the durable Assignment.
+
+**Stale secondary wording (do not treat as doctrine):**
+`capabilityRegistry` still describes `staff_coverage.plan` as "does not yet count toward
+staffing sufficiency." That registry blurb predates the projection slice; the projection
+owner and this paragraph are authoritative. Registry copy cleanup is product debt, not a
+Coverage-authority change.
 
 Coverage is also not Calendar, not Time Off, and not payroll.
 
@@ -138,3 +167,5 @@ Coverage is also not Calendar, not Time Off, and not payroll.
 
 - [Assignment owns its recurring time](assignment-time-authority.md) — the durable fact
   Coverage specializes, and the staffing-participation flag that governs baseline supply
+- [The staffing day is not one number](time-aware-staffing-projection.md) — how Coverage
+  specialises planned place inside the projection
