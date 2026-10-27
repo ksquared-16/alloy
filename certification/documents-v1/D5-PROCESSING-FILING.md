@@ -163,6 +163,9 @@ were the intended refusal, not a product regression:
   `gar_e7245a7bbce3eb`) on staging `81556597838b`: **D1b 37/37** (`d1b_hosted_security_cert_results.qar_fa40912deb3a.json`,
   the 25 prior cases plus 12) and **Q1 90/90** (`q1_hosted_authz_cert_results.qar_fa40912deb3a.json`). Fixtures
   seeded by `gar_ca2b44149ae9af`, `gar_f21a462dc863d2`, `gar_d221ff8f405b8c`; both teardowns ok.
+  Cleanup: fixtures reset (`gar_35928147b35014`, `gar_65800b45612545`, `gar_42546a16c81be5`), QA run closed by
+  `gar_ee98b38f387813`, **ZERO_RESIDUE** bound by `gar_6aacc7c419bea0` with census `gar_2c08fe41f206e7` (12/12 zero checks,
+  `certification/qa-shared/documents-zero-residue-census.sql.results.json`).
 - D3's test type applied to `child, household`, while its upload targets an opportunity (422). The type now also
   lists `opportunity`; every D3 assertion is unchanged.
 
