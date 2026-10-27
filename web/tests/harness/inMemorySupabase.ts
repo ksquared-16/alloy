@@ -13,7 +13,7 @@
  * Supported surface: `from(t).select().eq().neq().in().is().order().limit().range()`,
  * `.maybeSingle()`, `.single()`, awaiting the builder; `insert`/`update`/`delete` with the same
  * filters and an optional `.select().single()`; `storage.from(b).createSignedUrl/download/remove/
- * upload`. Unknown tables read as empty. Every storage call and every write is recorded.
+ * upload/copy`. Unknown tables read as empty. Every storage call and every write is recorded.
  */
 
 export type Row = Record<string, unknown>;
@@ -35,6 +35,7 @@ export class InMemorySupabase {
     downloadCalls: Array<{ bucket: string; path: string }> = [];
     removeCalls: Array<{ bucket: string; paths: string[] }> = [];
     uploadCalls: Array<{ bucket: string; path: string; bytes: number }> = [];
+    copyCalls: Array<{ bucket: string; from: string; to: string }> = [];
     /** Tables whose INSERT fails, to prove a route refuses when its audit cannot be written. */
     failInsertInto = new Set<string>();
 
@@ -74,6 +75,14 @@ export class InMemorySupabase {
                     this.removeCalls.push({ bucket, paths: [...paths] });
                     for (const p of paths) this.objects.delete(`${bucket}/${p}`);
                     return { data: paths.map((name) => ({ name })), error: null };
+                },
+                copy: async (from: string, to: string) => {
+                    this.copyCalls.push({ bucket, from, to });
+                    const bytes = this.objects.get(`${bucket}/${from}`);
+                    if (!bytes) return { data: null, error: { message: "Object not found" } };
+                    if (this.objects.has(`${bucket}/${to}`)) return { data: null, error: { message: "The resource already exists" } };
+                    this.objects.set(`${bucket}/${to}`, bytes);
+                    return { data: { path: to }, error: null };
                 },
                 upload: async (path: string, body: Uint8Array | ArrayBuffer | Blob) => {
                     const bytes =

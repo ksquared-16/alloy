@@ -283,10 +283,10 @@ describe("types: draft → validate → publish", () => {
         const body = (await invokeRoute(typesGET, buildRequest({ path: "/x" }))).body as { enforcement: Record<string, string> };
         expect(body.enforcement).toEqual({
             default_sensitivity: "enforced",
-            review_required: "declared_d5",
-            replacement_policy: "declared_d5",
-            allowed_formats: "declared_d5",
-            subject_types: "declared_d5",
+            review_required: "enforced_filing",
+            replacement_policy: "enforced_replacement",
+            allowed_formats: "enforced_filing",
+            subject_types: "enforced_filing",
             validity_policy: "declared_d7",
         });
     });

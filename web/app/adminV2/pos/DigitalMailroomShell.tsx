@@ -8,7 +8,8 @@ import ProcessingKpiStrip from "@/app/adminV2/pos/ProcessingKpiStrip";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
 
 export type DigitalMailroomMode = "work" | "studio";
-export type DigitalMailroomWorkView = "overview" | "work";
+/** D5: `documents` is the Documents work queue (received documents to classify, resolve and file). */
+export type DigitalMailroomWorkView = "overview" | "work" | "documents";
 
 const MAILROOM_MODES = [
     { key: "work" as const, label: "Work" },
@@ -18,6 +19,7 @@ const MAILROOM_MODES = [
 const WORK_TABS = [
     { key: "overview" as const, label: "Overview" },
     { key: "work" as const, label: "Queue" },
+    { key: "documents" as const, label: "Documents" },
 ];
 
 const STUDIO_TABS: { key: ProcessingStudioTab; label: string }[] = [

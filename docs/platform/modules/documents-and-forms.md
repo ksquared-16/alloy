@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-26
 supersedes: []
 ---
 
@@ -54,7 +54,7 @@ Digital Mailroom reuses the Communications operational modal pattern:
 |-------|-----------|------|--------|
 | Header | `OperationalModalHeader` | Title + subtitle + Close | same |
 | Mode (L1) | `AlloyModeSwitch` via `OperationalWorkspaceModeNav` | **Work** | **Studio** |
-| Section (L2) | `CommsModalTabBar` via `OperationalWorkspaceModeNav` | Overview · **Queue** | Forms · Packets · Fields · Branding |
+| Section (L2) | `CommsModalTabBar` via `OperationalWorkspaceModeNav` | Overview · **Queue** · Documents | Forms · Packets · Documents · Fields · Branding |
 | Execution | `DigitalMailroomShell` children | landing or queue workspace | asset library / builder |
 
 **Visual dividers (locked):**
@@ -74,6 +74,7 @@ ProcessingModal
     └── execution
         ├── mode=work,  workView=overview  → ProcessingOverviewLanding
         ├── mode=work,  workView=work       → PosProcessingWorkspace (Queue)
+        ├── mode=work,  workView=documents  → ProcessingDocumentsWork (Documents, D5)
         └── mode=studio, studioTab=*        → ProcessingFormsStudio (+ ProcessingFormBuilder)
 ```
 
@@ -181,8 +182,10 @@ organization maintains the document categories and types it tracks.
 - **Authority:** writes need `processing.documents.manage`, reads need `documents.read`.
 - **Starter vocabulary:** every organization receives a childcare starter vocabulary (10 categories, 13 types, including
   the existing `doc_type` values) as ordinary editable rows.
-- **Enforcement:** only the type's default sensitivity is enforced today. The rest of the policy is declared intent for
-  D5–D7, and the Studio says so beside each field.
+- **Enforcement:** the default sensitivity is enforced for new and re-typed documents (D3). Since D5, applicable subject
+  types, allowed formats and review are enforced when a document is filed or uploaded, and the replacement policy when it
+  is filed or replaced (`web/lib/documents/configuration/documentTypeEnforcement.ts`, `public.document_file`). Validity
+  (expiration, reconfirmation) is still declared intent for D7. The Studio labels each field with where it is enforced.
 - **Security model:** `docs/platform/governance/document-security-model.md` §7.
 
 ## Focus Panel → Documents: the household library (D4)
@@ -207,12 +210,37 @@ household behind the case: the household, its adults, its children and its cases
   revisiting a record renders from its snapshot; a write invalidates the cache so a refresh is never stale.
 - **Security:** `docs/platform/governance/document-security-model.md` §7a.
 
+## Processing → Work → Documents: filing a received document (D5)
+
+Received customer documents are classified, tied to the right record, reviewed and FILED into the canonical library
+from inside the Digital Mailroom. Record: `certification/documents-v1/D5-PROCESSING-FILING.md`.
+
+- **Queue** (`GET /api/admin/processing/documents/queue`, `ProcessingDocumentsWork.tsx`). Document cases whose purpose is
+  a customer document (intent `store_document` / `process_information`, or a filing proposal) with a DERIVED lane:
+  unclassified · needs a record · needs review · ready to file · filing errors · filed (7 days). Read from the Processing
+  case spine; there is no queue table and no Work Items row. Every row passes the canonical document disclosure.
+  Form-template uploads (`generate_form`, `packet_source`) stay in the forms flow.
+- **Proposal** (`processing_cases.metadata.document_filing`, `GET/PUT …/cases/[caseId]/document-filing`): the type (from
+  the published Studio catalog; the deterministic classifier's suggestion is shown as a proposal only), the PRIMARY OWNER
+  and any related records chosen from a household graph the operator can see (search finds the household; nothing is
+  matched from a name or an email), review, an optional sensitivity raise, and new document vs new version.
+- **Filing = approval.** `POST …/cases/[caseId]/approve` runs the Documents filing command
+  (`web/lib/documents/filing/documentFiling.ts`) and completes the case only when the filing committed
+  (`operational_result.kind = "document_filed"`). A refusal is stored on the proposal (`last_error`, the Filing errors
+  lane) and is never shown as done; a retry replays (filing key `processing_case:<case>:document:<doc>`).
+- **Ownership.** Processing owns intake and resolution. Documents owns the filing: associations, versions, sensitivity,
+  authorization and the transaction. Processing never writes a document row or an association.
+- **After filing** the document is in the record's Focus Panel library (D4) under its primary owner, with "Also relates
+  to" for the related records; "Open record" lands on the record's Documents card. History shows "Filed from Processing"
+  from the committed filing record.
+
 ## Integration points
 
 - Opportunity drawer — packet review modal, form status
 - Workflows — submission events
 - Field policy — forms parity with settings **planned**
 - Processing Identity Resolution — public lead-capture and Manual Create Lead source adapters; facts/resolutions/approval/executor
+- Processing document filing (D5) — the Documents filing command, called by a document case's approval
 
 ---
 

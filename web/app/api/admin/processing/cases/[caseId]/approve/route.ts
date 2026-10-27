@@ -20,6 +20,10 @@ import {
 } from "@/lib/pos/processingCase/processingCaseSubjectRemoved";
 import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { documentActorForRequest } from "@/lib/documents/assertDocumentAccess";
+import { DOCUMENT_SOURCE_KINDS } from "@/lib/pos/documentFiling/documentFilingModel";
+import { caseRequiresFiling, fileDocumentCase } from "@/lib/pos/documentFiling/documentFilingService";
 import {
     materializeRequestedTourForCase,
     type RequestedTourHandoffOutcome,
@@ -83,8 +87,12 @@ export const dynamic = "force-dynamic";
  * `identity_review_required` and does NOT auto-commit (the operator resolves it in
  * the identity review panel), preserving duplicate prevention.
  *
- * For any other source, approval performs the minimal destination handoff (records
- * own truth — see approveHandoff).
+ * For a **document** case whose purpose is a customer document (D5: intent store/process, or a filing proposal),
+ * approval FILES it through the Documents filing command and completes the case only when the filing committed. A
+ * refused or failed filing leaves the case open with the error on its proposal; a retry is idempotent.
+ *
+ * For any other source (including a document uploaded to generate a form), approval performs the minimal destination
+ * handoff (records own truth — see approveHandoff).
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -341,6 +349,20 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         if (srcErr) throw new Error(srcErr.message);
 
         const source = (src as { source_kind: string; source_id: string } | null) ?? null;
+
+        // D5: a customer document is FILED. Completion follows a committed filing, never precedes it.
+        if (source && DOCUMENT_SOURCE_KINDS.includes(source.source_kind) && caseRequiresFiling({ metadata: row.metadata ?? null })) {
+            const access = await getAdminAccessContextCached();
+            const filed = await fileDocumentCase(supabase, documentActorForRequest(ctx, access), caseId);
+            if (!filed.ok) {
+                return NextResponse.json(
+                    { ok: false, error: filed.message, code: filed.code, problems: filed.problems ?? [], data: { caseId, status: filed.caseStatus, blocked: true } },
+                    { status: filed.status },
+                );
+            }
+            return jsonData({ caseId, status: "completed", operationalResult: filed.operationalResult });
+        }
+
         const operationalResult = await runMinimalDestinationHandoff(supabase, ctx.orgId, source);
 
         // FP7: a case whose form lacks the required mapping (no person.email binding,
