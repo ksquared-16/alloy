@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { groupFieldsIntoRows, fieldLayoutFlexClass } from "@/lib/forms/formRowComposition";
+import { composeRuntimeRows, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { FORM_SUBMIT_LABEL_MAX, formSubmitLabel } from "@/lib/forms/schema";
@@ -717,7 +717,7 @@ export default function ProcessingFormBuilder({
     );
 }
 
-function FormPreview({
+export function FormPreview({
     schema,
     branding,
     runtime,
@@ -729,49 +729,53 @@ function FormPreview({
     const fieldById = useMemo(() => new Map(schema.fields.map((f) => [f.id, f])), [schema.fields]);
     const accent = branding.accent_color || DEFAULT_FORM_ACCENT;
     return (
-        <div className="mx-auto max-w-[560px] space-y-5" data-testid="form-builder-preview">
+        <div className="mx-auto max-w-2xl space-y-5" data-testid="form-builder-preview">
             <ProcessingFormBrandedHeader title={schema.title} branding={branding} runtime={runtime} />
             <div className="rounded-2xl border border-alloy-stone/15 bg-white p-6 shadow-sm">
             <div className="space-y-6">
                 {schema.sections.map((section) => {
-                    const rows = groupFieldsIntoRows(section.field_ids, fieldById);
+                    // The public runtime's own row composition and grid classes (FormEngineRenderer) —
+                    // not a second interpreter, so Preview cannot disagree with what families see.
+                    const sectionFields = section.field_ids
+                        .map((fid) => fieldById.get(fid))
+                        .filter((f): f is FormField => f != null);
+                    const rows = composeRuntimeRows(sectionFields);
                     return (
                         <section key={section.id}>
                             <h3 className="text-[13px] font-bold text-alloy-midnight">{section.title}</h3>
-                            <div className="mt-3 space-y-3">
+                            <div className="mt-3 space-y-4">
                                 {rows.map((row, rowIdx) => (
-                                    <div key={`${section.id}-row-${rowIdx}`} className="flex flex-wrap gap-3" data-testid={`form-preview-row-${section.id}-${rowIdx}`}>
-                                        {row.map((fid) => {
-                                            const field = fieldById.get(fid);
-                                            if (!field) return null;
-                                            const width =
-                                                field.layout_width === "half" ||
-                                                field.layout_width === "third" ||
-                                                field.layout_width === "quarter"
-                                                    ? field.layout_width
-                                                    : "full";
-                                            return (
-                                                <div key={fid} className={fieldLayoutFlexClass(width)}>
-                                                    {field.type === "text_block" ? (
-                                                        <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.05] px-4 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
-                                                            <PreviewTokenText value={field.content} />
-                                                        </div>
-                                                    ) : (
-                                                        <label className="block text-[12px] font-semibold">
-                                                            {field.label}
-                                                            {field.required ? <span className="text-rose-600"> *</span> : null}
-                                                        </label>
-                                                    )}
-                                                    {field.type === "signature" ? (
-                                                        <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-alloy-stone/30 text-[11px] text-alloy-midnight/40">
-                                                            Sign here
-                                                        </div>
-                                                    ) : field.type !== "text_block" ? (
-                                                        <input type="text" className="mt-1 w-full rounded-lg border border-alloy-stone/20 px-3 py-2 text-[13px]" placeholder="" readOnly />
-                                                    ) : null}
-                                                </div>
-                                            );
-                                        })}
+                                    <div
+                                        key={`${section.id}-row-${rowIdx}`}
+                                        className={runtimeRowClass(row)}
+                                        data-testid={`form-preview-row-${section.id}-${rowIdx}`}
+                                        data-preview-row-cells={row.length}
+                                    >
+                                        {row.map((field) => (
+                                            <div
+                                                key={field.id}
+                                                className={row.length > 1 ? runtimeCellSpanClass(field) : undefined}
+                                                data-preview-field={field.id}
+                                            >
+                                                {field.type === "text_block" ? (
+                                                    <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.05] px-4 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
+                                                        <PreviewTokenText value={field.content} />
+                                                    </div>
+                                                ) : (
+                                                    <label className="block text-[12px] font-semibold">
+                                                        {field.label}
+                                                        {field.required ? <span className="text-red-600"> *</span> : null}
+                                                    </label>
+                                                )}
+                                                {field.type === "signature" ? (
+                                                    <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-alloy-stone/30 text-[11px] text-alloy-midnight/40">
+                                                        Sign here
+                                                    </div>
+                                                ) : field.type !== "text_block" ? (
+                                                    <input type="text" className="mt-1 w-full rounded-lg border border-alloy-stone/20 px-3 py-2 text-[13px]" placeholder="" readOnly />
+                                                ) : null}
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
