@@ -2,7 +2,7 @@
 title: Alloy AI inference contract
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -70,6 +70,12 @@ Each of these is certified. A task may rely on it without re-deriving it.
 16. **Subsidy suppresses collection.** It is derived, never stored, and changes no obligation.
 17. **Alloy has two APIs.** `/api/v1/**` is the frozen external partner contract; `/api/admin/**` is
     internal and shares none of it.
+18. **Documents has one access door.** `assertDocumentAccess` (and the same predicates for lists)
+    decides disclosure; Processing chooses what to file and Documents files — `processing.operate`
+    is never sufficient filing authority.
+19. **Tours booking belongs to the Enrollment process.** Public calendar → booking → enrollment
+    handoff routes primarily under Enrollment / Placement; consent/send is Communications;
+    availability settings are Configuration; Operating Calendar authoring is not Tours-owned.
 
 ---
 
@@ -166,20 +172,34 @@ Each entry names the wrong inference, then what is actually true.
 30. **A named provider is in use because a canonical document mentions it.** *No.* Verify the
     configured provider.
 
+### Documents and Tours
+
+31. **`documents-and-forms.md` is security authority.** *No.* It is module/product narrative.
+    Document access, storage, filing and requirements security live in
+    `document-security-model.md`.
+32. **D6 hosted ZERO_RESIDUE is closed because D6 is implemented.** *No.* Requirements are
+    implemented with a certification record; the hosted residue section remains unfinished debt.
+33. **Tours needs its own Vacilando context lane.** *No.* Director D-02 assigns Enrollment /
+    Placement as provisional primary; Communications and Configuration are secondary.
+34. **Marketing consent is an Enrollment form field or Enrollment-owned preference truth.** *No.*
+    Consent preference and canonical send enqueue belong to Communications.
+35. **Operating Calendar is a Tours-owned table.** *No.* Tours consumes Operating Calendar
+    closures; authoring belongs to Attendance / Operational Intelligence.
+
 ### Verification method
 
-31. **`max_version` proves a specific migration applied.** *No.* Verify **per version** — a ledger
+36. **`max_version` proves a specific migration applied.** *No.* Verify **per version** — a ledger
     high-water mark can sit past your migration because another lane's work applied.
-32. **A merged pull request means the database changed.** *No.* Merging does not apply migrations.
-33. **An all-zero census means nothing exists.** *No.* It may mean a wrong identifier or a query
+37. **A merged pull request means the database changed.** *No.* Merging does not apply migrations.
+38. **An all-zero census means nothing exists.** *No.* It may mean a wrong identifier or a query
     against the wrong layer.
-34. **A passing source-level guard proves reachability.** *No.* Source guards prove a string is
+39. **A passing source-level guard proves reachability.** *No.* Source guards prove a string is
     present. Render the surface and confirm it fails when the behaviour is removed.
-35. **A stub-based test proves the real implementation is intact.** *No.* A stub proves the caller
+40. **A stub-based test proves the real implementation is intact.** *No.* A stub proves the caller
     asked.
-36. **The filesystem path matches the URL.** *No.* `/organization/*` and `/settings/*` are rewritten
+41. **The filesystem path matches the URL.** *No.* `/organization/*` and `/settings/*` are rewritten
     onto `web/app/adminV2/**`. Searching for `web/app/organization` finds nothing.
-37. **The configuration control plane is `/admin/settings`.** *No.* That redirects. `/organization` is
+42. **The configuration control plane is `/admin/settings`.** *No.* That redirects. `/organization` is
     the configuration landing, while `/admin/*` remains canonical for non-settings modules.
 
 ---

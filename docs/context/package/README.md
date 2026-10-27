@@ -12,7 +12,7 @@ supersedes: []
 
 A versioned, distributable definition of **what an AI should know about Alloy, and what it must never
 assume.** It is the output of the documentation certification program turned into infrastructure:
-fourteen certified domain records, reduced to a five-document global foundation plus thirteen domain
+fifteen certified domain records, reduced to a five-document global foundation plus fourteen domain
 lanes, with explicit inference boundaries and machine-readable staleness triggers.
 
 It serves two consumers from one source: **GPT project sources** and **Vacilando lanes**.
@@ -54,8 +54,9 @@ specification is [`vacilando-integration-spec.md`](vacilando-integration-spec.md
 authority for one domain, the shared mechanics it depends on, what it owns, what it explicitly does
 *not* own, and what would make its certification stale.
 
-Thirteen certified lanes, two shared context packages (`operations-temporal`, `product-urls`) and one
-pending lane (`financials-payments`). A shared package is never a primary mutation lane: both
+Fourteen certified lanes (including `documents`), two shared context packages (`operations-temporal`,
+`product-urls`) and one pending lane (`financials-payments`). Tours routes under
+`enrollment-placement` (no separate lane). A shared package is never a primary mutation lane: both
 `enrollment-placement` and `staff-scheduling` depend on `operations-temporal`, and neither owns the
 temporal mechanics.
 

@@ -70,11 +70,13 @@ cross-lane.
 |---|---|
 | status, stage, outcome, transition, work item | `business-process` |
 | placement, candidate, enrollment agreement, waitlist, room | `enrollment-placement` |
+| tour, tour booking, public tour calendar, tour invitation, requested tour | `enrollment-placement` (Director D-02; Communications secondary for consent/send; Configuration secondary for availability) |
 | staff, employment, schedule, coverage, staffing ratio | `staff-scheduling` |
 | attendance, check-in, kiosk, person code | `attendance` |
 | roles, access, permission, capability, RLS, tenancy | `identity-access` |
 | messages, email, SMS, reply, thread, provider delivery | `communications` |
 | settings, configuration publication, layouts, drafts | `configuration` |
+| document, filing, document library, document requirement, ingestion, org_documents | `documents` |
 | metrics, calculations, answers, operational expectations | `operational-intelligence` |
 | AI prompts, models, providers, Trust, assist | `ai-bos` |
 | pricing, rates, discounts, policies, catalog | `commercial` |
