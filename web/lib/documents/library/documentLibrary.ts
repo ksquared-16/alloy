@@ -26,6 +26,9 @@ import { filterDocumentRowsInActorScope } from "@/lib/documents/assertDocumentAc
 import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import { listCategories, listTypes } from "@/lib/documents/configuration/documentConfigurationService";
+import type { ValidityPolicy } from "@/lib/documents/configuration/documentTypePolicy";
+import { evaluateDocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { localDateOf, resolveDocumentsClock } from "@/lib/documents/validity/documentsClock";
 
 import {
     isLibrarySubjectType,
@@ -321,18 +324,19 @@ export async function buildDocumentLibrary(
     const truncated = rows.length > LIBRARY_DOCUMENT_LIMIT;
     rows = rows.slice(0, LIBRARY_DOCUMENT_LIMIT);
 
-    const [typesRes, categoriesRes, versionReads] = await Promise.all([
+    const [typesRes, categoriesRes, versionReads, clock] = await Promise.all([
         listTypes(supabase, orgId),
         listCategories(supabase, orgId),
         Promise.all(
             chunks(rows.map((d) => d.id)).map((ids) =>
                 supabase
                     .from("document_versions")
-                    .select("id, document_id, version_number, created_at, source, review_status, effective_on, expires_on")
+                    .select("id, document_id, version_number, created_at, source, review_status, reviewed_at, effective_on, expires_on")
                     .eq("org_id", orgId)
                     .in("document_id", ids),
             ),
         ),
+        resolveDocumentsClock(supabase, orgId),
     ]);
     if (versionReads.some((r) => r.error)) return { ok: false, status: 500, code: "LIBRARY_READ_FAILED" };
     const categories = categoriesRes.ok ? categoriesRes.value : [];
@@ -391,6 +395,18 @@ export async function buildDocumentLibrary(
                 (linksByDoc.get(d.id) ?? []).some((l) => l.subject_type === "form_submission" && submissionSet.has(l.subject_id)),
             current_version: current,
             version_count: versions.length,
+            validity: current
+                ? evaluateDocumentValidity({
+                      policy: (t?.published?.validity_policy ?? null) as ValidityPolicy | null,
+                      facts: {
+                          effective_on: current.effective_on,
+                          expires_on: current.expires_on,
+                          received_on: localDateOf(current.created_at, clock.timeZone),
+                          reviewed_on: localDateOf(current.reviewed_at ?? null, clock.timeZone),
+                      },
+                      today: clock.today,
+                  })
+                : null,
         };
     });
 

@@ -37,7 +37,7 @@ const DOC = "d6000000-0000-4000-8000-000000000001";
 const workRow = (over: Partial<RequirementWorkRow> = {}): RequirementWorkRow => ({
     id: `document_requirement:${R1}:child:${C1}`, requirement_id: R1, requirement_key: "immunizations", requirement_label: "Immunization record on file",
     document_type_key: "immunization_record", document_type_label: "Immunization record", subject_type: "child", subject_id: C1, subject_label: "Mia Rivera",
-    household_id: H, state: "missing", blocked_reason: null, due_on: "2026-10-20", overdue: true, waivable: true, pending_document_ids: [], ...over,
+    household_id: H, state: "missing", blocked_reason: null, due_on: "2026-10-20", overdue: true, waivable: true, pending_document_ids: [], undated_document_ids: [], expired_document_ids: [], valid_until: null, ...over,
 });
 
 let container: HTMLDivElement;
@@ -243,7 +243,7 @@ describe("Work Items: the Documents projection", () => {
 
     it("Work Items reads the same derived rows, never writes operational tasks for them, and routes completion to Documents", () => {
         const panel = readFileSync(join(__dirname, "../../app/adminV2/components/MyTasksPanel.tsx"), "utf8");
-        expect(panel).toContain("mapDocumentRequirementWorkToWorkItemRows(getDocumentRequirementWorkSnapshot()");
+        expect(panel).toContain("mapDocumentRequirementWorkToWorkItemRows(snap?.rows ?? [], snap?.documents ?? [])");
         const complete = panel.slice(panel.indexOf("const onCompleteTask = useCallback("), panel.indexOf("const onSelectOutcome"));
         expect(complete.indexOf("isDocumentRequirementProjectedWorkItem(task)")).toBeGreaterThan(0);
         expect(complete.indexOf("isDocumentRequirementProjectedWorkItem(task)")).toBeLessThan(complete.indexOf("patchOperationalTaskStatus") === -1 ? complete.indexOf("onPatchStatus(task.id") : complete.indexOf("patchOperationalTaskStatus"));

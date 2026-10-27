@@ -419,7 +419,8 @@ export default function MyTasksPanel({
 
     const documentsProjectedTasks = useMemo(() => {
         void documentsWarmNonce;
-        return mapDocumentRequirementWorkToWorkItemRows(getDocumentRequirementWorkSnapshot()?.rows ?? []);
+        const snap = getDocumentRequirementWorkSnapshot();
+        return mapDocumentRequirementWorkToWorkItemRows(snap?.rows ?? [], snap?.documents ?? []);
     }, [documentsWarmNonce]);
 
     const mergedTasks = useMemo(() => {

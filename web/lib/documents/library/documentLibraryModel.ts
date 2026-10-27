@@ -3,6 +3,8 @@
  *
  * No server imports here: the Focus Panel bundle reads these.
  */
+import type { DocumentValidity } from "@/lib/documents/validity/documentValidity";
+
 export const LIBRARY_SUBJECT_TYPES = ["household", "person", "child", "opportunity"] as const;
 export type LibrarySubjectType = (typeof LIBRARY_SUBJECT_TYPES)[number];
 export type LibrarySubjectRef = { subject_type: LibrarySubjectType; subject_id: string };
@@ -52,6 +54,7 @@ export type LibraryVersion = {
     review_status: string | null;
     effective_on: string | null;
     expires_on: string | null;
+    reviewed_at?: string | null;
 };
 
 export type LibraryDocument = {
@@ -74,6 +77,11 @@ export type LibraryDocument = {
     forms_artifact: boolean;
     current_version: LibraryVersion | null;
     version_count: number;
+    /**
+     * D7: the current version's validity on the organization-local date, from the type's published validity policy —
+     * derived by the one validity evaluator on the server (never computed in the browser).
+     */
+    validity?: DocumentValidity | null;
 };
 
 export type DocumentLibrary = {

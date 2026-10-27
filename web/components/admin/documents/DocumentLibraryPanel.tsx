@@ -14,6 +14,7 @@
  * answer, rendered above the list by `DocumentReadinessPanel`, never computed here; "expiring" is D7. A D3 policy that is still declaration-only is never presented as enforced; the
  * one enforced rule (the type's default sensitivity) is named as such.
  */
+import { VALIDITY_STATUS_LABEL } from "@/lib/documents/validity/documentValidity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -325,10 +326,11 @@ function LibraryRow({
         doc.received_at ? `Received ${formatDateTime(doc.received_at)}` : null,
         formatBytes(doc.byte_size),
     ].filter(Boolean);
+    const validity = doc.validity ?? null;
     const recorded = [
         v?.review_status ? `Review: ${v.review_status}` : null,
         v?.effective_on ? `Effective ${v.effective_on}` : null,
-        v?.expires_on ? `Expires ${v.expires_on}` : null,
+        validity?.expires_on ? `${validity.status === "expired" ? "Expired after" : "Valid through"} ${validity.expires_on}${validity.expires_source === "derived" ? " (by policy)" : ""}` : v?.expires_on ? `Expires ${v.expires_on}` : null,
     ].filter(Boolean);
     const others = doc.associations.filter((a) => !a.is_primary).map((a) => subjectLabel.get(`${a.subject_type}:${a.subject_id}`)?.label).filter(Boolean);
 
@@ -342,6 +344,14 @@ function LibraryRow({
                     <p className="mt-0.5 flex flex-wrap gap-1 text-[10px]">
                         {SENSITIVITY_LABEL[doc.sensitivity] ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900">{SENSITIVITY_LABEL[doc.sensitivity]}</span> : null}
                         {doc.forms_artifact ? <span className="rounded bg-alloy-stone/10 px-1.5 py-0.5 text-alloy-midnight/70">Forms</span> : null}
+                        {validity && validity.status !== "not_tracked" && validity.status !== "valid" ? (
+                            <span
+                                className={`rounded px-1.5 py-0.5 ${validity.status === "expired" ? "bg-orange-50 text-orange-800" : validity.status === "expiring_soon" ? "bg-amber-50 text-amber-800" : "bg-stone-100 text-alloy-midnight/70"}`}
+                                data-testid={`document-library-validity-${doc.id}`}
+                            >
+                                {VALIDITY_STATUS_LABEL[validity.status]}
+                            </span>
+                        ) : null}
                         {!doc.type.registered && doc.type.key ? <span className="rounded bg-alloy-stone/10 px-1.5 py-0.5 text-alloy-midnight/60">Unregistered type</span> : null}
                         {others.length ? <span className="text-alloy-midnight/55">Also relates to {others.join(", ")}</span> : null}
                     </p>
@@ -375,6 +385,29 @@ function LibraryRowDetail({ doc, canMutate, onMessage, onAfterWrite }: { doc: Li
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
     const fileRef = useRef<HTMLInputElement | null>(null);
+    const [renewEffective, setRenewEffective] = useState("");
+    const [renewExpires, setRenewExpires] = useState("");
+    const [effectiveOn, setEffectiveOn] = useState(doc.current_version?.effective_on ?? "");
+    const [expiresOn, setExpiresOn] = useState(doc.current_version?.expires_on ?? "");
+    const [reviewReason, setReviewReason] = useState("");
+    const review = doc.current_version?.review_status ?? null;
+    const decided = review === "accepted" || review === "rejected";
+
+    const post = async (url: string, method: "POST" | "PUT", body: Record<string, unknown>, done: string) => {
+        setBusy(true);
+        const res = await fetch(url, { method, credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+        const json = (await res?.json().catch(() => ({}))) as { error?: string; code?: string } | undefined;
+        setBusy(false);
+        if (!res?.ok) return onMessage(`${json?.error ?? "Refused."}${json?.code ? ` (${json.code})` : ""}`);
+        setReviewReason("");
+        onMessage(done);
+        await onAfterWrite();
+        await loadDetail();
+    };
+    const decide = (decision: "accepted" | "rejected" | "pending") =>
+        post(`/api/admin/documents/${encodeURIComponent(doc.id)}/review`, "POST", { decision, ...(reviewReason.trim() ? { reason: reviewReason.trim() } : {}), version_id: doc.current_version?.id }, decision === "accepted" ? "Accepted." : decision === "rejected" ? "Rejected." : "Review reopened.");
+    const saveDates = () =>
+        post(`/api/admin/documents/${encodeURIComponent(doc.id)}/validity`, "PUT", { effective_on: effectiveOn || null, expires_on: expiresOn || null, version_id: doc.current_version?.id }, "Dates recorded.");
 
     const loadDetail = useCallback(async () => {
         setFailed(null);
@@ -398,11 +431,15 @@ function LibraryRowDetail({ doc, canMutate, onMessage, onAfterWrite }: { doc: Li
         const fd = new FormData();
         fd.set("file", file);
         fd.set("reason", reason.trim());
+        if (renewEffective) fd.set("effective_on", renewEffective);
+        if (renewExpires) fd.set("expires_on", renewExpires);
         const res = await fetch(`/api/admin/documents/${encodeURIComponent(doc.id)}/versions`, { method: "POST", body: fd, credentials: "include" }).catch(() => null);
         const json = (await res?.json().catch(() => ({}))) as { error?: string; code?: string } | undefined;
         setBusy(false);
         if (!res?.ok) return onMessage(`${json?.error ?? "The new version was not saved."}${json?.code ? ` (${json.code})` : ""}`);
         setReason("");
+        setRenewEffective("");
+        setRenewExpires("");
         if (fileRef.current) fileRef.current.value = "";
         onMessage("New version saved.");
         await onAfterWrite();
@@ -453,10 +490,72 @@ function LibraryRowDetail({ doc, canMutate, onMessage, onAfterWrite }: { doc: Li
                 )}
             </div>
             {canMutate ? (
+                <div className="space-y-1 border-t border-alloy-stone/15 pt-2" data-testid={`document-library-review-${doc.id}`}>
+                    <p className="font-medium text-alloy-midnight/70">
+                        Review{review ? ` · ${review}` : " · not reviewed"}
+                    </p>
+                    <input
+                        value={reviewReason}
+                        onChange={(e) => setReviewReason(e.target.value)}
+                        placeholder={decided ? "Reason for changing the review (required)" : "Reason (required to reject)"}
+                        className="w-full rounded border border-alloy-stone/30 px-2 py-1"
+                        aria-label="Review reason"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                        {review !== "accepted" ? (
+                            <button type="button" disabled={busy || (decided && reviewReason.trim().length < 3)} onClick={() => void decide("accepted")} className="rounded border border-alloy-stone/30 px-2 py-1 disabled:opacity-50">
+                                Accept
+                            </button>
+                        ) : null}
+                        {review !== "rejected" ? (
+                            <button type="button" disabled={busy || reviewReason.trim().length < 3} onClick={() => void decide("rejected")} className="rounded border border-alloy-stone/30 px-2 py-1 disabled:opacity-50">
+                                Reject
+                            </button>
+                        ) : null}
+                        {decided ? (
+                            <button type="button" disabled={busy || reviewReason.trim().length < 3} onClick={() => void decide("pending")} className="rounded border border-alloy-stone/30 px-2 py-1 disabled:opacity-50">
+                                Reopen review
+                            </button>
+                        ) : null}
+                    </div>
+                    {decided ? <p className="text-[11px] text-alloy-midnight/55">Changing a decided review needs Documents administration and is recorded with its reason.</p> : null}
+                </div>
+            ) : null}
+            {canMutate ? (
+                <div className="space-y-1 border-t border-alloy-stone/15 pt-2" data-testid={`document-library-dates-${doc.id}`}>
+                    <p className="font-medium text-alloy-midnight/70">
+                        Validity{doc.validity ? ` · ${VALIDITY_STATUS_LABEL[doc.validity.status]}` : ""}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1">
+                            Effective
+                            <input type="date" value={effectiveOn} onChange={(e) => setEffectiveOn(e.target.value)} className="rounded border border-alloy-stone/30 px-1 py-0.5" aria-label="Effective date" />
+                        </label>
+                        <label className="flex items-center gap-1">
+                            Expires
+                            <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className="rounded border border-alloy-stone/30 px-1 py-0.5" aria-label="Expiration date" />
+                        </label>
+                        <button type="button" disabled={busy} onClick={() => void saveDates()} className="rounded border border-alloy-stone/30 px-2 py-1 disabled:opacity-50">
+                            Save dates
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+            {canMutate ? (
                 <div className="space-y-1 border-t border-alloy-stone/15 pt-2">
-                    <p className="font-medium text-alloy-midnight/70">Replace with a new version</p>
+                    <p className="font-medium text-alloy-midnight/70">{doc.validity && (doc.validity.status === "expired" || doc.validity.status === "expiring_soon") ? "Renew: upload the new version" : "Replace with a new version"}</p>
                     <input ref={fileRef} type="file" className="text-[12px]" aria-label="New version file" />
                     <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why it is being replaced" className="w-full rounded border border-alloy-stone/30 px-2 py-1" aria-label="Replacement reason" />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1">
+                            New effective
+                            <input type="date" value={renewEffective} onChange={(e) => setRenewEffective(e.target.value)} className="rounded border border-alloy-stone/30 px-1 py-0.5" aria-label="New version effective date" />
+                        </label>
+                        <label className="flex items-center gap-1">
+                            New expiration
+                            <input type="date" value={renewExpires} onChange={(e) => setRenewExpires(e.target.value)} className="rounded border border-alloy-stone/30 px-1 py-0.5" aria-label="New version expiration date" />
+                        </label>
+                    </div>
                     <button type="button" disabled={busy} onClick={() => void replace()} className="rounded border border-alloy-stone/30 px-2 py-1 disabled:opacity-50">
                         {busy ? "Saving…" : "Save new version"}
                     </button>
