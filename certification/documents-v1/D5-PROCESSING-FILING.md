@@ -134,7 +134,7 @@ Refusals for out-of-scope and other-organization targets are 404, indistinguisha
 | Gate | Result | Evidence |
 |---|---|---|
 | Q1 authorization | 90/90 | `q1_hosted_authz_cert_results.qar_c6e20cc02979.json` |
-| D1b security | 25/25 | `d1b_hosted_security_cert_results.qar_c6e20cc02979.json` |
+| D1b security | 25/25 (repaired driver: 37/37 on `qar_fa40912deb3a`, below) | `d1b_hosted_security_cert_results.qar_c6e20cc02979.json`, `d1b_hosted_security_cert_results.qar_fa40912deb3a.json` |
 | D2 foundation | 40/40 | `d2_hosted_foundation_cert_results.qar_c6e20cc02979.json` |
 | D3 Studio | 40/40 | `d3_hosted_studio_cert_results.qar_c6e20cc02979.json` |
 | D4 household library | 41/41 | `d4_hosted_library_cert_results.qar_c6e20cc02979.json` |
@@ -151,6 +151,18 @@ were the intended refusal, not a product regression:
   `customer_member` subjects have no department/site linkage and are readable only by an unrestricted-scope actor
   (`assertDocumentAccess`, fail closed, D2). That rule did not change in D5. The medical document is still never
   served to a persona without `health.view`.
+  **Closure review (Director D5 closure): that change WEAKENED the matrix.** Scope (step 6) is decided before
+  sensitivity (6b), so moving the medical document to a child turned the only case in which a scope-restricted actor
+  passes scope and is then refused for lacking `health.view` into a scope 404; `scoped_ops`' "medical listed = False"
+  stopped proving sensitivity filtering for the same reason. `doc_reader`/`ocr` (unrestricted, no `health.view`)
+  still proved the refusal. The driver was repaired, not the product: it also uploads an `other` document on OPP1
+  (QA D1, inside `scoped_ops`' scope) and raises its DECLARED class to `medical` through the audited sensitivity
+  route. The full persona matrix runs against it: `scoped_ops` **403 `SENSITIVE_DOCUMENT`**, not listed, drawer 404;
+  `doc_reader`/`ocr` 403; `no_docs` 403 `INSUFFICIENT_ROLE`; `cross_org_admin` 404; `fixture_admin` 200. The child
+  case keeps its non-disclosing 404. Revalidated on a fresh authz_q1 run `qar_fa40912deb3a` (opened by
+  `gar_e7245a7bbce3eb`) on staging `81556597838b`: **D1b 37/37** (`d1b_hosted_security_cert_results.qar_fa40912deb3a.json`,
+  the 25 prior cases plus 12) and **Q1 90/90** (`q1_hosted_authz_cert_results.qar_fa40912deb3a.json`). Fixtures
+  seeded by `gar_ca2b44149ae9af`, `gar_f21a462dc863d2`, `gar_d221ff8f405b8c`; both teardowns ok.
 - D3's test type applied to `child, household`, while its upload targets an opportunity (422). The type now also
   lists `opportunity`; every D3 assertion is unchanged.
 

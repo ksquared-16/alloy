@@ -6,7 +6,10 @@ Runs alongside the certified Q1 driver (q1_hosted_authz_cert.py), which owns the
 documents and the positive server-side regression matrix. This driver adds what D1b changed:
   * a MEDICAL document (immunization_record) on a child of an in-scope household: refused without health.view.
     Since D5 enforces each Studio type's applicable subjects, a medical type is child-only, so this driver owns a
-    run-scoped household (create_lead in WU1 / QA D1, one child) and removes it with the audited lead deletion;
+    run-scoped household (create_lead in WU1 / QA D1, one child) and removes it with the audited lead deletion.
+    A child has no department/site linkage, so a scope-restricted actor is refused it by scope (404) before the
+    sensitivity check is reached. The restricted-actor half of D1b.6 — in scope, and still refused without
+    health.view — is held by a second document on in-scope OPP1 whose DECLARED class is raised to medical;
   * content proven by bytes: a PNG named .pdf is refused and nothing is stored;
   * the record drawer: never OCR text, and no drawer for an actor without document read;
   * OCR text in a Processing case's stored form-draft preview: only for an actor who may read it;
@@ -153,8 +156,23 @@ if PHASE == "setup":
         if did:
             ids["medical"] = {"id": did, "owner": "fixture_admin"}
             json.dump(ids, open(STATE_FILE, "w"), indent=2)
+    if "medical_declared" not in ids:
+        s, b = upload("fixture_admin", "medical-declared", {"entity_type": "opportunity", "entity_id": OPP1, "doc_type": "other"},
+                      tiny_pdf("medical-declared"), "pdf", "application/pdf")
+        did = ((b or {}).get("document") or {}).get("id") if isinstance(b, dict) else None
+        print(f"upload medical-declared as fixture_admin: status={s} code={code_of(b)} has_id={bool(did)}")
+        if did:
+            ids["medical_declared"] = {"id": did, "owner": "fixture_admin"}
+            json.dump(ids, open(STATE_FILE, "w"), indent=2)
+    if "medical_declared" in ids and not ids["medical_declared"].get("raised"):
+        s, b = call(f"/api/admin/documents/{ids['medical_declared']['id']}/sensitivity", "fixture_admin", "POST",
+                    json.dumps({"sensitivity": "medical", "reason": "D1b hosted certification: in-scope medical class"}).encode(), "application/json")
+        raised = s == 200 and isinstance(b, dict) and b.get("sensitivity") == "medical"
+        print(f"raise medical-declared to medical: status={s} code={code_of(b)} raised={raised}")
+        ids["medical_declared"]["raised"] = raised
+        json.dump(ids, open(STATE_FILE, "w"), indent=2)
     print("SETUP", json.dumps({k: True for k in ids}))
-    sys.exit(0 if "medical" in ids else 1)
+    sys.exit(0 if "medical" in ids and (ids.get("medical_declared") or {}).get("raised") else 1)
 
 if PHASE == "lead_delete":
     # The lead-deletion repair (PR #1579), on the deployed build. fixture_admin deletes QA fixture opportunity OPP2
@@ -217,6 +235,7 @@ if PHASE == "teardown":
 q1 = json.load(open(Q1_IDS))
 d1b = json.load(open(STATE_FILE))
 MED = d1b["medical"]["id"]
+MED_DECL = d1b["medical_declared"]["id"]
 WU1 = q1["wu1"]["id"]
 INT = q1["intake"]["id"]
 
@@ -236,6 +255,22 @@ for p, visible in {"fixture_admin": True, "doc_reader": False, "ocr": False, "sc
     s, b = call("/api/admin/documents?limit=200", p)
     got = {(d or {}).get("id") for d in ((b or {}).get("documents") or [])} if isinstance(b, dict) else set()
     check(f"medical listed = {visible}", p, s == 200 and ((MED in got) == visible) and (WU1 in got), s, code_of(b), medical_listed=MED in got)
+
+# 1b. The same refusal for a scope-restricted actor who passes scope. MED_DECL is a standard-type document on OPP1
+# (QA D1, inside scoped_ops' scope; WU1 sits on the same subject) whose declared class setup raised to medical.
+check("declared medical class raised in setup", "fixture_admin", d1b["medical_declared"].get("raised") is True, None)
+for p, exp in {"fixture_admin": 200, "doc_reader": 403, "ocr": 403, "scoped_ops": 403, "no_docs": 403, "cross_org_admin": 404}.items():
+    s, b = call(f"/api/admin/documents/{MED_DECL}/signed-url", p)
+    has_url = isinstance(b, dict) and bool(b.get("signedUrl"))
+    want_code = {403: ("SENSITIVE_DOCUMENT" if p != "no_docs" else "INSUFFICIENT_ROLE"), 404: "NOT_FOUND"}.get(exp)
+    ok = s == exp and has_url == (exp == 200) and (want_code is None or code_of(b) == want_code)
+    check(f"in-scope declared-medical signed-url expect {exp}", p, ok, s, code_of(b), has_url=has_url)
+for p, visible in {"fixture_admin": True, "doc_reader": False, "ocr": False, "scoped_ops": False}.items():
+    s, b = call("/api/admin/documents?limit=200", p)
+    got = {(d or {}).get("id") for d in ((b or {}).get("documents") or [])} if isinstance(b, dict) else set()
+    check(f"in-scope declared-medical listed = {visible}", p, s == 200 and ((MED_DECL in got) == visible) and (WU1 in got), s, code_of(b), medical_listed=MED_DECL in got)
+s, b = call(f"/api/admin/entity/documents/{MED_DECL}", "scoped_ops")
+check("drawer refuses an in-scope declared-medical document without health.view", "scoped_ops", s == 404, s, code_of(b))
 
 # 2. The record drawer: never OCR text; sensitive and unreadable documents are not served.
 s, b = call(f"/api/admin/entity/documents/{INT}", "doc_reader")
@@ -311,4 +346,4 @@ rate_probe("vendor application", "/api/vendor-application", empty_body, empty_ct
 
 summary = {"passed": sum(r["pass"] for r in results), "total": len(results), "qa_run_id": RUN, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 print("\nSUMMARY", json.dumps(summary))
-json.dump({"summary": summary, "results": results}, open(os.path.join(HERE, "d1b_hosted_security_cert_results.json"), "w"), indent=2)
+json.dump({"summary": summary, "results": results}, open(os.path.join(HERE, f"d1b_hosted_security_cert_results.{RUN}.json"), "w"), indent=2)
