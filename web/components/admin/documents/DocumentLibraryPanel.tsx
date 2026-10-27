@@ -354,6 +354,17 @@ function LibraryRow({
                         ) : null}
                         {!doc.type.registered && doc.type.key ? <span className="rounded bg-alloy-stone/10 px-1.5 py-0.5 text-alloy-midnight/60">Unregistered type</span> : null}
                         {others.length ? <span className="text-alloy-midnight/55">Also relates to {others.join(", ")}</span> : null}
+                        {doc.form_provenance ? (
+                            <span
+                                className={`rounded px-1.5 py-0.5 ${doc.form_provenance.integrity === "mismatch" ? "bg-red-50 text-red-800" : "bg-alloy-stone/10 text-alloy-midnight/70"}`}
+                                data-testid={`document-library-form-provenance-${doc.id}`}
+                            >
+                                {doc.form_provenance.kind === "signed" ? "Signed form" : doc.form_provenance.kind === "signature" ? "Signature" : doc.form_provenance.kind === "upload" ? "Uploaded through a form" : "Completed form"}
+                                {doc.form_provenance.form_name ? `: ${doc.form_provenance.form_name}` : ""}
+                                {doc.form_provenance.submission_status && doc.form_provenance.submission_status !== "submitted" ? ` · ${doc.form_provenance.submission_status}` : ""}
+                                {doc.form_provenance.integrity === "verified" ? " · signature integrity verified" : doc.form_provenance.integrity === "mismatch" ? " · integrity does not match — not usable as evidence" : ""}
+                            </span>
+                        ) : null}
                     </p>
                 </button>
                 <button

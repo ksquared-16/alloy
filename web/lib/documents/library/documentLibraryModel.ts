@@ -3,6 +3,7 @@
  *
  * No server imports here: the Focus Panel bundle reads these.
  */
+import type { FormArtifactProvenance } from "@/lib/documents/forms/formArtifactProvenance";
 import type { DocumentValidity } from "@/lib/documents/validity/documentValidity";
 
 export const LIBRARY_SUBJECT_TYPES = ["household", "person", "child", "opportunity"] as const;
@@ -82,6 +83,8 @@ export type LibraryDocument = {
      * derived by the one validity evaluator on the server (never computed in the browser).
      */
     validity?: DocumentValidity | null;
+    /** D8: where a form-produced document came from (form, submission, artifact kind, integrity), when it did. */
+    form_provenance?: FormArtifactProvenance | null;
 };
 
 export type DocumentLibrary = {

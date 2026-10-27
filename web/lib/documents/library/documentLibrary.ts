@@ -29,6 +29,7 @@ import { listCategories, listTypes } from "@/lib/documents/configuration/documen
 import type { ValidityPolicy } from "@/lib/documents/configuration/documentTypePolicy";
 import { evaluateDocumentValidity } from "@/lib/documents/validity/documentValidity";
 import { localDateOf, resolveDocumentsClock } from "@/lib/documents/validity/documentsClock";
+import { loadFormArtifactProvenance } from "@/lib/documents/forms/formArtifactProvenance";
 
 import {
     isLibrarySubjectType,
@@ -230,6 +231,8 @@ type DocRow = {
     entity_id: string | null;
     created_at: string | null;
     current_version_id: string | null;
+    checksum_sha256?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 export async function buildDocumentLibrary(
@@ -298,7 +301,7 @@ export async function buildDocumentLibrary(
         chunks(linkedIds).map((ids) =>
             supabase
                 .from("documents")
-                .select("id, title, original_filename, mime_type, byte_size, doc_type, sensitivity, status, entity_type, entity_id, created_at, current_version_id")
+                .select("id, title, original_filename, mime_type, byte_size, doc_type, sensitivity, status, entity_type, entity_id, created_at, current_version_id, checksum_sha256, metadata")
                 .eq("org_id", orgId)
                 .in("id", ids),
         ),
@@ -339,6 +342,14 @@ export async function buildDocumentLibrary(
         resolveDocumentsClock(supabase, orgId),
     ]);
     if (versionReads.some((r) => r.error)) return { ok: false, status: 500, code: "LIBRARY_READ_FAILED" };
+    // D8: Forms provenance for every listed document (only form-produced ones appear in the map). Best-effort for the
+    // library's display: an unreadable link shows no provenance; evidence decisions read it again and fail closed.
+    const formProvenance =
+        (await loadFormArtifactProvenance(
+            supabase,
+            orgId,
+            rows.map((d) => ({ id: d.id, doc_type: str(d.doc_type), checksum_sha256: str((d as { checksum_sha256?: unknown }).checksum_sha256), metadata: ((d as { metadata?: unknown }).metadata ?? null) as Record<string, unknown> | null })),
+        )) ?? new Map();
     const categories = categoriesRes.ok ? categoriesRes.value : [];
     const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
     const typeByKey = new Map((typesRes.ok ? typesRes.value : []).map((t) => [t.key, t]));
@@ -395,6 +406,7 @@ export async function buildDocumentLibrary(
                 (linksByDoc.get(d.id) ?? []).some((l) => l.subject_type === "form_submission" && submissionSet.has(l.subject_id)),
             current_version: current,
             version_count: versions.length,
+            form_provenance: formProvenance.get(d.id) ?? null,
             validity: current
                 ? evaluateDocumentValidity({
                       policy: (t?.published?.validity_policy ?? null) as ValidityPolicy | null,
