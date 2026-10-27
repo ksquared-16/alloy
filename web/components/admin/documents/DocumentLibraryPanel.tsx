@@ -9,8 +9,9 @@
  * vocabulary loads only when the upload form opens. Every write goes through the canonical routes (upload, versions)
  * and invalidates the library cache.
  *
- * What is shown is what the record holds: review and validity appear only when the version carries them, and nothing
- * here derives "missing" or "expiring". A D3 policy that is still declaration-only is never presented as enforced; the
+ * What is shown is what the record holds: review and validity appear only when the version carries them, and the list
+ * itself derives nothing. Readiness ("required / missing / pending review / waived") is the D6 Documents evaluator's
+ * answer, rendered above the list by `DocumentReadinessPanel`, never computed here; "expiring" is D7. A D3 policy that is still declaration-only is never presented as enforced; the
  * one enforced rule (the type's default sensitivity) is named as such.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +23,9 @@ import { LIBRARY_UPLOAD_ENTITY_TYPE } from "@/lib/documents/library/documentLibr
 import { cachedDocumentLibrary, invalidateDocumentLibraries, loadDocumentLibrary } from "@/lib/documents/library/documentLibraryClient";
 import type { DocumentHistoryEntry } from "@/lib/documents/library/documentHistory";
 import type { DocumentTypeSummary } from "@/lib/documents/configuration/documentConfigurationService";
+import { invalidateDocumentRequirementWork } from "@/lib/documents/requirements/documentRequirementWorkClient";
+
+import DocumentReadinessPanel from "./DocumentReadinessPanel";
 
 type Props = {
     anchor: LibrarySubjectRef;
@@ -73,6 +77,7 @@ export default function DocumentLibraryPanel({ anchor, initialFocus = null, canM
     const [expanded, setExpanded] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [uploadOpen, setUploadOpen] = useState(false);
+    const [readinessNonce, setReadinessNonce] = useState(0);
     const request = useRef(0);
 
     // A new record (or a new selected member) starts from its own focus.
@@ -111,6 +116,9 @@ export default function DocumentLibraryPanel({ anchor, initialFocus = null, canM
 
     const afterWrite = useCallback(async () => {
         invalidateDocumentLibraries();
+        // A new document or version can change readiness and the derived work; both are re-read, never patched.
+        invalidateDocumentRequirementWork();
+        setReadinessNonce((v) => v + 1);
         await load(true);
     }, [load]);
 
@@ -195,6 +203,15 @@ export default function DocumentLibraryPanel({ anchor, initialFocus = null, canM
             {uploadOpen && canMutate && library ? (
                 <LibraryUploadForm subjects={subjects} defaultSubject={focus ?? subjects[0] ?? null} onDone={afterWrite} onMessage={setMessage} />
             ) : null}
+
+            <DocumentReadinessPanel
+                anchor={anchor}
+                focus={focus}
+                canMutate={canMutate}
+                refreshNonce={readinessNonce}
+                onChanged={() => void load(true)}
+                onOpenDocument={(id) => setExpanded(id)}
+            />
 
             {docs.length > 0 ? (
                 <div className="flex flex-wrap gap-2">

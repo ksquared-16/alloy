@@ -176,6 +176,40 @@ from (
               ), 'false'),
            '13'
     union all
+    -- D6: QA fixture requirements are purged by the audited requirement DELETE (archived qa_ keys only).
+    select 'doc_zr_d6_requirements', 'check',
+           'document_requirements ~ qa_fixture_keys ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.document_requirements r
+                where r.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and r.key like 'qa\_%'
+              ), 'false'),
+           '15'
+    union all
+    select 'doc_zr_d6_requirement_versions', 'check',
+           'document_requirement_versions ~ qa_fixture_or_orphan ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.document_requirement_versions v
+                left join public.document_requirements r on r.id = v.requirement_id
+                where v.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and (r.id is null or r.key like 'qa\_%')
+              ), 'false'),
+           '16'
+    union all
+    -- No waiver of a fixture requirement, and no waiver whose record no longer exists.
+    select 'doc_zr_d6_waivers', 'check',
+           'document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.document_requirement_waivers w
+                left join public.document_requirements r on r.id = w.requirement_id
+                where w.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and (r.key like 'qa\_%' or not public.document_subject_resolves(w.org_id, w.subject_type, w.subject_id))
+              ), 'false'),
+           '17'
+    union all
     select 'doc_zr_retained_d1a_audit', 'data',
            json_build_object(
                'artifact', 'D1a document audit (workflow_events)',
@@ -186,7 +220,9 @@ from (
                  from public.workflow_events we
                  where we.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
                    and we.event_type in ('document_link_issued', 'document_delete_authorized', 'document_delete_failed',
-                                         'document_uploaded', 'person_profile_photo_set', 'person_profile_photo_cleared')
+                                         'document_uploaded', 'person_profile_photo_set', 'person_profile_photo_cleared',
+                                         'document_requirement_changed', 'document_requirement_waiver_granted',
+                                         'document_requirement_waiver_revoked', 'document_version_reviewed')
                ), 0)
            )::text,
            '14'

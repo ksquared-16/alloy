@@ -42,4 +42,11 @@ export type MyTasksTaskRow = {
     communication_last_preview?: string | null;
     communication_last_activity_at?: string | null;
     is_communications_projection?: boolean;
+    /** Documents convergence (D6) — a derived, unmet document requirement for one record. */
+    document_requirement_id?: string | null;
+    document_requirement_state?: "missing" | "pending_review" | "blocked" | null;
+    document_requirement_label?: string | null;
+    document_requirement_subject_type?: string | null;
+    document_requirement_subject_label?: string | null;
+    is_document_requirement_projection?: boolean;
 };

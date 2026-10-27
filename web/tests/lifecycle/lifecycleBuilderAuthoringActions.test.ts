@@ -190,10 +190,12 @@ describe("set_stage_requirements", () => {
          * already reports `completed` per template key for a subject, so satisfaction has a
          * canonical owner and nothing had to be invented to prove it. `financial` then joined on
          * that same bar — canonical Financials owns the charge, the payment and what is still
-         * outstanding, so the requirement reads satisfaction rather than asserting it. The
-         * remaining four still have no owner that could answer, and the loop keeps them refused.
+         * outstanding, so the requirement reads satisfaction rather than asserting it. `document`
+         * joined with Documents V1 / D6: canonical Documents owns document requirement
+         * satisfaction (one evaluator, Documents-owned waivers) and Business Process reads it. The
+         * remaining three still have no owner that could answer, and the loop keeps them refused.
          */
-        const AUTHORABLE = ["form", "field", "work", "financial"] as const;
+        const AUTHORABLE = ["form", "field", "work", "financial", "document"] as const;
         for (const kind of AUTHORABLE) {
             expect(isAuthorableRequirementKind(kind), kind).toBe(true);
         }

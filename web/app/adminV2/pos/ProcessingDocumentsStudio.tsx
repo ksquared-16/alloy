@@ -19,6 +19,7 @@ import {
 import { DECLARED_DOCUMENT_SENSITIVITIES, type DeclaredDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 import { DOCUMENT_SUBJECT_TYPES, type DocumentSubjectType } from "@/lib/documents/documentSubjects";
 
+import ProcessingDocumentRequirementsStudio from "./ProcessingDocumentRequirementsStudio";
 import { documentStudioApi, useDocumentStudioLibrary } from "./useDocumentStudioApi";
 
 /**
@@ -28,6 +29,8 @@ import { documentStudioApi, useDocumentStudioLibrary } from "./useDocumentStudio
  * and only a published version is live. The Studio shows where each policy field is ENFORCED today (sensitivity for new
  * documents; subjects, formats and review on filing and upload; replacement on filing and replacement — D5) and which
  * are only DECLARED (validity, D7) — an unimplemented rule is never presented as active.
+ *
+ * Requirements (D6) are the third section: which published types are required, for whom, when, and whether waivable.
  *
  * Every action is a server route gated by `processing.documents.manage` (reads: `documents.read`). Hiding a control is
  * not the boundary; a refused write surfaces the server's code.
@@ -111,14 +114,14 @@ const PRIMARY = "rounded-lg bg-alloy-bend-pine px-3 py-2 text-[12px] font-semibo
 
 export default function ProcessingDocumentsStudio() {
     const lib = useDocumentStudioLibrary();
-    const [section, setSection] = useState<"types" | "categories">("types");
+    const [section, setSection] = useState<"types" | "categories" | "requirements">("types");
     const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white" data-testid="processing-documents-studio">
             <div className="flex shrink-0 items-center gap-2 border-b border-alloy-stone/12 px-5 py-3">
-                {(["types", "categories"] as const).map((s) => (
+                {(["types", "categories", "requirements"] as const).map((s) => (
                     <button
                         key={s}
                         type="button"
@@ -130,7 +133,7 @@ export default function ProcessingDocumentsStudio() {
                         className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${section === s ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-midnight/55"}`}
                         data-testid={`documents-studio-section-${s}`}
                     >
-                        {s === "types" ? "Document types" : "Categories"}
+                        {s === "types" ? "Document types" : s === "categories" ? "Categories" : "Requirements"}
                     </button>
                 ))}
             </div>
@@ -144,6 +147,8 @@ export default function ProcessingDocumentsStudio() {
                 </div>
             ) : section === "categories" ? (
                 <CategoryLibrary categories={lib.categories} types={lib.types} onChanged={lib.reload} />
+            ) : section === "requirements" ? (
+                <ProcessingDocumentRequirementsStudio types={lib.types} />
             ) : selectedTypeId || creating ? (
                 <TypeEditor
                     typeId={selectedTypeId}
