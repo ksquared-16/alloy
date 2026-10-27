@@ -1,0 +1,465 @@
+{
+  "run": "qar_af1c638fd52a",
+  "summary": {
+    "passed": 59,
+    "total": 59
+  },
+  "results": [
+    {
+      "case": "queue refused without processing.operate + documents.read",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "queue refused without processing.operate + documents.read",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "queue refused without processing.operate + documents.read",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "filing refused without processing.operate",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "filing refused without processing.operate",
+      "persona": "no_docs",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "a Processing operator without documents.write cannot file",
+      "persona": "processing_only",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENTS_WRITE_REQUIRED"
+    },
+    {
+      "case": "a Processing operator without documents.write cannot file",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENTS_WRITE_REQUIRED"
+    },
+    {
+      "case": "a proposal needs documents.write",
+      "persona": "ocr",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "case": "refused attempts left the case open",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "status_now": "received"
+    },
+    {
+      "case": "queue lists every received customer document of the run",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "missing": []
+    },
+    {
+      "case": "a form-template upload is not a customer document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "a quarantined upload opened no case and is not queued",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "unclassified row: suggestion shown as a proposal, no record chosen",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "lane": "unclassified",
+      "suggested": "immunization_record"
+    },
+    {
+      "case": "an operator with processing.operate + documents.read sees the queue",
+      "persona": "ocr",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "department-restricted operator: unattached intake is out of scope, not listed",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "another organization's queue does not contain the run's cases",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "workspace offers the published Studio catalog with its policy",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "classifier suggestion is a proposal; nothing chosen; no household matched",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "workspace of a case out of reach is not found (no leak)",
+      "persona": "scoped_ops",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "workspace of a case out of reach is not found (no leak)",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "cross-organization filing refused as not found",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "case": "cross-organization proposal refused",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "the household graph is offered for record selection",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "no type / no record: filing refused, nothing filed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 400,
+      "code": "TYPE_REQUIRED"
+    },
+    {
+      "case": "refused filing leaves the case open",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "status_now": "received"
+    },
+    {
+      "case": "subject-type policy: a child-only type is refused for a household",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 422,
+      "code": "TYPE_SUBJECT_NOT_APPLICABLE"
+    },
+    {
+      "case": "the refusal is a Filing error in the queue, never done",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "lane": "filing_error"
+    },
+    {
+      "case": "corrected classification files",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "proposal saved (labels from the server)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "preview: ready, nothing to resolve",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "problems": []
+    },
+    {
+      "case": "filing commits and completes the case",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "case completed only after filing",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "status_now": "completed"
+    },
+    {
+      "case": "re-approval is idempotent",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "no duplicate version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "versions": 1
+    },
+    {
+      "case": "duplicate submission files exactly once",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "statuses": [
+        200,
+        200
+      ],
+      "associations": 1
+    },
+    {
+      "case": "history records one committed filing",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "filed": 1
+    },
+    {
+      "case": "review-required type refused without a review",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "REVIEW_REQUIRED"
+    },
+    {
+      "case": "case stays open after the refusal",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "retry after review files",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "medical type raised the class; review recorded on the version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "sensitivity": "medical",
+      "review": "accepted"
+    },
+    {
+      "case": "a second document of a new_version type is not a new document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 409,
+      "code": "NEW_VERSION_REQUIRED"
+    },
+    {
+      "case": "preview names the existing document to version",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "filed as version 2 of the existing document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "one logical document, two versions",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "versions": 2
+    },
+    {
+      "case": "library: the version is not a second document; the received document is not listed",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "the superseded received document is unavailable",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 403,
+      "code": "DOCUMENT_RESTRICTED"
+    },
+    {
+      "case": "history: filed from Processing as version 2",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "identity document filed with a raised class",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "custody order filed (safeguarding class)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "cleared admin sees identity and safeguarding documents with their classes",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "reader without clearance: medical, identity and safeguarding documents withheld",
+      "persona": "doc_reader",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 3
+    },
+    {
+      "case": "format policy refuses a text file for a PDF/image type",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 422,
+      "code": "TYPE_FORMAT_NOT_ALLOWED"
+    },
+    {
+      "case": "upload: a child-only type refused for an adult, nothing stored",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 422,
+      "code": "TYPE_SUBJECT_NOT_APPLICABLE"
+    },
+    {
+      "case": "upload: a format the type does not allow refused, nothing stored",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 422,
+      "code": "TYPE_FORMAT_NOT_ALLOWED"
+    },
+    {
+      "case": "filed documents listed once each in the household library",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "one document, several associations: owner child, related household and case",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "associations": [
+        [
+          "child",
+          "owner"
+        ],
+        [
+          "household",
+          "context"
+        ],
+        [
+          "opportunity",
+          "context"
+        ]
+      ]
+    },
+    {
+      "case": "child-narrowed library holds the child's filed documents",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "parent-narrowed library holds the parent's filed document",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "queue lanes after filing: filed, and the refused text file in filing errors",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "lanes": {
+        "enr": "filed",
+        "amb": "filed",
+        "dup": "filed",
+        "imm1": "filed",
+        "imm2": "filed",
+        "dl": "filed",
+        "cust": "filed",
+        "txt": "filing_error"
+      }
+    }
+  ]
+}
