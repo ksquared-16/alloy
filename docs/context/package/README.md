@@ -97,11 +97,12 @@ the list that touches no document and breaks no test on its own.
 
 ## How Financials pending is handled
 
-`financials-payments` is `PENDING_DISABLED`, for a measured reason: the last substantive semantic
-change under `web/lib/financials/payments` was 2026-09-30, and the seven-day stability gate has not
-opened. Recent commits corrected core money meaning — refund ordering, held-deposit availability,
-payer authorization, return-versus-refund — so freezing current behaviour into DIRECT context would
-describe semantics that have already moved.
+`financials-payments` is `PENDING_DISABLED`, for a measured reason (remeasured 2026-10-27 at staging
+`1492a2dd9`): the last substantive semantic change under `web/lib/financials/payments` is
+`9e3774e0e` (2026-10-21), five quiet days at tip, and the seven-day stability gate has **not**
+opened. Payments V1/W7 is implemented on staging; implementation does not open DIRECT context.
+Freezing current behaviour into DIRECT context while the gate is closed would certify semantics
+still inside the stability window.
 
 The lane **exists now** so routing works and so the refusal is explicit rather than an omission. It
 provides no DIRECT context. Certified **Subsidy** and certified **Commercial** are not blocked by the

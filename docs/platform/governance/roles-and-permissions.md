@@ -1,13 +1,14 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-10
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
 # Roles and permissions
 
-**Status:** Canonical (V1 as-built).
+**Status:** Canonical (V1 as-built). Route-capability counts below remeasured 2026-10-27 at staging
+`1492a2dd9` via `node web/scripts/checkRouteCapabilities.mjs`.
 
 Capability (permission keys) vs visibility (department/site scope).
 
@@ -41,14 +42,16 @@ directions. The four layers are **Membership → Role → Capability → Scope**
 > **How much of the platform is actually capability-gated** is measured, not estimated:
 > `web/scripts/routeCapabilities.declared.json` records every handler method as `declared`,
 > `none` (reasoned — public token-scoped, signed webhook, stub) or `pending`, against a
-> `max_pending` ratchet. The great majority are still `pending`. The ratchet is tight by test —
-> the suite fails if it could be lowered without producing a violation — so every conversion
-> must lower it and none can be banked. Enforced in `prebuild` by
-> `web/scripts/checkRouteCapabilities.mjs` and locked, non-vacuously, by
+> `max_pending` ratchet. Measured 2026-10-27 at staging `1492a2dd9` (**726** routes, **950**
+> handlers): **531** `declared`, **106** `none`, **313** `pending` (of which **297** are
+> program-owned against ceiling **297**, plus **16** inherited). Pending is no longer “the great
+> majority.” The ratchet is tight by test — the suite fails if it could be lowered without
+> producing a violation — so every conversion must lower it and none can be banked. Enforced in
+> `prebuild` by `web/scripts/checkRouteCapabilities.mjs` and locked, non-vacuously, by
 > `web/tests/access/routeCapabilityDeclaration.test.ts`.
 >
-> Read the current figures from that file's own `reviewed` date rather than from prose here:
-> capability keys are being added most weeks, and the counts move with them.
+> Prefer the declaration table over any frozen prose count when the two disagree. The table's own
+> `reviewed` field may lag the tip; the live checker output is the measurement.
 
 > **A membership is a set, but the write is still a replacement.** `permissionKeys` is the union
 > of every role a person holds. `PATCH /api/admin/users/[userId]/role` nonetheless replaces every
@@ -127,10 +130,12 @@ hold several role keys in one org and `permissionKeys` is their **union**. Any s
     ([`staff-coverage-authority.md`](staff-coverage-authority.md)): no scope = trusted internal path;
     unrestricted writes org-wide; restricted must hold EVERY touched site; unresolvable fails closed.
     Capability policy is unchanged — this enforces scope only.
-- **Absent** access profile: legacy default `all` scopes — a transition default
-  (`ABSENT_PROFILE_ENFORCEMENT`), lockout-class to change, waiting on `W-7` / migration `M1`
+- **Absent** access profile: **denies** (`restricted`, empty allow-lists).
+  `ABSENT_PROFILE_ENFORCEMENT = "deny"` in `web/lib/admin/resolveAdminAccessCore.ts` (W-7 / I-19;
+  shipped — see `#1501` / “absent scope denies”). The old transition default of legacy `all` scopes
+  is **not** current enforcement.
 - **Failed** access-profile read: **denies** (`restricted`, empty allow-lists) — `W-43`. Absence and
-  failure are deliberately different populations
+  failure are deliberately the same *verdict* (deny) and remain different *populations* in audit.
 
 ### Where a role's capabilities come from
 
@@ -154,14 +159,33 @@ that backfills grants must first establish which.
 
 ### What is not true yet
 
-The rule above says capabilities are checked. **Most admin surfaces gate on admission alone** and
-never read `permissionKeys`. Per-route capability requirements are recorded in the `W-14`
-declaration table, where each handler is `declared` (bound to source by three joins), `none`
-(reasoned — public token-scoped routes, signed webhooks, stubs), or `pending` (the majority).
-Converting `pending` handlers is `W-15`, and each conversion is a decision about who may act, not a
-refactor.
+The rule above says capabilities are checked. **Many admin surfaces still gate on admission alone**
+and never read `permissionKeys`, but that is no longer “most handlers”: as of the 2026-10-27
+remeasurement, **531 of 950** handlers are `declared` and bind a capability. Per-route capability
+requirements are recorded in the `W-14` declaration table, where each handler is `declared` (bound
+to source by three joins), `none` (reasoned — public token-scoped routes, signed webhooks, stubs),
+or `pending` (**313** remaining; **297** program-owned). Converting `pending` handlers is `W-15`,
+and each conversion is a decision about who may act, not a refactor.
+
+**Material enforcement seams reviewed in this refresh (not a redesign):**
+
+- **Money-capable identity.** A login that holds a money-capable capability must be *nameable*
+  (account name and/or linked person). Invariants and services:
+  `web/lib/access/personLinkRequirement.ts`, `userPersonLinkService.ts`, migrations such as
+  `20261122140000_money_capable_grant_requires_person_link.sql` / named-operator identity. A
+  Person link is not a cacheable substitute for the account name rule (W7-F002).
+- **Membership and access profile.** Membership writes that clear or require an access profile are
+  enforced (absent profile denies — above). Invitation location restrictions write scope in one
+  path (`inviteLocationAccess.ts`).
+- **Medical / health visibility.** Sensitive document and health reads require `health.view` (and
+  related medical gates) in addition to ordinary record access — see
+  [`document-security-model.md`](document-security-model.md) and the Medical visibility work.
+- **Documents.** Document byte/link/text access goes through `assertDocumentAccess`
+  (`web/lib/documents/assertDocumentAccess.ts`); route declarations for Documents moved several
+  handlers from `pending` to `declared` under existing `documents.*` / Processing keys.
 
 **Grep when touching routes.** Do not infer from a neighbouring handler that a route is gated.
+Declared ≠ enforced at every call site; pending ≠ ungated when a domain service holds the check.
 
 ---
 

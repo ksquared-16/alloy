@@ -2,7 +2,7 @@
 title: Alloy benchmark context pack
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -19,7 +19,7 @@ contains several generations of design history, and most of it is not current tr
 | **Certified** | 2026-09-30 |
 | **Base** | `3c4ac97f1` (staging), plus the Configuration and AI/BOS records carried in PR 1368 candidate `5d24b0d08` — **not yet on staging** |
 | **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments only** — stability gate CLOSED, 0 days quiet; last semantic change `75c1a016c` (2026-09-30), thirteen commits under `web/lib/financials/payments` in the preceding seven days |
+| **Domains pending** | **Financials / Payments only** (context-lane hold) — measured at staging `1492a2dd9` (2026-10-27): stability gate **CLOSED**, **5** quiet days (&lt; 7); last semantic change `9e3774e0e` (2026-10-21); eight commits under `web/lib/financials/payments` in the preceding seven days. Documents is implemented with owners but has **no context lane yet** (Director D-01 → Slice 2) |
 
 **Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into three
 companion documents — [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current
@@ -67,8 +67,9 @@ context. A PASS in one of them is not current evidence.
 
 **Safe/forbidden inference for both domains is §5 of the certification record.** The two that cause the
 most damage if got wrong: "latest row = active row" (resolve currency by the operational-state
-predicate, never by recency) and "a declared capability is an enforced one" (319 declarations are a
-`pending` backlog).
+predicate, never by recency) and "a declared capability is an enforced one" (measured 2026-10-27 at
+staging `1492a2dd9`: **313** of **950** handlers are `pending`, of which **297** are program-owned
+against a ratchet ceiling of **297**, plus **16** inherited — see Identity/Access debt below).
 
 ### Attendance — context treatment
 
@@ -108,13 +109,15 @@ raise what the family owes; ten production commands share the single capability 
 **no mounted HTTP write surface** — subsidy is command-dispatched, with exactly three durable writer
 services and zero unexplained writers.
 
-**FINANCIALS / PAYMENTS — NOT CERTIFIED, and deliberately so.** Payments V1 is mid-mutation: **nine
-Payments V1 pull requests** in the last twenty staging commits, the most recent landing the same day as
-this pass, and their subjects are corrections to core money semantics rather than polish — refund
-ordering ("an operator's refund spends the money nobody has a claim on first"), held/deposit
-availability ("held money was available to spend after all"), payer authorization, and the
-return-versus-refund distinction. Freezing a domain mid-mutation is how a benchmark corpus starts
-describing behaviour that has already changed. `web/lib/financials/payments` last changed 2026-09-30.
+**FINANCIALS / PAYMENTS — NOT CERTIFIED, and deliberately so.** *(Live measurement 2026-10-27 at
+staging `1492a2dd9`.)* Payments V1 and W7 are **implemented** on staging (methods, collection,
+settlement, autopay surfaces under `web/lib/financials/payments` and related settlement authorities).
+Implementation is not certification. The seven-day quiet gate under `web/lib/financials/payments`
+remains **CLOSED**: last substantive change `9e3774e0e` (2026-10-21), five quiet days at tip, eight
+commits in the preceding seven days. Freezing Payments into DIRECT context while the gate is closed
+would describe semantics that are still inside the stability window. Historical note: the 2026-09-30
+certification pass measured `75c1a016c` with zero quiet days — that snapshot is provenance, not live
+state.
 
 **COMMERCIAL — superseded by the Commercial section below, which certifies it.** The paragraph that
 follows records the state at the time of the money pass and the misinformation it corrected; read the
@@ -147,10 +150,11 @@ and FK-guarded; what makes them unusual is that they administer the retired **Jo
 vertical (`pricing_*`, zero rows, including `pricing_first_clean_prices` and
 `pricing_square_footage_tiers`), not childcare tuition, which lives in `commercial_tuition_rates`.
 
-**FINANCIALS / PAYMENTS — STABILITY GATE CLOSED.** Latest substantive Payments semantic commit is
-`75c1a016c`, **2026-09-30**, changing bank-account authorization (who may authorize a payer bank
-account), with `e9694c5c8` changing refund-versus-paid accounting the same day. The gate requires seven
-consecutive quiet days; there were zero. Not certified, and not attempted.
+**FINANCIALS / PAYMENTS — STABILITY GATE CLOSED (remeasured 2026-10-27).** Latest substantive
+Payments semantic commit under `web/lib/financials/payments` is `9e3774e0e`, **2026-10-21**
+(automatic responsibility-aware settlement). The gate requires seven consecutive quiet days; at
+staging tip `1492a2dd9` there were **five**. Not certified, and not attempted. (The 2026-09-30
+measurement of `75c1a016c` / zero quiet days is historical.)
 
 **OPERATIONAL INTELLIGENCE — one authority hole found and repaired; certification still outstanding.**
 `admin/operational-questions/answer` POST answered a question and, by default, appended the observation
@@ -252,9 +256,11 @@ durable truth · AI bypasses capability checks · surface access is action autho
 local models or self-hosted inference are current · a route under the AI path necessarily invokes a
 model · an OI metric is model inference.
 
-**With these two, every platform domain is certified.** The only domain still pending is
-**Financials/Payments**, held by the seven-day stability gate — `75c1a016c`, 2026-09-30, **0 days quiet** —
-plus foundation synthesis, which is a whole-estate task rather than a domain.
+**Context-lane scoreboard (remeasured 2026-10-27 at staging `1492a2dd9`).** Every *registered*
+context-package domain lane is certified except **Financials/Payments**, held by the seven-day
+stability gate — last change `9e3774e0e` (2026-10-21), **5 quiet days** (&lt; 7). Documents D1a–D6 is
+implemented with canonical owners and is **not** yet a context-package lane (Director D-01 → Slice 2);
+do not read lane absence as “Documents does not exist.”
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -283,7 +289,7 @@ than tidied away.
 | Communications | CERTIFIED | `COMMUNICATIONS_…` | [`../platform/modules/communications-platform.md`](../platform/modules/communications-platform.md) | — | a provider change or addition |
 | Configuration | CERTIFIED | `CONFIGURATION_…` | [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md) | Programs publication chain is built with **zero rows**; **record is on PR 1368, not yet on staging** | first rows in the publication chain; a fifth lifecycle |
 | AI / BOS | CERTIFIED | `AI_BOS_…` | [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md) | two of four Trust capabilities are deterministic — a fact, not debt; **record is on PR 1368, not yet on staging** | a new provider or adapter |
-| **Financials / Payments** | **PENDING** | — | **none — do not load a Payments document as current truth** | the domain is mid-mutation, not merely undocumented | seven consecutive quiet days under `web/lib/financials/payments` |
+| **Financials / Payments** | **PENDING** | — | **none as DIRECT — do not load Payments as certified context** | implemented on staging (V1/W7); **not certified**; gate CLOSED (5/7 quiet days at `1492a2dd9`) | seven consecutive quiet days under `web/lib/financials/payments`, then a full domain certification |
 
 **Declarations reconcile to twelve tokens for fourteen rows.** Operations temporal truth shares the
 Enrollment/Placement declaration, and Subsidy has no token at all. Neither is a reason to doubt the
@@ -292,26 +298,27 @@ implied fourteen tokens would be the kind of tidy-looking falsehood this corpus 
 
 ## Financials / Payments — what may enter context now
 
-Financials/Payments is **PENDING**, and the reason is measurable rather than editorial: the last
-substantive semantic change under `web/lib/financials/payments` is `75c1a016c` (2026-09-30), with
-thirteen commits under that path in the preceding seven days. The recent subjects are corrections to
-core money meaning — refund ordering, held-deposit availability, payer authorization, and the
-return-versus-refund distinction — not polish.
+Financials/Payments is **PENDING**, and the reason is measurable rather than editorial. Measured at
+staging `1492a2dd9` (2026-10-27): the last substantive semantic change under
+`web/lib/financials/payments` is `9e3774e0e` (2026-10-21), with eight commits under that path in the
+preceding seven days and five quiet days at the tip. The seven-day gate is **CLOSED**. Payments
+capabilities are **implemented** (V1/W7); they are **not certified** for AI DIRECT context.
 
 **Allowed into context now:**
 
 - **Subsidy**, certified and stable — §0.1 of [`../platform/modules/financials-canonical-authorities.md`](../platform/modules/financials-canonical-authorities.md).
 - **Commercial**, certified — [`../platform/modules/commercial-configuration.md`](../platform/modules/commercial-configuration.md).
 - Core Financials QA material **only** as `EXCLUDE_HISTORY` evidence: `certification/financials/**`.
-- The top-level statement that Financials/Payments is pending re-certification because its semantics
-  are actively changing.
+- The top-level statement that Financials/Payments remains pending certification under the stability
+  gate (implementation ≠ certification).
 
 **Forbidden now:**
 
 - Freezing current Payments behaviour into DIRECT context.
 - Claiming or implying Financials certification, including by omission in a summary.
-- Inferring current payment semantics from older Payments or Billing documents — several were
-  overtaken during September 2026.
+- Inferring that “Payments is future work” — it shipped; what is pending is **certification**.
+- Inferring current payment semantics from older Payments or Billing documents without checking the
+  path and the gate.
 
 Subsidy and Commercial are **not** blocked by the Payments hold. They are separately certified, and
 subsidy is collection suppression rather than a payment concept.
@@ -525,15 +532,16 @@ uses the service-role client, so no legitimate path called it with a user JWT.
 
 ### Remaining implementation debt — bounded, and not model uncertainty
 
-**319 of 872 route handlers carry no declared capability** (303 program-owned, 16 inherited; ceiling
-303, ratcheted downward only). 56 of those are mutations. This is W-15's burndown and it is
-**propagation work, not doubt about the authority model**: the model is Model A, ratified and now proven
-closed at the database boundary. Each pending handler is enumerated in
-`scripts/routeCapabilities.declared.json` with a reason, so authority per route is a known quantity.
+**313 of 950 route handlers carry no declared capability** (297 program-owned, 16 inherited; ceiling
+297, ratcheted downward only) — measured 2026-10-27 at staging `1492a2dd9` via
+`node web/scripts/checkRouteCapabilities.mjs`. **54** of those pending handlers are mutations. This is
+W-15's burndown and it is **propagation work, not doubt about the authority model**: the model is
+Model A, ratified and now proven closed at the database boundary. Each pending handler is enumerated
+in `scripts/routeCapabilities.declared.json` with a reason, so authority per route is a known quantity.
 
-Do not read the pending count as "the domain is ungated": 456 handlers declare and bind a capability,
-and the database-level exposures that a missing route gate could have been exploited through are the
-ones this section just proved closed.
+Do not read the pending count as "the domain is ungated": **531** handlers declare and bind a
+capability (plus **106** reviewed `none`), and the database-level exposures that a missing route gate
+could have been exploited through are the ones this section just proved closed.
 
 ### Blockers closed on the documentation axis
 
@@ -575,16 +583,17 @@ yet applied to the deployed primary; see the gate above.*
 | Debt | Size | Why it is not a certification blocker |
 |---|---|---|
 | `authenticated` INSERT/UPDATE/DELETE grants the architecture never needed | **259 tables**; **56** of them have no write policy at all | Latent by mechanism: RLS denies, and no supported path uses the authenticated principal to write. Phase 4 retires them per table family; the 56 are the risk-free start |
-| Route handlers with no declared capability | **319 of 872** (303 owned + 16 frozen), across **122 route families**; **56 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
+| Route handlers with no declared capability | **313 of 950** (297 owned + 16 inherited), across **726** route files; **54 are mutations** (remeasured 2026-10-27 @ `1492a2dd9`) | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet** (ceiling **297**). Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
 | Write policies resting on `current_org_id()` | 41 | Returns NULL above one organization (measured: 3 orgs), so all 41 **deny**. Fails closed — but would silently become permissive in a single-org deployment |
 | Write policies matching none of the four known shapes | 142 | None are unconditionally permissive (measured: 0). Unclassified, not unsafe |
 | Read semantics for the two newly RLS-protected tables | 2 tables | Both are service-role-only reads today, which is what the product does. Choosing an org-scoped authenticated read predicate is a Financials decision, ledgered rather than guessed |
 
-**Route capability, stated correctly.** Of **872** handlers across 674 route files: **456 declare and
-bind a capability**, **97 are declared admission-sufficient**, **319 are pending**. An earlier version
-of this pack said "~17 assert a capability" — that was wrong by more than an order of magnitude and
-would have led a reader to believe the domain was essentially ungated. It is roughly half-gated, with
-the remainder enumerated.
+**Route capability, stated correctly (remeasured 2026-10-27 @ `1492a2dd9`).** Of **950** handlers
+across **726** route files: **531 declare and bind a capability**, **106 are reviewed `none`**
+(admission-sufficient / token / webhook / stub), **313 are pending** (297 program-owned ≤ ceiling
+297; 16 inherited). An earlier version of this pack said "~17 assert a capability" — that was wrong
+by more than an order of magnitude. A later snapshot said 456/872/319 — also superseded. Prefer the
+declaration table over any frozen prose count.
 
 **Admission is not authorization, and the helper name hides it.** `requireAdminOrOps` resolves
 `portal.access` and *returns* the principal's permission-key union; asserting a key from it is the
