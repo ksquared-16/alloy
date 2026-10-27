@@ -92,18 +92,6 @@ vi.mock("@/lib/admin/getAdminContext", async (orig) => ({
 }));
 
 /*
- * CERT-STACK DRIFT, not an S7 behaviour: `alloy-cert` lacks staging migration 20261129090000 (the
- * computed `processing_cases.processing_case_subject_removed`, another workstream's), so the approve
- * route's subject-removed guard cannot be selected there. Only that guard is replaced — with a real
- * column that is never `true` — and the drift is a recorded sprint obligation. Everything else in
- * Approve runs as deployed.
- */
-vi.mock("@/lib/pos/processingCase/processingCaseSubjectRemoved", async (orig) => ({
-    ...(await orig<typeof import("@/lib/pos/processingCase/processingCaseSubjectRemoved")>()),
-    PROCESSING_SUBJECT_REMOVED_FIELD: "updated_at",
-}));
-
-/*
  * CERT-TENANT CONFIGURATION, not an S7 behaviour: Northwind has no builder-owned Create Lead entry
  * department, so Processing's lead placement fails closed (`lead_placement_unresolved`) for any
  * public-form lead. The real resolver still runs — it is only told Northwind's `new_leads` work unit,
@@ -549,7 +537,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
         return Object.fromEntries(rows.filter((r) => r.category.includes("marketing")).map((r) => [r.category, r.state]));
     }
     async function marketingEvents(personId: string) {
-        return (await ok(db.from("communication_preference_events").select("category, from_state, to_state, source, method").eq("org_id", ORG).eq("person_id", personId))) as Array<Json>;
+        return (await ok(db.from("communication_preference_events").select("category, from_state, to_state, source, method").eq("org_id", ORG).eq("person_id", personId).order("occurred_at", { ascending: true }))) as Array<Json>;
     }
     async function marketingMessagesTo(email: string) {
         return (await ok(db.from("communication_messages").select("id, category").eq("org_id", ORG).ilike("to_address", email).eq("category", "marketing"))) as Array<Json>;
@@ -797,9 +785,10 @@ describeLive("S7 public tour booking, intake and approval — live certification
             deliverEmail = fam.email;
             deliverPerson = (await personsWithEmail(fam.email))[0]!.id;
             expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_in" });
-            const links = (await ok(db.from("opportunity_persons").select("opportunity_id").eq("org_id", ORG).eq("person_id", deliverPerson))) as Array<{ opportunity_id: string }>;
-            expect(links.length, "Approve linked the parent to the lead").toBeGreaterThanOrEqual(1);
-            deliverLead = links[0]!.opportunity_id;
+            // Approve's lead is its operational result; the parent is the lead's primary person.
+            deliverLead = String((r.json.data!.operationalResult as { recordId: string }).recordId);
+            const lead = (await ok(db.from("opportunities").select("primary_person_id").eq("org_id", ORG).eq("id", deliverLead).single())) as { primary_person_id: string | null };
+            expect(lead.primary_person_id, "Approve linked the parent to the lead").toBe(deliverPerson);
 
             // Direct path: the drawer adapter → canonical enqueue. The row is what the dispatcher delivers.
             const direct = await directSend("marketing", "direct-marketing");
@@ -921,15 +910,29 @@ describeLive("S7 public tour booking, intake and approval — live certification
             const marketingBefore = (await marketingMessagesTo(deliverEmail)).length;
 
             const direct = await directSend("marketing", "direct-after-unsub");
-            const directRow = await messageRow((direct as { communication_message_id: string }).communication_message_id);
-            expect(directRow).toMatchObject({ status: "blocked", error: "policy:OPTED_OUT" });
+            // The adapter refuses (canonical enqueue's eligibility gate) and returns no message id; the
+            // blocked row it persisted is found on the returned thread.
+            expect(direct).toMatchObject({ ok: false, error: expect.stringContaining("eligibility_blocked:OPTED_OUT") });
+            const directThread = String((direct as { thread_id?: string }).thread_id ?? "");
+            expect(directThread).not.toBe("");
+            const threadRows = (await ok(db.from("communication_messages").select("id, status, category, error").eq("org_id", ORG).eq("thread_id", directThread).eq("status", "blocked"))) as Array<{ id: string; status: string; category: string; error: string | null }>;
+            expect(threadRows.length).toBe(1);
+            const directRow = threadRows[0]!;
+            expect(directRow).toMatchObject({ status: "blocked", category: "marketing", error: "policy:OPTED_OUT" });
 
             const optedOut = await scheduleSend("sched-after-unsub", "marketing");
             const uncategorised = await scheduleSend("sched-no-category", null);
             const res = await dispatchDue([optedOut, uncategorised]);
             expect(res.claimed).toBe(2);
+            // The dispatcher's adapter is refused by the eligibility gate: the scheduled send fails with
+            // the refusal recorded and no message id; the blocked row is the one carrying its body.
             const s = await scheduled(optedOut);
-            const blocked = await messageRow(s.communication_message_id!);
+            expect(s.status).toBe("failed");
+            expect(s.communication_message_id).toBeNull();
+            expect(String((s.metadata.last_process_error as { error?: string } | undefined)?.error ?? "")).toContain("eligibility_blocked:OPTED_OUT");
+            const schedRows = (await ok(db.from("communication_messages").select("id, status, category, error").eq("org_id", ORG).ilike("to_address", deliverEmail).ilike("body", `%ZZ ${RUN} scheduled sched-after-unsub%`))) as Array<{ id: string; status: string; category: string; error: string | null }>;
+            expect(schedRows.length).toBe(1);
+            const blocked = schedRows[0]!;
             expect(blocked).toMatchObject({ status: "blocked", category: "marketing", error: "policy:OPTED_OUT" });
             const u = await scheduled(uncategorised);
             expect(u.status).toBe("failed");
