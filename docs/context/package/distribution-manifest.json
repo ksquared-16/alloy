@@ -3,7 +3,7 @@
   "package": "alloy-context.v1",
   "schema_version": "1.1.0",
   "package_status": "ALLOY_CONTEXT_PACKAGE_V1_1_READY_FINANCIALS_PENDING",
-  "source_staging_sha": "1464197d0940365ec3e9c868ebf673364b2b3c24",
+  "source_staging_sha": "6376564d37a8157ce9726b4a15be9f9e99e25cc5",
   "generated_by": "scripts/build-context-package.mjs",
   "strategy": "path-manifest",
   "strategy_note": "Paths and blob SHAs, not copies. A detached copy becomes a competing authority the moment the source moves.",
@@ -11,25 +11,25 @@
     {
       "path": "docs/context/alloy-benchmark-context.md",
       "tier": 1,
-      "blob_sha": "888e976f3ab8832326ea0ec33420ad32df5f6a56",
+      "blob_sha": "44ebe5ddc6dd6d0e2ac916a88ddbc553003263d0",
       "exists": true
     },
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "tier": 1,
-      "blob_sha": "09f0a5b242428785b172027c770fc6d4bcce606e",
+      "blob_sha": "085de9469c65a60a7907e2f6a0d74fec9b20040f",
       "exists": true
     },
     {
       "path": "docs/context/alloy-inference-contract.md",
       "tier": 1,
-      "blob_sha": "10cd0b712c4893e4a20228141ebdbd6befc4a0ca",
+      "blob_sha": "65feaf8e5e44edc82458c1d66ae3acc6cd384fae",
       "exists": true
     },
     {
       "path": "docs/context/alloy-platform-synthesis.md",
       "tier": 1,
-      "blob_sha": "f0539918f392c40315b4b4183c484ea454bf62a8",
+      "blob_sha": "37ec17d215502c5d2ea4d2fc7e46fa43b9acffd8",
       "exists": true
     },
     {
@@ -53,13 +53,13 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "ee6ee9899faef9e59bba92fa9811552c40bf4210",
+      "blob_sha": "35b2083842d83da7f75e7944f5f5f273f668fa3d",
       "exists": true
     },
     {
       "path": "docs/platform/core/effective-dated-assignment-doctrine.md",
       "tier": 2,
-      "blob_sha": "30dc1398ddd0aeea6cbff7f853787b62acf63e56",
+      "blob_sha": "6cb685cf91030ff759a14f60ee8628b431263124",
       "exists": true
     },
     {
@@ -71,25 +71,25 @@
     {
       "path": "docs/platform/core/placement-system.md",
       "tier": 2,
-      "blob_sha": "762ead72dc23c943863569266bf3314a0ef8ae44",
+      "blob_sha": "7784d8b752c5699d0be2c94896366d191a6a269b",
       "exists": true
     },
     {
       "path": "docs/platform/core/status-and-state-system.md",
       "tier": 2,
-      "blob_sha": "9e90934a8b255593cfd44c38f14f74caea953311",
+      "blob_sha": "37df34ecdfa406b0a556d14c1ddb74b3ad8ed770",
       "exists": true
     },
     {
       "path": "docs/platform/foundation/architecture.md",
       "tier": 2,
-      "blob_sha": "fdb69587d10270c884dbdf0146cd3705e4d6b1c3",
+      "blob_sha": "c592d4d0dd5ac29a3ab896019bd1c89af2522a71",
       "exists": true
     },
     {
       "path": "docs/platform/governance/configuration-publication-model.md",
       "tier": 2,
-      "blob_sha": "1085b3cd62dce413fe9daa2ea354a08135b0c464",
+      "blob_sha": "8fd8ea72b39bc6e849a360e7779686b4e7075eea",
       "exists": true
     },
     {
@@ -107,7 +107,7 @@
     {
       "path": "docs/platform/governance/staff-coverage-authority.md",
       "tier": 2,
-      "blob_sha": "ede92f9f14fbcbdd4036dc91ba4fc4116f566a44",
+      "blob_sha": "15a3060c81686a532783e3e2cd25a6b542f2f2d6",
       "exists": true
     },
     {
@@ -125,13 +125,13 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "121944110e8a4515618c48a3bff333862d892f5f",
+      "blob_sha": "2b1709491c10c1079bde65d71009fca72ba097ff",
       "exists": true
     },
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "baa943f8f38926558a536b924e0256528f724239",
+      "blob_sha": "e0e63e6d386079f490858e719189f4025f43c458",
       "exists": true
     },
     {
@@ -185,7 +185,7 @@
     {
       "path": "docs/platform/core/operations-temporal-truth-certification.md",
       "tier": 3,
-      "blob_sha": "ac4ff76352df380c7b4f41fe48f28fc251aba032",
+      "blob_sha": "e26c7cbf8cbc0363b8980824573eca4354f8851a",
       "exists": true
     },
     {
@@ -209,7 +209,7 @@
     {
       "path": "docs/platform/governance/assignment-time-authority.md",
       "tier": 3,
-      "blob_sha": "2f70b0a874a15b5bb486de5a6f28140bc5ede226",
+      "blob_sha": "76fdace4d2b40ab8b81c71ed6841c6c9128f7deb",
       "exists": true
     },
     {
@@ -239,7 +239,7 @@
     {
       "path": "docs/platform/governance/time-aware-staffing-projection.md",
       "tier": 3,
-      "blob_sha": "2db3a6c80d64a0b88fd52a8f16e91c0db82cf666",
+      "blob_sha": "3fbf1958bc607d1f13cec3872e9a0225e37dfb3c",
       "exists": true
     },
     {
@@ -257,13 +257,13 @@
     {
       "path": "docs/platform/modules/configuration-platform.md",
       "tier": 3,
-      "blob_sha": "cca1d61ed65e4e6d4a4429bfd92060455d6d8c43",
+      "blob_sha": "90a77fd129fc1784095814ffe9c0dba420aee17e",
       "exists": true
     },
     {
       "path": "docs/platform/modules/documents-and-forms.md",
       "tier": 3,
-      "blob_sha": "cb6122cc9c58b41712c86c22e55176fc6a080d22",
+      "blob_sha": "0ca4161339d8a22a7560439d817c902f64685bc6",
       "exists": true
     },
     {
@@ -341,19 +341,19 @@
     {
       "path": "docs/context/package/README.md",
       "tier": "contract",
-      "blob_sha": "90a0b6fc479bb069a56551a378dcbbcc99c4ec1e",
+      "blob_sha": "390e43bfb59a98e7b2175d3c9dd545f4fd7f0579",
       "exists": true
     },
     {
       "path": "docs/context/package/alloy-context-package.json",
       "tier": "manifest",
-      "blob_sha": "cb9bcdddeeb53eeebe86f021e460ba49bc5f0d01",
+      "blob_sha": "257b0389c47ab9a0d670c3c3152790e7a7ca4cf9",
       "exists": true
     },
     {
       "path": "docs/context/package/vacilando-lanes.json",
       "tier": "manifest",
-      "blob_sha": "b451e6f5b1994b33d301670ea57b89bb1827c85a",
+      "blob_sha": "3d47314ccbef9921e72b2cd579f626f9e26737c2",
       "exists": true
     },
     {

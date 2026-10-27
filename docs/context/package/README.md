@@ -98,12 +98,13 @@ the list that touches no document and breaks no test on its own.
 
 ## How Financials pending is handled
 
-`financials-payments` is `PENDING_DISABLED`, for a measured reason (remeasured 2026-10-27 at staging
-`1492a2dd9`): the last substantive semantic change under `web/lib/financials/payments` is
-`9e3774e0e` (2026-10-21), five quiet days at tip, and the seven-day stability gate has **not**
-opened. Payments V1/W7 is implemented on staging; implementation does not open DIRECT context.
-Freezing current behaviour into DIRECT context while the gate is closed would certify semantics
-still inside the stability window.
+`financials-payments` is `PENDING_DISABLED`, for a measured reason (Slice 5 remasure 2026-10-27T18:14:03Z
+at staging `6376564d3`): the last substantive semantic change under `web/lib/financials/payments` is
+`9e3774e0e` (2026-10-21T11:15:18-07:00), continuous quiet **≈ 5.999 days** (&lt; 7), six commits in the
+preceding seven days, classification **PENDING — GATE**. Earliest eligibility if quiet holds:
+**2026-10-28T11:15:18-07:00**. Payments V1/W7 is implemented on staging; implementation does not open
+DIRECT context. Freezing current behaviour into DIRECT context while the gate is closed would certify
+semantics still inside the stability window.
 
 The lane **exists now** so routing works and so the refusal is explicit rather than an omission. It
 provides no DIRECT context. Certified **Subsidy** and certified **Commercial** are not blocked by the

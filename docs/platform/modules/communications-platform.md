@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -67,11 +67,14 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 | **Drawer Communications** | Entity drawer tab | Record-specific conversations only |
 | **Configuration → Communications** | `/organization/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
 | **`/adminV2/communications`** | Direct URL | Deprecated notice — not in nav |
-| **`/admin/communications`** | Legacy path | Deprecated / non-primary |
+| **`/adminV2/messages`** | Inbox client | Present; not the primary modal hub |
+| **`/admin/communications`** | Legacy path | **No** `app/admin/communications` tree and **no** redirect in `next.config.ts` — do not treat as a live surface |
 
 ### Modal navigation (Operational Workspace Doctrine V2)
 
-Communications composes `@/components/workspace/doctrine` — same primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
+Communications composes `@/components/workspace/WorkspaceShell` (and related workspace primitives) —
+same operational-workspace pattern family as Processing (Digital Mailroom). Presentation only;
+send/thread/announcement/template runtimes unchanged.
 
 | Mode | Sections |
 |------|----------|
@@ -94,7 +97,10 @@ Communications **Needs Reply** threads (`attention_state` ∈ `needs_response`, 
 - **No** `operational_tasks` row is created.
 - Unread alone does not project.
 - **View in Work Items** / **Open in Communications** use shared navigation events and command-center pending selection.
-- Authoritative resolution or reply through Communications removes the projection after operational refresh.
+- **A reply does not clear attention.** `attention_state` is written by inbound ingress (`needs_response` /
+  `needs_routing_resolution`) and by **operator triage** — not by outbound send/reply paths. The Work
+  Items projection reads `attention_state` only (`mapCommunicationThreadToWorkItemRow`). Inbound may
+  reopen a `resolved` thread. Matches inference-contract claim: a reply does not clear attention.
 
 QA: `../../sprints/archive/08_2026/work-items-v3-platform/qa/slice-6/`.
 
@@ -121,12 +127,13 @@ Workspace Inbox owns only the operational queue and surrounding context controls
 | Surface | Template integration | Send / schedule behavior |
 |---------|---------------------|--------------------------|
 | **Template Library** (modal tab) | Authoring + versioning | N/A — registry only |
-| **Record New Message composer** (`FamilyNewMessageComposer`: Current Work → Contact Family / Send Message / Tour Invitation, Manage → Send Message / Email / SMS / Tour Invitation) and every `FamilyCommunicationWorkspaceView` composer | **Template ▾** in the editor toolbar (`ComposerTemplateMenu`): channel-filtered active templates; applies `current_version` as an editable copy of subject/body (subject only on a new email) | Canonical `family-send` preview → confirm; composed text only (no `template_id` on message row today) |
+| **Record New Message composer** (`FamilyNewMessageComposer`: Current Work → Contact Family / Send Message / Tour Invitation, Manage → Send Message / Email / SMS / Tour Invitation) and every `FamilyCommunicationWorkspaceView` composer | **Template ▾** in the editor toolbar (`ComposerTemplateMenu`): channel-filtered active templates; applies `current_version` as an editable copy of subject/body (subject only on a new email) | Canonical `family-send` preview → confirm (`operational` / `family_communication`); template id/version may be accepted by `canonicalSend` when a path supplies them — family composer still primarily copy-on-apply |
 | **Compose New without a record** (`QuickMessageModal`, person search) | Channel-filtered picker; applies `current_version` to editable subject/body | Per-recipient `/communications/send` (`quick_message`) — see the runtime contract's legacy exception |
 | **Announcements** | `announcements.template_id` FK + picker; apply-on-select copies `current_version` into draft fields | Schedule snapshots `announcements.subject` / `announcements.body` at schedule time — not a live re-resolve from `template_id` |
-| **Inbox reply** (`InboxThreadReplyBox`) | Not integrated | Free-text compose |
-| **Workflow `create_message` / `send_message`** | Inline `body` / `template` strings with payload path tokens | Separate from Template Library — no `communication_template_id` yet |
-| **Tour Invitation / confirmation / reschedule / cancel / reminder / no-show** | System templates (`system_key`, e.g. `tour_invitation:email`) seeded into Template Library; org-editable versions | Immediate Tour sends resolve **current** library version at send time; Send Tour Invitation seeds New Message from Tour Invitation template; **reminders snapshot at schedule time** |
+| **Inbox reply** (`InboxThreadReplyBox`) | Not integrated | Free-text compose (`operational`); **does not** clear attention |
+| **Workflow `create_message` / `send_message`** | Inline `body` / `template` strings with payload path tokens | Separate from Template Library |
+| **Workflow `send_communication_template`** | Resolves Template Library by id or `system_key` → **current** version at execution | Shipped (`executeSendCommunicationTemplateWorkflowAction`); `canonicalSend` with purpose `automated_family_message` / category `operational`; used by New Lead message automation |
+| **Tour Invitation / confirmation / reschedule / cancel / reminder / no-show** | System templates (`system_key`, e.g. `tour_invitation:email`) seeded into Template Library; org-editable versions | Immediate Tour sends resolve **current** library version at send time; **reminders snapshot at schedule time** |
 
 ### Doctrine
 
@@ -139,22 +146,24 @@ Workspace Inbox owns only the operational queue and surrounding context controls
 
 Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.ts` (`fetchCommunicationTemplateCurrentVersion`, `communicationTemplateDraftSeedFromPreview`).
 
-**Next increment (not shipped):** optional `communication_template_id` on workflow communication actions with runtime resolve of `current_version`; keep inline body as override during migration.
-
 ---
 
 ## Tour communications authority (S1, 2026-10-22)
 
-Tour booking semantics have **no certified lane** (D0, 2026-10-21); this section records only the
-communications boundary Tours now relies on. Evidence: `certification/tours-calendar-forms/s1/`.
+Tour booking product semantics route provisionally under the **Enrollment / Placement** context lane
+(Director D-02, 2026-10-27); this section records only the **communications** boundary Tours relies
+on (consent preference truth and canonical send enqueue). Evidence: `certification/tours-calendar-forms/s1/`.
 
 - **One policy decides whether a booking may be talked about:** `mayCommunicateForTour(intent, state)`
   (`web/lib/tours/comms/tourCommsEligibility.ts`), evaluated against the booking **re-read from the
   database** at decision time — never the triggering event's name and never the caller's row.
-  Confirmation, reschedule notice, reminder and the staff calendar invite require an approved booking
-  (`confirmed` / `rescheduled`) whose opportunity exists in the org (the lead approval boundary: a public
-  lead has no opportunity until Processing **Approve**). A cancellation notice requires that the booking
-  was confirmed before it was canceled — rejecting a pending request is not "your tour was canceled".
+  Confirmation, reschedule notice and reminder require an approved booking (`confirmed` / `rescheduled`)
+  whose opportunity exists in the org (the lead approval boundary: a public lead has no opportunity until
+  Processing **Approve**). A cancellation notice requires that the booking was confirmed before it was
+  canceled — rejecting a pending request is not "your tour was canceled".
+  **Staff calendar invite debt:** `tourInternalCalendarInvite` enqueues `audience: "internal"` on email,
+  which `evaluateEligibility` blocks (`INTERNAL_TO_PROVIDER`) — do not document the invite as a sending
+  path until that classification is fixed and guarded.
 - **Every tour outbound path asks it:** `orchestrateTourCommsForBooking` (immediate sends, reminder
   scheduling, internal ICS), `processDueCommunicationScheduledSends` for `source = tour_scheduling`
   (a due reminder is re-decided at dispatch; an ineligible one is set `canceled` with
@@ -260,20 +269,24 @@ Sprint closeout: `../../sprints/archive/2026-07/communications-activity-sprint-c
 **State:** `COMMUNICATIONS_DOCUMENTATION_CONTEXT_READY`. Measured against staging `c500c7a4e`. Row counts
 are from the certification stack.
 
-### Providers — measured from implementation, not from this document
+### Providers — two runtimes (remeasured 2026-10-27)
 
-**There are no provider SDKs in `package.json`.** Both providers are called over raw HTTP, which is why a
-dependency scan finds nothing and why the endpoints below are the evidence.
+**Web `package.json` has no Twilio/Resend SDKs** — TS outbound email uses raw HTTP (`deliverQueuedEmailHtml`).
+The **Python** communications worker **does** depend on `twilio` and uses `requests` for Resend
+(`backend/requirements.txt`, `integrations/twilio_client.py`). Pattern: **TypeScript authors and
+enqueues**; **Python dispatches** the queue. Inbound SMS webhook: `backend/app/routes/sms_inbound.py`
+(`/sms/inbound`, `COMMUNICATIONS_SMS_INBOUND_ENABLED`, Twilio signature verification).
 
 | Channel | Provider | Evidence | Webhook authority |
 |---|---|---|---|
 | email (outbound) | **Resend** | `https://api.resend.com/emails`; `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | — |
 | email (domains) | **Resend** | `https://api.resend.com/domains` | — |
-| email (status/inbound) | **Resend** | `app/api/webhooks/resend` | **Svix**: `svix-id` / `svix-timestamp` / `svix-signature` verified by `Webhook.verify` against `RESEND_WEBHOOK_SECRET`; refuses 503 unconfigured, 400 on missing headers |
-| SMS | **Twilio** | `https://api.twilio.com/2010-04-01/`; `TWILIO_AUTH_TOKEN` | **`X-Twilio-Signature`** verified per binding inside `lib/communications/twilioSmsStatusWebhook.ts`, falling back to the global token, refusing when none resolves |
+| email (status/inbound) | **Resend** | `app/api/webhooks/resend` | **Svix** against `RESEND_WEBHOOK_SECRET` |
+| SMS (status) | **Twilio** | `lib/communications/twilioSmsStatusWebhook.ts` | **`X-Twilio-Signature`** |
+| SMS (inbound) | **Twilio** | Python `/sms/inbound` | Twilio signature helper |
 
-The doc's existing claim that Twilio/Resend webhooks are "Complete" is **correct**. Verification lives in
-the handler library, not the route file — a route-level scan reports these as ungated and is wrong.
+Webhook signature verification lives in the handler library — a route-level scan that reports these as
+ungated is wrong.
 
 **SMS is implemented and unexercised here:** all 35 messages are `email` (32 inbound, 3 outbound). Zero SMS
 rows on this stack, which is not the same as unimplemented.
@@ -303,26 +316,42 @@ legacy pair, reachable only from `legacy-admin/messages-outbox`.
 | CROSS-DOMAIN | `lib/pos/processingIdentity/commands/ports.ts` — a caller of the one preference authority (below) |
 | SCRIPT | two seed scripts |
 
-**Consent has one writer: `lib/communications/v2/persistCommunicationPreference.ts`** (row + append-only
-event). Since Tours I1 (C1 integrated) its callers are exactly: the Processing identity commit (`ports.ts`,
-opt-out preserving), the public intake commit (`intakeMarketingConsent.ts`, opt-out preserving), recipient
-unsubscribe (`applyUnsubscribe.ts`), and the operator preference route/service. Bound by
-`tests/docs/communicationsCertificationClaims.test.ts`. At the time of this census
-`communication_preferences` held 0 rows here — worth knowing before assuming a consent record exists.
+**Consent has two writers (one per runtime):**
+1. TypeScript — `lib/communications/v2/persistCommunicationPreference.ts` (row + append-only event).
+   Callers include Processing identity commit, public intake commit, recipient unsubscribe, and
+   person preference services. Bound in part by `tests/docs/communicationsCertificationClaims.test.ts`.
+2. Python — `backend/app/services/communication_preferences.py::apply_preference_changes` for inbound
+   STOP/START keyword handling.
 
-### Surface and authority census — exact
+**Operator preference locks (`allowedPreferenceChanges`):** an operator must not opt a person **in** to
+marketing, and only the person reverses STOP/unsubscribe (`SELF_SERVICE_OPT_OUT_SOURCES`). The person
+preference admin route uses the locked service; the Command Center preferences PATCH currently maps
+status and persists with `source: "admin_command_center"` **without** calling that lock — record as
+debt, do not document as authorized unlock.
 
-43 route files · **54 handlers** (32 write, 22 read) · 4 mounted UI pages
-(`adminV2/communications`, `adminV2/messages`, `adminV2/settings/organization/communications`, and the
-legacy `legacy-admin/messages-outbox`).
+A second, flagged consent path (`consentGate` / `consentEnforcement` under `comms_v2_compliance`) still
+exists for some legacy/family-send adapters — do not confuse it with the canonical preference writers.
 
-**Every write resolves to real authority — zero unresolved, zero session-only:**
+### Eligibility and send authority (summary)
 
-| Authority class | Writes | Detail |
+Canonical enqueue freezes an `EligibilitySnapshot` (`evaluateEligibility`, policy `2026-07-31.1`).
+Live re-checks at Python dispatch cover only selected facts. Documented categories include quiet hours
+(parameter exists; **no caller currently supplies it**), STOP endpoint holds, unevaluable consent on
+thread-bound sends, emergency permission, internal-audience rule (`INTERNAL_TO_PROVIDER`),
+bounce/complaint suppression, and render/link-origin gates. Family-send is fixed to `operational` /
+`family_communication`; inbox reply is `operational`.
+
+### Surface and authority census — exact (2026-09-30 stack)
+
+**Historical census at staging `c500c7a4e`:** 43 route files · 54 handlers (32 write, 22 read).
+**Re-count debt (2026-10-27):** a scoped script count of `*communications*` routes + webhooks yields
+~38 files / ~48 handlers — define census scope and bind a guard before treating either number as current.
+
+| Authority class | Writes (2026-09-30) | Detail |
 |---|---|---|
-| CAPABILITY | **28** | `communications.bulk.send` 9 · `communications.send` 8 · `communications.provider.configure` 5 · `communications.templates.manage` 4 · `communications.assign` 1 · `communications.read` 1 |
-| PROVIDER_SIGNATURE | 3 | the Resend webhook and both Twilio status callbacks |
-| TOKEN | 1 | `communications/unsubscribe` — `verifyUnsubscribeToken` with expiry and tamper handling, and the token deliberately does not widen what the link authorizes |
+| CAPABILITY | **28** | `communications.bulk.send` · `communications.send` · `communications.provider.configure` · `communications.templates.manage` · `communications.assign` · `communications.read` |
+| PROVIDER_SIGNATURE | 3 | Resend webhook and Twilio status callbacks |
+| TOKEN | 1 | `communications/unsubscribe` |
 
 `communications.assign` governs conversation assignment specifically because assignment **grants scope**:
 an assigned thread bypasses site scope, so bundling it with `communications.send` would let a
@@ -336,14 +365,14 @@ answers; provider delivery state is transport evidence carried in `communication
 each ingress produces an eligibility observation; both providers' webhooks are signature-verified;
 `communications.assign` is separate because assignment grants scope.
 
-**FORBIDDEN:** an email address is a Person (Identity/Access owns identity, and `resolveLinkedPersonId`
-refuses an email fallback) · provider *accepted* means delivered · delivery means a business outcome ·
-holding someone's contact information implies consent (consent is `communication_preferences`, written
-only from the POS processing path, 0 rows here) · an unmatched inbound message must belong to a Person ·
-a provider webhook is trusted without verification · a template is sent-message truth
-(`communication_templates` is configuration; `communication_messages` is what was sent) · SMS is unused
-because this stack has no SMS rows · `announcements` or `messages_outbox` are live (0 rows; the latter is
-legacy).
+**FORBIDDEN:** an email address is a Person · inbound identity is `resolveLinkedPersonId` (that helper is
+the **staff user→person** link — SMS inbound uses phone canonicalization / exactly-one-or-nobody;
+email inbound uses `resolvePersonByEmail`) · a reply clears attention · provider *accepted* means
+delivered · delivery means a business outcome · holding contact information implies consent · an
+unmatched inbound message must belong to a Person · a provider webhook is trusted without verification ·
+a template is sent-message truth · SMS is unused because a cert stack had no SMS rows · measured "0 rows"
+on announcements/`messages_outbox` proves permanent disuse · the staff tour calendar invite currently
+sends.
 
 ### A pre-existing condition this certification does not fix
 

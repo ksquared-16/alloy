@@ -1,7 +1,7 @@
 ---
 owner: runtime
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -71,11 +71,13 @@ Three axes never collapse into one status model:
 | **Enrollment Agreement** | **Durable relationship** — is this child enrolled, active period, site | `child_enrollment_agreements` |
 | **Placement** | **Operational fact** — program / room / site (effective-dated, supersedable) | `child_placements` |
 | **Schedule Assignment** | **Operational fact** — schedule pattern (effective-dated, supersedable) | `schedule_assignments` |
-| **OCM** (`opportunity_customer_members`) | **Legacy compatibility only** — not a runtime owner | `opportunity_customer_members` |
+| **OCM** (`opportunity_customer_members`) | **Durable child Enrollment status** (`outcome_status_key`) and proposal fields; **not** the stage owner | `opportunity_customer_members` |
 
 `process_instances`: `process_key='enrollment'`, `subject_type='child'` → `customer_members.id`,
-`context_type='opportunity'` → `opportunities.id`, `stage_key`, `state`, `close_reason_key`, `metadata`
-(participation draft facts pre-materialization). Unique `(org_id, process_key, subject_id, context_id)`.
+context may be `opportunity` **or** `enrollment_participation`, with `stage_key`, `state`,
+`close_reason_key`, `metadata` (participation draft facts pre-materialization). Journey context
+resolves through `resolveEnrollmentJourneyContext`. Stage membership for child tracks reads
+`process_instances.stage_key`, not `OCM.stage_key`.
 
 ---
 
@@ -259,9 +261,10 @@ the query string, so a caller-supplied id cannot make one family's link ask abou
 ### Financial composition
 
 The shell holds no balance. Its financial slot consumes the Enrollment Financial Bridge's projection;
-it performs no gross, responsibility, expected-funding, collectible or balance calculation. The
-stored-method side will consume canonical `payment_methods` in a follow-up — see
-`docs/platform/modules/billing-financials-platform.md`.
+it performs no gross, responsibility, expected-funding, collectible or balance calculation. Stored
+payment methods and participant checkout paths exist under public enrollment-payment routes — money
+movement authority remains Financials. See `docs/platform/modules/billing-financials-platform.md`
+and [`../core/placement-system.md`](../core/placement-system.md) § Payer and financial handoff.
 
 ## The enrollment fee as a requirement (September 2026)
 
@@ -337,5 +340,6 @@ required — with no raw ids and no JSON, and not in Forms Studio. The price bes
 from Financials and never copied, and only the current version of a definition lineage is offered. A
 key with no active definition is called out rather than smoothed over.
 
-There is no Pay button. Participant checkout does not exist yet, and a button that does nothing is
-worse than its absence.
+Participant checkout is implemented on the public enrollment-payment surface. Enrollment still owns
+only requirement applicability and payer binding; Financials owns obligation and collection. Do not
+reintroduce a decorative Pay control that bypasses that boundary.

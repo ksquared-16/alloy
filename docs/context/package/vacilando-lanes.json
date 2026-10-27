@@ -417,12 +417,16 @@
         "staff primary assignments are overlap-governed only",
         "a staff member may hold a current and a future-dated primary assignment at once",
         "schedule is expectation; Attendance is observation",
+        "Coverage specialises planned place in the time-aware staffing projection",
+        "legacy whole-day buildStaffSupply does not read Coverage allocations",
         "staff supply is schedule_assignments with subject_type='staff' \u2014 there is no shift model"
       ],
       "forbidden": [
         "that one cardinality rule covers every effective-dated table",
         "that Scheduling is Attendance truth",
-        "that a shift model exists"
+        "that a shift model exists",
+        "that Coverage never participates in any staffing arithmetic",
+        "that Assignment, Coverage, Availability, Presence and Projection are one staffing state"
       ],
       "evidence": [
         "web/lib/operationalAssignments/setPrimaryOperationalAssignment.ts",
@@ -857,7 +861,7 @@
       "purpose": "Org-authored intent, and the four distinct lifecycles that publish it.",
       "owns": [
         "the four configuration lifecycles and their asymmetry",
-        "entity layouts and their append-only rule",
+        "entity layouts and their versioned draft/published lifecycle (not append-only)",
         "business process drafts and revisions",
         "the Programs publish-and-distribute chain",
         "the three-stage config_assist separation"
@@ -885,12 +889,16 @@
       ],
       "safe": [
         "configuration expresses intent; the runtime owns execution",
-        "entity_layouts is append-only \u2014 republish, never edit or delete",
-        "four distinct configuration lifecycles exist, not one",
+        "entity_layouts is versioned draft/published with in-place updates \u2014 not append-only",
+        "four distinct shared configuration lifecycles exist, not one",
+        "Forms and Documents versioning are domain-owned, not a fifth shared lifecycle",
         "the Programs publication chain is built with zero rows"
       ],
       "forbidden": [
-        "that configuration is uniformly versioned \u2014 three of the four lifecycles are not",
+        "that configuration is uniformly versioned \u2014 three of the four shared lifecycles are not",
+        "that entity_layouts is append-only",
+        "that Forms/Documents versioning is already a certified fifth shared lifecycle",
+        "that schema support implies builder, UI, publication, or runtime support",
         "that JSON can create or weaken an invariant",
         "that the Programs publication chain is in use",
         "that a config_assist proposal carries mutation authority"
@@ -1030,7 +1038,8 @@
       "forbidden": [
         "that one cardinality rule covers every table",
         "that latest row means active row",
-        "that a date makes a record effective-dated \u2014 only a bounded interval of asserted truth does"
+        "that a date makes a record effective-dated \u2014 only a bounded interval of asserted truth does",
+        "that secondary replacement and staff primary switches emit schedule_assignment_changed today"
       ],
       "evidence": [
         "web/lib/childcareOperational/participationOperationalChange.ts",

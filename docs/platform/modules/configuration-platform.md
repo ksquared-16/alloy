@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-24
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -293,9 +293,14 @@ consumption pointer. The Location independently owns whether it offers that
 Program. Programs does not register an Apply provider because delivery does not
 copy Organization configuration into Location-owned operational truth.
 
-Only Programs supports this runtime in V1. Other Configuration domains do not
-gain publication behavior by inference; adoption requires a domain-owned
-revision model and a registered durable adapter.
+Programs is the V1 consumer of the **assignment** distribution mode on this
+runtime. Business Process adopted its own draft→revision publish path; Surfaces
+and the Calculation library also publish explicitly. Forms and Documents use
+separate versioned tables that are **implemented but not yet classified** into
+the four-family Configuration publication model (Director decision required —
+see `configuration-publication-model.md`). Other domains do not gain publication
+behavior by inference; adoption still requires a domain-owned revision model
+and a registered durable adapter where this runtime applies.
 
 **Registry ownership:** Organization Configuration Runtime owns the domain
 registry and distribution-mode declarations. Programs is the V1 consumer that

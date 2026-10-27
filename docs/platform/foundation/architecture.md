@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -44,13 +44,13 @@ supersedes: []
 | **Surface Host** | Client-held surfaces; focus exchange without route teardown | [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md) |
 | **Focus Panel Runtime** | Canonical record execution surface (cards, Current Work, embeds) | [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md) |
 | **VM Runtime** | Entity compose, cache, reveal for Opportunity / Person / Child | [`../operator/drawer-system.md`](../operator/drawer-system.md) |
-| **Business Process Runtime** | Landing catalog → stage queues → record focus | [`../core/business-process-system.md`](../core/business-process-system.md) |
+| **Business Process Runtime** | Process tiles → Work Views → Focus Panel / durable record; staged lifecycle **or** domain projection (Enrollment / Assignments / Billing) | [`../core/business-process-system.md`](../core/business-process-system.md) |
 | **Processing Runtime** | Digital Mailroom operational workspace plus inbound identity resolution, review, approval, and commit execution | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
 | **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
 | **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
-| **Current Work Runtime** | Stage work completion inside Focus Panel | `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md` (historical: `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md`) |
+| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../operator/current-work-surface.md`](../operator/current-work-surface.md) |
 
-Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns `null`. Rollback is deployment/Git-based only.
+There is still **no tenth foundational runtime**. Domain-projection processes (Assignments, Billing) and the durable record surface run **inside** Business Process / Focus Panel — they are not new register entries. Unsupported historical entity drawers are **gone** (`AdminEntityDrawer` was deleted 2026-08); rollback is deployment/Git-based only.
 
 ---
 
@@ -59,8 +59,9 @@ Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns 
 | Layer | Route pattern | Responsibility |
 |-------|---------------|----------------|
 | Landing | `/workspace` | Business process tiles, KPI strip |
-| Stage execution | `/workspace/work-unit/:slug` | Queues, filters, actions rail |
-| Record detail | `…/:recordId` | Drawer VM on same route |
+| Stage / Work View execution | `/workspace/work-unit/:viewSlug` | Queues, Work Views, filters, actions rail |
+| Record focus | `?subject_id=` (+ optional `work_view_id`) on the work-unit route | Focus Panel on the selected subject |
+| Durable record | `/workspace/record/{person\|child\|household}/:id` | Durable-record surface (Assignments/Billing Focus entries) |
 
 **Shell:** `AdminV2Shell` — persistent sidebar, BOS bar, site filter context.
 
@@ -118,7 +119,7 @@ Queue row (preview)
     → drawer VM render  →  buildOperationalContext() → Focus Panel cards
 ```
 
-Opportunity, Person, and Child VM runtimes are **canonical**. The composed payload + drawer VM is **reveal/payload infrastructure**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. Locations operate through **Settings** (`/settings/locations`), not a drawer. See [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
+The composed payload path is **reveal/payload infrastructure** (compose, cache, reveal) behind the Focus Panel — not a competing product surface. Opportunity/Person/Child **drawer VM product runtimes were retired**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. Locations operate through **Settings** (`/settings/locations`), not a drawer. See [`../operator/drawer-system.md`](../operator/drawer-system.md) and [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
 
 ---
 
@@ -144,10 +145,10 @@ Selected record
 
 | Operator concept | Runtime construct |
 |------------------|-------------------|
-| Business Process | `lifecycles` + landing catalog |
-| Stage | Queue lane + stage metadata + membership rules |
-| Record | Entity row + drawer payload |
-| *(internal)* Work Unit | `work_units` + `queue_definition` + slug bootstrap |
+| Business Process | Published `business_process_revisions` (from drafts) → department landing catalog; model is **staged lifecycle** (Enrollment) or **domain projection** (Assignments / Billing) — see [`../core/business-process-system.md`](../core/business-process-system.md) |
+| Stage | Persisted `stage_key` on the stage owner (`opportunities` for family/case; `process_instances` for child) + Work View lens |
+| Record / subject | Focus Panel subject (`?subject_id=`) or durable record route — never a retired `/:recordId` drawer path |
+| *(internal)* Work Unit | Host work-unit + Work View slug bootstrap (`workViewRouteKeyFromLabel`); `queue_definition` remains execution infrastructure |
 
 ---
 
@@ -184,9 +185,9 @@ See `../governance/deployment-and-environments.md`.
 - `../core/business-process-system.md`
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
 - `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
-- `.../foundation/platform-capabilities.md` (capability model — new operational modules are designed API-first)
-- `platform-manifesto.md` (constitutional doctrine)
-- `milestones/certification-july-2026.md` (July 2026 certification)
+- [`platform-capabilities.md`](platform-capabilities.md) (capability model — new operational modules are designed API-first)
+- [`platform-manifesto.md`](platform-manifesto.md) (constitutional doctrine)
+- [`../milestones/certification-july-2026.md`](../milestones/certification-july-2026.md) (July 2026 certification)
 - `../milestones/stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

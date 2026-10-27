@@ -78,13 +78,13 @@ The per-domain certification state, owners and staleness triggers are in
 [`alloy-benchmark-context.md`](alloy-benchmark-context.md). The scoreboard is the domain status
 table there.
 
-**Financials / Payments is pending for a measurable reason, not an editorial one.** Measured at
-staging `1492a2dd9` (2026-10-27): the last substantive semantic change under
-`web/lib/financials/payments` is `9e3774e0e` (2026-10-21, automatic responsibility-aware settlement),
-with **eight** commits under that path in the preceding seven days, and **five** quiet days at the
-tip — below the required seven. The seven-day gate therefore remains **CLOSED**. Payments V1/W7
-capabilities are **implemented** on staging; that does **not** make them certified AI context.
-Subsidy and Commercial are certified and stable and are **not** blocked by this.
+**Financials / Payments is pending for a measurable reason, not an editorial one.** Remeasured
+Slice 5 (2026-10-27T18:14:03Z) at staging `6376564d3`: last substantive change under
+`web/lib/financials/payments` remains `9e3774e0e` (2026-10-21T11:15:18-07:00), continuous quiet
+**≈ 5.999 days** (&lt; 7), **six** commits in the preceding seven days, gate **CLOSED**. Earliest
+eligibility if quiet holds: **2026-10-28T11:15:18-07:00**. Payments V1/W7 is **implemented** on
+staging; that does **not** make it certified AI context. Classification remains
+**PENDING — GATE**. Subsidy and Commercial stay certified and are **not** blocked by this.
 
 ## Authority model
 
@@ -117,18 +117,26 @@ takes the *domain's* own capability.
 Configuration expresses **intent**; the runtime owns **execution**. JSON does not replace
 authorization, and it cannot create an invariant.
 
-The Configuration domain runs **four distinct lifecycles** — flattening them into "config is
+The Configuration domain runs **four distinct shared lifecycles** — flattening them into "config is
 versioned" is wrong in three of the four cases:
 
 | Shape | Lifecycle |
 |---|---|
 | `org_settings.metadata` | one JSON document, edited **in place** |
-| `entity_layouts` | **append-only** — republish, never edit or delete |
-| `business_process_drafts` → `revisions` | draft/revision pair |
+| `entity_layouts` | **versioned draft/published** — drafts update/delete; published rows may update in place (**not** append-only) |
+| `business_process_drafts` → `revisions` | draft → validate → publish → immutable revision |
 | Programs: `program_drafts` → `revisions` → `configuration_publications` → `distribution_targets`/`_runs` | full publish-and-distribute chain |
+
+Forms (`form_definition_versions`) and Documents type/requirement versions are **domain-owned**
+versioning surfaces — Director Slice 5: do **not** invent a fifth shared configuration lifecycle.
 
 The Programs chain is **real, reachable code with zero rows** as measured. It is built and
 unexercised — which is neither "in use" nor "not implemented".
+
+Forms Studio capabilities must be verified per layer (schema ≠ builder ≠ UI ≠ publication ≠ runtime).
+Staff Coverage specialises day/time planned place; the time-aware staffing projection composes it,
+while legacy whole-day staff supply does not. Communications: a reply does not clear attention;
+provider transport is not business truth.
 
 **Where configuration lives, as URLs.** Three canonical bases coexist, and the filesystem matches
 none of them:
