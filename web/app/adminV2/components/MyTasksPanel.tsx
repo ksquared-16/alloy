@@ -92,6 +92,15 @@ import {
     dispatchOperationalWorkRefresh,
 } from "@/lib/workItems/operationalWorkRefresh";
 import { dispatchOpenCommunicationsThread, dispatchOpenProcessingCase } from "@/lib/workItems/workItemsNavigation";
+import {
+    isDocumentRequirementProjectedWorkItem,
+    mapDocumentRequirementWorkToWorkItemRows,
+} from "@/lib/workItems/mapDocumentRequirementToWorkItemRow";
+import {
+    getDocumentRequirementWorkSnapshot,
+    loadDocumentRequirementWork,
+    subscribeDocumentRequirementWork,
+} from "@/lib/documents/requirements/documentRequirementWorkClient";
 import { getProcessingQueueWarmSnapshot, subscribeProcessingQueueWarm, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import {
     getCommandCenterCacheSnapshot,
@@ -308,6 +317,14 @@ export default function MyTasksPanel({
         void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
         void warmProcessingQueueCache({ scope: "actionable" });
         void prefetchCommandCenterConversations();
+        void loadDocumentRequirementWork();
+    }, [workEnabled]);
+
+    // D6: derived document requirement work, from the same read Processing → Work → Documents uses.
+    const [documentsWarmNonce, setDocumentsWarmNonce] = useState(0);
+    useEffect(() => {
+        if (!workEnabled) return;
+        return subscribeDocumentRequirementWork(() => setDocumentsWarmNonce((n) => n + 1));
     }, [workEnabled]);
 
     useEffect(() => {
@@ -400,6 +417,11 @@ export default function MyTasksPanel({
         return mapCommunicationsQueueToWorkItemRows(warm);
     }, [commsWarmNonce]);
 
+    const documentsProjectedTasks = useMemo(() => {
+        void documentsWarmNonce;
+        return mapDocumentRequirementWorkToWorkItemRows(getDocumentRequirementWorkSnapshot()?.rows ?? []);
+    }, [documentsWarmNonce]);
+
     const mergedTasks = useMemo(() => {
         const byId = new Map<string, MyTasksTaskRow>();
         for (const t of siteScopedTasks) byId.set(t.id, t);
@@ -409,8 +431,11 @@ export default function MyTasksPanel({
         for (const t of communicationsProjectedTasks) {
             if (!byId.has(t.id)) byId.set(t.id, t);
         }
+        for (const t of documentsProjectedTasks) {
+            if (!byId.has(t.id)) byId.set(t.id, t);
+        }
         return Array.from(byId.values());
-    }, [communicationsProjectedTasks, processingProjectedTasks, siteScopedTasks]);
+    }, [communicationsProjectedTasks, documentsProjectedTasks, processingProjectedTasks, siteScopedTasks]);
 
     const scopedTasks = useMemo(() => {
         return applyWorkItemQueueScope(mergedTasks, scope, processGroups, userId?.trim() || null);
@@ -538,6 +563,21 @@ export default function MyTasksPanel({
         onClose?.();
     }, [onClose]);
 
+    // D6: Documents owns the act (collect, review, file, waive) — open the record's Documents card.
+    const onOpenDocuments = useCallback(
+        (task: MyTasksTaskRow) => {
+            if (!task.entity_type || !task.entity_id?.trim()) return;
+            void focusRecord({
+                entity_type: task.entity_type,
+                entity_id: task.entity_id.trim(),
+                card_focus: { card_key: OPERATOR_FOCUS_CARDS.documents },
+            }).then((moved) => {
+                if (moved) onClose?.();
+            });
+        },
+        [focusRecord, onClose],
+    );
+
     const onPatchStatus = useCallback(
         async (id: string, status: "completed" | "canceled") => {
             const processingCaseId = parseProcessingCaseIdFromWorkItemId(id);
@@ -578,6 +618,10 @@ export default function MyTasksPanel({
                 onOpenCommunications(task);
                 return;
             }
+            if (isDocumentRequirementProjectedWorkItem(task)) {
+                onOpenDocuments(task);
+                return;
+            }
             setActionId(task.id);
             setError(null);
             try {
@@ -602,7 +646,7 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [onOpenCommunications, onOpenProcessing, onPatchStatus],
+        [onOpenCommunications, onOpenDocuments, onOpenProcessing, onPatchStatus],
     );
 
     const onSelectOutcome = useCallback(
@@ -743,7 +787,7 @@ export default function MyTasksPanel({
     const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
     const renderTaskCard = (t: MyTasksTaskRow) => {
-        if (isProcessingProjectedWorkItem(t) || isCommunicationsProjectedWorkItem(t)) return null;
+        if (isProcessingProjectedWorkItem(t) || isCommunicationsProjectedWorkItem(t) || isDocumentRequirementProjectedWorkItem(t)) return null;
         const mode =
             editingId === t.id ? "edit"
             : rescheduleId === t.id ? "reschedule"
@@ -990,6 +1034,7 @@ export default function MyTasksPanel({
                         onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}
                         onOpenProcessing={selectedTask ? () => onOpenProcessing(selectedTask) : undefined}
                         onOpenCommunications={selectedTask ? () => onOpenCommunications(selectedTask) : undefined}
+                        onOpenDocuments={selectedTask ? () => onOpenDocuments(selectedTask) : undefined}
                     />
                 </div>
             </WorkspaceZonePanel>

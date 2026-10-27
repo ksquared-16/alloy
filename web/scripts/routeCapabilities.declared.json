@@ -1895,6 +1895,14 @@
         "reason": "Documents V1 / D4 (2026-10-25). A document's history built from committed rows (versions, subject links, review, release) with refused audited attempts labelled as such. Admission is the full document access decision; never a storage path."
       }
     },
+    "app/api/admin/documents/[id]/review/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D6 (2026-10-27). Records the review (accepted/rejected) of a document's current version. Also requires the full document access decision (organization, subject scope, sensitivity, availability), so a quarantined document cannot be reviewed; a rejection needs a reason; audited first."
+      }
+    },
     "app/api/admin/documents/library/route.ts": {
       "GET": {
         "status": "declared",

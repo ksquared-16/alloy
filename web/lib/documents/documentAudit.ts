@@ -44,6 +44,8 @@ export type DocumentAuditEvent =
     | "document_requirement_changed"
     | "document_requirement_waiver_granted"
     | "document_requirement_waiver_revoked"
+    // D6: the review of a document's current version (accepted / rejected), recorded before it is written.
+    | "document_version_reviewed"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 

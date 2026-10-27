@@ -36,6 +36,7 @@ import { GET as readinessGET } from "@/app/api/admin/documents/requirements/read
 import { GET as workGET } from "@/app/api/admin/documents/requirements/work/route";
 import { GET as waiversGET, POST as waiversPOST } from "@/app/api/admin/documents/requirements/waivers/route";
 import { PATCH as waiverPATCH } from "@/app/api/admin/documents/requirements/waivers/[id]/route";
+import { POST as reviewPOST } from "@/app/api/admin/documents/[id]/review/route";
 import {
     evaluateDocumentRequirement,
     type EvaluableRequirement,
@@ -211,6 +212,12 @@ beforeEach(() => {
             if (w.state !== "active") return { data: null, error: { message: "document_requirement_waiver_not_active" } };
             Object.assign(w, { state: "revoked", revoked_by: args.p_actor, revoked_at: "2026-10-27T01:00:00Z", revoke_reason: args.p_reason });
             return { data: { waiver_id: w.id, requirement_id: w.requirement_id }, error: null };
+        }
+        if (name === "document_set_version_review") {
+            const v = db.rows("document_versions").find((x) => x.id === args.p_version_id && x.org_id === args.p_org_id);
+            if (!v) return { data: null, error: { message: "document_version_not_found" } };
+            Object.assign(v, { review_status: args.p_review_status, reviewed_by: args.p_actor, effective_on: args.p_effective_on, expires_on: args.p_expires_on });
+            return { data: { version_id: v.id, review_status: args.p_review_status }, error: null };
         }
         if (name === "is_medical_form_submission") return { data: false, error: null };
         return { data: null, error: { message: `unexpected rpc ${name}` } };
@@ -549,5 +556,50 @@ describe("Business Process asks Documents", () => {
         db.seed("document_requirement_waivers", [{ id: "w-bp", org_id: ORG, requirement_id: R_IMM.id, requirement_version_id: R_IMM.v, subject_type: "child", subject_id: C1, reason: "Exempt", state: "active", effective_until: null }]);
         const after = await evaluateDocumentTypeRequirementsForChild(db as never, { orgId: ORG, childId: C1, typeKeys: ["immunization_record"], today: "2026-10-27" });
         expect(after!.get("immunization_record")).toMatchObject({ state: "waived", waiver_id: "w-bp" });
+    });
+});
+
+// ── review: uploaded-but-unaccepted evidence becomes evidence, or is blocked ─────────────────────────────────────
+describe("reviewing the current version (pending review → satisfied / blocked)", () => {
+    const review = (docId: string, body: Record<string, unknown>) => invokeRoute(reviewPOST, json("POST", body), routeParams({ id: docId }));
+
+    it("accepting moves the requirement pending review → satisfied (work disappears); audited first", async () => {
+        as(P.ops);
+        expect(stateOf(subjectsOf(await readiness(`subject_type=child&subject_id=${C1}`)), R_CUSTODY.id, C1)).toBe("pending_review");
+        const r = await review(DOC.custodyPending, { decision: "accepted" });
+        expect(r.status).toBe(200);
+        expect(audits("document_version_reviewed")).toHaveLength(1);
+        expect((audits("document_version_reviewed")[0].payload as { from: string; to: string })).toMatchObject({ from: "pending", to: "accepted" });
+        expect(stateOf(subjectsOf(await readiness(`subject_type=child&subject_id=${C1}`)), R_CUSTODY.id, C1)).toBe("satisfied");
+        expect(rows(await work()).some((x) => x.requirement_id === R_CUSTODY.id && x.subject_id === C1)).toBe(false);
+    });
+
+    it("rejecting needs a reason and blocks the requirement until a new document arrives", async () => {
+        as(P.ops);
+        expect((await review(DOC.custodyPending, { decision: "rejected" })).status).toBe(400);
+        expect((await review(DOC.custodyPending, { decision: "rejected", reason: "Illegible scan" })).status).toBe(200);
+        const s = subjectsOf(await readiness(`subject_type=child&subject_id=${C1}`));
+        expect(s.flatMap((x) => x.requirements).find((e) => e.requirement_id === R_CUSTODY.id)).toMatchObject({ state: "blocked", blocked_reason: "evidence_rejected" });
+    });
+
+    it("refusals: no write 403; a quarantined document cannot be reviewed; not the current version 409; another organization 404", async () => {
+        as(P.readerNoHealth);
+        expect((await review(DOC.custodyPending, { decision: "accepted" })).status).toBe(403);
+        as(P.ops);
+        expect([403, 404]).toContain((await review(DOC.custodyQuarantined, { decision: "accepted" })).status);
+        expect((await review(DOC.custodyPending, { decision: "accepted", version_id: "not-the-current-one" })).status).toBe(409);
+        // A writer in another organization reaches the access decision and gets the non-disclosing 404.
+        as({ ...P.otherOrgAdmin, permissionKeys: [...P.otherOrgAdmin.permissionKeys, "documents.write"] });
+        expect((await review(DOC.custodyPending, { decision: "accepted" })).status).toBe(404);
+        expect(db.rows("document_versions").find((v) => v.id === `v-${DOC.custodyQuarantined}`)!.review_status).toBeNull();
+        expect(db.rows("document_versions").find((v) => v.id === `v-${DOC.custodyPending}`)!.review_status).toBe("pending");
+        expect(audits("document_version_reviewed")).toHaveLength(0);
+    });
+
+    it("a reviewer without clearance for the document's class is refused (sensitivity is enforced)", async () => {
+        db.rows("document_versions").find((v) => v.id === `v-${DOC.immRejected}`)!.review_status = "pending";
+        as({ ...P.ops, permissionKeys: ["portal.access", "documents.read", "documents.write"] });
+        expect((await review(DOC.immRejected, { decision: "accepted" })).status).toBe(403);
+        expect(db.rows("document_versions").find((v) => v.id === `v-${DOC.immRejected}`)!.review_status).toBe("pending");
     });
 });

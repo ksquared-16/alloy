@@ -37,6 +37,9 @@ import {
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { invalidateDocumentLibraries } from "@/lib/documents/library/documentLibraryClient";
+import { invalidateDocumentRequirementWork } from "@/lib/documents/requirements/documentRequirementWorkClient";
+
+import ProcessingDocumentRequirementWork from "./ProcessingDocumentRequirementWork";
 
 const SENSITIVITY_LABEL: Record<string, string> = {
     standard: "Standard",
@@ -56,7 +59,40 @@ const fmtDate = (iso: string | null | undefined) => {
 };
 const fmtSize = (n: number | null | undefined) => (typeof n === "number" ? (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`) : "—");
 
+/**
+ * Two views of one Documents work surface: received documents to file (D5) and missing documents — unmet, required
+ * document requirements derived by the Documents evaluator (D6). Received documents stay the default.
+ */
 export default function ProcessingDocumentsWork({ onLeaveProcessing }: { onLeaveProcessing?: () => void }) {
+    const [mode, setMode] = useState<"received" | "missing">("received");
+    return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex shrink-0 gap-1 border-b border-stone-200 px-2 py-1.5" role="tablist" aria-label="Documents work">
+                {(
+                    [
+                        ["received", "Received documents"],
+                        ["missing", "Missing documents"],
+                    ] as const
+                ).map(([k, label]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        role="tab"
+                        aria-selected={mode === k}
+                        data-testid={`documents-work-mode-${k}`}
+                        onClick={() => setMode(k)}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${mode === k ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-midnight/60 hover:bg-stone-100"}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+            {mode === "received" ? <ReceivedDocumentsWork onLeaveProcessing={onLeaveProcessing} /> : <ProcessingDocumentRequirementWork onLeaveProcessing={onLeaveProcessing} />}
+        </div>
+    );
+}
+
+function ReceivedDocumentsWork({ onLeaveProcessing }: { onLeaveProcessing?: () => void }) {
     const [rows, setRows] = useState<DocumentFilingQueueRow[] | null>(null);
     const [queueError, setQueueError] = useState<string | null>(null);
     const [lane, setLane] = useState<DocumentFilingLane | "all">("all");
@@ -235,7 +271,11 @@ function DocumentFilingWorkspacePanel({ caseId, onChanged, onLeaveProcessing }: 
         const r = await fileDocumentCaseRequest(caseId);
         setBusy(null);
         if (!r.ok) setNotice(r.message);
-        else invalidateDocumentLibraries();
+        else {
+            invalidateDocumentLibraries();
+            // A filed document can satisfy a requirement: the derived work is re-read, never patched.
+            invalidateDocumentRequirementWork();
+        }
         await load(p.household_id);
         onChanged();
     };

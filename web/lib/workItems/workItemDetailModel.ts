@@ -15,19 +15,21 @@ import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
 import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
 import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import { isDocumentRequirementProjectedWorkItem } from "@/lib/workItems/mapDocumentRequirementToWorkItemRow";
 import {
     resolveWorkItemProcessLabel,
     resolveWorkItemStageLabel,
     type WorkItemBpLabelOptions,
 } from "@/lib/workItems/workItemBpProvenance";
 
-export type WorkItemSourceKind = "business_process" | "communications" | "processing" | "manual";
+export type WorkItemSourceKind = "business_process" | "communications" | "processing" | "documents" | "manual";
 
 /** Which domain runtime owns completing this work. Work Items never owns a projected source. */
 export type WorkItemCompletionAuthority =
     | "current_work"
     | "communications"
     | "processing"
+    | "documents"
     | "work_items";
 
 /*
@@ -52,6 +54,7 @@ export type WorkItemDetailModel = {
 export function resolveWorkItemSourceKind(task: MyTasksTaskRow): WorkItemSourceKind {
     if (isCommunicationsProjectedWorkItem(task)) return "communications";
     if (isProcessingProjectedWorkItem(task)) return "processing";
+    if (isDocumentRequirementProjectedWorkItem(task)) return "documents";
     if (isBusinessProcessStageWorkTaskRow(task)) return "business_process";
     return "manual";
 }
@@ -70,6 +73,8 @@ export function resolveWorkItemCompletionAuthority(
             return "communications";
         case "processing":
             return "processing";
+        case "documents":
+            return "documents";
         case "manual":
             return "work_items";
     }
@@ -124,6 +129,24 @@ export function buildWorkItemDetailModel(
             state,
             subjectLabel: family,
             subjectDetail: trimOrNull(task.communication_channel),
+        };
+    }
+
+    if (kind === "documents") {
+        const state = task.document_requirement_state;
+        return {
+            kind,
+            completionAuthority: "documents",
+            reason:
+                state === "pending_review"
+                    ? "A required document is on file and awaiting review."
+                    : state === "blocked"
+                      ? "A required document cannot be used and needs attention."
+                      : "A required document is missing.",
+            originPath: trimOrNull(task.document_requirement_label),
+            state: resolveWorkItemDetailState(task, nowMs),
+            subjectLabel: trimOrNull(task.document_requirement_subject_label),
+            subjectDetail: trimOrNull(task.document_requirement_subject_type),
         };
     }
 
