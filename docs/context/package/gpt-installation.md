@@ -43,7 +43,7 @@ These five are the standing context. **Do not add a sixth.** The cap is enforced
 `alloy-benchmark-context.md` is `FETCH_LIVE`: it carries certification state and measured counts, so
 refresh it whenever the package version changes rather than treating it as fixed.
 
-## 3. Add Tier 2 — domain sources (17 files)
+## 3. Add Tier 2 — domain sources (18 files)
 
 Add these so they are available, and load them **per domain** rather than all at once:
 
@@ -62,6 +62,7 @@ commercial                docs/platform/modules/commercial-configuration.md
 operational-intelligence  docs/platform/core/operational-calculations.md
 communications            docs/platform/modules/communications-platform.md
 configuration             docs/platform/governance/configuration-publication-model.md
+documents                 docs/platform/governance/document-security-model.md
 ai-bos                    docs/platform/trust/reasoning-runtime.md
 operations-temporal       docs/platform/core/effective-dated-assignment-doctrine.md   (shared)
 product-urls              docs/system/routing-doctrine.md                             (shared)

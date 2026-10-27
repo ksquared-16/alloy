@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V2 |
 | **Certified** | 2026-09-30 |
 | **Base** | `3c4ac97f1` (staging), plus the Configuration and AI/BOS records carried in PR 1368 candidate `5d24b0d08` — **not yet on staging** |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments only** (context-lane hold) — measured at staging `1492a2dd9` (2026-10-27): stability gate **CLOSED**, **5** quiet days (&lt; 7); last semantic change `9e3774e0e` (2026-10-21); eight commits under `web/lib/financials/payments` in the preceding seven days. Documents is implemented with owners but has **no context lane yet** (Director D-01 → Slice 2) |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **Documents** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md); Documents: [`../platform/governance/document-security-model.md`](../platform/governance/document-security-model.md)) |
+| **Domains pending** | **Financials / Payments only** (context-lane hold) — measured at staging `1492a2dd9` (2026-10-27): stability gate **CLOSED**, **5** quiet days (&lt; 7); last semantic change `9e3774e0e` (2026-10-21); eight commits under `web/lib/financials/payments` in the preceding seven days |
 
 **Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into three
 companion documents — [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current
@@ -256,11 +256,12 @@ durable truth · AI bypasses capability checks · surface access is action autho
 local models or self-hosted inference are current · a route under the AI path necessarily invokes a
 model · an OI metric is model inference.
 
-**Context-lane scoreboard (remeasured 2026-10-27 at staging `1492a2dd9`).** Every *registered*
-context-package domain lane is certified except **Financials/Payments**, held by the seven-day
-stability gate — last change `9e3774e0e` (2026-10-21), **5 quiet days** (&lt; 7). Documents D1a–D6 is
-implemented with canonical owners and is **not** yet a context-package lane (Director D-01 → Slice 2);
-do not read lane absence as “Documents does not exist.”
+**Context-lane scoreboard (remeasured 2026-10-27; package revision at staging `1464197d0`).** Every
+*registered* context-package domain lane is certified except **Financials/Payments**, held by the
+seven-day stability gate — last change `9e3774e0e` (2026-10-21), **5 quiet days** (&lt; 7).
+**Documents** is now a certified context lane (Director D-01): D1a–D5 hosted-certified; **D6 hosted
+ZERO_RESIDUE remains open debt** and must not be inferred closed. **Tours** routes provisionally
+under Enrollment / Placement (Director D-02) — no separate Tours lane.
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -288,13 +289,16 @@ than tidied away.
 | Operational Intelligence | CERTIFIED | `OPERATIONAL_INTELLIGENCE_…` | **record:** §0 of [`../platform/core/operational-calculations.md`](../platform/core/operational-calculations.md) | the module narrative [`../platform/modules/operational-intelligence-platform.md`](../platform/modules/operational-intelligence-platform.md) is `last_reviewed` 2026-07-28 and does **not** carry the record | a new registered metric key or Answer consumer |
 | Communications | CERTIFIED | `COMMUNICATIONS_…` | [`../platform/modules/communications-platform.md`](../platform/modules/communications-platform.md) | — | a provider change or addition |
 | Configuration | CERTIFIED | `CONFIGURATION_…` | [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md) | Programs publication chain is built with **zero rows**; **record is on PR 1368, not yet on staging** | first rows in the publication chain; a fifth lifecycle |
+| Documents | CERTIFIED | per-slice records under `certification/documents-v1/` (Q1, D1b–D5 ZERO_RESIDUE where recorded) | [`../platform/governance/document-security-model.md`](../platform/governance/document-security-model.md) | **D6 hosted ZERO_RESIDUE unfinished**; D7 validity not in scope; D1c-2 malware deferred | access-door / filing / storage / requirements-evaluator change |
 | AI / BOS | CERTIFIED | `AI_BOS_…` | [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md) | two of four Trust capabilities are deterministic — a fact, not debt; **record is on PR 1368, not yet on staging** | a new provider or adapter |
 | **Financials / Payments** | **PENDING** | — | **none as DIRECT — do not load Payments as certified context** | implemented on staging (V1/W7); **not certified**; gate CLOSED (5/7 quiet days at `1492a2dd9`) | seven consecutive quiet days under `web/lib/financials/payments`, then a full domain certification |
 
-**Declarations reconcile to twelve tokens for fourteen rows.** Operations temporal truth shares the
-Enrollment/Placement declaration, and Subsidy has no token at all. Neither is a reason to doubt the
-certifications, which rest on measurement recorded in the owner documents — but a table that silently
-implied fourteen tokens would be the kind of tidy-looking falsehood this corpus exists to prevent.
+**Declarations reconcile to twelve named tokens for fifteen certified rows** (plus Financials
+pending). Operations temporal truth shares the Enrollment/Placement declaration; Subsidy has no
+token; Documents is certified from per-slice `certification/documents-v1/` records rather than a
+single `DOCUMENTS_…` token. None of these is a reason to doubt the certifications — but a table that
+silently implied one token per row would be the kind of tidy-looking falsehood this corpus exists to
+prevent.
 
 ## Financials / Payments — what may enter context now
 

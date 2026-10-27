@@ -6,8 +6,8 @@
   "tier1_cap": 5,
   "counts": {
     "tier1": 5,
-    "tier2": 17,
-    "tier3": 26
+    "tier2": 18,
+    "tier3": 28
   },
   "sources": [
     {
@@ -151,6 +151,16 @@
       "safe_for_default_context": true
     },
     {
+      "path": "docs/platform/governance/document-security-model.md",
+      "tier": 2,
+      "domain": "documents",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:documents",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
       "path": "docs/platform/governance/roles-and-permissions.md",
       "tier": 2,
       "domain": "identity-access",
@@ -193,7 +203,7 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "domain": "communications",
+      "domain": "enrollment-placement, communications",
       "authority_role": "canonical owner",
       "load_condition": "lane:communications",
       "volatility": "implementation-contract",
@@ -361,6 +371,16 @@
       "safe_for_default_context": false
     },
     {
+      "path": "docs/platform/governance/authorization-qa-personas.md",
+      "tier": 3,
+      "domain": "documents",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:documents",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
       "path": "docs/platform/governance/rls-authority-model-director-gate.md",
       "tier": 3,
       "domain": "identity-access",
@@ -406,6 +426,16 @@
       "domain": "configuration",
       "authority_role": "reference owner",
       "load_condition": "on-demand:configuration",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/modules/documents-and-forms.md",
+      "tier": 3,
+      "domain": "enrollment-placement, documents",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:enrollment-placement",
       "volatility": "reference",
       "load_mode": "REFERENCE_ONLY",
       "safe_for_default_context": false

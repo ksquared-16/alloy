@@ -59,18 +59,20 @@ cannot weaken them.
 
 ## Product domains
 
-Fourteen domains are certified as documented-and-measured context lanes. One certified-lane hold
-remains. Documents is implemented with canonical owners but is **not yet** a Vacilando context lane
-(Director D-01; lane packaging is Slice 2).
+Fifteen domains are certified as documented-and-measured context lanes (Documents added under
+Director D-01). One certified-lane hold remains (Financials/Payments). Tours has **no** separate
+lane — Enrollment / Placement is the provisional primary routing lane (Director D-02), with
+Communications and Configuration secondary.
 
 | Domain | State |
 |---|---|
 | Developer Platform / API, Runtime, Business Process, Identity/Access | certified platform spine |
 | Operations temporal truth, Enrollment/Placement, Staff/Scheduling, Attendance | certified operations |
 | Subsidy, Commercial | certified money |
-| Operational Intelligence, Communications, Configuration, AI/BOS | certified platform services |
+| Operational Intelligence, Communications, Configuration, Documents, AI/BOS | certified platform services |
 | **Financials / Payments** | **PENDING** — implemented on staging; not certified; stability gate CLOSED (see below) |
-| Documents (module) | implemented D1a–D6 with owner docs; **no context lane yet** |
+| Documents | certified lane; D1a–D5 hosted ZERO_RESIDUE; **D6 hosted residue open debt** |
+| Tours | routed under Enrollment/Placement (no separate lane) |
 
 The per-domain certification state, owners and staleness triggers are in
 [`alloy-benchmark-context.md`](alloy-benchmark-context.md). The scoreboard is the domain status
