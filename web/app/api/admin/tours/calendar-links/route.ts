@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { hasToursCapability, TOURS_CONFIGURE } from "@/lib/access/toursAuthority";
+import { requireToursCapability, TOURS_CONFIGURE } from "@/lib/access/toursAuthority";
+import { FORMS_AUTHOR, hasFormsCapability } from "@/lib/access/formsAuthority";
 import { assertLocationInOrg } from "@/lib/tours/schedules/tourScheduleWrites";
 import { readTourScheduleScopeLocation } from "@/lib/tours/schedules/tourScheduleRouteSupport";
 import { resolvePublicBaseUrl } from "@/lib/tours/public/resolvePublicBaseUrl";
@@ -15,12 +16,19 @@ import { projectTourCalendarShareLinks, type TourCalendarShareLinkRow } from "@/
  * The location's intake links as Preview & Share rows: which one publishes the tour calendar, its
  * hosted address, and whether it may be framed. Read-only — publishing is the existing link PATCH
  * (`tour_calendar`), which keeps its own `tours.configure` + forms authority checks.
+ *
+ * Needs `tours.configure`: the hosted addresses carry the links' public tokens, so only people who
+ * decide where a school's calendar is published see them here.
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const denied = requireToursCapability(access, TOURS_CONFIGURE);
+    if (denied) return denied;
 
     const scope = readTourScheduleScopeLocation(new URL(request.url).searchParams.get("location_id"));
     if (!scope.ok || !scope.locationId) return NextResponse.json({ error: "A location_id is required" }, { status: 400 });
@@ -48,9 +56,9 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const access = await getAdminAccessContextCached();
     return NextResponse.json({
         links: projectTourCalendarShareLinks(linkRows, { locationId: scope.locationId, baseUrl: resolvePublicBaseUrl(), formTitles }),
-        can_publish: access.ok && hasToursCapability(access, TOURS_CONFIGURE),
+        // Publishing is the link PATCH, which also needs forms authoring.
+        can_publish: hasFormsCapability(access, FORMS_AUTHOR),
     });
 }

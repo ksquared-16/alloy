@@ -1,0 +1,152 @@
+[
+ {
+  "step": "A organization fallback (org #1F6FEB, no location brand)",
+  "tours": {
+   "brand": "#1F6FEB",
+   "fill": "#1F6FEB",
+   "ink": "#FFFFFF",
+   "name": "Northwind Org Brand",
+   "button": {
+    "text": "28",
+    "bg": "rgb(31, 111, 235)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 4.63
+   }
+  },
+  "form": {
+   "brand": "#1F6FEB",
+   "fill": "#1F6FEB",
+   "ink": "#FFFFFF",
+   "name": "Northwind Org Brand",
+   "button": {
+    "text": "Request my tour",
+    "bg": "rgb(31, 111, 235)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 4.63
+   }
+  }
+ },
+ {
+  "step": "B location override (#B91C1C)",
+  "tours": {
+   "brand": "#B91C1C",
+   "fill": "#B91C1C",
+   "ink": "#FFFFFF",
+   "name": "Firefly QA Campus",
+   "button": {
+    "text": "28",
+    "bg": "rgb(185, 28, 28)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 6.47
+   }
+  },
+  "form": {
+   "brand": "#B91C1C",
+   "fill": "#B91C1C",
+   "ink": "#FFFFFF",
+   "name": "Firefly QA Campus",
+   "button": {
+    "text": "Request my tour",
+    "bg": "rgb(185, 28, 28)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 6.47
+   }
+  }
+ },
+ {
+  "step": "C form override, published snapshot (#7C3AED)",
+  "tours": {
+   "brand": "#7C3AED",
+   "fill": "#7C3AED",
+   "ink": "#FFFFFF",
+   "name": "Form Brand",
+   "button": {
+    "text": "28",
+    "bg": "rgb(124, 58, 237)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 5.7
+   }
+  },
+  "form": {
+   "brand": "#7C3AED",
+   "fill": "#7C3AED",
+   "ink": "#FFFFFF",
+   "name": "Form Brand",
+   "button": {
+    "text": "Request my tour",
+    "bg": "rgb(124, 58, 237)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 5.7
+   }
+  }
+ },
+ {
+  "step": "D draft edit to #FFD400, NOT republished",
+  "tours": {
+   "brand": "#7C3AED",
+   "fill": "#7C3AED",
+   "ink": "#FFFFFF",
+   "name": "Form Brand",
+   "button": {
+    "text": "28",
+    "bg": "rgb(124, 58, 237)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 5.7
+   }
+  },
+  "form": {
+   "brand": "#7C3AED",
+   "fill": "#7C3AED",
+   "ink": "#FFFFFF",
+   "name": "Form Brand",
+   "button": {
+    "text": "Request my tour",
+    "bg": "rgb(124, 58, 237)",
+    "color": "rgb(255, 255, 255)",
+    "ratio": 5.7
+   }
+  }
+ },
+ {
+  "step": "E republished (#FFD400, light brand)",
+  "tours": {
+   "brand": "#FFD400",
+   "fill": "#FFD400",
+   "ink": "#665500",
+   "name": "Draft Brand",
+   "button": {
+    "text": "28",
+    "bg": "rgb(255, 212, 0)",
+    "color": "rgb(102, 85, 0)",
+    "ratio": 5.12
+   }
+  },
+  "form": {
+   "brand": "#FFD400",
+   "fill": "#FFD400",
+   "ink": "#665500",
+   "name": "Draft Brand",
+   "button": {
+    "text": "Request my tour",
+    "bg": "rgb(255, 212, 0)",
+    "color": "rgb(102, 85, 0)",
+    "ratio": 5.12
+   }
+  }
+ },
+ {
+  "step": "E iframe parity",
+  "tours": {
+   "brand": "#FFD400",
+   "fill": "#FFD400",
+   "ink": "#665500",
+   "name": "STEP 1 OF 2",
+   "button": {
+    "text": "28",
+    "bg": "rgb(255, 212, 0)",
+    "color": "rgb(102, 85, 0)",
+    "ratio": 5.12
+   }
+  }
+ }
+]

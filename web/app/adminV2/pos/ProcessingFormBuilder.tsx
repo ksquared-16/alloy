@@ -772,7 +772,7 @@ export function FormPreview({
                                                         Sign here
                                                     </div>
                                                 ) : field.type !== "text_block" ? (
-                                                    <input type="text" className="mt-1 w-full rounded-lg border border-alloy-stone/20 px-3 py-2 text-[13px]" placeholder="" readOnly />
+                                                    <input type="text" className="mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" placeholder="" readOnly aria-label={field.label} />
                                                 ) : null}
                                             </div>
                                         ))}

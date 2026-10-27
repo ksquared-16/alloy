@@ -5131,6 +5131,14 @@
         "reason": "Reconciles a weekly tour schedule's availability rules to the submitted weekday x window shape. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
       }
     },
+    "app/api/admin/tours/calendar-links/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Tours P1 Preview & Share: lists one of the caller's own locations' intake links with their tour-calendar publication state and hosted addresses (which carry the links' public tokens). Read-only; bounded by org and the named location; publishing stays on the existing link PATCH. `tours.configure` at the call site, like the rest of Tours authoring."
+      }
+    },
     "app/api/admin/tours/schedules/route.ts": {
       "GET": {
         "status": "none",

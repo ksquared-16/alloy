@@ -242,7 +242,7 @@ export default function TourShareSection({
                 </p>
             :   null}
             {data && !data.can_publish ?
-                <p className="text-[11px] text-alloy-midnight/50">Publishing a tour calendar needs tour configuration access.</p>
+                <p className="text-[11px] text-alloy-midnight/50">Publishing a tour calendar also needs form authoring access.</p>
             :   null}
         </section>
     );

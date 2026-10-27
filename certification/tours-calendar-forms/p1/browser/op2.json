@@ -1,0 +1,116 @@
+{
+ "form": {
+  "formId": "ade9052c-0bf8-47df-9f95-1d20c8fdc07f",
+  "title": "Inquire About KLA Schools of Hillsboro"
+ },
+ "edit": [
+  [
+   {
+    "x": 276,
+    "y": 451,
+    "w": 333,
+    "label": "⋮⋮"
+   },
+   {
+    "x": 619,
+    "y": 451,
+    "w": 333,
+    "label": "⋮⋮"
+   }
+  ],
+  [
+   {
+    "x": 276,
+    "y": 569,
+    "w": 333,
+    "label": "⋮⋮"
+   },
+   {
+    "x": 619,
+    "y": 569,
+    "w": 333,
+    "label": "⋮⋮"
+   }
+  ],
+  [
+   {
+    "x": 276,
+    "y": 809,
+    "w": 333,
+    "label": "⋮⋮"
+   },
+   {
+    "x": 619,
+    "y": 809,
+    "w": 333,
+    "label": "⋮⋮"
+   }
+  ],
+  [
+   {
+    "x": 276,
+    "y": 927,
+    "w": 676,
+    "label": "⋮⋮"
+   }
+  ]
+ ],
+ "preview": [
+  [
+   {
+    "x": 473,
+    "y": 471,
+    "w": 299,
+    "label": "First Name *"
+   },
+   {
+    "x": 796,
+    "y": 471,
+    "w": 299,
+    "label": "Last Name *"
+   }
+  ],
+  [
+   {
+    "x": 473,
+    "y": 543,
+    "w": 299,
+    "label": "Email *"
+   },
+   {
+    "x": 796,
+    "y": 543,
+    "w": 299,
+    "label": "Phone *"
+   }
+  ],
+  [
+   {
+    "x": 473,
+    "y": 654,
+    "w": 299,
+    "label": "Child's first name *"
+   },
+   {
+    "x": 796,
+    "y": 654,
+    "w": 299,
+    "label": "Child's last name *"
+   }
+  ],
+  [
+   {
+    "x": 473,
+    "y": 726,
+    "w": 622,
+    "label": "Child's Date of birth *"
+   }
+  ]
+ ],
+ "previewWidth": 672,
+ "previewSubmit": {
+  "text": "Submit",
+  "bg": "rgb(206, 221, 84)",
+  "color": "rgb(82, 88, 34)"
+ }
+}
