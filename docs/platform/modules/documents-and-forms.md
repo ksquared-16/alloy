@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-10-26
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -202,7 +202,8 @@ household behind the case: the household, its adults, its children and its cases
 - **Narrowing:** the selected child (`child.customer_member_id`) opens the library narrowed to that child; the chips
   widen it to the household or switch to another member. Narrowing is done by the server.
 - **What it shows:** title, type and category, version (n of m), received date, size, sensitivity class and Forms
-  provenance; review and validity only when the version stores them. Nothing derives "missing" or "expiring" — that is D7.
+  provenance; review and validity only when the version stores them. The list derives nothing; readiness ("required /
+  missing / pending review / waived") is the D6 Documents evaluator's answer, shown above it. "Expiring" is D7.
 - **Actions:** open (a signed link, per version too), version history and the document's history (loaded when a row is
   expanded), replacement with a reason, and upload to a chosen member with a Studio type. Uploads go through
   `POST /api/admin/documents/upload` (content check, D1c screening, quarantine, the type's default sensitivity).
@@ -234,6 +235,40 @@ from inside the Digital Mailroom. Record: `certification/documents-v1/D5-PROCESS
   to" for the related records; "Open record" lands on the record's Documents card. History shows "Filed from Processing"
   from the committed filing record.
 
+## Document requirements, readiness and waivers (D6)
+
+Documents owns document requirement DEFINITIONS, their SATISFACTION and document-specific WAIVERS. Business Process
+reads the Documents answer; Enrollment keeps its separate stage exceptions. Record:
+`certification/documents-v1/D6-DOCUMENT-REQUIREMENTS.md`. Migration `supabase/migrations/20261212090000_documents_d6_requirements.sql`.
+
+- **Authoring** (Processing → Studio → Documents → **Requirements**, `/api/admin/documents/configuration/requirements/*`):
+  a published Studio type, the subject grain (household · adult · child · enrollment case), scope (every record, or
+  records in a Business Process, optionally at named stages), timing (immediately, or within N days of entering scope),
+  required/optional, waivable or not, an optional effective window. Versioned like types: draft → validated → published
+  (compare-and-swap) → superseded; the database validates against the PUBLISHED type (it must exist and accept the
+  grain) and refuses a second live definition of the same type, grain and scope. Archive keeps history and waivers.
+  `processing.documents.manage`; reads `documents.read`.
+- **One evaluator** (`web/lib/documents/requirements/documentRequirementEvaluator.ts`, pure): missing · pending review ·
+  satisfied · waived · blocked, from the subject's owned documents of the type, their status and their CURRENT version's
+  review, and the active waivers. Accepted evidence satisfies; an unaccepted upload (or no review on a review-required
+  type) is pending review; quarantined or rejected evidence alone is blocked; a type no longer published or no longer
+  accepting the grain is blocked by configuration. Satisfaction is never stored — no placeholder rows, no satisfaction
+  table, no "waived" document status.
+- **Waivers** (`/api/admin/documents/requirements/waivers`): one requirement, one subject, a reason, the actor, an optional
+  end date; revocation with a reason; never deleted. Only a requirement whose published policy allows waivers.
+  A waiver is not evidence, grants no access and never changes a document (quarantine stays quarantine).
+- **Review** (`POST /api/admin/documents/[id]/review`): accept or reject a document's current version — what turns
+  pending evidence into satisfying (or blocked) evidence.
+- **Work** — Processing → Work → Documents → **Missing documents**, and Work Items (source "Documents"), both from
+  `GET /api/admin/documents/requirements/work`: derived rows (`document_requirement:<requirement>:<grain>:<subject>`)
+  for unmet REQUIRED requirements; never `operational_tasks`; a row disappears on the next read once satisfied or waived.
+- **Readiness** — the Focus Panel Documents card (`DocumentReadinessPanel`, `GET …/requirements/readiness`): required, on
+  file, missing, pending review, waived and blocked per household member, with accept/reject/waive/revoke.
+- **Business Process** — a stage `document` requirement (`document_type_key`) is now authorable (a published type a child
+  can file); participant progress asks the same Documents service, so a stage's document requirement and the Documents
+  requirement for that type give one answer. Completion sufficiency and Enrollment stage exceptions are unchanged.
+- **Security:** `docs/platform/governance/document-security-model.md` §7c.
+
 ## Integration points
 
 - Opportunity drawer — packet review modal, form status
@@ -241,6 +276,8 @@ from inside the Digital Mailroom. Record: `certification/documents-v1/D5-PROCESS
 - Field policy — forms parity with settings **planned**
 - Processing Identity Resolution — public lead-capture and Manual Create Lead source adapters; facts/resolutions/approval/executor
 - Processing document filing (D5) — the Documents filing command, called by a document case's approval
+- Business Process readiness (D6) — stage `document` requirements answered by the Documents requirement service
+- Work Items (D6) — the Documents source, a derived projection of unmet document requirements
 
 ---
 
