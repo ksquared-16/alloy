@@ -201,7 +201,6 @@ beforeEach(() => {
             }
             const id = `e0000000-0000-4000-8000-00000000000${db.rows("document_requirement_waivers").length + 1}`;
             db.seed("document_requirement_waivers", [
-                ...db.rows("document_requirement_waivers"),
                 { id, org_id: args.p_org_id, requirement_id: r.id, requirement_version_id: v.id, subject_type: args.p_subject_type, subject_id: args.p_subject_id, reason: args.p_reason, state: "active", effective_until: args.p_effective_until, granted_by: args.p_actor, granted_at: "2026-10-27T00:00:00Z" },
             ]);
             return { data: { waiver_id: id, requirement_version_id: v.id }, error: null };
@@ -212,6 +211,16 @@ beforeEach(() => {
             if (w.state !== "active") return { data: null, error: { message: "document_requirement_waiver_not_active" } };
             Object.assign(w, { state: "revoked", revoked_by: args.p_actor, revoked_at: "2026-10-27T01:00:00Z", revoke_reason: args.p_reason });
             return { data: { waiver_id: w.id, requirement_id: w.requirement_id }, error: null };
+        }
+        if (name === "document_requirement_purge") {
+            const r = db.rows("document_requirements").find((x) => x.id === args.p_requirement_id && x.org_id === args.p_org_id);
+            if (!r) return { data: null, error: { message: "document_requirement_not_found" } };
+            if (!/^qa_[a-z0-9_]+$/.test(String(r.key)) || r.status !== "archived") return { data: null, error: { message: "document_requirement_purge_refused" } };
+            const versions = db.rows("document_requirement_versions").filter((v) => v.requirement_id === r.id).length;
+            const waivers = db.rows("document_requirement_waivers").filter((w) => w.requirement_id === r.id).length;
+            for (const t of ["document_requirement_waivers", "document_requirement_versions"]) db.tables[t] = db.rows(t).filter((x) => x.requirement_id !== r.id);
+            db.tables.document_requirements = db.rows("document_requirements").filter((x) => x.id !== r.id);
+            return { data: { requirement_id: r.id, versions, waivers, purged: true }, error: null };
         }
         if (name === "document_set_version_review") {
             const v = db.rows("document_versions").find((x) => x.id === args.p_version_id && x.org_id === args.p_org_id);
@@ -412,9 +421,9 @@ describe("readiness and work: one evaluator, the canonical disclosure", () => {
         const D_NEW = "d6000000-0000-4000-8000-0000000000aa";
         expect(stateOf(subjectsOf(await readiness(`subject_type=child&subject_id=${C1}`)), R_IMM.id, C1)).toBe("missing");
         expect(JSON.stringify(db.tables)).toBe(before); // a read writes nothing: no placeholder rows, no satisfaction table
-        db.seed("documents", [...db.rows("documents"), doc(D_NEW, { entity_type: "customer_member", entity_id: C1, doc_type: "immunization_record", sensitivity: "medical" })]);
-        db.seed("document_subjects", [...db.rows("document_subjects"), owner(D_NEW, "child", C1)]);
-        db.seed("document_versions", [...db.rows("document_versions"), { id: `v-${D_NEW}`, org_id: ORG, document_id: D_NEW, version_number: 1, review_status: "pending" }]);
+        db.seed("documents", [doc(D_NEW, { entity_type: "customer_member", entity_id: C1, doc_type: "immunization_record", sensitivity: "medical" })]);
+        db.seed("document_subjects", [owner(D_NEW, "child", C1)]);
+        db.seed("document_versions", [{ id: `v-${D_NEW}`, org_id: ORG, document_id: D_NEW, version_number: 1, review_status: "pending" }]);
         expect(stateOf(subjectsOf(await readiness(`subject_type=child&subject_id=${C1}`)), R_IMM.id, C1)).toBe("pending_review");
         expect(rows(await work()).find((r) => r.requirement_id === R_IMM.id && r.subject_id === C1)).toMatchObject({ state: "pending_review", pending_document_ids: [D_NEW] });
         db.rows("document_versions").find((v) => v.id === `v-${D_NEW}`)!.review_status = "accepted";
@@ -601,5 +610,33 @@ describe("reviewing the current version (pending review → satisfied / blocked)
         as({ ...P.ops, permissionKeys: ["portal.access", "documents.read", "documents.write"] });
         expect((await review(DOC.immRejected, { decision: "accepted" })).status).toBe(403);
         expect(db.rows("document_versions").find((v) => v.id === `v-${DOC.immRejected}`)!.review_status).toBe("pending");
+    });
+});
+
+// ── teardown: only an archived QA fixture requirement is purged ──────────────────────────────────────────────────
+describe("the QA fixture purge (zero-residue teardown) never reaches a real requirement", () => {
+    it("an archived qa_ requirement is purged with its versions and waivers, audited as purge_fixture", async () => {
+        as(P.admin);
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.key = "qa_d6_run_immunizations";
+        await invokeRoute(waiversPOST, json("POST", { requirement_id: R_IMM.id, subject_type: "child", subject_id: C1, reason: "Fixture waiver" }));
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "archived";
+        const res = await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }));
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ purged: true, versions: 1, waivers: 1 });
+        expect(db.rows("document_requirements").some((r) => r.id === R_IMM.id)).toBe(false);
+        expect(db.rows("document_requirement_waivers")).toHaveLength(0);
+        expect((audits("document_requirement_changed").at(-1)!.payload as { action: string }).action).toBe("purge_fixture");
+    });
+    it("a real (non-qa_) or still-active requirement is never purged; the purge function is not called", async () => {
+        as(P.admin);
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "archived"; // real key, archived
+        await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }));
+        db.rows("document_requirements").find((r) => r.id === R_CUSTODY.id)!.key = "qa_d6_active"; // fixture key, still active
+        await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_CUSTODY.id }));
+        expect(rpcCalls.filter((c) => c.name === "document_requirement_purge")).toHaveLength(0);
+    });
+    it("ops cannot purge", async () => {
+        as(P.ops);
+        expect((await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }))).status).toBe(403);
     });
 });

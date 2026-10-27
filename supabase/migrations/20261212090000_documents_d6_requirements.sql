@@ -20,6 +20,10 @@
 -- A waiver waives a REQUIREMENT for a subject. It is not evidence, grants no access to any document, never touches a
 -- document's status (so it cannot release a quarantine) and says nothing about any other Business Process rule.
 --
+-- History is kept: a published or waived requirement is archived, never deleted. The one exception is the QA fixture
+-- namespace: an ARCHIVED requirement whose key starts with `qa_` may be purged (with its versions and waivers) by the
+-- service-role function `document_requirement_purge`, so a governed hosted certification can end with zero residue.
+--
 -- Additive, re-runnable, self-verifying. Rollback: drop the three tables and the functions created here; nothing
 -- existing is altered.
 -- =============================================================================
@@ -135,6 +139,9 @@ CREATE OR REPLACE FUNCTION public.document_requirements_guard()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+            RETURN OLD;  -- the QA fixture purge (document_requirement_purge) only
+        END IF;
         IF OLD.published_version_id IS NOT NULL
            OR EXISTS (SELECT 1 FROM public.document_requirement_waivers w WHERE w.requirement_id = OLD.id) THEN
             RAISE EXCEPTION 'document_requirement_in_use: a published or waived requirement is archived, not deleted' USING ERRCODE = 'check_violation';
@@ -172,6 +179,9 @@ DECLARE
     v_changed boolean;
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+            RETURN OLD;
+        END IF;
         IF OLD.status IN ('published', 'superseded') AND EXISTS (SELECT 1 FROM public.document_requirements r WHERE r.id = OLD.requirement_id) THEN
             RAISE EXCEPTION 'document_requirement_version_immutable: a published version goes only with its requirement' USING ERRCODE = 'check_violation';
         END IF;
@@ -227,6 +237,9 @@ CREATE OR REPLACE FUNCTION public.document_requirement_waivers_guard()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+            RETURN OLD;
+        END IF;
         IF EXISTS (SELECT 1 FROM public.document_requirements r WHERE r.id = OLD.requirement_id) THEN
             RAISE EXCEPTION 'document_requirement_waiver_history: a waiver is revoked, never deleted' USING ERRCODE = 'check_violation';
         END IF;
@@ -471,6 +484,38 @@ BEGIN
 END;
 $$;
 
+-- ── 4a. the QA fixture purge ─────────────────────────────────────────────────────────────────────────────────
+-- Real requirements keep their history forever. A governed hosted certification, however, must leave no residue, so
+-- ONE narrow exception exists: an ARCHIVED requirement in the QA fixture key namespace (`qa_…`) is removed with its
+-- versions and waivers. Service role only; never reachable from a product route.
+CREATE OR REPLACE FUNCTION public.document_requirement_purge(p_org_id uuid, p_requirement_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    r record;
+    n_versions int;
+    n_waivers int;
+BEGIN
+    SELECT * INTO r FROM public.document_requirements WHERE id = p_requirement_id AND org_id = p_org_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'document_requirement_not_found' USING ERRCODE = 'no_data_found'; END IF;
+    IF r.key !~ '^qa_[a-z0-9_]+$' THEN
+        RAISE EXCEPTION 'document_requirement_purge_refused: only QA fixture requirements (key qa_…) are purged; others are archived'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF r.status <> 'archived' THEN
+        RAISE EXCEPTION 'document_requirement_purge_refused: archive the requirement first' USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT count(*) INTO n_versions FROM public.document_requirement_versions WHERE requirement_id = r.id;
+    SELECT count(*) INTO n_waivers FROM public.document_requirement_waivers WHERE requirement_id = r.id;
+    PERFORM set_config('alloy.document_requirement_purge', 'on', true);
+    -- Versions and waivers go by ON DELETE CASCADE; every guard honours the purge setting.
+    DELETE FROM public.document_requirements WHERE id = r.id;
+    PERFORM set_config('alloy.document_requirement_purge', 'off', true);
+    RETURN jsonb_build_object('requirement_id', r.id, 'key', r.key, 'versions', n_versions, 'waivers', n_waivers, 'purged', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.document_requirement_purge(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT ALL ON FUNCTION public.document_requirement_purge(uuid, uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.document_requirement_version_problems(uuid) FROM PUBLIC, anon, authenticated;
 GRANT ALL ON FUNCTION public.document_requirement_version_problems(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.document_requirement_validate(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
@@ -492,7 +537,7 @@ DECLARE
 BEGIN
     SELECT array_agg(n) INTO missing FROM unnest(ARRAY[
         'document_requirement_version_problems', 'document_requirement_validate', 'document_requirement_publish',
-        'document_requirement_waiver_grant', 'document_requirement_waiver_revoke']) n
+        'document_requirement_waiver_grant', 'document_requirement_waiver_revoke', 'document_requirement_purge']) n
      WHERE NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = n);
     IF missing IS NOT NULL THEN RAISE EXCEPTION 'd6 self-verify: functions missing %', missing; END IF;
     IF EXISTS (SELECT 1 FROM unnest(ARRAY['document_requirements', 'document_requirement_versions', 'document_requirement_waivers']) t

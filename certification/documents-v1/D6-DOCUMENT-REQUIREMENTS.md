@@ -46,6 +46,15 @@ Processing → Studio → Documents → **Requirements** (`ProcessingDocumentReq
 Lifecycle as D3 types: draft → validated → published → superseded; a published version never changes; validation and
 publication only through their functions; one open and one published version per requirement; archive (keeps versions
 and waivers) and delete only when never published and never waived. One live definition per (type, grain, scope).
+
+**QA fixture purge (slice 5, added before merge).** Hosted certification must publish and waive run-scoped requirements
+in QA Shared and still bind ZERO_RESIDUE, which the history rule above made impossible. Fixture resets are hash-pinned
+in the toolkit registry, so the in-repo governed path is the product's own audited route, as D2–D5 cleaned up through
+audited deletes: `DELETE …/requirements/[id]` on an ARCHIVED requirement whose key starts with `qa_` calls
+`document_requirement_purge` (service role; re-checks both; versions and waivers by cascade; audited `purge_fixture`).
+Every other requirement keeps its history. Invariant 11 proves it; the census gains `doc_zr_d6_requirements`,
+`doc_zr_d6_requirement_versions` and `doc_zr_d6_waivers`. This changed the candidate after the first release
+(`spr_4e7438699164` for `81573d1b1501`), so it was re-certified and re-released.
 The editor mirrors `document_requirement_version_problems`; a test pins the two code sets equal.
 
 ## D6.2 — the satisfaction evaluator
@@ -113,8 +122,8 @@ was added because nothing could accept or reject a version outside filing: `docu
 
 | Suite | Result |
 |---|---|
-| Postgres invariants `certification/invariants/documents-d6-requirements.sql` (shared local stack, D2/D3/D5/D6 applied inside a rolled-back transaction, D6 applied twice) | **10/10 PASS**; mutations (waivable check, type-grain compatibility) each fail it |
-| `tests/documents` | **438/438** (383 before D6; D6 routes 34, UI 10, Business Process 11) |
+| Postgres invariants `certification/invariants/documents-d6-requirements.sql` (shared local stack, D2/D3/D5/D6 applied inside a rolled-back transaction, D6 applied twice) | **11/11 PASS**; mutations (waivable check, type-grain compatibility, purge key namespace, purge archived-only) each fail it |
+| `tests/documents` | **441/441** (383 before D6; D6 routes 37, UI 10, Business Process 11) |
 | Mutation checks | removing work's clearance filter fails 1; removing both waiver scope gates fails 1 |
 | Regression vs the unchanged base `0c46b4548` (`/tmp/d6-base`) | lifecycle + enrollment: identical 85 reds on both; 28 other importers of changed modules: identical 6; Work Items / processing / runtime / components: identical 22. **0 new reds** |
 | Typecheck | `vac run typecheck` and `vac run typecheck:tests`: green |

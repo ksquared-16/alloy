@@ -8,7 +8,8 @@
 -- validate/publish; compatibility with the published Studio type (existence, subject grain); scope / timing / effective
 -- range validation; duplicate refusal; waiver policy eligibility, grain, subject resolution, cross-organization refusal,
 -- reason, single active waiver, revocation and re-grant; waivers neither deleted nor edited; a waiver never touches a
--- document; published or waived requirements archived, not deleted; service-role only.
+-- document; published or waived requirements archived, not deleted; the QA fixture purge (archived `qa_` keys only);
+-- service-role only.
 DO $$
 DECLARE
     v_org uuid := (SELECT id FROM public.orgs ORDER BY created_at NULLS LAST, id LIMIT 1);
@@ -234,7 +235,48 @@ BEGIN
     END IF;
     passes := passes || 'service_role_only'::text;
 
-    RAISE NOTICE 'D6 invariants PASS %/%: %', array_length(passes, 1), 10, array_to_string(passes, ', ');
-    IF array_length(passes, 1) <> 10 THEN RAISE EXCEPTION 'D6 invariants incomplete'; END IF;
+    -- 11. The QA fixture purge: only an ARCHIVED `qa_` requirement, with its versions and waivers; nothing else.
+    BEGIN
+        PERFORM public.document_requirement_purge(v_org, req);  -- d6_immunization: not a QA fixture key
+        RAISE EXCEPTION '11a: a non-fixture requirement was purged';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    INSERT INTO public.document_requirements (id, org_id, key) VALUES (req_dup, v_org, 'qa_d6_fixture');
+    INSERT INTO public.document_requirement_versions (id, org_id, requirement_id, version_number, label, document_type_key, subject_type, waivable, scope)
+        VALUES (vdup, v_org, req_dup, 1, 'Fixture', 'immunization_record', 'child', true, '{"kind":"business_process","process_key":"qa_fixture_process"}');
+    PERFORM public.document_requirement_validate(v_org, vdup, actor);
+    PERFORM public.document_requirement_publish(v_org, req_dup, vdup, NULL, actor);
+    PERFORM public.document_requirement_waiver_grant(v_org, req_dup, 'child', c1, 'Fixture waiver', NULL, actor);
+    BEGIN
+        PERFORM public.document_requirement_purge(v_org, req_dup);
+        RAISE EXCEPTION '11b: an active fixture requirement was purged';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    UPDATE public.document_requirements SET status = 'archived' WHERE id = req_dup;
+    BEGIN
+        PERFORM public.document_requirement_purge(v_org2, req_dup);
+        RAISE EXCEPTION '11c: another organization purged the requirement';
+    EXCEPTION WHEN no_data_found THEN NULL;
+    END;
+    r := public.document_requirement_purge(v_org, req_dup);
+    IF (r ->> 'versions')::int <> 1 OR (r ->> 'waivers')::int <> 1
+       OR EXISTS (SELECT 1 FROM public.document_requirements WHERE id = req_dup)
+       OR EXISTS (SELECT 1 FROM public.document_requirement_versions WHERE requirement_id = req_dup)
+       OR EXISTS (SELECT 1 FROM public.document_requirement_waivers WHERE requirement_id = req_dup) THEN
+        RAISE EXCEPTION '11d: the fixture purge left rows: %', r;
+    END IF;
+    -- The guards are back in force after the purge: real history is still undeletable.
+    BEGIN
+        DELETE FROM public.document_requirements WHERE id = req;
+        RAISE EXCEPTION '11e: the purge setting leaked past the purge';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    IF has_function_privilege('authenticated', 'public.document_requirement_purge(uuid, uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION '11f: the purge is reachable by a client role';
+    END IF;
+    passes := passes || 'qa_fixture_purge_only'::text;
+
+    RAISE NOTICE 'D6 invariants PASS %/%: %', array_length(passes, 1), 11, array_to_string(passes, ', ');
+    IF array_length(passes, 1) <> 11 THEN RAISE EXCEPTION 'D6 invariants incomplete'; END IF;
 END;
 $$;

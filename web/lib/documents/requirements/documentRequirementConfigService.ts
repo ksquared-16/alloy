@@ -37,6 +37,7 @@ const REFUSALS: Array<[RegExp, string, number]> = [
     [/document_requirement_waiver_exists/, "WAIVER_EXISTS", 409],
     [/document_requirement_waiver_not_active/, "WAIVER_NOT_ACTIVE", 409],
     [/document_requirement_waiver_not_found/, "NOT_FOUND", 404],
+    [/document_requirement_purge_refused/, "PURGE_REFUSED", 409],
     [/document_requirement_not_found|document_requirement_version_not_found/, "NOT_FOUND", 404],
     [/uq_document_requirements_key/, "KEY_TAKEN", 409],
     [/chk_document_requirements_key/, "KEY_INVALID", 400],
@@ -247,6 +248,24 @@ export async function setRequirementStatus(
     if (error) return refusal(error);
     if (!data) return { ok: false, code: "NOT_FOUND", status: 404, message: "requirement not found" };
     return { ok: true, value: data as { id: string; status: string } };
+}
+
+/** The QA fixture key namespace: only an ARCHIVED requirement whose key matches is ever purged (`document_requirement_purge`). */
+export const QA_FIXTURE_REQUIREMENT_KEY = /^qa_[a-z0-9_]+$/;
+
+export function requirementIsPurgeableFixture(r: { key: string; status: string }): boolean {
+    return r.status === "archived" && QA_FIXTURE_REQUIREMENT_KEY.test(r.key);
+}
+
+/** Remove an archived QA fixture requirement with its versions and waivers (the database re-checks both conditions). */
+export async function purgeFixtureRequirement(
+    supabase: SupabaseClient,
+    orgId: string,
+    requirementId: string,
+): Promise<RequirementConfigResult<{ requirement_id: string; versions: number; waivers: number }>> {
+    const { data, error } = await supabase.rpc("document_requirement_purge", { p_org_id: orgId, p_requirement_id: requirementId });
+    if (error) return refusal(error);
+    return { ok: true, value: data as { requirement_id: string; versions: number; waivers: number } };
 }
 
 export async function deleteRequirement(supabase: SupabaseClient, orgId: string, requirementId: string): Promise<RequirementConfigResult<{ id: string }>> {

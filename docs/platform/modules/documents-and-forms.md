@@ -246,7 +246,8 @@ reads the Documents answer; Enrollment keeps its separate stage exceptions. Reco
   records in a Business Process, optionally at named stages), timing (immediately, or within N days of entering scope),
   required/optional, waivable or not, an optional effective window. Versioned like types: draft → validated → published
   (compare-and-swap) → superseded; the database validates against the PUBLISHED type (it must exist and accept the
-  grain) and refuses a second live definition of the same type, grain and scope. Archive keeps history and waivers.
+  grain) and refuses a second live definition of the same type, grain and scope. Archive keeps history and waivers;
+  only an archived QA fixture requirement (key `qa_…`) can be purged, for zero-residue certification teardown.
   `processing.documents.manage`; reads `documents.read`.
 - **One evaluator** (`web/lib/documents/requirements/documentRequirementEvaluator.ts`, pure): missing · pending review ·
   satisfied · waived · blocked, from the subject's owned documents of the type, their status and their CURRENT version's
