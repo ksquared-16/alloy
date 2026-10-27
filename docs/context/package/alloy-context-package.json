@@ -30,13 +30,17 @@
       "domain": "Financials / Payments",
       "lane": "financials-payments",
       "status": "PENDING_DISABLED",
-      "reason": "seven-day Payments stability gate",
+      "reason": "seven-day Payments stability gate — still CLOSED; Payments V1/W7 is implemented on staging but not certified",
       "measured": {
-        "last_semantic_change": "75c1a016c",
-        "date": "2026-09-30",
-        "days_quiet_at_generation": 1,
+        "last_semantic_change": "9e3774e0e",
+        "date": "2026-10-21",
+        "days_quiet_at_generation": 5,
         "required_quiet_days": 7,
-        "path": "web/lib/financials/payments"
+        "path": "web/lib/financials/payments",
+        "measured_at_staging_sha": "1492a2dd9",
+        "measured_at": "2026-10-27",
+        "commits_in_preceding_seven_days": 8,
+        "gate_open": false
       }
     }
   ],

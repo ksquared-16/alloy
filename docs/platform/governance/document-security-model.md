@@ -7,8 +7,8 @@ supersedes: []
 
 # Document security model
 
-**Status:** canonical owner for document access, storage, ingestion, identity, type-policy and filing security (Documents V1, D1a–D5).
-**Last reviewed:** 2026-10-26, at staging `d18d4e524` plus the D5 candidate.
+**Status:** canonical owner for document access, storage, ingestion, identity, type-policy, filing and requirements security (Documents V1, D1a–D6).
+**Last reviewed:** 2026-10-27, against staging `1492a2dd9` (D1a–D5 hosted-certified; D6 requirements implemented with certification record).
 **Higher authority:** the code and migrations named below. Where this prose disagrees with them, they win.
 
 ## 1. The one door

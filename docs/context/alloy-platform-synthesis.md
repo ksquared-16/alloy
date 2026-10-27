@@ -2,7 +2,7 @@
 title: Alloy platform synthesis
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -59,7 +59,9 @@ cannot weaken them.
 
 ## Product domains
 
-Fourteen domains are certified as documented-and-measured. One is not.
+Fourteen domains are certified as documented-and-measured context lanes. One certified-lane hold
+remains. Documents is implemented with canonical owners but is **not yet** a Vacilando context lane
+(Director D-01; lane packaging is Slice 2).
 
 | Domain | State |
 |---|---|
@@ -67,17 +69,20 @@ Fourteen domains are certified as documented-and-measured. One is not.
 | Operations temporal truth, Enrollment/Placement, Staff/Scheduling, Attendance | certified operations |
 | Subsidy, Commercial | certified money |
 | Operational Intelligence, Communications, Configuration, AI/BOS | certified platform services |
-| **Financials / Payments** | **PENDING** — actively changing; see below |
+| **Financials / Payments** | **PENDING** — implemented on staging; not certified; stability gate CLOSED (see below) |
+| Documents (module) | implemented D1a–D6 with owner docs; **no context lane yet** |
 
 The per-domain certification state, owners and staleness triggers are in
 [`alloy-benchmark-context.md`](alloy-benchmark-context.md). The scoreboard is the domain status
 table there.
 
-**Financials / Payments is pending for a measurable reason, not an editorial one.** The last
-substantive semantic change under `web/lib/financials/payments` is `75c1a016c` (2026-09-30), and
-thirteen commits landed there in the preceding seven days. A domain is not documentable as current
-truth while its semantics move daily. Subsidy and Commercial are certified and stable and are
-**not** blocked by this.
+**Financials / Payments is pending for a measurable reason, not an editorial one.** Measured at
+staging `1492a2dd9` (2026-10-27): the last substantive semantic change under
+`web/lib/financials/payments` is `9e3774e0e` (2026-10-21, automatic responsibility-aware settlement),
+with **eight** commits under that path in the preceding seven days, and **five** quiet days at the
+tip — below the required seven. The seven-day gate therefore remains **CLOSED**. Payments V1/W7
+capabilities are **implemented** on staging; that does **not** make them certified AI context.
+Subsidy and Commercial are certified and stable and are **not** blocked by this.
 
 ## Authority model
 

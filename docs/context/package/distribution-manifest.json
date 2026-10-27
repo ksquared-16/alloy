@@ -11,13 +11,13 @@
     {
       "path": "docs/context/alloy-benchmark-context.md",
       "tier": 1,
-      "blob_sha": "4bd869190b2c4a4d88ad0e8698b9f0652c7c9d75",
+      "blob_sha": "659c73528c78ec46d33d0046f13fd2481c7519d4",
       "exists": true
     },
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "tier": 1,
-      "blob_sha": "d27c6ddfe0f420fc01159f7869559355c7c0bae5",
+      "blob_sha": "ff1738b8e89abf5b89399fe95db1cbe52ae1c84e",
       "exists": true
     },
     {
@@ -29,7 +29,7 @@
     {
       "path": "docs/context/alloy-platform-synthesis.md",
       "tier": 1,
-      "blob_sha": "87e65e4670334b61cc469579826abdc2b75b5f12",
+      "blob_sha": "9ae1fc7b7de31a8b82c0a90195287f33b6291d4f",
       "exists": true
     },
     {
@@ -95,7 +95,7 @@
     {
       "path": "docs/platform/governance/roles-and-permissions.md",
       "tier": 2,
-      "blob_sha": "fea4086c3946f937217ce83856098901fa71352f",
+      "blob_sha": "d4d41e6bac5c1f28c048e2723e119714fa5f1b8a",
       "exists": true
     },
     {
@@ -125,7 +125,7 @@
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "64f040e80df72e53a43d3eedb97c2c3d92fe7f55",
+      "blob_sha": "baa943f8f38926558a536b924e0256528f724239",
       "exists": true
     },
     {
@@ -293,7 +293,7 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "f4eb971c08922c9363fd94b8e89e0368885a298e",
+      "blob_sha": "7d8575647db65d217763c1d841f632a0a3beb072",
       "exists": true
     },
     {
@@ -323,13 +323,13 @@
     {
       "path": "docs/context/package/README.md",
       "tier": "contract",
-      "blob_sha": "08b3bee43d50cd85144c874f2e5492ed97e08496",
+      "blob_sha": "83368c4059ee8717d2da353da065d380a8d050a1",
       "exists": true
     },
     {
       "path": "docs/context/package/alloy-context-package.json",
       "tier": "manifest",
-      "blob_sha": "6a83eee735c1619bcc795d9bf2936c426fac6c33",
+      "blob_sha": "8b2325058d27a2e14759690817a0b598e67f2e65",
       "exists": true
     },
     {
