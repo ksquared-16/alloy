@@ -1240,15 +1240,15 @@ Payment method, autopay, provider, collection, settlement and deposit-lifecycle 
 
 Distinguish these states carefully:
 
-| State | Payments today (remeasured 2026-10-27 Slice 4 @ staging `6376564d3`) |
+| State | Payments today (remeasured 2026-10-27 Slice 5 @ staging `6376564d3`) |
 |---|---|
 | **Implemented** | Yes — source and operator surfaces on staging |
 | **Tested** | Substantial W7 / Director QA evidence exists; tests are not domain certification |
 | **Deployed** | Merged to staging; do not infer production solely from merge |
-| **Certified** (AI / context-package DIRECT) | **No** — lane remains `PENDING_DISABLED` (package status unchanged in Slice 4) |
+| **Certified** (AI / context-package DIRECT) | **No** — lane remains `PENDING_DISABLED` |
 | **Pending certification** | Yes — classification **PENDING — GATE** (stability prerequisite not satisfied) |
 
-### Stability gate — continuous elapsed quiet (remeasured Slice 4)
+### Stability gate — continuous elapsed quiet (remeasured Slice 5)
 
 Gate path: `web/lib/financials/payments`. Required: **seven consecutive quiet days** of continuous
 elapsed time (no calendar-day rounding). Unrelated documentation commits outside this path do not
@@ -1258,16 +1258,16 @@ reset the gate; only substantive path changes do.
 |---|---|
 | Staging tip at measurement | `6376564d37a8157ce9726b4a15be9f9e99e25cc5` (2026-10-27T09:53:42-07:00) |
 | Last Payments semantic change | `9e3774e0ef7e89c811b8293ee02804ed04d395ac` — 2026-10-21T11:15:18-07:00 — W7-F050/F051 ordinary automatic settlement |
-| Measurement instant (UTC) | 2026-10-27T17:40:33Z |
-| Continuous quiet elapsed | **516 315 s ≈ 5.975871 days** (< 7) |
+| Measurement instant (UTC) | 2026-10-27T18:14:03Z |
+| Continuous quiet elapsed | **518 325 s ≈ 5.999142 days** (< 7) |
 | Commits under path in preceding 7 days | **6** (all substantive Payments/Financials code or merges touching the path — none docs-only) |
 | Gate | **CLOSED** |
 | Earliest eligibility (if no further path change) | **2026-10-28T11:15:18-07:00** (`9e3774e0e` + 7×86400 s) |
 
-**Slice 4 decision:** do **not** run full Financials / Payments domain certification while the gate is
-closed. Do **not** enable the context-package lane. Recommended Slice 5 action once the gate opens
-*and* full certification passes: transition `financials-payments` from `PENDING_DISABLED` to the
-existing enabled Financials lane — do not invent a new lane.
+**Slice 5 decision:** gate still **CLOSED** — do **not** run full Financials / Payments domain
+certification; do **not** enable the context-package lane. Once the gate opens *and* full
+certification passes: transition `financials-payments` from `PENDING_DISABLED` to the existing
+enabled Financials lane — do not invent a new lane.
 
 Do **not** load Payments documents as certified DIRECT context while the gate is closed. Do **not**
 infer that shipped Payments capabilities are “future” or “deferred product.” Do **not** declare

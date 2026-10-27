@@ -17,9 +17,9 @@ contains several generations of design history, and most of it is not current tr
 |---|---|
 | **Version** | V2 |
 | **Certified** | 2026-09-30 |
-| **Base** | `3c4ac97f1` (staging), plus the Configuration and AI/BOS records carried in PR 1368 candidate `5d24b0d08` — **not yet on staging** |
+| **Base** | Staging tip for Slice 5 Financials gate / package measurement: `6376564d3` (2026-10-27). Historical September certification base `3c4ac97f1` remains provenance for older measured counts unless a section names a newer SHA. |
 | **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **Documents** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md); Documents: [`../platform/governance/document-security-model.md`](../platform/governance/document-security-model.md)) |
-| **Domains pending** | **Financials / Payments only** (context-lane hold) — measured at staging `1492a2dd9` (2026-10-27): stability gate **CLOSED**, **5** quiet days (&lt; 7); last semantic change `9e3774e0e` (2026-10-21); eight commits under `web/lib/financials/payments` in the preceding seven days |
+| **Domains pending** | **Financials / Payments only** (context-lane hold) — Slice 5 remasure at staging `6376564d3` (2026-10-27T18:14:03Z): gate **CLOSED**, continuous quiet **≈ 5.999 days** (&lt; 7); last semantic change `9e3774e0e` (2026-10-21T11:15:18-07:00); six commits in the preceding seven days; classification **PENDING — GATE**; earliest eligibility if quiet holds **2026-10-28T11:15:18-07:00** |
 
 **Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into three
 companion documents — [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current
@@ -109,15 +109,16 @@ raise what the family owes; ten production commands share the single capability 
 **no mounted HTTP write surface** — subsidy is command-dispatched, with exactly three durable writer
 services and zero unexplained writers.
 
-**FINANCIALS / PAYMENTS — NOT CERTIFIED, and deliberately so.** *(Live measurement 2026-10-27 at
-staging `1492a2dd9`.)* Payments V1 and W7 are **implemented** on staging (methods, collection,
+**FINANCIALS / PAYMENTS — NOT CERTIFIED, and deliberately so.** *(Slice 5 remasure 2026-10-27T18:14:03Z
+at staging `6376564d3`.)* Payments V1 and W7 are **implemented** on staging (methods, collection,
 settlement, autopay surfaces under `web/lib/financials/payments` and related settlement authorities).
 Implementation is not certification. The seven-day quiet gate under `web/lib/financials/payments`
-remains **CLOSED**: last substantive change `9e3774e0e` (2026-10-21), five quiet days at tip, eight
-commits in the preceding seven days. Freezing Payments into DIRECT context while the gate is closed
-would describe semantics that are still inside the stability window. Historical note: the 2026-09-30
-certification pass measured `75c1a016c` with zero quiet days — that snapshot is provenance, not live
-state.
+remains **CLOSED**: last substantive change `9e3774e0e` (2026-10-21T11:15:18-07:00), continuous quiet
+**≈ 5.999 days**, six commits in the preceding seven days. Classification **PENDING — GATE**.
+Earliest eligibility if quiet holds: **2026-10-28T11:15:18-07:00**. Freezing Payments into DIRECT
+context while the gate is closed would describe semantics still inside the stability window.
+Historical note: the 2026-09-30 certification pass measured `75c1a016c` with zero quiet days — that
+snapshot is provenance, not live state.
 
 **COMMERCIAL — superseded by the Commercial section below, which certifies it.** The paragraph that
 follows records the state at the time of the money pass and the misinformation it corrected; read the
@@ -150,11 +151,13 @@ and FK-guarded; what makes them unusual is that they administer the retired **Jo
 vertical (`pricing_*`, zero rows, including `pricing_first_clean_prices` and
 `pricing_square_footage_tiers`), not childcare tuition, which lives in `commercial_tuition_rates`.
 
-**FINANCIALS / PAYMENTS — STABILITY GATE CLOSED (remeasured 2026-10-27).** Latest substantive
-Payments semantic commit under `web/lib/financials/payments` is `9e3774e0e`, **2026-10-21**
-(automatic responsibility-aware settlement). The gate requires seven consecutive quiet days; at
-staging tip `1492a2dd9` there were **five**. Not certified, and not attempted. (The 2026-09-30
-measurement of `75c1a016c` / zero quiet days is historical.)
+**FINANCIALS / PAYMENTS — STABILITY GATE CLOSED (Slice 5 remasure 2026-10-27T18:14:03Z @ staging
+`6376564d3`).** Latest substantive Payments semantic commit under `web/lib/financials/payments` is
+`9e3774e0e`, **2026-10-21T11:15:18-07:00** (automatic responsibility-aware settlement). Continuous
+quiet **≈ 5.999 days** (&lt; 7); six path commits in the preceding seven days; classification
+**PENDING — GATE**. Earliest eligibility if quiet holds: **2026-10-28T11:15:18-07:00**. Not certified,
+and full domain certification not attempted while the gate is closed. (The 2026-09-30 measurement of
+`75c1a016c` / zero quiet days is historical.)
 
 **OPERATIONAL INTELLIGENCE — one authority hole found and repaired; certification still outstanding.**
 `admin/operational-questions/answer` POST answered a question and, by default, appended the observation
@@ -224,12 +227,14 @@ truth · SMS or announcements are unused because this stack has no rows for them
 
 **CONFIGURATION — CERTIFIED.** DIRECT:
 [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md).
-84 route files / 117 handlers / 62 writes / 67 UI pages. **It has four lifecycles, not one** —
-`org_settings.metadata` is a single JSON document mutated in place; `entity_layouts` is append-only
-(republish, never edit); Business Process runs draft → validate → publish → immutable revision; Programs
-adds publish → distribute. The publish/distribute machinery holds **zero rows** on the certification stack,
-and `business_process_revisions` is 0 against 2 drafts, so nothing has been published there. AI-assisted
-configuration separates **generate / review / apply** into three capabilities: proposing confers nothing.
+84 route files / 117 handlers / 62 writes / 67 UI pages. **It has four shared lifecycles, not one** —
+`org_settings.metadata` is a single JSON document mutated in place; `entity_layouts` is **versioned
+draft/published with in-place updates** (not append-only); Business Process runs draft → validate →
+publish → immutable revision; Programs adds publish → distribute. Forms/Documents versioning remains
+**domain-owned** (Director: no fifth shared lifecycle). The publish/distribute machinery holds **zero
+rows** on the certification stack, and `business_process_revisions` is 0 against 2 drafts, so nothing
+has been published there. AI-assisted configuration separates **generate / review / apply** into three
+capabilities: proposing confers nothing.
 
 **AI/BOS — CERTIFIED.** DIRECT: [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md)
 and `trust-platform.md`. REFERENCE_ON_DEMAND: `privacy-runtime.md`, `information-classification.md`,
@@ -256,12 +261,13 @@ durable truth · AI bypasses capability checks · surface access is action autho
 local models or self-hosted inference are current · a route under the AI path necessarily invokes a
 model · an OI metric is model inference.
 
-**Context-lane scoreboard (remeasured 2026-10-27; package revision at staging `1464197d0`).** Every
+**Context-lane scoreboard (Slice 5 remasure 2026-10-27; staging tip `6376564d3`).** Every
 *registered* context-package domain lane is certified except **Financials/Payments**, held by the
-seven-day stability gate — last change `9e3774e0e` (2026-10-21), **5 quiet days** (&lt; 7).
-**Documents** is now a certified context lane (Director D-01): D1a–D5 hosted-certified; **D6 hosted
-ZERO_RESIDUE remains open debt** and must not be inferred closed. **Tours** routes provisionally
-under Enrollment / Placement (Director D-02) — no separate Tours lane.
+seven-day stability gate — last change `9e3774e0e` (2026-10-21), **≈ 5.999 quiet days** (&lt; 7),
+**PENDING — GATE**. **Documents** is a certified context lane (Director D-01): D1a–D5 hosted-certified;
+**D6 hosted ZERO_RESIDUE remains open debt** and must not be inferred closed. **Hosted Forms
+builder→publish→public-submit behavioral proof** remains an explicit Slice 5 certification gap.
+**Tours** routes provisionally under Enrollment / Placement (Director D-02) — no separate Tours lane.
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -288,10 +294,10 @@ than tidied away.
 | Commercial | CERTIFIED | `COMMERCIAL_…` | [`../platform/modules/commercial-configuration.md`](../platform/modules/commercial-configuration.md) | pending DELETE declarations on the **retired Jobs/Booking** pricing vertical; this manifest says *five* in the Commercial section and *six* in the money section — one is wrong and the Commercial owner should settle it | a new pricing or catalog table |
 | Operational Intelligence | CERTIFIED | `OPERATIONAL_INTELLIGENCE_…` | **record:** §0 of [`../platform/core/operational-calculations.md`](../platform/core/operational-calculations.md) | the module narrative [`../platform/modules/operational-intelligence-platform.md`](../platform/modules/operational-intelligence-platform.md) is `last_reviewed` 2026-07-28 and does **not** carry the record | a new registered metric key or Answer consumer |
 | Communications | CERTIFIED | `COMMUNICATIONS_…` | [`../platform/modules/communications-platform.md`](../platform/modules/communications-platform.md) | — | a provider change or addition |
-| Configuration | CERTIFIED | `CONFIGURATION_…` | [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md) | Programs publication chain is built with **zero rows**; **record is on PR 1368, not yet on staging** | first rows in the publication chain; a fifth lifecycle |
+| Configuration | CERTIFIED | `CONFIGURATION_…` | [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md) | Programs publication chain is built with **zero rows**; Forms/Documents versioning domain-owned (no fifth shared lifecycle) | first rows in the publication chain; Director-ratified shared-lifecycle change only |
 | Documents | CERTIFIED | per-slice records under `certification/documents-v1/` (Q1, D1b–D5 ZERO_RESIDUE where recorded) | [`../platform/governance/document-security-model.md`](../platform/governance/document-security-model.md) | **D6 hosted ZERO_RESIDUE unfinished**; D7 validity not in scope; D1c-2 malware deferred | access-door / filing / storage / requirements-evaluator change |
 | AI / BOS | CERTIFIED | `AI_BOS_…` | [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md) | two of four Trust capabilities are deterministic — a fact, not debt; **record is on PR 1368, not yet on staging** | a new provider or adapter |
-| **Financials / Payments** | **PENDING** | — | **none as DIRECT — do not load a Payments document as current truth** | implemented on staging (V1/W7); **not certified**; gate CLOSED (5/7 quiet days at `1492a2dd9`) | seven consecutive quiet days under `web/lib/financials/payments`, then a full domain certification |
+| **Financials / Payments** | **PENDING — GATE** | — | **none as DIRECT — do not load a Payments document as current truth** | implemented on staging (V1/W7); **not certified**; gate CLOSED (≈5.999/7 quiet days at `6376564d3`) | seven consecutive quiet days under `web/lib/financials/payments`, then a full domain certification |
 
 **Declarations reconcile to twelve named tokens for fifteen certified rows** (plus Financials
 pending). Operations temporal truth shares the Enrollment/Placement declaration; Subsidy has no
@@ -302,11 +308,12 @@ prevent.
 
 ## Financials / Payments — what may enter context now
 
-Financials/Payments is **PENDING**, and the reason is measurable rather than editorial. Measured at
-staging `1492a2dd9` (2026-10-27): the last substantive semantic change under
-`web/lib/financials/payments` is `9e3774e0e` (2026-10-21), with eight commits under that path in the
-preceding seven days and five quiet days at the tip. The seven-day gate is **CLOSED**. Payments
-capabilities are **implemented** (V1/W7); they are **not certified** for AI DIRECT context.
+Financials/Payments is **PENDING — GATE**, and the reason is measurable rather than editorial.
+Slice 5 remasure at staging `6376564d3` (2026-10-27T18:14:03Z): last substantive change under
+`web/lib/financials/payments` is `9e3774e0e` (2026-10-21T11:15:18-07:00), six commits in the preceding
+seven days, continuous quiet **≈ 5.999 days**. The seven-day gate is **CLOSED**. Earliest eligibility
+if quiet holds: **2026-10-28T11:15:18-07:00**. Payments capabilities are **implemented** (V1/W7); they
+are **not certified** for AI DIRECT context.
 
 **Allowed into context now:**
 

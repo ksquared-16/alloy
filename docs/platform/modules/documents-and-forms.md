@@ -286,7 +286,13 @@ Do **not** infer support in one layer from another. Schema ≠ builder ≠ UI �
 
 **Publication contract:** `form_definition_versions` draft → published → archived with DB immutability on
 published payloads. Studio publish is save → patch metadata → publish (three calls). Concurrent draft
-edits are last-write-wins (no draft CAS token). Branding is snapshotted at publish.
+edits are last-write-wins (no draft CAS token). Branding is snapshotted at publish. Forms/Documents
+versioning is **domain-owned** — not a fifth shared Configuration lifecycle (Director Slice 5).
+
+**Hosted behavioral certification (Slice 5):** unit/contract coverage exists for the five-layer matrix
+above. A governed hosted builder → publication → public-submission walkthrough for conditionals,
+multiselect, derived values, option sets, and source bindings was **not obtained** in Slice 5 —
+retain as an explicit certification evidence gap (do not treat unit green as hosted proof).
 
 **Documents dependency:** `file_ref.document_type` is a free string; Forms Studio does not pick from the
 published Documents catalog. Empty values fall back to `enrollment_document`. Real uploads run through
