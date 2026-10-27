@@ -140,4 +140,87 @@ was added because nothing could accept or reject a version outside filing: `docu
 
 ### Promotion, hosted certification and residue
 
-Recorded below as they happen.
+| Step | Evidence |
+|---|---|
+| Merge | PR #1605 merged as `1492a2dd9fdbb36cde05db1e734e71b550e875dd` (`gar_e116e09609e758`, release `spr_f32e5f74b3a3` for checkpoint `ick_9fd5861b6730` / `dfa2fc79837a`) |
+| Migration | `20261212090000` registered by the merge's Supabase integration; physical-state census `gar_1344ea127f1c6b` **20/20 true**; documents/versions 378/378 intact (`d6-requirements-physical-state-census.sql.results.json`) |
+| Deployment | staging `/api/build-info` gitSha `1492a2dd9fdbb36cde05db1e734e71b550e875dd`, deployment `dpl_H9cyKSZcBYGAABiaUkENGkviyJ5h`, Supabase `ikaxilmwmrmbagoidedu` — read before the run and again before certify (2026-10-27 ~15:38Z and ~15:49Z) |
+| Stale release | `spr_094ccaabc8c8` (checkpoint `ick_6ffc98180fb1`, candidate `6995e65b`, before the slice-6 repair) was revoked by the toolkit itself when `ick_9fd5861b6730` superseded its checkpoint (`sprint-objective.mjs`: "superseded by …"), then replaced in the sprint's single release slot by `spr_f32e5f74b3a3`; the hold is PROMOTED. It survives only as a history row and can authorize nothing (`sprintHoldDecision` reads the current slot; `applyRelease` refuses a PROMOTED sprint). No revocation was filed: there is no live release to revoke, and a revocation could only touch the current authority |
+
+#### Hosted certification — run `qar_af1c638fd52a` (authz_q1, `alloy_staging_web`, hosted authority declared)
+
+Opened by `gar_979f192ad518f1` on run `erun2_a8cdd83d5836194a`. Fixtures seeded by `gar_d95cc0973a3a9b` (vendors),
+`gar_dac40b5e248865` (subjects), `gar_ef01ec315dfd8c` (secondary).
+
+| Gate | Result | Evidence |
+|---|---|---|
+| **D6 requirements** (`d6_hosted_requirements_cert.py`) | **73/74** | `d6_hosted_requirements_cert_results.qar_af1c638fd52a.json` |
+| Q1 authorization | 90/90 | `q1_hosted_authz_cert_results.qar_af1c638fd52a.json` |
+| D1b security | 37/37 (+ lead deletion 7/7) | `d1b_hosted_security_cert_results…`, `d1b_lead_delete_results.qar_af1c638fd52a.json` |
+| D2 foundation | 40/40 | `d2_hosted_foundation_cert_results.qar_af1c638fd52a.json` |
+| D3 Studio | 40/40 | `d3_hosted_studio_cert_results.qar_af1c638fd52a.json` |
+| D4 household library | 41/41 | `d4_hosted_library_cert_results.qar_af1c638fd52a.json` |
+| D5 Processing filing | 59/59 | `d5_hosted_filing_cert_results.qar_af1c638fd52a.json` |
+| Browser walk (`d6_hosted_browser_walk.mjs`) | 5/8 | `d6_hosted_browser_walk_results.qar_af1c638fd52a.json`, `d6-human-qa/` |
+
+The D6 driver covers, from every persona: authoring authority (only `processing.documents.manage` creates); database
+validation (a child-only type refused for a household); delete of a never-published requirement, refusal for a
+published one; invalid key; validate → publish with compare-and-swap; one live definition per (type, grain, scope);
+missing → satisfied (no-review type) with the work row disappearing; a medical requirement invisible (readiness and
+work) to a reader without `health.view`; pending review → rejected (reason required) → blocked → accepted → satisfied;
+review authority (`documents.write`), cross-organization 404; waivers (non-waivable, reason, grain, authority,
+cross-organization, a second active waiver, waived → not blocking, work gone, history with clearance filtering,
+revoke, revoke twice refused, work back); quarantined evidence blocking without disclosing its id, and not reviewable;
+department-restricted and cross-organization isolation; revision (v2 optional, supersedes v1, history kept, optional
+never blocks or makes work); archive (stops applying, cannot be waived, never deleted without the run's id, another
+run's id refused).
+
+**The one failure is a product defect, recorded and not repaired in D6:** after rejecting and then accepting the same
+version, the document history showed only "Review accepted". `documentHistory.ts` derived review entries from the
+version row's CURRENT `review_status`, so each decision overwrote the last; the audit stream (`document_version_reviewed`)
+held both. D7.2 repairs it with an append-only review history (`document_version_review_events`, migration
+`20261213090000`) and is certified locally (`D7-REVIEW-EXPIRATION-RENEWAL.md`); it is not deployed.
+
+**Browser walk** (fixture_admin session, visible controls; the run's requirement re-published as required v3 for the
+walk): Processing → Work → Documents → Missing documents lists the unmet requirement per child with due dates
+(`within_days 14`), Satisfied children absent, the row detail names the action, the due date and a reason-required
+waive (`01-missing-documents.png`, `02-missing-row-detail.png`); Studio → Documents → Requirements lists it
+(`03-studio-requirements.png`); the surfaces read only `GET …/requirements/work` and `GET …/configuration/requirements`.
+**Not reached by clicking:** the Focus Panel readiness card. "Open the record's documents" on a child row lands on the
+child's durable record, which on QA Shared's published child surface has no Documents card (`05a-open-record-child-view.png`);
+search reached the adult's staff surface (`05c-adult-opened.png`). Readiness itself is certified through the API above
+(and D4.7 reached the library through the case Focus Panel's Activity → Documents). Carried as a D7.4 finding; it needs a
+Human-QA decision on where a child's Documents card lives.
+
+#### Teardown and ZERO_RESIDUE
+
+- D6 reset: both run requirements archived and purged through `DELETE …?qa_run_id=qar_af1c638fd52a`
+  (`document_requirement_purge`: 3 versions + 0 waivers, 1 version + 1 waiver), the quarantined upload POS-deleted, the
+  household removed by lead deletion; every requirement, document and the household library 404 (`all_gone: true`).
+- D5 reset (all gone), D4 reset (household and orphaned guardian), D1b lead deletion and teardown, Q1, D2, D3 teardowns.
+- Registered resets `gar_7a7d053ac793d5`, `gar_341f57f968ff69`, `gar_05735f05af9431`.
+- Close `gar_ac198181b7143c` (17:18:00Z): **ZERO_RESIDUE**, access clean, 7/7 sessions signed out, 0 custom-role grants.
+- Census: the D6-extended census (`eb702fb6…`, `gar_53d6744eb1cf1a`) **15/15 zero** including `doc_zr_d6_requirements`,
+  `doc_zr_d6_requirement_versions`, `doc_zr_d6_waivers` (`d6_zero_residue_extended_census.qar_af1c638fd52a.json`).
+  Binding it was refused (`qa_residue_census_rejected`): the authz_q1 plan's registered census is hash-pinned to the
+  pre-D6 file (`3be83854…`). The registered census was run on that exact content (`gar_36a8179c88d9bc`, 12/12 zero) and
+  bound by `gar_dc0e6f3915ff4c` (`documents-zero-residue-census.sql.results.json`). **Gap for the toolkit owner:** the
+  registered residue census does not include D6's requirement checks; until its pin moves to `eb702fb6…`, a bound
+  ZERO_RESIDUE does not by itself prove zero requirement residue (this run proved it separately).
+
+#### Sprint
+
+`OPWORK_AA660DC9554D_SPRINT_362F6FBDCB83` reads PROMOTED, `next: evidence each completion condition`. The conditions
+could not be evidenced from this session: run `erun2_a8cdd83d5836194a` is attributed to no objective
+(`vac sprint condition … run_not_attributed`), and attribution is the Director's (a run dispatched for the objective).
+Evidence for each condition: c1 authoring + applicability (D6 driver §1–3, §10–11); c2 evaluator transitions (§4–8);
+c3 waivers (§7); c4 Processing / Work Items / Focus Panel parity (driver §4–6, browser W1–W4, W6; Focus Panel by API);
+c5 Business Process readiness (local: `tests/documents/documentsD6BusinessProcess.test.ts`; not separately exercised on
+staging — no Business Process stage requirement names a document type in QA Shared); c6 isolation (§9, §6 clearance);
+c7 regressions Q1 90, D1b 37, D2 40, D3 40, D4 41, D5 59, browser walk, ZERO_RESIDUE (above).
+
+## Status
+
+D6 hosted certification on the deployed build `1492a2dd`: **D6 73/74** (one recorded defect, repaired in D7, not
+deployed), all regressions green, browser walk 5/8 (Focus Panel readiness reached by API only), ZERO_RESIDUE bound.
+Sprint closure awaits the Director's attribution of a run to `OPWORK_AA660DC9554D_SPRINT_362F6FBDCB83`.
