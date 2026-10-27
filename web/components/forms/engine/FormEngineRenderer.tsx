@@ -18,7 +18,7 @@ import type {
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { isPlacementOnlyForParticipant } from "@/lib/forms/placementOnlyFields";
-import { composeRuntimeRows, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
+import { composeRuntimeRows, RUNTIME_FORM_CONTAINER_CLASS, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
@@ -998,7 +998,7 @@ export function FormEngineRenderer({
                 titlesEquivalent(block.content, schema.title ?? "")
         );
         return (
-            <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+            <div className={clsx(RUNTIME_FORM_CONTAINER_CLASS, "mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
                 {!compositionHasTitleHeading ?
                     <header>
                         <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>
@@ -1025,7 +1025,7 @@ export function FormEngineRenderer({
     }
 
     return (
-        <div className={clsx("mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
+        <div className={clsx(RUNTIME_FORM_CONTAINER_CLASS, "mx-auto max-w-xl space-y-8", loose && "max-w-full px-3 py-4")}>
             <header>
                 <h1 className={clsx("text-xl font-semibold text-neutral-900", loose && "text-lg")}>{schema.title}</h1>
             </header>

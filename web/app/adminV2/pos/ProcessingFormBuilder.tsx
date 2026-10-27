@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { composeRuntimeRows, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
+import { composeRuntimeRows, RUNTIME_FORM_CONTAINER_CLASS, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { FORM_SUBMIT_LABEL_MAX, formSubmitLabel } from "@/lib/forms/schema";
@@ -729,7 +729,7 @@ export function FormPreview({
     const fieldById = useMemo(() => new Map(schema.fields.map((f) => [f.id, f])), [schema.fields]);
     const accent = branding.accent_color || DEFAULT_FORM_ACCENT;
     return (
-        <div className="mx-auto max-w-2xl space-y-5" data-testid="form-builder-preview">
+        <div className={`${RUNTIME_FORM_CONTAINER_CLASS} mx-auto max-w-2xl space-y-5`} data-testid="form-builder-preview">
             <ProcessingFormBrandedHeader title={schema.title} branding={branding} runtime={runtime} />
             <div className="rounded-2xl border border-alloy-stone/15 bg-white p-6 shadow-sm">
             <div className="space-y-6">

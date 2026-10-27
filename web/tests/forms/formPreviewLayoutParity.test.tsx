@@ -45,10 +45,10 @@ const branding = { brand_name: "", accent_color: DEFAULT_FORM_ACCENT, logo_url: 
 function rowsOf(html: string): { rowClass: string; spans: string[] }[] {
     const doc = new DOMParser().parseFromString(html, "text/html");
     return [...doc.querySelectorAll("div")]
-        .filter((el) => el.className.includes("md:grid-cols-12"))
+        .filter((el) => el.className.includes("@md:grid-cols-12"))
         .map((row) => ({
             rowClass: row.className,
-            spans: [...row.children].map((c) => (c.className.match(/md:col-span-\d+/) ?? [""])[0]!),
+            spans: [...row.children].map((c) => (c.className.match(/@md:col-span-\d+/) ?? [""])[0]!),
         }));
 }
 
@@ -61,7 +61,7 @@ describe("P1-C — Preview lays a form out exactly as the public runtime does", 
     it("half-width parent fields share a row in Preview (they used to wrap one per line)", () => {
         const rows = rowsOf(preview);
         expect(rows.length).toBeGreaterThanOrEqual(2);
-        expect(rows[0]!.spans).toEqual(["md:col-span-6", "md:col-span-6"]);
+        expect(rows[0]!.spans).toEqual(["@md:col-span-6", "@md:col-span-6"]);
     });
 
     it("Preview and runtime compose the same rows with the same cell spans, in the same order", () => {
@@ -84,7 +84,16 @@ describe("P1-C — Preview lays a form out exactly as the public runtime does", 
     });
 
     it("Preview uses the runtime's available width (ParentIntakeShell main is max-w-2xl)", () => {
-        expect(preview).toContain('class="mx-auto max-w-2xl space-y-5" data-testid="form-builder-preview"');
+        expect(preview).toContain('class="@container mx-auto max-w-2xl space-y-5" data-testid="form-builder-preview"');
+    });
+
+    it("rows follow the FORM's width, not the window's — so a framed form keeps its columns", () => {
+        // Both roots are the query container; the rows switch at @md (28rem of form width). A viewport
+        // breakpoint (md = 768px) collapsed a 542px-wide form inside a 760px iframe while the same
+        // 542px form standalone on a laptop kept two columns.
+        expect(preview).toMatch(/class="@container [^"]*" data-testid="form-builder-preview"/);
+        expect(runtime).toMatch(/^<div class="@container /);
+        expect(`${preview}${runtime}`).not.toMatch(/[\s"]md:(grid-cols|col-span)-/);
     });
 });
 
