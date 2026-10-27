@@ -260,10 +260,13 @@ Migration `supabase/migrations/20261212090000_documents_d6_requirements.sql`. Se
   quarantined document cannot be reviewed); only the current version; a rejection needs a reason;
   `document_version_reviewed` is recorded first.
 - **Audit:** `document_requirement_changed` (create, draft, publish, archive, delete, purge_fixture) before the change.
-- **History is kept.** A published or waived requirement is archived, never deleted. The single exception is the QA
-  fixture namespace: an ARCHIVED requirement whose key starts with `qa_` is purged with its versions and waivers by the
-  audited requirement DELETE (`document_requirement_purge`, service role, re-checks both conditions), so a governed
-  hosted certification can end ZERO_RESIDUE. The zero-residue census checks it (`doc_zr_d6_*`).
+- **History is kept.** A published or waived requirement is archived, never deleted. The single exception is a governed
+  QA run's own fixture: in a registered QA organization (QA Shared / QA Secondary — never Firefly or a tenant), an
+  ARCHIVED requirement whose key is in the named run's namespace (`qa_<run>_…` for `?qa_run_id=qar_<run>`) is purged
+  with its versions and waivers by the audited requirement DELETE (`document_requirement_purge(org, id, qa_run_id)`,
+  service role, re-checks every bound; a refusal changes nothing). The guards honour the purge only inside that
+  function (its owner), never a session that sets the purge setting itself. So a governed hosted certification can
+  end ZERO_RESIDUE. The zero-residue census checks it (`doc_zr_d6_*`).
 
 ## 8. Certification
 

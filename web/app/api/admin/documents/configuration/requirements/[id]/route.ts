@@ -21,9 +21,10 @@ import {
  * PATCH   { action: "archive" | "activate" }. An archived requirement stops applying: its work disappears and it can no
  *         longer be waived; its identity, versions and waiver history are kept. `processing.documents.manage`.
  * DELETE  only a requirement never published and never waived; otherwise archive it. `processing.documents.manage`.
- *         The one exception is the QA fixture namespace: an ARCHIVED requirement whose key starts with `qa_` is purged
- *         with its versions and waivers (`document_requirement_purge`, which re-checks both), so a governed hosted
- *         certification can end with zero residue. Every real requirement keeps its history.
+ *         The one exception is a governed QA run's own fixture: `?qa_run_id=qar_<run>` in a registered QA organization
+ *         (QA Shared / QA Secondary) purges an ARCHIVED requirement whose key is in that run's namespace (`qa_<run>_…`)
+ *         with its versions and waivers (`document_requirement_purge`, which re-checks every bound), so a governed
+ *         hosted certification can end with zero residue. Every tenant requirement keeps its history.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -68,7 +69,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ ok: true, ...changed.value });
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const denied = requireDocumentConfigurationWrite(ctx);
@@ -79,7 +80,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const supabase = createAdminClient();
     const got = await getRequirement(supabase, ctx.orgId, id);
     if (!got.ok) return NextResponse.json({ ok: false, error: "Requirement not found", code: got.code }, { status: got.status });
-    const purge = requirementIsPurgeableFixture(got.value.requirement);
+    const qaRunId = request.nextUrl.searchParams.get("qa_run_id");
+    const purge = requirementIsPurgeableFixture(ctx.orgId, got.value.requirement, qaRunId);
 
     const audit = await recordDocumentAudit({
         orgId: ctx.orgId,
@@ -87,12 +89,12 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
         event: "document_requirement_changed",
         subject: { type: "document_requirements", id },
         route: "admin/documents/configuration/requirements",
-        detail: { action: purge ? "purge_fixture" : "delete", key: got.value.requirement.key, versions: got.value.versions.length },
+        detail: { action: purge ? "purge_fixture" : "delete", key: got.value.requirement.key, versions: got.value.versions.length, ...(purge ? { qa_run_id: qaRunId } : {}) },
     });
     if (!audit.ok) return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
 
     if (purge) {
-        const purged = await purgeFixtureRequirement(supabase, ctx.orgId, id);
+        const purged = await purgeFixtureRequirement(supabase, ctx.orgId, id, qaRunId!);
         if (!purged.ok) return NextResponse.json({ ok: false, error: "The fixture requirement could not be purged.", code: purged.code }, { status: purged.status });
         return NextResponse.json({ ok: true, deleted: true, purged: true, id, ...purged.value });
     }

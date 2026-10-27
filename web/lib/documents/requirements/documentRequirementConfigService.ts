@@ -9,6 +9,7 @@
  * never re-implements a guard the database already holds.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isForbiddenQaOrgId, isRegisteredQaOrgId } from "@/lib/qa/sharedQaRegistry";
 
 import {
     documentRequirementDraftProblems,
@@ -250,20 +251,32 @@ export async function setRequirementStatus(
     return { ok: true, value: data as { id: string; status: string } };
 }
 
-/** The QA fixture key namespace: only an ARCHIVED requirement whose key matches is ever purged (`document_requirement_purge`). */
-export const QA_FIXTURE_REQUIREMENT_KEY = /^qa_[a-z0-9_]+$/;
+/**
+ * The QA fixture purge is bounded by organization AND run: only an ARCHIVED requirement in a registered QA organization
+ * (QA Shared / QA Secondary, never Firefly or a tenant) whose key is in the named governed run's namespace
+ * (`qa_<run>_…` for `qar_<run>`) is ever purged. `document_requirement_purge` re-checks every condition.
+ */
+export const QA_RUN_ID = /^qar_([a-z0-9]{8,40})$/;
 
-export function requirementIsPurgeableFixture(r: { key: string; status: string }): boolean {
-    return r.status === "archived" && QA_FIXTURE_REQUIREMENT_KEY.test(r.key);
+export function qaRunRequirementPrefix(qaRunId: string): string | null {
+    const m = QA_RUN_ID.exec(qaRunId);
+    return m ? `qa_${m[1]}_` : null;
 }
 
-/** Remove an archived QA fixture requirement with its versions and waivers (the database re-checks both conditions). */
+export function requirementIsPurgeableFixture(orgId: string, r: { key: string; status: string }, qaRunId: string | null | undefined): boolean {
+    if (r.status !== "archived" || !qaRunId || !isRegisteredQaOrgId(orgId) || isForbiddenQaOrgId(orgId)) return false;
+    const prefix = qaRunRequirementPrefix(qaRunId);
+    return prefix !== null && r.key.startsWith(prefix) && /^qa_[a-z0-9_]+$/.test(r.key);
+}
+
+/** Remove an archived QA run's fixture requirement with its versions and waivers (the database re-checks every bound). */
 export async function purgeFixtureRequirement(
     supabase: SupabaseClient,
     orgId: string,
     requirementId: string,
+    qaRunId: string,
 ): Promise<RequirementConfigResult<{ requirement_id: string; versions: number; waivers: number }>> {
-    const { data, error } = await supabase.rpc("document_requirement_purge", { p_org_id: orgId, p_requirement_id: requirementId });
+    const { data, error } = await supabase.rpc("document_requirement_purge", { p_org_id: orgId, p_requirement_id: requirementId, p_qa_run_id: qaRunId });
     if (error) return refusal(error);
     return { ok: true, value: data as { requirement_id: string; versions: number; waivers: number } };
 }

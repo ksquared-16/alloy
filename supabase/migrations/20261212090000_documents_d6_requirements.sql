@@ -20,8 +20,9 @@
 -- A waiver waives a REQUIREMENT for a subject. It is not evidence, grants no access to any document, never touches a
 -- document's status (so it cannot release a quarantine) and says nothing about any other Business Process rule.
 --
--- History is kept: a published or waived requirement is archived, never deleted. The one exception is the QA fixture
--- namespace: an ARCHIVED requirement whose key starts with `qa_` may be purged (with its versions and waivers) by the
+-- History is kept: a published or waived requirement is archived, never deleted. The one exception is a governed QA
+-- run's own fixture: an ARCHIVED requirement in a registered QA organization (QA Shared / QA Secondary) whose key is in
+-- that run's namespace (`qa_<run>_…` for run `qar_<run>`) may be purged, with its versions and waivers, by the
 -- service-role function `document_requirement_purge`, so a governed hosted certification can end with zero residue.
 --
 -- Additive, re-runnable, self-verifying. Rollback: drop the three tables and the functions created here; nothing
@@ -135,11 +136,24 @@ GRANT ALL ON TABLE public.document_requirement_versions TO service_role;
 GRANT ALL ON TABLE public.document_requirement_waivers TO service_role;
 
 -- ── 2. guards ─────────────────────────────────────────────────────────────────────────────────────────────────
+-- The guards let a DELETE through only inside `document_requirement_purge` itself: the purge setting must be on AND the
+-- statement must run as the purge function's owner (SECURITY DEFINER). A service-role session that sets the setting
+-- by hand runs as service_role and is still refused.
+CREATE OR REPLACE FUNCTION public.document_requirement_purge_active()
+RETURNS boolean LANGUAGE sql STABLE SET search_path = public AS $$
+    SELECT coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on'
+       AND EXISTS (SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid = p.proowner
+                    WHERE p.oid = to_regprocedure('public.document_requirement_purge(uuid,uuid,text)')
+                      AND o.rolname = current_user);
+$$;
+REVOKE ALL ON FUNCTION public.document_requirement_purge_active() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.document_requirement_purge_active() TO service_role;
+
 CREATE OR REPLACE FUNCTION public.document_requirements_guard()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+        IF public.document_requirement_purge_active() THEN
             RETURN OLD;  -- the QA fixture purge (document_requirement_purge) only
         END IF;
         IF OLD.published_version_id IS NOT NULL
@@ -179,7 +193,7 @@ DECLARE
     v_changed boolean;
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+        IF public.document_requirement_purge_active() THEN
             RETURN OLD;
         END IF;
         IF OLD.status IN ('published', 'superseded') AND EXISTS (SELECT 1 FROM public.document_requirements r WHERE r.id = OLD.requirement_id) THEN
@@ -237,7 +251,7 @@ CREATE OR REPLACE FUNCTION public.document_requirement_waivers_guard()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        IF coalesce(current_setting('alloy.document_requirement_purge', true), '') = 'on' THEN
+        IF public.document_requirement_purge_active() THEN
             RETURN OLD;
         END IF;
         IF EXISTS (SELECT 1 FROM public.document_requirements r WHERE r.id = OLD.requirement_id) THEN
@@ -486,19 +500,36 @@ $$;
 
 -- ── 4a. the QA fixture purge ─────────────────────────────────────────────────────────────────────────────────
 -- Real requirements keep their history forever. A governed hosted certification, however, must leave no residue, so
--- ONE narrow exception exists: an ARCHIVED requirement in the QA fixture key namespace (`qa_…`) is removed with its
--- versions and waivers. Service role only; never reachable from a product route.
-CREATE OR REPLACE FUNCTION public.document_requirement_purge(p_org_id uuid, p_requirement_id uuid)
+-- ONE narrow exception exists, bounded by organization AND run:
+--   * the organization is a registered QA organization (QA Shared, QA Secondary) — never Firefly, never any tenant;
+--   * the caller names the governed QA run (`qar_<run>`), and the requirement's key is in THAT run's namespace
+--     (`qa_<run>_…`), so a run removes only what it created and a tenant's `qa_…` key is never eligible;
+--   * the requirement is ARCHIVED.
+-- It is then removed with its versions and waivers. Every refusal raises before anything is touched. Service role
+-- only; the one caller is the audited requirement DELETE.
+DROP FUNCTION IF EXISTS public.document_requirement_purge(uuid, uuid);
+CREATE OR REPLACE FUNCTION public.document_requirement_purge(p_org_id uuid, p_requirement_id uuid, p_qa_run_id text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
     r record;
+    v_run text;
     n_versions int;
     n_waivers int;
 BEGIN
+    -- The QA organizations of web/lib/qa/sharedQaRegistry.ts (QA_ORGS); Firefly is never one of them.
+    IF p_org_id IS NULL OR p_org_id NOT IN ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid) THEN
+        RAISE EXCEPTION 'document_requirement_purge_refused: only a registered QA organization purges fixture requirements'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    v_run := substring(coalesce(p_qa_run_id, '') FROM '^qar_([a-z0-9]{8,40})$');
+    IF v_run IS NULL THEN
+        RAISE EXCEPTION 'document_requirement_purge_refused: a governed QA run id (qar_…) is required'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
     SELECT * INTO r FROM public.document_requirements WHERE id = p_requirement_id AND org_id = p_org_id FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'document_requirement_not_found' USING ERRCODE = 'no_data_found'; END IF;
-    IF r.key !~ '^qa_[a-z0-9_]+$' THEN
-        RAISE EXCEPTION 'document_requirement_purge_refused: only QA fixture requirements (key qa_…) are purged; others are archived'
+    IF left(r.key, length('qa_' || v_run || '_')) <> 'qa_' || v_run || '_' OR r.key !~ '^qa_[a-z0-9_]+$' THEN
+        RAISE EXCEPTION 'document_requirement_purge_refused: only this QA run''s fixture requirements (key qa_<run>_…) are purged; others are archived'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF r.status <> 'archived' THEN
@@ -507,15 +538,15 @@ BEGIN
     SELECT count(*) INTO n_versions FROM public.document_requirement_versions WHERE requirement_id = r.id;
     SELECT count(*) INTO n_waivers FROM public.document_requirement_waivers WHERE requirement_id = r.id;
     PERFORM set_config('alloy.document_requirement_purge', 'on', true);
-    -- Versions and waivers go by ON DELETE CASCADE; every guard honours the purge setting.
+    -- Versions and waivers go by ON DELETE CASCADE; every guard honours the purge only inside this function.
     DELETE FROM public.document_requirements WHERE id = r.id;
     PERFORM set_config('alloy.document_requirement_purge', 'off', true);
-    RETURN jsonb_build_object('requirement_id', r.id, 'key', r.key, 'versions', n_versions, 'waivers', n_waivers, 'purged', true);
+    RETURN jsonb_build_object('requirement_id', r.id, 'key', r.key, 'qa_run_id', p_qa_run_id, 'versions', n_versions, 'waivers', n_waivers, 'purged', true);
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.document_requirement_purge(uuid, uuid) FROM PUBLIC, anon, authenticated;
-GRANT ALL ON FUNCTION public.document_requirement_purge(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.document_requirement_purge(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT ALL ON FUNCTION public.document_requirement_purge(uuid, uuid, text) TO service_role;
 REVOKE ALL ON FUNCTION public.document_requirement_version_problems(uuid) FROM PUBLIC, anon, authenticated;
 GRANT ALL ON FUNCTION public.document_requirement_version_problems(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.document_requirement_validate(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
@@ -548,6 +579,11 @@ BEGIN
        OR has_table_privilege('anon', 'public.document_requirements', 'SELECT')
        OR has_function_privilege('authenticated', 'public.document_requirement_waiver_grant(uuid, uuid, text, uuid, text, date, uuid)', 'EXECUTE') THEN
         RAISE EXCEPTION 'd6 self-verify: a D6 object is reachable outside the service role';
+    END IF;
+    IF has_function_privilege('authenticated', 'public.document_requirement_purge(uuid, uuid, text)', 'EXECUTE')
+       OR has_function_privilege('anon', 'public.document_requirement_purge(uuid, uuid, text)', 'EXECUTE')
+       OR to_regprocedure('public.document_requirement_purge(uuid,uuid)') IS NOT NULL THEN
+        RAISE EXCEPTION 'd6 self-verify: the fixture purge is reachable outside the service role or unbound to a QA run';
     END IF;
 END
 $verify$;

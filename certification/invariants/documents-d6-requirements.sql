@@ -8,12 +8,17 @@
 -- validate/publish; compatibility with the published Studio type (existence, subject grain); scope / timing / effective
 -- range validation; duplicate refusal; waiver policy eligibility, grain, subject resolution, cross-organization refusal,
 -- reason, single active waiver, revocation and re-grant; waivers neither deleted nor edited; a waiver never touches a
--- document; published or waived requirements archived, not deleted; the QA fixture purge (archived `qa_` keys only);
--- service-role only.
+-- document; published or waived requirements archived, not deleted; the QA fixture purge (a registered QA organization,
+-- the named run's `qa_<run>_` key namespace, archived — every refusal leaves every row; the guards' purge bypass is
+-- unreachable by a service-role session that sets the setting itself); service-role only.
 DO $$
 DECLARE
-    v_org uuid := (SELECT id FROM public.orgs ORDER BY created_at NULLS LAST, id LIMIT 1);
-    v_org2 uuid := (SELECT id FROM public.orgs WHERE id <> (SELECT id FROM public.orgs ORDER BY created_at NULLS LAST, id LIMIT 1) ORDER BY id LIMIT 1);
+    -- Tenant organizations: never a registered QA organization (the purge must be refused in them).
+    v_org uuid := (SELECT id FROM public.orgs WHERE id NOT IN ('4acc9386-c485-486f-aa1f-05d83499d142', 'ad53fee2-2570-460f-9300-f0e106c473b6')
+                    ORDER BY created_at NULLS LAST, id LIMIT 1);
+    v_org2 uuid := (SELECT id FROM public.orgs WHERE id NOT IN ('4acc9386-c485-486f-aa1f-05d83499d142', 'ad53fee2-2570-460f-9300-f0e106c473b6')
+                      AND id <> (SELECT id FROM public.orgs WHERE id NOT IN ('4acc9386-c485-486f-aa1f-05d83499d142', 'ad53fee2-2570-460f-9300-f0e106c473b6')
+                                  ORDER BY created_at NULLS LAST, id LIMIT 1) ORDER BY id LIMIT 1);
     h uuid := 'd6000000-0000-4000-8000-0000000000a1';
     h_org2 uuid := 'd6000000-0000-4000-8000-0000000000a2';
     c1 uuid := 'd6000000-0000-4000-8000-0000000000c1';
@@ -28,6 +33,12 @@ DECLARE
     vw uuid := 'd6000000-0000-4000-8000-000000000203';
     vbad uuid := 'd6000000-0000-4000-8000-000000000204';
     vdup uuid := 'd6000000-0000-4000-8000-000000000205';
+    v_qa uuid := '4acc9386-c485-486f-aa1f-05d83499d142';  -- QA Shared (web/lib/qa/sharedQaRegistry.ts)
+    h_qa uuid := 'd6000000-0000-4000-8000-0000000000a3';
+    c_qa uuid := 'd6000000-0000-4000-8000-0000000000c3';
+    req_qa uuid := 'd6000000-0000-4000-8000-000000000105';
+    vqa uuid := 'd6000000-0000-4000-8000-000000000206';
+    rows_before text;
     w1 uuid;
     r jsonb;
     s text;
@@ -235,34 +246,96 @@ BEGIN
     END IF;
     passes := passes || 'service_role_only'::text;
 
-    -- 11. The QA fixture purge: only an ARCHIVED `qa_` requirement, with its versions and waivers; nothing else.
-    BEGIN
-        PERFORM public.document_requirement_purge(v_org, req);  -- d6_immunization: not a QA fixture key
-        RAISE EXCEPTION '11a: a non-fixture requirement was purged';
-    EXCEPTION WHEN insufficient_privilege THEN NULL;
-    END;
-    INSERT INTO public.document_requirements (id, org_id, key) VALUES (req_dup, v_org, 'qa_d6_fixture');
+    -- 11. The QA fixture purge: only a registered QA organization's ARCHIVED requirement in the named run's key
+    --     namespace, with its versions and waivers; every refusal leaves every row; nothing else.
+    IF NOT EXISTS (SELECT 1 FROM public.orgs WHERE id = v_qa) THEN
+        INSERT INTO public.orgs (id, name, slug) VALUES (v_qa, 'ZZ Alloy QA', 'zz-alloy-qa');
+    END IF;
+    PERFORM public.document_configuration_seed(v_qa);
+    INSERT INTO public.customers (id, org_id, name, customer_number) VALUES (h_qa, v_qa, 'D6 QA household', 996003);
+    INSERT INTO public.customer_members (id, org_id, customer_id, display_name) VALUES (c_qa, v_qa, h_qa, 'D6 QA Child');
+    -- (a) a tenant's published, waived, ARCHIVED requirement whose key is exactly in the run's namespace
+    INSERT INTO public.document_requirements (id, org_id, key) VALUES (req_dup, v_org, 'qa_d6inv0001_tenant');
     INSERT INTO public.document_requirement_versions (id, org_id, requirement_id, version_number, label, document_type_key, subject_type, waivable, scope)
-        VALUES (vdup, v_org, req_dup, 1, 'Fixture', 'immunization_record', 'child', true, '{"kind":"business_process","process_key":"qa_fixture_process"}');
+        VALUES (vdup, v_org, req_dup, 1, 'Tenant', 'immunization_record', 'child', true, '{"kind":"business_process","process_key":"qa_fixture_process"}');
     PERFORM public.document_requirement_validate(v_org, vdup, actor);
     PERFORM public.document_requirement_publish(v_org, req_dup, vdup, NULL, actor);
-    PERFORM public.document_requirement_waiver_grant(v_org, req_dup, 'child', c1, 'Fixture waiver', NULL, actor);
-    BEGIN
-        PERFORM public.document_requirement_purge(v_org, req_dup);
+    PERFORM public.document_requirement_waiver_grant(v_org, req_dup, 'child', c1, 'Tenant waiver', NULL, actor);
+    UPDATE public.document_requirements SET status = 'archived' WHERE id = req_dup;
+    -- (b) the run's own fixture in QA Shared, published and waived, still ACTIVE
+    INSERT INTO public.document_requirements (id, org_id, key) VALUES (req_qa, v_qa, 'qa_d6inv0001_fixture');
+    INSERT INTO public.document_requirement_versions (id, org_id, requirement_id, version_number, label, document_type_key, subject_type, waivable, scope)
+        VALUES (vqa, v_qa, req_qa, 1, 'Fixture', 'immunization_record', 'child', true, '{"kind":"business_process","process_key":"qa_fixture_process"}');
+    PERFORM public.document_requirement_validate(v_qa, vqa, actor);
+    PERFORM public.document_requirement_publish(v_qa, req_qa, vqa, NULL, actor);
+    PERFORM public.document_requirement_waiver_grant(v_qa, req_qa, 'child', c_qa, 'Fixture waiver', NULL, actor);
+    rows_before := (SELECT md5(string_agg(t, '|' ORDER BY t)) FROM (
+        SELECT 'r' || id || status || key FROM public.document_requirements WHERE id IN (req, req_dup, req_qa)
+        UNION ALL SELECT 'v' || id || status FROM public.document_requirement_versions WHERE requirement_id IN (req, req_dup, req_qa)
+        UNION ALL SELECT 'w' || id || state FROM public.document_requirement_waivers WHERE requirement_id IN (req, req_dup, req_qa)) x(t));
+    BEGIN  -- a tenant org, even with the run's own key namespace
+        PERFORM public.document_requirement_purge(v_org, req_dup, 'qar_d6inv0001');
+        RAISE EXCEPTION '11a: a tenant requirement was purged';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN  -- a tenant org's real requirement
+        PERFORM public.document_requirement_purge(v_org, req, 'qar_d6inv0001');
+        RAISE EXCEPTION '11a: a tenant requirement was purged';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN  -- this run's fixture, still active
+        PERFORM public.document_requirement_purge(v_qa, req_qa, 'qar_d6inv0001');
         RAISE EXCEPTION '11b: an active fixture requirement was purged';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
-    UPDATE public.document_requirements SET status = 'archived' WHERE id = req_dup;
-    BEGIN
-        PERFORM public.document_requirement_purge(v_org2, req_dup);
-        RAISE EXCEPTION '11c: another organization purged the requirement';
-    EXCEPTION WHEN no_data_found THEN NULL;
+    UPDATE public.document_requirements SET status = 'archived' WHERE id = req_qa;
+    BEGIN  -- another run
+        PERFORM public.document_requirement_purge(v_qa, req_qa, 'qar_d6inv0002');
+        RAISE EXCEPTION '11c: another run purged the fixture';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
     END;
-    r := public.document_requirement_purge(v_org, req_dup);
+    BEGIN  -- no run / malformed run
+        PERFORM public.document_requirement_purge(v_qa, req_qa, NULL);
+        RAISE EXCEPTION '11c: a purge without a QA run succeeded';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN
+        PERFORM public.document_requirement_purge(v_qa, req_qa, 'qa_d6inv0001');
+        RAISE EXCEPTION '11c: a malformed QA run id was accepted';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN  -- the right run, named through another organization
+        PERFORM public.document_requirement_purge(v_org2, req_qa, 'qar_d6inv0001');
+        RAISE EXCEPTION '11c: another organization purged the fixture';
+    EXCEPTION WHEN insufficient_privilege OR no_data_found THEN NULL;
+    END;
+    BEGIN  -- a service-role session that sets the purge setting itself still meets every history guard
+        SET LOCAL ROLE service_role;
+        PERFORM set_config('alloy.document_requirement_purge', 'on', true);
+        DELETE FROM public.document_requirement_waivers WHERE requirement_id = req_dup;
+        RAISE EXCEPTION '11e: the purge bypass was reachable outside the purge function';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    BEGIN
+        SET LOCAL ROLE service_role;
+        PERFORM set_config('alloy.document_requirement_purge', 'on', true);
+        DELETE FROM public.document_requirements WHERE id = req_dup;
+        RAISE EXCEPTION '11e: the purge bypass was reachable outside the purge function';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    UPDATE public.document_requirements SET status = 'active' WHERE id = req_qa;  -- compare with the pre-refusal state
+    IF rows_before IS DISTINCT FROM (SELECT md5(string_agg(t, '|' ORDER BY t)) FROM (
+        SELECT 'r' || id || status || key FROM public.document_requirements WHERE id IN (req, req_dup, req_qa)
+        UNION ALL SELECT 'v' || id || status FROM public.document_requirement_versions WHERE requirement_id IN (req, req_dup, req_qa)
+        UNION ALL SELECT 'w' || id || state FROM public.document_requirement_waivers WHERE requirement_id IN (req, req_dup, req_qa)) x(t)) THEN
+        RAISE EXCEPTION '11f: a refused purge changed rows';
+    END IF;
+    UPDATE public.document_requirements SET status = 'archived' WHERE id = req_qa;
+    r := public.document_requirement_purge(v_qa, req_qa, 'qar_d6inv0001');
     IF (r ->> 'versions')::int <> 1 OR (r ->> 'waivers')::int <> 1
-       OR EXISTS (SELECT 1 FROM public.document_requirements WHERE id = req_dup)
-       OR EXISTS (SELECT 1 FROM public.document_requirement_versions WHERE requirement_id = req_dup)
-       OR EXISTS (SELECT 1 FROM public.document_requirement_waivers WHERE requirement_id = req_dup) THEN
+       OR EXISTS (SELECT 1 FROM public.document_requirements WHERE id = req_qa)
+       OR EXISTS (SELECT 1 FROM public.document_requirement_versions WHERE requirement_id = req_qa)
+       OR EXISTS (SELECT 1 FROM public.document_requirement_waivers WHERE requirement_id = req_qa) THEN
         RAISE EXCEPTION '11d: the fixture purge left rows: %', r;
     END IF;
     -- The guards are back in force after the purge: real history is still undeletable.
@@ -271,8 +344,15 @@ BEGIN
         RAISE EXCEPTION '11e: the purge setting leaked past the purge';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
-    IF has_function_privilege('authenticated', 'public.document_requirement_purge(uuid, uuid)', 'EXECUTE') THEN
-        RAISE EXCEPTION '11f: the purge is reachable by a client role';
+    IF NOT EXISTS (SELECT 1 FROM public.document_requirements WHERE id = req_dup)
+       OR NOT EXISTS (SELECT 1 FROM public.document_requirement_waivers WHERE requirement_id = req_dup) THEN
+        RAISE EXCEPTION '11e: the tenant qa_ requirement lost history';
+    END IF;
+    IF has_function_privilege('authenticated', 'public.document_requirement_purge(uuid, uuid, text)', 'EXECUTE')
+       OR has_function_privilege('anon', 'public.document_requirement_purge(uuid, uuid, text)', 'EXECUTE')
+       OR has_function_privilege('authenticated', 'public.document_requirement_purge_active()', 'EXECUTE')
+       OR to_regprocedure('public.document_requirement_purge(uuid,uuid)') IS NOT NULL THEN
+        RAISE EXCEPTION '11g: the purge is reachable by a client role, or an unbound signature survives';
     END IF;
     passes := passes || 'qa_fixture_purge_only'::text;
 

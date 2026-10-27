@@ -48,6 +48,9 @@ import { evaluateDocumentTypeRequirementsForChild, type RequirementWorkRow, type
 
 const ORG = "0a000000-0000-4000-8000-0000000000d6";
 const OTHER_ORG = "0b000000-0000-4000-8000-0000000000d6";
+const QA_SHARED_ORG = "4acc9386-c485-486f-aa1f-05d83499d142"; // QA_ORGS.qa_shared
+const QA_SECONDARY_ORG = "ad53fee2-2570-460f-9300-f0e106c473b6"; // QA_ORGS.qa_secondary
+const FIREFLY_ORG = "93667019-bd28-49b5-a688-acc9bb1e0a19"; // FORBIDDEN_QA_ORG_IDS
 const USER = "05e00000-0000-4000-8000-0000000000d6";
 const DEPT = "de000000-0000-4000-8000-0000000000d6";
 const WU = "a0000000-0000-4000-8000-0000000000d6";
@@ -215,7 +218,12 @@ beforeEach(() => {
         if (name === "document_requirement_purge") {
             const r = db.rows("document_requirements").find((x) => x.id === args.p_requirement_id && x.org_id === args.p_org_id);
             if (!r) return { data: null, error: { message: "document_requirement_not_found" } };
-            if (!/^qa_[a-z0-9_]+$/.test(String(r.key)) || r.status !== "archived") return { data: null, error: { message: "document_requirement_purge_refused" } };
+            // Mirrors the database: a registered QA organization, this run's key namespace, archived — or refused untouched.
+            const run = /^qar_([a-z0-9]{8,40})$/.exec(String(args.p_qa_run_id ?? ""));
+            if (![QA_SHARED_ORG, QA_SECONDARY_ORG].includes(String(args.p_org_id)) || !run
+                || !String(r.key).startsWith(`qa_${run[1]}_`) || r.status !== "archived") {
+                return { data: null, error: { message: "document_requirement_purge_refused" } };
+            }
             const versions = db.rows("document_requirement_versions").filter((v) => v.requirement_id === r.id).length;
             const waivers = db.rows("document_requirement_waivers").filter((w) => w.requirement_id === r.id).length;
             for (const t of ["document_requirement_waivers", "document_requirement_versions"]) db.tables[t] = db.rows(t).filter((x) => x.requirement_id !== r.id);
@@ -613,30 +621,92 @@ describe("reviewing the current version (pending review → satisfied / blocked)
     });
 });
 
-// ── teardown: only an archived QA fixture requirement is purged ──────────────────────────────────────────────────
-describe("the QA fixture purge (zero-residue teardown) never reaches a real requirement", () => {
-    it("an archived qa_ requirement is purged with its versions and waivers, audited as purge_fixture", async () => {
+// ── teardown: only a governed QA run's own archived fixture requirement is purged ─────────────────────────────
+describe("the QA fixture purge (zero-residue teardown) is bounded by QA organization and run", () => {
+    const RUN = "qar_c0ffee123456";
+    const del = (id: string, qaRunId?: string) =>
+        invokeRoute(reqDELETE, buildRequest({ method: "DELETE", path: "/x", query: { qa_run_id: qaRunId } }), routeParams({ id }));
+    const snapshot = () => JSON.stringify(["document_requirements", "document_requirement_versions", "document_requirement_waivers"].map((t) => db.rows(t)));
+    /** Re-home the immunization requirement (its versions and waivers) into `org` with `key`, archived. */
+    async function fixture(org: string, key: string) {
         as(P.admin);
-        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.key = "qa_d6_run_immunizations";
         await invokeRoute(waiversPOST, json("POST", { requirement_id: R_IMM.id, subject_type: "child", subject_id: C1, reason: "Fixture waiver" }));
-        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "archived";
-        const res = await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }));
+        const r = db.rows("document_requirements").find((x) => x.id === R_IMM.id)!;
+        Object.assign(r, { key, status: "archived", org_id: org });
+        for (const t of ["document_requirement_versions", "document_requirement_waivers"]) {
+            for (const x of db.rows(t)) if (x.requirement_id === R_IMM.id) x.org_id = org;
+        }
+        as({ ...P.admin, orgId: org });
+    }
+
+    it("this run's archived fixture in QA Shared is purged with its versions and waivers, audited with the run", async () => {
+        await fixture(QA_SHARED_ORG, "qa_c0ffee123456_immunizations");
+        const res = await del(R_IMM.id, RUN);
         expect(res.status).toBe(200);
         expect(res.body).toMatchObject({ purged: true, versions: 1, waivers: 1 });
         expect(db.rows("document_requirements").some((r) => r.id === R_IMM.id)).toBe(false);
+        expect(db.rows("document_requirement_versions").some((v) => v.requirement_id === R_IMM.id)).toBe(false);
         expect(db.rows("document_requirement_waivers")).toHaveLength(0);
-        expect((audits("document_requirement_changed").at(-1)!.payload as { action: string }).action).toBe("purge_fixture");
+        expect(rpcCalls.find((c) => c.name === "document_requirement_purge")!.args).toMatchObject({ p_org_id: QA_SHARED_ORG, p_qa_run_id: RUN });
+        expect(audits("document_requirement_changed").at(-1)!.payload).toMatchObject({ action: "purge_fixture", qa_run_id: RUN });
     });
-    it("a real (non-qa_) or still-active requirement is never purged; the purge function is not called", async () => {
-        as(P.admin);
-        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "archived"; // real key, archived
-        await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }));
-        db.rows("document_requirements").find((r) => r.id === R_CUSTODY.id)!.key = "qa_d6_active"; // fixture key, still active
-        await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_CUSTODY.id }));
+
+    // The route-level refusals fall through to the ordinary DELETE, whose history guard (a published or waived
+    // requirement is archived, never deleted) is proven in Postgres — the in-memory stub does not model triggers. What
+    // the route controls, and what is asserted here, is that the purge is never invoked and nothing reports a purge.
+    const neverPurged = (res: { body: unknown }) => {
         expect(rpcCalls.filter((c) => c.name === "document_requirement_purge")).toHaveLength(0);
+        expect((res.body as { purged?: boolean }).purged).toBeUndefined();
+        expect(audits("document_requirement_changed").some((a) => (a.payload as { action: string }).action === "purge_fixture")).toBe(false);
+    };
+
+    it("a tenant organization's qa_ requirement in the run's own namespace is never purged", async () => {
+        await fixture(ORG, "qa_c0ffee123456_immunizations"); // exactly the run's namespace, but a real tenant
+        neverPurged(await del(R_IMM.id, RUN));
     });
+
+    it("Firefly is never a purge target", async () => {
+        await fixture(FIREFLY_ORG, "qa_c0ffee123456_immunizations");
+        neverPurged(await del(R_IMM.id, RUN));
+    });
+
+    it("another run's fixture, a missing or malformed run id, or a key outside the run namespace is never purged", async () => {
+        await fixture(QA_SHARED_ORG, "qa_c0ffee123456_immunizations");
+        const before = snapshot();
+        for (const run of [undefined, "", "qar_deadbeef0000", "qar_C0FFEE123456", "c0ffee123456", "qar_c0ffee12"]) {
+            neverPurged(await del(R_IMM.id, run));
+            db.tables.document_requirements = JSON.parse(before)[0]; // restore whatever the stubbed ordinary delete removed
+        }
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.key = "qa_d6_immunizations"; // qa_ but not this run's
+        neverPurged(await del(R_IMM.id, RUN));
+    });
+
+    it("this run's still-active fixture is never purged", async () => {
+        await fixture(QA_SHARED_ORG, "qa_c0ffee123456_immunizations");
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "active";
+        neverPurged(await del(R_IMM.id, RUN));
+    });
+
+    it("a refused purge leaves every row unchanged, even called directly (tenant org, other run, active)", async () => {
+        const { purgeFixtureRequirement } = await import("@/lib/documents/requirements/documentRequirementConfigService");
+        await fixture(ORG, "qa_c0ffee123456_immunizations");
+        let before = snapshot();
+        expect(await purgeFixtureRequirement(dbRef.current as never, ORG, R_IMM.id, RUN)).toMatchObject({ ok: false, code: "PURGE_REFUSED" });
+        expect(snapshot()).toBe(before);
+        await fixture(QA_SHARED_ORG, "qa_c0ffee123456_immunizations");
+        before = snapshot();
+        expect(await purgeFixtureRequirement(dbRef.current as never, QA_SHARED_ORG, R_IMM.id, "qar_deadbeef0000")).toMatchObject({ ok: false, code: "PURGE_REFUSED" });
+        db.rows("document_requirements").find((r) => r.id === R_IMM.id)!.status = "active";
+        const active = snapshot();
+        expect(await purgeFixtureRequirement(dbRef.current as never, QA_SHARED_ORG, R_IMM.id, RUN)).toMatchObject({ ok: false, code: "PURGE_REFUSED" });
+        expect(snapshot()).toBe(active);
+        expect(before).not.toBe(active); // only the test's own status edit differs
+    });
+
     it("ops cannot purge", async () => {
-        as(P.ops);
-        expect((await invokeRoute(reqDELETE, json("DELETE"), routeParams({ id: R_IMM.id }))).status).toBe(403);
+        await fixture(QA_SHARED_ORG, "qa_c0ffee123456_immunizations");
+        as({ ...P.ops, orgId: QA_SHARED_ORG });
+        expect((await del(R_IMM.id, RUN)).status).toBe(403);
+        expect(db.rows("document_requirements").some((r) => r.id === R_IMM.id)).toBe(true);
     });
 });

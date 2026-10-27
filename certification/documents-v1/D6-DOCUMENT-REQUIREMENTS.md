@@ -50,9 +50,18 @@ and waivers) and delete only when never published and never waived. One live def
 **QA fixture purge (slice 5, added before merge).** Hosted certification must publish and waive run-scoped requirements
 in QA Shared and still bind ZERO_RESIDUE, which the history rule above made impossible. Fixture resets are hash-pinned
 in the toolkit registry, so the in-repo governed path is the product's own audited route, as D2–D5 cleaned up through
-audited deletes: `DELETE …/requirements/[id]` on an ARCHIVED requirement whose key starts with `qa_` calls
-`document_requirement_purge` (service role; re-checks both; versions and waivers by cascade; audited `purge_fixture`).
-Every other requirement keeps its history. Invariant 11 proves it; the census gains `doc_zr_d6_requirements`,
+audited deletes: `DELETE …/requirements/[id]?qa_run_id=qar_<run>` calls `document_requirement_purge` for an ARCHIVED
+requirement only when the organization is a registered QA organization (QA Shared / QA Secondary; never Firefly or a
+tenant) and the key is in that run's namespace (`qa_<run>_…`); the database re-checks every bound, every refusal raises
+before any row is touched, versions and waivers go by cascade, and the audit (`purge_fixture`) names the run. The history
+guards honour the purge only when running as the purge function's owner, so a service-role session that sets the purge
+setting itself is still refused. Every other requirement keeps its history.
+
+*Ownership repair (slice 6, release preflight).* As first released, the purge bound only the `qa_` key and the caller's
+own organization: an administrator of any tenant could create a `qa_…` requirement, publish, waive, archive and purge
+its history, and any service-role session could set the purge setting and delete history directly. Slice 6 binds the
+organization and run as above (signature `document_requirement_purge(uuid, uuid, text)`; the two-argument form is
+dropped) and closes the setting bypass. Invariant 11 proves it; the census gains `doc_zr_d6_requirements`,
 `doc_zr_d6_requirement_versions` and `doc_zr_d6_waivers`. This changed the candidate after the first release
 (`spr_4e7438699164` for `81573d1b1501`), so it was re-certified and re-released.
 The editor mirrors `document_requirement_version_problems`; a test pins the two code sets equal.
