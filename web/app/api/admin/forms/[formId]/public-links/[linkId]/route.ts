@@ -10,6 +10,13 @@ import {
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
+import { publicFormLinkLocationId } from "@/lib/branding/loadPublicBrand";
+import {
+    buildTourCalendarLinkConfig,
+    stripTourCalendarLinkConfig,
+    TOUR_CALENDAR_LINK_METADATA_KEY,
+} from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
 
 async function validatePinnedVersion(
     supabase: ReturnType<typeof createAdminClient>,
@@ -91,7 +98,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (typeof body.metadata !== "object" || body.metadata === null || Array.isArray(body.metadata)) {
             return jsonError("metadata must be an object", 400);
         }
-        const incoming = body.metadata as Record<string, unknown>;
+        // The public tour calendar flag is never client metadata — only `tour_calendar` sets it.
+        const incoming = stripTourCalendarLinkConfig(body.metadata as Record<string, unknown>);
         const existingMeta =
             existing.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
                 ? { ...(existing.metadata as Record<string, unknown>) }
@@ -145,6 +153,41 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         } else {
             return jsonError("pinned_form_definition_version_id must be a UUID string or null", 400);
         }
+    }
+
+    /*
+     * S7 — publish (or withdraw) this link's public tour calendar. Publishing a location's tour
+     * availability is a Tours decision, so it needs `tours.configure` on top of forms authority,
+     * and only a location-scoped intake link can carry it (the location comes from the link).
+     */
+    if ("tour_calendar" in body) {
+        const raw = body.tour_calendar;
+        const enabled =
+            raw === true || (raw && typeof raw === "object" && (raw as { enabled?: unknown }).enabled === true)
+                ? true
+                : raw === false || (raw && typeof raw === "object" && (raw as { enabled?: unknown }).enabled === false)
+                  ? false
+                  : null;
+        if (enabled === null) return jsonError("tour_calendar must be a boolean or { enabled: boolean }", 400);
+        const deniedTours = requireToursCapability(ctx, TOURS_CONFIGURE);
+        if (deniedTours) return deniedTours;
+        const base =
+            patch.metadata ??
+            (existing.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+                ? { ...(existing.metadata as Record<string, unknown>) }
+                : {});
+        if (enabled) {
+            if (!publicFormLinkLocationId(base)) {
+                return jsonError("A public tour calendar needs a location-specific link", 400, { code: "TOUR_CALENDAR_NEEDS_LOCATION" });
+            }
+            if (!linkRequiresLeadCapture(base)) {
+                return jsonError("A public tour calendar needs a lead-capture intake link", 400, { code: "TOUR_CALENDAR_NEEDS_INTAKE" });
+            }
+        }
+        patch.metadata = {
+            ...base,
+            [TOUR_CALENDAR_LINK_METADATA_KEY]: buildTourCalendarLinkConfig({ enabled, actorUserId: ctx.userId ?? null }),
+        };
     }
 
     if (Object.keys(patch).length === 0) return jsonError("No valid fields to update", 400);

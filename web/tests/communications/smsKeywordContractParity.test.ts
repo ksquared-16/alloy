@@ -17,14 +17,20 @@ import {
     parseSmsKeyword,
     keywordTargetState,
     SMS_KEYWORD_CATEGORIES,
+    SMS_START_CATEGORIES,
+    SMS_STOP_CATEGORIES,
+    categoriesForSmsKeyword,
     type SmsKeyword,
 } from "@/lib/communications/v2/smsKeywords";
 import { PREFERENCE_CATEGORIES } from "@/lib/communications/v2/preferences";
+import { expandSmsKeywordChanges } from "@/lib/communications/v2/preferenceMutations";
 
 type Contract = {
     version: string;
     keywords: Record<SmsKeyword, string[]>;
     affected_preference_categories: string[];
+    stop_preference_categories?: string[];
+    start_preference_categories?: string[];
     target_state: Record<SmsKeyword, string | null>;
 };
 
@@ -52,6 +58,12 @@ describe("SMS keyword contract parity", () => {
 
     it("affects exactly the contract's preference categories", () => {
         expect([...SMS_KEYWORD_CATEGORIES].sort()).toEqual([...contract.affected_preference_categories].sort());
+        expect([...SMS_STOP_CATEGORIES].sort()).toEqual(
+            [...(contract.stop_preference_categories ?? contract.affected_preference_categories)].sort()
+        );
+        expect([...SMS_START_CATEGORIES].sort()).toEqual(
+            [...(contract.start_preference_categories ?? [])].sort()
+        );
     });
 
     it("only names categories that exist in the preference vocabulary", () => {
@@ -64,6 +76,15 @@ describe("SMS keyword contract parity", () => {
         // Carrier semantics: STOP suppresses ALL SMS. Operational is the bulk of
         // what the platform sends, so omitting it would make STOP near-useless.
         expect(SMS_KEYWORD_CATEGORIES).toContain("sms_operational");
+    });
+
+    it("START does not re-opt into sms_marketing", () => {
+        expect(categoriesForSmsKeyword("start")).not.toContain("sms_marketing");
+        expect(categoriesForSmsKeyword("stop")).toContain("sms_marketing");
+        const startChanges = expandSmsKeywordChanges("start", { orgId: "o", personId: "p" });
+        expect(startChanges.map((c) => c.upsert.category).sort()).toEqual(
+            ["sms_operational", "sms_transactional"].sort()
+        );
     });
 });
 

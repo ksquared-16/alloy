@@ -79,7 +79,7 @@ const LEDGER: Readonly<Record<string, number>> = {
     "app/adminV2/settings/analytics/VisualizationBuilderPanel.tsx": 2,
     "app/adminV2/settings/attention-sla-rules/page.tsx": 1,
     "app/adminV2/settings/kpis/KpiPlacementsSettingsClient.tsx": 4,
-    "app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx": 3,
+    "app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx": 2,
     "components/admin/agentLab/AgentConfigLabClient.tsx": 3,
     "components/admin/agentLab/AgentLabAssistantPanel.tsx": 1,
     "components/admin/AssociatedDocumentUploadModal.tsx": 2,
@@ -311,6 +311,7 @@ describe("raw <select> adoption ledger", () => {
         // 1 -> 0, so 401 -> 400. Independent of the conversions that brought it to 401; the number
         // is the MEASURED sum of what the files now hold, not arithmetic on either side of the
         // merge, because this ledger is one-way and a guessed total would let adoption drift back.
-        expect(ledgerTotal).toBe(395);
+        // Tours S3: the availability editor's location picker went (scope picker + weekday buttons), 3 -> 2. 395 -> 394.
+        expect(ledgerTotal).toBe(394);
     });
 });

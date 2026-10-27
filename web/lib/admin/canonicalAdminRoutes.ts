@@ -414,6 +414,8 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
         return true;
     }
     if (p === "/tour-booking" || p.startsWith("/tour-booking/")) return true;
+    // S7: a school's public tour calendar, standalone or framed on its own website.
+    if (p.startsWith("/tours/")) return true;
     /*
      * A PAYER AUTHORIZING A BANK DEBIT IS NOT A VISITOR.
      *

@@ -298,6 +298,15 @@ export function interpretServiceDay(input: {
     groupByChildId?: ReadonlyMap<string, string | null>;
     effective: readonly EffectiveExpectationForSubject[];
     unresolved?: readonly UnresolvedExpectationLineage[];
+    /**
+     * A full-day closure of THIS site by the Operating Calendar on this service
+     * date, already resolved by `resolveOperatingCalendar` (local date, org
+     * default → location exception precedence). It reads exactly like a site
+     * closure authored here — the projection does not re-decide calendar
+     * precedence, and it never sees partial closures or modified hours, which
+     * do not change who is expected (see the calendar's Attendance contract).
+     */
+    calendarSiteClosure?: { expectationId: string; reasonKey: string | null } | null;
 }): ChildServiceDayExpectation[] {
     /*
      * ONE eligibility decision per expectation, taken in one place.
@@ -349,6 +358,16 @@ export function interpretServiceDay(input: {
                 closedSubjectKind: ATTENDANCE_SUBJECT_KINDS.site,
                 closedSubjectId: input.siteLocationId,
                 expectationId: siteClosure.expectationId,
+            };
+        }
+        if (input.calendarSiteClosure) {
+            return {
+                childId,
+                interpretation: "closed",
+                reasonKey: input.calendarSiteClosure.reasonKey,
+                closedSubjectKind: ATTENDANCE_SUBJECT_KINDS.site,
+                closedSubjectId: input.siteLocationId,
+                expectationId: input.calendarSiteClosure.expectationId,
             };
         }
 

@@ -78,8 +78,12 @@ describe("an activated purpose opens one narrow door", () => {
 
     it("registers the attendance purpose as activated", () => {
         expect(isActivatedAuthoringPurpose(ATTENDANCE_EXPECTATION_PURPOSE)).toBe(true);
-        // Thread 4 is the first and only consumer; a growing set is a review signal.
-        expect(ACTIVATED_AUTHORING_PURPOSES.size).toBe(1);
+        // A growing set is a review signal: each member is named here on purpose.
+        // Thread 4 (Attendance) was first; the Operating Calendar (Tours S5) is the second.
+        expect([...ACTIVATED_AUTHORING_PURPOSES].sort()).toEqual([
+            "attendance.service_day_exception",
+            "location.operating_calendar",
+        ]);
     });
 });
 

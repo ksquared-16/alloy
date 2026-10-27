@@ -28,6 +28,10 @@ export const TOUR_PUBLIC_RATE_LIMIT = {
     // Authorises the bounded cancellation step; mints a credential, so it is
     // budgeted like a mutation even though it changes no booking state.
     cancel_intent: { max: 30, windowMs: 60_000 },
+    // S7 public tour calendar (a location-scoped form link, not an invitation).
+    calendar_slots: { max: 120, windowMs: 60_000 },
+    /** A lead-form submission that carries a requested tour time. */
+    calendar_request: { max: 10, windowMs: 60_000 },
 } satisfies Record<string, Window>;
 
 export type TourPublicRateLimitKind = keyof typeof TOUR_PUBLIC_RATE_LIMIT;

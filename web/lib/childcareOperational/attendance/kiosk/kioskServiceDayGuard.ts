@@ -30,6 +30,7 @@ import {
 } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import { effectiveExpectationsForWindow } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
 import { createSupabaseExpectationQueryGateway } from "@/lib/operationalExpectations/query/supabaseExpectationQueryGateway";
+import { loadCalendarSiteClosureForServiceDay } from "@/lib/operatingCalendar/operatingCalendarServer";
 
 export type KioskServiceDayVerdict =
     | { operable: true; interpretation: string }
@@ -60,11 +61,19 @@ export async function resolveKioskServiceDay(params: {
     ];
 
     let effective;
+    let calendarSiteClosure;
     try {
         effective = await effectiveExpectationsForWindow(
             { orgId, subjects, asOf: serviceDayAsOf(serviceDate) },
             createSupabaseExpectationQueryGateway(supabase),
         );
+        // The Operating Calendar's full-day closure of the site, read through the same
+        // resolver the roster and Tours use. Unreadable is refused like the read above.
+        calendarSiteClosure = await loadCalendarSiteClosureForServiceDay(supabase, {
+            orgId,
+            siteLocationId,
+            serviceDate,
+        });
     } catch {
         return { operable: false, reason: "unreadable" };
     }
@@ -75,6 +84,7 @@ export async function resolveKioskServiceDay(params: {
         groupByChildId: new Map([[childId, roomLocationId]]),
         effective: effective.effective,
         unresolved: effective.unresolved,
+        calendarSiteClosure,
     });
 
     if (row?.interpretation === "closed") return { operable: false, reason: "closed" };

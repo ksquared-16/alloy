@@ -15,6 +15,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildPublishBrandSnapshotMetadata } from "@/lib/admin/forms/formsAdminDb";
 import { buildPacketIntakeForCaseSafe } from "@/lib/pos/packetIntake/buildPacketIntakeForCaseSafe";
 import { dbLoadPacketReview } from "@/lib/pos/packetIntake/packetIntakeDb";
 import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
@@ -556,8 +557,10 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Repr
             // A published row is immutable — `publish -> archive only` — so an unattributed
             // publication cannot be repaired afterwards. It can only be prevented.
             assertPublisherIdentity(userId);
+            // Branding is frozen at publish, as every other publish path does (S4).
+            const metadata = await buildPublishBrandSnapshotMetadata(supabase, orgId, versionId);
             const { error } = await supabase.from("form_definition_versions")
-                .update({ status: "published", published_at: new Date().toISOString(), published_by_user_id: userId })
+                .update({ status: "published", published_at: new Date().toISOString(), published_by_user_id: userId, ...(metadata ? { metadata } : {}) })
                 .eq("org_id", orgId).eq("id", versionId).eq("status", "draft");
             if (error) throw new Error(error.message);
         },

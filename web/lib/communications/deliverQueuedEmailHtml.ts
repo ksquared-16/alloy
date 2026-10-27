@@ -69,7 +69,9 @@ export async function deliverQueuedEmailHtml(params: {
 }): Promise<DeliverResult> {
     const { data: row, error } = await params.supabase
         .from("communication_messages")
-        .select("id, org_id, thread_id, status, channel, subject, body, to_address, from_address, rendered_snapshot, communication_provider_binding_id")
+        .select(
+            "id, org_id, thread_id, status, channel, subject, body, to_address, from_address, rendered_snapshot, communication_provider_binding_id, category, metadata, eligibility_snapshot"
+        )
         .eq("id", params.messageId)
         .maybeSingle();
     if (error || !row) return { ok: false, reason: "message_not_found" };
@@ -122,7 +124,38 @@ export async function deliverQueuedEmailHtml(params: {
     const history =
         orgId && threadId ? await loadThreadHeaderHistory(params.supabase, orgId, threadId) : [];
     const { inReplyTo, references } = deriveOutboundThreadHeaders(history);
-    const headers = outboundEmailHeaders({ messageId: emailMessageId, inReplyTo, references });
+
+    // List-Unsubscribe: prefer the URL frozen at enqueue (metadata). Fall back to
+    // minting from category + eligibility recipient when an older queued row lacks it.
+    let unsubscribeUrl: string | null = null;
+    const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
+    const frozen = String(meta.unsubscribe_url ?? "").trim();
+    if (frozen) {
+        unsubscribeUrl = frozen;
+    } else {
+        const { resolveOutboundUnsubscribeUrl } = await import(
+            "@/lib/communications/preferences/unsubscribeForOutbound"
+        );
+        const snap =
+            row.eligibility_snapshot && typeof row.eligibility_snapshot === "object"
+                ? (row.eligibility_snapshot as { recipient?: { personId?: string | null } })
+                : null;
+        const personId =
+            String(snap?.recipient?.personId ?? meta.recipient_person_id ?? "").trim() || null;
+        const minted = resolveOutboundUnsubscribeUrl({
+            messageCategory: String(row.category ?? ""),
+            personId,
+            orgId,
+        });
+        unsubscribeUrl = minted?.url ?? null;
+    }
+
+    const headers = outboundEmailHeaders({
+        messageId: emailMessageId,
+        inReplyTo,
+        references,
+        unsubscribeUrl,
+    });
 
     const payload: Record<string, unknown> = {
         from: fromEmail,

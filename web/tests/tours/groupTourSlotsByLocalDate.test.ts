@@ -10,6 +10,7 @@ import {
 function slot(p: Partial<AvailableTourSlot> & Pick<AvailableTourSlot, "startAt" | "endAt" | "timezone" | "ruleId">): AvailableTourSlot {
     return {
         remainingCapacity: 1,
+        capacity: 1,
         locationId: "loc",
         userId: null,
         ...p,

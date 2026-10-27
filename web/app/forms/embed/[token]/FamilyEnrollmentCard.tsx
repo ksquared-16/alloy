@@ -290,12 +290,12 @@ export default function FamilyEnrollmentCard({ token }: { token: string }) {
                             {/* Separators stay in the text for screen readers; the layout carries them visually. */}
                             <span className="sr-only"> — </span>
                             <span className="flex items-center gap-2">
-                                <span data-family-enrollment="detail" className={row.complete ? "font-medium text-alloy-bend-pine" : "text-alloy-midnight/60"}>{row.detail}</span>
+                                <span data-family-enrollment="detail" className={row.complete ? "font-medium text-participant-accent-ink" : "text-alloy-midnight/60"}>{row.detail}</span>
                                 {focused ? <span data-family-enrollment="focused" className="text-[12px] text-alloy-midnight/45"><span className="sr-only"> · </span>You are here</span> : null}
                                 {!focused && path ? (
                                     <>
                                         <span className="sr-only"> · </span>
-                                        <a data-family-enrollment="open" href={path} className="text-[13px] font-medium text-alloy-bend-pine underline underline-offset-2">
+                                        <a data-family-enrollment="open" href={path} className="text-[13px] font-medium text-participant-accent-ink underline underline-offset-2">
                                             Open
                                         </a>
                                     </>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { brandingMetadataPatch, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
+import { DEFAULT_FORM_ACCENT, brandingMetadataPatch, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
 import {
     buildProcessingPublicLinkMetadata,
     isProcessingIntakeLink,
@@ -137,7 +137,7 @@ export function useProcessingFormApi() {
 
     const patchFormBranding = useCallback(
         async (formId: string, branding: ProcessingFormBranding, existingMeta: Record<string, unknown> = {}) => {
-            await fetch(`/api/admin/forms/${formId}`, {
+            const res = await fetch(`/api/admin/forms/${formId}`, {
                 method: "PATCH",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
@@ -146,6 +146,7 @@ export function useProcessingFormApi() {
                     metadata: brandingMetadataPatch(branding, existingMeta),
                 }),
             });
+            if (!res.ok) throw new Error(await readJsonError(res, "Branding was not saved"));
         },
         []
     );
@@ -161,7 +162,7 @@ export function useProcessingFormApi() {
                 opts?.branding ?? {
                     brand_name: typeof existingMeta.brand_name === "string" ? existingMeta.brand_name : "",
                     accent_color:
-                        typeof existingMeta.accent_color === "string" ? existingMeta.accent_color : "#00A283",
+                        typeof existingMeta.accent_color === "string" ? existingMeta.accent_color : DEFAULT_FORM_ACCENT,
                     logo_url: typeof existingMeta.logo_url === "string" ? existingMeta.logo_url : null,
                     description: opts?.description ?? "",
                 },
@@ -180,12 +181,20 @@ export function useProcessingFormApi() {
             if (opts?.formName !== undefined) payload.name = opts.formName.trim() || schema.title;
             if (opts?.description !== undefined) payload.description = opts.description || null;
             else if (opts?.branding) payload.description = opts.branding.description.trim() || null;
-            await fetch(`/api/admin/forms/${formId}`, {
+            // Branding, name and description live on the form row, and the public form reads them
+            // live. A failed write used to be dropped here, so the builder said "saved" while the
+            // public form kept the old branding (D-F2). The questions are already saved by now; say so.
+            const res = await fetch(`/api/admin/forms/${formId}`, {
                 method: "PATCH",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
-            }).catch(() => undefined);
+            });
+            if (!res.ok) {
+                throw new Error(
+                    `Questions saved, but branding and form details were not: ${await readJsonError(res, `save failed (${res.status})`)}`
+                );
+            }
         },
         []
     );
@@ -213,7 +222,7 @@ export function useProcessingFormApi() {
                         name,
                         description: input.description?.trim() || null,
                         brand_name: input.brand_name?.trim() ?? "",
-                        accent_color: input.accent_color ?? "#00A283",
+                        accent_color: input.accent_color ?? DEFAULT_FORM_ACCENT,
                         origin: input.origin ?? "blank",
                     }),
                 });
@@ -387,7 +396,7 @@ export function useProcessingFormApi() {
             const branding = opts?.branding ?? {
                 brand_name: typeof existingMeta.brand_name === "string" ? existingMeta.brand_name : "",
                 accent_color:
-                    typeof existingMeta.accent_color === "string" ? existingMeta.accent_color : "#00A283",
+                    typeof existingMeta.accent_color === "string" ? existingMeta.accent_color : DEFAULT_FORM_ACCENT,
                 logo_url: typeof existingMeta.logo_url === "string" ? existingMeta.logo_url : null,
                 description: "",
             };

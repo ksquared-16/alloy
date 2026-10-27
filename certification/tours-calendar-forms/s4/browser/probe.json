@@ -1,0 +1,68 @@
+[
+ {
+  "width": 271.484375,
+  "key": "platform",
+  "bg": "rgb(0, 162, 131)",
+  "fg": "rgb(24, 39, 58)",
+  "row": 358,
+  "backWidth": 74.515625,
+  "ink": "rgb(0, 130, 105)",
+  "contrast": "4.67",
+  "inkContrast": "4.78"
+ },
+ {
+  "width": 271.484375,
+  "key": "pale",
+  "bg": "rgb(253, 230, 138)",
+  "fg": "rgb(24, 39, 58)",
+  "row": 358,
+  "backWidth": 74.515625,
+  "ink": "rgb(126, 115, 69)",
+  "contrast": "12.13",
+  "inkContrast": "4.75"
+ },
+ {
+  "width": 271.484375,
+  "key": "purple",
+  "bg": "rgb(124, 58, 237)",
+  "fg": "rgb(255, 255, 255)",
+  "row": 358,
+  "backWidth": 74.515625,
+  "ink": "rgb(124, 58, 237)",
+  "contrast": "5.70",
+  "inkContrast": "5.70"
+ },
+ {
+  "width": 160,
+  "key": "platform",
+  "bg": "rgb(0, 162, 131)",
+  "fg": "rgb(24, 39, 58)",
+  "row": 640,
+  "backWidth": 74.515625,
+  "ink": "rgb(0, 130, 105)",
+  "contrast": "4.67",
+  "inkContrast": "4.78"
+ },
+ {
+  "width": 160,
+  "key": "pale",
+  "bg": "rgb(253, 230, 138)",
+  "fg": "rgb(24, 39, 58)",
+  "row": 640,
+  "backWidth": 74.515625,
+  "ink": "rgb(126, 115, 69)",
+  "contrast": "12.13",
+  "inkContrast": "4.75"
+ },
+ {
+  "width": 160,
+  "key": "purple",
+  "bg": "rgb(124, 58, 237)",
+  "fg": "rgb(255, 255, 255)",
+  "row": 640,
+  "backWidth": 74.515625,
+  "ink": "rgb(124, 58, 237)",
+  "contrast": "5.70",
+  "inkContrast": "5.70"
+ }
+]

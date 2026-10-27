@@ -9,15 +9,21 @@
     "",
     "STOP semantics are carrier-mandated: a STOP suppresses ALL SMS to that",
     "number, including transactional and operational. It is not a marketing-only",
-    "opt-out."
+    "opt-out.",
+    "",
+    "START restores transactional and operational SMS only. It does NOT re-opt",
+    "the recipient into sms_marketing — marketing requires a separate explicit",
+    "opt-in (public form, operator, or future marketing keyword)."
   ],
-  "version": "2026-07-31.1",
+  "version": "2026-10-22.1",
   "keywords": {
     "stop": ["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "opt-out"],
     "start": ["start", "unstop", "optin", "opt-in"],
     "help": ["help", "info"]
   },
   "affected_preference_categories": ["sms_transactional", "sms_operational", "sms_marketing"],
+  "stop_preference_categories": ["sms_transactional", "sms_operational", "sms_marketing"],
+  "start_preference_categories": ["sms_transactional", "sms_operational"],
   "target_state": {
     "stop": "opted_out",
     "start": "opted_in",
@@ -25,5 +31,5 @@
   },
   "help_response": "Alloy messaging. Reply STOP to unsubscribe. Msg&data rates may apply. Contact your school for assistance.",
   "stop_response": "You have been unsubscribed and will receive no further messages. Reply START to resubscribe.",
-  "start_response": "You are resubscribed to messages. Reply STOP to unsubscribe."
+  "start_response": "You are resubscribed to service messages. Marketing texts still require a separate opt-in. Reply STOP to unsubscribe."
 }

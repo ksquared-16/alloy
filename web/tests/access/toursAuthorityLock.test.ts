@@ -61,6 +61,10 @@ const CONFIGURE: [string, string][] = [
     ["tours/availability-rules/route.ts", "POST"],
     ["tours/availability-rules/[ruleId]/route.ts", "PATCH"],
     ["tours/availability-rules/[ruleId]/route.ts", "DELETE"],
+    // S3 weekly schedules: the same configuration authority as a single rule.
+    ["tours/schedules/route.ts", "POST"],
+    ["tours/schedules/[scheduleId]/route.ts", "PUT"],
+    ["tours/schedules/[scheduleId]/route.ts", "DELETE"],
 ];
 
 const BOOK: [string, string][] = [
@@ -77,7 +81,7 @@ const read = (rel: string) => fs.readFileSync(path.join(API, rel), "utf8");
 
 describe("RL-20 — every Tour mutation is owned", () => {
     it("finds the surface it asserts over, so this lock cannot pass by measuring nothing", () => {
-        expect(CONFIGURE.length).toBe(3);
+        expect(CONFIGURE.length).toBe(6);
         expect(BOOK.length).toBe(6);
         for (const [rel] of ALL) expect(fs.existsSync(path.join(API, rel))).toBe(true);
     });

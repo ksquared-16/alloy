@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
+import { isTourSlotCapacityConflict } from "@/lib/tours/bookings/tourSlotCapacity";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 import { parseTourManualLocalDateTime } from "@/lib/tours/bookings/parseTourManualLocalDateTime";
 import { resolveTourLocationSlotDurationMinutes } from "@/lib/tours/availability/resolveTourLocationSlotDurationMinutes";
@@ -130,6 +131,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ booking: row }, { status: 201 });
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // Another booking took the last seat between availability and write.
+        if (isTourSlotCapacityConflict(e)) {
+            return NextResponse.json({ error: "That time is no longer available.", code: "SLOT_UNAVAILABLE" }, { status: 409 });
+        }
         return NextResponse.json({ error: msg }, { status: 400 });
     }
 }

@@ -14,14 +14,43 @@
  *
  * ## Nothing tenant-specific is hardcoded
  *
- * The fallback is the platform's own neutral accent, not any tenant's colour. Firefly renders in its
- * established treatment because its forms carry `accent_color: #00A283` — resolved, not special-cased.
+ * The fallback is the platform's own accent (Bend Pine), the same default the Form Builder shows
+ * and saves — one default, so the builder preview and the public form can no longer disagree about
+ * what an unbranded form looks like. A tenant's authored accent always wins.
+ *
+ * ## Painting it
+ *
+ * `participantBrandStyle` sets `--participant-accent`, `--participant-on-accent` and
+ * `--participant-accent-ink` on the shell. `globals.css` maps them to colour utilities with
+ * `@theme inline`, so every accent surface inside the shell reads the tenant's colour. Text ON the
+ * accent and the accent AS text on white both hold WCAG AA 4.5:1 (S4-D) — chosen automatically, so a
+ * light accent gets dark text and a pale accent's links are a darker shade of the same hue.
+ *
+ * The effective brand (form → location → organization → platform) is resolved server-side
+ * (`resolveEffectivePublicBrand`); `participantBrandFromEffective` adapts it to this shape.
  *
  * Pure. No I/O — the caller already holds the form metadata.
  */
 
-/** Platform default when a tenant has authored no accent. Never a tenant's colour. */
-export const PARTICIPANT_DEFAULT_ACCENT = "#1F2937";
+import { DEFAULT_FORM_ACCENT } from "@/lib/forms/processingFormBranding";
+import {
+    BRAND_INK_DARK,
+    BRAND_INK_LIGHT,
+    brandAccentInk,
+    brandOnAccent,
+    contrastRatio,
+    relativeLuminance,
+    type EffectivePublicBrand,
+} from "@/lib/branding/publicBrand";
+
+export { contrastRatio, relativeLuminance };
+
+/** Platform default when a tenant has authored no accent — the builder's default, not a second one. */
+export const PARTICIPANT_DEFAULT_ACCENT = DEFAULT_FORM_ACCENT;
+
+/** Text on the accent: white where it is legible, otherwise the platform's dark ink (then black). */
+export const PARTICIPANT_ON_ACCENT_LIGHT = BRAND_INK_LIGHT;
+export const PARTICIPANT_ON_ACCENT_DARK = BRAND_INK_DARK;
 
 export type ParticipantBrand = {
     readonly accentColor: string;
@@ -57,7 +86,24 @@ export function resolveParticipantBrand(formMetadata: unknown): ParticipantBrand
     };
 }
 
+/**
+ * Text on a surface painted in `accent`, at least 4.5:1 (S4-D, Director-approved floor for normal-size
+ * button text). Bend Pine itself carries dark ink under this rule: white on it is about 3.2:1.
+ */
+export function participantOnAccent(accent: string): string {
+    return brandOnAccent(accent);
+}
+
+/** The participant theme from a server-resolved effective brand. */
+export function participantBrandFromEffective(brand: EffectivePublicBrand): ParticipantBrand {
+    return { accentColor: brand.accentColor, logoUrl: brand.logoUrl, brandName: brand.displayName };
+}
+
 /** CSS custom properties, so both phases inherit one theme from the shell that wraps them. */
 export function participantBrandStyle(brand: ParticipantBrand): Record<string, string> {
-    return { "--participant-accent": brand.accentColor };
+    return {
+        "--participant-accent": brand.accentColor,
+        "--participant-on-accent": participantOnAccent(brand.accentColor),
+        "--participant-accent-ink": brandAccentInk(brand.accentColor),
+    };
 }

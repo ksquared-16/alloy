@@ -3543,6 +3543,18 @@
         "status": "pending"
       }
     },
+    "app/api/admin/operating-calendar/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only Operating Calendar for one location the caller's site scope admits (refused otherwise): the organization defaults it inherits, its own entries, closures recorded in Attendance and the resolved days, plus whether the caller may edit each scope. Org-filtered, behind portal admission, writes nothing."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.manage",
+        "helper": "requireOperatingCalendarCapability",
+        "reason": "Previews or authors an Operating Calendar entry (holiday, closure, partial closure, modified hours) as an Operational Expectation under the reviewed purpose `location.operating_calendar`, through the one ledger intake. It changes when a location operates for Attendance and Tours, so organization settings authority (`settings.manage`) at the call site; an organization default additionally needs unrestricted site scope and a location entry needs that site in scope. No portal fallback, role title or flag in the authority path."
+      }
+    },
     "app/api/admin/operational-config-rules/route.ts": {
       "GET": {
         "status": "pending"
@@ -4455,6 +4467,12 @@
         "status": "pending"
       }
     },
+    "app/api/admin/processing/cases/[caseId]/requested-tour/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only view of the tour a family requested on the school's public tour calendar (S7), for the Processing case it belongs to: the request, whether the time is still offered, the booking Approve made and its confirmation outcome, and current openings from the canonical slot engine. Same admission as the case detail it accompanies (portal admin context, org-filtered); writes nothing."
+      }
+    },
     "app/api/admin/processing/dev-cleanup/route.ts": {
       "POST": {
         "status": "declared",
@@ -4536,6 +4554,28 @@
         "capability": "settings.manage",
         "helper": "requireProgramsConfigurationCapability",
         "reason": "Programs are published organization configuration: a draft/validate/publish lifecycle that distributes to Locations, writing configuration_publications and the configuration_distribution_* tables, met by the operator at Settings -> Programs. No capability was invented \u2014 settings.manage was already the declared owner of the canonical publication route, and this extends the same authority to the surfaces that had none. Was ORG-CONTEXT-ONLY: portal admission was the entire gate. NOT Financials: every commercial_products / commercial_policies / commercial_tuition_rates access on this surface is a read, and the tuition-rate reads only COUNT, to refuse retiring an offering whose rates are in use. NOT Business Process: nothing here writes a process definition, stage or lifecycle."
+      }
+    },
+    "app/api/admin/public-brand/locations/[locationId]/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Sets a location's override of the organization's public brand (name, colour, logo on that location's tour page and location-scoped forms), writing only `locations.metadata.public_brand_v1` for a location in the caller's org. Edited with the location's tour settings, so it carries Tours configuration authority at the call site; no portal fallback, role title or flag."
+      }
+    },
+    "app/api/admin/public-brand/organization/route.ts": {
+      "PUT": {
+        "status": "declared",
+        "capability": "settings.manage",
+        "helper": "requirePublicBrandOrganizationCapability",
+        "reason": "Sets the organization's default public brand shown to families on every form and tour page that does not override it (`org_settings.metadata.public_brand_v1`). It is organization identity, so organization settings authority (`settings.manage`) at the call site, not Tours authority; no portal fallback, role title or flag."
+      }
+    },
+    "app/api/admin/public-brand/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only: the caller's own organization brand, one of its locations' overrides and the effective result. All of it is shown publicly to families on forms and tour pages anyway; behind portal admission, org-filtered, writes nothing."
       }
     },
     "app/api/admin/qa/financials-director/route.ts": {
@@ -5075,6 +5115,32 @@
         "capability": "tours.configure",
         "helper": "requireToursCapability",
         "reason": "Creates a tour availability rule (writes `tour_availability_rules`), setting when and where tours may be booked at a location. Mounted at Settings -> Tours -> Availability. `requireAdminOrOps()` stood here and, despite its name, resolves PORTAL ADMISSION and no role, so every principal who could enter the portal could perform this - accidental reach on a customer-facing surface, not a package. Effective authority was traced per handler through the shared service, not inferred from the route: there is no downstream role title, no portal fallback and no feature flag in the authority path."
+      }
+    },
+    "app/api/admin/tours/schedules/[scheduleId]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Deletes a weekly tour schedule's availability rules at the named scope only; bookings are never read or written. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Reconciles a weekly tour schedule's availability rules to the submitted weekday x window shape. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
+      }
+    },
+    "app/api/admin/tours/schedules/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only default time zone for authoring a schedule at the caller's own org scope or one of its locations (location -> organization). Returns an IANA zone id and its source, nothing tenant-sensitive; it is behind portal admission like the rule list it accompanies, and writes nothing."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "tours.configure",
+        "helper": "requireToursCapability",
+        "reason": "Creates a weekly tour schedule (one availability rule per weekday x window); duplicating a schedule is this call with copied configuration. Weekly tour schedules (S3): writes `tour_availability_rules` rows grouped under one `metadata.tour_schedule` id, bounded by org, exact location scope and schedule id. Same authority as creating or editing a single availability rule: `tours.configure` at the call site, no portal fallback, no role title and no flag in the authority path."
       }
     },
     "app/api/admin/tours/bookings/[bookingId]/cancel/route.ts": {
@@ -5723,6 +5789,12 @@
       "GET": {
         "status": "none",
         "reason": "Reads the bookable slots for the token's own booking link so the family can choose one. Token-scoped admission like the rest of this public surface; it exposes availability windows for that link only and no organization data beyond them."
+      }
+    },
+    "app/api/public/tours/[token]/slots/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "A school's public tour calendar (S7): bookable times for the one location a published, location-scoped intake link names. Token-scoped admission (active, unexpired link carrying the tours-authorized calendar flag; embed-origin allowlist enforced), rate-limited, 45-day window cap; org and location come from the link, never the request. Returns intervals and their timezone only — no capacity, rules, bookings or family data — and writes nothing."
       }
     },
     "app/api/runtime-info/route.ts": {

@@ -8,6 +8,11 @@ export type ProcessingFormBranding = {
     accent_color: string;
     logo_url: string | null;
     description: string;
+    /**
+     * "inherit" = the public form shows the school's brand (location → organization); "form" = these
+     * values override it. Absent on forms saved before S4 (see lib/branding/publicBrand.ts).
+     */
+    brand_source?: "inherit" | "form" | null;
 };
 
 export const DEFAULT_FORM_ACCENT = "#00A283";
@@ -26,6 +31,7 @@ export function parseFormBranding(
                 : DEFAULT_FORM_ACCENT,
         logo_url: typeof meta.logo_url === "string" && meta.logo_url.trim() ? meta.logo_url.trim() : null,
         description: descFromRow || descFromMeta,
+        brand_source: meta.brand_source === "inherit" || meta.brand_source === "form" ? meta.brand_source : null,
     };
 }
 
@@ -38,6 +44,7 @@ export function brandingMetadataPatch(
         brand_name: branding.brand_name.trim() || null,
         accent_color: branding.accent_color || DEFAULT_FORM_ACCENT,
         logo_url: branding.logo_url?.trim() || null,
+        ...(branding.brand_source ? { brand_source: branding.brand_source } : {}),
     };
 }
 

@@ -8,12 +8,17 @@ import {
     type TourCommsConfig,
 } from "@/lib/tours/comms/tourCommsConfig";
 import type { TourAutomationConditionFacts } from "@/lib/tours/comms/tourCommsAutomationConditions";
+import { loadTourCommsAuthoritativeState, mayCommunicateForTour } from "@/lib/tours/comms/tourCommsEligibility";
 import {
     buildTourReminderSchedulePlans,
     isTourBookingEligibleForReminders,
     type TourReminderSchedulePlan,
     type TourReminderSuppressionReason,
 } from "@/lib/tours/comms/tourReminderTiming";
+import {
+    TOUR_COMMS_PURPOSE,
+    messageCategoryForTourEvent,
+} from "@/lib/tours/comms/tourCommsMessageCategory";
 
 export const TOUR_REMINDER_EVENT_KEY = "tour_reminder" as const;
 
@@ -43,6 +48,8 @@ export type TourSchedulingReminderMetadata = {
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.eventKey]: typeof TOUR_REMINDER_EVENT_KEY;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.tourStartAt]: string;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.locationId]: string;
+    [TOUR_COMMS_SCHEDULED_SEND_METADATA.messageCategory]: "transactional";
+    [TOUR_COMMS_SCHEDULED_SEND_METADATA.purpose]: typeof TOUR_COMMS_PURPOSE;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.quietHoursAdjusted]?: boolean;
     [TOUR_COMMS_SCHEDULED_SEND_METADATA.reason]?: string;
 };
@@ -104,6 +111,62 @@ function metadataTourBookingId(metadata: unknown): string {
     return typeof v === "string" ? v.trim() : "";
 }
 
+export type TourReminderDispatchVerdict =
+    | { kind: "dispatch" }
+    /** Durable: the booking can no longer be reminded about. The row is withdrawn, not retried. */
+    | { kind: "suppress"; reason: string }
+    /** Transient: eligibility could not be read. The row fails visibly rather than sending blind. */
+    | { kind: "error"; message: string };
+
+/**
+ * Re-decide a DUE tour reminder against the booking as it is now.
+ *
+ * Scheduling-time eligibility is not dispatch-time eligibility: a booking can be canceled,
+ * marked no-show, moved, or turn out never to have been approved between the two, and the
+ * withdrawal on those transitions is best-effort. This is the check that cannot be skipped,
+ * because it runs at the moment of sending, through the same policy that gated scheduling.
+ */
+export async function revalidateTourReminderForDispatch(params: {
+    supabase: SupabaseClient;
+    row: Pick<CommunicationScheduledSendRow, "org_id" | "entity_id" | "metadata">;
+    now: Date;
+    loadState?: typeof loadTourCommsAuthoritativeState;
+}): Promise<TourReminderDispatchVerdict> {
+    const bookingId = metadataTourBookingId(params.row.metadata);
+    if (!bookingId) return { kind: "suppress", reason: "booking_reference_missing" };
+
+    let state: Awaited<ReturnType<typeof loadTourCommsAuthoritativeState>>;
+    try {
+        state = await (params.loadState ?? loadTourCommsAuthoritativeState)(params.supabase, {
+            orgId: params.row.org_id,
+            bookingId,
+        });
+    } catch (e) {
+        return { kind: "error", message: e instanceof Error ? e.message : String(e) };
+    }
+
+    const verdict = mayCommunicateForTour("reminder", state, { now: params.now });
+    if (!verdict.allowed) return { kind: "suppress", reason: verdict.reason };
+
+    // The reminder belongs to this booking's opportunity — never deliver one row's text
+    // about a booking another entity owns.
+    if (state.row && String(state.row.opportunity_id) !== String(params.row.entity_id)) {
+        return { kind: "suppress", reason: "entity_mismatch" };
+    }
+    // Written for a different start time: the booking moved and this generation is stale.
+    const scheduledFor = isRecord(params.row.metadata)
+        ? params.row.metadata[TOUR_COMMS_SCHEDULED_SEND_METADATA.tourStartAt]
+        : null;
+    if (
+        typeof scheduledFor === "string" &&
+        state.booking &&
+        Date.parse(scheduledFor) !== Date.parse(state.booking.start_at)
+    ) {
+        return { kind: "suppress", reason: "schedule_stale" };
+    }
+    return { kind: "dispatch" };
+}
+
 export function buildTourSchedulingReminderMetadata(input: {
     tourBookingId: string;
     reminderKey: string;
@@ -120,6 +183,10 @@ export function buildTourSchedulingReminderMetadata(input: {
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.eventKey]: TOUR_REMINDER_EVENT_KEY,
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.tourStartAt]: input.tourStartAtIso,
         [TOUR_COMMS_SCHEDULED_SEND_METADATA.locationId]: input.locationId,
+        [TOUR_COMMS_SCHEDULED_SEND_METADATA.messageCategory]: messageCategoryForTourEvent(
+            TOUR_REMINDER_EVENT_KEY
+        ) as "transactional",
+        [TOUR_COMMS_SCHEDULED_SEND_METADATA.purpose]: TOUR_COMMS_PURPOSE,
     };
     if (input.quietHoursAdjusted) {
         metadata[TOUR_COMMS_SCHEDULED_SEND_METADATA.quietHoursAdjusted] = true;
