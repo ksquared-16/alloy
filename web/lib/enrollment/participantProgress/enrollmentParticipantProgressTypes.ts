@@ -96,6 +96,18 @@ export type EnrollmentSatisfactionEvidence =
           readonly kind: "financial_obligation";
           readonly charge_ids: readonly string[];
           readonly financial_state: string;
+      }
+    | {
+          /**
+           * Canonical Documents says this child's document requirement is met (Documents V1 / D6): accepted evidence,
+           * or a Documents-owned waiver. `document_requirement_id` is the Documents requirement that answered, or
+           * `stage:<type key>` when the stage's own requirement was evaluated.
+           */
+          readonly kind: "document_requirement";
+          readonly document_requirement_id: string;
+          readonly documents_state: "satisfied" | "waived";
+          readonly document_ids: readonly string[];
+          readonly waiver_id: string | null;
       };
 
 export type EnrollmentRequirementProgress = {

@@ -28,11 +28,10 @@ describe("the financial requirement kind", () => {
 
     it("is not listed among the kinds the platform refuses", () => {
         expect(Object.keys(REQUIREMENT_KIND_UNSUPPORTED_REASON_V1)).not.toContain("financial");
-        // The four that genuinely have no evidence owner are untouched.
+        // The kinds that genuinely have no evidence owner are untouched (`document` left with Documents V1 / D6).
         expect(Object.keys(REQUIREMENT_KIND_UNSUPPORTED_REASON_V1).sort()).toEqual([
             "acknowledgment",
             "consent",
-            "document",
             "signature",
         ]);
     });

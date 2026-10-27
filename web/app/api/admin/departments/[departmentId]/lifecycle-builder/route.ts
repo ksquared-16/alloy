@@ -3,6 +3,8 @@ import { parseProcessModelV1, processModelV1Problem } from "@/lib/lifecycle/proc
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { financialRequirementRefusals } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
+import { listPublishedDocumentTypePolicies } from "@/lib/documents/configuration/documentTypeEnforcement";
+import { documentStageRequirementRefusals } from "@/lib/documents/requirements/documentStageRequirementRefs";
 import {
     STAGE_ANNOTATION_PROJECTIONS,
     isStageAnnotationProjectionKey,
@@ -474,6 +476,28 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                                 error: financialRefusals.map((r) => r.detail).join(" "),
                                 code: "unknown_charge_template",
                                 refusals: financialRefusals,
+                            },
+                            { status: 422 },
+                        );
+                    }
+                }
+                /*
+                 * A document requirement must name a PUBLISHED Studio type that accepts a child's documents
+                 * (Documents V1 / D6): Documents evaluates it for the journey's child, and a type it cannot file
+                 * for a child would leave the family at a stage they can never finish.
+                 */
+                if (parsed.requirements.some((r) => r.ref.kind === "document")) {
+                    const publishedTypes = await listPublishedDocumentTypePolicies(createAdminClient(), ctx.orgId);
+                    if (!publishedTypes) {
+                        return NextResponse.json({ error: "Document types could not be read.", code: "document_types_unavailable" }, { status: 503 });
+                    }
+                    const documentRefusals = documentStageRequirementRefusals(parsed.requirements, publishedTypes);
+                    if (documentRefusals.length) {
+                        return NextResponse.json(
+                            {
+                                error: documentRefusals.map((r) => r.detail).join(" "),
+                                code: "unknown_document_type",
+                                refusals: documentRefusals,
                             },
                             { status: 422 },
                         );

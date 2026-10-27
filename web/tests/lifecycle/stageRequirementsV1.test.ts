@@ -88,7 +88,7 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
          * distinction this constant exists to hold: architecture may admit a kind, and the
          * platform still refuses to pretend it can satisfy one.
          */
-        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work", "financial"]);
+        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work", "financial", "document"]);
         expect(isAuthorableRequirementKind("form")).toBe(true);
         expect(isAuthorableRequirementKind("work")).toBe(true);
         expect(isAuthorableRequirementKind("consent")).toBe(false);
@@ -101,13 +101,18 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
          * four refused kinds below still have nothing that could answer for them.
          */
         expect(isAuthorableRequirementKind("financial")).toBe(true);
+        /*
+         * `document` joined with Documents V1 / D6: Documents now owns document requirement satisfaction (one
+         * evaluator over documents, reviewed versions and Documents-owned waivers), so it is READ, never asserted.
+         */
+        expect(isAuthorableRequirementKind("document")).toBe(true);
     });
 
     it("refuses an unsupported kind with a concrete missing-owner reason", () => {
-        for (const kind of ["document", "consent", "acknowledgment", "signature"] as const) {
+        for (const kind of ["consent", "acknowledgment", "signature"] as const) {
             const refusal = refuseUnauthorableRequirement({
                 requirement_id: "r1",
-                ref: { kind, [`${kind === "document" ? "document_type_key" : `${kind}_key`}`]: "x" } as never,
+                ref: { kind, [`${kind}_key`]: "x" } as never,
                 level: "required",
             });
             expect(refusal?.code).toBe("unsupported_kind");

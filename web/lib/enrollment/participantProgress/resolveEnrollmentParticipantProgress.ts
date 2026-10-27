@@ -23,6 +23,8 @@
  * @see projectEnrollmentParticipantProgress.ts — the pure join and its rules
  */
 
+import { evaluateDocumentTypeRequirementsForChild } from "@/lib/documents/requirements/documentRequirementService";
+import { projectDocumentRequirementProgress } from "@/lib/enrollment/participantProgress/projectDocumentRequirementProgress";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequirements";
@@ -297,11 +299,18 @@ export async function resolveEnrollmentParticipantProgress(
 
     const realized = await loadRealizedFormItems(supabase, input.orgId, evidence.items as SessionItemRow[]);
     const formProjected = projectRequirementsProgress(requirements, realized);
-    const projected = await projectFinancialRequirementsForChild(supabase, {
+    // Documents before financial: a fee comes due only once every non-financial requirement is satisfied.
+    const documentProjected = await projectDocumentRequirementsForChild(supabase, {
         orgId: input.orgId,
         childId: String((instance as { subject_id?: string | null }).subject_id ?? "").trim() || null,
         requirements,
         projected: formProjected,
+    });
+    const projected = await projectFinancialRequirementsForChild(supabase, {
+        orgId: input.orgId,
+        childId: String((instance as { subject_id?: string | null }).subject_id ?? "").trim() || null,
+        requirements,
+        projected: documentProjected,
     });
 
     input.captureLoaded?.({
@@ -323,6 +332,38 @@ export async function resolveEnrollmentParticipantProgress(
             requirements: projected,
         },
     };
+}
+
+/**
+ * DOCUMENT REQUIREMENTS, FROM CANONICAL DOCUMENTS, FOR THIS CHILD (Documents V1 / D6).
+ *
+ * One read of the Documents service for every document type the stage names; each answer is translated by
+ * `projectDocumentRequirementProgress`. Business Process never decides document satisfaction. A read failure leaves
+ * the requirements "unsupported" (blocking): an unreadable answer must never read as a met one.
+ */
+async function projectDocumentRequirementsForChild(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        childId: string | null;
+        requirements: readonly StageRequirementV1[];
+        projected: EnrollmentRequirementProgress[];
+    },
+): Promise<EnrollmentRequirementProgress[]> {
+    const documents = args.requirements.filter((r) => r.ref.kind === "document");
+    if (!documents.length || !args.childId) return args.projected;
+    try {
+        const typeKeys = documents.map((r) => (r.ref.kind === "document" ? r.ref.document_type_key : ""));
+        const answers = await evaluateDocumentTypeRequirementsForChild(supabase, { orgId: args.orgId, childId: args.childId, typeKeys });
+        if (!answers) return args.projected;
+        return args.projected.map((p) => {
+            const requirement = documents.find((r) => r.requirement_id === p.requirement_id);
+            if (!requirement || requirement.ref.kind !== "document") return p;
+            return projectDocumentRequirementProgress(p, answers.get(requirement.ref.document_type_key));
+        });
+    } catch {
+        return args.projected;
+    }
 }
 
 /**
