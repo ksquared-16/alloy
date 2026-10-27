@@ -19,6 +19,8 @@ import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { addDocumentVersion, listDocumentVersions } from "@/lib/documents/documentVersions";
 import { checkDocumentTypeForWrite, markVersionPendingReview } from "@/lib/documents/configuration/documentTypeEnforcement";
 import { documentSubjectTypeForLegacy } from "@/lib/documents/documentSubjects";
+import { setDocumentVersionValidity } from "@/lib/documents/review/documentReviewService";
+import { isIsoDate } from "@/lib/documents/validity/documentValidity";
 
 /**
  * D2 — a document's versions.
@@ -34,6 +36,12 @@ import { documentSubjectTypeForLegacy } from "@/lib/documents/documentSubjects";
  *      no record, no version. The previous version is kept and stays retrievable through
  *      `GET /api/admin/documents/[id]/signed-url?version=<id>`. The document's OCR text belonged to the previous bytes and
  *      is cleared; extraction is not re-run here.
+ *
+ *      D7 RENEWAL: a replacement is how an expiring or expired document is renewed. Optional `effective_on` /
+ *      `expires_on` (YYYY-MM-DD) are recorded on the NEW version (`document_set_version_validity`, in its review history).
+ *      The new version is PENDING review when the type requires review or its validity policy says `review_on_renewal`;
+ *      until it is accepted it satisfies nothing, while the earlier accepted version keeps counting if it is still in
+ *      force (the D6/D7 evaluator). A file screening would quarantine is never stored, so it can never satisfy anything.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -82,6 +90,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const reason = typeof formData.get("reason") === "string" ? String(formData.get("reason")).trim() : "";
     if (reason.length < 10) {
         return NextResponse.json({ error: "A replacement needs a written reason (at least 10 characters).", code: "REASON_REQUIRED" }, { status: 400 });
+    }
+    const dateField = (k: string): string | null | "invalid" => {
+        const raw = formData.get(k);
+        if (raw === null || raw === "") return null;
+        return typeof raw === "string" && isIsoDate(raw.trim()) ? raw.trim() : "invalid";
+    };
+    const effectiveOn = dateField("effective_on");
+    const expiresOn = dateField("expires_on");
+    if (effectiveOn === "invalid" || expiresOn === "invalid") return NextResponse.json({ error: "Dates are YYYY-MM-DD.", code: "BAD_DATE" }, { status: 400 });
+    if (effectiveOn && expiresOn && expiresOn < effectiveOn) {
+        return NextResponse.json({ error: "The expiration date is before the effective date.", code: "VALIDITY_RANGE_INVERTED" }, { status: 400 });
     }
 
     const origName = file instanceof File && file.name ? file.name : "replacement";
@@ -133,7 +152,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         event: "document_version_added",
         subject: { type: "documents", id: document.id },
         route: "admin/documents/versions",
-        detail: { reason, checksum_sha256: checksumSha256, byte_size: buffer.length, mime_type: mimeType, screening_engine: screened.screening.engine ?? null },
+        detail: {
+            reason,
+            checksum_sha256: checksumSha256,
+            byte_size: buffer.length,
+            mime_type: mimeType,
+            screening_engine: screened.screening.engine ?? null,
+            ...(effectiveOn || expiresOn ? { effective_on: effectiveOn, expires_on: expiresOn } : {}),
+        },
     });
     if (!audit.ok) return NextResponse.json(DOCUMENT_AUDIT_UNAVAILABLE.body, { status: DOCUMENT_AUDIT_UNAVAILABLE.status });
 
@@ -163,8 +189,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         const status = added.code === "DOCUMENT_UNAVAILABLE" ? 409 : added.code === "NOT_FOUND" ? 404 : 500;
         return NextResponse.json({ ok: false, error: "The new version could not be recorded.", code: added.code }, { status });
     }
-    if (typeCheck.policy?.review_required) {
+    if (typeCheck.policy?.review_required || typeCheck.policy?.validity_policy?.review_on_renewal === true) {
         await markVersionPendingReview(supabase, document.orgId, document.id).catch(() => undefined);
+    }
+    let validityRecorded: boolean | null = null;
+    if (effectiveOn || expiresOn) {
+        const v = await setDocumentVersionValidity(supabase, {
+            orgId: document.orgId,
+            documentId: document.id,
+            versionId: added.versionId,
+            effectiveOn,
+            expiresOn,
+            reason: `Renewal: ${reason}`.slice(0, 2000),
+            actorUserId: ctx.userId,
+        });
+        validityRecorded = v.ok;
     }
 
     return NextResponse.json({
@@ -174,5 +213,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         version_number: added.versionNumber,
         supersedes_version_id: added.supersedesVersionId,
         checksum_sha256: checksumSha256,
+        validity_recorded: validityRecorded,
     });
 }
