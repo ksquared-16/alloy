@@ -181,3 +181,12 @@ Governed merge of PR #1606 (`gar_014b48d6f7390c`) refused before execution:
 `20261210093500`, so the S1 guard would apply out of order. Renumbered (pure `git mv`, R100, SQL
 byte-identical) to **`20261211090000`**; the two code/test comments citing the version updated. Earlier
 records above cite the old version as it was at the time.
+
+## Delivered (2026-10-27)
+
+PR #1606 merged to staging (`gar_ccc4d7fceab0a8`) at **`b5abf2d02`** from candidate `0220d4b29` (checkpoint
+`ick_2f802c299baf`). A direct staging apply (`gar_fd0942c3c2e85e`) was correctly refused —
+`migration_owned_by_pending_merge`: the Supabase integration applies merged migrations itself. Catalog census on
+ALLOY_STAGING (`gar_4ae4adaa460fa2`, `tha_333e1e5193243a`, 04:07:45Z): ledger has `20261211090000`, neither old
+version; `enforce_tour_booking_slot_capacity()` present; `trg_tour_bookings_slot_capacity` present, enabled.
+`staging.workwithalloy.com/api/build-info` serves `b5abf2d02`.
