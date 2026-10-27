@@ -28,7 +28,7 @@ const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
 const policy = (key: string, subject_types: string[]): PublishedDocumentTypePolicy => ({
     type_id: `t-${key}`, version_id: `v-${key}`, key, label: key, category_id: null, category_label: null,
     subject_types: subject_types as PublishedDocumentTypePolicy["subject_types"], allowed_formats: ["pdf"], default_sensitivity: "standard",
-    review_required: true, replacement_policy: "new_version",
+    review_required: true, replacement_policy: "new_version", validity_policy: { kind: "none" },
 });
 const docReq = (id: string, key: string, level: StageRequirementV1["level"] = "required"): StageRequirementV1 =>
     ({ requirement_id: id, ref: { kind: "document", document_type_key: key }, level, timing: "stage_exit", enforcement: "blocking" }) as StageRequirementV1;
@@ -38,8 +38,8 @@ const unsupported = (id: string, level: EnrollmentRequirementProgress["level"] =
 const evaluation = (state: RequirementEvaluation["state"], over: Partial<RequirementEvaluation> = {}): RequirementEvaluation => ({
     requirement_id: "r1", requirement_key: "r1", version_id: "v1", label: "Immunizations", document_type_key: "immunization_record", subject_type: "child",
     subject_id: "c1", policy: "required", blocking: state !== "satisfied" && state !== "waived", state, blocked_reason: state === "blocked" ? "evidence_quarantined" : null,
-    evidence: { accepted: state === "satisfied" ? ["d1"] : [], pending: [], rejected: [], quarantined: [] }, waiver_id: state === "waived" ? "w1" : null,
-    waivable: true, due_on: null, ...over,
+    evidence: { accepted: state === "satisfied" ? ["d1"] : [], pending: [], undated: [], expired: [], rejected: [], quarantined: [] }, waiver_id: state === "waived" ? "w1" : null,
+    waivable: true, due_on: null, valid_until: null, expiring_soon: false, renewal_pending: false, ...over,
 });
 
 describe("authoring a stage document requirement", () => {

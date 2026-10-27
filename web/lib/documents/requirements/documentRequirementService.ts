@@ -36,6 +36,7 @@ import { householdForAnchor, householdSubjects, type LibrarySubject, type Librar
 import { REQUIREMENT_VERSION_COLUMNS } from "@/lib/documents/requirements/documentRequirementConfigService";
 import {
     evaluateDocumentRequirement,
+    evaluationNeedsRenewal,
     evaluationNeedsWork,
     type EvaluableRequirement,
     type EvaluableTypePolicy,
@@ -46,6 +47,8 @@ import {
     type SubjectJourney,
 } from "@/lib/documents/requirements/documentRequirementEvaluator";
 import type { RequirementSubjectType } from "@/lib/documents/requirements/documentRequirementPolicy";
+import { evaluateDocumentValidity, type DocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { localDateOf, resolveDocumentsClock, type DocumentsClock } from "@/lib/documents/validity/documentsClock";
 
 export type RequirementActor = {
     orgId: string;
@@ -78,9 +81,17 @@ function chunks<T>(list: T[], size = IN_CHUNK): T[][] {
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 export const subjectKey = (r: { subject_type: string; subject_id: string }) => `${r.subject_type}:${r.subject_id}`;
 
-/** Today in UTC as YYYY-MM-DD; the evaluator itself never reads a clock. */
+/**
+ * Today in UTC as YYYY-MM-DD. Kept for callers that pass an explicit date; every Documents read resolves the
+ * ORGANIZATION-local date instead (`resolveDocumentsClock`, D7). The evaluator itself never reads a clock.
+ */
 export function todayIso(now: Date = new Date()): string {
     return now.toISOString().slice(0, 10);
+}
+
+/** An explicit `today` (tests, callers that already know the date) is used as given, in UTC; otherwise the org clock. */
+async function clockFor(supabase: SupabaseClient, orgId: string, today?: string): Promise<DocumentsClock> {
+    return today ? { today, timeZone: "UTC" } : resolveDocumentsClock(supabase, orgId);
 }
 
 // ── configuration reads ─────────────────────────────────────────────────────────────────────────────────────────
@@ -156,6 +167,43 @@ export function actorMaySeeRequirement(actor: Pick<RequirementActor, "roleKeys" 
 // ── facts ───────────────────────────────────────────────────────────────────────────────────────────────────────
 type EvidenceRow = EvidenceDocument & { doc_type: string | null; entity_type: string | null; entity_id: string | null };
 
+type VersionRow = { id: string; document_id: string; version_number: number | null; review_status: string | null; reviewed_at: string | null; effective_on: string | null; expires_on: string | null; created_at: string | null };
+
+/** D7: one version's validity under its document type's published policy, on the organization's date. */
+export function versionValidity(types: RequirementTypeCatalog, docType: string | null, v: Pick<VersionRow, "effective_on" | "expires_on" | "created_at" | "reviewed_at">, clock: DocumentsClock): DocumentValidity {
+    const policy = docType ? types.get(docType)?.validity_policy ?? null : null;
+    return evaluateDocumentValidity({
+        policy,
+        facts: { effective_on: v.effective_on, expires_on: v.expires_on, received_on: localDateOf(v.created_at, clock.timeZone), reviewed_on: localDateOf(v.reviewed_at, clock.timeZone) },
+        today: clock.today,
+    });
+}
+
+const asReview = (r: string | null): EvidenceDocument["review_status"] => (r === "pending" || r === "accepted" || r === "rejected" ? r : null);
+
+/**
+ * D7: the current version's validity and the newest EARLIER accepted version (with its validity), from all of a
+ * document's versions. An earlier version with no review counts as accepted only for a type that needs no review.
+ */
+export function evidenceVersionFacts(
+    types: RequirementTypeCatalog,
+    doc: { doc_type: string | null; current_version_id: string | null },
+    versions: VersionRow[],
+    clock: DocumentsClock,
+): { review_status: EvidenceDocument["review_status"]; validity: DocumentValidity | null; prior_accepted: EvidenceDocument["prior_accepted"] } {
+    const current = versions.find((v) => v.id === doc.current_version_id) ?? null;
+    const reviewRequired = doc.doc_type ? types.get(doc.doc_type)?.review_required === true : false;
+    const earlier = versions
+        .filter((v) => v.id !== doc.current_version_id && (current?.version_number == null || (v.version_number ?? 0) < current.version_number))
+        .sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0));
+    const prior = earlier.find((v) => v.review_status === "accepted" || (v.review_status === null && !reviewRequired)) ?? null;
+    return {
+        review_status: current ? asReview(current.review_status) : null,
+        validity: current ? versionValidity(types, doc.doc_type, current, clock) : null,
+        prior_accepted: prior ? { version_id: prior.id, validity: versionValidity(types, doc.doc_type, prior, clock) } : null,
+    };
+}
+
 type SubjectFacts = {
     subjects: Map<string, EvaluationSubject>;
     evidence: Map<string, EvidenceRow[]>;
@@ -218,7 +266,14 @@ async function loadJourneys(supabase: SupabaseClient, orgId: string, refs: Subje
     return out;
 }
 
-async function loadSubjectFacts(supabase: SupabaseClient, orgId: string, refs: SubjectRef[], typeKeys: string[]): Promise<SubjectFacts | null> {
+async function loadSubjectFacts(
+    supabase: SupabaseClient,
+    orgId: string,
+    refs: SubjectRef[],
+    typeKeys: string[],
+    types: RequirementTypeCatalog,
+    clock: DocumentsClock,
+): Promise<SubjectFacts | null> {
     const subjects = new Map<string, EvaluationSubject>();
     const evidence = new Map<string, EvidenceRow[]>();
     if (refs.length === 0) return { subjects, evidence, waivers: [] };
@@ -261,21 +316,30 @@ async function loadSubjectFacts(supabase: SupabaseClient, orgId: string, refs: S
             (c) => supabase.from("documents").select("id, doc_type, status, entity_type, entity_id, created_at, current_version_id").eq("org_id", orgId).in("id", c).in("doc_type", typeKeys),
         );
         if (!docs) return null;
-        const versionIds = docs.map((d) => d.current_version_id).filter((v): v is string => Boolean(v));
-        const versions = versionIds.length
-            ? await readIn<{ id: string; review_status: string | null }>(supabase, versionIds, (c) => supabase.from("document_versions").select("id, review_status").eq("org_id", orgId).in("id", c))
+        // D7: every version of each evidence document — the current one decides, an earlier accepted one may still count.
+        const versions = docs.length
+            ? await readIn<VersionRow>(supabase, docs.map((d) => d.id), (c) =>
+                  supabase
+                      .from("document_versions")
+                      .select("id, document_id, version_number, review_status, reviewed_at, effective_on, expires_on, created_at")
+                      .eq("org_id", orgId)
+                      .in("document_id", c),
+              )
             : [];
         if (!versions) return null;
-        const reviewByVersion = new Map(versions.map((v) => [v.id, v.review_status]));
+        const versionsByDoc = new Map<string, VersionRow[]>();
+        for (const v of versions) versionsByDoc.set(v.document_id, [...(versionsByDoc.get(v.document_id) ?? []), v]);
         const docById = new Map(docs.map((d) => [d.id, d]));
         for (const l of ownerLinks) {
             const d = docById.get(l.document_id);
             if (!d) continue;
-            const review = d.current_version_id ? reviewByVersion.get(d.current_version_id) ?? null : null;
+            const facts = evidenceVersionFacts(types, d, versionsByDoc.get(d.id) ?? [], clock);
             const row: EvidenceRow = {
                 document_id: d.id,
                 status: d.status,
-                review_status: review === "pending" || review === "accepted" || review === "rejected" ? review : null,
+                review_status: facts.review_status,
+                validity: facts.validity,
+                prior_accepted: facts.prior_accepted,
                 received_at: d.created_at,
                 doc_type: d.doc_type,
                 entity_type: d.entity_type,
@@ -315,10 +379,11 @@ export async function evaluateSubjects(
     supabase: SupabaseClient,
     orgId: string,
     refs: SubjectRef[],
-    input: { requirements: EvaluableRequirement[]; types: RequirementTypeCatalog; today: string },
+    input: { requirements: EvaluableRequirement[]; types: RequirementTypeCatalog; today: string; clock?: DocumentsClock },
 ): Promise<SystemEvaluation | null> {
     const typeKeys = [...new Set(input.requirements.map((r) => r.document_type_key))];
-    const facts = await loadSubjectFacts(supabase, orgId, refs, typeKeys);
+    const clock = input.clock ?? { today: input.today, timeZone: "UTC" };
+    const facts = await loadSubjectFacts(supabase, orgId, refs, typeKeys, input.types, clock);
     if (!facts) return null;
     const evaluations: RequirementEvaluation[] = [];
     for (const ref of refs) {
@@ -344,7 +409,7 @@ export async function evaluateSubjects(
 // ── disclosure ──────────────────────────────────────────────────────────────────────────────────────────────────
 export type DisclosedEvaluation = Omit<RequirementEvaluation, "evidence"> & {
     /** Only documents this actor may read. Quarantined evidence is never listed. */
-    evidence: { accepted: string[]; pending: string[]; rejected: string[] };
+    evidence: { accepted: string[]; pending: string[]; undated: string[]; expired: string[]; rejected: string[] };
 };
 
 /** The ids among `rows` this actor may read: available, owner in scope, cleared for the sensitivity. */
@@ -362,6 +427,8 @@ function disclose(e: RequirementEvaluation, readable: Set<string>): DisclosedEva
         evidence: {
             accepted: e.evidence.accepted.filter((id) => readable.has(id)),
             pending: e.evidence.pending.filter((id) => readable.has(id)),
+            undated: e.evidence.undated.filter((id) => readable.has(id)),
+            expired: e.evidence.expired.filter((id) => readable.has(id)),
             rejected: e.evidence.rejected.filter((id) => readable.has(id)),
         },
     };
@@ -375,7 +442,19 @@ async function subjectsInActorScope(supabase: SupabaseClient, actor: Requirement
 }
 
 // ── Focus Panel readiness ───────────────────────────────────────────────────────────────────────────────────────
-export type ReadinessCounts = { required: number; on_file: number; missing: number; pending_review: number; waived: number; blocked: number; satisfied: number };
+export type ReadinessCounts = {
+    required: number;
+    on_file: number;
+    missing: number;
+    pending_review: number;
+    waived: number;
+    blocked: number;
+    satisfied: number;
+    /** D7 */
+    expired: number;
+    /** D7: satisfied, but renewal is due (inside the expiring-soon window). Also counted in `satisfied`. */
+    expiring_soon: number;
+};
 export type SubjectReadiness = {
     subject: { subject_type: RequirementSubjectType; subject_id: string; label: string; role: LibrarySubject["role"] };
     requirements: DisclosedEvaluation[];
@@ -385,15 +464,21 @@ export type ReadinessResult =
     | { ok: true; value: { household: { id: string; label: string } | null; subjects: SubjectReadiness[]; totals: ReadinessCounts; today: string } }
     | { ok: false; status: 404 | 500; code: string };
 
-export function readinessCounts(list: ReadonlyArray<Pick<RequirementEvaluation, "state" | "policy"> & { evidence: { accepted: string[]; pending: string[] } }>): ReadinessCounts {
-    const c: ReadinessCounts = { required: 0, on_file: 0, missing: 0, pending_review: 0, waived: 0, blocked: 0, satisfied: 0 };
+export function readinessCounts(
+    list: ReadonlyArray<Pick<RequirementEvaluation, "state" | "policy"> & { expiring_soon?: boolean; evidence: { accepted: string[]; pending: string[] } }>,
+): ReadinessCounts {
+    const c: ReadinessCounts = { required: 0, on_file: 0, missing: 0, pending_review: 0, waived: 0, blocked: 0, satisfied: 0, expired: 0, expiring_soon: 0 };
     for (const e of list) {
         if (e.policy === "required") c.required += 1;
         if (e.state === "missing") c.missing += 1;
         else if (e.state === "pending_review") c.pending_review += 1;
         else if (e.state === "waived") c.waived += 1;
         else if (e.state === "blocked") c.blocked += 1;
-        else c.satisfied += 1;
+        else if (e.state === "expired") c.expired += 1;
+        else {
+            c.satisfied += 1;
+            if (e.expiring_soon) c.expiring_soon += 1;
+        }
         c.on_file += e.evidence.accepted.length + e.evidence.pending.length;
     }
     return c;
@@ -409,7 +494,6 @@ export async function buildSubjectReadiness(
     input: { anchor: LibrarySubjectRef; focus?: LibrarySubjectRef | null; today?: string },
 ): Promise<ReadinessResult> {
     const { orgId } = actor;
-    const today = input.today ?? todayIso();
     if (!actor.scope) return { ok: false, status: 404, code: "NOT_FOUND" };
     if (!(await assertEntityDrawerRecordReadable(supabase, orgId, actor.scope, TABLE_FOR[input.anchor.subject_type], input.anchor.subject_id))) {
         return { ok: false, status: 404, code: "NOT_FOUND" };
@@ -432,12 +516,13 @@ export async function buildSubjectReadiness(
         if (!graph.some((s) => subjectKey(s) === subjectKey(f))) return { ok: false, status: 404, code: "NOT_FOUND" };
         graph = graph.filter((s) => subjectKey(s) === subjectKey(f));
     }
-    const [requirements, types] = await Promise.all([loadLiveRequirements(supabase, orgId), loadRequirementTypes(supabase, orgId)]);
+    const [requirements, types, clock] = await Promise.all([loadLiveRequirements(supabase, orgId), loadRequirementTypes(supabase, orgId), clockFor(supabase, orgId, input.today)]);
     if (!requirements || !types) return { ok: false, status: 500, code: "READINESS_UNAVAILABLE" };
+    const today = clock.today;
     const visible = requirements.filter((r) => actorMaySeeRequirement(actor, types, r.document_type_key));
 
     const refs = await subjectsInActorScope(supabase, actor, graph.map((s) => ({ subject_type: s.subject_type, subject_id: s.subject_id })));
-    const system = await evaluateSubjects(supabase, orgId, refs, { requirements: visible, types, today });
+    const system = await evaluateSubjects(supabase, orgId, refs, { requirements: visible, types, today, clock });
     if (!system) return { ok: false, status: 500, code: "READINESS_UNAVAILABLE" };
     const readable = await readableEvidenceIds(supabase, actor, [...system.evidence.values()].flat());
 
@@ -465,13 +550,20 @@ export type RequirementWorkRow = {
     subject_id: string;
     subject_label: string;
     household_id: string | null;
-    state: "missing" | "pending_review" | "blocked";
+    /** `expiring_soon` (D7) is renewal work: the requirement is still met today, so it is never blocking. */
+    state: "missing" | "pending_review" | "blocked" | "expired" | "expiring_soon";
     blocked_reason: RequirementEvaluation["blocked_reason"];
     due_on: string | null;
     overdue: boolean;
     waivable: boolean;
     /** Readable evidence awaiting review (ids only; the library opens them). */
     pending_document_ids: string[];
+    /** D7: readable evidence accepted but missing its required expiration date (also in pending_document_ids). */
+    undated_document_ids: string[];
+    /** D7: readable evidence that has expired (renewal needed). */
+    expired_document_ids: string[];
+    /** D7: for expiring_soon, the last day the evidence is in force. */
+    valid_until: string | null;
 };
 
 export function requirementWorkId(requirementId: string, subject: { subject_type: string; subject_id: string }): string {
@@ -532,7 +624,7 @@ async function requirementPopulation(
     }
 }
 
-async function subjectLabels(supabase: SupabaseClient, orgId: string, refs: SubjectRef[]): Promise<Map<string, { label: string; household_id: string | null }>> {
+export async function subjectLabels(supabase: SupabaseClient, orgId: string, refs: SubjectRef[]): Promise<Map<string, { label: string; household_id: string | null }>> {
     const out = new Map<string, { label: string; household_id: string | null }>();
     const by = (t: RequirementSubjectType) => refs.filter((r) => r.subject_type === t).map((r) => r.subject_id);
     const name = (p: Record<string, unknown>) => str(p.display_name) ?? str(p.full_name) ?? ([str(p.first_name), str(p.last_name)].filter(Boolean).join(" ") || null);
@@ -553,9 +645,14 @@ export type RequirementWorkResult = { ok: true; rows: RequirementWorkRow[]; trun
  * The unmet, required document requirements this actor may see, as derived work rows. Satisfying the requirement
  * (accepted evidence) or an applicable waiver makes the row disappear on the next read; nothing is stored or closed.
  */
-export async function listRequirementWork(supabase: SupabaseClient, actor: RequirementActor, input: { today?: string } = {}): Promise<RequirementWorkResult> {
+export async function listRequirementWork(
+    supabase: SupabaseClient,
+    actor: RequirementActor,
+    input: { today?: string; clock?: DocumentsClock } = {},
+): Promise<RequirementWorkResult> {
     const { orgId } = actor;
-    const today = input.today ?? todayIso();
+    const clock = input.clock ?? (await clockFor(supabase, orgId, input.today));
+    const today = clock.today;
     if (!actor.scope) return { ok: true, rows: [], truncated: false, today };
     const [requirements, types] = await Promise.all([loadLiveRequirements(supabase, orgId), loadRequirementTypes(supabase, orgId)]);
     if (!requirements || !types) return { ok: false, code: "WORK_UNAVAILABLE" };
@@ -569,9 +666,9 @@ export async function listRequirementWork(supabase: SupabaseClient, actor: Requi
         if (!population) return { ok: false, code: "WORK_UNAVAILABLE" };
         truncated = truncated || population.truncated;
         const refs = await subjectsInActorScope(supabase, actor, population.refs);
-        const system = await evaluateSubjects(supabase, orgId, refs, { requirements: [r], types, today });
+        const system = await evaluateSubjects(supabase, orgId, refs, { requirements: [r], types, today, clock });
         if (!system) return { ok: false, code: "WORK_UNAVAILABLE" };
-        evaluations.push(...system.evaluations.filter(evaluationNeedsWork));
+        evaluations.push(...system.evaluations.filter((e) => evaluationNeedsWork(e) || evaluationNeedsRenewal(e)));
         for (const list of system.evidence.values()) evidenceRows.push(...list);
     }
     const readable = await readableEvidenceIds(supabase, actor, evidenceRows);
@@ -590,12 +687,16 @@ export async function listRequirementWork(supabase: SupabaseClient, actor: Requi
                 subject_id: e.subject_id,
                 subject_label: l?.label ?? "Record",
                 household_id: l?.household_id ?? null,
-                state: e.state as RequirementWorkRow["state"],
+                state: (evaluationNeedsRenewal(e) ? "expiring_soon" : e.state) as RequirementWorkRow["state"],
                 blocked_reason: e.blocked_reason,
-                due_on: e.due_on,
-                overdue: Boolean(e.due_on && e.due_on < today),
+                // Renewal work is due when the evidence stops being in force; unmet work keeps the requirement's due date.
+                due_on: evaluationNeedsRenewal(e) ? e.valid_until : e.due_on,
+                overdue: e.blocking && Boolean(e.due_on && e.due_on < today),
                 waivable: e.waivable,
                 pending_document_ids: e.evidence.pending.filter((id) => readable.has(id)),
+                undated_document_ids: e.evidence.undated.filter((id) => readable.has(id)),
+                expired_document_ids: e.evidence.expired.filter((id) => readable.has(id)),
+                valid_until: e.valid_until,
             };
         })
         .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.subject_label.localeCompare(b.subject_label) || a.id.localeCompare(b.id));
@@ -616,10 +717,10 @@ export async function evaluateDocumentTypeRequirementsForChild(
     supabase: SupabaseClient,
     input: { orgId: string; childId: string; typeKeys: string[]; today?: string },
 ): Promise<Map<string, RequirementEvaluation> | null> {
-    const today = input.today ?? todayIso();
     const keys = [...new Set(input.typeKeys.filter(Boolean))];
     if (keys.length === 0) return new Map();
-    const [requirements, types] = await Promise.all([loadLiveRequirements(supabase, input.orgId), loadRequirementTypes(supabase, input.orgId)]);
+    const [requirements, types, clock] = await Promise.all([loadLiveRequirements(supabase, input.orgId), loadRequirementTypes(supabase, input.orgId), clockFor(supabase, input.orgId, input.today)]);
+    const today = clock.today;
     if (!requirements || !types) return null;
     const ref: SubjectRef = { subject_type: "child", subject_id: input.childId };
     const live = requirements.filter((r) => r.subject_type === "child" && keys.includes(r.document_type_key));
@@ -637,7 +738,7 @@ export async function evaluateDocumentTypeRequirementsForChild(
         effective_from: null,
         effective_until: null,
     }));
-    const system = await evaluateSubjects(supabase, input.orgId, [ref], { requirements: [...live, ...stage], types, today });
+    const system = await evaluateSubjects(supabase, input.orgId, [ref], { requirements: [...live, ...stage], types, today, clock });
     if (!system) return null;
     const out = new Map<string, RequirementEvaluation>();
     for (const k of keys) {

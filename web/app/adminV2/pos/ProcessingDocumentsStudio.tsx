@@ -78,7 +78,7 @@ const ENFORCEMENT_LABEL: Record<string, string> = {
     enforced: "Enforced for new documents",
     enforced_filing: "Enforced when a document is filed or uploaded",
     enforced_replacement: "Enforced when a document is filed or replaced",
-    declared_d7: "Declared — enforced from D7",
+    enforced_evaluation: "Enforced — an expired document no longer satisfies a requirement",
 };
 
 const EMPTY_DRAFT: DocumentTypeDraft = {

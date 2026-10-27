@@ -73,14 +73,14 @@ describe("Studio → Documents", () => {
         expect(card?.textContent).toContain("Medical");
     });
 
-    it("labels declared policy as not yet enforced, and publish waits for validation", async () => {
+    it("labels each policy with its enforcement (validity is evaluated since D7), and publish waits for validation", async () => {
         await act(async () => root.render(<ProcessingDocumentsStudio />));
         await flush();
         await act(async () => q("documents-studio-type-immunization_record")!.click());
         await flush();
         const editor = q("documents-studio-type-editor")!;
         expect(editor.textContent).toContain("Enforced for new documents");
-        expect(editor.textContent).toContain("Declared — enforced from D7");
+        expect(editor.textContent).toContain("Enforced — an expired document no longer satisfies a requirement");
         expect(editor.textContent).toContain("Enforced when a document is filed or uploaded");
         expect(editor.textContent).toContain("Enforced when a document is filed or replaced");
         expect(editor.textContent).not.toContain("enforced from D5");

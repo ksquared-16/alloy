@@ -1887,6 +1887,20 @@
         "reason": "Documents V1 / D2 (2026-10-23). Replaces a document's file with a new immutable version. documents.write AND the full access decision; content signature and D1c-1 screening, only a clean file is stored; a written reason; document_version_added recorded before the version exists. The previous version is kept."
       }
     },
+    "app/api/admin/documents/[id]/validity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "reason": "Documents V1 / D7 (2026-10-27). A document's current-version validity dates, its type's published validity policy and the derived validity on the organization-local date. Admission is the full document access decision (read admission, subject scope, every sensitive class, availability)."
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D7 (2026-10-27). Records effective/expiration dates on a document's CURRENT version through document_set_version_validity (review untouched, appended to the version's review history). documents.write AND the full access decision; an unavailable document is refused; document_version_validity_set recorded first."
+      }
+    },
     "app/api/admin/documents/[id]/history/route.ts": {
       "GET": {
         "status": "declared",
@@ -1900,7 +1914,7 @@
         "status": "declared",
         "capability": "documents.write",
         "helper": "requireDocumentWrite",
-        "reason": "Documents V1 / D6 (2026-10-27). Records the review (accepted/rejected) of a document's current version. Also requires the full document access decision (organization, subject scope, sensitivity, availability), so a quarantined document cannot be reviewed; a rejection needs a reason; audited first."
+        "reason": "Documents V1 / D6, D7 (2026-10-27). Records the review (accepted/rejected/reopened) of a document's current version through document_review_version, appended to the version's review history. Also requires the full document access decision (organization, subject scope, sensitivity, availability), so a quarantined document cannot be reviewed; a rejection or reopen needs a reason; changing an already decided review additionally needs processing.documents.manage and a reason; audited first."
       }
     },
     "app/api/admin/documents/library/route.ts": {

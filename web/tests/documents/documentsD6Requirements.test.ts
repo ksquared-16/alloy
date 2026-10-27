@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { documentReviewStandIn } from "../harness/documentReviewStandIns";
 import { InMemorySupabase } from "../harness/inMemorySupabase";
 import { buildRequest, invokeRoute, routeParams } from "../harness/routeInvoker";
 
@@ -187,6 +188,8 @@ beforeEach(() => {
     // Stand-ins for the governed functions; their guards are proven in Postgres.
     (db as unknown as { rpc: unknown }).rpc = async (name: string, args: Record<string, unknown>) => {
         rpcCalls.push({ name, args });
+        const reviewed = documentReviewStandIn(db as never, name, args);
+        if (reviewed) return reviewed;
         if (name === "document_requirement_validate") return { data: { version_id: args.p_version_id, valid: true, problems: [] }, error: null };
         if (name === "document_requirement_publish") return { data: { version_id: args.p_version_id, version_number: 2, superseded_version_id: args.p_expected_published_version_id }, error: null };
         if (name === "document_requirement_waiver_grant") {

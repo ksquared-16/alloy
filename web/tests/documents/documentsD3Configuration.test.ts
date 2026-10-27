@@ -278,7 +278,7 @@ describe("types: draft → validate → publish", () => {
         expect((await invokeRoute(publishPOST, json("POST", { version_id: "cf000000-0000-4000-8000-0000000000ff" }), routeParams({ id: TYPE }))).status).toBe(404);
     });
 
-    it("the type list says which policy is enforced and which is only declared", async () => {
+    it("the type list says how each policy is enforced (validity: evaluated on read since D7)", async () => {
         as(P.reader);
         const body = (await invokeRoute(typesGET, buildRequest({ path: "/x" }))).body as { enforcement: Record<string, string> };
         expect(body.enforcement).toEqual({
@@ -287,7 +287,7 @@ describe("types: draft → validate → publish", () => {
             replacement_policy: "enforced_replacement",
             allowed_formats: "enforced_filing",
             subject_types: "enforced_filing",
-            validity_policy: "declared_d7",
+            validity_policy: "enforced_evaluation",
         });
     });
 });
