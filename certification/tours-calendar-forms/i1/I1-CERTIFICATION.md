@@ -1,8 +1,8 @@
 # Tours I1 — C1 Communications + S7 completion + staging convergence
 
 Sprint: Tours, Operating Calendar & Public Forms · integration I1 · **commit-only, not promoted.
-Outcome: PARTIAL** — integration and targeted certification complete; the full typecheck receipt and the
-cert-stack migration apply are outstanding (host Docker went down mid-run; see Blockers).
+Outcome: real-database certification COMPLETE** (see "Resumption" at the end) — the first pass below was
+PARTIAL when host Docker went down; its outstanding DB items were closed on the restored shared stack.
 Lane `lane_2cea84351d90` · objective `OPWORK_2CEA84351D90_SPRINT_80ADA49DE68E` · run `erun2_632019b9bff3020a`.
 
 ## Starting point
@@ -124,3 +124,52 @@ unauthenticated-side-effects, route-capabilities, runtime-mode-audience, governe
 4. Browser verification of the consent control (standalone/iframe, phone/desktop) with S2/S4/S5/S6/S7 19–20.
 5. One production build + full Tier 1 on the frozen candidate at the final QA checkpoint.
 6. C1 Python tests (no Python env on host). Operator surface does not yet show the consent evidence.
+
+## Resumption — shared-stack real-database certification (2026-10-26, run `erun2_1d0539c5802b9976`)
+
+Shared `alloy-cert` restored by the operator (volumes preserved; 324 public tables). Joined with
+`alloy-stack use tours-forms-cert-erun2_1d0539c5802b9976`; no private stack, no reset. Pre-outage state
+survived: the S1 ledger repair (`20261210090000`) present.
+
+**Migration.** `20261129090000` refiled (the outage request `gar_997f04ea741b98` was terminal) as
+`gar_66a4a927b9261b`, expectedSha `815565978` (file byte-identical on staging) → **Succeeded**. Census, not
+the status line: `processing_case_subject_removed()` present, ledger row written, evaluable over all 260
+cases (0 removed). The S7/I1 suite's drift stub on that guard is **removed** — Approve now runs its real
+subject-removed guard.
+
+**C·9–C·12 (written during the outage, first run here).** Three proof-authoring errors, none product:
+- C·9 located the lead via `opportunity_persons`; Approve writes none. Now: Approve's `operationalResult.recordId`,
+  with the parent asserted as `opportunities.primary_person_id`.
+- C·11 read preference events unordered; the `opted_in→opted_out` `recipient_unsubscribe/email_link` event was
+  present (DB-verified). Events now ordered by `occurred_at`.
+- C·12 assumed suppressed sends return a message id. Deployed contract: canonical enqueue's eligibility gate
+  refuses (`eligibility_blocked:OPTED_OUT`) and persists a `blocked / policy:OPTED_OUT` row; the direct adapter
+  returns `ok:false` with the thread (row found there); the scheduled dispatcher marks the send `failed` with
+  the refusal in `last_process_error` and no message id (row found by body).
+
+**Negative controls** (source restored byte-exact, sha256 `e468cb41…`): NC6 eligibility block bypassed in
+`canonicalOutboundEnqueue` → C·12 red; NC7 `unsubscribe_url` not attached → C·9–C·12 red.
+
+**Staging reconcile.** `origin/staging` moved to `815565978` (#1604 Documents D5) during the outage. Explicit
+merge `a6025de18`; one import-only conflict in the Approve route (D5 filing imports + S7/C1 imports — both
+kept; D5's branch is document-source-only). Context-package manifest regenerated (merge changed the
+`routeCapabilities.declared.json` blob).
+
+**Live suites on the merged candidate, real `alloy-cert`, no stubs of cert drift — 72/72:**
+publicTourIntake 22/22 · tourBookingSafety 8/8 · tourOperatingCalendar 10/10 · tourWeeklySchedules 7/7 ·
+operatingCalendar 9/9 · publicBrand 6/6 · formsCapabilityAuthority 10/10.
+
+**Not applied (outside this sprint):** `20261210093500` (D5, brought by the reconcile) — governed apply
+`gar_3d9ffe46366bdd` rolled back: `public.document_types` absent on cert. The Documents chain D2→D5
+(`20261208090000`, `20261209090000`, `20261209090100`, `20261209090200`, `20261210093500`) is missing from the
+shared cert DB — Documents-workstream cert parity; no Tours/Forms path or suite depends on it.
+
+**Finding for the operator (not changed here):** an opted-out direct send surfaces from
+`executeLegacyCommunicationsSendAdapter` as HTTP **500** "Failed to enqueue message (eligibility_blocked:…)".
+Suppression is correct; the status/wording reads as a server fault. Pre-existing staging behaviour.
+
+Lease released (`alloy-stack release`). Its last-one-out stop was refused — the installed toolkit lacks
+`bin/lib/cert-ownership.sh`; the stack was left running, idle, unleased.
+
+Still outstanding (not DB): browser verification of the consent control; C1 Python tests (no Python env —
+CI runs them); operator surface for consent evidence; Director release and the one protected PR.
