@@ -173,3 +173,11 @@ Lease released (`alloy-stack release`). Its last-one-out stop was refused — th
 
 Still outstanding (not DB): browser verification of the consent control; C1 Python tests (no Python env —
 CI runs them); operator surface for consent evidence; Director release and the one protected PR.
+
+## Promotion — migration renumbered (2026-10-26)
+
+Governed merge of PR #1606 (`gar_014b48d6f7390c`) refused before execution:
+`pending_version_before_ledger_head:20261210090000` — staging's hosted ledger head is #1604's
+`20261210093500`, so the S1 guard would apply out of order. Renumbered (pure `git mv`, R100, SQL
+byte-identical) to **`20261211090000`**; the two code/test comments citing the version updated. Earlier
+records above cite the old version as it was at the time.

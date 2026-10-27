@@ -3,7 +3,7 @@
  *
  * Every capacity-consuming booking write records the limit of the slot it landed in under
  * `metadata.slot_capacity`. The trigger `enforce_tour_booking_slot_capacity`
- * (migration 20261210090000) re-counts overlapping bookings at the location under a
+ * (migration 20261211090000) re-counts overlapping bookings at the location under a
  * per-location advisory lock and refuses the write once the slot is full — so two families
  * racing for the last seat cannot both get it, whichever route they came through.
  */
