@@ -108,6 +108,48 @@ describe("P1-A root cause — why Monday appears twice", () => {
     });
 });
 
+describe("P1-A — the Director's staging data, as censused (certification/tours-calendar-forms/p1)", () => {
+    // ALLOY_STAGING, 2026-10-27: six legacy windows (no schedule identity). Organization-wide Monday
+    // 09:00–12:00 exists as TWO identical rows; South Campus adds its own Monday 10:00–12:00.
+    const legacy = (id: string, locationId: string | null, day: number, start: string, end: string): TourRuleForAuthoring => ({
+        id, location_id: locationId, day_of_week: day, start_time: start, end_time: end, timezone: "America/Los_Angeles",
+        slot_duration_minutes: 30, buffer_minutes: 0, max_bookings_per_slot: 1, approval_required: false, is_active: true, metadata: {},
+    });
+    const southCampusSees = [
+        legacy("org-mon-a", null, 1, "09:00:00", "12:00:00"),
+        legacy("org-mon-b", null, 1, "09:00:00", "12:00:00"),
+        legacy("org-wed", null, 3, "09:00:00", "12:00:00"),
+        legacy("org-fri", null, 5, "09:00:00", "12:00:00"),
+        legacy("south-mon", LOC, 1, "10:00:00", "12:00:00"),
+    ];
+
+    it("Monday read twice because two identical organization-wide rows each became a card and a weekday entry", () => {
+        const groups = groupTourRulesIntoSchedules(southCampusSees, LOC);
+        const inheritedMonday = groups.filter((g) => g.inherited && g.days.join() === "1");
+        expect(inheritedMonday.map((g) => [g.name, g.windows[0]!.start_time])).toEqual([
+            ["Monday window", "09:00:00"],
+            ["Monday window", "09:00:00"],
+        ]);
+        const monday = buildTourWeekdayView(groups).find((d) => d.day === 1)!;
+        expect(monday.entries.map((e) => `${e.start_time}${e.inherited ? " org" : " local"}`)).toEqual(["09:00:00 org", "09:00:00 org", "10:00:00 local"]);
+    });
+
+    it("the duplicate row is now named on both cards; families were never offered a time twice", () => {
+        const groups = groupTourRulesIntoSchedules(southCampusSees, LOC);
+        const repeats = findRepeatedTourSchedules(groups);
+        expect([...repeats.values()]).toEqual(["Monday window", "Monday window"]);
+        const slots = computeSlotsFromRulesAndBookings(southCampusSees as TourAvailabilityRuleRow[], [], {
+            locationId: LOC,
+            fromUtc: new Date("2027-01-11T08:00:00Z"),
+            toUtc: new Date("2027-01-12T08:00:00Z"),
+        });
+        const starts = slots.map((s) => s.startAt);
+        expect(new Set(starts).size).toBe(starts.length);
+        expect(slots.length).toBe(6); // 9:00 … 11:30, once each
+        expect(Math.max(...slots.map((s) => s.capacity))).toBe(1); // not summed across the duplicate rows
+    });
+});
+
 describe("P1-A — Tours surface information architecture", () => {
     const client = read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx");
     const code = client.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
