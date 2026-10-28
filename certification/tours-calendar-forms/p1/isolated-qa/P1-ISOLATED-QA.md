@@ -80,6 +80,16 @@ on the person, suppression) depend on approval and were not reached.
 | D7 | Pre-existing | Studio | Studio Health tiles show fixed deltas ("↑ 2 this week", "↓ 12%") beside counts of 0. |
 | D8 | Pre-existing (known) | Forms runtime | Runtime text inputs have no associated `<label>` (re-confirmed). |
 
+**Toolkit defect (Vacilando backend — recorded only; not fixed from this product lane).**
+`vac governed-action --contract product.register_candidate_preview_target` reports `required inputs : reason`, because the
+registry declares `inputSchema: { required: ["reason"] }` (installed toolkit `20261028-1388aad78e16`,
+`lib/trusted-host-action-registry.mjs:1958`). Its `validateInputs` also requires an absolute subject worktree
+(`worktree` / `worktreePath` / `worktree_path`) and a `slug` or `target` (`:1965–1975`), and refuses without them. A payload
+built from `--contract` is therefore approved by the operator and then fails `input_validation_failed — absolute subject
+Alloy worktree required` (`gar_af94e406ec4c33`): one operator approval spent on a request that could never run. Expected fix (owner:
+Vacilando): `inputSchema.required` names `worktree` and the `slug`/`target` alternative, so `--contract` matches the validator,
+and validation runs before the request is offered for approval. Re-filed with the worktree as `gar_a6f1f552b3609e` → REGISTERED.
+
 Walkthrough correction (applied): "Deactivate" appears only on legacy single-window rules (what staging has); schedules
 created in the new editor are switched off with Edit › Active.
 
