@@ -96,7 +96,7 @@ export async function POST(req: Request) {
 
     if (!exec.ok) {
         return NextResponse.json(
-            { error: exec.error, code: exec.code, thread_id: exec.thread_id },
+            { error: exec.error, code: exec.code, outcome: exec.outcome, reason: exec.reason, thread_id: exec.thread_id },
             { status: exec.status ?? 500 }
         );
     }
