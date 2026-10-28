@@ -12,7 +12,7 @@ import unittest
 from typing import Dict, Optional
 from unittest.mock import MagicMock, patch
 
-from app.services.dispatch_eligibility import REGISTERED_QA_ORG_IDS
+from app.services.dispatch_eligibility import REGISTERED_QA_ORG_IDS, DispatchDecision
 from app.services import message_sender as ms
 
 QA_SHARED = "4acc9386-c485-486f-aa1f-05d83499d142"
@@ -127,15 +127,39 @@ class TestMessageSenderQaRefuse(unittest.TestCase):
         self.assertIn("QA_ORG_OUTBOUND_ORG_UNRESOLVABLE", out["errors"][0])
         send.assert_not_called()
 
-    def test_non_qa_still_sends(self):
+    def test_non_qa_ungated_row_refused_before_twilio(self):
+        """C3 · a workflow's legacy row carries no eligibility record: refused, never sent around an opt-out."""
         out, send, patch_mock = self._run(
             [_queued_row(workflow_run_id=WR_NON)],
             {WR_NON: NON_QA},
         )
+        self.assertEqual(out["sent"], 0)
+        self.assertEqual(out["refused"], 1)
+        self.assertIn("policy:SNAPSHOT_MISSING", out["errors"][0])
+        send.assert_not_called()
+        patches = [c.kwargs.get("json") for c in patch_mock.call_args_list]
+        self.assertIn({"status": "failed", "error": "policy:SNAPSHOT_MISSING"}, patches)
+
+    def test_non_qa_opted_out_refused_before_twilio(self):
+        """The canonical decision is authoritative: an opt-out blocks the legacy dispatch too."""
+        blocked = DispatchDecision("blocked", reason="OPTED_OUT", operator_message="opted out")
+        with patch.object(ms, "revalidate_for_dispatch", return_value=blocked) as gate:
+            out, send, _ = self._run([_queued_row(workflow_run_id=WR_NON)], {WR_NON: NON_QA})
+        self.assertEqual(out["refused"], 1)
+        self.assertIn("policy:OPTED_OUT", out["errors"][0])
+        send.assert_not_called()
+        self.assertEqual(gate.call_args.args[0]["org_id"], NON_QA)
+        self.assertEqual(gate.call_args.args[0]["channel"], "sms")
+
+    def test_non_qa_eligible_still_sends(self):
+        with patch.object(ms, "revalidate_for_dispatch", return_value=DispatchDecision("send_now")):
+            out, send, patch_mock = self._run(
+                [_queued_row(workflow_run_id=WR_NON)],
+                {WR_NON: NON_QA},
+            )
         self.assertEqual(out["sent"], 1)
         self.assertEqual(out["refused"], 0)
         send.assert_called_once_with("+15551234567", "hello")
-        # Final patch should be status=sent
         sent_patches = [
             c.kwargs.get("json") or (c.args[3] if len(c.args) > 3 else None)
             for c in patch_mock.call_args_list
