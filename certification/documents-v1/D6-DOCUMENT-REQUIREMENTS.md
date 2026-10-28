@@ -207,6 +207,13 @@ Human-QA decision on where a child's Documents card lives.
   bound by `gar_dc0e6f3915ff4c` (`documents-zero-residue-census.sql.results.json`). **Gap for the toolkit owner:** the
   registered residue census does not include D6's requirement checks; until its pin moves to `eb702fb6…`, a bound
   ZERO_RESIDUE does not by itself prove zero requirement residue (this run proved it separately).
+- **Supplemental 15-check binding (2026-10-28, toolkit `1388aad78e16`, which registers `eb702fb6…` with 15 checks and
+  keeps the 12-check binding as an immutable historical binding):** `gar_a6359b4f860c8b` (`environment.qa_run_close` on the
+  CLOSED run, operator-approved) attached `gar_53d6744eb1cf1a` — **verified by the toolkit: 15/15**, executed 17:20:27Z after
+  the 17:18:00Z close, `alloy_deployed_primary`. The run's `close.residue_census` now names `gar_53d6744eb1cf1a`
+  (`supplemental: true`); the 12-check `gar_36a8179c88d9bc` binding is retained as `prior_residue_census`, the history keeps
+  both `census_attached` events, and the close itself (`gar_ac198181b7143c`, verdict ZERO_RESIDUE) is unchanged. The gap
+  above is closed for this run (`d6_zero_residue_supplemental_attach.qar_af1c638fd52a.json`).
 
 #### Sprint
 
@@ -222,5 +229,6 @@ c7 regressions Q1 90, D1b 37, D2 40, D3 40, D4 41, D5 59, browser walk, ZERO_RES
 ## Status
 
 D6 hosted certification on the deployed build `1492a2dd`: **D6 73/74** (one recorded defect, repaired in D7, not
-deployed), all regressions green, browser walk 5/8 (Focus Panel readiness reached by API only), ZERO_RESIDUE bound.
+deployed), all regressions green, browser walk 5/8 (Focus Panel readiness reached by API only), ZERO_RESIDUE bound —
+since 2026-10-28 by the registered 15-check census (`gar_53d6744eb1cf1a`, supplemental; 12-check binding preserved).
 Sprint closure awaits the Director's attribution of a run to `OPWORK_AA660DC9554D_SPRINT_362F6FBDCB83`.

@@ -1,0 +1,120 @@
+{
+ "schema": "alloy.documents_d6.zero_residue_supplemental_attach.v1",
+ "qa_run_id": "qar_af1c638fd52a",
+ "plan": "authz_q1",
+ "target": "alloy_staging_web (hosted)",
+ "installed_toolkit": "1388aad78e16",
+ "registered_census": {
+  "path": "certification/qa-shared/documents-zero-residue-census.sql",
+  "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+  "source_commit": "1492a2dd9fdb",
+  "checks": 15
+ },
+ "attach_request": {
+  "request_id": "gar_a6359b4f860c8b",
+  "action_key": "environment.qa_run_close",
+  "run_id": "erun2_692186febb16333e",
+  "inputs": {
+   "qaRunId": "qar_af1c638fd52a",
+   "residueCensusRequestId": "gar_53d6744eb1cf1a"
+  },
+  "status": "complete",
+  "trusted_host_action_id": "tha_25d5a199586d87",
+  "execution_ended_at": "2026-10-28T00:59:57.277Z",
+  "result_status": "already_closed",
+  "approval": "operator-approved (Needs You)"
+ },
+ "preflight": "installed verifyResidueCensus(qaPlan('authz_q1'), record, gar_53d6744eb1cf1a + tha_eed63c87cac610) returned ok with 15 checks before filing (read-only)",
+ "close": {
+  "request_id": "gar_ac198181b7143c",
+  "closed_at": "2026-10-27T17:18:00.807Z",
+  "verdict": "ZERO_RESIDUE",
+  "access_clean": true,
+  "sessions_removed": true
+ },
+ "residue_census_now": {
+  "ok": true,
+  "request_id": "gar_53d6744eb1cf1a",
+  "executed_at": "2026-10-27T17:20:27.331Z",
+  "checks": [
+   "doc_zr_vendors",
+   "doc_zr_qa_role_grants",
+   "doc_zr_pool_access",
+   "doc_zr_zero_sent",
+   "doc_zr_subjects",
+   "doc_zr_shared_documents",
+   "doc_zr_shared_objects",
+   "doc_zr_shared_dangling_case_sources",
+   "doc_zr_secondary_documents",
+   "doc_zr_secondary_objects",
+   "doc_zr_secondary_cases",
+   "doc_zr_qa_sessions",
+   "doc_zr_d6_requirements",
+   "doc_zr_d6_requirement_versions",
+   "doc_zr_d6_waivers"
+  ],
+  "supplemental": true,
+  "attached_at": "2026-10-28T00:59:57.277Z"
+ },
+ "historical_12_check_binding_preserved": {
+  "binding_request": "gar_dc0e6f3915ff4c",
+  "prior_residue_census": {
+   "ok": true,
+   "request_id": "gar_36a8179c88d9bc",
+   "executed_at": "2026-10-27T17:25:22.337Z",
+   "checks": [
+    "doc_zr_vendors",
+    "doc_zr_qa_role_grants",
+    "doc_zr_pool_access",
+    "doc_zr_zero_sent",
+    "doc_zr_subjects",
+    "doc_zr_shared_documents",
+    "doc_zr_shared_objects",
+    "doc_zr_shared_dangling_case_sources",
+    "doc_zr_secondary_documents",
+    "doc_zr_secondary_objects",
+    "doc_zr_secondary_cases",
+    "doc_zr_qa_sessions"
+   ]
+  },
+  "registry": "QA_PLANS.authz_q1.residue_census.historical_bindings[0] (3be83854..., immutable)"
+ },
+ "history": [
+  {
+   "at": "2026-10-27T15:46:38.821Z",
+   "event": "opening"
+  },
+  {
+   "at": "2026-10-27T15:46:38.821Z",
+   "event": "open"
+  },
+  {
+   "at": "2026-10-27T17:18:00.807Z",
+   "event": "closing",
+   "detail": "live"
+  },
+  {
+   "at": "2026-10-27T17:18:00.807Z",
+   "event": "closed",
+   "detail": "ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED"
+  },
+  {
+   "at": "2026-10-27T17:33:32.337Z",
+   "event": "census_attached",
+   "detail": "gar_36a8179c88d9bc"
+  },
+  {
+   "at": "2026-10-28T00:59:57.277Z",
+   "event": "census_attached",
+   "detail": "gar_53d6744eb1cf1a"
+  }
+ ],
+ "census_answers": "d6_zero_residue_extended_census.qar_af1c638fd52a.json (15/15 ~ true; the same gar_53d6744eb1cf1a, re-used \u2014 it is the measurement taken after the close, not re-run)",
+ "refused_earlier": {
+  "request_id": "gar_4339a05f3b9e36",
+  "code": "qa_residue_census_rejected",
+  "why": "pre-re-pin registry (3be83854...)",
+  "kept": "unchanged in the gateway store"
+ },
+ "recorded_at": "2026-10-28"
+}
