@@ -11,7 +11,9 @@ as the run's fixture_admin session:
            database validation, delete-vs-archive), the evaluator's states through readiness and work (missing,
            satisfied, pending review, rejected, quarantined, waived), version review, waivers (grant, refusals, revoke),
            archive, clearance (a medical requirement is invisible to an actor without health.view), subject scope and
-           organization isolation.
+           organization isolation. Since D7 (migration 20261213090000) the re-review step expects D7 semantics — a
+           reason is required to change a decided review, and the history keeps every decision — so this driver
+           certifies a build that carries D7; its 73/74 record on 1492a2dd (pre-D7) stands as it was run.
   reset    archive → DELETE …/requirements/[id]?qa_run_id=<run> (document_requirement_purge, versions and waivers by
            cascade) → POS delete of the quarantined upload → lead deletion of the household → verifies every id is gone.
 
@@ -348,14 +350,19 @@ if PHASE == "certify":
     s, b = readiness(A)
     e = state_of(b, rimm, c1) or {}
     check("rejected evidence blocks (evidence_rejected)", A, e.get("state") == "blocked" and e.get("blocked_reason") == "evidence_rejected", s, None, state=e.get("state"))
+    # D7: changing a decided review needs processing.documents.manage AND a reason (REASON_REQUIRED otherwise).
     s, b = review(A, d, "accepted")
+    check("changing a review without a reason is refused", A, s == 400 and code_of(b) == "REASON_REQUIRED", s, code_of(b))
+    s, b = review(A, d, "accepted", f"{TAG} legible on resubmission")
     check("authorized re-review accepts the current version", A, s == 200 and b.get("review_status") == "accepted", s, code_of(b))
     s, b = readiness(A)
     e = state_of(b, rimm, c1) or {}
     check("accepted evidence satisfies", A, e.get("state") == "satisfied", s, None, state=e.get("state"))
     s, b = call(f"/api/admin/documents/{d}/history", A)
-    acts = json.dumps([x.get("action") for x in (b or {}).get("entries") or []])
-    check("history records the reviews", A, s == 200 and acts.lower().count("review") >= 2, s, None)
+    acts = [str(x.get("action") or "") for x in (b or {}).get("entries") or []]
+    # The D6 hosted defect (qar_af1c638fd52a, 73/74): only "Review accepted" was shown. The D7 append-only review
+    # history must keep BOTH decisions, the second one naming what it replaced.
+    check("history records the reviews", A, s == 200 and "Review rejected" in acts and "Review accepted (was rejected)" in acts, s, None, actions=[a for a in acts if a.startswith("Review")])
 
     # 7. Waivers.
     W = "/api/admin/documents/requirements/waivers"
