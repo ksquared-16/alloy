@@ -37,6 +37,7 @@ import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissi
 import { financialReadScopeFromAccess, householdFinancialsReadable } from "@/lib/financials/workspace/financialReadScope";
 import { recordProducerSpans, producerClock } from "@/lib/perf/routeTimingDiagnostic";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import type {
     FocusPanelCardProducerResults,
     ProducerResult,
@@ -243,6 +244,7 @@ export async function projectFocusPanelCardProducers(input: {
                       customerMemberId,
                       displayName,
                       access: { permissionKeys: access.permissionKeys },
+                      documentActor: { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) },
                   }),
               )
             : Promise.resolve(null),
