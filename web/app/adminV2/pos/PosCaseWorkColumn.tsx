@@ -159,6 +159,26 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 </PosPanel>
             ) : null}
 
+            {/* 1a' — C1: what the family answered about marketing on the form, and what Approve did with it. */}
+            {detail.marketingConsent ? (
+                <PosPanel eyebrow="Marketing consent" accent={false} className="!h-auto">
+                    <div className="space-y-1 text-[12.5px]" data-testid="case-marketing-consent" data-committed={detail.marketingConsent.committed ? "yes" : "no"}>
+                        {detail.marketingConsent.lines.map((l) => (
+                            <p key={l.channel} data-testid={`case-marketing-consent-${l.channel}`}>
+                                <span className="text-stone-900">{l.answered}</span>
+                                <span className="block text-[11.5px] text-stone-500">
+                                    {l.applied ?? "Not applied yet — Approve records it against the person's preferences"}
+                                </span>
+                            </p>
+                        ))}
+                        <p className="text-[11px] text-stone-400">
+                            Captured {formatDisplayDateTime(detail.marketingConsent.capturedAt)}
+                            {detail.marketingConsent.languageVersion ? ` · wording ${detail.marketingConsent.languageVersion}` : ""}
+                        </p>
+                    </div>
+                </PosPanel>
+            ) : null}
+
             {/* 1b — What Alloy found: the existing records it matched, next to "What came in" so the
                 operator can compare the two before deciding (§1). This is the primary place for
                 match discovery — the right rail carries only the concise decision. */}

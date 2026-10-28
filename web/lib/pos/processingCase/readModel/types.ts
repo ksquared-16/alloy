@@ -7,6 +7,7 @@
  */
 
 import type { RequestedTourRecord } from "@/lib/tours/publicCalendar/requestedTour";
+import type { IntakeMarketingConsentPresentation } from "@/lib/communications/preferences/intakeMarketingConsentPresentation";
 import type {
     ProcessingCaseSourceKind,
     ProcessingCaseSourceRole,
@@ -137,6 +138,8 @@ export interface ProcessingCaseDetail {
      * Live eligibility, the booking and its confirmation are read by the requested-tour route.
      */
     requestedTour?: RequestedTourRecord | null;
+    /** C1 — the intake's marketing-consent evidence and what Approve did with it (`metadata.marketing_consent`). */
+    marketingConsent?: IntakeMarketingConsentPresentation | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";
