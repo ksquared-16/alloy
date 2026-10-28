@@ -1,0 +1,33 @@
+{
+  "r5_l2_preview": {
+    "status": 200,
+    "blocked": false,
+    "form_submissions": 2,
+    "expected": 2,
+    "children": 1,
+    "will_retain": {
+      "customers": 0,
+      "persons": 0,
+      "customer_members": 0
+    }
+  },
+  "delete_L3": 200,
+  "delete_L2": 200,
+  "form_delete": 409,
+  "form_archive": 200,
+  "after": {
+    "sub_s_opp1": 404,
+    "sub_s_opp2": 404,
+    "sub_s_k1": 404,
+    "sub_s_k2": 404,
+    "sub_s_unrel": 404,
+    "opp_L1": 404,
+    "opp_L2": 404,
+    "opp_L3": 404
+  },
+  "all_gone": true,
+  "r5_l2_pass": true,
+  "retained_by_design": {
+    "form_definition": "published form archived (Forms never deletes a published definition)"
+  }
+}
