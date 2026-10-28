@@ -406,7 +406,8 @@ async function resolveFormSubmissionIds(
     orgId: string,
     opportunityId: string,
     deletableCustomerId: string | null,
-    deletablePersonIds: readonly string[]
+    deletablePersonIds: readonly string[],
+    deletableCustomerMemberIds: readonly string[] = [],
 ): Promise<string[]> {
     const ids = new Set<string>();
     const oppSubs = await selectIdsByIn(supabase, "form_submissions", "opportunity_id", [opportunityId], orgId);
@@ -432,6 +433,23 @@ async function resolveFormSubmissionIds(
             .eq("org_id", orgId)
             .in("person_id", part);
         if (error) throw new Error(`load form_submissions by person: ${error.message}`);
+        for (const row of data ?? []) {
+            const id = typeof row.id === "string" ? row.id.trim() : "";
+            if (id) ids.add(id);
+        }
+    }
+
+    // R5 (hosted qar_4246ac22ece0): a submission about a CHILD alone (an admin-created submission names only
+    // customer_member_id) belongs to the child this deletion removes. It was left behind — answers, and its generated
+    // PDF through form_submission_documents — once the child row was gone. Only deletable children: a child kept
+    // because something else still references it keeps its submissions.
+    for (const part of chunkIds(deletableCustomerMemberIds)) {
+        const { data, error } = await supabase
+            .from("form_submissions")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("customer_member_id", part);
+        if (error) throw new Error(`load form_submissions by child: ${error.message}`);
         for (const row of data ?? []) {
             const id = typeof row.id === "string" ? row.id.trim() : "";
             if (id) ids.add(id);
@@ -546,7 +564,7 @@ export async function resolveOpportunityLeadDeletionGraph(
 
     const [threadIds, formSubmissionIds] = await Promise.all([
         resolveCommunicationThreadIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
-        resolveFormSubmissionIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds),
+        resolveFormSubmissionIds(supabase, orgId, opportunityId, deletableCustomerId, deletablePersonIds, deletableCustomerMemberIds),
     ]);
     const documentIds = await resolveDocumentIds(
         supabase,
