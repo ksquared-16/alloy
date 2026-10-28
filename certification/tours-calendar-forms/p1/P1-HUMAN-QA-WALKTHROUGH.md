@@ -2,7 +2,8 @@
 
 For the Director, on **hosted staging** (`https://staging.workwithalloy.com`) **after** the P1 candidate is
 deployed there. Every route, label and button named here was read from the implementation and seen in a
-browser on 2026-10-27; nothing is invented. Do the steps in order. Each step ends with **PASS if …**.
+browser on 2026-10-27, and the P1-close changes (§D 16a–16b, §E 18a, §F 23, §G 27a, 30a) on an isolated
+copy on 2026-10-28; nothing is invented. Do the steps in order. Each step ends with **PASS if …**.
 
 Use a private/incognito window for the family steps (§E), so you are not signed in as staff there.
 
@@ -72,6 +73,17 @@ Use a private/incognito window for the family steps (§E), so you are not signed
 16. Try a light colour, e.g. `#FFD400`. **PASS if** the preview keeps the yellow and uses dark
     **olive** text (not black, not white), still ≥ 4.5:1. Clear the colour field again and save, or use
     **Use the organization's settings** to drop all location overrides.
+16a. *What families actually see.* Once the calendar is published (§E), the top of Booking experience names
+    the form it opens into. If that form sets its **own** branding, it wins on the booking page.
+    **PASS if** it reads *"The tour calendar opens into the form "…". That form sets its own school name,
+    which families see instead of the setting below."*, the Display name field says *"Families see … (set on
+    the published form "…") — it takes precedence here. This setting gives … to forms that don't set their
+    own."*, and the preview header shows the **form's** name — the same name as the hosted booking page.
+16b. To make Booking experience govern it: **Processing → Studio → Forms**, open that form, **Branding** →
+    **Use the school's branding (location, then organization)**, **Save draft**, then **Distribution →
+    Republish version**. **PASS if** Booking experience now says *"It uses this location's brand, so
+    families see the settings below"* and *"Shown to families: … (set for this location)"*, and the hosted
+    booking page header changes to that name.
 
 ## E. Publish the calendar and get the embed
 
@@ -82,6 +94,10 @@ Use a private/incognito window for the family steps (§E), so you are not signed
     **PASS if** the panel now reads **Tour calendar is live — Published** and shows three rows:
     **Hosted booking page** (Open / Copy), **Embed on your website (iframe)** (Copy), **Button for your
     website** (Copy) with a sample button.
+18a. Under the Published heading, read *"Families see "…" (…) in #… (…)."* **PASS if** the name and colour
+    match the hosted booking page and each names where it comes from (*set on the form "…"*, *Booking
+    experience for this location*, *the organization's Booking experience* or *Alloy default*). The line
+    *"Step 2 is the form "…""* names the form once.
 19. Click **Copy** on the iframe row. That text is the embed. It looks like
     `<iframe src="https://staging.workwithalloy.com/tours/…" title="Book a Campus Visit — South Campus" …></iframe>`
     — use the copied text, not this example.
@@ -104,7 +120,9 @@ Use a private/incognito window for the family steps (§E), so you are not signed
     with a **Requested tour** box ("not confirmed until the school reviews your request") and the
     inquiry form; on a laptop, First/Last name sit **side by side**.
 23. Fill required fields with `you+tourqa1@…`. Under **Stay in touch (optional)**, tick **Email me news…**
-    only. Click the submit button.
+    only. Click the submit button. *(There is one consent control. If the form also contains the Alloy
+    fields "Email opt-in" / "SMS opt-in", they are not shown on this page and their answers are not stored —
+    **Stay in touch** is the answer Approve records.)*
     **PASS if** you see **Your tour request was received … This time is not confirmed yet**.
 24. Check that inbox for 5 minutes. **PASS if** **no** tour confirmation, reminder or calendar invite
     arrives (only an approved tour sends those).
@@ -118,7 +136,13 @@ Use a private/incognito window for the family steps (§E), so you are not signed
 ## G. Processing and approval
 
 27. In the staff window: sidebar **Processing** → **Work**. Open the newest case for `you+tourqa1@…`.
-    **PASS if** it shows a **Requested tour** panel with the day/time and campus you picked.
+    **PASS if** it shows a **Requested tour** panel with the day/time and campus you picked, and *"Nothing is
+    booked and nothing has been sent to the family yet."*
+27a. Readiness before you approve. If the organization's Business Process cannot receive new leads, the
+    case says **"Can't create the enrollment lead yet — Create Lead is not configured for this
+    process/location."** and the button reads **Lead setup needed to approve** (disabled). That is a
+    Business Process setup issue (Organization › Processes), not a problem with this family — stop here and
+    report it. **PASS if** the button reads **Approve — Create enrollment lead** and no such notice shows.
 28. Review "What Alloy found", then click the **Approve —** button (e.g. *Approve — Create enrollment lead*).
     **PASS if** the case completes, the Requested tour shows as booked, and within minutes the inbox gets
     the **tour confirmation** (with the time in the school's zone).
@@ -128,6 +152,13 @@ Use a private/incognito window for the family steps (§E), so you are not signed
 30. Suppression: on that person set email marketing to **opted out**, then try to send them a marketing
     email from the record. **PASS if** nothing is delivered. *(Known defect: the screen may show a
     server error even though suppression worked — Communications backlog. FAIL only if an email arrives.)*
+30a. Opt-out stays opted out. With that person still **opted out** of email marketing, submit a new tour
+    request (§F) with the same email and tick **Email me news…** again, then approve it (§G 28).
+    **PASS if** the person's email marketing preference is still **opted out** afterwards.
+
+*Status of §G (2026-10-28): steps 27, 27a verified on an isolated copy; 28–30a not yet verified — the
+isolated test organization could not be given a Business Process that accepts new leads (see
+`p1-close/P1-CLOSE.md`). Run them on staging after deployment.*
 
 ## H. Forms Studio parity
 
@@ -142,7 +173,8 @@ Use a private/incognito window for the family steps (§E), so you are not signed
 
 33. **Preview & Share** → **Withdraw calendar** (unless you want it live).
 34. **Availability** → delete `QA Wednesday`.
-35. **Booking experience** → **Use the organization's settings** → **Save booking experience**.
+35. **Booking experience** → **Use the organization's settings** → **Save booking experience**. If you
+    changed a form's Branding in 16b, set it back the way you found it and republish.
 36. Processing: the QA cases you created are completed by approval; the lead/person created for
     `you+tourqa1@…` can be archived from its record. Cancel the QA tour booking from the person's tour card.
 37. Delete `tour-test.html`.
