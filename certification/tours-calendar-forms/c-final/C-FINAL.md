@@ -8,7 +8,7 @@ a recorded finding for its owners. No push, PR, merge, deployment, staging migra
 |---|---|
 | Branch | `sprint/tours-polish-p1` (Enrollment lane worktree; the Communications lane has no live run and its worktree is merged and owned by another provider — Communications commits are appended here, labelled) |
 | Start | `1b967b172` (Enrollment P1 evidence; product candidate `5d3a73697`), staging `24b03991c`, 0 behind |
-| Commits | `a8c05a90d` C4 · `d2e04e0eb` C2 · `d3dba5b7f` C1 · `723b76422` legacy SMS gate · `1b778748a` live certification · this record |
+| Commits | `a8c05a90d` C4 · `d2e04e0eb` C2 · `d3dba5b7f` C1 · `723b76422` legacy SMS gate · `1b778748a` live certification · `83c7086e9` docs (**certified candidate**) · build receipt |
 | Real database | shared `alloy-cert` (`web/.env.certification.local`), Northwind synthetic tenant |
 | Schema / migrations | none |
 
@@ -87,7 +87,7 @@ a policy decision (a staff-recipient send class, or an explicit exception to the
 **owner: Communications policy + Tours**. Separately, `tour_comms.ics` is parsed but has no consumer (dead
 configuration; family links are always included) — **owner: Tours**.
 
-## Validation (candidate `1b778748a`)
+## Validation (code candidate `1b778748a`; docs-only `83c7086e9` built)
 
 | Check | Result |
 |---|---|
@@ -97,7 +97,7 @@ configuration; family links are always included) — **owner: Tours**.
 | Python C1 set | 58/58 + 25/25 (see C4) |
 | `vac run typecheck` / `typecheck:tests` | PASSED |
 | `npm run prebuild` | exit 0 |
-| `vac run build` | see the addendum below |
+| `vac run build` | **PASSED** on `83c7086e9` (tree `aae0f65862b5313a`, request `req_1793192970645158_75600`); the next commit is this record only |
 
 ## Enrollment integration
 
