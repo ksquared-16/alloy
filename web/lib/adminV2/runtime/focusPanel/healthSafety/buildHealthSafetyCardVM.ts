@@ -27,6 +27,7 @@
  * a relationship is not an emergency contact merely because it exists.
  */
 
+import { classifyImmunizationEvidence, type ImmunizationEvidence } from "@/lib/health/immunizationEvidence";
 import { disclosableDocumentIds, type DocumentDisclosureActor } from "@/lib/documents/documentMetadataDisclosure";
 import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -169,6 +170,11 @@ export type HealthSafetyCardVM = {
     insurance: HealthSafetyInsurance[];
     /** Immunizations by vaccine, with their assurance. */
     immunizations: HealthSafetyImmunization[];
+    /**
+     * EN-FI-10: reported vs uploaded vs reviewed vs accepted/rejected certificate vs Medical-verified, kept apart. Null
+     * when health is unavailable or refused.
+     */
+    immunizationEvidence: ImmunizationEvidence | null;
     /** Medical authorizations: the current state per kind, then history. */
     consents: HealthSafetyConsent[];
     /** Owners this VM deliberately does not project, and why. */
@@ -240,6 +246,7 @@ function emptyVm(): HealthSafetyCardVM {
         careProviders: [],
         insurance: [],
         immunizations: [],
+        immunizationEvidence: null,
         consents: [],
         gaps: [],
         unavailableReason: null,
@@ -301,7 +308,7 @@ export async function buildHealthSafetyCardVM(
         hClock.time("health_documents_ms", () =>
             supabase
                 .from("documents")
-                .select("id, doc_type, title, status, created_at")
+                .select("id, doc_type, title, status, created_at, current_version_id")
                 .eq("org_id", args.orgId)
                 .eq("entity_type", "customer_member")
                 .eq("entity_id", memberId),
@@ -458,6 +465,39 @@ export async function buildHealthSafetyCardVM(
                 uploadedAt: t(d.created_at) || null,
             }),
         );
+    }
+
+    // ── EN-FI-10: IMMUNIZATION EVIDENCE, layer by layer ─────────────────────────────────────────────
+    // Facts are Medical's; certificates are Documents'. The read never promotes one into the other.
+    {
+        const certificateDocs =
+            documentsResult.status === "fulfilled" && !documentsResult.value.error
+                ? ((documentsResult.value.data ?? []) as unknown as Array<Record<string, unknown>>).filter(
+                      (d) => t(d.doc_type) === "immunization_record" && vm.documents.some((x) => x.documentId === t(d.id)),
+                  )
+                : [];
+        const versionIds = certificateDocs.map((d) => t(d.current_version_id)).filter(Boolean);
+        const reviewByVersion = new Map<string, string | null>();
+        if (versionIds.length) {
+            const { data: versions } = await supabase.from("document_versions").select("id, review_status").eq("org_id", args.orgId).in("id", versionIds);
+            for (const v of (versions ?? []) as Array<{ id: string; review_status: string | null }>) reviewByVersion.set(v.id, v.review_status);
+        }
+        vm.immunizationEvidence = classifyImmunizationEvidence({
+            facts: vm.immunizations.map((i) => ({
+                id: i.factId,
+                vaccine_key: i.vaccineKey,
+                source_kind: i.sourceKind,
+                confirmed_at: i.assurance === "verified" ? "verified" : null,
+            })),
+            certificates: certificateDocs.map((d) => {
+                const r = reviewByVersion.get(t(d.current_version_id)) ?? null;
+                return {
+                    document_id: t(d.id),
+                    status: t(d.status) || null,
+                    review_status: r === "pending" || r === "accepted" || r === "rejected" ? r : null,
+                };
+            }),
+        });
     }
 
     /*

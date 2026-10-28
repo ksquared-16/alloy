@@ -30,6 +30,7 @@ import {
     editHealthFact,
     endHealthFact,
     HealthFactError,
+    verifyImmunizationFact,
 } from "@/lib/health/healthFactService";
 import { isHealthFactKind, type HealthFactKind } from "@/lib/health/healthFactModel";
 import { MedicalConsentError, withdrawMedicalConsent } from "@/lib/health/medicalConsentService";
@@ -38,6 +39,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const HEALTH_FACT_ADD_ACTION_KEY = "health_fact.add";
 export const HEALTH_FACT_EDIT_ACTION_KEY = "health_fact.edit";
 export const HEALTH_FACT_END_ACTION_KEY = "health_fact.end";
+export const HEALTH_FACT_VERIFY_IMMUNIZATION_ACTION_KEY = "health_fact.verify_immunization";
 export const MEDICAL_CONSENT_WITHDRAW_ACTION_KEY = "medical_consent.withdraw";
 
 function t(v: unknown): string {
@@ -352,4 +354,73 @@ const withdrawConsent: RegisteredAction = {
     },
 };
 
-export const healthFactActions: RegisteredAction[] = [addFact, editFact, endFact, withdrawConsent];
+/**
+ * EN-FI-10 — VERIFY AN IMMUNIZATION. Medical's act (health.manage), never a side effect: the reported fact gains who
+ * verified it, when, on what basis and (optionally) which accepted certificate version was checked. What it says does
+ * not change.
+ */
+const verifyImmunization: RegisteredAction = {
+    ...BASE,
+    actionKey: HEALTH_FACT_VERIFY_IMMUNIZATION_ACTION_KEY,
+    defaultLabel: "Verify immunization",
+    description: "Medical verification of a reported immunization, optionally against an accepted certificate.",
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        const blockers = [];
+        if (!t(src.fact_id)) blockers.push({ code: "missing_fact", message: "An immunization is required.", field: "fact_id" });
+        if (t(src.basis).length < 3) blockers.push({ code: "missing_basis", message: "Say what the verification is based on.", field: "basis" });
+        return blockers.length ? { ok: false, blockers } : { ok: true, value: src };
+    },
+
+    async resolveEligibility({ payload }) {
+        const factId = t(payload?.fact_id);
+        return {
+            eligible: Boolean(factId),
+            blockers: factId ? [] : [{ code: "missing_fact", message: "An immunization is required." }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: "Verify this immunization",
+            changes: [
+                t(payload?.evidence_document_id)
+                    ? "Recorded as verified by you, against the accepted certificate. The reported doses are unchanged."
+                    : "Recorded as verified by you, on the basis you give. The reported doses are unchanged.",
+            ],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        try {
+            const out = await verifyImmunizationFact(supabase as SupabaseClient, {
+                access: await resolveHealthAccessForActor(supabase as SupabaseClient, ctx.orgId, ctx.userId),
+                orgId: ctx.orgId,
+                factId: t(payload.fact_id),
+                evidenceDocumentId: t(payload.evidence_document_id) || null,
+                basis: t(payload.basis),
+                actorUserId: ctx.userId ?? null,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: HEALTH_FACT_VERIFY_IMMUNIZATION_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: childIdFrom(payload, invocation.entityId),
+                    affectedId: out.fact.id,
+                    detail: { confirmed_at: out.fact.confirmed_at, already_verified: out.alreadyVerified },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const healthFactActions: RegisteredAction[] = [addFact, editFact, endFact, verifyImmunization, withdrawConsent];
