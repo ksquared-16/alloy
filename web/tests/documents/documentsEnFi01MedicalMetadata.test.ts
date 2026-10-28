@@ -46,6 +46,11 @@ import { makeDefaultSourceDisplayResolverRegistry } from "@/lib/pos/processingCa
 import { redactPacketRollupDocuments } from "@/lib/forms/packets/redactPacketRollupDocuments";
 import { buildHealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
+import { GET as relatedGET } from "@/app/api/admin/related/[entity]/[id]/route";
+import { GET as p076GET } from "@/app/api/admin/p076-first-order-prototype/route";
+import { POST as generateDocumentPOST } from "@/app/api/admin/forms/submissions/[submissionId]/generate-document/route";
+import { discloseFormDraftTextPreview } from "@/lib/documents/extractedTextDisclosure";
+import { diagnosticReaderAllowed } from "@/lib/admin/diagnosticReaderAuthority";
 
 const ORG_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ORG_B = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -287,5 +292,98 @@ describe("Health card document list — Medical gate AND Documents gates", () =>
     it("without health.view the card itself is refused", async () => {
         const vm = await card(P.documentsOperator, ["documents.read"]);
         expect(vm.permissionDenied).toBe(true);
+    });
+});
+
+describe("Related records — the document's own subject scope (EN-FI-01 security release)", () => {
+    const CONTACT = "c0a00000-0000-4000-8000-000000000001";
+    const MED = "d0c00000-0000-4000-8000-0000000000c1";
+    const STD = "d0c00000-0000-4000-8000-0000000000c2";
+    beforeEach(() => {
+        db.seed("contacts", [{ id: CONTACT, org_id: ORG_A, customer_id: null, vendor_id: null }]);
+        db.seed("documents", [
+            doc(MED, { entity_type: "contact", entity_id: CONTACT, doc_type: "immunization_record", sensitivity: "medical", title: "Immunization — Ava" }),
+            doc(STD, { entity_type: "contact", entity_id: CONTACT, title: "Photo release" }),
+        ]);
+    });
+    const related = () => invokeRoute(relatedGET, buildRequest({ path: `/api/admin/related/contact/${CONTACT}` }), routeParams({ entity: "contact", id: CONTACT }));
+    const ids = (r: { body: unknown }) => ((r.body as { documents?: Array<{ id: string }> }).documents ?? []).map((d) => d.id);
+    it("a department-restricted reader gets none (a contact's documents have no department; scope fails closed)", async () => {
+        as(P.outOfScope);
+        const r = await related();
+        expect(r.status).toBe(200);
+        expect(ids(r)).toEqual([]);
+    });
+    it("a Documents operator sees the ordinary document, never the medical one", async () => {
+        as(P.documentsOperator);
+        const got = ids(await related());
+        expect(got).toContain(STD);
+        expect(got).not.toContain(MED);
+    });
+    it("a Medical-authorized administrator sees both", async () => {
+        as(P.medicalAdmin);
+        expect(ids(await related()).sort()).toEqual([MED, STD].sort());
+    });
+    it("health.view without Documents admission sees none; cross-organization sees none", async () => {
+        as(P.noDocuments);
+        expect(ids(await related())).toEqual([]);
+        as(P.crossOrg);
+        expect(ids(await related())).toEqual([]);
+    });
+});
+
+describe("Processing form-draft OCR preview — scope as well as clearance", () => {
+    const draft = () => ({ source_document_id: DOC.immunization, diagnostics: { extracted_text_preview: "MMR dose 1 2022-01-04" } });
+    const preview = (p: Persona) => discloseFormDraftTextPreview(db as never, ORG_A, accessOf(p) as never, draft());
+    it("a Medical-authorized administrator in scope reads it", async () => {
+        expect((await preview(P.medicalAdmin)).diagnostics.extracted_text_preview).toContain("MMR");
+    });
+    it("out of scope, or without health.view, it is blanked", async () => {
+        expect((await preview(P.outOfScope)).diagnostics.extracted_text_preview).toBe("");
+        expect((await preview(P.documentsOperator)).diagnostics.extracted_text_preview).toBe("");
+    });
+    it("an actor without scope dimensions is refused (scope unknown is not scope granted)", async () => {
+        const out = await discloseFormDraftTextPreview(db as never, ORG_A, { roleKeys: ["admin"], permissionKeys: ADMIN }, draft());
+        expect(out.diagnostics.extracted_text_preview).toBe("");
+    });
+});
+
+describe("p076 diagnostic — live on staging (ALLOY_ROUTE_TIMING=1): administrator, unrestricted, Documents AND Medical", () => {
+    it("who may run it", () => {
+        expect(diagnosticReaderAllowed(accessOf(P.medicalAdmin) as never)).toBe(true);
+        expect(diagnosticReaderAllowed(accessOf(P.documentsOperator) as never)).toBe(false);
+        expect(diagnosticReaderAllowed(accessOf(P.noDocuments) as never)).toBe(false);
+        expect(diagnosticReaderAllowed(accessOf(P.processingManager) as never)).toBe(false);
+        expect(diagnosticReaderAllowed(accessOf(P.outOfScope) as never)).toBe(false);
+    });
+    it("the route refuses everyone else before any read; with the flag off it does not exist", async () => {
+        const prev = process.env.ALLOY_ROUTE_TIMING;
+        try {
+            process.env.ALLOY_ROUTE_TIMING = "1";
+            as(P.documentsOperator);
+            const spy = vi.spyOn(db, "from");
+            const r = await invokeRoute(p076GET, buildRequest({ path: `/api/admin/p076-first-order-prototype?member_id=${OPP_1}` }));
+            expect(r.status).toBe(403);
+            expect(spy).not.toHaveBeenCalled();
+            delete process.env.ALLOY_ROUTE_TIMING;
+            expect((await invokeRoute(p076GET, buildRequest({ path: "/api/admin/p076-first-order-prototype" }))).status).toBe(404);
+        } finally {
+            if (prev === undefined) delete process.env.ALLOY_ROUTE_TIMING;
+            else process.env.ALLOY_ROUTE_TIMING = prev;
+        }
+    });
+});
+
+describe("generate-document — the provenance reference must be this organization's document", () => {
+    const post = (generated_from_document_id: string) =>
+        invokeRoute(generateDocumentPOST, buildRequest({ method: "POST", path: "/x", body: { generated_from_document_id } }), routeParams({ submissionId: "5b000000-0000-4000-8000-000000000009" }));
+    it("another organization's document id is refused before anything is generated", async () => {
+        as({ ...P.medicalAdmin, permissionKeys: [...ADMIN, "forms.submissions"] });
+        const r = await post(DOC.otherOrg);
+        expect(r.status).toBe(400);
+    });
+    it("this organization's document passes the check (and the missing submission is then a 404)", async () => {
+        as({ ...P.medicalAdmin, permissionKeys: [...ADMIN, "forms.submissions"] });
+        expect((await post(DOC.plain)).status).toBe(404);
     });
 });
