@@ -400,19 +400,16 @@ describeLive("S7 public tour booking, intake and approval — live certification
         expect((prefs ?? []).filter((p) => String((p as Json).category).includes("marketing") && (p as Json).state === "opted_in")).toEqual([]);
     });
 
-    it("C3·T · FINDING — a configured staff calendar invite is refused at enqueue (internal audience on email: INTERNAL_TO_PROVIDER)", async () => {
+    it("C3·T · a configured staff calendar invite for the approved tour is an authorized, external transactional email (no longer refused INTERNAL_TO_PROVIDER)", async () => {
         const [booking] = (await ok(db.from("tour_bookings").select("*").eq("org_id", ORG).eq("metadata->>processing_case_id", familyA.caseId!))) as TourBookingRow[];
         expect(booking).toBeTruthy();
-        const { data: users } = await db.auth.admin.listUsers({ page: 1, perPage: 50 });
-        const staff = (users?.users ?? []).find((u) => Boolean(u.email));
-        expect(staff, "a staff auth user with an email exists on the cert stack").toBeTruthy();
-        const config = { ...DEFAULT_TOUR_COMMS_CONFIG, internal_recipients: { enabled: true, user_ids: [staff!.id] } };
+        const STAFF_ADMIN = "00000000-0000-4000-8000-000000000002"; // Northwind admin (all sites, tours.book)
+        const config = { ...DEFAULT_TOUR_COMMS_CONFIG, internal_recipients: { enabled: true, user_ids: [STAFF_ADMIN] } };
         const res = await sendTourInternalCalendarInvite({ supabase: db, orgId: ORG, booking: booking!, config, action: "request", actorUserId: ACTOR });
-        // The recipient resolves and the .ics is built, but the canonical gate refuses an internal-audience email.
-        expect(res).toMatchObject({ skippedReason: "enqueue_failed" });
-        const rows = (await ok(db.from("communication_messages").select("status, audience, error, metadata").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", booking!.id).filter("metadata->>tour_event_key", "eq", "tour_internal_calendar"))) as Array<{ status: string; audience: string; error: string | null; metadata: Json }>;
-        expect(rows.length).toBeGreaterThanOrEqual(1);
-        expect(rows.every((r) => r.status === "blocked" && r.error === "policy:INTERNAL_TO_PROVIDER")).toBe(true);
+        expect(res.communicationMessageIds ?? []).toHaveLength(1);
+        const rows = (await ok(db.from("communication_messages").select("status, audience, category, error, metadata").in("id", res.communicationMessageIds!))) as Array<{ status: string; audience: string; category: string; error: string | null; metadata: Json }>;
+        expect(rows[0]).toMatchObject({ status: "queued", audience: "external", category: "transactional", error: null });
+        expect(rows[0]!.metadata).toMatchObject({ staff_recipient: { user_id: STAFF_ADMIN, verified: true } });
     });
 
     it("11 · repeating Approve or racing the handoff never books or confirms twice", async () => {

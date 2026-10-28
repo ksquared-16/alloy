@@ -115,9 +115,16 @@ export type TourCommsInternalRecipientsPolicy = {
 export type TourCommsParentRecipientPolicy = "primary_contact";
 
 export type TourCommsIcsPolicy = {
-    /** Link or embed ICS in confirmation email (Batch 3+). */
+    /**
+     * Whether the family's tour messages (confirmation, reschedule) carry the "Add to calendar" link.
+     * Default true. Consumed by the orchestrator; false omits the link and its line. Staff calendar
+     * invitations are governed by `internal_recipients`, not by this setting.
+     */
     include_in_confirmation_email: boolean;
-    /** Allow token-scoped public ICS download (Batch 3+). */
+    /**
+     * RESERVED — no consumer. Intended to allow a token-scoped public .ics download, but no such route
+     * exists (`buildTourIcsDownloadPath` names one); setting it changes nothing. Owner: Tours.
+     */
     public_download_enabled: boolean;
 };
 

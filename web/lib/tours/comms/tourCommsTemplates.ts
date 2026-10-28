@@ -209,7 +209,8 @@ export function applyTourCommsPlaceholders(template: string, mergeFields: Record
 
 /** Remove lines that became empty labels after merge (optional URLs, site_line). */
 export function omitEmptyOptionalTourCommsLines(text: string): string {
-    const lines = text.split("\n");
+    // An SMS carries its optional link inline ("… Details: {{url}}"): a missing link drops the label too.
+    const lines = text.split("\n").map((line) => line.replace(/\s+Details:\s*$/i, ""));
     const filtered = lines.filter((line) => {
         const t = line.trim();
         if (!t) return true;
