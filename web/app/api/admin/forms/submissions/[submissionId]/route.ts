@@ -10,6 +10,9 @@ import {
 } from "@/lib/admin/forms/formsAdminDb";
 import { buildPublicLinkIntakeDebug, type PublicLinkIntakeDebug } from "@/lib/forms/submissionOutcomeSummary";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { disclosableDocumentIds, UNDISCLOSED_DOCUMENT_LABEL } from "@/lib/documents/documentMetadataDisclosure";
 
 /** GET /api/admin/forms/submissions/[submissionId] */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
@@ -50,10 +53,23 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         public_link_intake_debug = buildPublicLinkIntakeDebug(meta, linkId);
     }
 
+    // EN-FI-01: a linked document (a completed-form PDF, an upload, a signed artifact) is named only to a reader who
+    // may read it — documents admission, subject scope, sensitivity clearance (a medical form's PDF needs health.view).
+    const access = await getAdminAccessContextCached();
+    const documentActor = access.ok
+        ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) }
+        : null;
+    const disclosable = await disclosableDocumentIds(supabase, ctx.orgId, documentActor, (linked ?? []).map((l) => l.document.id));
+    const linked_documents = (linked ?? []).map((l) =>
+        disclosable.has(l.document.id)
+            ? l
+            : { ...l, document: { ...l.document, name: UNDISCLOSED_DOCUMENT_LABEL, original_filename: null, document_type: null } },
+    );
+
     return jsonData({
         ...submissionRest,
         schema_json,
-        linked_documents: linked ?? [],
+        linked_documents,
         public_link_intake_debug,
     });
 }

@@ -35,6 +35,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : null;
 
     const supabase = createAdminClient();
+    // EN-FI-01: the provenance reference must be a document of THIS organization. Nothing reads it back today, but a
+    // stored cross-tenant document id is an integrity defect the next reader would inherit. Same answer as not found.
+    if (generatedFrom) {
+        const { data: source } = await supabase.from("documents").select("id").eq("org_id", ctx.orgId).eq("id", generatedFrom).maybeSingle();
+        if (!source) return jsonError("generated_from_document_id is not a document of this organization", 400);
+    }
     const result = await createGeneratedPdfForSubmission(supabase, {
         orgId: ctx.orgId,
         submissionId,
