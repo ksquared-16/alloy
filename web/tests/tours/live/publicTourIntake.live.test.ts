@@ -42,6 +42,7 @@ import { processDueCommunicationScheduledSends } from "@/lib/communications/comm
 import { issueUnsubscribeToken, verifyUnsubscribeToken } from "@/lib/communications/preferences/unsubscribeToken";
 import { createSupabaseAuthoringGateway } from "@/lib/operationalExpectations/intake/supabaseAuthoringGateway";
 import { commitCalendarAct, prepareCalendarAct, type CalendarAuthoringAction } from "@/lib/operatingCalendar/operatingCalendarAuthoring";
+import { mergeRoutingDefaultsIntoMetadata, resolveOrgIntakeRoutingDefaults } from "@/lib/forms/intake/resolveOrgIntakeRoutingDefaults";
 import { OPERATING_CALENDAR_PURPOSE, type OperatingCalendarEntryDraft } from "@/lib/operatingCalendar/operatingCalendarVocabulary";
 
 function certEnv(): { url: string; serviceKey: string } | null {
@@ -90,21 +91,6 @@ vi.mock("@/lib/admin/getAdminContext", async (orig) => ({
     getAdminContextCached: vi.fn(async () => adminCtx),
     getAdminContext: vi.fn(async () => adminCtx),
 }));
-
-/*
- * CERT-TENANT CONFIGURATION, not an S7 behaviour: Northwind has no builder-owned Create Lead entry
- * department, so Processing's lead placement fails closed (`lead_placement_unresolved`) for any
- * public-form lead. The real resolver still runs — it is only told Northwind's `new_leads` work unit,
- * as a configured entry department would tell it.
- */
-vi.mock("@/lib/lifecycle/resolveCreateLeadPlacement", async (orig) => {
-    const real = await orig<typeof import("@/lib/lifecycle/resolveCreateLeadPlacement")>();
-    return {
-        ...real,
-        resolveCreateLeadPlacement: (supabase: never, orgId: string, input: Record<string, unknown> = {}) =>
-            real.resolveCreateLeadPlacement(supabase, orgId, { ...input, workUnitId: (input.workUnitId as string | undefined) ?? "00000000-0000-4000-8000-000000000030" }),
-    };
-});
 
 import { GET as slotsGet } from "@/app/api/public/tours/[token]/slots/route";
 import { POST as draftPost } from "@/app/api/public/forms/[token]/submissions/route";
@@ -162,6 +148,9 @@ describeLive("S7 public tour booking, intake and approval — live certification
 
     async function mintLink(orgId: string, locationId: string, form: string, extra: Json = {}, columns: Json = {}): Promise<string> {
         const token = randomBytes(24).toString("base64url");
+        // A link minted in Studio carries the organization's intake routing (Enrollment's
+        // default_department_id) underneath its own settings — Approve places the lead from it.
+        const routing = await resolveOrgIntakeRoutingDefaults(db, orgId, "enrollment_lead");
         const row = await ok(
             db
                 .from("form_public_links")
@@ -171,14 +160,17 @@ describeLive("S7 public tour booking, intake and approval — live certification
                     token_hash: hashFormLinkToken(token),
                     token_prefix: token.slice(0, 12),
                     is_active: true,
-                    metadata: {
-                        lead_capture: true,
-                        default_vertical_id: verticalId,
-                        default_location_id: locationId,
-                        distribution_context: "location_specific",
-                        cert_run: RUN,
-                        ...extra,
-                    },
+                    metadata: mergeRoutingDefaultsIntoMetadata(
+                        {
+                            lead_capture: true,
+                            default_vertical_id: verticalId,
+                            default_location_id: locationId,
+                            distribution_context: "location_specific",
+                            cert_run: RUN,
+                            ...extra,
+                        },
+                        routing
+                    ),
                     ...columns,
                 })
                 .select("id")
@@ -248,7 +240,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
         return (await ok(db.from("tour_bookings").select("id, status_key, opportunity_id, start_at, source, form_submission_id").eq("org_id", ORG).eq("metadata->>processing_case_id", caseId))) as Array<Json>;
     }
     async function confirmationsFor(bookingId: string) {
-        return ((await ok(db.from("communication_messages").select("id, status, error, metadata").eq("org_id", ORG).eq("direction", "outbound").filter("metadata->>tour_booking_id", "eq", bookingId))) as Array<{ status: string; error: string | null; metadata: Json }>).filter((m) => m.metadata?.event_key === "tour_confirmation");
+        return ((await ok(db.from("communication_messages").select("id, status, error, metadata").eq("org_id", ORG).eq("direction", "outbound").filter("metadata->>tour_booking_id", "eq", bookingId))) as Array<{ id: string; status: string; error: string | null; metadata: Json }>).filter((m) => m.metadata?.event_key === "tour_confirmation");
     }
     async function personsWithEmail(email: string) {
         return (await ok(db.from("persons").select("id").eq("org_id", ORG).ilike("email", email))) as Array<{ id: string }>;
@@ -390,6 +382,10 @@ describeLive("S7 public tour booking, intake and approval — live certification
         // Exactly one confirmation per channel, and it was queued for delivery — not refused.
         expect(tour.comms?.status, JSON.stringify({ comms: tour.comms, confirmations })).toBe("sent");
         expect(confirmations.filter((m) => m.status !== "blocked").length).toBeGreaterThanOrEqual(1);
+        // The family's calendar invitation: the confirmation email carries an Add to calendar link for this tour.
+        const email = (await ok(db.from("communication_messages").select("body").in("id", confirmations.map((m) => m.id)).eq("channel", "email"))) as Array<{ body: string | null }>;
+        expect(email, JSON.stringify(confirmations)).toHaveLength(1);
+        expect(email[0]!.body ?? "").toMatch(/Add to calendar:?\s*https:\/\/calendar\.google\.com\/calendar\/render\?[^\s]*20330301T180000Z/);
         // 16 · intake and approval imply no marketing consent.
         const people = await personsWithEmail(familyA.email);
         expect(people).toHaveLength(1);
