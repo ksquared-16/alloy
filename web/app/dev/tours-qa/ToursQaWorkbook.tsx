@@ -20,6 +20,7 @@ export type QaStatus = "PASS" | "FAIL" | "BLOCKED" | "NOT RUN";
 const STATUSES: QaStatus[] = ["PASS", "FAIL", "BLOCKED", "NOT RUN"];
 type Result = { status: QaStatus; note: string; evidence: string };
 type Results = Record<string, Result>;
+const EMPTY_RESULT: Result = { status: "NOT RUN", note: "", evidence: "" };
 
 const STORAGE_KEY = "alloy.tours-human-qa-v2.results";
 const TESTER_KEY = "alloy.tours-human-qa-v2.tester";
@@ -146,7 +147,7 @@ export default function ToursQaWorkbook({
     }, [results, tester, loaded]);
 
     const update = (label: string, patch: Partial<Result>) =>
-        setResults((prev) => ({ ...prev, [label]: { status: "NOT RUN", note: "", evidence: "", ...prev[label], ...patch } }));
+        setResults((prev) => ({ ...prev, [label]: { ...EMPTY_RESULT, ...prev[label], ...patch } }));
     const statusOf = (label: string): QaStatus => results[label]?.status ?? "NOT RUN";
     const counts = Object.fromEntries(STATUSES.map((s) => [s, tests.filter((t) => statusOf(t.label) === s).length])) as Record<QaStatus, number>;
     const problems = tests.filter((t) => statusOf(t.label) === "FAIL" || statusOf(t.label) === "BLOCKED");
