@@ -23,8 +23,15 @@ export function isDocumentRequirementProjectedWorkItem(task: Pick<MyTasksTaskRow
 }
 
 export function mapDocumentRequirementToWorkItemRow(row: RequirementWorkRow): MyTasksTaskRow {
+    // R1: an expiring requirement whose renewal is already on file awaiting review is review work, not renewal work.
     const verb =
-        row.state === "pending_review" ? "Review" : row.state === "blocked" ? "Resolve" : row.state === "expired" || row.state === "expiring_soon" ? "Renew" : "Collect";
+        row.state === "pending_review" || row.renewal === "pending"
+            ? "Review"
+            : row.state === "blocked"
+              ? "Resolve"
+              : row.state === "expired" || row.state === "expiring_soon"
+                ? "Renew"
+                : "Collect";
     return {
         id: row.id,
         title: `${verb}: ${row.requirement_label} — ${row.subject_label}`,

@@ -172,8 +172,8 @@ beforeEach(() => {
             const d = db.rows("documents").find((x) => x.id === args.p_document_id && x.org_id === args.p_org_id);
             if (!d) return { data: null, error: { message: "document_not_found" } };
             const versions = db.rows("document_versions").filter((v) => v.document_id === d.id);
-            const id = `v2-${d.id}`;
             const number = Math.max(0, ...versions.map((v) => Number(v.version_number))) + 1;
+            const id = `v${number}-${d.id}`; // v2-<doc> for the first renewal, as the D7.3 tests name it; v3-… after it
             db.seed("document_versions", [{ id, org_id: d.org_id, document_id: d.id, version_number: number, review_status: null, effective_on: null, expires_on: null, created_at: "2026-10-27T18:00:00Z", source: "replacement", supersedes_version_id: d.current_version_id }]);
             const supersedes = d.current_version_id;
             Object.assign(d, { current_version_id: id });
@@ -303,7 +303,8 @@ describe("requirement satisfaction honours validity (D7.1) and renewal (D7.3)", 
         expect(r).toMatchObject({ state: "satisfied", renewal_pending: true, expiring_soon: true });
     });
     it("a rejected renewal never satisfies by itself; the earlier valid version still does, an expired one does not", () => {
-        expect(e([d("a", { review_status: "rejected", prior_accepted: { version_id: "v1", validity: val("valid") } })])).toMatchObject({ state: "satisfied", renewal_pending: true });
+        // R1: the rejected renewal is a decision, not an outstanding review.
+        expect(e([d("a", { review_status: "rejected", prior_accepted: { version_id: "v1", validity: val("valid") } })])).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: true });
         expect(e([d("a", { review_status: "rejected", prior_accepted: { version_id: "v1", validity: val("expired") } })])).toMatchObject({ state: "blocked", blocked_reason: "evidence_rejected" });
         expect(e([d("a", { review_status: "pending", prior_accepted: { version_id: "v1", validity: val("expired") } })]).state).toBe("pending_review");
     });
@@ -504,7 +505,7 @@ describe("renewal by replacement (D7.3)", () => {
         as(P.admin);
         await renew(DOC.physC1, {});
         await review(DOC.physC1, { decision: "rejected", reason: "Wrong child on the form" });
-        expect(evalOf(await readiness(`subject_type=child&subject_id=${C1}`), R_PHYS.id, C1)).toMatchObject({ state: "satisfied", renewal_pending: true });
+        expect(evalOf(await readiness(`subject_type=child&subject_id=${C1}`), R_PHYS.id, C1)).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: true });
         vi.setSystemTime(new Date("2026-11-11T20:00:00Z"));
         expect(evalOf(await readiness(`subject_type=child&subject_id=${C1}`), R_PHYS.id, C1)).toMatchObject({ state: "blocked", blocked_reason: "evidence_rejected" });
     });
@@ -512,5 +513,101 @@ describe("renewal by replacement (D7.3)", () => {
         as(P.admin);
         expect((await renew(DOC.physC1, { effective_on: "2027-01-01", expires_on: "2026-01-01" })).status).toBe(400);
         expect(db.rows("document_versions").some((x) => x.id === `v2-${DOC.physC1}`)).toBe(false);
+    });
+});
+
+// ── R1: a renewal's own review state ─────────────────────────────────────────────────────────────────────────
+// Hosted qar_4246ac22ece0 (D7.3b, browser W4f): after a renewal was REJECTED, readiness kept renewal_pending: true and
+// the Focus Panel read "renewal awaiting review". A rejection is a decision; only an undecided renewal is pending.
+describe("R1 — a renewal's review state: pending, rejected, re-reviewed, replaced again", () => {
+    async function renew(id: string, fields: Record<string, string> = {}) {
+        const d = await PDFDocument.create();
+        d.addPage([100, 100]);
+        const form = new FormData();
+        form.set("file", new File([(await d.save()) as unknown as BlobPart], "renewal.pdf", { type: "application/pdf" }));
+        form.set("reason", "Renewed physical from the pediatrician");
+        for (const [k, v] of Object.entries(fields)) form.set(k, v);
+        return invokeRoute(versionsPOST, new NextRequest(`http://localhost/api/admin/documents/${id}/versions`, { method: "POST", body: form }), routeParams({ id }));
+    }
+    const phys = async () => evalOf(await readiness(`subject_type=child&subject_id=${C1}`), R_PHYS.id, C1);
+    const physWork = async () => (await work()).rows.find((x) => x.requirement_id === R_PHYS.id && x.subject_id === C1) ?? null;
+    const historyActions = async (id: string) =>
+        (((await invokeRoute(historyGET, buildRequest({ path: `/api/admin/documents/${id}/history` }), routeParams({ id }))).body as { entries?: Array<{ action: string }> }).entries ?? []).map((x) => x.action);
+
+    it("evaluator: a pending renewal is pending; a rejected one is rejected; one pending among several keeps it pending", () => {
+        const requirement: EvaluableRequirement = {
+            requirement_id: "r", requirement_key: "r", version_id: "v", label: "Physical", document_type_key: "physical", subject_type: "child",
+            scope: { kind: "all" }, timing: { kind: "immediate" }, policy: "required", waivable: false, effective_from: null, effective_until: null,
+        };
+        const t = { key: "physical", label: "Physical", subject_types: ["child"], review_required: true };
+        const subject = { subject_type: "child" as const, subject_id: "c", created_at: "2026-10-01", journeys: [] };
+        const valid: DocumentValidity = { status: "valid", expires_on: "2027-01-01", expires_source: "recorded", effective_on: null, warn_from: null, days_remaining: null };
+        const ev = (docs: EvidenceDocument[]) => evaluateDocumentRequirement({ requirement, type: t, subject, documents: docs, waivers: [], today: TODAY })!;
+        const doc = (id: string, review_status: "pending" | "rejected" | "accepted", prior = true): EvidenceDocument => ({
+            document_id: id, status: "uploaded", review_status, received_at: "2026-10-01", validity: valid, ...(prior ? { prior_accepted: { version_id: `${id}-v1`, validity: valid } } : {}),
+        });
+        expect(ev([doc("a", "pending")])).toMatchObject({ state: "satisfied", renewal_pending: true, renewal_rejected: false });
+        expect(ev([doc("a", "rejected")])).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: true });
+        expect(ev([doc("a", "rejected"), doc("b", "pending")])).toMatchObject({ renewal_pending: true, renewal_rejected: false });
+        // Any document whose CURRENT version is accepted means no renewal is outstanding at all.
+        expect(ev([doc("a", "rejected"), doc("b", "accepted", false)])).toMatchObject({ renewal_pending: false, renewal_rejected: false });
+    });
+
+    it("rejected replacement: still met by version 1, reported rejected (never 'awaiting review'), renewal work says so", async () => {
+        as(P.admin);
+        expect((await renew(DOC.physC1)).status).toBe(200);
+        expect(await phys()).toMatchObject({ state: "satisfied", renewal_pending: true, renewal_rejected: false, valid_until: "2026-11-09", expiring_soon: true });
+        const pendingRow = (await physWork())!;
+        expect(pendingRow).toMatchObject({ state: "expiring_soon", renewal: "pending", due_on: "2026-11-09" });
+        // An expiring requirement whose renewal awaits review is REVIEW work in Work Items, not "Renew".
+        expect(mapDocumentRequirementWorkToWorkItemRows([pendingRow])[0].title).toMatch(/^Review: /);
+
+        expect((await review(DOC.physC1, { decision: "rejected", reason: "Wrong child on the form" })).status).toBe(200);
+        expect(await phys()).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: true, valid_until: "2026-11-09", expiring_soon: true });
+        const rejectedRow = (await physWork())!;
+        expect(rejectedRow).toMatchObject({ state: "expiring_soon", renewal: "rejected" });
+        expect(mapDocumentRequirementWorkToWorkItemRows([rejectedRow])[0].title).toMatch(/^Renew: /);
+        // History keeps the rejection.
+        expect(await historyActions(DOC.physC1)).toContain("Review rejected");
+    });
+
+    it("re-review of the rejected renewal (Documents administration, with a reason) accepts it and moves the date", async () => {
+        as(P.admin);
+        await renew(DOC.physC1, { effective_on: "2026-10-20", expires_on: "2027-10-19" });
+        await review(DOC.physC1, { decision: "rejected", reason: "Wrong child on the form" });
+        // Without the re-review capability the decided review cannot be changed.
+        as(P.ops);
+        expect((await review(DOC.physC1, { decision: "accepted", reason: "It is the right child" })).status).toBe(403);
+        expect(await phys()).toMatchObject({ renewal_rejected: true });
+        as(P.admin);
+        expect((await review(DOC.physC1, { decision: "accepted", reason: "It is the right child after all" })).status).toBe(200);
+        expect(await phys()).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: false, valid_until: "2027-10-19", expiring_soon: false });
+        expect(await physWork()).toBeNull();
+        const actions = await historyActions(DOC.physC1);
+        expect(actions).toContain("Review rejected");
+        expect(actions).toContain("Review accepted (was rejected)");
+    });
+
+    it("an accepted subsequent replacement after a rejection: pending again, then met through the new date; every version kept", async () => {
+        as(P.admin);
+        await renew(DOC.physC1, {});
+        await review(DOC.physC1, { decision: "rejected", reason: "Wrong child on the form" });
+        expect(await phys()).toMatchObject({ renewal_rejected: true });
+        expect((await renew(DOC.physC1, { effective_on: "2026-10-25", expires_on: "2027-10-24" })).status).toBe(200);
+        expect(await phys()).toMatchObject({ state: "satisfied", renewal_pending: true, renewal_rejected: false });
+        expect((await physWork())!).toMatchObject({ renewal: "pending" });
+        await review(DOC.physC1, { decision: "accepted" });
+        expect(await phys()).toMatchObject({ state: "satisfied", renewal_pending: false, renewal_rejected: false, valid_until: "2027-10-24" });
+        expect(await physWork()).toBeNull();
+        expect(db.rows("document_versions").filter((v) => v.document_id === DOC.physC1)).toHaveLength(3);
+    });
+
+    it("once version 1 lapses, a rejected renewal blocks (evidence_rejected); flags clear because nothing satisfies", async () => {
+        as(P.admin);
+        await renew(DOC.physC1, {});
+        await review(DOC.physC1, { decision: "rejected", reason: "Wrong child on the form" });
+        vi.setSystemTime(new Date("2026-11-11T20:00:00Z"));
+        expect(await phys()).toMatchObject({ state: "blocked", blocked_reason: "evidence_rejected", renewal_pending: false, renewal_rejected: false });
+        expect((await physWork())!).toMatchObject({ state: "blocked", renewal: null });
     });
 });

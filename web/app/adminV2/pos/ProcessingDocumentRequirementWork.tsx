@@ -274,7 +274,12 @@ function RequirementWorkPanel({ row, onChanged, onLeaveProcessing }: { row: Requ
                 <p className="mt-1 text-sm text-alloy-midnight/80">{requirementWorkAction(row)}</p>
                 {row.state === "expiring_soon" && row.valid_until ? (
                     <p className="mt-1 text-xs text-amber-800" data-testid="requirement-work-valid-until">
-                        Met until {fmtDate(row.valid_until)}; upload the renewal as a new version of the document.
+                        Met until {fmtDate(row.valid_until)};{" "}
+                        {row.renewal === "pending"
+                            ? "the renewal on file awaits review."
+                            : row.renewal === "rejected"
+                              ? "the renewal on file was rejected — upload a new version."
+                              : "upload the renewal as a new version of the document."}
                     </p>
                 ) : null}
                 {(row.undated_document_ids ?? []).length > 0 ? (
@@ -283,7 +288,7 @@ function RequirementWorkPanel({ row, onChanged, onLeaveProcessing }: { row: Requ
             </div>
             <div className="flex flex-wrap gap-2">
                 <button type="button" className={WS_ACTION_PRIMARY} onClick={() => void openRecord()} data-testid="requirement-work-open-record">
-                    {row.state === "pending_review" ? "Review on the record" : row.state === "expired" || row.state === "expiring_soon" ? "Renew on the record" : "Open the record's documents"}
+                    {row.state === "pending_review" || row.renewal === "pending" ? "Review on the record" : row.state === "expired" || row.state === "expiring_soon" ? "Renew on the record" : "Open the record's documents"}
                 </button>
             </div>
             {row.waivable ? (

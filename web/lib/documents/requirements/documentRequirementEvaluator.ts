@@ -137,9 +137,17 @@ export type RequirementEvaluation = {
     valid_until: string | null;
     /** D7: satisfied, but every satisfying document is inside its expiring-soon window: renewal is due. */
     expiring_soon: boolean;
-    /** D7: satisfied by an earlier accepted version while the current version (a renewal) awaits review or was rejected. */
+    /**
+     * D7: satisfied by an earlier accepted version while the current version (a renewal) AWAITS REVIEW. A rejected
+     * renewal is never "pending": it was decided (R1 — the hosted run showed "renewal awaiting review" beside a rejection).
+     */
     renewal_pending: boolean;
+    /** D7 (R1): satisfied by an earlier accepted version only because every renewal on file was REJECTED — collect a new one. */
+    renewal_rejected: boolean;
 };
+
+/** D7 (R1): the review state of the renewal a satisfying document rests on — null when its current version is accepted. */
+export type RenewalState = "pending" | "rejected" | null;
 
 /** Unavailable statuses (as `UNAVAILABLE_DOCUMENT_STATUSES`) other than quarantine never count, either way. */
 const NEVER_EVIDENCE = new Set(["deleted", "restricted", "superseded"]);
@@ -172,10 +180,14 @@ export function classifyEvidence(doc: EvidenceDocument, reviewRequired: boolean)
     return review;
 }
 
-/** The validity that applies to a document classified `accepted` (its current version, or the prior one it rests on). */
-function acceptedValidity(doc: EvidenceDocument, reviewRequired: boolean): { validity: DocumentValidity | null; renewal: boolean } {
-    if (reviewClass(doc, reviewRequired) === "accepted") return { validity: doc.validity ?? null, renewal: false };
-    return { validity: doc.prior_accepted?.validity ?? null, renewal: true };
+/**
+ * The validity that applies to a document classified `accepted` (its current version, or the prior one it rests on),
+ * and — when it rests on the prior one — the renewal's own review state, so a rejection is never shown as pending.
+ */
+function acceptedValidity(doc: EvidenceDocument, reviewRequired: boolean): { validity: DocumentValidity | null; renewal: RenewalState } {
+    const review = reviewClass(doc, reviewRequired);
+    if (review === "accepted") return { validity: doc.validity ?? null, renewal: null };
+    return { validity: doc.prior_accepted?.validity ?? null, renewal: review };
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -238,7 +250,7 @@ export function evaluateDocumentRequirement(input: {
     };
     const reviewRequired = type?.review_required === true;
     const sorted = [...input.documents].sort((a, b) => (b.received_at ?? "").localeCompare(a.received_at ?? "") || a.document_id.localeCompare(b.document_id));
-    const inForce: Array<{ validity: DocumentValidity | null; renewal: boolean }> = [];
+    const inForce: Array<{ validity: DocumentValidity | null; renewal: RenewalState }> = [];
     for (const doc of sorted) {
         const cls = classifyEvidence(doc, reviewRequired);
         if (cls === "unavailable") continue;
@@ -310,13 +322,24 @@ export function evaluateDocumentRequirement(input: {
 }
 
 /** D7: how long the satisfying evidence stays in force, and whether its renewal is due. */
-function renewalFacts(state: RequirementState, inForce: Array<{ validity: DocumentValidity | null; renewal: boolean }>): Pick<RequirementEvaluation, "valid_until" | "expiring_soon" | "renewal_pending"> {
-    if (state !== "satisfied" || inForce.length === 0) return { valid_until: null, expiring_soon: false, renewal_pending: false };
+function renewalFacts(
+    state: RequirementState,
+    inForce: Array<{ validity: DocumentValidity | null; renewal: RenewalState }>,
+): Pick<RequirementEvaluation, "valid_until" | "expiring_soon" | "renewal_pending" | "renewal_rejected"> {
+    if (state !== "satisfied" || inForce.length === 0) return { valid_until: null, expiring_soon: false, renewal_pending: false, renewal_rejected: false };
     // Any satisfying document without an expiration keeps the requirement met indefinitely.
     const open = inForce.some((e) => !e.validity || !e.validity.expires_on);
     const until = open ? null : inForce.map((e) => e.validity!.expires_on!).sort().at(-1) ?? null;
     const expiring = !open && inForce.every((e) => e.validity?.status === "expiring_soon");
-    return { valid_until: until, expiring_soon: expiring, renewal_pending: inForce.every((e) => e.renewal) };
+    // Met only through earlier versions: a renewal is in flight. It is pending while ANY of them awaits review, and
+    // rejected only when every one was decided against — a rejection is a decision, not an outstanding review.
+    const onlyPrior = inForce.every((e) => e.renewal !== null);
+    return {
+        valid_until: until,
+        expiring_soon: expiring,
+        renewal_pending: onlyPrior && inForce.some((e) => e.renewal === "pending"),
+        renewal_rejected: onlyPrior && inForce.every((e) => e.renewal === "rejected"),
+    };
 }
 
 /** A requirement whose outcome needs an operator: unmet, in force, and required. Optional requirements never make work. */

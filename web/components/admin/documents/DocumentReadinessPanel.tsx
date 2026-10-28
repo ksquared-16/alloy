@@ -159,7 +159,7 @@ export default function DocumentReadinessPanel({
                                                     data-testid={`document-readiness-valid-until-${e.requirement_key}-${e.subject_id}`}
                                                 >
                                                     {e.expiring_soon ? "Expiring soon · valid through" : "Valid through"} {e.valid_until}
-                                                    {e.renewal_pending ? " · renewal awaiting review" : ""}
+                                                    {e.renewal_pending ? " · renewal awaiting review" : e.renewal_rejected ? " · renewal rejected — collect a new version" : ""}
                                                 </span>
                                             ) : null}
                                             {(e.evidence.undated ?? []).length ? <span className="text-[11px] text-alloy-midnight/60">expiration date not recorded</span> : null}
