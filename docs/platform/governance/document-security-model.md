@@ -296,6 +296,28 @@ Migration `supabase/migrations/20261212090000_documents_d6_requirements.sql`. Se
 - Sensitivity of form artifacts is unchanged (medical-by-linkage, D1b); evidence ids are disclosed only to actors who may
   read them.
 
+## 7f. Document metadata outside the Documents routes (EN-FI-01)
+
+A document's title, file name and type are content: "Immunization_Record_<child>.pdf" discloses a medical fact. Every
+surface that names a document from a service-role read decides it per document with
+`web/lib/documents/documentMetadataDisclosure.ts` (`disclosableDocumentIds`) — the same three gates as the Documents
+routes: **admission** (`documents.read` or a document-read role), **subject scope** (department / site), **sensitivity
+clearance** (`health.view` for medical, safeguarding, identity, restricted). It fails closed (no reader, a failed read,
+another organization's id → hidden). A hidden document reads "Document (restricted)" or the call is 404.
+
+| Surface | Before (deployed `317eafa5`) | Now |
+|---|---|---|
+| Processing queue / case source labels | admin session only | three gates per label |
+| `GET forms/submissions/[id]` `linked_documents` | admin session only | three gates per document |
+| Packet review rollup / insight, opportunity enrollment packets | admin\|ops, no document gate | three gates per title |
+| `PATCH documents/[id]` (returns the row) | `documents.write` + scope | + clearance (404) |
+| `PATCH` / `DELETE pos/documents/[id]` | `processing.documents.manage` only | + the three read gates (404) |
+| Health card document list | `health.view` only; quarantined listed | Medical **and** Documents gates; never quarantined |
+
+Medical answers were already withheld on these surfaces; the document metadata was not. Proof:
+`web/tests/documents/documentsEnFi01MedicalMetadata.test.ts` (Documents operator, Medical-authorized, health.view without
+Documents, out-of-scope, cross-organization, anonymous; two mutations).
+
 ## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.

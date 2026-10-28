@@ -297,6 +297,26 @@ reads the Documents answer; Enrollment keeps its separate stage exceptions. Reco
   review due, date missing) for owned documents no requirement row already names — one derived read for Processing →
   Work → Documents, Work Items (source Documents, never `operational_tasks`) and the Focus Panel.
 
+### D7 batch additions (local; not deployed)
+
+- **Event renewal resolves from the record** (B2). `birthday` → the day before the first birthday after the anchor
+  (`customer_members.dob` / `persons.date_of_birth`); `enrollment_start` → a document covers one enrollment and expires the
+  day before the next enrollment start (`child_enrollment_agreements`, service statuses); no later enrollment = valid with no
+  end date yet. `program_year_start` has no authoritative source and stays *date missing* (`event_source_unavailable`).
+  Every unresolvable case says why; nothing is guessed; a recorded expiration wins.
+- **Document attention is complete** (B3). Keyset-paged scan of every tracked document (bounded 20,000-document window per
+  request); `GET …/requirements/work?documents_cursor=&documents_limit=` returns at most 500 rows, a cursor and
+  `documents_complete`. Processing → Work → Documents offers "Show more document attention" until complete. Work Items carries
+  the first (most urgent) page.
+- **A durable child/person/household record opened for documents** (`card=documents`) mounts the library for that subject
+  (B1) — "Open the record's documents" now lands on the child's documents.
+- **Medical document metadata** (EN-FI-01): every surface that names a document outside the Documents routes (Processing
+  queue and case, submission linked documents, packet review, enrollment packets, the Health card, the status PATCH, the
+  POS rename/delete) decides it with `disclosableDocumentIds` — documents admission ∧ subject scope ∧ sensitivity clearance.
+- **Immunization evidence** (EN-FI-10): reported fact, uploaded certificate, reviewed certificate, accepted/rejected evidence
+  and Medical-verified state stay separate (`lib/health/immunizationEvidence.ts`). Only `health_fact.verify_immunization`
+  (`health.manage`) verifies, optionally citing a certificate Documents review accepted.
+
 ## Forms and Documents (D8)
 
 - **Forms already write canonical Documents.** Completed-form PDFs, signed artifacts and signature images are
