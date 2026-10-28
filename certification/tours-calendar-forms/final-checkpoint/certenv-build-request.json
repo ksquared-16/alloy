@@ -1,0 +1,12 @@
+{
+  "action_key": "environment.build_certification_baseline",
+  "reason_worker_cannot_execute": "Building an isolated certification environment starts a Vacilando-owned Supabase project with rotated credentials; only the trusted host may do it, under operator approval.",
+  "purpose": "Isolated certification environment for the Tours/Forms/Communications final checkpoint browser journey (the lane's certenv-8b1a2284d8 lease expired)",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "baseBranch": "staging",
+    "expectedBaseSha": "24b03991c08add5e5c555fc56646821e5d42209f",
+    "expected_repo_head": "24b03991c08add5e5c555fc56646821e5d42209f",
+    "expected_repo_ref": "refs/remotes/origin/staging"
+  }
+}

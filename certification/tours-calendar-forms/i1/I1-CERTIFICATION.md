@@ -24,7 +24,7 @@ Lane `lane_2cea84351d90` · objective `OPWORK_2CEA84351D90_SPRINT_80ADA49DE68E` 
 C1 worktree (`wt3-comms-c1-consent`) was read only: clean, untouched. C1 left no certification record of its
 own; its evidence is its three unit files (green here, below). Its two Python test files
 (`backend/tests/test_email_thread_headers.py`, `test_inbound_sms_keywords.py`) were **not run** — no Python
-environment exists on this host; CI runs them.
+environment exists on this host; CI runs them. **[Corrected 2026-10-28: no CI workflow ran any backend Python test — P1-CERTIFICATION §112. A job now exists (`backend-comms-tests.yml`, C-FINAL); it has not yet executed in GitHub Actions.]**
 
 ## S7 public consent capture (closes S7-G)
 
@@ -172,7 +172,7 @@ Lease released (`alloy-stack release`). Its last-one-out stop was refused — th
 `bin/lib/cert-ownership.sh`; the stack was left running, idle, unleased.
 
 Still outstanding (not DB): browser verification of the consent control; C1 Python tests (no Python env —
-CI runs them); operator surface for consent evidence; Director release and the one protected PR.
+CI runs them **[corrected: it did not; see above]**); operator surface for consent evidence; Director release and the one protected PR.
 
 ## Promotion — migration renumbered (2026-10-26)
 

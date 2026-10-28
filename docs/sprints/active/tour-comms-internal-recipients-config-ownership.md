@@ -15,7 +15,7 @@ Internal Tour notifications use **configured internal recipients**, not a Tour H
 | Parent recipient policy | `tour_comms.parent_recipient_policy` (seed: `primary_contact`) |
 | Internal calendar / staff notification recipients | `tour_comms.internal_recipients` (`enabled` + `user_ids[]`) |
 | Quiet hours | `tour_comms.quiet_hours` |
-| ICS attach to parent confirmation | `tour_comms.ics` |
+| Family "Add to calendar" link in confirmation / reschedule messages | `tour_comms.ics.include_in_confirmation_email` (default `true`; `false` omits the link and its line). `tour_comms.ics.public_download_enabled` is **reserved — no consumer** (no `.ics` download route exists). Staff invitations are not governed by `tour_comms.ics`. |
 | Scheduling correctness | Platform Tour reminder / orchestrator runtime |
 
 ## Internal recipients (not Tour Host)
@@ -32,7 +32,7 @@ Internal Tour notifications use **configured internal recipients**, not a Tour H
 ```
 
 - Supports **0 / 1 / many** canonical auth user ids.
-- On confirm / reschedule / cancel, orchestrator sends internal ICS email artifacts to those users.
+- On confirm / reschedule / cancel, the orchestrator sends each recipient an ICS email as an external transactional message to a **typed staff recipient** that Communications authorizes (member, `tours.book`, site scope over the tour's location, an email); unauthorized recipients are refused and recorded. Pending or never-confirmed tours produce nothing; a replayed confirmation is deduplicated.
 - Parent-facing templates are not blindly CC'd.
 - No `host_user_id` assignment UI; no host-based calendar ownership.
 

@@ -17,7 +17,7 @@
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "tier": 1,
-      "blob_sha": "085de9469c65a60a7907e2f6a0d74fec9b20040f",
+      "blob_sha": "85039b3dbff0440dbb3ff95695d09324ef53bd22",
       "exists": true
     },
     {
@@ -125,7 +125,7 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "ce09ef90ac1b3f6c7fec0c34040664add9a872ee",
+      "blob_sha": "31a6b0553b566c52b798ba169b3806bb3eeff664",
       "exists": true
     },
     {
@@ -245,7 +245,7 @@
     {
       "path": "docs/platform/modules/actions-and-workflows.md",
       "tier": 3,
-      "blob_sha": "07cd9304af516132b6840f47d1d2eec92c77a482",
+      "blob_sha": "0da785745ead3d1c877247cd2459f71ad7de00c8",
       "exists": true
     },
     {
