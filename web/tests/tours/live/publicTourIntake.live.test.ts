@@ -35,8 +35,15 @@ import { buildPublicFormResolvePayload } from "@/lib/public/forms/buildPublicFor
 import { readIntakeMarketingConsent, INTAKE_MARKETING_CONSENT_LANGUAGE } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { commitIntakeMarketingConsentForCase } from "@/lib/pos/processingCase/commitIntakeMarketingConsentForCase";
 import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
+import { loadPersonPreferencesView } from "@/lib/communications/v2/personCommunicationPreferences";
+import { presentIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentPresentation";
+import { describePreferenceEvent, describePreferenceProvenance } from "@/components/admin/communications/PersonCommunicationPreferencesPanel";
 import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
+import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
+import { sendTourInternalCalendarInvite } from "@/lib/tours/comms/tourInternalCalendarInvite";
+import { DEFAULT_TOUR_COMMS_CONFIG } from "@/lib/tours/comms/tourCommsConfig";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
 import { processDueCommunicationScheduledSends } from "@/lib/communications/communicationScheduledSendsService";
 import { issueUnsubscribeToken, verifyUnsubscribeToken } from "@/lib/communications/preferences/unsubscribeToken";
@@ -393,6 +400,21 @@ describeLive("S7 public tour booking, intake and approval — live certification
         expect((prefs ?? []).filter((p) => String((p as Json).category).includes("marketing") && (p as Json).state === "opted_in")).toEqual([]);
     });
 
+    it("C3·T · FINDING — a configured staff calendar invite is refused at enqueue (internal audience on email: INTERNAL_TO_PROVIDER)", async () => {
+        const [booking] = (await ok(db.from("tour_bookings").select("*").eq("org_id", ORG).eq("metadata->>processing_case_id", familyA.caseId!))) as TourBookingRow[];
+        expect(booking).toBeTruthy();
+        const { data: users } = await db.auth.admin.listUsers({ page: 1, perPage: 50 });
+        const staff = (users?.users ?? []).find((u) => Boolean(u.email));
+        expect(staff, "a staff auth user with an email exists on the cert stack").toBeTruthy();
+        const config = { ...DEFAULT_TOUR_COMMS_CONFIG, internal_recipients: { enabled: true, user_ids: [staff!.id] } };
+        const res = await sendTourInternalCalendarInvite({ supabase: db, orgId: ORG, booking: booking!, config, action: "request", actorUserId: ACTOR });
+        // The recipient resolves and the .ics is built, but the canonical gate refuses an internal-audience email.
+        expect(res).toMatchObject({ skippedReason: "enqueue_failed" });
+        const rows = (await ok(db.from("communication_messages").select("status, audience, error, metadata").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", booking!.id).filter("metadata->>tour_event_key", "eq", "tour_internal_calendar"))) as Array<{ status: string; audience: string; error: string | null; metadata: Json }>;
+        expect(rows.length).toBeGreaterThanOrEqual(1);
+        expect(rows.every((r) => r.status === "blocked" && r.error === "policy:INTERNAL_TO_PROVIDER")).toBe(true);
+    });
+
     it("11 · repeating Approve or racing the handoff never books or confirms twice", async () => {
         const bookingId = String((await bookingsForCase(familyA.caseId!))[0]!.id);
         const before = (await confirmationsFor(bookingId)).length;
@@ -465,6 +487,11 @@ describeLive("S7 public tour booking, intake and approval — live certification
         const [b] = await bookingsForCase(fam.caseId!);
         expect(await confirmationsFor(String(b!.id))).toEqual([]);
         expect(readRequestedTour((await caseMeta(fam.caseId!)).metadata)!.comms).toMatchObject({ status: "not_applicable" });
+        // C3·12 · a tour staff have not approved produces nothing at all: no confirmation, reminder or calendar invite.
+        const anyMsg = (await ok(db.from("communication_messages").select("id").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", String(b!.id)))) as Array<Json>;
+        expect(anyMsg).toEqual([]);
+        const anySend = (await ok(db.from("communication_scheduled_sends").select("id").eq("org_id", ORG).filter("metadata->>tour_booking_id", "eq", String(b!.id)))) as Array<Json>;
+        expect(anySend).toEqual([]);
     });
 
     it("14 · 17 · an existing family with a prior opt-out: identity is resolved, never merged by email, and the opt-out holds", async () => {
@@ -607,6 +634,20 @@ describeLive("S7 public tour booking, intake and approval — live certification
         expect(await marketingPrefs(emailPerson)).toEqual({ email_marketing: "opted_in" });
         expect(await marketingEvents(emailPerson)).toEqual([expect.objectContaining({ category: "email_marketing", from_state: null, to_state: "opted_in", source: "public_intake", method: "form_checkbox" })]);
         expect(readIntakeMarketingConsent((await caseMeta(emailFamily.caseId!)).metadata)!.committed).toMatchObject({ person_id: emailPerson });
+        // C1 · the operator sees this opt-in's source, wording and time, and that marketing email can now go.
+        const optedInView = (await loadPersonPreferencesView(db, { orgId: ORG, personId: emailPerson })).preferences.find((p) => p.key === "email_marketing")!;
+        expect(optedInView.lastChange).toMatchObject({ source: "public_intake", changedState: true, outcome: "opted_in", consentLanguageVersion: INTAKE_MARKETING_CONSENT_LANGUAGE.version });
+        expect(describePreferenceProvenance(optedInView)).toMatch(new RegExp(`^Set by public inquiry form · .* · wording ${INTAKE_MARKETING_CONSENT_LANGUAGE.version.replace(/\./g, "\\.")}$`));
+        expect(optedInView.effective.status).toBe("allowed");
+        const smsView = (await loadPersonPreferencesView(db, { orgId: ORG, personId: emailPerson })).preferences.find((p) => p.key === "sms_marketing")!;
+        // SMS was not ticked: nothing recorded, no consent invented.
+        expect(smsView).toMatchObject({ state: "unset", lastChange: null, history: [] });
+        expect(describePreferenceProvenance(smsView)).toBe("No consent on record");
+        expect(smsView.effective.status).toBe("blocked");
+        expect(presentIntakeMarketingConsent(readIntakeMarketingConsent((await caseMeta(emailFamily.caseId!)).metadata))?.lines).toEqual([
+            { channel: "email", answered: "Email news: yes", applied: "Recorded as opted in" },
+            { channel: "sms", answered: "Text news: no", applied: "Nothing recorded — no consent given" },
+        ]);
         // Capturing consent generated no marketing message; the tour confirmation is transactional (C1).
         expect(await marketingMessagesTo(emailFamily.email)).toEqual([]);
         const [b] = await bookingsForCase(emailFamily.caseId!);
@@ -668,6 +709,32 @@ describeLive("S7 public tour booking, intake and approval — live certification
                 expect(prefs.sms_marketing).toBe("opted_out");
             }
             expect(await marketingMessagesTo(email)).toEqual([]);
+
+            // C1 · provenance: the inquiry is history, never the source of the opt-out. The state row still
+            // names the unsubscribe; the inquiry's event records what was asked, under which wording.
+            const row = (await ok(db.from("communication_preferences").select("state, source").eq("org_id", ORG).eq("person_id", personId).eq("category", "email_marketing").single())) as Json;
+            expect(row).toEqual({ state: "opted_out", source: "recipient_unsubscribe" });
+            const ev = (await ok(db.from("communication_preference_events").select("from_state, to_state, source, metadata").eq("org_id", ORG).eq("person_id", personId).eq("category", "email_marketing").eq("source", "public_intake").order("occurred_at", { ascending: false }).limit(1).single())) as Json;
+            expect(ev).toMatchObject({
+                from_state: "opted_out",
+                to_state: "opted_out",
+                metadata: { outcome: "preserved_opt_out", requested_state: "opted_in", language_version: INTAKE_MARKETING_CONSENT_LANGUAGE.version, processing_case_id: fam.caseId },
+            });
+            // C1 · what the operator sees: provenance from the last real change, the inquiry as "opt-out kept",
+            // and the canonical evaluator's answer.
+            const view = await loadPersonPreferencesView(db, { orgId: ORG, personId });
+            const marketing = view.preferences.find((p) => p.key === "email_marketing")!;
+            expect(marketing.state).toBe("opted_out");
+            expect(marketing.lastChange).toMatchObject({ source: "recipient_unsubscribe", toState: "opted_out", changedState: true });
+            expect(marketing.history[0]).toMatchObject({ source: "public_intake", changedState: false, outcome: "preserved_opt_out" });
+            expect(describePreferenceEvent(marketing.history[0]!)).toMatch(/asked to opt in — opt-out kept$/);
+            expect(describePreferenceProvenance(marketing)).toMatch(/^Set by unsubscribe link/);
+            expect(marketing.effective).toMatchObject({ status: "blocked", code: "OPTED_OUT" });
+            // The person's own unsubscribe still locks the operator out of reversing it.
+            expect(marketing.allowedChanges).toEqual([]);
+            // The Processing case shows the family's answer and that it was not applied.
+            const shown = presentIntakeMarketingConsent(readIntakeMarketingConsent((await caseMeta(fam.caseId!)).metadata));
+            expect(shown?.lines.find((l) => l.channel === "email")).toEqual({ channel: "email", answered: "Email news: yes", applied: "Not applied — the person had opted out; the opt-out stands" });
         }
     });
 
@@ -772,6 +839,7 @@ describeLive("S7 public tour booking, intake and approval — live certification
             return (await ok(db.from("communication_scheduled_sends").select("status, communication_message_id, metadata").eq("id", id).single())) as { status: string; communication_message_id: string | null; metadata: Json };
         }
         const smsFamilyEmail = () => `qa+${RUN}-csms@example.invalid`;
+        let preUnsubScheduled = "";
 
         it("C·9 · a consented family's marketing email carries a working unsubscribe link on the direct and provider paths; transactional mail carries none", async () => {
             const fam = await familySubmits("cdeliver", null, tokens.calendar, { consent: { email: true } });
@@ -876,6 +944,20 @@ describeLive("S7 public tour booking, intake and approval — live certification
             const token = new URL(unsubscribeUrl).searchParams.get("t")!;
             const post = (t: string) => unsubscribePost(new Request(`http://localhost${UNSUB_PATH}?t=${encodeURIComponent(t)}`, { method: "POST" }));
 
+            // C3·5 · the same person's SMS marketing consent is its own decision: recorded before the email unsubscribe.
+            const smsOptIn = await persistCommunicationPreference(db, { orgId: ORG, personId: deliverPerson, category: "sms_marketing", fromState: null, toState: "opted_in", source: "public_intake", method: "form_checkbox" });
+            expect(smsOptIn.ok).toBe(true);
+            // C3·6 · a marketing send approved and scheduled while the family is opted in — dispatched after they unsubscribe (C·12).
+            preUnsubScheduled = await scheduleSend("sched-pre-unsub", "marketing");
+
+            // C3·9 · an expired token and a malformed one are refused safely and change nothing.
+            const expired = issueUnsubscribeToken({ personId: deliverPerson, orgId: ORG, category: "email_marketing", ttlSeconds: -60 });
+            expect(verifyUnsubscribeToken(expired)).toMatchObject({ ok: false, reason: "expired" });
+            expect((await post(expired)).status).toBe(400);
+            expect((await post("not-a-token")).status).toBe(400);
+            expect((await unsubscribeGet(new Request(`http://localhost${UNSUB_PATH}?t=not-a-token`))).status).toBe(400);
+            expect((await marketingPrefs(deliverPerson)).email_marketing).toBe("opted_in");
+
             // A forged token naming another family (payload swapped, signature kept) changes nothing.
             const [, sig] = token.split(".");
             const forgedPayload = Buffer.from(JSON.stringify({ ...claimsOf(unsubscribeUrl), p: smsPerson }), "utf8").toString("base64url");
@@ -889,43 +971,49 @@ describeLive("S7 public tour booking, intake and approval — live certification
             const get = await unsubscribeGet(new Request(`http://localhost${UNSUB_PATH}?t=${encodeURIComponent(token)}`));
             expect(get.status).toBe(200);
             expect(await get.text()).toContain('method="post"');
-            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_in" });
+            expect((await marketingPrefs(deliverPerson)).email_marketing).toBe("opted_in");
 
             // The recipient confirms.
             const res = await post(token);
             expect(res.status).toBe(200);
             expect(await res.text()).toContain("You have been unsubscribed");
-            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_out" });
+            expect((await marketingPrefs(deliverPerson)).email_marketing).toBe("opted_out");
             const events = await marketingEvents(deliverPerson);
             expect(events.at(-1)).toMatchObject({ category: "email_marketing", to_state: "opted_out", source: "recipient_unsubscribe" });
             // The other family, and this family's other channels, are untouched.
             expect(await marketingPrefs(smsPerson)).toEqual(smsBefore);
+            expect((await marketingPrefs(deliverPerson)).sms_marketing).toBe("opted_in");
         });
 
         it("C·12 · after unsubscribing, marketing is suppressed on the direct and scheduled paths, and a send with no category is refused", async () => {
             const marketingBefore = (await marketingMessagesTo(deliverEmail)).length;
 
             const direct = await directSend("marketing", "direct-after-unsub");
-            // The adapter refuses (canonical enqueue's eligibility gate) and returns no message id; the
-            // blocked row it persisted is found on the returned thread.
-            expect(direct).toMatchObject({ ok: false, error: expect.stringContaining("eligibility_blocked:OPTED_OUT") });
+            // C2 · the adapter answers an intentional suppression as a governed refusal (409
+            // recipient_suppressed, outcome blocked) — never a 500 — and names the blocked row it persisted.
+            expect(direct).toMatchObject({ ok: false, status: 409, code: "recipient_suppressed", outcome: "blocked", reason: "eligibility_blocked:OPTED_OUT" });
             const directThread = String((direct as { thread_id?: string }).thread_id ?? "");
             expect(directThread).not.toBe("");
             const threadRows = (await ok(db.from("communication_messages").select("id, status, category, error").eq("org_id", ORG).eq("thread_id", directThread).eq("status", "blocked"))) as Array<{ id: string; status: string; category: string; error: string | null }>;
             expect(threadRows.length).toBe(1);
             const directRow = threadRows[0]!;
             expect(directRow).toMatchObject({ status: "blocked", category: "marketing", error: "policy:OPTED_OUT" });
+            expect((direct as { blocked_communication_message_id?: string }).blocked_communication_message_id).toBe(directRow.id);
 
             const optedOut = await scheduleSend("sched-after-unsub", "marketing");
             const uncategorised = await scheduleSend("sched-no-category", null);
-            const res = await dispatchDue([optedOut, uncategorised]);
-            expect(res.claimed).toBe(2);
+            const res = await dispatchDue([preUnsubScheduled, optedOut, uncategorised]);
+            expect(res.claimed).toBe(3);
+            // C3·6 · scheduled while opted in, dispatched after the unsubscribe: re-checked at dispatch and refused.
+            const pre = await scheduled(preUnsubScheduled);
+            expect(pre).toMatchObject({ status: "failed", communication_message_id: null });
+            expect(pre.metadata.last_process_error).toMatchObject({ http_status: 409, code: "recipient_suppressed", reason: "eligibility_blocked:OPTED_OUT" });
             // The dispatcher's adapter is refused by the eligibility gate: the scheduled send fails with
             // the refusal recorded and no message id; the blocked row is the one carrying its body.
             const s = await scheduled(optedOut);
             expect(s.status).toBe("failed");
             expect(s.communication_message_id).toBeNull();
-            expect(String((s.metadata.last_process_error as { error?: string } | undefined)?.error ?? "")).toContain("eligibility_blocked:OPTED_OUT");
+            expect(s.metadata.last_process_error).toMatchObject({ http_status: 409, code: "recipient_suppressed", outcome: "blocked", reason: "eligibility_blocked:OPTED_OUT" });
             const schedRows = (await ok(db.from("communication_messages").select("id, status, category, error").eq("org_id", ORG).ilike("to_address", deliverEmail).ilike("body", `%ZZ ${RUN} scheduled sched-after-unsub%`))) as Array<{ id: string; status: string; category: string; error: string | null }>;
             expect(schedRows.length).toBe(1);
             const blocked = schedRows[0]!;
@@ -935,11 +1023,30 @@ describeLive("S7 public tour booking, intake and approval — live certification
             expect(u.communication_message_id).toBeNull();
             expect(u.metadata.last_process_error).toMatchObject({ code: "missing_category" });
 
-            // Exactly two new marketing rows, both blocked: nothing deliverable was created.
+            // C3·7 · a workflow's send reaches the same gate: the canonical mirror of create_message is refused
+            // (no category, no consent), and nothing deliverable is created. Its legacy SMS twin is refused at
+            // dispatch by revalidate_for_dispatch (backend/tests/test_message_sender_qa_refuse.py).
+            const wf = await enqueueCanonicalCommunicationMirror({
+                supabase: db as never,
+                orgId: ORG,
+                workflowRunId: randomUUID(),
+                workflowId: randomUUID(),
+                channelRaw: "email",
+                toRaw: deliverEmail,
+                bodyRaw: `ZZ ${RUN} workflow-after-unsub`,
+                payload: { org_id: ORG, opportunity: { id: deliverLead }, person: { id: deliverPerson } },
+            });
+            expect(wf.communicationMessageId).toBeNull();
+            expect(wf.skippedReason ?? "").toMatch(/^eligibility_blocked:/);
+            const wfRows = (await ok(db.from("communication_messages").select("status").eq("org_id", ORG).ilike("body", `%ZZ ${RUN} workflow-after-unsub%`))) as Array<{ status: string }>;
+            expect(wfRows.filter((r) => r.status !== "blocked")).toEqual([]);
+
+            // Exactly three new marketing rows, all blocked: nothing deliverable was created.
             const after = (await ok(db.from("communication_messages").select("id, status").eq("org_id", ORG).ilike("to_address", deliverEmail).eq("category", "marketing"))) as Array<{ id: string; status: string }>;
-            expect(after.length).toBe(marketingBefore + 2);
+            expect(after.length).toBe(marketingBefore + 3);
+            expect(after.filter((m) => m.status !== "blocked").length).toBe(marketingBefore);
             expect(after.filter((m) => m.id === directRow.id || m.id === blocked.id).map((m) => m.status)).toEqual(["blocked", "blocked"]);
-            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_out" });
+            expect(await marketingPrefs(deliverPerson)).toEqual({ email_marketing: "opted_out", sms_marketing: "opted_in" });
         });
     });
 });
