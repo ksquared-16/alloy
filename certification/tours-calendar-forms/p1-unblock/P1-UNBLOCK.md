@@ -148,3 +148,8 @@ wants browser evidence on the exact tree.
 | C3 | Unsubscribe round-trip certification | Communications | OPEN (owner cert) | integration green: S7 C·9–C·12 |
 | C4 | C1 Python CI coverage | Communications | OPEN | — |
 | P1x | Completed-case queue chip reads "Link existing" for a new family | Processing | RECORDED (cosmetic) | §5 |
+
+**Tracker update (2026-10-28, C-FINAL):** C1, C2 and C3 closed and certified on `alloy-cert`; C4 job committed,
+not yet executed in GitHub Actions; 3a reclassified **configured but unreachable** (internal-audience email is
+refused `INTERNAL_TO_PROVIDER`, proven); new defect fixed — legacy workflow SMS bypassed consent (Director
+decision before promotion). Record: `../c-final/C-FINAL.md`.
