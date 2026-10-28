@@ -43,17 +43,17 @@ export async function resolveLocationPublicBrand(
 }
 
 /**
- * The effective brand for a published form version.
+ * The form layer of a published form version — the one owner of "what did this form's publish freeze".
  *
  * The form layer comes from the version's publish-time snapshot (`metadata.brand_snapshot_v1`), so a
  * draft edit to the form's branding cannot restyle what families already see — only republishing
  * does. A version published before snapshots existed has none; it falls back to the form's live
  * metadata, which is how it rendered before (backward compatible, and closed by its next publish).
  */
-export async function resolvePublicFormBrand(
+export async function loadPublishedFormBrandLayer(
     supabase: SupabaseClient,
-    params: { orgId: string; formDefinitionVersionId: string; formMetadata: unknown; locationId?: string | null }
-): Promise<EffectivePublicBrand & { formLayerSource: "published_snapshot" | "live_definition" }> {
+    params: { orgId: string; formDefinitionVersionId: string; formMetadata: unknown }
+): Promise<{ form: PublicBrandValues | null; formLayerSource: "published_snapshot" | "live_definition" }> {
     const { data: version } = await supabase
         .from("form_definition_versions")
         .select("metadata")
@@ -63,12 +63,20 @@ export async function resolvePublicFormBrand(
     const versionMeta = (version as { metadata?: Record<string, unknown> } | null)?.metadata ?? null;
     const snapshot = versionMeta?.[FORM_BRAND_SNAPSHOT_KEY];
     const hasSnapshot = snapshot != null && typeof snapshot === "object" && !Array.isArray(snapshot);
-    const form = formBrandLayer(hasSnapshot ? snapshot : params.formMetadata);
-    const layers = await loadPublicBrandLayers(supabase, { orgId: params.orgId, locationId: params.locationId });
     return {
-        ...resolveEffectivePublicBrand({ form, ...layers }),
+        form: formBrandLayer(hasSnapshot ? snapshot : params.formMetadata),
         formLayerSource: hasSnapshot ? "published_snapshot" : "live_definition",
     };
+}
+
+/** The effective brand for a published form version: form override → location → organization → platform. */
+export async function resolvePublicFormBrand(
+    supabase: SupabaseClient,
+    params: { orgId: string; formDefinitionVersionId: string; formMetadata: unknown; locationId?: string | null }
+): Promise<EffectivePublicBrand & { formLayerSource: "published_snapshot" | "live_definition" }> {
+    const { form, formLayerSource } = await loadPublishedFormBrandLayer(supabase, params);
+    const layers = await loadPublicBrandLayers(supabase, { orgId: params.orgId, locationId: params.locationId });
+    return { ...resolveEffectivePublicBrand({ form, ...layers }), formLayerSource };
 }
 
 /** A public form link's location (location-scoped share links carry it). */

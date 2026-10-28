@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
-import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
+import ReviewDecideCard, { DECISION_TO_ACTION, leadPlacementBlock, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
 import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
 import IdentityReviewPanel from "@/app/adminV2/processing/IdentityReviewPanel";
 import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extraction/types";
@@ -840,7 +840,8 @@ export default function ProcessingCaseDetailContent({
                             {/* Real, preserved approve path — executes Alloy's link-or-create handoff. */}
                             <button
                                 type="button"
-                                disabled={approving}
+                                disabled={approving || Boolean(leadPlacementBlock(rec))}
+                                title={leadPlacementBlock(rec) ?? undefined}
                                 onClick={() => void approve()}
                                 className="rounded-md bg-[#00A283] px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >

@@ -793,7 +793,9 @@ function ScheduleEditor({
                         {tzSource === "location" ? "The location's time zone."
                         : tzSource === "organization" ? "The organization's time zone (the location has none of its own)."
                         : tzSource === "existing_tour_rules" ? "The zone this location's tours already use."
-                        : tzSource === "unresolved" ? "No time zone is configured for this location — enter one (for example America/Chicago)."
+                        : tzSource === "unresolved" ?
+                            scopeLocationId ? "No time zone is configured for this location — enter one (for example America/Chicago)."
+                            : "No time zone is configured for the organization — enter one (for example America/Chicago)."
                         : "Times are in this zone, including across daylight saving changes."}
                     </span>
                 </label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, type FormEvent } from "react";
+import { useCallback, useId, useMemo, type FormEvent } from "react";
 import clsx from "clsx";
 import PhoneInput from "@/components/ui/PhoneInput";
 import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
@@ -107,6 +107,8 @@ export function FormEngineRenderer({
         [schema, payload.values, readonly],
     );
     const loose = variant === "embed";
+    // Label ↔ control association (P1-close): unique per renderer instance and per group row.
+    const controlIdBase = useId();
 
     /*
      * CALCULATED ANSWERS ARE SHOWN, NOT ASKED.
@@ -141,8 +143,14 @@ export function FormEngineRenderer({
             const fieldErrors = errorPathPrefix?.length
                 ? errorsUnderPrefix(validationErrors, errorPathPrefix)
                 : [];
+            // One focusable control per field for these types: its label names it (screen readers, click-to-focus).
+            const labelsControl = !readonly && !field.derived && ["text", "number", "date", "select"].includes(field.type);
+            const controlId = `${controlIdBase}-${[...(errorPathPrefix ?? []), field.id].join("-")}`.replace(/[^A-Za-z0-9_-]/g, "_");
             const commonLabel = (
-                <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
+                <label
+                    className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}
+                    htmlFor={labelsControl ? controlId : undefined}
+                >
                     {field.label}
                     {field.required ? <span className="text-red-600"> *</span> : null}
                 </label>
@@ -221,6 +229,7 @@ export function FormEngineRenderer({
                             {helpText}
                             {phoneLike && !field.multiline ?
                                 <PhoneInput
+                                    id={controlId}
                                     className={clsx(
                                         "w-full rounded border px-2 py-1.5 text-sm",
                                         fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
@@ -231,6 +240,7 @@ export function FormEngineRenderer({
                                 />
                             : field.multiline && !emailLike ?
                                 <textarea
+                                    id={controlId}
                                     rows={5}
                                     className={clsx(
                                         "w-full rounded border px-2 py-1.5 text-sm",
@@ -242,6 +252,7 @@ export function FormEngineRenderer({
                                     {...(embedAutofillFix as object)}
                                 />
                             :   <input
+                                    id={controlId}
                                     type={inputType}
                                     autoComplete={autoComplete}
                                     className={clsx(
@@ -278,6 +289,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <input
+                                id={controlId}
                                 type="number"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={raw === undefined || raw === null || raw === "" ? "" : Number(raw)}
@@ -294,6 +306,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <input
+                                id={controlId}
                                 type="date"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={typeof raw === "string" ? raw : ""}
@@ -332,6 +345,7 @@ export function FormEngineRenderer({
                             {commonLabel}
                             {helpText}
                             <select
+                                id={controlId}
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={typeof raw === "string" ? raw : ""}
                                 onChange={(e) => onCellChange(field.id, e.target.value)}
@@ -390,7 +404,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview, controlIdBase]
     );
 
     const renderSignatureControl = useCallback(

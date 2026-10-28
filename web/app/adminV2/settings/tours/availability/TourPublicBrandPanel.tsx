@@ -19,16 +19,25 @@ import {
     type PublicBrandValues,
 } from "@/lib/branding/publicBrand";
 
+type PublishedForm = {
+    linkId: string;
+    formId: string;
+    formTitle: string;
+    formLayer: PublicBrandValues | null;
+};
+
 type BrandResponse = {
     organization: PublicBrandValues;
     location: PublicBrandValues | null;
+    /** The form this location's published tour calendar opens into (its brand layer wins on that page). */
+    published_form: PublishedForm | null;
     effective: EffectivePublicBrand;
     can_edit_organization: boolean;
     can_edit_location: boolean;
 };
 
 const SOURCE_LABEL: Record<PublicBrandSource, string> = {
-    form: "set on the form",
+    form: "set on the published form",
     location: "set for this location",
     organization: "inherited from the organization",
     platform: "Alloy default",
@@ -48,6 +57,10 @@ const TREATMENT_NOTE: Record<ReturnType<typeof brandButtonColors>["treatment"], 
  * override, field by field — an empty field inherits, and every effective value says where it comes
  * from. The preview is the booking page's own first step in miniature, painted with the same button
  * pair the public page uses (`brandButtonColors`).
+ *
+ * What families see is resolved exactly as the public page resolves it: the published form's own brand
+ * (if it sets one) → this location → the organization → Alloy (P1-close, D1). Where the form wins, the
+ * field says so and shows the setting that applies to forms without their own brand.
  */
 export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { scopeLocationId: string | null; scopeLabel: string }) {
     const [data, setData] = useState<BrandResponse | null>(null);
@@ -79,9 +92,17 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
     }
 
     const editable = scopeLocationId ? data.can_edit_location : data.can_edit_organization;
+    const publishedForm = scopeLocationId ? data.published_form : null;
     const preview = resolveEffectivePublicBrand(
+        scopeLocationId
+            ? { form: publishedForm?.formLayer ?? null, location: cleaned(draft), organization: data.organization }
+            : { organization: cleaned(draft) }
+    );
+    // What this screen's own settings resolve to — what a form that sets no brand of its own shows.
+    const withoutForm = resolveEffectivePublicBrand(
         scopeLocationId ? { location: cleaned(draft), organization: data.organization } : { organization: cleaned(draft) }
     );
+    const formWins = BRAND_KEYS.filter((k) => sourceKey(preview, k) === "form");
     const pair = brandButtonColors(preview.accentColor);
     const inherited = scopeLocationId ? data.organization : null;
     const anySet = Boolean(draft.display_name || draft.accent_color || draft.logo_url || draft.tour_cta_label);
@@ -126,7 +147,15 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
                 }}
                 data-testid={`tours-brand-${key}`}
             />
-            <span className="mt-0.5 block text-[11px] text-alloy-midnight/50">Shown to families: {sourceOf(preview, key)}</span>
+            {sourceKey(preview, key) === "form" ?
+                <span className="mt-0.5 block text-[11px] text-amber-900" data-testid={`tours-brand-${key}-form-wins`}>
+                    Families see {sourceOf(preview, key, publishedForm?.formTitle)} — it takes precedence here. This setting
+                    gives {sourceOf(withoutForm, key)} to forms that don&apos;t set their own.
+                </span>
+            :   <span className="mt-0.5 block text-[11px] text-alloy-midnight/50" data-testid={`tours-brand-${key}-shown`}>
+                    Shown to families: {sourceOf(preview, key)}
+                </span>
+            }
             {extra?.hint ? <span className="mt-0.5 block text-[11px] text-alloy-midnight/50">{extra.hint}</span> : null}
         </label>
     );
@@ -139,6 +168,9 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
                     : "The default for every location's tour booking page (and forms that don't set their own brand)."}
             </p>
             {err ? <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">{err}</p> : null}
+            {scopeLocationId ?
+                <PublishedFormNote form={publishedForm} formWins={formWins} />
+            :   null}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
                 <div className="space-y-4">
@@ -213,7 +245,7 @@ function BookingPagePreview({
 }) {
     return (
         <div className="space-y-1.5" data-testid="tours-brand-preview">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Preview — booking page</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Preview — booking page as families see it</p>
             <div className="overflow-hidden rounded-xl border border-alloy-stone/25 bg-white shadow-sm" aria-hidden>
                 <div className="flex items-center gap-2 border-b border-alloy-stone/15 px-4 py-2.5">
                     {brand.logoUrl ? (
@@ -274,12 +306,50 @@ function cleaned(v: PublicBrandValues): PublicBrandValues {
     };
 }
 
-function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues): string {
-    const source =
-        key === "display_name" ? brand.sources.displayName
+const BRAND_KEYS: (keyof PublicBrandValues)[] = ["display_name", "logo_url", "accent_color", "tour_cta_label"];
+const FIELD_NOUN: Record<keyof PublicBrandValues, string> = {
+    display_name: "school name",
+    logo_url: "logo",
+    accent_color: "brand colour",
+    tour_cta_label: "button text",
+};
+
+function sourceKey(brand: EffectivePublicBrand, key: keyof PublicBrandValues): PublicBrandSource {
+    return key === "display_name" ? brand.sources.displayName
         : key === "accent_color" ? brand.sources.accentColor
         : key === "logo_url" ? brand.sources.logoUrl
         : brand.sources.tourCtaLabel;
+}
+
+/** Which form the calendar opens into, and which of its own brand settings families see instead. */
+function PublishedFormNote({ form, formWins }: { form: PublishedForm | null; formWins: (keyof PublicBrandValues)[] }) {
+    if (!form) {
+        return (
+            <p className="text-[11px] text-alloy-midnight/60" data-testid="tours-brand-published-form">
+                No tour calendar is published here yet. If the form you publish it on sets its own branding, families see the
+                form&apos;s instead of these settings.
+            </p>
+        );
+    }
+    return (
+        <p
+            className={`rounded-lg border px-3 py-2 text-xs ${formWins.length ? "border-amber-200 bg-amber-50 text-amber-950" : "border-alloy-stone/20 bg-white text-alloy-midnight/75"}`}
+            data-testid="tours-brand-published-form"
+        >
+            The tour calendar opens into the form “{form.formTitle}”.{" "}
+            {formWins.length ?
+                <>
+                    That form sets its own {formWins.map((k) => FIELD_NOUN[k]).join(", ")}, which families see instead of the
+                    setting below. To change that, open the form in Forms Studio › Branding and choose “Use the school&apos;s
+                    branding”, then publish it again.
+                </>
+            :   "It uses this location's brand, so families see the settings below."}
+        </p>
+    );
+}
+
+function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues, formTitle?: string | null): string {
+    const source = sourceKey(brand, key);
     const value =
         key === "display_name" ? brand.displayName
         : key === "accent_color" ? brand.accentColor
@@ -290,5 +360,6 @@ function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues): st
         if (key === "tour_cta_label") return `“${PUBLIC_TOUR_CTA_DEFAULT}” (Alloy default)`;
         return "none (Alloy default)";
     }
-    return `${value} (${SOURCE_LABEL[source]})`;
+    const label = source === "form" && formTitle ? `set on the published form “${formTitle}”` : SOURCE_LABEL[source];
+    return `${value} (${label})`;
 }

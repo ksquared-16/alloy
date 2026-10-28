@@ -128,11 +128,20 @@ export default function TourShareSection({
                                 <span className="ml-2 rounded bg-alloy-pine/15 px-1.5 text-[11px] font-semibold text-alloy-pine">Published</span>
                             </p>
                             <p className="config-typo-sublabel">
-                                Step 2 is the form “{link.formTitle}”{link.linkLabel ? ` (${link.linkLabel})` : ""}.
+                                Step 2 is the form “{link.formTitle}”{distinctLabel(link) ? ` (${distinctLabel(link)})` : ""}.
                                 {link.allowedEmbedOrigins.length ?
                                     ` May be framed only on: ${link.allowedEmbedOrigins.join(", ")}.`
                                 :   " Any website may frame it."}
                             </p>
+                            {brand ?
+                                <p className="mt-1 text-xs text-alloy-midnight/75" data-testid="tours-share-effective-brand">
+                                    Families see {brand.displayName ? `“${brand.displayName}”` : "no school name"} in{" "}
+                                    <span className="font-mono">{brand.accentColor}</span>
+                                    {brand.sources.displayName === "form" || brand.sources.accentColor === "form" || brand.sources.logoUrl === "form" ?
+                                        ` — from the form “${link.formTitle}”'s own branding, which takes precedence over Booking experience.`
+                                    :   " — from Booking experience."}
+                                </p>
+                            :   null}
                         </div>
                         {data?.can_publish ?
                             <ConfigurationSecondaryButton className="px-2 py-1" disabled={busyLink != null} onClick={() => void setPublished(link, false)} data-testid="tours-share-withdraw">
@@ -220,7 +229,7 @@ export default function TourShareSection({
                                 <div className="min-w-0">
                                     <p className="font-medium text-alloy-midnight">
                                         {link.formTitle}
-                                        {link.linkLabel ? <span className="text-alloy-midnight/55"> · {link.linkLabel}</span> : null}
+                                        {distinctLabel(link) ? <span className="text-alloy-midnight/55"> · {distinctLabel(link)}</span> : null}
                                     </p>
                                     {blocker ? <p className="text-[11px] text-alloy-midnight/55">{blocker}</p> : null}
                                 </div>
@@ -286,4 +295,10 @@ function ShareRow({
             </div>
         </div>
     );
+}
+
+/** A link's own name, unless it only repeats its form's title. */
+function distinctLabel(link: { formTitle: string; linkLabel: string | null }): string | null {
+    const label = link.linkLabel?.trim();
+    return label && label.toLowerCase() !== link.formTitle.trim().toLowerCase() ? label : null;
 }
