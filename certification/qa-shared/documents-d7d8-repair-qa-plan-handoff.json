@@ -1,0 +1,85 @@
+{
+  "schema": "alloy.documents_d7d8.repair_qa_plan_handoff.v1",
+  "status": "DRAFT FOR THE QA-PLAN OWNER — prepared by the Documents lane under the D7/D8 repair batch (2026-10-28). The Documents lane has not changed and will not change the registry, the persona contract, the pool identities or the registered census.",
+  "from_lane": "lane_aa660dc9554d",
+  "objective": "OPWORK_AA660DC9554D_SPRINT_6389E3AA927A",
+  "to_owner": "Vacilando Backend (owner of ksquared-16/vacilando lib/qa-plan-registry.mjs and lib/reconciliation-registry.mjs); persona contract owner for docs/platform/governance/authorization-qa-personas.md (sha256 a1ad543a…, Director-approved)",
+  "plan": "authz_q1",
+  "why": "Hosted run qar_4246ac22ece0 (CLOSED, ZERO_RESIDUE on the 15-check census) could not test two permission boundaries because no persona held them, and left synthetic Forms / Medical rows the registered census does not measure. Recorded in certification/documents-v1/D7-D8-HOSTED-CERTIFICATION.md and D7-D8-REPAIR-BATCH.md.",
+
+  "personas_to_add": [
+    {
+      "persona_key": "health_viewer",
+      "custom_role": "qa_health_viewer",
+      "grants": ["portal.access", "documents.read", "health.view"],
+      "scope": { "department": "all", "site": "all" },
+      "proves": "a Health card reader who may SEE medical documents and requirements but may not verify (health_fact.verify_immunization → 403) and may not review a medical document (no documents.write)",
+      "currently_untestable_because": "every persona with health.view also holds health.manage (fixture_admin, org admin)"
+    },
+    {
+      "persona_key": "doc_writer",
+      "custom_role": "qa_doc_writer",
+      "grants": ["portal.access", "documents.read", "documents.write"],
+      "scope": { "department": "all", "site": "all" },
+      "proves": "a reviewer who takes a FIRST review decision but is refused a re-review / reopen (REREVIEW_NOT_AUTHORIZED, needs processing.documents.manage); records validity; uploads a renewal",
+      "currently_untestable_because": "every persona with documents.write also holds processing.documents.manage"
+    },
+    {
+      "persona_key": "scoped_forms",
+      "custom_role": "qa_scoped_forms",
+      "grants": ["portal.access", "documents.read", "forms.submissions", "forms.author", "crm.customers.read"],
+      "scope": { "department": "restricted", "site": "all" },
+      "proves": "R2 on the Forms ACTION routes: a department-restricted operator WITH Forms capability is refused (404) create / submit / generate-document / manual-link / link minting for an out-of-scope subject. scoped_ops (no forms capability) proves only the read half — its action refusals come from capability, not scope",
+      "currently_untestable_because": "scoped_ops has no forms.* grant"
+    }
+  ],
+  "pool_identities_needed": "three additional managed pool identities (qa_pool_06..08) or reuse under a revised contract; the contract document and its sha256 pin change with the personas",
+
+  "residue_census_extension": {
+    "registered_now": {
+      "path": "certification/qa-shared/documents-zero-residue-census.sql",
+      "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+      "checks": 15
+    },
+    "proposed_checks": [
+      { "id": "doc_zr_forms_definitions", "assert": "form_definitions in QA Shared / QA Secondary with key LIKE 'qa\\_%' (and their form_definition_versions) ~ zero" },
+      { "id": "doc_zr_forms_submissions", "assert": "form_submissions in QA orgs whose form_definition is qa\\_% keyed, or whose subject (customer_member / customer / person / opportunity) no longer exists ~ zero" },
+      { "id": "doc_zr_forms_links", "assert": "form_public_links of qa\\_% forms / packet definitions ~ zero" },
+      { "id": "doc_zr_retained_health_facts", "kind": "retained_by_design (data, never residue)", "report": "person_health_facts in QA orgs whose subject no longer exists, by status — expected status 'ended'; an ACTIVE fact on a deleted subject is a defect" }
+    ],
+    "note": "The health-fact question must be a retained_by_design report, like doc_zr_retained_audit: the database refuses DELETE on person_health_facts (enforce_person_health_fact_immutability, restrict_violation) and a closed fact cannot reopen. Ending is the only product disposal."
+  },
+
+  "reconciliation_to_register": {
+    "key": "qa_documents_forms_residue_reset",
+    "environments": ["staging"],
+    "frozen_context": "QA Shared 4acc9386-c485-486f-aa1f-05d83499d142 and QA Secondary ad53fee2-2570-460f-9300-f0e106c473b6 only (same whitelist as qa_authz_fixture_reset)",
+    "deletes_in_order": [
+      "form_submission_documents / form_submission_signatures of the submissions below (their documents must already be gone — refuse otherwise, as qa-authz-subjects-reset refuses while documents remain)",
+      "form_submissions whose form_definition key is qa\\_<run>\\_% , or whose only subject is a customer_member that no longer exists, created by the run's fixture_admin",
+      "form_public_links of those forms",
+      "form_definition_versions, then form_definitions keyed qa\\_<run>\\_%"
+    ],
+    "never_deletes": "mutation_events / workflow_events (retained audit), person_health_facts (append-only)",
+    "first_use": "the qar_4246ac22ece0 rows listed under existing_residue"
+  },
+
+  "existing_residue_qar_4246ac22ece0": {
+    "form_definitions": [
+      { "id": "01c4bf36-39ea-4ab8-8966-8fd850e381fe", "key": "qa_4246ac22ece0_d8f1", "published_version": "21c69787-46c7-4664-afbe-b7d688f16e16", "state": "archived" },
+      { "id": "6a565dc9-fab7-4220-ada2-3d7b55036f26", "key": "qa_4246ac22ece0_d8f2", "published_version": "964dc834-cc33-48f3-8d31-cacd9e7bc8b4", "state": "archived" }
+    ],
+    "form_submissions": [
+      { "id": "c727bac4-0d80-46a7-bba1-6bd0a0e0cf68", "state": "submitted; customer_member_id null (child deleted)" },
+      { "id": "9bc7cb9b-4a45-41b7-a10a-5d1e9e99b52c", "state": "submitted; customer_member_id null (child deleted)" },
+      { "id": "f19d3fd1-21fe-4e34-9498-4babc7314f40", "state": "submitted; customer_member_id null (child deleted)" }
+    ],
+    "person_health_facts_retained_by_design": [
+      { "id": "c32794d7-f234-4242-875f-e3a2b096cf6a", "state": "ended", "subject": "deleted QA child 12eba36c-e062-4a64-a02e-580a260d8b58" },
+      { "id": "4f390d72-de2f-4d62-a8e0-589670300a93", "state": "ended", "subject": "deleted QA child 4344e6b5-9e91-4f09-9ddb-1840c89aa791" }
+    ],
+    "the_closed_run_is_not_reopened": "qar_4246ac22ece0 stays CLOSED with its 15/15 ZERO_RESIDUE binding (gar_7082b096e66018 → gar_6c1775d6d4cfc4). The reconciliation is a separate governed act; its own census is new evidence, not an amendment of the run."
+  },
+
+  "future_runs": "R5 (Alloy commit 3f174f1ad): lead deletion now collects child-only form submissions of the children it deletes, so a D8-style run no longer leaves submissions or generated PDFs behind once deployed. Form definitions (published) and health facts remain for the reconciliation / retention above."
+}
