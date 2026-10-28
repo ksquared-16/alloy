@@ -1,0 +1,13 @@
+{
+  "action_key": "database.read_census",
+  "artifact_refs": [
+    "certification/tours-calendar-forms/final-checkpoint/workflow-messaging-inventory-census.sql"
+  ],
+  "reason_worker_cannot_execute": "This lane holds no hosted database credentials; the deployed database is reachable only from the trusted host.",
+  "reason": "Tours/Forms/Communications final checkpoint \u00a72: inventory which workflows on the deployed database author legacy create_message/send_message actions (SMS and email) and how many legacy workflow SMS rows were written in the last 90 days, to size the impact of the 723b76422 fail-closed SMS gate. Read-only, aggregate, org ids truncated.",
+  "inputs": {
+    "expectedQueryHash": "9a8cb93e9700a069c8afff3b519166f101a7499ff6a416c5e2845ab253d06625",
+    "databaseTarget": "alloy_deployed_primary",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/wt4-enrollment-phase2-participant-anchor"
+  }
+}
