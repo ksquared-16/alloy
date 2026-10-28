@@ -767,7 +767,7 @@ export async function listRequirementWork(
                 undated_document_ids: e.evidence.undated.filter((id) => readable.has(id)),
                 expired_document_ids: e.evidence.expired.filter((id) => readable.has(id)),
                 valid_until: e.valid_until,
-                renewal: e.renewal_pending ? "pending" : e.renewal_rejected ? "rejected" : null,
+                renewal: (e.renewal_pending ? "pending" : e.renewal_rejected ? "rejected" : null) as RequirementWorkRow["renewal"],
             };
         })
         .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.subject_label.localeCompare(b.subject_label) || a.id.localeCompare(b.id));
