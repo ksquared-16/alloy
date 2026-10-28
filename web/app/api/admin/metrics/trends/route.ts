@@ -11,6 +11,7 @@ import {
 } from "@/lib/metrics/registry";
 import { parseMetricTimeWindow } from "@/lib/metrics/timeWindow";
 import { readMetricTrend } from "@/lib/metrics/snapshots/readMetricTrend";
+import { orgScopeOnlyRefusal, snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
 import type { MetricTrendSummary } from "@/lib/metrics/snapshots/computeMetricTrend";
 import type { MetricTimeWindowKey, OipMetricKey } from "@/lib/metrics/types";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -29,6 +30,8 @@ export type MetricTrendApiItem = {
     delta: number | null;
     delta_percent: number | null;
     sparkline_y: number[];
+    /** WS0-A — present only when the caller may not see this series; `has_trend` is then false. */
+    unavailable_reason?: string;
 };
 
 function resolveScope(siteId: string | null): { scopeType: "org" | "site"; scopeId: string | null } {
@@ -96,6 +99,34 @@ export async function GET(request: NextRequest) {
 
     for (const key of keys) {
         const def = getMetricDefinition(key);
+
+        /*
+         * WS0-A — trends are read from canonical snapshots. Omitting `site_id` used to hand a
+         * restricted caller the stored ORG series; an org-only metric asked at site scope has no
+         * honest series at all. Both answer "unavailable" with the reason — never the stored figure
+         * and never a fabricated flat line. The same rules the engine applies to snapshot mode.
+         */
+        const unavailableReason =
+            orgScopeOnlyRefusal({ scope, siteLocationId: siteId }, key as OipMetricKey)
+            ?? (snapshotReadableForScope(scope, scopeType, scopeId) ? null : "snapshot_scope_wider_than_caller");
+        if (unavailableReason) {
+            trends.push({
+                metric_key: key,
+                window,
+                scope_type: scopeType,
+                scope_id: scopeId,
+                format: def.format,
+                trend_label: "Not available for your access scope",
+                direction: "flat",
+                has_trend: false,
+                delta: null,
+                delta_percent: null,
+                sparkline_y: [],
+                unavailable_reason: unavailableReason,
+            });
+            continue;
+        }
+
         const trend = await readMetricTrend(supabase, {
             orgId,
             metricKey: key as OipMetricKey,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
+import { assertMetricSiteAccess, assertMetricWorkUnitAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import {
     parseOipMetricKeys,
     listMetricDefinitions,
@@ -171,6 +171,12 @@ export async function GET(request: NextRequest) {
         const siteAllowed = await assertMetricSiteAccess({ supabase, orgId, scope, siteId });
         if (!siteAllowed) {
             return NextResponse.json({ error: "Site not in access scope" }, { status: 403 });
+        }
+    }
+    if (workUnitId) {
+        const workUnitAllowed = await assertMetricWorkUnitAccess({ supabase, orgId, scope, workUnitId });
+        if (!workUnitAllowed) {
+            return NextResponse.json({ error: "Work unit not in access scope" }, { status: 403 });
         }
     }
 

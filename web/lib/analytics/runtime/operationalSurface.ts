@@ -20,6 +20,7 @@ import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import type { MetricTimeWindowKey, OipMetricKey } from "@/lib/metrics/types";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { readMetricTrend } from "@/lib/metrics/snapshots/readMetricTrend";
+import { orgScopeOnlyRefusal, snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
 import { resolveMetricScopeFilter, applyOpportunityScopeToQuery } from "@/lib/metrics/scopeFilter";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { resolvePlacementsForSurface } from "@/lib/metrics/platform/placementResolver";
@@ -219,18 +220,27 @@ export async function buildOperationalSurfaceModel(
     const trendByKey = new Map<OipMetricKey, Awaited<ReturnType<typeof readMetricTrend>>>();
     if (compareOn) {
         const scopeType = siteId ? "site" : "org";
+        // WS0-A — deltas come from canonical snapshots; a caller whose access is narrower than the
+        // stored scope (or an org-only metric asked at a site) gets no delta, not the stored series.
+        const comparable = (key: OipMetricKey) =>
+            !orgScopeOnlyRefusal({ scope: accessScope, siteLocationId: siteId }, key)
+            && snapshotReadableForScope(accessScope, scopeType, siteId);
         const trends = await Promise.all(
             metricKeys.map((key) =>
-                readMetricTrend(supabase, { orgId, metricKey: key, windowKey, scopeType, scopeId: siteId }).catch(
-                    () => null,
-                ),
+                comparable(key)
+                    ? readMetricTrend(supabase, { orgId, metricKey: key, windowKey, scopeType, scopeId: siteId }).catch(
+                          () => null,
+                      )
+                    : Promise.resolve(null),
             ),
         );
         metricKeys.forEach((key, i) => {
             const t = trends[i];
             if (t) trendByKey.set(key, t);
         });
-        if (![...trendByKey.values()].some((t) => t.hasTrend)) {
+        if (!metricKeys.some(comparable)) {
+            dataNotes.push("Comparison is not available for your access scope at this level — choose one of your sites.");
+        } else if (![...trendByKey.values()].some((t) => t.hasTrend)) {
             dataNotes.push("Comparison is on, but no prior snapshots exist yet for this scope — deltas appear once snapshot history accrues.");
         }
     }

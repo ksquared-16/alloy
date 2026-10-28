@@ -7,6 +7,8 @@ import { comparePeriodOverPeriod } from "@/lib/metrics/platform/metricTrends";
 import { formatPlatformMetricValue } from "@/lib/metrics/platform/metricFormatters";
 import { computeMetricRollup } from "@/lib/metrics/platform/metricRollups";
 import type { MetricRollupRow } from "@/lib/metrics/platform/types";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import { snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
 
 /** BOS-safe metric read — governed definitions and snapshots only, no raw queries. */
 export async function listBosReadableMetrics(
@@ -22,19 +24,30 @@ export async function listBosReadableMetrics(
     }));
 }
 
+/**
+ * WS0-A — every BOS read names the caller's access scope. These read ORG-context platform
+ * snapshots, which only an unrestricted caller may see; a restricted caller is evaluated live with
+ * its own scope instead. (They previously read the latest snapshot of ANY context and evaluated
+ * with an implied unrestricted scope.)
+ */
 export async function getBosMetricValue(
     supabase: SupabaseClient,
     orgId: string,
-    metricKey: string
+    metricKey: string,
+    accessScope: AdminAccessScopeDimensions
 ): Promise<BosMetricSummary | null> {
     const defs = await loadMetricDefinitionsForOrg(supabase, orgId, "active");
     const def = defs.find((d) => d.key === metricKey);
     if (!def) return null;
 
-    const snapshot = await getLatestMetricPlatformSnapshot(supabase, {
-        orgId,
-        metricDefinitionId: def.id,
-    });
+    const snapshot = snapshotReadableForScope(accessScope, "org", null)
+        ? await getLatestMetricPlatformSnapshot(supabase, {
+              orgId,
+              metricDefinitionId: def.id,
+              contextType: "org",
+              contextId: null,
+          })
+        : null;
 
     if (snapshot) {
         return {
@@ -54,6 +67,7 @@ export async function getBosMetricValue(
             supabase,
             definition: def,
             ctx: { orgId },
+            accessScope,
         });
         return {
             key: def.key,
@@ -73,7 +87,8 @@ export async function getBosMetricValue(
 export async function getBosMetricTrend(
     supabase: SupabaseClient,
     orgId: string,
-    metricKey: string
+    metricKey: string,
+    accessScope: AdminAccessScopeDimensions
 ): Promise<{
     key: string;
     label: string;
@@ -84,11 +99,15 @@ export async function getBosMetricTrend(
     const def = defs.find((d) => d.key === metricKey);
     if (!def) return null;
 
-    const series = await getMetricPlatformSnapshotSeries(supabase, {
-        orgId,
-        metricDefinitionId: def.id,
-        limit: 30,
-    });
+    const series = snapshotReadableForScope(accessScope, "org", null)
+        ? await getMetricPlatformSnapshotSeries(supabase, {
+              orgId,
+              metricDefinitionId: def.id,
+              contextType: "org",
+              contextId: null,
+              limit: 30,
+          })
+        : [];
 
     const comparison =
         series.length >= 2
@@ -110,7 +129,8 @@ export async function getBosMetricTrend(
 export async function getBosMetricRollupSummary(
     supabase: SupabaseClient,
     orgId: string,
-    rollupKey: string
+    rollupKey: string,
+    accessScope: AdminAccessScopeDimensions
 ): Promise<{ key: string; label: string; value: number | null; healthState: string } | null> {
     const { data } = await supabase
         .from("metric_rollups")
@@ -126,6 +146,7 @@ export async function getBosMetricRollupSummary(
         supabase,
         rollup: data as MetricRollupRow,
         ctx: { orgId },
+        accessScope,
     });
 
     return {

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import { CANONICAL_MATERIALIZATION_SCOPE } from "@/lib/metrics/metricScopeGuard";
 import { getMetricDefinition, isLiveOnlyMetric, listMetricDefinitions } from "@/lib/metrics/registry";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { writeMetricSnapshot } from "@/lib/metrics/snapshots/writeMetricSnapshot";
@@ -51,7 +51,6 @@ function scopeTargets(includeSiteScopes: boolean, siteIds: string[]): MetricSnap
 export async function writeOrgMetricSnapshots(params: {
     supabase: SupabaseClient;
     orgId: string;
-    scope?: AdminAccessScopeDimensions;
     windows?: MetricTimeWindowKey[];
     metricKeys?: OipMetricKey[];
     includeSiteScopes?: boolean;
@@ -94,12 +93,13 @@ export async function writeOrgMetricSnapshots(params: {
                 ctx: {
                     supabase: params.supabase,
                     orgId: params.orgId,
-                    scope: params.scope ?? {
-                        departmentScope: "all",
-                        allowedDepartmentIds: [],
-                        siteScope: "all",
-                        allowedSiteLocationIds: [],
-                    },
+                    /*
+                     * WS0-A — ALWAYS CANONICAL. Rows are labelled `org` or one site and are read
+                     * back by everyone entitled to that scope; the operator who triggered the run
+                     * must not be able to store their narrowed figure under the org label. Read
+                     * paths apply `snapshotReadableForScope` instead.
+                     */
+                    scope: CANONICAL_MATERIALIZATION_SCOPE,
                     window,
                     siteLocationId: target.scopeType === "site" ? target.scopeId : null,
                     mode: "live",

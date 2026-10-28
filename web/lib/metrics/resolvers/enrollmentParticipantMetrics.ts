@@ -22,6 +22,7 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { resolveMetricTimeWindowBounds } from "@/lib/metrics/timeWindow";
 import { resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable, type MetricUnavailableReason } from "@/lib/metrics/metricScopeGuard";
 import {
     enrollmentProjection,
     countActiveLeadParticipants,
@@ -55,6 +56,31 @@ export function enrollmentParticipantMatchesLocationScope(
     return Boolean(loc && allowed.has(loc));
 }
 
+/**
+ * WS0-A — the caller's authorized location set, resolved for EVERY request.
+ *
+ * This used to run only when a `site_id` was passed, so a site-restricted caller asking at org
+ * scope got the whole organization's count. Omitting a site narrows to the caller's own sites; it
+ * never widens to everyone's. Returns `{ refused }` when no honest count exists for this caller.
+ *
+ * DEPARTMENT. Neither membership source can narrow by an arbitrary set of work units (the count
+ * takes one work unit and expands it to its department). An explicit work unit is admitted by the
+ * route only when its department is inside the caller's scope; without one, a department-restricted
+ * caller would be counted across every department, so the answer is refused instead.
+ */
+async function resolveEnrollmentLocationScope(
+    ctx: MetricResolveContext,
+    siteId: string | null,
+    scopeId: string | null,
+): Promise<{ locationIds: string[] | null } | { refused: MetricUnavailableReason }> {
+    if (ctx.scope.departmentScope === "restricted" && !scopeId) {
+        return { refused: "department_scope_requires_work_unit" };
+    }
+    const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, siteId);
+    if (filter.impossible) return { refused: "scope_impossible" };
+    return { locationIds: filter.locationIds };
+}
+
 async function resolveParticipantMetric(
     ctx: MetricResolveContext,
     key: OipMetricKey,
@@ -67,27 +93,11 @@ async function resolveParticipantMetric(
     const scopeId = ctx.workUnitId?.trim() || null;
     const siteId = ctx.siteLocationId?.trim() || null;
 
-    let locationIds: string[] | null = null;
-    if (siteId) {
-        const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, siteId);
-        if (filter.impossible) {
-            return {
-                key: def.key,
-                label: def.label,
-                format: def.format,
-                value: 0,
-                formattedValue: formatMetricValue(def.format, 0),
-                window: ctx.window,
-                windowStartIso: windowStart.toISOString(),
-                windowEndIso: windowEnd.toISOString(),
-                computedAtIso: now.toISOString(),
-                sources: def.sources,
-                resolveMode: ctx.mode ?? "live",
-                meta: { count: 0, grain, scope: "site", site_id: siteId },
-            };
-        }
-        locationIds = filter.locationIds;
+    const scoped = await resolveEnrollmentLocationScope(ctx, siteId, scopeId);
+    if ("refused" in scoped) {
+        return metricUnavailable(ctx, key, scoped.refused, { grain, ...(siteId ? { site_id: siteId } : {}) });
     }
+    const locationIds = scoped.locationIds;
 
     // ONE membership source: the Enrollment projection (process_instances ⋈ context ⋈ subject).
     // Work-unit scope expands to the department Enrollment footprint inside `load` (so Waitlist
@@ -155,29 +165,16 @@ async function resolveActiveLeadCountCanonical(
     const scopeId = ctx.workUnitId?.trim() || null;
     const siteId = ctx.siteLocationId?.trim() || null;
 
-    // Request-time authorization is unchanged and stays OUTSIDE the count: the same scope filter
-    // the projection path applied, resolved here and passed in as location ids.
-    let locationIds: string[] | null = null;
-    if (siteId) {
-        const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, siteId);
-        if (filter.impossible) {
-            return {
-                key: def.key,
-                label: def.label,
-                format: def.format,
-                value: 0,
-                formattedValue: formatMetricValue(def.format, 0),
-                window: ctx.window,
-                windowStartIso: windowStart.toISOString(),
-                windowEndIso: windowEnd.toISOString(),
-                computedAtIso: now.toISOString(),
-                sources: def.sources,
-                resolveMode: ctx.mode ?? "live",
-                meta: { count: 0, grain: "participant", scope: "site", site_id: siteId },
-            };
-        }
-        locationIds = filter.locationIds;
+    // Request-time authorization stays OUTSIDE the count: the caller's scope filter, resolved here
+    // for every request (WS0-A) and passed in as location ids.
+    const scoped = await resolveEnrollmentLocationScope(ctx, siteId, scopeId);
+    if ("refused" in scoped) {
+        return metricUnavailable(ctx, key, scoped.refused, {
+            grain: "participant",
+            ...(siteId ? { site_id: siteId } : {}),
+        });
     }
+    const locationIds = scoped.locationIds;
 
     const { data, error } = await ctx.supabase.rpc("count_active_lead_participations", {
         p_org_id: ctx.orgId,
