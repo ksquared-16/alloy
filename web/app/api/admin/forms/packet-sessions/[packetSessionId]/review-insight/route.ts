@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { packetSessionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -31,6 +32,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!orgAssert.ok) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    // R2: the same 404 for a packet session outside the caller's department/site scope as for a missing one.
+    if (!(await packetSessionReadableById(supabase, ctx.orgId, id))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const built = await buildPacketReviewRollupV1(supabase, ctx.orgId, id, { permissionKeys: ctx.permissionKeys });
     if (!built.ok) {

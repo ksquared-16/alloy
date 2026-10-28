@@ -1,3 +1,4 @@
+import { filterLinksInActorScope, formsReadScope } from "@/lib/forms/formSubmissionScope";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -74,7 +75,7 @@ export async function GET() {
     // Keep only links that target one of our POS packets (filtered here since the JSON
     // key can't be used with `.in`).
     const packetIdSet = new Set(packetIds);
-    const links = ((linksRes.data ?? []) as PosPacketLinkRow[]).filter((l) => {
+    let links = ((linksRes.data ?? []) as PosPacketLinkRow[]).filter((l) => {
         const pid = l.metadata?.packet_definition_id;
         return typeof pid === "string" && packetIdSet.has(pid);
     });
@@ -97,6 +98,10 @@ export async function GET() {
         if (formErr) return NextResponse.json({ error: formErr.message }, { status: 500 });
         forms = (formRows ?? []) as PosFormNameRow[];
     }
+
+    // R2: a share link naming a child, recipient or opportunity outside the caller's department/site scope is not listed,
+    // and its child / recipient names and contact details are never resolved.
+    links = await filterLinksInActorScope(supabase, ctx.orgId, await formsReadScope(), links);
 
     // Resolve child + recipient display names for share rows (from link metadata).
     const childIds = new Set<string>();

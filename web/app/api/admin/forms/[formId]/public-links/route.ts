@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { filterLinksInActorScope, formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
@@ -81,7 +82,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data, error } = await dbListPublicLinksForForm(supabase, ctx.orgId, formId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    // R2: a link launched from a record outside the caller's department/site scope is not listed (its metadata names it).
+    return jsonData(await filterLinksInActorScope(supabase, ctx.orgId, await formsReadScope(), (data ?? []) as Array<{ metadata?: unknown }>));
 }
 
 /** POST /api/admin/forms/[formId]/public-links — create link; returns plaintext token once. */
@@ -230,6 +232,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const entityId = parseUuidParam(parsedLaunch.entityId, "launch_from_entity.entity_id");
         if (entityId instanceof NextResponse) return entityId;
+        // R2: a link prefilled from a record only for a record inside the caller's department/site scope.
+        const launchSubject = namedSubject(parsedLaunch.entityType, entityId);
+        if (!launchSubject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), launchSubject))) return jsonError("Not found", 404);
 
         const mint = await mintExistingRecordFormLinkForAdmin({
             supabase,

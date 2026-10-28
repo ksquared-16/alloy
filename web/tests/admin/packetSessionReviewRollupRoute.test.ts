@@ -11,6 +11,12 @@ vi.mock("@/lib/adminAuth", () => ({
     requireAdminOrOps: vi.fn(async () => null),
 }));
 
+// R2: these suites exercise review logic for an in-scope session; the department/site scope gate on these routes is
+// proven against a restricted actor in tests/forms/formsSubjectScope.test.ts.
+vi.mock("@/lib/forms/formSubmissionScope", async (orig) => ({
+    ...(await orig<typeof import("@/lib/forms/formSubmissionScope")>()),
+    packetSessionReadableById: async () => true,
+}));
 vi.mock("@/lib/admin/getAdminContext", () => ({
     getAdminContextCached: vi.fn(async () => ({ ok: true, orgId: ORG, userId: USER, role: "admin" })),
     adminContextFailureResponse: vi.fn(),
