@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
+import { parseIntakeReviewConfig } from "@/lib/forms/intake/resolveIntakeReviewDecision";
 import { formIntakeLocationId } from "../formIntakeShadowHelpers";
 import {
     appendCorrectedProcessingFact,
@@ -87,6 +88,22 @@ export function caseResolvesOwnLeadPlacement(metadata: unknown): boolean {
     return !m.create_lead_intake && m.source_adapter === "public_form_v1";
 }
 
+/**
+ * What the case's public link says about where its lead belongs. A location-specific intake link is
+ * minted with the organization's routing (`default_department_id`, e.g. Enrollment); placement used to
+ * be asked with `{}`, so a routed form in an organization without exactly one builder-owned entry
+ * department could never be approved (422 `lead_placement_unresolved`) — while BOS Create Lead, which
+ * names its department, placed the same lead. Only the department is passed: the canonical resolver
+ * still decides the work unit and status, scoped to the org, exactly as it does for BOS.
+ */
+export function caseLeadPlacementInput(metadata: unknown): { departmentId?: string } {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+    const link = (metadata as { link_metadata?: unknown }).link_metadata;
+    if (link == null || typeof link !== "object" || Array.isArray(link)) return {};
+    const departmentId = parseIntakeReviewConfig(link as Record<string, unknown>).linkDefaults.default_department_id;
+    return departmentId ? { departmentId } : {};
+}
+
 export type CaseLeadPlacementReadiness =
     | { readonly applies: false }
     | { readonly applies: true; readonly ok: true }
@@ -108,8 +125,9 @@ export async function evaluateCaseLeadPlacement(
         .eq("org_id", orgId)
         .eq("id", caseId)
         .maybeSingle();
-    if (!caseResolvesOwnLeadPlacement((caseRow as { metadata?: unknown } | null)?.metadata)) return { applies: false };
-    const placement = await resolveCreateLeadPlacement(supabase, orgId, {});
+    const metadata = (caseRow as { metadata?: unknown } | null)?.metadata;
+    if (!caseResolvesOwnLeadPlacement(metadata)) return { applies: false };
+    const placement = await resolveCreateLeadPlacement(supabase, orgId, caseLeadPlacementInput(metadata));
     return placement.ok ? { applies: true, ok: true } : { applies: true, ok: false, reason: placement.reason, message: placement.message };
 }
 
@@ -465,7 +483,7 @@ export async function buildPlan(
             // Other sources keep their existing behaviour; they are not Create Lead entries.
             if (caseResolvesOwnLeadPlacement(metadata) && leadSubject.decision === "create") {
                 if (needsWorkUnit) {
-                    const placement = await resolveCreateLeadPlacement(deps.supabase, deps.orgId, {});
+                    const placement = await resolveCreateLeadPlacement(deps.supabase, deps.orgId, caseLeadPlacementInput(metadata));
                     if (!placement.ok) {
                         throw new OperatorServiceError("lead_placement_unresolved", placement.message);
                     }
