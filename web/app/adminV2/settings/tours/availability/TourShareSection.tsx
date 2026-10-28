@@ -135,11 +135,12 @@ export default function TourShareSection({
                             </p>
                             {brand ?
                                 <p className="mt-1 text-xs text-alloy-midnight/75" data-testid="tours-share-effective-brand">
-                                    Families see {brand.displayName ? `“${brand.displayName}”` : "no school name"} in{" "}
-                                    <span className="font-mono">{brand.accentColor}</span>
+                                    Families see {brand.displayName ? `“${brand.displayName}”` : "no school name"} (
+                                    {brandSourcePhrase(brand.sources.displayName, link.formTitle)}) in{" "}
+                                    <span className="font-mono">{brand.accentColor}</span> ({brandSourcePhrase(brand.sources.accentColor, link.formTitle)}).
                                     {brand.sources.displayName === "form" || brand.sources.accentColor === "form" || brand.sources.logoUrl === "form" ?
-                                        ` — from the form “${link.formTitle}”'s own branding, which takes precedence over Booking experience.`
-                                    :   " — from Booking experience."}
+                                        " The form's own branding takes precedence over Booking experience."
+                                    :   null}
                                 </p>
                             :   null}
                         </div>
@@ -301,4 +302,12 @@ function ShareRow({
 function distinctLabel(link: { formTitle: string; linkLabel: string | null }): string | null {
     const label = link.linkLabel?.trim();
     return label && label.toLowerCase() !== link.formTitle.trim().toLowerCase() ? label : null;
+}
+
+/** Where one part of what families see comes from, in the operator's words. */
+function brandSourcePhrase(source: EffectivePublicBrand["sources"]["displayName"], formTitle: string): string {
+    return source === "form" ? `set on the form “${formTitle}”`
+        : source === "location" ? "Booking experience for this location"
+        : source === "organization" ? "the organization's Booking experience"
+        : "Alloy default";
 }

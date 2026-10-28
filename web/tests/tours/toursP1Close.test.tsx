@@ -176,6 +176,9 @@ describe("D1 — effective identity = published form → location → organizati
         expect(panel).toContain('data-testid="tours-brand-published-form"');
         const share = web("app/adminV2/settings/tours/availability/TourShareSection.tsx");
         expect(share).toContain('data-testid="tours-share-effective-brand"');
+        // Each part of the identity names its own source (the form may set the name but not the colour).
+        expect(share).toContain("brandSourcePhrase(brand.sources.displayName, link.formTitle)");
+        expect(share).toContain("brandSourcePhrase(brand.sources.accentColor, link.formTitle)");
     });
 
     it("D4 — a link named like its form is not listed twice", () => {
