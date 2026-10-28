@@ -1,9 +1,9 @@
 {
   "schema": "alloy.context-distribution.v1",
   "package": "alloy-context.v1",
-  "schema_version": "1.0.0",
-  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_READY_FINANCIALS_PENDING",
-  "source_staging_sha": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+  "schema_version": "1.1.0",
+  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_1_READY_FINANCIALS_PENDING",
+  "source_staging_sha": "6376564d37a8157ce9726b4a15be9f9e99e25cc5",
   "generated_by": "scripts/build-context-package.mjs",
   "strategy": "path-manifest",
   "strategy_note": "Paths and blob SHAs, not copies. A detached copy becomes a competing authority the moment the source moves.",
@@ -11,25 +11,25 @@
     {
       "path": "docs/context/alloy-benchmark-context.md",
       "tier": 1,
-      "blob_sha": "4bd869190b2c4a4d88ad0e8698b9f0652c7c9d75",
+      "blob_sha": "44ebe5ddc6dd6d0e2ac916a88ddbc553003263d0",
       "exists": true
     },
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "tier": 1,
-      "blob_sha": "d27c6ddfe0f420fc01159f7869559355c7c0bae5",
+      "blob_sha": "085de9469c65a60a7907e2f6a0d74fec9b20040f",
       "exists": true
     },
     {
       "path": "docs/context/alloy-inference-contract.md",
       "tier": 1,
-      "blob_sha": "b12a3cf632d78094759c103e85b00daf69a4ad6e",
+      "blob_sha": "65feaf8e5e44edc82458c1d66ae3acc6cd384fae",
       "exists": true
     },
     {
       "path": "docs/context/alloy-platform-synthesis.md",
       "tier": 1,
-      "blob_sha": "87e65e4670334b61cc469579826abdc2b75b5f12",
+      "blob_sha": "37ec17d215502c5d2ea4d2fc7e46fa43b9acffd8",
       "exists": true
     },
     {
@@ -53,13 +53,13 @@
     {
       "path": "docs/platform/core/business-process-system.md",
       "tier": 2,
-      "blob_sha": "ee6ee9899faef9e59bba92fa9811552c40bf4210",
+      "blob_sha": "35b2083842d83da7f75e7944f5f5f273f668fa3d",
       "exists": true
     },
     {
       "path": "docs/platform/core/effective-dated-assignment-doctrine.md",
       "tier": 2,
-      "blob_sha": "30dc1398ddd0aeea6cbff7f853787b62acf63e56",
+      "blob_sha": "6cb685cf91030ff759a14f60ee8628b431263124",
       "exists": true
     },
     {
@@ -71,37 +71,43 @@
     {
       "path": "docs/platform/core/placement-system.md",
       "tier": 2,
-      "blob_sha": "762ead72dc23c943863569266bf3314a0ef8ae44",
+      "blob_sha": "7784d8b752c5699d0be2c94896366d191a6a269b",
       "exists": true
     },
     {
       "path": "docs/platform/core/status-and-state-system.md",
       "tier": 2,
-      "blob_sha": "9e90934a8b255593cfd44c38f14f74caea953311",
+      "blob_sha": "37df34ecdfa406b0a556d14c1ddb74b3ad8ed770",
       "exists": true
     },
     {
       "path": "docs/platform/foundation/architecture.md",
       "tier": 2,
-      "blob_sha": "fdb69587d10270c884dbdf0146cd3705e4d6b1c3",
+      "blob_sha": "c592d4d0dd5ac29a3ab896019bd1c89af2522a71",
       "exists": true
     },
     {
       "path": "docs/platform/governance/configuration-publication-model.md",
       "tier": 2,
-      "blob_sha": "1085b3cd62dce413fe9daa2ea354a08135b0c464",
+      "blob_sha": "8fd8ea72b39bc6e849a360e7779686b4e7075eea",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/document-security-model.md",
+      "tier": 2,
+      "blob_sha": "b74f34640ab43f89ef24d2562a6b2998fb976cda",
       "exists": true
     },
     {
       "path": "docs/platform/governance/roles-and-permissions.md",
       "tier": 2,
-      "blob_sha": "fea4086c3946f937217ce83856098901fa71352f",
+      "blob_sha": "d4d41e6bac5c1f28c048e2723e119714fa5f1b8a",
       "exists": true
     },
     {
       "path": "docs/platform/governance/staff-coverage-authority.md",
       "tier": 2,
-      "blob_sha": "ede92f9f14fbcbdd4036dc91ba4fc4116f566a44",
+      "blob_sha": "15a3060c81686a532783e3e2cd25a6b542f2f2d6",
       "exists": true
     },
     {
@@ -119,13 +125,13 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "121944110e8a4515618c48a3bff333862d892f5f",
+      "blob_sha": "2b1709491c10c1079bde65d71009fca72ba097ff",
       "exists": true
     },
     {
       "path": "docs/platform/modules/financials-canonical-authorities.md",
       "tier": 2,
-      "blob_sha": "64f040e80df72e53a43d3eedb97c2c3d92fe7f55",
+      "blob_sha": "e0e63e6d386079f490858e719189f4025f43c458",
       "exists": true
     },
     {
@@ -179,7 +185,7 @@
     {
       "path": "docs/platform/core/operations-temporal-truth-certification.md",
       "tier": 3,
-      "blob_sha": "ac4ff76352df380c7b4f41fe48f28fc251aba032",
+      "blob_sha": "e26c7cbf8cbc0363b8980824573eca4354f8851a",
       "exists": true
     },
     {
@@ -203,7 +209,7 @@
     {
       "path": "docs/platform/governance/assignment-time-authority.md",
       "tier": 3,
-      "blob_sha": "2f70b0a874a15b5bb486de5a6f28140bc5ede226",
+      "blob_sha": "76fdace4d2b40ab8b81c71ed6841c6c9128f7deb",
       "exists": true
     },
     {
@@ -219,6 +225,12 @@
       "exists": true
     },
     {
+      "path": "docs/platform/governance/authorization-qa-personas.md",
+      "tier": 3,
+      "blob_sha": "bc490002f9589873f8ad31d19553e941b81e9549",
+      "exists": true
+    },
+    {
       "path": "docs/platform/governance/rls-authority-model-director-gate.md",
       "tier": 3,
       "blob_sha": "418bda331cd0d61344eed91e6688fbe1a45307e2",
@@ -227,7 +239,7 @@
     {
       "path": "docs/platform/governance/time-aware-staffing-projection.md",
       "tier": 3,
-      "blob_sha": "2db3a6c80d64a0b88fd52a8f16e91c0db82cf666",
+      "blob_sha": "3fbf1958bc607d1f13cec3872e9a0225e37dfb3c",
       "exists": true
     },
     {
@@ -245,7 +257,13 @@
     {
       "path": "docs/platform/modules/configuration-platform.md",
       "tier": 3,
-      "blob_sha": "cca1d61ed65e4e6d4a4429bfd92060455d6d8c43",
+      "blob_sha": "90a77fd129fc1784095814ffe9c0dba420aee17e",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/documents-and-forms.md",
+      "tier": 3,
+      "blob_sha": "0ca4161339d8a22a7560439d817c902f64685bc6",
       "exists": true
     },
     {
@@ -293,13 +311,13 @@
     {
       "path": "web/scripts/routeCapabilities.declared.json",
       "tier": 3,
-      "blob_sha": "f4eb971c08922c9363fd94b8e89e0368885a298e",
+      "blob_sha": "7d8575647db65d217763c1d841f632a0a3beb072",
       "exists": true
     },
     {
       "path": "docs/context/package/context-resolution.md",
       "tier": "contract",
-      "blob_sha": "926515aca763cd0646720d3061305a27e6aad287",
+      "blob_sha": "fb895b7082be7b3c476c377843c7b69fe8964c25",
       "exists": true
     },
     {
@@ -311,7 +329,7 @@
     {
       "path": "docs/context/package/gpt-installation.md",
       "tier": "contract",
-      "blob_sha": "0658fc50dbad3272f76199ff425c0b6cca6278c1",
+      "blob_sha": "db1b99b817543fbd541cc65155982a8645e83d2c",
       "exists": true
     },
     {
@@ -323,31 +341,31 @@
     {
       "path": "docs/context/package/README.md",
       "tier": "contract",
-      "blob_sha": "08b3bee43d50cd85144c874f2e5492ed97e08496",
+      "blob_sha": "390e43bfb59a98e7b2175d3c9dd545f4fd7f0579",
       "exists": true
     },
     {
       "path": "docs/context/package/alloy-context-package.json",
       "tier": "manifest",
-      "blob_sha": "6a83eee735c1619bcc795d9bf2936c426fac6c33",
+      "blob_sha": "257b0389c47ab9a0d670c3c3152790e7a7ca4cf9",
       "exists": true
     },
     {
       "path": "docs/context/package/vacilando-lanes.json",
       "tier": "manifest",
-      "blob_sha": "03bc99c45aaac534aa9aae91cb80db125589c127",
+      "blob_sha": "3d47314ccbef9921e72b2cd579f626f9e26737c2",
       "exists": true
     },
     {
       "path": "docs/context/package/recertification-triggers.json",
       "tier": "manifest",
-      "blob_sha": "3f66a8a1f4bdc19e26f5bb39baa90d9749dca927",
+      "blob_sha": "bd5f92e5e0b54fbbae698f77bc8a8f40145846d5",
       "exists": true
     },
     {
       "path": "docs/context/package/gpt-project-sources.json",
       "tier": "manifest",
-      "blob_sha": "2a2f0554a3fc2e9fcc97ae5277a3313928d15358",
+      "blob_sha": "fbc41d737611f6fa36ca8727de711ee095abc3d5",
       "exists": true
     }
   ]

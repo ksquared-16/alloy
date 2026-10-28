@@ -17,7 +17,7 @@ Forms engine, document handling, enrollment packets — industry-agnostic core w
 
 | Area | Status | Entry |
 |------|--------|-------|
-| Form definitions & versions | Complete | `/admin/forms` |
+| Form definitions & versions | Implemented (Studio) | Processing → Studio → Forms (legacy `/admin/forms` links retired) |
 | Public links & submissions | Complete | Public API routes |
 | Packet sessions | Complete | Enrollment packet flows |
 | Review rollup MVP | Complete | Packet review console |
@@ -43,8 +43,8 @@ Processing remains the engine underneath; it is not the operator-facing architec
 **Canonical entry:** AdminV2 sidebar **Processing** → `ProcessingModal` (BOS workspace modal).
 Standalone `/admin/processing` is a deep-link host only; the modal is the product surface.
 
-The operator never leaves the modal for `/admin/forms`. Processing owns form authoring and publishing
-in-modal via Studio → Forms → Builder.
+The operator never leaves the modal for a standalone forms app. Processing owns form authoring and
+publishing in-modal via Studio → Forms → Builder.
 
 ### Mode pattern (Work vs Studio)
 
@@ -84,7 +84,7 @@ Sub-tab label under Work is **Queue** (not "Work"). Top-level mode label remains
 
 1. **Overview** — launch point for importing, resuming active work, or opening Studio assets.
 2. **Work → Queue** — folder-aware operational queue + document review.
-3. **Studio** — reusable assets: Forms (live), Packets / Fields / Branding (placeholders).
+3. **Studio** — reusable assets: Forms (live), Packets (live), Documents (live), Fields / Branding (placeholders).
 4. **Builder** — canvas-first editor opened from Studio Forms; stays in-modal.
 
 Overview is not a dashboard. It answers: *What am I trying to accomplish?*
@@ -310,19 +310,50 @@ reads the Documents answer; Enrollment keeps its separate stage exceptions. Reco
   integrity mismatch, counts — after review (default) or on submission (`submitted`, only where the organization's
   policy says so). D7 validity applies with the requirement's type policy.
 
+## Forms Studio — layers (remeasured 2026-10-27)
+
+Do **not** infer support in one layer from another. Schema ≠ builder ≠ UI ≠ publication ≠ runtime.
+
+| Capability | Schema | Builder | Studio UI | Publication | Runtime |
+|---|---|---|---|---|---|
+| Option sets | `option_set_key` or `static_options` | static + registry defaults | Choices editor is static-first; option-set-backed fields can be overwritten by "+ Add choice" | Parses only — does not verify set existence | Public hydrate; enrollment conversation path validates static/`occurrence.options` more narrowly |
+| Conditionals | `visibility.all[]` (`eq`/`neq`, AND) | Single top-level clause | "Show this question when…" (not inside groups) | Parse-time reference/cycle checks | `evaluateFieldVisibility`; hidden non-empty answers rejected |
+| Derived values | `age_from_date_of_birth`, `execution_date` | Top-level scalars | Calculation editor (hidden for signature/file) | No key-existence gate | Resolved at public submit / preview / participant compile |
+| Multiselect | Array of strings vs options | Authorable | Type + choices | Nothing multiselect-specific | Renderer + validation; prefill skips multiselect |
+| Field source bindings | `field_source` (+ relationship lineage) | Rebuilds entity/field/shared; drops relationship unless registry/`rel:` path | "Store answer in" picker | **Gap:** POS/Documents binding validation runs only when `pos_connected` is set — Studio blank/imported forms typically never set it | Prefill/submit honor `field_source` |
+| Imported paperwork | Same schema + `pdf_mapping_json` | `draftFormToFormSchemaV1` | Same Studio authoring | Never auto-published; same publish route (same binding-gate gap) | Same runtime as hand-built |
+
+**Publication contract:** `form_definition_versions` draft → published → archived with DB immutability on
+published payloads. Studio publish is save → patch metadata → publish (three calls). Concurrent draft
+edits are last-write-wins (no draft CAS token). Branding is snapshotted at publish. Forms/Documents
+versioning is **domain-owned** — not a fifth shared Configuration lifecycle (Director Slice 5).
+
+**Hosted behavioral certification (Slice 5):** unit/contract coverage exists for the five-layer matrix
+above. A governed hosted builder → publication → public-submission walkthrough for conditionals,
+multiselect, derived values, option sets, and source bindings was **not obtained** in Slice 5 —
+retain as an explicit certification evidence gap (do not treat unit green as hosted proof).
+
+**Documents dependency:** `file_ref.document_type` is a free string; Forms Studio does not pick from the
+published Documents catalog. Empty values fall back to `enrollment_document`. Real uploads run through
+enrollment conversation / document integration paths — the generic renderer still shows a placeholder
+for some file-upload surfaces. Document **security** remains [`../governance/document-security-model.md`](../governance/document-security-model.md).
+
 ## Integration points
 
-- Opportunity drawer — packet review modal, form status
+- Opportunity / Focus Panel — packet review, form status
 - Workflows — submission events
-- Field policy — forms parity with settings **planned**
-- Processing Identity Resolution — public lead-capture and Manual Create Lead source adapters; facts/resolutions/approval/executor
-- Processing document filing (D5) — the Documents filing command, called by a document case's approval
-- Business Process readiness (D6) — stage `document` requirements answered by the Documents requirement service
-- Work Items (D6) — the Documents source, a derived projection of unmet document requirements
+- Field library — lifecycle palette merged with org `field_definitions` (`GET /api/admin/forms/field-library`)
+- Processing Identity Resolution — public lead-capture and Manual Create Lead source adapters
+- Processing document filing (D5) — Documents filing command on document-case approval
+- Business Process readiness (D6) — stage `document` requirements answered by Documents
+- Work Items (D6) — Documents source as derived projection of unmet requirements
+- Review, validity and renewal (D7) — `document_version_review_events`; requirement work and document attention
+- Forms evidence (D8) — completed-form PDFs satisfy a requirement only under its published `form_evidence` policy
 
 ---
 
 ## Related
 
-- `../../platform/modules/documents-and-forms.md` (transitional expanded reference)
-- `../../foundation/platform-capabilities.md`
+- [`../foundation/platform-capabilities.md`](../foundation/platform-capabilities.md)
+- [`../governance/configuration-publication-model.md`](../governance/configuration-publication-model.md)
+- [`../governance/document-security-model.md`](../governance/document-security-model.md)

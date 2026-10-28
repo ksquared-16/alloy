@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -257,6 +257,7 @@ staff/scheduling artifacts that carry current authority, and even they required 
 | Combined edit orchestration | `lib/childcareOperational/applyCombinedParticipationChange.ts` |
 | Primary switch (child and staff) | `lib/operationalAssignments/setPrimaryOperationalAssignment.ts` |
 | Proposed assignment lifecycle | `lib/operationalAssignments/operationalAssignmentService.ts` |
+| Secondary replacement persistence | `replace_secondary_schedule_assignment` via `operationalAssignmentService.ts` (`assignment.create` / `assignment.change_room` with predecessor) |
 | Staff coverage authority | `docs/platform/governance/staff-coverage-authority.md` |
 | Staffing projection | `docs/platform/governance/time-aware-staffing-projection.md` |
 | Assignment recurring time | `docs/platform/governance/assignment-time-authority.md` |
@@ -331,6 +332,10 @@ as doctrine; `certification/**` artifacts are EXCLUDE_HISTORY.
   proposals.
 - An employment implies a single fixed site. `primary_location_id` is singular, but per-day placement
   runs through coverage allocations.
+- Coverage "does not count toward staffing sufficiency" as a blanket claim. The time-aware projection
+  composes Coverage for planned place; only legacy whole-day baseline supply ignores Coverage rows.
+- Assignment, Coverage, Availability, Presence, and Projection are interchangeable names for one
+  staffing state. They are five distinct authorities.
 
 ---
 
@@ -358,6 +363,18 @@ shortcut: `docs/platform/planning/**` is PLANNED_ONLY and `certification/**`, `d
 doctrine by construction. A reader should not infer that 38 markdown artifacts were each audited; four
 canonical documents were, and one of them was wrong.
 
+### Slice 3C refresh (2026-10-27) — trigger + Coverage composition
+
+- `ops.temporal-table-migration` disposition lives on
+  [`effective-dated-assignment-doctrine.md`](effective-dated-assignment-doctrine.md) (writers +
+  cardinality resolved; event parity still open for Director).
+- Coverage owner corrected: time-aware projection **does** compose Coverage for planned place;
+  legacy `buildStaffSupply` still does not read `staff_coverage_allocations`. Do not collapse
+  Assignment / Coverage / Availability / Presence / Projection into one authoritative staffing state.
+- Business Process V2 owns stage execution; Scheduling owns Assignment/Coverage/Presence facts.
+  Attendance owns observation. Operational Calculations / Intelligence consume projections — they do
+  not author Assignment or Coverage. Cross-domain claims update the primary owner only.
+
 ### What remains open, and is not a certification blocker
 
 - **319 `pending` capability declarations platform-wide** (303 program-owned, ceiling 305) are W-15's
@@ -371,6 +388,8 @@ canonical documents were, and one of them was wrong.
 - **A cross-site move is still unrepresented** (§ the doctrine's open item), returned as product work.
 - **Legacy role gates (12 across both domains)** are authority, but not capability-based. Converting
   them is W-15's, not a documentation gap.
+- **Secondary / staff primary change events** remain unemitted (Director ruling on the doctrine
+  Events section). Not a writer-census failure.
 
 ## Related
 

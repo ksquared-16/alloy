@@ -12,7 +12,7 @@ supersedes: []
 
 A versioned, distributable definition of **what an AI should know about Alloy, and what it must never
 assume.** It is the output of the documentation certification program turned into infrastructure:
-fourteen certified domain records, reduced to a five-document global foundation plus thirteen domain
+fifteen certified domain records, reduced to a five-document global foundation plus fourteen domain
 lanes, with explicit inference boundaries and machine-readable staleness triggers.
 
 It serves two consumers from one source: **GPT project sources** and **Vacilando lanes**.
@@ -54,8 +54,9 @@ specification is [`vacilando-integration-spec.md`](vacilando-integration-spec.md
 authority for one domain, the shared mechanics it depends on, what it owns, what it explicitly does
 *not* own, and what would make its certification stale.
 
-Thirteen certified lanes, two shared context packages (`operations-temporal`, `product-urls`) and one
-pending lane (`financials-payments`). A shared package is never a primary mutation lane: both
+Fourteen certified lanes (including `documents`), two shared context packages (`operations-temporal`,
+`product-urls`) and one pending lane (`financials-payments`). Tours routes under
+`enrollment-placement` (no separate lane). A shared package is never a primary mutation lane: both
 `enrollment-placement` and `staff-scheduling` depend on `operations-temporal`, and neither owns the
 temporal mechanics.
 
@@ -97,11 +98,13 @@ the list that touches no document and breaks no test on its own.
 
 ## How Financials pending is handled
 
-`financials-payments` is `PENDING_DISABLED`, for a measured reason: the last substantive semantic
-change under `web/lib/financials/payments` was 2026-09-30, and the seven-day stability gate has not
-opened. Recent commits corrected core money meaning — refund ordering, held-deposit availability,
-payer authorization, return-versus-refund — so freezing current behaviour into DIRECT context would
-describe semantics that have already moved.
+`financials-payments` is `PENDING_DISABLED`, for a measured reason (Slice 5 remasure 2026-10-27T18:14:03Z
+at staging `6376564d3`): the last substantive semantic change under `web/lib/financials/payments` is
+`9e3774e0e` (2026-10-21T11:15:18-07:00), continuous quiet **≈ 5.999 days** (&lt; 7), six commits in the
+preceding seven days, classification **PENDING — GATE**. Earliest eligibility if quiet holds:
+**2026-10-28T11:15:18-07:00**. Payments V1/W7 is implemented on staging; implementation does not open
+DIRECT context. Freezing current behaviour into DIRECT context while the gate is closed would certify
+semantics still inside the stability window.
 
 The lane **exists now** so routing works and so the refusal is explicit rather than an omission. It
 provides no DIRECT context. Certified **Subsidy** and certified **Commercial** are not blocked by the

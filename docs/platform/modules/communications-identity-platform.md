@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-10
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -73,7 +73,8 @@ On resolution failure: enqueues with `metadata.sender_resolution_deferred` + Pyt
   `20260813160000_inbound_email_retrieval_receipt.sql`, `20260817170000_communication_ingress_routes.sql`);
   code at `web/lib/communications/email/`, `web/lib/communications/ingress/`;
   live-certified by `certification/playwright/communications-inbound-email.cert.spec.ts`.
-  Note the ingress eligibility gate is **observe-only** by design, not enforcement.
+  Note: `conversationIdentityAdmission` **enforces** one refusal (`REJECT_NO_ADMITTING_EVIDENCE`)
+  at a conversation-role identity and fails open when role data is absent — not purely observe-only.
 
 ### Discovery API
 

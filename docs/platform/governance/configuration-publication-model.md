@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -16,23 +16,28 @@ Companions: [`configuration-integrity-laws.md`](./configuration-integrity-laws.m
 **State:** `CONFIGURATION_DOCUMENTATION_CONTEXT_READY`. Measured against staging `3c4ac97f1`. Row counts
 are from the certification stack.
 
-### Configuration does not share one lifecycle — it has four
+### Configuration does not share one lifecycle — four families were measured in 2026-09
 
 This is the claim most likely to be got wrong, so it is measured rather than generalised. **Do not assume
 a draft/publish model applies to a family that does not have one.**
 
-| Family | Store | Lifecycle | Rows here |
+| Family | Store | Lifecycle (remeasured 2026-10-27) | Rows at 2026-09-30 cert |
 |---|---|---|---|
 | organization settings | `org_settings.metadata` | a **single JSON document per org, mutated in place**; no draft, no version, no history | **1** |
-| entity layouts | `entity_layouts` | **append-only** — republish, never edit or delete; the current layout is the newest row | **20** |
-| Business Process | `business_process_drafts` → `business_process_revisions` | draft → validate → publish → immutable revision | 2 drafts, **0 revisions** |
+| entity layouts | `entity_layouts` | **versioned draft/published rows** — draft update/delete and published in-place update exist in code (`entityLayoutsRepo`, surface routes); **not** append-only | **20** |
+| Business Process | `business_process_drafts` → `business_process_revisions` | draft → validate → publish → immutable revision (CAS) | 2 drafts, **0 revisions** |
 | Programs | `program_drafts` → `program_revisions` → `configuration_publications` → `configuration_distribution_targets`/`_runs` | draft → publish → distribute to locations | **all 0** |
 
-**The publish-and-distribute machinery carries zero rows on this stack.** `configuration_publications` and
-`configuration_distribution_runs` are implemented and unexercised here; `business_process_revisions` is 0
-against 2 drafts, so nothing has been published. Live configuration on this stack is `entity_layouts` (20)
-and `org_settings` (1). Zero rows is not proof of disuse in production — it means this pass did not
-exercise them.
+**Unreconciled versioned stores (Director classification required — do not invent a fifth lifecycle in prose):**
+Forms (`form_definition_versions`: draft → published → archived, DB immutability on published),
+Documents types (`document_type_versions`, CAS publish), and Documents requirements (`document_requirement_versions`).
+Surfaces and the Calculation library also publish explicitly. Treat these as **measured but unclassified**
+relative to the four-family table until Director decides whether they are variants of an existing family
+or a distinct contract (`config.new-lifecycle` trigger).
+
+**The publish-and-distribute machinery carried zero rows on the 2026-09-30 stack.** Zero rows is not proof
+of disuse in production — it means that pass did not exercise them. Do not refresh row counts without a
+new hosted census.
 
 ### Configuration expresses intent; the runtime owns executable semantics
 
@@ -79,17 +84,16 @@ Configuration parameterises certified domains; it does not own their behaviour. 
 ### Benchmark inference contract
 
 **SAFE, because measured:** configuration expresses governed intent; the runtime and domain code own
-executable semantics; each family follows its **own** measured lifecycle; `entity_layouts` is append-only
-and `org_settings` is in-place; AI-assisted configuration separates generate, review and apply into three
-capabilities.
+executable semantics; each family follows its **own** measured lifecycle; `org_settings` is in-place;
+AI-assisted configuration separates generate, review and apply into three capabilities.
 
-**FORBIDDEN:** a config string is an executable command · a draft is active behaviour
-(`business_process_revisions` is 0 against 2 drafts — nothing has been published here) · schema support
-implies builder exposure, builder exposure implies UI exposure, or UI exposure implies runtime support
-(these are four distinct layers) · a seed default is immutable platform law · deleting current
-configuration erases historical truth (`entity_layouts` is append-only, so it does not) · configuration
-visibility is authorization · one configuration family's lifecycle applies to another · the
-publish/distribute path is exercised because it exists (zero rows here).
+**FORBIDDEN:** a config string is an executable command · a draft is active behaviour · schema support
+implies builder exposure, builder exposure implies UI exposure, UI exposure implies publication gates,
+or publication implies runtime execution (**five distinct layers**) · a seed default is immutable
+platform law · `entity_layouts` is append-only (it is not — drafts update/delete and published rows can
+update in place) · configuration visibility is authorization · one configuration family's lifecycle
+applies to another · Forms/Documents versioning is already a certified fifth lifecycle (Director has
+not classified them) · the publish/distribute path is exercised because it exists.
 
 ## The model
 

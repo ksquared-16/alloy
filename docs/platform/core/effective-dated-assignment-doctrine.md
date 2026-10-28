@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -263,6 +263,40 @@ rollback of a half-written combined change, retry replay, stale-row conflict, an
 still emit no change event (see [Events](#events)); that is open for a Director ruling, so this lane is
 recertified for its writers and invariants, not for event parity. The deployed database's copy of both
 migrations was last measured 2026-10-21 (function present, trigger checks site).
+
+### Slice 3C disposition — `ops.temporal-table-migration` (2026-10-27)
+
+Slice 0 recorded this trigger as fired. Slice 3C re-inspected **migration content** (not filenames)
+and re-ran the required static guards on integration HEAD.
+
+**Migrations that write or redefine writers of the temporal tables (post-convergence corpus):**
+
+| Migration | What it actually does |
+|---|---|
+| `20261108120000` | introduces `apply_participation_operational_change` |
+| `20261109120000` | successor carries placement facts onto the assignment INSERT |
+| `20261110120000` | named-null vs absent-key inheritance on the same primitive |
+| `20261201090000` | `replace_secondary_schedule_assignment` (sibling primitive for `is_primary = false`) |
+| `20261201100000` | room resolves under site for every `schedule_assignments` writer |
+
+**False-positive match (read-only):** `20261026120000_financials_account_subject_facts.sql` reads
+`child_placements` inside a financials fact function; it is not a temporal writer and does not fire
+writer-census obligations.
+
+**Cardinality asymmetry reconfirmed:** child placement and child primary remain single-operational
+indexes; staff primary remains overlap-only — no staff `subject_type='staff'` UNIQUE index exists.
+Do not flatten child and staff cardinality.
+
+**Disposition (Slice 3C, 2026-10-27):** writers + cardinality + room/site invariants —
+**resolved for this trigger.** Re-proof:
+
+- Static: `participationTemporalWriterCensus`, `temporalCardinalityAsymmetry` PASS
+- Live on shared `alloy-cert`: `participationOperationalChange` (11),
+  `participationWiringApplication`, `secondaryAssignmentReplacement`,
+  `staffPrimaryRoomInvariant` — all PASS
+
+**Still open (not a silent pass):** event parity for secondary replacement and staff primary
+switches (Director ruling — see [Events](#events)).
 
 ### Open, and deliberately not closed here
 
