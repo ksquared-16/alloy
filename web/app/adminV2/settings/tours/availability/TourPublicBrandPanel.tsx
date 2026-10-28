@@ -339,7 +339,7 @@ function PublishedFormNote({ form, formWins }: { form: PublishedForm | null; for
             The tour calendar opens into the form “{form.formTitle}”.{" "}
             {formWins.length ?
                 <>
-                    That form sets its own {formWins.map((k) => FIELD_NOUN[k]).join(", ")}, which families see instead of the
+                    That form sets its own {listInWords(formWins.map((k) => FIELD_NOUN[k]))}, which families see instead of the
                     setting below. To change that, open the form in Forms Studio › Branding and choose “Use the school&apos;s
                     branding”, then publish it again.
                 </>
@@ -362,4 +362,9 @@ function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues, for
     }
     const label = source === "form" && formTitle ? `set on the published form “${formTitle}”` : SOURCE_LABEL[source];
     return `${value} (${label})`;
+}
+
+/** "a", "a and b", "a, b and c". */
+function listInWords(items: string[]): string {
+    return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

@@ -33,6 +33,7 @@ import {
     tokenFromShareEmbedPath,
 } from "@/lib/tours/publicCalendar/publishedTourCalendarBrand";
 import {
+    caseLeadPlacementInput,
     caseResolvesOwnLeadPlacement,
     evaluateCaseLeadPlacement,
 } from "@/lib/pos/processingIdentity/operator/operatorReviewService";
@@ -224,6 +225,29 @@ describe("D2 — approval readiness asks the resolver approval uses", () => {
         expect(placementMock.resolveCreateLeadPlacement).not.toHaveBeenCalled();
     });
 
+    it("the case's routed department reaches the resolver (the approval blocker, P1 unblock)", async () => {
+        const DEPT = "00000000-0000-4000-8000-000000000020";
+        expect(caseLeadPlacementInput({ link_metadata: { default_department_id: DEPT } })).toEqual({ departmentId: DEPT });
+        expect(caseLeadPlacementInput({ link_metadata: { intake_outcome: { default_department_id: DEPT } } })).toEqual({ departmentId: DEPT });
+        expect(caseLeadPlacementInput({ link_metadata: { default_department_id: "not-a-uuid" } })).toEqual({});
+        expect(caseLeadPlacementInput({ link_metadata: {} })).toEqual({});
+        expect(caseLeadPlacementInput(null)).toEqual({});
+
+        placementMock.resolveCreateLeadPlacement.mockResolvedValue({ ok: true, workUnitId: "wu-pipeline", statusKey: "new_inquiry" });
+        const supabase = fakeSupabase({
+            processing_cases: { metadata: { source_adapter: "public_form_v1", link_metadata: { default_department_id: DEPT, default_work_unit_id: "ignored" } } },
+        });
+        expect(await evaluateCaseLeadPlacement(supabase, ORG, "c")).toEqual({ applies: true, ok: true });
+        // Only the department: the canonical resolver still decides the work unit and status.
+        expect(placementMock.resolveCreateLeadPlacement).toHaveBeenCalledWith(expect.anything(), ORG, { departmentId: DEPT });
+    });
+
+    it("approval and readiness ask with the same input", () => {
+        const svc = web("lib/pos/processingIdentity/operator/operatorReviewService.ts");
+        expect(svc.match(/resolveCreateLeadPlacement\([^)]*caseLeadPlacementInput\(metadata\)\)/g)?.length).toBe(2);
+        expect(svc).not.toMatch(/resolveCreateLeadPlacement\([^)]*, \{\}\)/);
+    });
+
     it("blocks Approve only when a NEW lead would be placed and cannot be", () => {
         const blocked = { applies: true, ok: false, reason: "unconfigured", message: "Create Lead is not configured for this process/location." } as const;
         const view = (over: Partial<RecommendationView>): RecommendationView => ({ supported: true, ...over });
@@ -338,5 +362,23 @@ describe("D8 — the public renderer names each control with its label", () => {
             <FormEngineRenderer schema={formSchema} payload={emptyPayload()} onChange={() => {}} mode="readonly" variant="embed" />
         );
         expect(html).not.toContain(' for="');
+    });
+});
+
+// ── UX-04 / T1 ──────────────────────────────────────────────────────────────────────────────────────
+
+describe("UX-04 — an anonymous inquiry page no longer logs 409s; T1 copy", () => {
+    it("NO_SESSION on the read-only participant probes answers ok:false without an error status", () => {
+        for (const route of ["app/api/public/forms/[token]/enrollment-objective/route.ts", "app/api/public/forms/[token]/enrollment-artifact/route.ts"]) {
+            const src = web(route);
+            expect(src).toContain('access.error.code === "INVALID_LINK" ? 404 : access.error.code === "NO_SESSION" ? 200 : 409');
+        }
+        // Every consumer reads `ok` / `data`, so ok:false still leaves the objective and artifact unset.
+        expect(web("app/forms/embed/[token]/FormEmbedClient.tsx")).toContain("if (!cancelled && json?.ok && json.data)");
+        expect(web("app/forms/embed/[token]/EnrollmentConversationCard.tsx")).toContain("if (json.ok && json.data)");
+    });
+
+    it("the overriding fields read as a sentence", () => {
+        expect(web("app/adminV2/settings/tours/availability/TourPublicBrandPanel.tsx")).toContain("listInWords(formWins.map((k) => FIELD_NOUN[k]))");
     });
 });
