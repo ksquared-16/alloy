@@ -108,7 +108,7 @@ def save_state(ids):
 
 
 DRAFT = {
-    "label": "QA permit", "description": "D3 hosted certification fixture", "subject_types": ["child", "household"],
+    "label": "QA permit", "description": "D3 hosted certification fixture", "subject_types": ["child", "household", "opportunity"],
     "allowed_formats": ["pdf", "png"], "default_sensitivity": "personal_identity", "review_required": True,
     "replacement_policy": "new_version", "validity_policy": {"kind": "duration", "value": 12, "unit": "months", "warning_days": [30, 7]},
 }

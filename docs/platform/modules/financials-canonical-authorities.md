@@ -1,14 +1,15 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
 # Financials — the canonical authorities
 
-**Status:** current as of the Thread 11A **Core freeze**. Section 7 is mounted-certified;
-Core Financials feature work is complete and Payments is the next program.
+**Status:** Core Financials authorities as of the Thread 11A **Core freeze** (Section 7
+mounted-certified). Payments V1/W7 is **implemented** on staging and **not certified** for AI
+context — see §14. Implementation ≠ certification.
 **Purpose:** name the single owner of every core financial concept, so a lane that needs one
 **finds it instead of building a second one.**
 
@@ -1226,14 +1227,55 @@ the second one is always written under deadline. Converge on Governed Scheduled 
 
 ---
 
-## 14. Deferred — Payments is the next program
+## 14. Payments status — implemented, not certified
 
-Payment method, autopay, provider, collection and deposit-lifecycle productization is the next major
-program. See **`docs/platform/modules/core-payments-contract.md`** for the boundary: what Payments
-inherits, what it must not rebuild, and where provider-specific objects belong.
+Payment method, autopay, provider, collection, settlement and deposit-lifecycle productization is
+**not** “the next program.” Payments V1 and W7 work is **implemented** under
+`web/lib/financials/payments` (and related settlement authorities such as
+`web/lib/financials/settlement/`). Companion module docs include `payments-autopay.md`,
+`payments-collection-completion.md`, `payments-held-deposits.md`,
+`payments-payment-method-reference.md`, `payments-provider-architecture.md`, and
+`payments-provider-webhook.md`. The boundary contract remains
+[`core-payments-contract.md`](./core-payments-contract.md).
 
-The three accepted Core deferrals are stated in full in the Director QA catalog
-(`CORE_DEFERRALS` in `lib/qa/financialsDirectorQa/scenarioCatalog.ts`) and are **not** Core defects:
+Distinguish these states carefully:
+
+| State | Payments today (remeasured 2026-10-27 Slice 5 @ staging `6376564d3`) |
+|---|---|
+| **Implemented** | Yes — source and operator surfaces on staging |
+| **Tested** | Substantial W7 / Director QA evidence exists; tests are not domain certification |
+| **Deployed** | Merged to staging; do not infer production solely from merge |
+| **Certified** (AI / context-package DIRECT) | **No** — lane remains `PENDING_DISABLED` |
+| **Pending certification** | Yes — classification **PENDING — GATE** (stability prerequisite not satisfied) |
+
+### Stability gate — continuous elapsed quiet (remeasured Slice 5)
+
+Gate path: `web/lib/financials/payments`. Required: **seven consecutive quiet days** of continuous
+elapsed time (no calendar-day rounding). Unrelated documentation commits outside this path do not
+reset the gate; only substantive path changes do.
+
+| Measurement | Value |
+|---|---|
+| Staging tip at measurement | `6376564d37a8157ce9726b4a15be9f9e99e25cc5` (2026-10-27T09:53:42-07:00) |
+| Last Payments semantic change | `9e3774e0ef7e89c811b8293ee02804ed04d395ac` — 2026-10-21T11:15:18-07:00 — W7-F050/F051 ordinary automatic settlement |
+| Measurement instant (UTC) | 2026-10-27T18:14:03Z |
+| Continuous quiet elapsed | **518 325 s ≈ 5.999142 days** (< 7) |
+| Commits under path in preceding 7 days | **6** (all substantive Payments/Financials code or merges touching the path — none docs-only) |
+| Gate | **CLOSED** |
+| Earliest eligibility (if no further path change) | **2026-10-28T11:15:18-07:00** (`9e3774e0e` + 7×86400 s) |
+
+**Slice 5 decision:** gate still **CLOSED** — do **not** run full Financials / Payments domain
+certification; do **not** enable the context-package lane. Once the gate opens *and* full
+certification passes: transition `financials-payments` from `PENDING_DISABLED` to the existing
+enabled Financials lane — do not invent a new lane.
+
+Do **not** load Payments documents as certified DIRECT context while the gate is closed. Do **not**
+infer that shipped Payments capabilities are “future” or “deferred product.” Do **not** declare
+Payments certified merely because the last path commit is several days old.
+
+Accepted Core deferrals that remain (Director QA catalog `CORE_DEFERRALS` in
+`lib/qa/financialsDirectorQa/scenarioCatalog.ts`) are **not** Core defects and are **not** a claim
+that Payments is absent:
 
 - ~~`SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED`~~ — **RETIRED.** The arrangement authority always
   accepted percentage, fixed and remainder; what was deferred was the authoring surface, and the
@@ -1242,5 +1284,6 @@ The three accepted Core deferrals are stated in full in the Director QA catalog
   outside the org — are unchanged and remain the last word.
 - `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` — canonical provenance exists and the ledger states a
   concise preview of it; there is no deep row-inspection surface in Core.
-- `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` — the deposit policy and model foundation exist; the held
-  deposit lifecycle belongs to Payments.
+- `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` — deposit policy and held-deposit foundations exist; Payments
+  held-deposit productization has progressed (see `payments-held-deposits.md`). Treat residual
+  operator-product gaps as debt against that module, not as evidence that Payments has not shipped.

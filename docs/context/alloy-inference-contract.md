@@ -2,7 +2,7 @@
 title: Alloy AI inference contract
 owner: platform
 status: canonical
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -50,7 +50,11 @@ Each of these is certified. A task may rely on it without re-deriving it.
 
 8. **Configuration expresses intent; the runtime owns execution.** JSON steers behaviour; it cannot
    create or weaken an invariant.
-9. **`entity_layouts` is append-only.** Republish; never edit or delete.
+9. **Configuration has four measured lifecycle families, not one.** `org_settings` mutates in place;
+   `entity_layouts` is versioned draft/published with in-place updates (not append-only); Business
+   Process is draft → validate → publish → immutable revision; Programs adds publish → distribute.
+   Forms and Documents version stores are **domain-owned** versioning — not a fifth shared
+   configuration lifecycle (Director Slice 5).
 
 ### Temporal truth
 
@@ -59,17 +63,30 @@ Each of these is certified. A task may rely on it without re-deriving it.
 11. **A cancelled row is retained, not deleted**, and is excluded from the operational uniqueness
     index.
 12. **Schedule is expectation; Attendance is observation.** Different ledgers, different authority.
+13. **Child and staff primary assignment cardinality differ deliberately.** Placement and child
+    primary: at most one operational row per agreement. Staff primary: overlap-governed only — a
+    current and a future-dated primary may coexist when intervals are disjoint.
 
 ### Domain semantics
 
-13. **Provider delivery state is not business truth.** It is telemetry about a vendor's pipeline.
-14. **An Operational Intelligence answer is a reading, not an action.** It recommends nothing and
+14. **Provider delivery state is not business truth.** It is telemetry about a vendor's pipeline
+    (Communications transport or Payments Stripe alike).
+15. **An Operational Intelligence answer is a reading, not an action.** It recommends nothing and
     authorizes nothing.
-15. **AI reasoning confers no mutation authority.** Applying a proposal takes the domain's own
+16. **AI reasoning confers no mutation authority.** Applying a proposal takes the domain's own
     capability.
-16. **Subsidy suppresses collection.** It is derived, never stored, and changes no obligation.
-17. **Alloy has two APIs.** `/api/v1/**` is the frozen external partner contract; `/api/admin/**` is
+17. **Subsidy suppresses collection.** It is derived, never stored, and changes no obligation.
+18. **Alloy has two APIs.** `/api/v1/**` is the frozen external partner contract; `/api/admin/**` is
     internal and shares none of it.
+19. **Documents has one access door.** `assertDocumentAccess` (and the same predicates for lists)
+    decides disclosure; Processing chooses what to file and Documents files — `processing.operate`
+    is never sufficient filing authority.
+20. **Tours booking belongs to the Enrollment process.** Public calendar → booking → enrollment
+    handoff routes primarily under Enrollment / Placement; consent/send is Communications;
+    availability settings are Configuration; Operating Calendar authoring is not Tours-owned.
+21. **Coverage specialises planned place in the time-aware staffing projection.** Legacy whole-day
+    baseline supply (`buildStaffSupply`) does not read Coverage allocations. Assignment, Coverage,
+    Availability, Presence, and Projection remain five distinct nouns.
 
 ---
 
@@ -118,6 +135,9 @@ Each entry names the wrong inference, then what is actually true.
     deliberately. Ordinary edits are operational changes and supersede.
 13. **A future-dated change leaves the present row active.** *No* — for placements and child
     assignments it closes the present row immediately. For staff the two coexist.
+14. **Secondary replacement and staff primary switches emit `schedule_assignment_changed`.** *No.*
+    Only child agreement-scoped paths emit today. Event parity is open product/architecture debt —
+    do not invent it in documentation or consumers.
 
 ### Queues and projections
 
@@ -150,36 +170,68 @@ Each entry names the wrong inference, then what is actually true.
 
 ### Money
 
-24. **Subsidy is a payment.** *No* — it is collection suppression. Nor does an authorization or a
+25. **Subsidy is a payment.** *No* — it is collection suppression. Nor does an authorization or a
     draft claim suppress collection; only a SUBMITTED claim does, and a shortfall does not raise what
     the family owes.
-25. **A quote is an obligation**, or **a payment is revenue recognition**, or **credit and reversal
+26. **A quote is an obligation**, or **a payment is revenue recognition**, or **credit and reversal
     are interchangeable.** *No* to all three.
-26. **Provider state is Alloy financial truth.** *No.*
-27. **Commercial owns the obligation its pricing produces.** *No* — it owns intent only.
-28. **Current payment semantics can be inferred from existing Payments documents.** *No.* The domain
-    is uncertified and mid-mutation; recent commits corrected core money semantics.
+27. **Provider state is Alloy financial truth.** *No.*
+28. **Commercial owns the obligation its pricing produces.** *No* — it owns intent only.
+29. **Current payment semantics can be inferred from existing Payments documents, or Payments is
+    certified because the last path commit is several days old.** *No.* The Financials lane stays
+    `PENDING_DISABLED` until the seven-day quiet gate under `web/lib/financials/payments` opens
+    **and** full domain certification passes. Implementation ≠ certification.
 
 ### Communications
 
-29. **A reply clears attention.** *No.* Only operator triage resolves an attention item.
-30. **A named provider is in use because a canonical document mentions it.** *No.* Verify the
+30. **A reply clears attention.** *No.* Only operator triage resolves an attention item.
+31. **A named provider is in use because a canonical document mentions it.** *No.* Verify the
     configured provider.
+
+### Configuration, Forms, Coverage
+
+32. **`entity_layouts` is append-only.** *No.* Drafts update/delete and published layout rows may
+    update in place. Do not republish-only as a universal rule.
+33. **Schema support implies builder, UI, publication, or runtime support.** *No.* Forms (and similar
+    authoring) have five distinct layers — verify each independently.
+34. **Forms/Documents versioning is a fifth shared configuration lifecycle.** *No.* Director: keep
+    four shared families; Forms and Documents versioning remain domain-owned unless separately
+    ratified.
+35. **Coverage never counts toward any staffing arithmetic**, or **Coverage, Assignment, Availability,
+    Presence and Projection are one staffing state.** *No.* The time-aware projection composes
+    Coverage for planned place; legacy whole-day `buildStaffSupply` does not read Coverage rows; the
+    five nouns stay separate.
+
+### Documents and Tours
+
+36. **`documents-and-forms.md` is security authority.** *No.* It is module/product narrative.
+    Document access, storage, filing and requirements security live in
+    `document-security-model.md`.
+37. **D6 hosted ZERO_RESIDUE is closed because D6 is implemented.** *No.* Requirements are
+    implemented with a certification record; the hosted residue section remains unfinished debt.
+38. **Hosted Forms builder→publish→public-submit proof exists because unit schema tests pass.** *No.*
+    Slice 5 retains an explicit hosted Forms behavioral certification gap.
+39. **Tours needs its own Vacilando context lane.** *No.* Director D-02 assigns Enrollment /
+    Placement as provisional primary; Communications and Configuration are secondary.
+40. **Marketing consent is an Enrollment form field or Enrollment-owned preference truth.** *No.*
+    Consent preference and canonical send enqueue belong to Communications.
+41. **Operating Calendar is a Tours-owned table.** *No.* Tours consumes Operating Calendar
+    closures; authoring belongs to Attendance / Operational Intelligence.
 
 ### Verification method
 
-31. **`max_version` proves a specific migration applied.** *No.* Verify **per version** — a ledger
+42. **`max_version` proves a specific migration applied.** *No.* Verify **per version** — a ledger
     high-water mark can sit past your migration because another lane's work applied.
-32. **A merged pull request means the database changed.** *No.* Merging does not apply migrations.
-33. **An all-zero census means nothing exists.** *No.* It may mean a wrong identifier or a query
+43. **A merged pull request means the database changed.** *No.* Merging does not apply migrations.
+44. **An all-zero census means nothing exists.** *No.* It may mean a wrong identifier or a query
     against the wrong layer.
-34. **A passing source-level guard proves reachability.** *No.* Source guards prove a string is
+45. **A passing source-level guard proves reachability.** *No.* Source guards prove a string is
     present. Render the surface and confirm it fails when the behaviour is removed.
-35. **A stub-based test proves the real implementation is intact.** *No.* A stub proves the caller
+46. **A stub-based test proves the real implementation is intact.** *No.* A stub proves the caller
     asked.
-36. **The filesystem path matches the URL.** *No.* `/organization/*` and `/settings/*` are rewritten
+47. **The filesystem path matches the URL.** *No.* `/organization/*` and `/settings/*` are rewritten
     onto `web/app/adminV2/**`. Searching for `web/app/organization` finds nothing.
-37. **The configuration control plane is `/admin/settings`.** *No.* That redirects. `/organization` is
+48. **The configuration control plane is `/admin/settings`.** *No.* That redirects. `/organization` is
     the configuration landing, while `/admin/*` remains canonical for non-settings modules.
 
 ---

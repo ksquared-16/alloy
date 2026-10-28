@@ -1,14 +1,14 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-10-26
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
 # Document security model
 
-**Status:** canonical owner for document access, storage, ingestion, identity, type-policy and filing security (Documents V1, D1a–D5).
-**Last reviewed:** 2026-10-26, at staging `d18d4e524` plus the D5 candidate.
+**Status:** canonical owner for document access, storage, ingestion, identity, type-policy, filing and requirements security (Documents V1, D1a–D6).
+**Last reviewed:** 2026-10-27, against staging `1492a2dd9` (D1a–D5 hosted-certified; D6 requirements implemented with certification record).
 **Higher authority:** the code and migrations named below. Where this prose disagrees with them, they win.
 
 ## 1. The one door
@@ -237,6 +237,37 @@ Record: `certification/documents-v1/D5-PROCESSING-FILING.md`.
   refused (`ALREADY_FILED`); the database refuses a new owner for an owned document.
 - **Service role only:** the filing functions are revoked from every client role.
 
+## 7c. Document requirements, waivers and readiness (D6)
+
+Migration `supabase/migrations/20261212090000_documents_d6_requirements.sql`. Service
+`web/lib/documents/requirements/documentRequirementService.ts`. Record: `certification/documents-v1/D6-DOCUMENT-REQUIREMENTS.md`.
+
+- **Evaluation is system-level; disclosure is per actor.** Whether a requirement is met never depends on who asks. Every
+  result an actor receives (readiness, work rows, counts) is disclosed in this order: organization (every read is
+  org-bound) → subject scope (the same document-scope predicate as §1; children, households and adults need an
+  unrestricted scope, fail closed) → requirement clearance (a requirement whose type carries a sensitive class —
+  medical, safeguarding, personal identity, restricted — is shown only to an actor cleared for that class, so its state
+  is never a side channel) → evidence (a document id is listed only if the actor may read that document; quarantined
+  evidence is never listed by id).
+- **Configuration:** `processing.documents.manage` writes; `documents.read` reads. Tables and functions are service-role
+  only; versions are immutable once published; publication and validation only through their functions.
+- **Waivers:** `processing.documents.manage`, the subject readable in the actor's document scope (404 otherwise, as
+  absent), clearance for the requirement's class (403 `SENSITIVE_REQUIREMENT`). The database refuses a non-waivable
+  policy, the wrong grain, a subject outside the organization, a missing reason and a second active waiver; a waiver
+  changes only through grant/revoke and is never deleted. `document_requirement_waiver_granted` / `_revoked` are
+  recorded before the database decides. A waiver grants no document access and cannot release a quarantine.
+- **Review:** `POST /api/admin/documents/[id]/review` needs `documents.write` and the full access decision (so a
+  quarantined document cannot be reviewed); only the current version; a rejection needs a reason;
+  `document_version_reviewed` is recorded first.
+- **Audit:** `document_requirement_changed` (create, draft, publish, archive, delete, purge_fixture) before the change.
+- **History is kept.** A published or waived requirement is archived, never deleted. The single exception is a governed
+  QA run's own fixture: in a registered QA organization (QA Shared / QA Secondary — never Firefly or a tenant), an
+  ARCHIVED requirement whose key is in the named run's namespace (`qa_<run>_…` for `?qa_run_id=qar_<run>`) is purged
+  with its versions and waivers by the audited requirement DELETE (`document_requirement_purge(org, id, qa_run_id)`,
+  service role, re-checks every bound; a refusal changes nothing). The guards honour the purge only inside that
+  function (its owner), never a session that sets the purge setting itself. So a governed hosted certification can
+  end ZERO_RESIDUE. The zero-residue census checks it (`doc_zr_d6_*`).
+
 ## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.
@@ -247,3 +278,4 @@ Record: `certification/documents-v1/D5-PROCESSING-FILING.md`.
 - **D3:** `certification/documents-v1/D3-DOCUMENT-STUDIO.md`; database invariants `certification/invariants/documents-d3-studio-configuration.sql`.
 - **D4:** `certification/documents-v1/D4-FOCUS-PANEL-LIBRARY.md`.
 - **D5:** `certification/documents-v1/D5-PROCESSING-FILING.md`; database invariants `certification/invariants/documents-d5-filing.sql`.
+- **D6:** `certification/documents-v1/D6-DOCUMENT-REQUIREMENTS.md`; database invariants `certification/invariants/documents-d6-requirements.sql`.

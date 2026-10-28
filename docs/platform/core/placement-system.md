@@ -1,135 +1,162 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-10
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
 # Placement system
 
-**Status:** Canonical foundation (June 2026). Defines ownership boundaries for School → Program → Room → Schedule before scheduling/attendance runtime.
+**Status:** Canonical. Owns child placement / enrollment-agreement boundaries for the Enrollment /
+Placement context lane (including provisional Tours booking routing — Director D-02).
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** Where this doc frames a dedicated **`child_placements` / `schedule_assignments`** runtime as "future," that framing is stale: the effective-dated committed foundation (`child_enrollment_agreements` → `child_placements` → `schedule_assignments`, with supersede-not-patch and provenance FKs) is **built** and is the canonical **L2 Operational Intent** layer — see the "Enrollment proposal vs operational contract" table below and [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) §1/§3. The OCM-column MVP storage remains the *enrollment proposal*; the committed placement/schedule tables own operational truth after the approve handoff.
+> **Recertification note (2026-10-27, Slice 3A).** Earlier drafts framed `child_placements` /
+> `schedule_assignments` as "future" and described an OCM-column MVP plus `approve_enrollment`
+> handoff as the only path. The committed trio is **built**. The canonical enrollment materialization
+> path is process-instance driven. This document is the DIRECT owner for the `enrollment-placement`
+> Vacilando lane — keep Tours, Medical, and Financials as **boundary pointers**, not duplicated
+> authority.
 
 ---
 
 ## Definition
 
-**Placement** is the domain concept connecting a child to physical and programmatic assignment over time:
+**Placement** connects a child to physical and programmatic assignment over time:
 
-- **School / site** — campus or center (`locations` row, `location_type = site`)
+- **School / site** — campus (`locations`, `location_type = site`)
 - **Program / category** — location-owned offering (`location_program_categories`)
-- **Room / unit** — classroom under site (`locations` row, `location_type = unit`, `parent_location_id` = site)
-- **Schedule pattern** — interim: org option set; future: location-scoped offerings
-- **Effective dates & status** — future: `placements` / `child_placements` table
+- **Room / unit** — classroom under site (`locations`, `location_type = unit`)
+- **Schedule pattern** — schedule assignment on an agreement (effective-dated)
+- **Effective dates & status** — on `child_placements` / `schedule_assignments` / agreements
 
-Placement is **not** a loose set of custom fields. School, Program, and Room form a **cascade** with shared semantics across Fields, layouts, drawer, intake, and waitlist.
+Placement is **not** a loose set of custom fields. School, Program, and Room form a **cascade**
+with shared semantics across Fields, layouts, Focus Panel, intake, and waitlist.
+
+---
+
+## Three layers (must not be collapsed)
+
+| Layer | Storage | Role | Writer |
+|---|---|---|---|
+| **1. Waitlist candidate** | `placement_candidates` (+ overrides / link groups) | Ranked intent while waiting; statuses `active` / `paused` / `withdrawn` / `placed` | Waitlist outcomes / candidate services |
+| **2. Proposed assignment** | `schedule_assignments` with `commitment_kind='proposed'` (no agreement); optional `enrollment_pricing_terms` | Operator-proposed schedule/pricing before commit; promoted by `assignment.promote_proposed` | Assignments / enrollment pricing services |
+| **3. Committed trio** | `child_enrollment_agreements` → `child_placements` → `schedule_assignments` (`committed`) | Operational truth after materialization; supersede-not-patch | Materialization / placement / schedule services |
+
+Agreement lifecycle statuses include `pending_start`, `active`, `ending`, `ended`, `canceled`,
+`voided`. Operator edits after commit **supersede** (close prior row, open successor) — they do not
+in-place patch operational facts.
+
+---
+
+## Enrollment journey (operator spine — do not restate BP ownership)
+
+Family stages: `lead` → `tour` → `decision` → `closed`. Child stages: `waitlist` → `enrolling` →
+`enrolled` / `closed_withdrawn`. Per-child decisions (`enrollment.decide`) move one child at a time.
+Stage vocabulary and outcome execution are owned by Business Process / Status docs; this document
+owns placement and agreement consequences.
+
+**Decision / Offer:** There is **no** separate offer entity. "Offer Spot" is the Waitlist outcome
+`spot_offered` (template `waitlist_to_enrolling`) moving the child into Enrolling. Candidate status
+`placed` is config-driven via outcome targets — not automatic on materialization.
+
+---
+
+## Materialization paths (V1 vs legacy)
+
+| Path | Trigger | Facts from | Gate |
+|---|---|---|---|
+| **Canonical (V1)** | Child outcome disposition `enrolled` → `materializeEnrollmentFromProcessInstance` → `applyChildEnrollmentMaterialization` | `process_instance.metadata` → `placement_candidates` → opportunity defaults | `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED` (default **OFF**; org may override via feature flags). Failures surface as `degradedEffects` — non-blocking |
+| **Legacy** | `approve_enrollment` / `enroll_child` alias → `enrollmentAgreementHandoff` | OCM enrollment proposal columns | Compatibility; OCM fallback also gated by `ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK` |
+
+Hosted flag state is **environment evidence**, not something this doc asserts as always-on.
 
 ---
 
 ## Ownership boundaries
 
-| Concept | Owner | Storage (MVP) | Authority |
-|---------|-------|---------------|-----------|
-| **Family / Lead** | Opportunity | `opportunities.location_id` | Family **default preferred school** for intake. Not child placement authority. |
-| **Child** | OCM (`inquiry_child`) | `opportunity_customer_members.location_id` | **Child-level school/site** during enrollment. Supports multi-child families at different schools. |
-| **Placement** | Conceptual runtime | OCM columns (short-term) | School → Program → Room → Schedule cascade per child. |
-| **Enrollment** | Lifecycle / BP | `outcome_status_key`, stage requirements | Process state. References placement needs; **not** long-term placement history SoT. |
+| Concept | Owner | Storage | Authority |
+|---------|-------|---------|-----------|
+| **Family / Lead** | Opportunity | `opportunities.location_id` | Family default preferred school. Not child placement authority. |
+| **Child site (pre-commit)** | OCM / participation | `opportunity_customer_members.location_id` | Child-level site during enrollment; multi-child families may differ |
+| **Child enrollment status** | OCM / participation | `opportunity_customer_members.outcome_status_key` (+ `close_reason_key`) | Durable per-child Enrollment **status** |
+| **Child stage / journey** | Process instance | `process_instances.stage_key` / `state` | Journey position — **not** `OCM.stage_key` |
+| **Committed placement** | This domain | `child_placements` on an agreement | Effective-dated school/program/room |
+| **Committed schedule** | This domain | `schedule_assignments` | Effective-dated schedule; subject-neutral table (`child` \| `staff`) — **this doc owns the child branch** |
 
 ### Rules
 
 1. **Do not** use `opportunities.location_id` as child placement authority for enrollment, capacity, ratio, billing, or attendance.
-2. **Do** resolve child site as `OCM.location_id` with opportunity location as **fallback only** when child site is empty.
+2. **Do** resolve child site as OCM/participation `location_id` with opportunity location as **fallback only** when child site is empty.
 3. **Do not** treat School, Program, and Room as unrelated standalone fields.
 4. **Do not** create module-specific placement duplicates (one cascade, many surfaces).
 
 ---
 
-## Canonical cascade
+## Canonical cascade (proposal fields)
 
 ```
 School/Site  →  Program/Category  →  Room/Unit  →  Schedule
-(location_id)   (desired_program_category_id)   (program_room_cohort_key)   (desired_schedule_type)
-                     ↳ legacy sync: desired_program_type (program category key)
+(location_id)   (program_category_id)            (program_room_cohort_key)   (schedule_type)
 ```
-
-### Location hierarchy
-
-| Role | `locations` shape | Filter |
-|------|-------------------|--------|
-| School / site | `location_type = site` | Lead + child school pickers |
-| Room / unit | `location_type = unit`, `parent_location_id` = site | Room picker; value = `locations.id` |
-| Program filter | Unit `metadata.category` or `location_program_categories` | Program picker scoped by school |
-
-Room cascade resolves program filter key via `desired_program_category_id` when present, with **`desired_program_type` fallback** for legacy rows.
-
----
-
-## Current MVP storage model
 
 | Field | Table.column | Meaning |
 |-------|--------------|---------|
 | Lead school | `opportunities.location_id` | Family default preferred site |
-| Child school | `opportunity_customer_members.location_id` | Child placement site authority |
-| Child program | `opportunity_customer_members.desired_program_category_id` | Canonical program/category FK |
-| Legacy program key | `opportunity_customer_members.desired_program_type` | Synced category key; legacy read path |
-| Child room | `opportunity_customer_members.program_room_cohort_key` | **Unit `locations.id`** (legacy column name) |
-| Schedule interest | `opportunity_customer_members.desired_schedule_type` | **Enrollment schedule proposal** (may be captured before tour; BOS capacity forecasting) |
+| Child school | `opportunity_customer_members.location_id` | Child site during enrollment |
+| Child program | `opportunity_customer_members.program_category_id` | Canonical program/category FK (`desired_program_category_id` / `desired_program_type` were retired/renamed) |
+| Child room | `opportunity_customer_members.program_room_cohort_key` | Unit `locations.id` (legacy column name) |
+| Schedule interest | `opportunity_customer_members.schedule_type` | Enrollment schedule proposal (`desired_schedule_type` renamed) |
 
-### Enrollment proposal vs operational contract (June 2026)
-
-| Layer | Storage | Role |
-|-------|---------|------|
-| Enrollment proposal | OCM columns (`location_id`, `desired_program_type`, `program_room_cohort_key`, `desired_schedule_type`) | Intent during inquiry/enrollment — not committed operational truth |
-| Operational contract | `child_enrollment_agreements` | Per child × site agreement after approve handoff |
-| Committed placement | `child_placements` | Effective-dated physical/program/room assignment on an agreement |
-| Committed schedule | `schedule_assignments` | Effective-dated schedule on an agreement (from latest valid `desired_schedule_type` at handoff) |
-
-Handoff on `approve_enrollment` creates or reuses the agreement and converts the latest valid enrollment proposal into committed placement/schedule rows. Missing schedule patterns produce partial handoff warnings without blocking approval.
-
-**Operator edits (Batch 5):** After handoff, operators change placement or schedule via supersede (new effective-dated row; prior row closed the day before). Agreement lifecycle uses ending / ended / cancel routes — not in-place patches.
+Room cascade resolves program filter via `program_category_id` when present.
 
 ---
 
-- OCM columns act as placement storage before a dedicated placements table.
-- `program_room_cohort_key` column name (value is unit location id).
-- Dual program columns (`desired_program_category_id` + `desired_program_type`).
-- Legacy string cohort keys in waitlist seeds/repair (migrate toward unit UUIDs).
-- No effective-dated placement history yet.
+## Tours booking handoff (provisional — Enrollment lane)
+
+Tours **booking lifecycle** (public calendar request → approve/materialize → operator
+schedule/confirm/cancel/complete/no-show; opportunity tour mirror) routes under this lane
+(Director D-02). **Do not** create a separate Tours context lane.
+
+| Concern | Owner |
+|---|---|
+| Booking / public calendar journey | This lane (`web/lib/tours/**`, `tours.book` / `tours.configure`) |
+| Marketing consent + canonical send | Communications |
+| Availability / public link flags | Configuration (secondary) |
+| Operating Calendar authoring | Attendance / Operational Intelligence — Tours **consumes** closures |
+| Forms intake embedding | Documents / Forms module narrative — not security authority |
+
+A pending public **requested** tour is not yet a booking. Notification failure must not revoke a
+committed booking. Stage-sync follow-up failure similarly must not unwind booking truth.
 
 ---
 
-## Subject scope — this document owns the child branch
+## Medical and consent (boundary only)
 
-`schedule_assignments` is **subject-neutral**: it carries
-`subject_type ∈ {child, staff}` as a CHECK constraint
-(`supabase/migrations/20260725030801_operational_assignment_foundation_v1.sql`). The two grains
-have different shapes — a child assignment names a `customer_members` row and may carry an
-enrollment agreement; a staff assignment names a `persons` row, requires a `site_location_id`,
-forbids an agreement, and must be `committed`.
+Enrollment **does not own** medical storage or marketing-consent preference truth. Health /
+`person_medical_consents` / `person_health_facts` belong to the Health capability model. Marketing
+consent writers belong to Communications. This lane may surface requirements and Focus Panel cards;
+it must not redefine those authorities.
 
-**This document owns the child branch.** The staff branch — presence, supply and roster
-composition — is owned by [`../modules/attendance-system.md`](../modules/attendance-system.md)
-§ Attendance V1. Neither document owns the assignment commitment *object* itself (lifecycle
-states, `commitment_kind`, supersede-not-patch, the type registry); that gets a canonical owner
-when staff traffic exists — see D6 in
-`docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md`.
+---
 
-## Future placement runtime
+## Payer and financial handoff (boundary only)
 
-When scheduling and attendance require moves and history:
+Enrollment owns fee **requirement** applicability (`financial` stage requirement +
+`charge_template_key`), payer binding for enrollment links, and pricing-terms metadata where
+configured. **Financials** owns obligation, collection, refund, and ledger truth. Do not state
+current payment semantics here while the Financials context lane is `PENDING_DISABLED`.
 
-**`placements` / `child_placements`** becomes effective-dated SoT:
+Participant enrollment payment surfaces exist (`/api/public/forms/.../enrollment-payment` and
+related UI) — do not claim "no Pay button / checkout does not exist."
 
-- child/member/person id
-- `school_location_id`
-- program/category id
-- `room_location_id`
-- `schedule_pattern_id`
-- `start_date`, `end_date`
-- `status`, reason/source metadata
+---
 
-Enrollment lifecycle references placement decisions; placement table owns historical truth.
+## Subject scope — child branch of `schedule_assignments`
+
+`schedule_assignments` is **subject-neutral** (`subject_type ∈ {child, staff}`). **This document
+owns the child branch.** Staff presence/roster composition is owned by
+[`../modules/attendance-system.md`](../modules/attendance-system.md). Commitment object mechanics
+(`commitment_kind`, supersede-not-patch) are shared infrastructure.
 
 ---
 
@@ -137,11 +164,11 @@ Enrollment lifecycle references placement decisions; placement table owns histor
 
 | Domain | Reads from | Notes |
 |--------|------------|-------|
-| **Scheduling / attendance** | Future placements table + child site | Not built; do not infer from lead location alone. |
-| **Billing / subsidy** | Person/customer contracts | No lead-location placement coupling today. |
-| **Staffing / ratio / capacity** | Room unit + program category + site | Use child `location_id` and room unit id; forecast facts reserved. |
-| **Waitlist / placement_candidates** | OCM + `placement_candidates` grain | `site_id` from OCM-first resolution; cohort key may be legacy string during transition. |
-| **Queues (OCM enrollment track)** | `OCM.location_id` | Child-grain scopes should prefer OCM site over opportunity site. |
+| **Scheduling / attendance** | Committed placements + schedule assignments | Built; do not infer from lead location alone |
+| **Billing / subsidy** | Person/customer contracts + Financials | No lead-location placement coupling; money authority stays Financials |
+| **Staffing / ratio / capacity** | Room unit + program category + site | Use child site and room unit id |
+| **Waitlist / placement_candidates** | Candidates + OCM proposal fields | Ranking grain = program-category **section** (below) |
+| **Queues (child track)** | `process_instances` first | OCM queue fallback only when explicitly flagged |
 
 ---
 
@@ -202,9 +229,9 @@ ordinal 2. Duplicate ordinals are now prevented rather than resolved.
 is a claim about every row above it. A writer that sets one `pin_ordinal` and leaves the rest alone
 has not expressed the operator's intent; it has recorded a number next to a row.
 
-So the writer obtains the list rather than deriving it. `loadWaitlistSectionOrder` asks the queue
-through `getWorkUnitQueueItems` — the same entry point the work-unit surface calls — and reads the
-positions the projection already stamped. It contains no ordering logic, which is the point: a
+So the writer obtains the list rather than deriving it. `loadWaitlistSectionOrder` asks the
+orchestration path through `composeProvisioningAnswerForRoute` — the same projection the
+work-unit surface uses — and reads the positions already stamped. It contains no ordering logic, which is the point: a
 writer holding its own copy of the ordering rules will eventually disagree with the renderer.
 
 That is not hypothetical. A previous writer renumbered ordinals by breaking ties on `created_at`
@@ -244,7 +271,8 @@ actually changes. "Who put this child here, and why" keeps its original answer.
 - Do not use lead `location_id` as child placement authority.
 - Do not create parallel placement models per module.
 - Do not rename DB columns in foundation pass (`program_room_cohort_key` stays).
-- Do not build scheduling/attendance or full placements table until placement foundation is locked.
+- Do not treat Tours booking, marketing consent, or Financials money movement as Placement-owned.
+- Do not invent a second Tours context lane — Tours booking routes under Enrollment/Placement (D-02).
 
 ---
 

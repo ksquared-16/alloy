@@ -12,6 +12,7 @@ import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOper
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
 import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import { isDocumentRequirementProjectedWorkItem } from "@/lib/workItems/mapDocumentRequirementToWorkItemRow";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
 /*
@@ -45,7 +46,8 @@ export type WorkItemSourceKey =
     | "bos"
     | "recurring"
     | "processing"
-    | "communications";
+    | "communications"
+    | "documents";
 
 export type WorkItemSortKey = "due_date" | "title" | "recently_updated";
 
@@ -135,6 +137,11 @@ export const WORK_ITEM_SOURCE_DEFS: WorkItemSourceDef[] = [
     {
         key: "communications",
         label: "Communications",
+        available: true,
+    },
+    {
+        key: "documents",
+        label: "Documents",
         available: true,
     },
 ];
@@ -243,7 +250,7 @@ export function filterTasksByView(
  * number. The rows stay in the queue and in Open/All Work; they simply stop claiming to be late.
  */
 export function hasAuthoritativeDueCommitment(task: MyTasksTaskRow): boolean {
-    return !isCommunicationsProjectedWorkItem(task) && !isProcessingProjectedWorkItem(task);
+    return !isCommunicationsProjectedWorkItem(task) && !isProcessingProjectedWorkItem(task) && !isDocumentRequirementProjectedWorkItem(task);
 }
 
 export function taskMatchesSource(task: MyTasksTaskRow, source: WorkItemSourceKey): boolean {
@@ -259,6 +266,9 @@ export function taskMatchesSource(task: MyTasksTaskRow, source: WorkItemSourceKe
     }
     if (source === "communications") {
         return Boolean(task.communication_thread_id?.trim()) || src === "communications";
+    }
+    if (source === "documents") {
+        return isDocumentRequirementProjectedWorkItem(task) || src === "documents";
     }
     return false;
 }
@@ -361,6 +371,12 @@ export function resolveWorkItemQueueEmptyState(
             return {
                 message: "No Processing work is assigned to you.",
                 helper: "Processing projections stay unassigned until an operator claims them. Try Unassigned or clear the Mine view.",
+            };
+        }
+        if (source === "documents") {
+            return {
+                message: "No Documents work is assigned to you.",
+                helper: "Missing documents stay unassigned. Try Unassigned or clear the Mine view.",
             };
         }
         if (source === "communications") {

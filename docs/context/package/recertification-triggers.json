@@ -258,7 +258,7 @@
     {
       "trigger_id": "config.publication-chain-first-rows",
       "lane": "configuration",
-      "match": "first rows in configuration_publications or distribution_targets/_runs — the chain moving from built to in use",
+      "match": "first rows in configuration_publications or distribution_targets/_runs \u2014 the chain moving from built to in use",
       "check_type": "census",
       "full_recertification": true,
       "required_guard": "the Configuration certification record's measured counts",
@@ -308,6 +308,42 @@
       "full_recertification": false,
       "required_guard": "web/tests/docs/foundationSynthesisClaims.test.ts",
       "doc_owner": "docs/system/routing-doctrine.md"
+    },
+    {
+      "trigger_id": "documents.access-door-change",
+      "lane": "documents",
+      "match": "a change to web/lib/documents/assertDocumentAccess.ts, documentSensitivity, or capability keys that gate medical/safeguarding/identity/restricted disclosure",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "certification/documents-v1/ and web/tests/documents/",
+      "doc_owner": "docs/platform/governance/document-security-model.md"
+    },
+    {
+      "trigger_id": "documents.filing-or-storage-change",
+      "lane": "documents",
+      "match": "a change to commitDocumentFiling / document_file* RPCs, org_documents storage privileges, or a new upload/storage writer bypassing decideIngestion",
+      "check_type": "source+migration",
+      "full_recertification": true,
+      "required_guard": "certification/documents-v1/ and web/tests/documents/",
+      "doc_owner": "docs/platform/governance/document-security-model.md"
+    },
+    {
+      "trigger_id": "documents.requirements-evaluator-change",
+      "lane": "documents",
+      "match": "a change to document requirement evaluation, waiver paths, or enrollment_requirement_exceptions boundary",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/documents/ and certification/documents-v1/D6-DOCUMENT-REQUIREMENTS.md",
+      "doc_owner": "docs/platform/governance/document-security-model.md"
+    },
+    {
+      "trigger_id": "enrollment.tours-lifecycle-change",
+      "lane": "enrollment-placement",
+      "match": "a change under web/lib/tours/, toursAuthority, public tour calendar/booking routes, or tour booking materialization/handoff",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/tours/",
+      "doc_owner": "docs/platform/core/placement-system.md"
     },
     {
       "trigger_id": "financials.stability-gate",

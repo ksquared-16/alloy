@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
@@ -52,7 +52,7 @@ Organization
 
 ## Business Process (configuration)
 
-**Settings:** `/admin/settings/lifecycle` (UI: **Business Processes**)
+**Settings:** `/organization/processes` (UI: **Business Processes**; legacy `/admin/settings/lifecycle` redirects)
 
 A business process defines:
 
@@ -74,7 +74,7 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
 | `process_model_v1` | Meaning | Publishes with |
 |---|---|---|
 | absent, or `{ kind: "staged_lifecycle" }` | Records move through authored stages. | everything above; `primary_entity: "opportunity"` |
-| `{ kind: "domain_projection", domain: "assignments" \| "billing" }` | The process **reads** another domain's authority (Assignments → Scheduling, Billing → Financials). It has no stages and never persists a synthetic stage. | name, description, `process_model_v1` only — **no** `primary_entity` |
+| `{ kind: "domain_projection", domain: "assignments" \| "billing" }` | The process **reads** another domain's authority (Assignments → Scheduling, Billing → Financials). It has no stages and never persists a synthetic stage. | name, description, `process_model_v1`, and `work_views_v1` whose views each name a registered `projection_key` — **no** `primary_entity` |
 
 - **Absence is the one default.** An authored model the platform cannot read is refused at publish
   (`process_model_unknown`, read from the raw payload) and survives draft saves verbatim — it never
@@ -147,7 +147,7 @@ October 2026 is (Enrollment). A process may instead declare `process_model_v1` (
 
 **Runtime consumption (P6.S2):** Current Work, process-aware stage evaluation, and optional BOS process filters resolve Commands through `projectProcessRuntimeCommands` → `resolveEffectiveBusinessProcessCommands`. **Authoring (P6.S3):** process saves stamp `command_set_v1`; Work Template options gate to process selection. Process Command picker UI remains P6.S4.
 
-**Implementation tables:** `lifecycles`, `business_process_layout_assignments`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
+**Implementation tables:** `business_process_drafts` → `business_process_revisions` (published via `publish_business_process_revision_v1`), with a guarded projection into `departments.metadata` (including lifecycle builder JSON); `business_process_layout_assignments`; stage keys in published config. There is **no** `lifecycles` table.
 
 ### Requirement timing (July 2026)
 
@@ -192,7 +192,7 @@ A **stage** is where operators **work a cohort of records** with shared expected
 
 Stages render as **queue lanes** or **header pills** on the work-unit execution surface — not as separate navigation destinations.
 
-> **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts). Every configured visible Work View **materializes** as its own navigation item (see *Work View runtime materialization* below) — a view may bind a queue lane via `compat_queue_key`, but a view without one still materializes and routes via `?work_view=<id>`. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
+> **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts). Every configured visible Work View **materializes** as its own navigation item (see *Work View runtime materialization* below) and routes to `/workspace/work-unit/:viewSlug` (slug from the published label via `workViewRouteKeyFromLabel`). There is **no** lane-slug branch and **no** `?work_view=` query routing for nav (`buildOperatorLifecycleLanding`). Deep links may carry `work_view_id` for kernel Focus selection. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
 
 ### Work View conditions — operational predicate builder (V3)
 
@@ -243,18 +243,16 @@ opens its own work view, evaluates its own predicates, and shows its own count. 
   to the single view that happened to bind a queue lane — the prior bug, where views lacking a
   `compat_queue_key` (or whose key didn't match a `queue_definition` lane) were silently dropped and the
   rail fell back to the one default "New Leads" lane.
-- **Stable per-view route.** A view that binds a pipeline queue lane keeps its canonical lane-slug route
-  (`/workspace/work-unit/:laneSlug`). A view without a bound lane routes to the host work unit with
-  `?work_view=<id>` (a supported route param) — the runtime selects it (`resolveActiveWorkViewRuntimeContext`
-  resolves by id), evaluates its predicates, and counts its rows via the predicate-filtered queue route.
-  The legacy New Leads lane route remains the compatibility default.
-- **Focus Panel is unaffected.** `/workspace/work-unit/:slug/:recordId` opens the record by id regardless
-  of the active Work View (the query string is not part of the record-id path).
-- **Stage roll-up (next modeling cleanup, not solved here).** Stage should be treated as an operational
-  **bucket / roll-up over statuses and work**, and Work Views should consume stages as configured
-  process-stage buckets. The queue/header **pill row** on the Work Unit page is still queue-backed (it
-  filters/relabels existing `queue_definition` lanes); converting it to render every configured Work View
-  with its own predicate-derived count is the follow-up, tracked with the Stage roll-up modeling.
+- **Stable per-view route.** Every visible Work View gets `/workspace/work-unit/:viewSlug`. The runtime
+  selects the active view from the published set (`resolveActiveWorkViewRuntimeContext`), evaluates its
+  predicates, and counts its rows via the predicate-filtered projection — **not** by collapsing to a
+  single lane-bound default.
+- **Focus Panel is unaffected.** Record focus uses `?subject_id=` on the work-unit route (legacy
+  `/workspace/work-unit/:slug/:recordId` path form is retired). Durable-record Focus entries for
+  Assignments/Billing use `/workspace/record/...` — see architecture § Operator plane.
+- **Header pills are Work-View-driven.** The Work Unit pill row comes from the snapshot `lensSet`
+  (`workUnitSurfaceModelFromSnapshot`) — configured Work Views with predicate-derived counts — not from
+  filtering `queue_definition` lanes.
 
 ### Work View draft vs published labels
 
@@ -273,11 +271,10 @@ Panel.
 - **One resolver for count and rows.** A Work View's count is the predicate-filtered count over the
   all-records base — **never** a `queue_definition` lane-membership summary. So process card "records",
   "All Leads", Work View counts, and queue rows agree (All Leads = total; each view's count = its rows).
-- **Stage is persisted process state.** `opportunities.stage_key` / `OCM.stage_key` hold the
-  record's stage, written by outcome execution and intake only (Enrollment Alignment sprint —
-  previously stage was derived from `status_definitions.metadata.process_stage_key` roll-ups,
-  which required `enrichRowsWithDerivedStage` and drifted). The projection reads the column;
-  Stage Work View predicates (New Leads = stage "lead") match directly.
+- **Stage is persisted process state.** Family/case grain: `opportunities.stage_key`. Child grain:
+  `process_instances.stage_key` (the OCM/`participation` `stage_key` mirror write was removed —
+  see `status-and-state-system.md`). Written by outcome execution and intake only. The projection
+  reads those columns; Stage Work View predicates match directly.
 - **Analytics is not operational truth.** Window/aggregate metrics (e.g. "leads created in 30 days") are
   analytics — they may differ in scope and must be labeled as such. A KPI tile **never** renders a value
   beside a "No data" indicator (`oipDisplayValueIsPresent` guard).
@@ -295,11 +292,13 @@ placements), not free-form buttons. **Status transitions are validated server-si
 **process required info informs eligibility/blockers**: the Action Runtime
 (`web/lib/adminV2/actions/`) resolves available transitions from `status_definitions`,
 enforces `status_transition_rules`, and returns required inputs/blockers before any
-mutation. **That enforcement is real but path-scoped:** it covers the Action/Command runtime,
-not every durable-status write. Outcome execution and the direct status PATCH bypass the gate
-today — see `status-and-state-system.md` § The transition-policy gate does not yet cover every
-write path. Config controls which actions appear and their copy; code owns the executable
-semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract.
+mutation. **That enforcement is real and path-scoped:** Action/Command runtime and
+`executeEnrollmentStatusTransition` go through the gate; durable lifecycle fields are **not**
+writable on the record PATCH route (refused — see next section). Stage-outcome rule status writes
+follow their own executor path; do not claim every status write is ungated, and do not claim a
+universal gate covers every writer. Config controls which actions appear and their copy; code owns
+the executable semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract and
+`status-and-state-system.md` § One transition-policy gate.
 
 ### Governed lifecycle state is not writable through the record route
 
@@ -359,17 +358,21 @@ registered-action route, so the BPS never gains a parallel mutation path. See
 
 ### Stage grain
 
-Each stage declares a **grain** — the entity type that queue rows represent.
+Each **staged-lifecycle** stage declares a **grain** (`StageGrain`: `family` | `child` | `person` |
+`account` | `work_item`) — the entity type that queue rows represent.
 
 | Example stage | Grain |
 |---|---|
-| Enrollment Intake | family |
-| Waitlist | child |
-| Attendance | child |
-| Billing | household |
-| Family Summary | household |
+| Enrollment Intake / Lead | family (case) |
+| Waitlist / Enrolling | child |
+| Family Summary | family |
 
-Grain is a stage-level declaration, not a work-unit default. A single business process can contain stages at different grains. Queues built for a stage use the stage's grain.
+**Domain-projection processes have no stages.** Assignments and Billing Work Views project durable
+subjects (child/staff person; household) via registered `projection_key`s — that subject grain is
+not a `StageGrain` and must not be read as staged-lifecycle configuration.
+
+Grain is a stage-level declaration, not a work-unit default. A single staged process can contain
+stages at different grains. Queues built for a stage use the stage's grain.
 
 ### Stage-action relationship and evaluation states
 
@@ -434,20 +437,20 @@ Stage work surfaced in **Current Work** is the authoritative Business Process ex
 
 - **Shared identity:** `work_id` ≡ `operational_tasks.id` across What’s Next and Workspace Work Items.
 
-**Source authority (measured 2026-09-29).** Work Items composes four sources, and only one of them
-persists new rows:
+**Source authority (remeasured 2026-10-27).** Work Items composes **five** kinds
+(`workItemDetailModel.ts`). Persistence differs:
 
 | Source | Authority | Persists `operational_tasks`? |
 |---|---|---|
-| Manual | the task itself | **Yes** — manual items are the persisted case |
-| Business Process | stage work runtime + outcome execution | No |
-| Processing | the Processing case | No |
-| Communications | the communication thread | No |
+| Manual | the task itself | **Yes** — manual items are minted as `operational_tasks` |
+| Business Process | stage work runtime + outcome execution | **Yes** — stage work is persisted by the BP runtime (`isBusinessProcessStageWorkTaskRow`); Work Items does **not** mint a second copy |
+| Processing | the Processing case | No — projected |
+| Communications | the communication thread | No — projected |
+| Documents | Documents requirement / readiness projection | No — projected; never writes `operational_tasks` |
 
-The three projected sources surface authoritative domain work where it already lives. They do **not**
-mint duplicate `operational_tasks` rows, and the operational projection writes nothing at all — so a
-Work Items row appearing for a projected source is never a second copy of that work. Completion for a
-projected source returns to its own authority (for Business Process work, the outcome path).
+Projected sources surface authoritative domain work where it already lives. They do **not** mint
+duplicate `operational_tasks` rows. Completion for a projected source returns to its own authority
+(for Business Process work, the outcome path).
 - Current Work → Work Items: deep link with same underlying task/work identity.
 - Work Items → Current Work: focus event on the record-scoped work surface.
 - Outcome completion remains on the authoritative BP / Current Work path.

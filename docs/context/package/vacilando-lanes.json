@@ -27,7 +27,7 @@
         "OpenAPI publication parity"
       ],
       "does_not_own": [
-        "the domain semantics behind any endpoint — those belong to the domain lane",
+        "the domain semantics behind any endpoint \u2014 those belong to the domain lane",
         "authentication and session mechanics (identity-access)",
         "outbound partner event delivery, which does not exist"
       ],
@@ -57,7 +57,7 @@
         "that an /api/admin behaviour applies to /api/v1 or the reverse",
         "that a public operation exists because an internal one does",
         "that the generated partner package is a second source of truth",
-        "that Alloy has no partner API — it is versioned and certified"
+        "that Alloy has no partner API \u2014 it is versioned and certified"
       ],
       "evidence": [
         "web/app/api/v1/",
@@ -261,7 +261,7 @@
         "email does not define Person identity"
       ],
       "forbidden": [
-        "that a route with no capability call is ungated — authority may live in a service, handler library, registered action or token boundary",
+        "that a route with no capability call is ungated \u2014 authority may live in a service, handler library, registered action or token boundary",
         "that a table grant with no admitting policy is permissive; absence is not a wildcard",
         "that a capability's name implies its scope"
       ],
@@ -297,16 +297,21 @@
       "display_name": "Enrollment / Placement",
       "status": "certified",
       "domain": "Enrollment / Placement",
-      "purpose": "Placement candidates, enrollment agreements, and where a child is placed.",
+      "purpose": "Placement candidates, enrollment agreements, where a child is placed, and the Enrollment-process tour booking lifecycle (Director D-02 provisional Tours routing).",
       "owns": [
         "the placement candidate lifecycle",
         "enrollment agreements and their site consistency",
-        "placement supersession as a product behaviour"
+        "placement supersession as a product behaviour",
+        "tour booking lifecycle inside the Enrollment process (public calendar request, approve\u2192materialize, operator schedule/confirm/cancel/complete/no-show)",
+        "opportunity tour metadata mirror as a tour-owned consequence (not general CRM write)"
       ],
       "does_not_own": [
         "the temporal mechanics of supersession (operations-temporal)",
         "attendance observation (attendance)",
-        "money (subsidy / commercial / financials)"
+        "money (subsidy / commercial / financials)",
+        "marketing/consent preference truth and canonical send enqueue (communications)",
+        "Operating Calendar / OE ledger authoring (attendance / operational-intelligence) \u2014 Tours only consumes closures",
+        "business-process stage vocabulary authorship (business-process / configuration drafts)"
       ],
       "direct": [
         "docs/platform/core/placement-system.md"
@@ -315,7 +320,9 @@
         "operations-temporal"
       ],
       "reference": [
-        "docs/platform/core/operations-temporal-truth-certification.md"
+        "docs/platform/core/operations-temporal-truth-certification.md",
+        "docs/platform/modules/communications-platform.md",
+        "docs/platform/modules/documents-and-forms.md"
       ],
       "generated": [],
       "planned_only": [],
@@ -325,26 +332,38 @@
       "safe": [
         "a placement allows at most one operational row per agreement",
         "a future-dated placement change closes the present one immediately",
-        "a cancelled row is retained, not deleted"
+        "a cancelled row is retained, not deleted",
+        "a pending public requested tour is not yet a booking",
+        "Approve lead is not the same authority as tours.book",
+        "notification failure must not revoke an already-committed booking"
       ],
       "forbidden": [
-        "that a cross-site move is represented — it is not, deliberately",
+        "that a cross-site move is represented \u2014 it is not, deliberately",
         "that latest row means active row",
-        "that a correction path exists because an edit form does"
+        "that a correction path exists because an edit form does",
+        "that marketing consent is an enrollment form field or Enrollment-owned preference truth",
+        "that Operating Calendar is a Tours-owned table or Enrollment-authored ledger",
+        "that tour stage status alone is the booking source of truth",
+        "that Tours requires its own Vacilando lane (Director D-02: Enrollment is provisional primary)"
       ],
       "evidence": [
         "web/lib/childcareOperational/childPlacementService.ts",
-        "web/tests/access/live/participationOperationalChange.live.test.ts"
+        "web/tests/access/live/participationOperationalChange.live.test.ts",
+        "web/lib/tours/",
+        "web/lib/access/toursAuthority.ts"
       ],
       "triggers": [
         "ops.temporal-table-migration",
-        "enrollment.supersession-change"
+        "enrollment.supersession-change",
+        "enrollment.tours-lifecycle-change"
       ],
       "related": [
         "operations-temporal",
         "staff-scheduling",
         "attendance",
-        "business-process"
+        "business-process",
+        "communications",
+        "configuration"
       ],
       "task_routing_hints": [
         "placement",
@@ -354,7 +373,12 @@
         "room",
         "waitlist",
         "offer",
-        "child placement"
+        "child placement",
+        "tour",
+        "tour booking",
+        "public tour calendar",
+        "tour invitation",
+        "requested tour"
       ]
     },
     {
@@ -369,7 +393,7 @@
         "time-aware staffing projection"
       ],
       "does_not_own": [
-        "attendance observation — schedule is expectation, not observation",
+        "attendance observation \u2014 schedule is expectation, not observation",
         "the temporal mechanics (operations-temporal)",
         "child placement (enrollment-placement)"
       ],
@@ -393,12 +417,16 @@
         "staff primary assignments are overlap-governed only",
         "a staff member may hold a current and a future-dated primary assignment at once",
         "schedule is expectation; Attendance is observation",
-        "staff supply is schedule_assignments with subject_type='staff' — there is no shift model"
+        "Coverage specialises planned place in the time-aware staffing projection",
+        "legacy whole-day buildStaffSupply does not read Coverage allocations",
+        "staff supply is schedule_assignments with subject_type='staff' \u2014 there is no shift model"
       ],
       "forbidden": [
         "that one cardinality rule covers every effective-dated table",
         "that Scheduling is Attendance truth",
-        "that a shift model exists"
+        "that a shift model exists",
+        "that Coverage never participates in any staffing arithmetic",
+        "that Assignment, Coverage, Availability, Presence and Projection are one staffing state"
       ],
       "evidence": [
         "web/lib/operationalAssignments/setPrimaryOperationalAssignment.ts",
@@ -437,7 +465,7 @@
         "the attendance capability pair"
       ],
       "does_not_own": [
-        "expected presence — that is staff-scheduling and enrollment-placement",
+        "expected presence \u2014 that is staff-scheduling and enrollment-placement",
         "billing consequences of attendance (financials, pending)"
       ],
       "direct": [
@@ -498,7 +526,7 @@
         "the fin.subsidy capability family"
       ],
       "does_not_own": [
-        "obligation, reduction, responsibility or payment — subsidy changes none of them",
+        "obligation, reduction, responsibility or payment \u2014 subsidy changes none of them",
         "payment collection mechanics (financials, pending)",
         "pricing (commercial)"
       ],
@@ -516,7 +544,7 @@
         "subsidy suppresses collection and is derived, never stored",
         "only a SUBMITTED claim suppresses",
         "suppression is bounded by the smallest of claimed, expected and outstanding",
-        "there is no mounted HTTP write surface — subsidy is command-dispatched"
+        "there is no mounted HTTP write surface \u2014 subsidy is command-dispatched"
       ],
       "forbidden": [
         "that subsidy is a payment",
@@ -558,7 +586,7 @@
         "revenue categories and accounting configuration"
       ],
       "does_not_own": [
-        "the obligation its pricing produces — Commercial owns intent only",
+        "the obligation its pricing produces \u2014 Commercial owns intent only",
         "payment collection (financials, pending)",
         "subsidy suppression (subsidy)"
       ],
@@ -579,7 +607,7 @@
       "forbidden": [
         "that a quote is an obligation",
         "that Commercial owns the obligation its pricing produces",
-        "that the pricing_* tables describe childcare tuition — they administer the retired Jobs/Booking vertical"
+        "that the pricing_* tables describe childcare tuition \u2014 they administer the retired Jobs/Booking vertical"
       ],
       "evidence": [
         "web/lib/financials/",
@@ -618,7 +646,7 @@
         "Answer production and its consumer surfaces"
       ],
       "does_not_own": [
-        "acting on an answer — an OI reading authorizes nothing",
+        "acting on an answer \u2014 an OI reading authorizes nothing",
         "model-backed reasoning (ai-bos)",
         "the underlying domain facts"
       ],
@@ -637,7 +665,7 @@
       ],
       "safe": [
         "an OI answer is a reading, not an action",
-        "intelligence is not a catch-all for every derived datum — four output families exist and differ by authored versus derived",
+        "intelligence is not a catch-all for every derived datum \u2014 four output families exist and differ by authored versus derived",
         "OI confers no mutation authority"
       ],
       "forbidden": [
@@ -670,6 +698,96 @@
       ]
     },
     {
+      "id": "documents",
+      "display_name": "Documents",
+      "status": "certified",
+      "domain": "Documents",
+      "purpose": "Document access, storage, ingestion, filing and requirements security \u2014 one access door, Processing chooses and Documents files.",
+      "certification_note": "D1a\u2013D5 hosted-certified (ZERO_RESIDUE where recorded). D6 requirements are implemented with a certification record; hosted ZERO_RESIDUE closure for D6 remains open debt \u2014 do not infer it is closed.",
+      "owns": [
+        "document access decision and disclosure (assertDocumentAccess)",
+        "storage privilege revocation, private bucket and signed-URL delivery",
+        "structural ingestion screening and quarantine unreachability",
+        "canonical document identity, versions, subjects and sensitivity",
+        "document categories/types Studio policy and filing (commitDocumentFiling)",
+        "household library disclosure predicates",
+        "document requirements, waivers and readiness evaluation"
+      ],
+      "does_not_own": [
+        "Processing intake/case proposal spine \u2014 Processing never writes document rows/associations",
+        "Enrollment stage exceptions (enrollment_requirement_exceptions)",
+        "Runtime queue/drawer/reveal semantics",
+        "Configuration's four publication lifecycles \u2014 document categories/types are Documents Studio",
+        "capability catalog authorship (identity-access)",
+        "money (financials / subsidy / commercial)"
+      ],
+      "direct": [
+        "docs/platform/governance/document-security-model.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/modules/documents-and-forms.md",
+        "docs/platform/governance/authorization-qa-personas.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/",
+        "certification/documents-v1/"
+      ],
+      "safe": [
+        "one access door: assertDocumentAccess (lists use the same predicates)",
+        "no direct client table/storage access; service-role sits behind the decision",
+        "primary owner alone authorizes; context/library links do not",
+        "Processing chooses; Documents files; processing.operate is never sufficient for filing",
+        "requirement satisfaction is evaluated, never stored; a waiver is not access and not quarantine release",
+        "structural screening is not antivirus; quarantine is unreachable",
+        "code and migrations outrank prose"
+      ],
+      "forbidden": [
+        "that documents-and-forms.md is security authority \u2014 it is module narrative only",
+        "that RLS alone is the document boundary",
+        "that a secondary association or drawer readability grants document read",
+        "that a Studio/config change silently closes public intake",
+        "that a type change reclassifies existing documents downward",
+        "that structural screening proves malware-free or that D1c-2 is current",
+        "that validity/expiration (D7) is enforced",
+        "that D6 hosted ZERO_RESIDUE is closed \u2014 that section remains unfinished debt",
+        "that D1A.md PARTIAL status alone means the domain is uncertified (later D1b/Q1/D2+ records supersede)"
+      ],
+      "evidence": [
+        "web/lib/documents/assertDocumentAccess.ts",
+        "web/lib/documents/library/documentLibrary.ts",
+        "web/lib/documents/filing/",
+        "web/lib/documents/requirements/",
+        "certification/documents-v1/"
+      ],
+      "triggers": [
+        "documents.access-door-change",
+        "documents.filing-or-storage-change",
+        "documents.requirements-evaluator-change"
+      ],
+      "related": [
+        "identity-access",
+        "business-process",
+        "enrollment-placement",
+        "configuration",
+        "runtime"
+      ],
+      "task_routing_hints": [
+        "document",
+        "documents",
+        "filing",
+        "document library",
+        "document requirement",
+        "document waiver",
+        "ingestion",
+        "org_documents",
+        "document sensitivity",
+        "document type"
+      ]
+    },
+    {
       "id": "communications",
       "display_name": "Communications",
       "status": "certified",
@@ -683,7 +801,8 @@
       "does_not_own": [
         "provider delivery state as business truth",
         "attention resolution semantics beyond triage",
-        "identity resolution of inbound senders (identity-access, processing)"
+        "identity resolution of inbound senders (identity-access, processing)",
+        "tour booking lifecycle and public calendar journey (enrollment-placement)"
       ],
       "direct": [
         "docs/platform/modules/communications-platform.md"
@@ -715,7 +834,8 @@
       ],
       "related": [
         "identity-access",
-        "business-process"
+        "business-process",
+        "enrollment-placement"
       ],
       "task_routing_hints": [
         "message",
@@ -727,7 +847,10 @@
         "inbox",
         "provider",
         "delivery",
-        "attention"
+        "attention",
+        "tour coordination",
+        "marketing consent",
+        "tour invitation"
       ]
     },
     {
@@ -738,7 +861,7 @@
       "purpose": "Org-authored intent, and the four distinct lifecycles that publish it.",
       "owns": [
         "the four configuration lifecycles and their asymmetry",
-        "entity layouts and their append-only rule",
+        "entity layouts and their versioned draft/published lifecycle (not append-only)",
         "business process drafts and revisions",
         "the Programs publish-and-distribute chain",
         "the three-stage config_assist separation"
@@ -746,7 +869,8 @@
       "does_not_own": [
         "runtime execution of configuration (runtime)",
         "product URLs (product-urls shared concern)",
-        "what a capability authorizes (identity-access)"
+        "what a capability authorizes (identity-access)",
+        "tour booking effects and public calendar journey (enrollment-placement)"
       ],
       "direct": [
         "docs/platform/governance/configuration-publication-model.md"
@@ -765,12 +889,16 @@
       ],
       "safe": [
         "configuration expresses intent; the runtime owns execution",
-        "entity_layouts is append-only — republish, never edit or delete",
-        "four distinct configuration lifecycles exist, not one",
+        "entity_layouts is versioned draft/published with in-place updates \u2014 not append-only",
+        "four distinct shared configuration lifecycles exist, not one",
+        "Forms and Documents versioning are domain-owned, not a fifth shared lifecycle",
         "the Programs publication chain is built with zero rows"
       ],
       "forbidden": [
-        "that configuration is uniformly versioned — three of the four lifecycles are not",
+        "that configuration is uniformly versioned \u2014 three of the four shared lifecycles are not",
+        "that entity_layouts is append-only",
+        "that Forms/Documents versioning is already a certified fifth shared lifecycle",
+        "that schema support implies builder, UI, publication, or runtime support",
         "that JSON can create or weaken an invariant",
         "that the Programs publication chain is in use",
         "that a config_assist proposal carries mutation authority"
@@ -787,7 +915,8 @@
       "related": [
         "runtime",
         "identity-access",
-        "commercial"
+        "commercial",
+        "enrollment-placement"
       ],
       "task_routing_hints": [
         "settings",
@@ -799,7 +928,10 @@
         "revision",
         "distribute",
         "program catalog",
-        "option set"
+        "option set",
+        "tour availability",
+        "tours.configure",
+        "tour public calendar link"
       ]
     },
     {
@@ -815,7 +947,7 @@
         "BOS command sessions"
       ],
       "does_not_own": [
-        "mutation authority — applying a proposal takes the domain's capability",
+        "mutation authority \u2014 applying a proposal takes the domain's capability",
         "deterministic derivation (operational-intelligence)",
         "autonomous agent behaviour, which does not exist"
       ],
@@ -884,7 +1016,7 @@
         "cardinality mechanisms and their deliberate asymmetry"
       ],
       "does_not_own": [
-        "any domain's product decisions — it owns mechanics only",
+        "any domain's product decisions \u2014 it owns mechanics only",
         "eligibility, authorization or event emission"
       ],
       "direct": [
@@ -901,12 +1033,13 @@
         "effective-dated truth supersedes rather than overwrites",
         "cardinality is NOT uniform: placements and child primary assignments are single-operational; staff is overlap-governed only",
         "no correction path is implemented, deliberately",
-        "the primitive emits no events — the calling service does, after commit"
+        "the primitive emits no events \u2014 the calling service does, after commit"
       ],
       "forbidden": [
         "that one cardinality rule covers every table",
         "that latest row means active row",
-        "that a date makes a record effective-dated — only a bounded interval of asserted truth does"
+        "that a date makes a record effective-dated \u2014 only a bounded interval of asserted truth does",
+        "that secondary replacement and staff primary switches emit schedule_assignment_changed today"
       ],
       "evidence": [
         "web/lib/childcareOperational/participationOperationalChange.ts",
@@ -1008,8 +1141,8 @@
         "(when certified) obligation, collection, refund, reversal and the financial journal"
       ],
       "does_not_own": [
-        "subsidy suppression — certified separately in the subsidy lane",
-        "pricing intent — certified separately in the commercial lane"
+        "subsidy suppression \u2014 certified separately in the subsidy lane",
+        "pricing intent \u2014 certified separately in the commercial lane"
       ],
       "direct": [],
       "shared": [],

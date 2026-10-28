@@ -135,14 +135,19 @@ export const REQUIREMENT_KINDS_AUTHORABLE_V1: readonly RequirementKindV1[] = Obj
      * to be built to satisfy it, which is the test.
      */
     "financial",
+    /*
+     * `document` joined with Documents V1 / D6, on the same terms. Documents is now the canonical owner of document
+     * requirement satisfaction: one evaluator (`documentRequirementEvaluator.ts`) answers missing / pending review /
+     * satisfied / waived / blocked from the documents, their reviewed versions and the Documents-owned waivers. A stage
+     * names the Studio type (`document_type_key`); Business Process READS the Documents answer and never decides it.
+     */
+    "document",
 ]);
 
 /** Why a declared kind cannot yet be authored. Surfaced to operators and to controls. */
 export const REQUIREMENT_KIND_UNSUPPORTED_REASON_V1: Readonly<
-    Record<Exclude<RequirementKindV1, "field" | "form" | "work" | "financial">, string>
+    Record<Exclude<RequirementKindV1, "field" | "form" | "work" | "financial" | "document">, string>
 > = Object.freeze({
-    document:
-        "No canonical document-requirement owner exists. Document evidence is bound to a form submission, so a document required outside a form has no owner that can prove it was satisfied.",
     consent:
         "No canonical consent record exists. A consent is currently only a form control, which cannot carry withdrawal, versioned policy text, or an audit trail.",
     acknowledgment:
@@ -574,7 +579,7 @@ export function refuseUnauthorableRequirement(
     if (!isAuthorableRequirementKind(candidate.ref.kind)) {
         const reason =
             REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
-                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "work" | "financial">
+                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "work" | "financial" | "document">
             ];
         return { code: "unsupported_kind", detail: reason };
     }

@@ -1,12 +1,12 @@
 {
   "schema": "alloy.context-package.v1",
   "package_id": "alloy-context.v1",
-  "schema_version": "1.0.0",
-  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_READY_FINANCIALS_PENDING",
-  "certified_date": "2026-10-01",
-  "source_staging_sha": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+  "schema_version": "1.1.0",
+  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_1_READY_FINANCIALS_PENDING",
+  "certified_date": "2026-10-27",
+  "source_staging_sha": "6376564d37a8157ce9726b4a15be9f9e99e25cc5",
   "benchmark_manifest_version": "V2",
-  "identity_note": "Package identity is (package_id, schema_version), NOT the generation date. Re-generating on a later date without a content change does not produce a new package. Financials certification should yield alloy-context.v1.1 — a compatible revision — unless including it requires a schema change, in which case v2.",
+  "identity_note": "Package identity is (package_id, schema_version), NOT the generation date. v1.1 remains a compatible revision after Slice 5 reconciliation (entity_layouts lifecycle correction, Forms five-layer / Coverage projection / temporal cardinality / Comms attention inferences, Financials gate remasured PENDING-GATE). Content snapshot is the documentation-recert integration branch at generation time; Financials gate measurement uses the named staging tip. Financials lane stays PENDING_DISABLED until the seven-day quiet gate opens and full domain certification passes.",
   "tier1_cap": 5,
   "tier1_cap_note": "Tier 1 is capped at five documents. Raising the cap is a ratified decision, not an editorial one: the validator fails if the foundation set grows without this number changing in the same commit.",
   "certified_domains": [
@@ -23,6 +23,7 @@
     "Operational Intelligence",
     "Communications",
     "Configuration",
+    "Documents",
     "AI / BOS"
   ],
   "pending_domains": [
@@ -30,13 +31,21 @@
       "domain": "Financials / Payments",
       "lane": "financials-payments",
       "status": "PENDING_DISABLED",
-      "reason": "seven-day Payments stability gate",
+      "reason": "seven-day Payments stability gate \u2014 still CLOSED (PENDING-GATE); Payments V1/W7 is implemented on staging but not certified",
       "measured": {
-        "last_semantic_change": "75c1a016c",
-        "date": "2026-09-30",
-        "days_quiet_at_generation": 1,
+        "last_semantic_change": "9e3774e0ef7e89c811b8293ee02804ed04d395ac",
+        "date": "2026-10-21",
+        "last_semantic_change_at": "2026-10-21T11:15:18-07:00",
+        "days_quiet_at_generation": 5.999,
+        "quiet_elapsed_seconds": 518325,
         "required_quiet_days": 7,
-        "path": "web/lib/financials/payments"
+        "path": "web/lib/financials/payments",
+        "measured_at_staging_sha": "6376564d37a8157ce9726b4a15be9f9e99e25cc5",
+        "measured_at": "2026-10-27T18:14:03Z",
+        "commits_in_preceding_seven_days": 6,
+        "earliest_eligibility_if_quiet": "2026-10-28T11:15:18-07:00",
+        "classification": "PENDING-GATE",
+        "gate_open": false
       }
     }
   ],
@@ -44,7 +53,7 @@
     {
       "path": "docs/context/alloy-platform-synthesis.md",
       "role": "the current platform in one document",
-      "authority": "synthesis — owns nothing; every section defers to a domain owner",
+      "authority": "synthesis \u2014 owns nothing; every section defers to a domain owner",
       "why_global": "it is the only document that describes the whole implemented platform at once, so it is what stops a lane-scoped agent reasoning from a partial model",
       "volatility": "static-doctrine",
       "load_mode": "EMBED",
@@ -52,8 +61,8 @@
     },
     {
       "path": "docs/context/alloy-inference-contract.md",
-      "role": "17 safe and 37 forbidden inferences",
-      "authority": "guardrail — binding on every run",
+      "role": "21 safe and 48 forbidden inferences",
+      "authority": "guardrail \u2014 binding on every run",
       "why_global": "the forbidden list is the accumulated record of mistakes actually made against this codebase; without it an agent repeats them",
       "volatility": "static-doctrine",
       "load_mode": "EMBED",
@@ -62,7 +71,7 @@
     {
       "path": "docs/context/alloy-canonical-owner-map.md",
       "role": "one concern, one owner, plus the staleness contract",
-      "authority": "routing authority — decides which document is authority for a concern",
+      "authority": "routing authority \u2014 decides which document is authority for a concern",
       "why_global": "it turns Tier 2 selection into a lookup instead of a guess, and names the deliberate non-owners",
       "volatility": "static-doctrine",
       "load_mode": "EMBED",
@@ -90,7 +99,7 @@
   "lane_packages": {
     "manifest": "docs/context/package/vacilando-lanes.json",
     "schema": "alloy.vacilando-lanes.v1",
-    "certified_lanes": 13,
+    "certified_lanes": 14,
     "pending_lanes": 1
   },
   "shared_context_packages": [
@@ -165,7 +174,7 @@
     "a canonical owner changing for any concern",
     "the benchmark manifest version changing",
     "a new excluded tree",
-    "a document changing volatility class — which happens whenever measured counts are added to static doctrine"
+    "a document changing volatility class \u2014 which happens whenever measured counts are added to static doctrine"
   ],
   "validator": "web/tests/docs/contextPackageValidator.test.ts",
   "distribution": {

@@ -54,7 +54,12 @@ const UNSUPPORTED_KIND_REASON: Record<string, string> = {
      */
     financial:
         "A financial obligation is resolved from canonical Financials — charges, payments and the collectible position — not by anything in a participant packet.",
-    document: "No canonical document-requirement owner exists outside a form submission.",
+    /*
+     * Documents V1 / D6: a document requirement is answered by canonical Documents, overlaid by the resolver
+     * (`projectDocumentRequirementProgress`). Seen here only when that answer could not be read — and then it stays
+     * unsupported, i.e. blocking.
+     */
+    document: "Document requirements are answered by Documents; the answer could not be read.",
     consent: "No canonical consent record exists in the platform.",
     acknowledgment: "No canonical acknowledgment record exists in the platform.",
     signature: "Signature evidence exists only as part of a form submission.",

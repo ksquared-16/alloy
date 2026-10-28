@@ -36,6 +36,8 @@ export type WorkItemDetailPanelProps = {
     onOpenCurrentWork?: () => void;
     onOpenProcessing?: () => void;
     onOpenCommunications?: () => void;
+    /** D6: open the record's Documents card — Documents owns collecting, reviewing and waiving. */
+    onOpenDocuments?: () => void;
 };
 
 const STATE_CHIP: Record<WorkItemDetailState, { label: string; className: string }> = {
@@ -84,6 +86,7 @@ export default function WorkItemDetailPanel({
     onOpenCurrentWork,
     onOpenProcessing,
     onOpenCommunications,
+    onOpenDocuments,
 }: WorkItemDetailPanelProps) {
     const [showActivity, setShowActivity] = useState(false);
 
@@ -165,6 +168,16 @@ export default function WorkItemDetailPanel({
                                 onClick={onOpenCommunications}
                             >
                                 Open conversation
+                            </button>
+                        ) : null}
+                        {model.kind === "documents" && onOpenDocuments ? (
+                            <button
+                                type="button"
+                                className={COMMAND_PRIMARY}
+                                data-work-items-command="open-documents"
+                                onClick={onOpenDocuments}
+                            >
+                                Open record documents
                             </button>
                         ) : null}
                         {model.kind === "processing" && onOpenProcessing ? (

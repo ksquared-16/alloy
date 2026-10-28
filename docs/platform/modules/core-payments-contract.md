@@ -1,17 +1,18 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-20
+last_reviewed: 2026-10-27
 supersedes: []
 ---
 
 # Core Financials → Payments — the contract
 
 **Status:** written at the Thread 11A **Core freeze**. Core Financials feature work is complete and
-mounted-certified; Payments is the next program and this document is its boundary.
+mounted-certified. Payments V1/W7 is **implemented** on staging and **not certified** for AI context
+(see `financials-canonical-authorities.md` §14). This document remains the Core→Payments boundary.
 
 **Purpose:** say exactly what Payments inherits, what it must not rebuild, and where
-provider-specific objects belong — so the next lane extends a foundation instead of growing a second
+provider-specific objects belong — so Payments extends a foundation instead of growing a second
 financial domain beside it.
 
 Read `financials-canonical-authorities.md` first. This document adds only the boundary.
