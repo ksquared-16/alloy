@@ -309,7 +309,7 @@ export function IntakeFooter({
                     disabled={primaryDisabled}
                     aria-busy={primaryBusy}
                     onClick={onPrimary}
-                    className="flex-1 rounded-xl bg-participant-accent py-3.5 text-[14px] font-semibold text-participant-on-accent shadow-[0_2px_10px_rgba(24,39,58,0.18)] transition-colors hover:bg-participant-accent/90 disabled:cursor-not-allowed disabled:bg-alloy-midnight/25 disabled:text-white disabled:shadow-none sm:ml-auto sm:min-w-[10rem] sm:flex-none sm:px-8"
+                    className="flex-1 rounded-xl bg-participant-accent py-3.5 text-[14px] font-semibold text-participant-on-accent shadow-[0_2px_10px_rgba(24,39,58,0.18)] transition-shadow hover:shadow-[0_4px_16px_rgba(24,39,58,0.28)] disabled:cursor-not-allowed disabled:bg-alloy-midnight/25 disabled:text-white disabled:shadow-none sm:ml-auto sm:min-w-[10rem] sm:flex-none sm:px-8"
                 >
                     {primaryLabel}
                 </button>

@@ -35,6 +35,42 @@ export interface RecommendationView {
     source?: { kind: string; hasEmailBinding: boolean; mappedPersonValues: number };
     /** The lead subject's own resolution: reuse the family's open case, or open one. */
     leadPlan?: "reuse" | "create" | null;
+    /** Whether a NEW lead from this case can be placed — the same resolver approval uses (P1-close, D2). */
+    leadPlacement?:
+        | { applies: false }
+        | { applies: true; ok: true }
+        | { applies: true; ok: false; reason: "ambiguous" | "unconfigured"; message: string }
+        | null;
+}
+
+/**
+ * Why approval would be refused before it is attempted, or null. Approval places a new lead through
+ * `resolveCreateLeadPlacement`; when that cannot resolve, "Ready to create" describes the family match
+ * only, and Approve must not be offered as if it would succeed. Reusing an open lead places nothing.
+ */
+export function leadPlacementBlock(view: RecommendationView | null): string | null {
+    const p = view?.leadPlacement;
+    if (!p || !p.applies || p.ok) return null;
+    if (view?.leadPlan === "reuse") return null;
+    return p.message;
+}
+
+/** The blocked state, with what to do about it. Rendered wherever the case offers Approve. */
+export function LeadPlacementBlockedNotice({ message }: { message: string }) {
+    return (
+        <div
+            className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-900"
+            role="status"
+            data-testid="processing-lead-placement-blocked"
+        >
+            <p className="font-semibold">Can&apos;t create the enrollment lead yet</p>
+            <p className="mt-0.5">{message}</p>
+            <p className="mt-0.5 text-amber-900/80">
+                New leads go to the New Lead stage of the organization&apos;s Business Process. An administrator sets that up in
+                Organization › Processes; nothing about this family needs to change.
+            </p>
+        </div>
+    );
 }
 
 /** Map the read-model decision to a stable action key (engine vocabulary, not shown to the operator). */
@@ -95,6 +131,8 @@ export default function ReviewDecideCard({
                     </p>
                 </div>
             ) : view.recommendation ? (
+                <>
+                {leadPlacementBlock(view) ? <div className="mb-2"><LeadPlacementBlockedNotice message={leadPlacementBlock(view)!} /></div> : null}
                 <ReviewBody
                     rec={view.recommendation}
                     intent={view.intent ?? null}
@@ -102,6 +140,7 @@ export default function ReviewDecideCard({
                     compact={compact}
                     planLines={planLines}
                 />
+                </>
             ) : (
                 <div className="text-[12.5px] text-stone-500">No recommendation was produced.</div>
             )}

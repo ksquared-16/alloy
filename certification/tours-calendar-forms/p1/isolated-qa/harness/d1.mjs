@@ -1,0 +1,27 @@
+import { open, OUT, riversideTours } from "./lib.mjs";
+const { browser, page, errors } = await open();
+const log = {};
+await riversideTours(page);
+await page.getByRole("tab", { name: /Booking experience/ }).click().catch(async () => page.getByText("Booking experience").first().click());
+const panel = page.getByTestId("tours-public-brand"); await panel.waitFor({ timeout: 20000 });
+const btnStyle = async () => page.getByTestId("tours-brand-preview-button").evaluate(e => { const s = getComputedStyle(e); return { text: e.innerText, bg: s.backgroundColor, color: s.color }; });
+log.default = { colorPh: await page.getByTestId("tours-brand-accent_color").getAttribute("placeholder"), note: await page.getByTestId("tours-brand-contrast-note").innerText(), btn: await btnStyle() };
+await page.getByTestId("tours-brand-display_name").fill("Riverside QA");
+await page.getByTestId("tours-brand-tour_cta_label").fill("Book a Campus Visit");
+await page.waitForTimeout(500);
+log.livePreview = { heading: await page.getByTestId("tours-brand-preview-heading").innerText(), cta: await page.getByTestId("tours-brand-preview-cta").innerText() };
+await page.getByTestId("tours-brand-accent_color").fill("#FFD400"); await page.waitForTimeout(500);
+log.yellow = { note: await page.getByTestId("tours-brand-contrast-note").innerText(), btn: await btnStyle() };
+await page.screenshot({ path: `${OUT}d-booking-yellow.png`, fullPage: true });
+await page.getByTestId("tours-brand-accent_color").fill(""); await page.waitForTimeout(300);
+const resp = page.waitForResponse(r => r.request().method() !== "GET" && /brand|public/i.test(r.url()), { timeout: 20000 }).catch(() => null);
+await page.getByTestId("tours-brand-save").click();
+const r = await resp; log.save = r ? { status: r.status(), url: r.url().replace(/^https?:\/\/[^/]+/, "") } : "no response seen";
+await page.waitForTimeout(1500);
+const t = await panel.innerText(); log.after = t.replace(/\n+/g, " | ").slice(0, 900);
+// reload to prove persistence
+await riversideTours(page); await page.getByText("Booking experience").first().click(); await page.getByTestId("tours-public-brand").waitFor();
+log.reload = { name: await page.getByTestId("tours-brand-display_name").inputValue(), cta: await page.getByTestId("tours-brand-tour_cta_label").inputValue(), previewCta: await page.getByTestId("tours-brand-preview-cta").innerText() };
+await page.screenshot({ path: `${OUT}d-booking-saved.png`, fullPage: true });
+log.errors = errors.slice(0, 5);
+console.log(JSON.stringify(log, null, 1)); await browser.close();

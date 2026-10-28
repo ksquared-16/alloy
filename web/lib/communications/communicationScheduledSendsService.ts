@@ -734,6 +734,11 @@ export async function processDueCommunicationScheduledSends(params: {
                             error: exec.error,
                             http_status: exec.status,
                             code: exec.code ?? null,
+                            // An intentional refusal (e.g. recipient_suppressed) is final, not a transient fault:
+                            // nothing retries it, and re-pending it by edit re-runs the eligibility gate.
+                            ...(exec.outcome === "blocked"
+                                ? { outcome: "blocked", reason: exec.reason ?? null, blocked_communication_message_id: exec.blocked_communication_message_id ?? null }
+                                : {}),
                         },
                     }),
                 })

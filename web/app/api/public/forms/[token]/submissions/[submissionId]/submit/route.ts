@@ -58,6 +58,7 @@ import {
     buildIntakeMarketingConsentRecord,
     parsePublicMarketingConsentChoice,
     type IntakeMarketingConsentRecord,
+    withoutCompetingMarketingConsentFields,
 } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 
 const UUID_RE =
@@ -238,11 +239,26 @@ export async function POST(
         }
         throw e;
     }
+    // Where this link offers the marketing-consent control, it is the one consent answer: the form's own
+    // "Email opt-in" / "SMS opt-in" person fields are not shown, not required and not stored (P1-close, D5).
+    const competingConsentFieldIds = new Set<string>();
+    if (marketingConsent) {
+        const before = new Set(collectFieldIds(schema.fields));
+        schema = withoutCompetingMarketingConsentFields(schema);
+        const after = new Set(collectFieldIds(schema.fields));
+        for (const id of before) if (!after.has(id)) competingConsentFieldIds.add(id);
+    }
 
     let payloadToValidate: Record<string, unknown> =
         body.payload !== undefined && typeof body.payload === "object" && !Array.isArray(body.payload)
             ? (body.payload as Record<string, unknown>)
             : (sub.payload as Record<string, unknown>);
+
+    if (competingConsentFieldIds.size) {
+        const values = { ...((payloadToValidate.values ?? {}) as Record<string, unknown>) };
+        for (const id of competingConsentFieldIds) delete values[id];
+        payloadToValidate = { ...payloadToValidate, values };
+    }
 
     if (ctx.packet) {
         payloadToValidate = {
@@ -708,4 +724,8 @@ export async function POST(
         // Received, not booked: the family's screen says exactly this.
         ...(requestedTour ? { tour_request: { state: requestedTour.state } } : {}),
     });
+}
+
+function collectFieldIds(fields: { id: string; fields?: unknown }[]): string[] {
+    return fields.flatMap((f) => [f.id, ...(Array.isArray(f.fields) ? collectFieldIds(f.fields as { id: string; fields?: unknown }[]) : [])]);
 }

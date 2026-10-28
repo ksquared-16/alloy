@@ -1,0 +1,117 @@
+{
+  "trusted_host_action_id": "tha_e97fa8b562b11b",
+  "query_hash": "2eab0e41ba26259f39827303ac919c79919ffc4cbc7f7d5783a28518bdb8ea46",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-27T15:27:03.148Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e97fa8b562b11b",
+    "query_hash": "2eab0e41ba26259f39827303ac919c79919ffc4cbc7f7d5783a28518bdb8ea46",
+    "authorization_id": "grnt_9d2b5059836f4f3c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-27T15:27:05.975Z",
+    "question_ids": [
+      "p1_tour_rules"
+    ],
+    "questions": {
+      "p1_tour_rules": {
+        "question_id": "p1_tour_rules",
+        "row_count": null,
+        "rows": [
+          {
+            "groups": [
+              {
+                "scope": "location",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "end_time": "12:00:00",
+                "is_active": true,
+                "rule_rows": 1,
+                "start_time": "10:00:00",
+                "day_of_week": 1,
+                "location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "schedule_id": null,
+                "schedule_name": null,
+                "location_label": "South Campus",
+                "approval_required": false,
+                "max_bookings_per_slot": 1,
+                "slot_duration_minutes": 30
+              },
+              {
+                "scope": "location",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "end_time": "12:00:00",
+                "is_active": true,
+                "rule_rows": 1,
+                "start_time": "09:00:00",
+                "day_of_week": 3,
+                "location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+                "schedule_id": null,
+                "schedule_name": null,
+                "location_label": "West Campus",
+                "approval_required": true,
+                "max_bookings_per_slot": 1,
+                "slot_duration_minutes": 20
+              },
+              {
+                "scope": "organization",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "end_time": "12:00:00",
+                "is_active": true,
+                "rule_rows": 2,
+                "start_time": "09:00:00",
+                "day_of_week": 1,
+                "location_id": null,
+                "schedule_id": null,
+                "schedule_name": null,
+                "location_label": null,
+                "approval_required": false,
+                "max_bookings_per_slot": 1,
+                "slot_duration_minutes": 45
+              },
+              {
+                "scope": "organization",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "end_time": "12:00:00",
+                "is_active": true,
+                "rule_rows": 1,
+                "start_time": "09:00:00",
+                "day_of_week": 3,
+                "location_id": null,
+                "schedule_id": null,
+                "schedule_name": null,
+                "location_label": null,
+                "approval_required": false,
+                "max_bookings_per_slot": 1,
+                "slot_duration_minutes": 45
+              },
+              {
+                "scope": "organization",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "end_time": "12:00:00",
+                "is_active": true,
+                "rule_rows": 1,
+                "start_time": "09:00:00",
+                "day_of_week": 5,
+                "location_id": null,
+                "schedule_id": null,
+                "schedule_name": null,
+                "location_label": null,
+                "approval_required": false,
+                "max_bookings_per_slot": 1,
+                "slot_duration_minutes": 45
+              }
+            ],
+            "rules_total": 6
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

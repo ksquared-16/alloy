@@ -1,0 +1,18 @@
+import { open, OUT, TOUR, fillStep2 } from "./lib.mjs";
+const { browser, page } = await open({ auth: false });
+const posts = [];
+page.on("response", async (r) => { if (r.request().method() === "POST") posts.push(`${r.status()} ${r.url().replace(/^https?:\/\/[^/]+/, "").replace(/[A-Za-z0-9_-]{30,}/g, "<tok>")}`); });
+await page.goto(TOUR, { waitUntil: "networkidle", timeout: 90000 });
+await page.getByTestId("public-tour-times").getByRole("button").first().click();
+await page.getByRole("button", { name: /Continue/ }).first().click(); await page.waitForTimeout(3500);
+const geo = async (i) => page.locator('input[type="text"]').nth(i).boundingBox();
+const g0 = await geo(0), g1 = await geo(1);
+console.log("first/last", JSON.stringify([g0 && [Math.round(g0.x), Math.round(g0.y), Math.round(g0.width)], g1 && [Math.round(g1.x), Math.round(g1.y), Math.round(g1.width)]]));
+await fillStep2(page, { email: "qa+enrtour1@example.invalid" });
+await page.getByTestId("public-marketing-consent-email").check();
+await page.screenshot({ path: `${OUT}f3-filled.png`, fullPage: true });
+await page.getByRole("button", { name: /^Submit$/ }).click(); await page.waitForTimeout(6000);
+console.log("POSTS", JSON.stringify(posts));
+console.log((await page.locator("body").innerText()).replace(/\n+/g, " | ").slice(0, 800));
+await page.screenshot({ path: `${OUT}f3-received.png`, fullPage: true });
+await browser.close();

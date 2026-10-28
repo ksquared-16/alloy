@@ -1,0 +1,9 @@
+{
+  "action_key": "environment.restore_preview_qa_session",
+  "reason_worker_cannot_execute": "Minting a QA browser session uses the isolated environment service boundary; only the trusted host may do it.",
+  "purpose": "Operator browser session on the isolated final-checkpoint candidate preview",
+  "inputs": {
+    "target": "alloy.candidate.enrollment",
+    "candidateSha": "af0e490822020f10713de1645ac827161c9d619a"
+  }
+}

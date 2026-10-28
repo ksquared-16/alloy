@@ -20,8 +20,11 @@
  *
  * ## Painting it
  *
- * `participantBrandStyle` sets `--participant-accent`, `--participant-on-accent` and
- * `--participant-accent-ink` on the shell. `globals.css` maps them to colour utilities with
+ * `participantBrandStyle` sets `--participant-brand` (the authored colour, untouched),
+ * `--participant-accent` (the solid an action is painted in), `--participant-on-accent` and
+ * `--participant-accent-ink` on the shell. The solid and its text are one pair from
+ * `brandButtonColors` (P1-B): a mid-tone brand is deepened in its own hue so white text holds,
+ * a light brand keeps its fill under a deep shade of its own hue — never a free-floating black. `globals.css` maps them to colour utilities with
  * `@theme inline`, so every accent surface inside the shell reads the tenant's colour. Text ON the
  * accent and the accent AS text on white both hold WCAG AA 4.5:1 (S4-D) — chosen automatically, so a
  * light accent gets dark text and a pale accent's links are a darker shade of the same hue.
@@ -37,7 +40,7 @@ import {
     BRAND_INK_DARK,
     BRAND_INK_LIGHT,
     brandAccentInk,
-    brandOnAccent,
+    brandButtonColors,
     contrastRatio,
     relativeLuminance,
     type EffectivePublicBrand,
@@ -87,11 +90,17 @@ export function resolveParticipantBrand(formMetadata: unknown): ParticipantBrand
 }
 
 /**
- * Text on a surface painted in `accent`, at least 4.5:1 (S4-D, Director-approved floor for normal-size
- * button text). Bend Pine itself carries dark ink under this rule: white on it is about 3.2:1.
+ * The primary-action pair for a brand: the surface and its text, at least 4.5:1 (S4-D floor, P1-B
+ * pairing). Every accent-painted button — public runtime and builder preview alike — uses this.
  */
+export function participantButtonColors(accent: string): { fill: string; ink: string } {
+    const { fill, ink } = brandButtonColors(accent);
+    return { fill, ink };
+}
+
+/** Text on the action surface `participantButtonColors(accent).fill`. */
 export function participantOnAccent(accent: string): string {
-    return brandOnAccent(accent);
+    return brandButtonColors(accent).ink;
 }
 
 /** The participant theme from a server-resolved effective brand. */
@@ -101,9 +110,11 @@ export function participantBrandFromEffective(brand: EffectivePublicBrand): Part
 
 /** CSS custom properties, so both phases inherit one theme from the shell that wraps them. */
 export function participantBrandStyle(brand: ParticipantBrand): Record<string, string> {
+    const { fill, ink } = brandButtonColors(brand.accentColor);
     return {
-        "--participant-accent": brand.accentColor,
-        "--participant-on-accent": participantOnAccent(brand.accentColor),
+        "--participant-brand": brand.accentColor,
+        "--participant-accent": fill,
+        "--participant-on-accent": ink,
         "--participant-accent-ink": brandAccentInk(brand.accentColor),
     };
 }

@@ -21,7 +21,18 @@ type Row = {
     state: "opted_in" | "opted_out" | "unset";
     allowedChanges: Array<"Allowed" | "Blocked">;
     lockedReason: string | null;
-    lastChange: { source: string | null; at: string } | null;
+    lastChange: EventView | null;
+    history: EventView[];
+    effective: { status: "allowed" | "blocked" | "unknown"; code: string | null; reason: string };
+};
+type EventView = {
+    source: string | null;
+    at: string;
+    fromState: string | null;
+    toState: string;
+    changedState: boolean;
+    outcome: string | null;
+    consentLanguageVersion: string | null;
 };
 type View = {
     personId: string;
@@ -35,7 +46,39 @@ const SOURCE_LABEL: Record<string, string> = {
     recipient_unsubscribe: "unsubscribe link",
     operator_person_record: "staff",
     admin_command_center: "staff",
+    public_intake: "public inquiry form",
 };
+
+const STATE_WORD: Record<string, string> = { opted_in: "opted in", opted_out: "opted out", unset: "not set" };
+
+function sourceLabel(source: string | null): string {
+    return SOURCE_LABEL[source ?? ""] ?? source ?? "unknown source";
+}
+
+/** One recorded act, in words. An act that changed nothing says so — it is never read as consent. */
+export function describePreferenceEvent(e: EventView): string {
+    const when = new Date(e.at).toLocaleDateString();
+    if (!e.changedState) {
+        return e.outcome === "preserved_opt_out"
+            ? `${when} · ${sourceLabel(e.source)} asked to opt in — opt-out kept`
+            : `${when} · ${sourceLabel(e.source)} · no change (${STATE_WORD[e.toState] ?? e.toState})`;
+    }
+    const wording = e.consentLanguageVersion ? ` · wording ${e.consentLanguageVersion}` : "";
+    return `${when} · ${STATE_WORD[e.fromState ?? "unset"] ?? e.fromState} → ${STATE_WORD[e.toState] ?? e.toState} · ${sourceLabel(e.source)}${wording}`;
+}
+
+/** Where the current state came from. No recorded change is said plainly — never inferred as consent. */
+export function describePreferenceProvenance(row: Pick<Row, "state" | "lastChange">): string {
+    if (!row.lastChange) return row.state === "unset" ? "No consent on record" : "Source not recorded";
+    const wording = row.lastChange.consentLanguageVersion ? ` · wording ${row.lastChange.consentLanguageVersion}` : "";
+    return `Set by ${sourceLabel(row.lastChange.source)} · ${new Date(row.lastChange.at).toLocaleDateString()}${wording}`;
+}
+
+function effectiveLabel(e: Row["effective"]): string {
+    if (e.status === "allowed") return "Can be sent now";
+    if (e.status === "unknown") return "Unknown — could not be checked";
+    return `Will not be sent — ${e.reason}`;
+}
 
 function stateLabel(row: Row): string {
     if (row.control === "always_allowed") return row.state === "opted_out" ? "Opted out" : "Always allowed";
@@ -158,6 +201,24 @@ export default function PersonCommunicationPreferencesPanel({ personId }: { pers
                                             </button>
                                         ) : null}
                                         {row.lockedReason ? <span className="block text-[10.5px] text-alloy-midnight/50">{row.lockedReason}</span> : null}
+                                        {row.control === "opt_in" ? (
+                                            <span className="block text-[10.5px] text-alloy-midnight/60" data-person-communication-preferences={`${row.key}-provenance`}>
+                                                {describePreferenceProvenance(row)}
+                                                <span className="block" data-person-communication-preferences={`${row.key}-effective`} data-effective-status={row.effective.status}>
+                                                    {effectiveLabel(row.effective)}
+                                                </span>
+                                            </span>
+                                        ) : null}
+                                        {row.history.length ? (
+                                            <details className="mt-0.5 text-[10.5px] text-alloy-midnight/50" data-person-communication-preferences={`${row.key}-history`}>
+                                                <summary className="cursor-pointer">History</summary>
+                                                <ul>
+                                                    {row.history.map((h, i) => (
+                                                        <li key={`${h.at}-${i}`}>{describePreferenceEvent(h)}</li>
+                                                    ))}
+                                                </ul>
+                                            </details>
+                                        ) : null}
                                     </span>
                                 </li>
                             ))}
@@ -171,7 +232,7 @@ export default function PersonCommunicationPreferencesPanel({ personId }: { pers
                                     .concat(others)
                                     .filter((r) => r.lastChange)
                                     .sort((a, b) => (b.lastChange!.at > a.lastChange!.at ? 1 : -1))[0]!;
-                                return `${last.label} · ${SOURCE_LABEL[last.lastChange!.source ?? ""] ?? last.lastChange!.source ?? "unknown"} · ${new Date(last.lastChange!.at).toLocaleDateString()}`;
+                                return `${last.label} · ${sourceLabel(last.lastChange!.source)} · ${new Date(last.lastChange!.at).toLocaleDateString()}`;
                             })()}
                         </p>
                     ) : null}

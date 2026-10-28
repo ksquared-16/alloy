@@ -25,6 +25,7 @@ import {
     evaluateEligibility,
 } from "@/lib/communications/eligibility/evaluateEligibility";
 import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
+import { resolveAuthorizedStaffRecipient, type StaffRecipientRequest } from "@/lib/communications/recipients/staffRecipient";
 import { renderOutboundMessage } from "@/lib/communications/render/renderOutboundMessage";
 import { enforceOutboundPublicLinkOrigin } from "@/lib/communications/outboundPublicLinkOrigin";
 import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
@@ -331,6 +332,13 @@ export async function enqueueCanonicalOutboundMessage(params: {
      * thread-bound reply path — never accepted from a client.
      */
     verifiedThreadEndpoint?: boolean;
+    /**
+     * A staff member of this organization as the recipient (a product notification about work they run).
+     * Resolved and authorized HERE (`resolveAuthorizedStaffRecipient`) — the address comes from the
+     * resolution, never from `toRaw`. Satisfies recipient resolution for transactional sends only; an
+     * unauthorized or unreachable recipient is a persisted refusal (RECIPIENT_UNRESOLVED).
+     */
+    staffRecipient?: StaffRecipientRequest | null;
     /** Names the caller in fallback telemetry. */
     callSite?: string;
 
@@ -353,7 +361,10 @@ export async function enqueueCanonicalOutboundMessage(params: {
         mc === "sms"
             ? normalizeRecipientKeySms(params.toRaw)
             : normalizeRecipientKeyEmail(params.toRaw);
-    const recipientKey = mc === "in_app" && !recipient.trim() ? "_in_app" : recipient || "_empty";
+    const staffUserKey = String(params.staffRecipient?.userId ?? "").trim();
+    const recipientKey = staffUserKey
+        ? `staff:${staffUserKey}`
+        : mc === "in_app" && !recipient.trim() ? "_in_app" : recipient || "_empty";
 
     // One value, used by BOTH the conversation and the sender resolution. If these
     // could disagree, a message could be filed at Riverside and sent from the
@@ -638,7 +649,16 @@ export async function enqueueCanonicalOutboundMessage(params: {
     const audience: MessageAudience = params.audience ?? "external";
     const category: MessageCategory =
         params.category ?? recordCategoryFallback(params.callSite ?? "canonicalOutboundEnqueue:unspecified");
-    const toAddress = params.toRaw?.trim() || null;
+    // A typed staff recipient: Communications resolves and authorizes it, and supplies the address.
+    const staff = params.staffRecipient
+        ? await resolveAuthorizedStaffRecipient(params.supabase, orgIdTrim, params.staffRecipient)
+        : null;
+    if (staff) {
+        meta.staff_recipient = staff.ok
+            ? { user_id: staff.userId, verified: true }
+            : { user_id: staff.userId, verified: false, reason: staff.reason };
+    }
+    const toAddress = staff ? (staff.ok ? staff.email : null) : params.toRaw?.trim() || null;
 
     // ---- UNSUBSCRIBE LINK (marketing / operational email only) --------------
     // Minted at the enqueue choke point so every delivery runtime — TypeScript
@@ -681,7 +701,9 @@ export async function enqueueCanonicalOutboundMessage(params: {
         fromAddress: params.fromAddress ?? null,
     });
 
-    const decision = context.lookupFailed
+    const decision = staff && !staff.ok
+        ? { allowed: false, code: "RECIPIENT_UNRESOLVED" as const, reason: staff.message }
+        : context.lookupFailed
         ? {
               allowed: false,
               code: "SUPPRESSED" as const,
@@ -693,6 +715,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
               channel: mc,
               unresolvedInboundStopHold: context.unresolvedInboundStopHold,
               verifiedThreadEndpoint: params.verifiedThreadEndpoint === true,
+              verifiedStaffRecipient: staff?.ok === true,
               purpose: params.purpose ?? null,
               recipientPersonId: params.recipientPersonId ?? null,
               preferenceState: context.preferenceState,
@@ -709,7 +732,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
         audience,
         category,
         purpose: params.purpose ?? null,
-        recipient: { personId: params.recipientPersonId ?? null, channel: mc },
+        recipient: { personId: params.recipientPersonId ?? null, channel: mc, ...(staff ? { staffUserId: staff.userId } : {}) },
         authorizedBy: {
             userId: params.authorizedByUserId ?? null,
             permission: params.emergencyPermitted ? "communications.send.emergency" : "communications.send",

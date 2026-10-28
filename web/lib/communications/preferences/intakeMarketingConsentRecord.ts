@@ -131,3 +131,50 @@ export function capturesFromIntakeRecord(
         },
     }));
 }
+
+// ── One consent control on a public intake ─────────────────────────────────────────────────────────
+
+/**
+ * Person fields a form can bind that ask the same marketing question as this control.
+ *
+ * Both appeared on one page when an author added the Alloy fields "Email opt-in" / "SMS opt-in" to an
+ * intake form whose link also offers this control (P1-close, D5): two pairs of boxes, different
+ * wording, and two destinations — the form fields promote onto the person's own columns with no record
+ * of what was agreed to, while this control's evidence is the one Approve commits to
+ * `communication_preferences`. Where the link offers this control, it is the only one shown.
+ */
+export const COMPETING_MARKETING_CONSENT_PERSON_FIELD_KEYS = ["email_opt_in", "sms_opt_in"] as const;
+
+type ConsentFieldLike = { id: string; type?: string; field_source?: unknown; fields?: ConsentFieldLike[] };
+
+export function isCompetingMarketingConsentField(field: ConsentFieldLike): boolean {
+    const src = field.field_source;
+    if (src == null || typeof src !== "object" || Array.isArray(src)) return false;
+    const s = src as { entity_type?: unknown; field_key?: unknown };
+    return (
+        s.entity_type === "person" &&
+        typeof s.field_key === "string" &&
+        (COMPETING_MARKETING_CONSENT_PERSON_FIELD_KEYS as readonly string[]).includes(s.field_key)
+    );
+}
+
+/** The schema without fields that compete with this control (and without their section references). */
+export function withoutCompetingMarketingConsentFields<
+    S extends { fields: ConsentFieldLike[]; sections?: { field_ids?: string[] }[] },
+>(schema: S): S {
+    const removed = new Set<string>();
+    const strip = (fields: ConsentFieldLike[]): ConsentFieldLike[] =>
+        fields
+            .filter((f) => {
+                if (!isCompetingMarketingConsentField(f)) return true;
+                removed.add(f.id);
+                return false;
+            })
+            .map((f) => (Array.isArray(f.fields) ? { ...f, fields: strip(f.fields) } : f));
+    const fields = strip(schema.fields);
+    if (removed.size === 0) return schema;
+    const sections = schema.sections?.map((sec) =>
+        Array.isArray(sec.field_ids) ? { ...sec, field_ids: sec.field_ids.filter((id) => !removed.has(id)) } : sec,
+    );
+    return { ...schema, fields, ...(sections ? { sections } : {}) } as S;
+}

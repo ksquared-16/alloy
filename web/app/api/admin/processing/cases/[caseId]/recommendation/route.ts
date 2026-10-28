@@ -5,6 +5,7 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import { recommendationFromFormSubmission } from "@/lib/pos/processingCase/recommendation/recommendationFromSubmission";
 import { listProcessingResolutionsByCase } from "@/lib/pos/processingIdentity/processingResolutionsDb";
 import { pickLatestResolutionPerSubject } from "@/lib/pos/processingIdentity/operator/recommendationBuilder";
+import { evaluateCaseLeadPlacement, type CaseLeadPlacementReadiness } from "@/lib/pos/processingIdentity/operator/operatorReviewService";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         } catch {
             leadPlan = null;
         }
-        return jsonData({ ...result, leadPlan });
+        // Can a NEW lead from this case be placed? The same resolver approval uses — so "Ready to create"
+        // and an enabled Approve never promise what approval will refuse (P1-close, D2).
+        let leadPlacement: CaseLeadPlacementReadiness | null = null;
+        try {
+            leadPlacement = await evaluateCaseLeadPlacement(supabase, ctx.orgId, caseId);
+        } catch {
+            leadPlacement = null;
+        }
+        return jsonData({ ...result, leadPlan, leadPlacement });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to build recommendation" },
