@@ -27,7 +27,8 @@ import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import { listCategories, listTypes } from "@/lib/documents/configuration/documentConfigurationService";
 import type { ValidityPolicy } from "@/lib/documents/configuration/documentTypePolicy";
-import { evaluateDocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { validityNeedsEventDates, evaluateDocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { loadValidityEventDates } from "@/lib/documents/validity/validityEventDates";
 import { localDateOf, resolveDocumentsClock } from "@/lib/documents/validity/documentsClock";
 import { loadFormArtifactProvenance } from "@/lib/documents/forms/formArtifactProvenance";
 
@@ -362,6 +363,16 @@ export async function buildDocumentLibrary(
         versionsByDoc.set(v.document_id, list);
     }
 
+    // B2: event-renewal types resolve from each document's owner's authoritative event dates.
+    const eventOwners = rows
+        .filter((d) => {
+            const tk = str(d.doc_type);
+            return tk ? validityNeedsEventDates((typeByKey.get(tk)?.published?.validity_policy ?? null) as ValidityPolicy | null) : false;
+        })
+        .map((d) => primaryByDoc.get(d.id))
+        .filter((o): o is NonNullable<typeof o> => Boolean(o));
+    const eventDates = eventOwners.length ? await loadValidityEventDates(supabase, orgId, eventOwners) : null;
+
     const documents: LibraryDocument[] = rows.map((d) => {
         const typeKey = str(d.doc_type);
         const t = typeKey ? typeByKey.get(typeKey) : undefined;
@@ -415,6 +426,7 @@ export async function buildDocumentLibrary(
                           expires_on: current.expires_on,
                           received_on: localDateOf(current.created_at, clock.timeZone),
                           reviewed_on: localDateOf(current.reviewed_at ?? null, clock.timeZone),
+                          events: owner ? (eventDates?.get(`${owner.subject_type}:${owner.subject_id}`) ?? null) : null,
                       },
                       today: clock.today,
                   })

@@ -47,7 +47,8 @@ import {
     type SubjectJourney,
 } from "@/lib/documents/requirements/documentRequirementEvaluator";
 import type { RequirementSubjectType } from "@/lib/documents/requirements/documentRequirementPolicy";
-import { evaluateDocumentValidity, type DocumentValidity } from "@/lib/documents/validity/documentValidity";
+import { evaluateDocumentValidity, validityNeedsEventDates, type DocumentValidity, type ValidityEventDates } from "@/lib/documents/validity/documentValidity";
+import { loadValidityEventDates } from "@/lib/documents/validity/validityEventDates";
 import { formArtifactCountsFor, loadFormArtifactProvenance, type FormArtifactProvenance } from "@/lib/documents/forms/formArtifactProvenance";
 import { parseRequirementFormEvidence } from "@/lib/documents/requirements/documentRequirementPolicy";
 import { localDateOf, resolveDocumentsClock, type DocumentsClock } from "@/lib/documents/validity/documentsClock";
@@ -173,11 +174,18 @@ type EvidenceRow = EvidenceDocument & { doc_type: string | null; entity_type: st
 type VersionRow = { id: string; document_id: string; version_number: number | null; review_status: string | null; reviewed_at: string | null; effective_on: string | null; expires_on: string | null; created_at: string | null };
 
 /** D7: one version's validity under its document type's published policy, on the organization's date. */
-export function versionValidity(types: RequirementTypeCatalog, docType: string | null, v: Pick<VersionRow, "effective_on" | "expires_on" | "created_at" | "reviewed_at">, clock: DocumentsClock): DocumentValidity {
+export function versionValidity(
+    types: RequirementTypeCatalog,
+    docType: string | null,
+    v: Pick<VersionRow, "effective_on" | "expires_on" | "created_at" | "reviewed_at">,
+    clock: DocumentsClock,
+    /** B2: the owning subject's event dates, for an event-renewal type (absent → `event_dates_not_resolved`). */
+    events?: ValidityEventDates | null,
+): DocumentValidity {
     const policy = docType ? types.get(docType)?.validity_policy ?? null : null;
     return evaluateDocumentValidity({
         policy,
-        facts: { effective_on: v.effective_on, expires_on: v.expires_on, received_on: localDateOf(v.created_at, clock.timeZone), reviewed_on: localDateOf(v.reviewed_at, clock.timeZone) },
+        facts: { effective_on: v.effective_on, expires_on: v.expires_on, received_on: localDateOf(v.created_at, clock.timeZone), reviewed_on: localDateOf(v.reviewed_at, clock.timeZone), events: events ?? null },
         today: clock.today,
     });
 }
@@ -193,6 +201,7 @@ export function evidenceVersionFacts(
     doc: { doc_type: string | null; current_version_id: string | null },
     versions: VersionRow[],
     clock: DocumentsClock,
+    events?: ValidityEventDates | null,
 ): { review_status: EvidenceDocument["review_status"]; validity: DocumentValidity | null; prior_accepted: EvidenceDocument["prior_accepted"] } {
     const current = versions.find((v) => v.id === doc.current_version_id) ?? null;
     const reviewRequired = doc.doc_type ? types.get(doc.doc_type)?.review_required === true : false;
@@ -202,8 +211,8 @@ export function evidenceVersionFacts(
     const prior = earlier.find((v) => v.review_status === "accepted" || (v.review_status === null && !reviewRequired)) ?? null;
     return {
         review_status: current ? asReview(current.review_status) : null,
-        validity: current ? versionValidity(types, doc.doc_type, current, clock) : null,
-        prior_accepted: prior ? { version_id: prior.id, validity: versionValidity(types, doc.doc_type, prior, clock) } : null,
+        validity: current ? versionValidity(types, doc.doc_type, current, clock, events) : null,
+        prior_accepted: prior ? { version_id: prior.id, validity: versionValidity(types, doc.doc_type, prior, clock, events) } : null,
     };
 }
 
@@ -215,6 +224,8 @@ type SubjectFacts = {
     versions: Map<string, VersionRow[]>;
     currentVersion: Map<string, string | null>;
     formProvenance: Map<string, FormArtifactProvenance>;
+    /** B2: each evaluated subject's event dates, loaded only when a type in play renews on an event. */
+    events: Map<string, ValidityEventDates> | null;
 };
 
 /** D8: the Studio type of a completed-form PDF — the one Forms artifact that can stand as requirement evidence. */
@@ -289,7 +300,7 @@ async function loadSubjectFacts(
     const versionsOut = new Map<string, VersionRow[]>();
     const currentVersion = new Map<string, string | null>();
     let formProvenance = new Map<string, FormArtifactProvenance>();
-    if (refs.length === 0) return { subjects, evidence, waivers: [], versions: versionsOut, currentVersion, formProvenance };
+    if (refs.length === 0) return { subjects, evidence, waivers: [], versions: versionsOut, currentVersion, formProvenance, events: null };
 
     // Subjects resolve in this organization, or they are not evaluated at all.
     for (const t of Object.keys(TABLE_FOR) as RequirementSubjectType[]) {
@@ -301,6 +312,8 @@ async function loadSubjectFacts(
     }
     const journeys = await loadJourneys(supabase, orgId, refs);
     if (!journeys) return null;
+    // B2: event-renewal types resolve from the subject's own authoritative dates; a failed read leaves them unresolved.
+    const events = [...types.values()].some((t) => validityNeedsEventDates(t.validity_policy)) ? await loadValidityEventDates(supabase, orgId, refs) : null;
     for (const [k, s] of subjects) subjects.set(k, { ...s, journeys: journeys.get(k) ?? [] });
 
     // Evidence: documents of the requirement types OWNED by the subject (D2 owner associations, primary or not).
@@ -368,7 +381,7 @@ async function loadSubjectFacts(
         for (const l of ownerLinks) {
             const d = docById.get(l.document_id);
             if (!d) continue;
-            const facts = evidenceVersionFacts(types, d, versionsByDoc.get(d.id) ?? [], clock);
+            const facts = evidenceVersionFacts(types, d, versionsByDoc.get(d.id) ?? [], clock, events?.get(`${l.subject_type}:${l.subject_id}`) ?? null);
             const row: EvidenceRow = {
                 document_id: d.id,
                 status: d.status,
@@ -401,7 +414,7 @@ async function loadSubjectFacts(
         if (!rows) return null;
         waivers.push(...rows.map((w) => ({ ...w, waiver_id: (w as { id: string }).id })));
     }
-    return { subjects, evidence, waivers, versions: versionsOut, currentVersion, formProvenance };
+    return { subjects, evidence, waivers, versions: versionsOut, currentVersion, formProvenance, events };
 }
 
 /**
@@ -409,13 +422,13 @@ async function loadSubjectFacts(
  * need is the Forms evidence `acceptance`, and validity is the REQUIREMENT's document type policy (a completed
  * immunization form expires like an immunization record).
  */
-function formEvidenceFor(requirement: EvaluableRequirement, docs: EvidenceRow[], facts: SubjectFacts, types: RequirementTypeCatalog, clock: DocumentsClock): EvidenceRow[] {
+function formEvidenceFor(requirement: EvaluableRequirement, docs: EvidenceRow[], facts: SubjectFacts, types: RequirementTypeCatalog, clock: DocumentsClock, subjectKeyOf: string): EvidenceRow[] {
     const fe = requirement.form_evidence;
     if (!fe || !Array.isArray(fe.form_keys) || fe.form_keys.length === 0) return [];
     return docs
         .filter((d) => d.doc_type === FORM_EVIDENCE_DOCUMENT_TYPE && formArtifactCountsFor(facts.formProvenance.get(d.document_id), fe.form_keys))
         .map((d) => {
-            const v = evidenceVersionFacts(types, { doc_type: requirement.document_type_key, current_version_id: facts.currentVersion.get(d.document_id) ?? null }, facts.versions.get(d.document_id) ?? [], clock);
+            const v = evidenceVersionFacts(types, { doc_type: requirement.document_type_key, current_version_id: facts.currentVersion.get(d.document_id) ?? null }, facts.versions.get(d.document_id) ?? [], clock, facts.events?.get(subjectKeyOf) ?? null);
             return { ...d, validity: v.validity, prior_accepted: v.prior_accepted, review_required: fe.acceptance !== "submitted", from_form: facts.formProvenance.get(d.document_id)?.form_key ?? null };
         });
 }
@@ -447,7 +460,7 @@ export async function evaluateSubjects(
                 requirement,
                 type: evaluableType(input.types, requirement.document_type_key),
                 subject,
-                documents: [...docs.filter((d) => d.doc_type === requirement.document_type_key), ...formEvidenceFor(requirement, docs, facts, input.types, clock)],
+                documents: [...docs.filter((d) => d.doc_type === requirement.document_type_key), ...formEvidenceFor(requirement, docs, facts, input.types, clock, subjectKey(ref))],
                 waivers: facts.waivers,
                 today: input.today,
             });

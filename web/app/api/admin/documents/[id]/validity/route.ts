@@ -6,6 +6,8 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertDocumentAccess, documentAccessHttp, documentActorForRequest, requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { loadRequirementTypes, versionValidity } from "@/lib/documents/requirements/documentRequirementService";
+import { validityNeedsEventDates } from "@/lib/documents/validity/documentValidity";
+import { loadDocumentOwnerEventDates } from "@/lib/documents/validity/validityEventDates";
 import { setDocumentVersionValidity } from "@/lib/documents/review/documentReviewService";
 import { resolveDocumentsClock } from "@/lib/documents/validity/documentsClock";
 import { isIsoDate } from "@/lib/documents/validity/documentValidity";
@@ -50,6 +52,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (!cur) return NextResponse.json({ error: "The document has no version.", code: "NO_VERSION" }, { status: 409 });
     if (!types) return NextResponse.json({ error: "Validity could not be read.", code: "VALIDITY_UNAVAILABLE" }, { status: 500 });
     const policy = cur.doc.doc_type ? types.get(cur.doc.doc_type)?.validity_policy ?? null : null;
+    const events = validityNeedsEventDates(policy) ? await loadDocumentOwnerEventDates(supabase, orgId, id) : null;
     return NextResponse.json({
         ok: true,
         document_id: id,
@@ -57,7 +60,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         effective_on: cur.version.effective_on,
         expires_on: cur.version.expires_on,
         policy: policy ?? { kind: "none" },
-        validity: versionValidity(types, cur.doc.doc_type, cur.version, clock),
+        validity: versionValidity(types, cur.doc.doc_type, cur.version, clock, events),
         today: clock.today,
     });
 }
@@ -119,6 +122,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if (!written.ok) return NextResponse.json({ error: "The dates could not be recorded.", code: written.code }, { status: written.status });
 
     const [types, clock] = await Promise.all([loadRequirementTypes(supabase, ctx.orgId), resolveDocumentsClock(supabase, ctx.orgId)]);
-    const validity = types ? versionValidity(types, cur.doc.doc_type, { ...cur.version, effective_on: effectiveOn, expires_on: expiresOn }, clock) : null;
+    const putPolicy = types && cur.doc.doc_type ? types.get(cur.doc.doc_type)?.validity_policy ?? null : null;
+    const putEvents = validityNeedsEventDates(putPolicy) ? await loadDocumentOwnerEventDates(supabase, ctx.orgId, id) : null;
+    const validity = types ? versionValidity(types, cur.doc.doc_type, { ...cur.version, effective_on: effectiveOn, expires_on: expiresOn }, clock, putEvents) : null;
     return NextResponse.json({ ok: true, document_id: id, version_id: cur.version.id, changed: written.value.changed, effective_on: effectiveOn, expires_on: expiresOn, validity, today: clock.today });
 }

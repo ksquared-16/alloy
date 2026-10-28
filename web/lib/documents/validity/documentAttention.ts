@@ -16,6 +16,8 @@
  * quarantined, deleted, restricted or superseded). Disclosure is the canonical document disclosure: organization, the
  * actor's subject scope, then sensitivity clearance, before anything is listed or counted.
  */
+import { validityNeedsEventDates } from "@/lib/documents/validity/documentValidity";
+import { loadValidityEventDates } from "@/lib/documents/validity/validityEventDates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { filterDocumentRowsInActorScope } from "@/lib/documents/assertDocumentAccess";
@@ -138,6 +140,12 @@ export async function listDocumentAttention(
     const versionsByDoc = new Map<string, V[]>();
     for (const v of versionReads.flatMap((r) => (r.data ?? []) as V[])) versionsByDoc.set(v.document_id, [...(versionsByDoc.get(v.document_id) ?? []), v]);
 
+    // B2: event-renewal types resolve from each owner's authoritative event dates.
+    const eventOwners = cleared
+        .filter((d) => validityNeedsEventDates(types.get(d.doc_type)?.validity_policy) && ownerOf.has(d.id))
+        .map((d) => ownerOf.get(d.id)!);
+    const events = eventOwners.length ? await loadValidityEventDates(supabase, orgId, eventOwners) : null;
+
     const coverage = requirementCoverage(input.requirementRows ?? []);
     const pending: Array<Omit<DocumentAttentionRow, "subject_label" | "household_id">> = [];
     for (const d of cleared) {
@@ -145,7 +153,7 @@ export async function listDocumentAttention(
         if (!owner || coverage.documents.has(d.id)) continue;
         if (coverage.renewals.has(`${owner.subject_type}:${owner.subject_id}:${d.doc_type}`)) continue;
         const type = types.get(d.doc_type);
-        const facts = evidenceVersionFacts(types, d, versionsByDoc.get(d.id) ?? [], clock);
+        const facts = evidenceVersionFacts(types, d, versionsByDoc.get(d.id) ?? [], clock, events?.get(`${owner.subject_type}:${owner.subject_id}`) ?? null);
         const kind = attentionKindFor({
             review_status: facts.review_status,
             review_required: type?.review_required === true,

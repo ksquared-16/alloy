@@ -18,8 +18,19 @@
  *                            the version's received date
  *   periodic_reconfirmation  anchor + value·unit − 1 day; anchor = effective_on, else      overrides the derived date
  *                            the review date, else the received date
- *   event_renewal            the recorded date; none recorded → `date_missing` (renewal    the authority
- *                            events are not yet resolvable from the record)
+ *   event_renewal            resolved from the SUBJECT's authoritative event dates          the authority
+ *                            (`ValidityFacts.events`, see below); unresolvable → `date_missing` with the reason
+ *
+ * Event renewal (D7 batch B2). The anchor is effective_on, else the review date, else the received date.
+ *   birthday          recurring: expires the day before the subject's first birthday AFTER the anchor (29 Feb → 28 Feb in
+ *                     a common year). Source: customer_members.dob (child) / persons.date_of_birth (person).
+ *   enrollment_start  a document covers ONE enrollment: the latest enrollment start on or before the anchor, else (collected
+ *                     ahead) the first one after it. It expires the day before the NEXT enrollment start after that one; with
+ *                     no later enrollment it is valid with no end date yet. Source: child_enrollment_agreements.start_date
+ *                     (voided agreements excluded).
+ *   program_year_start  no authoritative source in the platform — never guessed: `date_missing`, reason `event_source_unavailable`.
+ * A missing date of birth, a subject with no enrollment, or a subject grain that has neither is `date_missing` with its
+ * reason. A recorded expires_on always wins.
  *
  * Expiring soon: within the policy's largest `warning_days` window, inclusive of the expiration day. No warning days,
  * no expiring-soon state (the document is valid until it expires).
@@ -36,7 +47,26 @@ export type ValidityFacts = {
     received_on: string | null;
     /** When the version was last reviewed (org-local date), anchoring periodic reconfirmation. */
     reviewed_on: string | null;
+    /**
+     * The subject's authoritative event dates (B2), resolved by the caller for event-renewal types. Absent = not
+     * resolved (the event-renewal expiration is then `date_missing`, reason `event_dates_not_resolved`).
+     */
+    events?: ValidityEventDates | null;
 };
+
+/** `null` in a field means the subject has no such date on record (or its grain has no source for it). */
+export type ValidityEventDates = {
+    birthday: string | null;
+    /** Start dates of the subject's non-voided enrollments, any order. Empty = no enrollment. */
+    enrollment_starts: string[] | null;
+};
+
+export type EventDateUnavailable =
+    | "event_dates_not_resolved"
+    | "event_source_unavailable"
+    | "birthday_not_recorded"
+    | "no_enrollment"
+    | "event_not_configured";
 
 export type DocumentValidity = {
     status: ValidityStatus;
@@ -48,6 +78,10 @@ export type DocumentValidity = {
     warn_from: string | null;
     /** Days from today to `expires_on` (negative once expired), or null. */
     days_remaining: number | null;
+    /** Event renewal only: why the event date could not be resolved (status `date_missing`). */
+    event_unavailable?: EventDateUnavailable;
+    /** Event renewal only: valid until the next event, which is not yet on record (no end date yet). */
+    open_until_event?: boolean;
 };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -92,7 +126,47 @@ function warningWindow(policy: ValidityPolicy | null | undefined): number | null
 }
 
 /** The policy's expiration for these facts, before comparing with today. */
-export function policyExpiration(policy: ValidityPolicy | null | undefined, facts: ValidityFacts): { expires_on: string | null; source: "recorded" | "derived" | null; required: boolean } {
+type PolicyExpiration = {
+    expires_on: string | null;
+    source: "recorded" | "derived" | null;
+    required: boolean;
+    event_unavailable?: EventDateUnavailable;
+    open_until_event?: boolean;
+};
+
+/** The next anniversary of `birth` strictly after `anchor` (29 Feb in a common year → 28 Feb). */
+export function nextBirthdayAfter(birth: string, anchor: string): string {
+    const [, bm, bd] = birth.split("-").map(Number);
+    const ay = Number(anchor.slice(0, 4));
+    for (let y = ay; y <= ay + 1; y++) {
+        const last = new Date(Date.UTC(y, bm, 0)).getUTCDate();
+        const candidate = `${String(y).padStart(4, "0")}-${String(bm).padStart(2, "0")}-${String(Math.min(bd, last)).padStart(2, "0")}`;
+        if (candidate > anchor) return candidate;
+    }
+    return addPeriod(anchor, 1, "years");
+}
+
+function eventExpiration(event: unknown, events: ValidityEventDates | null | undefined, anchor: string | null): PolicyExpiration {
+    const missing = (event_unavailable: EventDateUnavailable): PolicyExpiration => ({ expires_on: null, source: null, required: true, event_unavailable });
+    if (event === "program_year_start") return missing("event_source_unavailable");
+    if (event !== "birthday" && event !== "enrollment_start") return missing("event_not_configured");
+    if (!events) return missing("event_dates_not_resolved");
+    if (!anchor) return { expires_on: null, source: null, required: true };
+    if (event === "birthday") {
+        const birth = asDate(events.birthday);
+        if (!birth) return missing("birthday_not_recorded");
+        return { expires_on: addDays(nextBirthdayAfter(birth, anchor), -1), source: "derived", required: true };
+    }
+    const starts = [...new Set((events.enrollment_starts ?? []).map(asDate).filter((d): d is string => Boolean(d)))].sort();
+    if (starts.length === 0) return missing("no_enrollment");
+    const onOrBefore = starts.filter((d) => d <= anchor);
+    const covered = onOrBefore.length ? onOrBefore[onOrBefore.length - 1]! : starts[0]!;
+    const next = starts.find((d) => d > covered) ?? null;
+    if (!next) return { expires_on: null, source: "derived", required: true, open_until_event: true };
+    return { expires_on: addDays(next, -1), source: "derived", required: true };
+}
+
+export function policyExpiration(policy: ValidityPolicy | null | undefined, facts: ValidityFacts): PolicyExpiration {
     const recorded = asDate(facts.expires_on);
     const kind = policy?.kind ?? "none";
     if (recorded) return { expires_on: recorded, source: "recorded", required: kind !== "none" };
@@ -106,7 +180,10 @@ export function policyExpiration(policy: ValidityPolicy | null | undefined, fact
         }
         return { expires_on: null, source: null, required: true };
     }
-    if (kind === "explicit_date" || kind === "event_renewal") return { expires_on: null, source: null, required: true };
+    if (kind === "event_renewal") {
+        return eventExpiration(policy?.event, facts.events, asDate(facts.effective_on) ?? asDate(facts.reviewed_on) ?? asDate(facts.received_on));
+    }
+    if (kind === "explicit_date") return { expires_on: null, source: null, required: true };
     return { expires_on: null, source: null, required: false };
 }
 
@@ -118,9 +195,18 @@ export function evaluateDocumentValidity(input: { policy: ValidityPolicy | null 
     const window = warningWindow(policy);
     const warn_from = exp.expires_on && window !== null ? addDays(exp.expires_on, -window) : null;
     const days_remaining = exp.expires_on ? daysBetween(today, exp.expires_on) : null;
-    const base = { expires_on: exp.expires_on, expires_source: exp.source, effective_on: effective, warn_from, days_remaining };
+    const base = {
+        expires_on: exp.expires_on,
+        expires_source: exp.source,
+        effective_on: effective,
+        warn_from,
+        days_remaining,
+        ...(exp.event_unavailable ? { event_unavailable: exp.event_unavailable } : {}),
+        ...(exp.open_until_event ? { open_until_event: true } : {}),
+    };
 
     if (effective && today < effective) return { status: "not_yet_effective", ...base };
+    if (exp.open_until_event) return { status: "valid", ...base };
     if (!exp.expires_on) return { status: exp.required ? "date_missing" : "not_tracked", ...base };
     if (today > exp.expires_on) return { status: "expired", ...base };
     if (warn_from && today >= warn_from) return { status: "expiring_soon", ...base };
@@ -136,6 +222,11 @@ export function validityAllowsEvidence(v: DocumentValidity | null | undefined): 
 /** Does the type's policy need its validity dates recorded by a person before the document counts? */
 export function validityNeedsRecordedDate(policy: ValidityPolicy | null | undefined): boolean {
     return policy?.kind === "explicit_date" || policy?.kind === "event_renewal";
+}
+
+/** Does the type's policy need the subject's event dates (B2)? Callers resolve them only then. */
+export function validityNeedsEventDates(policy: ValidityPolicy | null | undefined): boolean {
+    return policy?.kind === "event_renewal";
 }
 
 export const VALIDITY_STATUS_LABEL: Readonly<Record<ValidityStatus, string>> = Object.freeze({
