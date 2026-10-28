@@ -7,6 +7,7 @@ import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/for
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { disclosableDocumentIds, UNDISCLOSED_DOCUMENT_LABEL } from "@/lib/documents/documentMetadataDisclosure";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -171,13 +172,20 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         const batch = await dbListSubmissionLinkedDocumentsForSubmissionIds(supabase, ctx.orgId, submissionIds);
         if (batch.error) return NextResponse.json({ error: batch.error.message }, { status: 500 });
         const map = batch.data ?? {};
+        // EN-FI-01: a linked document is named only to a reader who may read it (medical PDFs need health.view).
+        const disclosable = await disclosableDocumentIds(
+            supabase,
+            ctx.orgId,
+            { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: accessDim },
+            Object.values(map).flatMap((list) => (list ?? []).map((d) => d.document.id)),
+        );
         for (const sid of submissionIds) {
             const list = map[sid] ?? [];
-            documentsBySubmission[sid] = list.map((d) => ({
-                id: d.document.id,
-                name: d.document.name ?? d.document.original_filename,
-                document_type: d.document.document_type,
-            }));
+            documentsBySubmission[sid] = list.map((d) =>
+                disclosable.has(d.document.id)
+                    ? { id: d.document.id, name: d.document.name ?? d.document.original_filename, document_type: d.document.document_type }
+                    : { id: d.document.id, name: UNDISCLOSED_DOCUMENT_LABEL, document_type: null },
+            );
         }
     }
 

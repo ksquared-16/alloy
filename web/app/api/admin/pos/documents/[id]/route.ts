@@ -6,6 +6,26 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import { isStoragePathWithinOrg } from "@/lib/documents/assertDocumentAccess";
 import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { documentStoredObjects } from "@/lib/documents/documentVersions";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { disclosableDocumentIds } from "@/lib/documents/documentMetadataDisclosure";
+
+/**
+ * EN-FI-01: the Processing source-document authority acts only on a document its holder may READ — documents admission,
+ * subject scope and sensitivity clearance (health.view for a medical document). Before, `processing.documents.manage`
+ * alone could rename (and read back the title and file name of) or delete any document in the organization. Refused as
+ * not found, the same answer as a document in another organization.
+ */
+async function documentReadableByCaller(supabase: ReturnType<typeof createAdminClient>, orgId: string, documentId: string): Promise<boolean> {
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return false;
+    const readable = await disclosableDocumentIds(supabase, orgId, {
+        roleKeys: access.roleKeys,
+        permissionKeys: access.permissionKeys,
+        scope: scopeDimensionsFromAccess(access),
+    }, [documentId]);
+    return readable.has(documentId);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +48,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!displayName) return jsonError("Display name cannot be empty.", 400);
 
     const supabase = createAdminClient();
+    if (!(await documentReadableByCaller(supabase, ctx.orgId, documentId))) return jsonError("Not found", 404);
     const { data, error } = await supabase
         .from("documents")
         .update({ title: displayName, updated_at: new Date().toISOString() })
@@ -69,6 +90,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (documentId instanceof NextResponse) return documentId;
 
     const supabase = createAdminClient();
+    if (!(await documentReadableByCaller(supabase, ctx.orgId, documentId))) return jsonError("Not found", 404);
     let auditedDeletion = false;
 
     try {

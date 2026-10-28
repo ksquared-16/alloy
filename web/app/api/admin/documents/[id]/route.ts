@@ -9,6 +9,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { documentSubjectInActorScope, requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import { canonicalDocumentEntityType } from "@/lib/documents/documentEntityTypes";
 import { UNAVAILABLE_DOCUMENT_STATUSES } from "@/lib/documents/documentAvailability";
+import { disclosableDocumentIds } from "@/lib/documents/documentMetadataDisclosure";
 
 /**
  * PATCH: update document workflow status. Persists to `documents.status` (text); there is no documents.status_key column.
@@ -16,6 +17,8 @@ import { UNAVAILABLE_DOCUMENT_STATUSES } from "@/lib/documents/documentAvailabil
  * D1a: requires `documents.write` (was `ctx.role !== "admin"`, the compatibility projection), and the
  * document's subject must be inside the caller's department/site scope — the same predicate as the
  * list and the signer — so a writer cannot change by id a document their list does not show them.
+ *
+ * EN-FI-01: and the caller must clear the document's sensitivity (the read gates: admission, scope, clearance).
  *
  * D2: the lifecycle statuses (`deleted`, `quarantined`, `restricted`) are neither set nor left here. Each has its own
  * audited path: the document delete, the D1c-1 screening release (reviewer capability + written reason). Before this, a
@@ -67,6 +70,16 @@ export async function PATCH(
         entityId: subject.entity_id ?? null,
     });
     if (!inScope) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+    // EN-FI-01: the response is the whole row; a writer without the document's sensitivity clearance (health.view for a
+    // medical document) may neither change it nor read it back. Same answer as out of scope — no existence oracle.
+    const readable = await disclosableDocumentIds(supabase, ctx.orgId, {
+        roleKeys: access.roleKeys,
+        permissionKeys: access.permissionKeys,
+        scope: scopeDimensionsFromAccess(access),
+    }, [id]);
+    if (!readable.has(id)) {
         return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 

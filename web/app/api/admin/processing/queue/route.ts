@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { loadUnworkedFlags } from "@/lib/pos/processingCaseAttention";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     makeDefaultSourceDisplayResolverRegistry,
     makeProcessingCaseReadDeps,
@@ -94,7 +96,12 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const deps = makeProcessingCaseReadDeps(supabase);
-    const registry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId);
+    // EN-FI-01: source-document labels are disclosed per document to a reader who may read it.
+    const access = await getAdminAccessContextCached();
+    const documentActor = access.ok
+        ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) }
+        : null;
+    const registry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId, documentActor);
 
     try {
         const [queue, counts] = await Promise.all([

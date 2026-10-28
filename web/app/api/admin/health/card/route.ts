@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -49,6 +50,9 @@ export async function GET(request: NextRequest) {
             customerMemberId,
             displayName: searchParams.get("display_name")?.trim() || null,
             access: { permissionKeys },
+            documentActor: access.ok
+                ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) }
+                : null,
         });
         if (vm.permissionDenied) {
             return NextResponse.json(

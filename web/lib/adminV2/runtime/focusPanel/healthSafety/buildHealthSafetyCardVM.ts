@@ -27,6 +27,8 @@
  * a relationship is not an emergency contact merely because it exists.
  */
 
+import { disclosableDocumentIds, type DocumentDisclosureActor } from "@/lib/documents/documentMetadataDisclosure";
+import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { healthClock, recordHealthSpans } from "@/lib/perf/routeTimingDiagnostic";
 
@@ -252,6 +254,11 @@ export async function buildHealthSafetyCardVM(
         customerMemberId: string;
         displayName?: string | null;
         access: HealthAccessSubject;
+        /**
+         * The reader of the card's DOCUMENT list (EN-FI-01). health.view admits the card; each listed document must also
+         * pass the Documents read gates (admission, subject scope, clearance). `null` lists no documents.
+         */
+        documentActor: DocumentDisclosureActor | null;
     },
 ): Promise<HealthSafetyCardVM> {
     const vm = emptyVm();
@@ -438,7 +445,11 @@ export async function buildHealthSafetyCardVM(
 
     // ── DOCUMENTS, and the requirements they satisfy ────────────────────────────────────────────
     if (documentsResult.status === "fulfilled" && !documentsResult.value.error) {
-        vm.documents = ((documentsResult.value.data ?? []) as unknown as Array<Record<string, unknown>>).map(
+        // EN-FI-01: health.view is the Medical gate; the Documents gates still apply to each document, and a quarantined
+        // or deleted document is never listed (the same rule as the library).
+        const rows = (documentsResult.value.data ?? []) as unknown as Array<Record<string, unknown>>;
+        const disclosable = await disclosableDocumentIds(supabase, args.orgId, args.documentActor, rows.map((d) => t(d.id)));
+        vm.documents = rows.filter((d) => disclosable.has(t(d.id)) && !isDocumentUnavailable(t(d.status) || null)).map(
             (d) => ({
                 documentId: t(d.id),
                 docType: t(d.doc_type) || null,

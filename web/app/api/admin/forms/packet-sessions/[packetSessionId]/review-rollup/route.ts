@@ -4,6 +4,9 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { buildPacketReviewRollupV1 } from "@/lib/forms/packets/buildPacketReviewRollupV1";
+import { redactPacketRollupForReader } from "@/lib/forms/packets/redactPacketRollupDocuments";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,5 +36,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: built.error }, { status: built.httpStatus });
     }
 
-    return NextResponse.json({ ok: true, rollup: built.rollup });
+    // EN-FI-01: document titles only for a reader who may read the document.
+    const access = await getAdminAccessContextCached();
+    const rollup = await redactPacketRollupForReader(
+        supabase,
+        ctx.orgId,
+        access.ok ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) } : null,
+        built.rollup,
+    );
+    return NextResponse.json({ ok: true, rollup });
 }
