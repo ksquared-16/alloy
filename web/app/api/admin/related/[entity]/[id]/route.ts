@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { actorMayReadDocuments } from "@/lib/documents/assertDocumentAccess";
-import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
+import { disclosableDocumentIds } from "@/lib/documents/documentMetadataDisclosure";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
@@ -834,6 +835,8 @@ async function getRelatedImpl(
  * Every entity branch above assembles `documents` its own way, so the rule is applied once, here, to
  * the response every branch returns. A branch added later cannot skip it.
  */
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> {
     if (res.status !== 200) return res;
     const body = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
@@ -842,13 +845,17 @@ async function withDocumentDisclosure(res: NextResponse): Promise<NextResponse> 
     const access = await getAdminAccessContextCached();
     let documents: unknown[] = [];
     if (ctx.ok && access.ok && actorMayReadDocuments(access)) {
-        const rows = (body.documents as Array<Record<string, unknown>>).map((d) => ({
-            id: typeof d.id === "string" ? d.id : "",
-            doc_type: (d.document_type as string | null | undefined) ?? (d.doc_type as string | null | undefined) ?? null,
-        }));
-        const kept = new Set(
-            (await filterDocumentRowsBySensitivity(createAdminClient(), ctx.orgId, access, rows)).map((d) => d.id),
+        // EN-FI-01: admission, the document's own subject SCOPE and sensitivity clearance, per document — the parent
+        // record's route never checked scope, so a department-restricted reader could list another department's
+        // documents. Synthetic rows (a packet's "submitted record", a non-uuid id) are not documents and stay.
+        const ids = (body.documents as Array<Record<string, unknown>>).map((d) => (typeof d.id === "string" ? d.id : ""));
+        const disclosable = await disclosableDocumentIds(
+            createAdminClient(),
+            ctx.orgId,
+            { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) },
+            ids.filter((id) => UUID_ID.test(id)),
         );
+        const kept = new Set(ids.filter((id) => id && (!UUID_ID.test(id) || disclosable.has(id))));
         documents = (body.documents as Array<Record<string, unknown>>).filter(
             (d) => kept.has(String(d.id ?? "")) && !isDocumentUnavailable(d.status),
         );

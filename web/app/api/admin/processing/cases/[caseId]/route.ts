@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
@@ -31,7 +32,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const supabase = createAdminClient();
     const deps = makeProcessingCaseReadDeps(supabase);
-    const displayRegistry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId);
+    // EN-FI-01: source-document labels are disclosed per document to a reader who may read it.
+    const access = await getAdminAccessContextCached();
+    const documentActor = access.ok
+        ? { roleKeys: access.roleKeys, permissionKeys: access.permissionKeys, scope: scopeDimensionsFromAccess(access) }
+        : null;
+    const displayRegistry = makeDefaultSourceDisplayResolverRegistry(supabase, ctx.orgId, documentActor);
 
     try {
         const detail = await getProcessingCaseDetail(deps, displayRegistry, { orgId: ctx.orgId, id: caseId });
@@ -40,7 +46,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         const result = await resolveSourceEvidence(detail, evidenceRegistry);
         // D1b: the stored form-draft preview carries OCR text; it is shown only to an actor who may
         // read the source document's extracted text.
-        const access = await getAdminAccessContextCached();
         const textActor = access.ok ? access : { roleKeys: [], permissionKeys: [] };
         return jsonData({
             ...result,

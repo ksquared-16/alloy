@@ -41,6 +41,12 @@ const env = certEnv();
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RUN = Date.now();
 const MANAGER = { permissionKeys: ["health.view", "health.manage"] };
+/** EN-FI-01: the card's document list also passes the Documents read gates — an unrestricted administrator here. */
+const DOCUMENT_READER = {
+    roleKeys: ["admin"],
+    permissionKeys: ["documents.read", "health.view", "health.manage"],
+    scope: { departmentScope: "all", allowedDepartmentIds: null, siteScope: "all", allowedSiteLocationIds: null } as never,
+};
 const VIEWER = { permissionKeys: ["health.view"] };
 let db: SupabaseClient;
 const ids = { customer: "", ava: "", ben: "", def: "", ver: "", subs: [] as string[], cases: [] as string[] };
@@ -163,7 +169,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
             const out = await fn({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: prop.proposal_id, metadata: await meta(caseId) });
             expect(out.ok, JSON.stringify(out)).toBe(true);
         }
-        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(vm.insurance).toHaveLength(1);
         expect(vm.insurance[0]).toMatchObject({ provider: "Pacific Health Plan", policyNumber: "PHP-4410-22", subscriberName: "Pat Rivers", assurance: "reported" });
         const byKey = new Map(vm.immunizations.map((m) => [m.vaccineKey, m]));
@@ -178,7 +184,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         expect(row.subject_entity_id).toBe(ids.ava);
 
         // The sibling inherits nothing.
-        const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER, documentActor: DOCUMENT_READER });
         expect([ben.insurance, ben.immunizations, ben.consents]).toEqual([[], [], []]);
     });
 
@@ -191,7 +197,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
             const again = await fn({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: prop.proposal_id, metadata: await meta(caseId) });
             expect(again).toMatchObject({ ok: true, already_applied: true });
         }
-        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         // A different policy number is a second coverage (two plans), never a silent overwrite.
         expect(vm.insurance.map((i) => i.policyNumber).sort()).toEqual(["PHP-4410-22", "PHP-4410-99"]);
         // Unchanged immunizations are already on record — still one fact per vaccine.
@@ -202,7 +208,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
     });
 
     it("withdrawal is a state with a reason; what was granted can never be rewritten or deleted", async () => {
-        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         const active = vm.consents.find((c) => c.status === "active")!;
         await expect(withdrawMedicalConsent(db, { orgId: ORG, access: VIEWER, consentId: active.consentId, reason: "family request", actorUserId: null })).rejects.toThrow();
         await expect(withdrawMedicalConsent(db, { orgId: ORG, access: MANAGER, consentId: active.consentId, reason: "  ", actorUserId: null })).rejects.toThrow(/reason/);
@@ -219,7 +225,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         const del = await db.from("person_medical_consents").delete().eq("id", active.consentId);
         expect(del.error?.message).toMatch(/never deleted/);
 
-        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(after.consents.filter((c) => c.status === "active")).toHaveLength(0);
         expect(after.consents.find((c) => c.consentId === active.consentId)).toMatchObject({ status: "withdrawn", withdrawalReason: "Family revoked by phone" });
     });
@@ -248,7 +254,7 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         expect(consent.status).toBe("valid");
         const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
         expect(out.ok).toBe(true);
-        const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const ben = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(ben.consents[0]).toMatchObject({ status: "active", grantedByName: "Pat Rivers", grantedAt: expect.stringMatching(/^2026-10-21T16:00/) });
     });
 
@@ -259,11 +265,11 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         await persistFormSubmissionSignatures(db, { orgId: ORG, formSubmissionId: sub, schema: SCHEMA, payload: p, signerIpHash: null, channel: { kind: "public_link", linkId: `zz-link-${RUN}`, packetSessionId: null, recipientPersonId: null, recipientName: "Pat Rivers" } });
         const row = (await ok(db.from("form_submission_signatures").select("metadata").eq("form_submission_id", sub).single())) as { metadata: { signer: Record<string, unknown> } };
         expect(row.metadata.signer).toMatchObject({ printed_name: "Jordan Rivers", printed_name_matches_recipient: false });
-        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER, documentActor: DOCUMENT_READER });
         const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
         const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
         expect(out).toMatchObject({ ok: false, code: "signer_not_authorized" });
-        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(after.consents).toEqual(before.consents);
         expect(JSON.stringify(after.consents)).not.toContain("Jordan Rivers");
     });
@@ -279,10 +285,10 @@ describe.skipIf(!env)("medical completeness (cert DB)", () => {
         const consent = proposals(sub, p).find((x) => x.execution_kind === "medical_consent")!;
         expect(consent.status).toBe("incomplete");
         expect(JSON.stringify(consent.diagnostics)).toMatch(/does not say who signed/);
-        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const before = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         const out = await executeMedicalConsentProposalCommit({ supabase: db, orgId: ORG, userId: null, access: MANAGER, caseId, proposalId: consent.proposal_id, metadata: await meta(caseId) });
         expect(out).toMatchObject({ ok: false });
-        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const after = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(after.consents).toHaveLength(before.consents.length);
     });
 

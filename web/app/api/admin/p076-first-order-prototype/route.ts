@@ -16,6 +16,7 @@ import { composeFirstOrderWorkUnitProjection } from "@/lib/runtime/firstOrder/co
 import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
 import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { diagnosticReaderAllowed } from "@/lib/admin/diagnosticReaderAuthority";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
@@ -50,6 +51,11 @@ export async function GET(req: NextRequest) {
     }
     const access = await getAdminAccessContextCached();
     if (!access.ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    // EN-FI-01: this diagnostic reads a child's documents, health-profile fields (allergies, medical_notes) and household
+    // finances with the service-role client, for any member id the caller names, and echoes counts and which profile
+    // fields are filled. It is live wherever ALLOY_ROUTE_TIMING=1 (staging). Only an organization administrator with
+    // unrestricted scope who holds Documents read AND Medical (health.view) may run it.
+    if (!diagnosticReaderAllowed(access)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
     const supabase = createAdminClient();
     const orgId = access.orgId;

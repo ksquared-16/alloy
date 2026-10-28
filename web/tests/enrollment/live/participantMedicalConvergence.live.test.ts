@@ -52,6 +52,12 @@ const env = certEnv();
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RUN = Date.now();
 const MANAGER = { permissionKeys: ["health.view", "health.manage"] };
+/** EN-FI-01: the card's document list also passes the Documents read gates — an unrestricted administrator here. */
+const DOCUMENT_READER = {
+    roleKeys: ["admin"],
+    permissionKeys: ["documents.read", "health.view", "health.manage"],
+    scope: { departmentScope: "all", allowedDepartmentIds: null, siteScope: "all", allowedSiteLocationIds: null } as never,
+};
 const VIEWER = { permissionKeys: ["health.view"] };
 
 const ids = {
@@ -367,7 +373,7 @@ describe.skipIf(!env)("participant, medical & canonical data convergence (cert D
     });
 
     it("M · the Medical card shows the allergy with its details, the physician as physician, and only true emergency contacts", async () => {
-        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER });
+        const vm = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ava, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(vm.criticalFacts.map((f) => f.label)).toEqual(["Peanuts"]);
         expect(vm.criticalFacts[0]).toMatchObject({ severity: "life_threatening", effect: "Hives", instruction: "EpiPen Jr. in backpack; call 911" });
         expect(vm.careProviders.map((c) => [c.role, c.name])).toEqual([["physician", "Dr. Lee Park"]]);
@@ -376,7 +382,7 @@ describe.skipIf(!env)("participant, medical & canonical data convergence (cert D
         expect(vm.emergencyContacts[0]!.relationship).toBe("Grandparent");
         expect(vm.gaps.map((g) => g.concept)).not.toContain("physician_dentist");
 
-        const sibling = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER });
+        const sibling = await buildHealthSafetyCardVM(db, { orgId: ORG, customerMemberId: ids.ben, access: MANAGER, documentActor: DOCUMENT_READER });
         expect(sibling.criticalFacts).toEqual([]);
         expect(sibling.careFacts).toEqual([]);
         expect(sibling.careProviders).toEqual([]);

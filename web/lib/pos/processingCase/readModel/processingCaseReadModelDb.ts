@@ -6,6 +6,7 @@
  * an org-scoped client. All resolvers are batched per kind (≤2 queries per kind).
  */
 
+import { disclosableDocumentIds, UNDISCLOSED_DOCUMENT_LABEL, type DocumentDisclosureActor } from "@/lib/documents/documentMetadataDisclosure";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isProcessingIntakeLink } from "@/lib/pos/processingPublicLinkMetadata";
 import type {
@@ -243,10 +244,18 @@ function makePacketSessionResolver(supabase: SupabaseClient, orgId: string): Bat
     };
 }
 
-function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedSourceResolver {
+function makeDocumentResolver(
+    supabase: SupabaseClient,
+    orgId: string,
+    documentActor: DocumentDisclosureActor | null,
+): BatchedSourceResolver {
     return async (ids) => {
         const out = new Map<string, ResolvedSourceLabel>();
         if (ids.length === 0) return out;
+        // EN-FI-01: a source document's title and file name are shown only to an actor who may read that document
+        // (documents admission, subject scope, sensitivity clearance — e.g. health.view for an immunization record).
+        // Anyone else sees a neutral label; the case itself stays in their queue.
+        const disclosable = await disclosableDocumentIds(supabase, orgId, documentActor, ids);
         // NOTE: the documents table has `title`, NOT `name` — selecting a non-existent
         // column made this query fail and fall back to the generic "document" label in the
         // queue/detail. Use `title` + the same cleaned display name as the Documents list.
@@ -265,6 +274,10 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
         }[]) {
             const md = d.metadata ?? {};
             const ocrDerived = md.ocr_derived === true;
+            if (!disclosable.has(d.id)) {
+                out.set(d.id, { label: UNDISCLOSED_DOCUMENT_LABEL, originalFilename: null, ocr: null, receivedAt: d.created_at, channel: "document" });
+                continue;
+            }
             out.set(d.id, {
                 label: deriveDocumentDisplayName(d.title, d.original_filename),
                 originalFilename: d.original_filename,
@@ -286,11 +299,13 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
 
 export function makeDefaultSourceDisplayResolverRegistry(
     supabase: SupabaseClient,
-    orgId: string
+    orgId: string,
+    /** The reader. Required: a document label is disclosed only to an actor who may read the document (EN-FI-01). */
+    documentActor: DocumentDisclosureActor | null,
 ): SourceDisplayResolverRegistry {
     return new Map([
         ["form_submission", makeFormSubmissionResolver(supabase, orgId)],
         ["form_packet_session", makePacketSessionResolver(supabase, orgId)],
-        ["document", makeDocumentResolver(supabase, orgId)],
+        ["document", makeDocumentResolver(supabase, orgId, documentActor)],
     ]);
 }
