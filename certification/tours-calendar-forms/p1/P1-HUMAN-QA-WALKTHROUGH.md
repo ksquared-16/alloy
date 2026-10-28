@@ -156,9 +156,13 @@ Use a private/incognito window for the family steps (§E), so you are not signed
     request (§F) with the same email and tick **Email me news…** again, then approve it (§G 28).
     **PASS if** the person's email marketing preference is still **opted out** afterwards.
 
-*Status of §G (2026-10-28): steps 27, 27a verified on an isolated copy; 28–30a not yet verified — the
-isolated test organization could not be given a Business Process that accepts new leads (see
-`p1-close/P1-CLOSE.md`). Run them on staging after deployment.*
+*Status of §G (2026-10-28): 27–30a verified end to end on an isolated copy with a real database after the
+approval fix (`p1-unblock/P1-UNBLOCK.md`). Notes from that run: if the schedule has **Staff approve each
+booking**, Approve books the tour as **pending approval** and the confirmation is sent only when staff confirm
+the booking from the lead's tour action; a family that already has an active tour, or a time that is no longer
+offered, shows **"Lead accepted — tour needs rescheduling"** with current openings. A repeat inquiry from a known
+family needs **Review matches** (e.g. *Same child*) before **Approve — Link existing**. Repeat on staging after
+deployment.*
 
 ## H. Forms Studio parity
 

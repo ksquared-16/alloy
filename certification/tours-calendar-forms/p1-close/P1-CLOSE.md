@@ -1,5 +1,9 @@
 # Tours & Public Forms P1-close — branding truth, Processing readiness, final QA
 
+> **Superseded for §G by `../p1-unblock/P1-UNBLOCK.md`:** the blocker below was a product defect in the
+> public-form approval path (placement ignored the link's routed department), fixed in `01d76bc1b`; §G now
+> passes end to end. The fixture analysis here remains accurate for B1/B2.
+
 **Outcome: PARTIAL** — D1, D2 (product), D3, D4, D5 and D8 are implemented, tested and browser-verified on an
 isolated copy. The full §G approval journey is **not** verified: the isolated test organization could not
 be given a Business Process that accepts new leads through any supported path (see "§G blocker").

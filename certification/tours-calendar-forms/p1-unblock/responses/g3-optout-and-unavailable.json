@@ -1,0 +1,81 @@
+{
+ "prefsAfterOptOut": {
+  "email_marketing": {
+   "state": "opted_out",
+   "last": "operator_person_record"
+  },
+  "sms_marketing": {
+   "state": "unset",
+   "last": null
+  }
+ },
+ "repeatApprove": {
+  "label": "Approve — Link existing",
+  "status": 200,
+  "matchedExisting": true,
+  "person": "c7a5d90c-907f-472c-989d-5c7981b3783f",
+  "lead": "8773aa07-51af-4b4a-b338-df4895cf83dc",
+  "tourRequest": {
+   "kind": "needs_rescheduling",
+   "reason": "existing_active_tour",
+   "replay": false,
+   "existingBookingId": "4d5a1f61-851d-4ec6-8206-33421b0d773e"
+  },
+  "marketingConsent": {
+   "kind": "committed",
+   "personId": "c7a5d90c-907f-472c-989d-5c7981b3783f",
+   "outcomes": [
+    {
+     "channel": "email",
+     "outcome": "preserved_opt_out"
+    },
+    {
+     "channel": "sms",
+     "outcome": "skipped_unset"
+    }
+   ],
+   "replayed": false
+  }
+ },
+ "prefsAfterRepeat": {
+  "email_marketing": {
+   "state": "opted_out",
+   "last": "public_intake"
+  },
+  "sms_marketing": {
+   "state": "unset",
+   "last": null
+  }
+ },
+ "unavailReceived": true,
+ "weekdaysOff": "QA Weekdaysneeds approvalinactive Mon Tue Wed Thu Fri Sat Su",
+ "unavailApprove": {
+  "label": "Approve — Create enrollment lead",
+  "status": 200,
+  "matchedExisting": false,
+  "person": "80d84abd-607e-4b5b-b4ff-fcb99549892e",
+  "lead": "c7bde9ed-0e70-410f-be6f-f8bf099b4682",
+  "tourRequest": {
+   "kind": "needs_rescheduling",
+   "reason": "slot_unavailable",
+   "replay": false,
+   "existingBookingId": null
+  },
+  "marketingConsent": {
+   "kind": "committed",
+   "personId": "80d84abd-607e-4b5b-b4ff-fcb99549892e",
+   "outcomes": [
+    {
+     "channel": "email",
+     "outcome": "skipped_unset"
+    },
+    {
+     "channel": "sms",
+     "outcome": "skipped_unset"
+    }
+   ],
+   "replayed": false
+  }
+ },
+ "weekdaysOn": "QA Weekdaysneeds approval Mon Tue Wed Thu Fri Sat Sun 1:00 –"
+}
