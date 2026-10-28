@@ -3,6 +3,7 @@
  * Replayable after `supabase db reset --no-seed` + seed().
  */
 
+import { isCertApiUrl, isCertDbUrl } from "./processingCertTarget";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const CERT_PASSWORD = "ProcessingCert-Local-Only-2026";
@@ -33,18 +34,18 @@ export const SHARED_PHONE = "+15555550999";
 
 export function certDbConfigured(): boolean {
     const url = process.env.PROCESSING_LOCAL_CERT_DATABASE_URL?.trim() || process.env.DB_URL?.trim();
-    return Boolean(process.env.PROCESSING_LOCAL_CERT_ENABLED === "true" && url?.includes(":55322"));
+    return Boolean(process.env.PROCESSING_LOCAL_CERT_ENABLED === "true" && isCertDbUrl(url));
 }
 
 export function certSupabaseConfigured(): boolean {
-    return certDbConfigured() && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL?.includes(":55321"));
+    return certDbConfigured() && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && isCertApiUrl(process.env.NEXT_PUBLIC_SUPABASE_URL));
 }
 
 export function createCertAdminClient(): SupabaseClient {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) throw new Error("Missing cert Supabase env");
-    if (url.includes(":54321")) throw new Error("Cert must not target port 54321");
+    if (!isCertApiUrl(url)) throw new Error("Cert must target the shared certification stack (or the retired isolated one), never :54321 or a hosted project");
     return createClient(url, key, { auth: { persistSession: false } });
 }
 
