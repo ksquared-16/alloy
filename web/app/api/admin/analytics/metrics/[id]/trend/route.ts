@@ -9,12 +9,18 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
+    // WS0-A — returns stored and evaluated metric VALUES: an analytics read, like its siblings.
+    const analyticsAuth = await requireAnalyticsReadAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 
@@ -23,11 +29,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const definition = await loadMetricDefinitionById(supabase, gate.ctx.orgId, id);
     if (!definition) return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
 
-    const series = await getMetricPlatformSnapshotSeries(supabase, {
-        orgId: gate.ctx.orgId,
-        metricDefinitionId: id,
-        limit: 30,
-    });
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+
+    /*
+     * WS0-A — the series is ORG-context canonical snapshots. It used to read every context's rows
+     * (org, sites, work units) as one series, and to serve them to any caller. Only an unrestricted
+     * caller may read the org series; a restricted caller gets their own live evaluation.
+     */
+    const series = snapshotReadableForScope(scopeDimensionsFromAccess(access), "org", null)
+        ? await getMetricPlatformSnapshotSeries(supabase, {
+              orgId: gate.ctx.orgId,
+              metricDefinitionId: id,
+              contextType: "org",
+              contextId: null,
+              limit: 30,
+          })
+        : [];
 
     let comparison = null;
     if (series.length >= 2) {
@@ -37,8 +55,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
             target: definition.target_config,
         });
     } else {
-        const access = await getAdminAccessContextCached();
-        if (!access.ok) return adminContextFailureResponse(access);
         try {
             const current = await evaluateMetricDefinition({
                 supabase,

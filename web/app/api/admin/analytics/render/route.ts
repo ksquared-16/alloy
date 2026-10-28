@@ -3,6 +3,9 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAnalyticsV2AdminContext } from "@/lib/metrics/platform/adminApiHelpers";
 import { renderMetricPlacementsForSurface, renderMetricPlacementsByZone } from "@/lib/metrics/platform/renderMetricPlacements";
 import type { MetricSurface } from "@/lib/metrics/platform/types";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
+import { locationAllowedUnderSiteScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { snapshotReadableForScope } from "@/lib/metrics/metricScopeGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,14 @@ const OI_ZONES = ["overview", "health", "trends", "comparisons"] as const;
 
 /** GET /api/admin/analytics/render — snapshot-first placement bundle for a surface. */
 export async function GET(request: NextRequest) {
+    /*
+     * WS0-A — this returns stored metric VALUES, so it is an analytics read: `reports.read` (or
+     * `reports.write`), like every sibling value route. It was reachable through org admission
+     * alone.
+     */
+    const analyticsAuth = await requireAnalyticsReadAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 
@@ -34,6 +45,20 @@ export async function GET(request: NextRequest) {
     const placementZone = request.nextUrl.searchParams.get("placement_zone") ?? undefined;
     const contextType = request.nextUrl.searchParams.get("context_type") ?? "org";
     const contextId = request.nextUrl.searchParams.get("context_id");
+
+    /*
+     * WS0-A — every value here is a canonical platform snapshot for `context_type`/`context_id`.
+     * A caller whose access is narrower than that context may not read it (the org bundle by
+     * omitting the context, or another site's by naming it).
+     */
+    const scope = scopeDimensionsFromAccess(analyticsAuth.access);
+    const contextSiteAllowed =
+        contextType !== "site" || !contextId || (await locationAllowedUnderSiteScope(
+            createAdminClient(), gate.ctx.orgId, scope, contextId,
+        ));
+    if (!contextSiteAllowed || !snapshotReadableForScope(scope, contextType, contextId ?? null)) {
+        return NextResponse.json({ error: "Context not in access scope" }, { status: 403 });
+    }
 
     const supabase = createAdminClient();
     const baseParams = {

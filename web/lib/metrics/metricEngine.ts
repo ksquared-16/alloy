@@ -10,6 +10,11 @@ import { evaluateKpiForMetric } from "@/lib/metrics/kpiEvaluator";
 import { readLatestMetricSnapshot } from "@/lib/metrics/snapshots/readMetricSnapshot";
 import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import {
+    metricUnavailable,
+    orgScopeOnlyRefusal,
+    snapshotReadableForScope,
+} from "@/lib/metrics/metricScopeGuard";
+import {
     resolveEnrollmentTimeToScheduleTour,
     resolveEnrollmentTourConversionRate,
     resolveEnrollmentTourCompletedCount,
@@ -240,9 +245,26 @@ export async function resolveSingleMetric(ctx: MetricResolveContext, key: OipMet
      * guarantee, and `resolveMode` stays honest because the value really was
      * resolved live.
      */
+    /*
+     * WS0-A — a metric with no scope linkage answers only an unnarrowed, unrestricted request.
+     * Checked before BOTH paths so live and snapshot refuse identically.
+     */
+    const orgOnly = orgScopeOnlyRefusal(ctx, key);
+    if (orgOnly) return metricUnavailable(ctx, key, orgOnly);
+
+    /*
+     * WS0-A — a snapshot is canonical (unrestricted) truth for its scope. A restricted caller whose
+     * own live read would differ resolves live instead, so the stored org figure never stands in
+     * for their narrowed one. `resolveMode` stays honest: the value really was resolved live.
+     */
     if (ctx.mode === "snapshot" && !isLiveOnlyMetric(key)) {
-        const snap = await resolveFromSnapshotIfAvailable(ctx, key);
-        if (snap) return snap;
+        const { scopeType, scopeId } = snapshotScope(ctx);
+        if (snapshotReadableForScope(ctx.scope, scopeType, scopeId)) {
+            const snap = await resolveFromSnapshotIfAvailable(ctx, key);
+            if (snap) return snap;
+        }
+        // Whatever was asked for, this value is resolved live — say so.
+        return resolveLiveMetric({ ...ctx, mode: "live" }, key);
     }
     return resolveLiveMetric(ctx, key);
 }

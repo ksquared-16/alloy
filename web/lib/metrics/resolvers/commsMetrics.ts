@@ -7,6 +7,7 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { buildMetricResultBase } from "@/lib/metrics/resolvers/metricResolveBase";
 import { resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
 
 export type DeliveryEventRow = {
     event_type: string;
@@ -69,7 +70,8 @@ export async function resolveCommsDeliveryRate(ctx: MetricResolveContext): Promi
     const base = buildMetricResultBase(ctx, def, now);
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
     if (filter.impossible) {
-        return { ...base, value: null, formattedValue: "—", meta: { sent: 0, delivered: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const windowStart = new Date(base.windowStartIso);
@@ -106,7 +108,8 @@ export async function resolveCommsReplyRate(ctx: MetricResolveContext): Promise<
     const base = buildMetricResultBase(ctx, def, now);
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
     if (filter.impossible) {
-        return { ...base, value: null, formattedValue: "—", meta: { sent: 0, replied: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const windowStart = new Date(base.windowStartIso);
@@ -128,7 +131,8 @@ export async function resolveCommsFailedDeliveryCount(ctx: MetricResolveContext)
     const base = buildMetricResultBase(ctx, def, now);
     const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
     if (filter.impossible) {
-        return { ...base, value: 0, formattedValue: "0", meta: { failed: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     const windowStart = base.windowStartIso;
