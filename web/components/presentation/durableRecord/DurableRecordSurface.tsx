@@ -38,6 +38,7 @@ import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocu
 import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
 import DurableRecordFinancialsLead from "@/components/presentation/durableRecord/DurableRecordFinancialsLead";
+import DurableRecordDocuments, { DURABLE_RECORD_DOCUMENTS_CARD } from "@/components/presentation/durableRecord/DurableRecordDocuments";
 import type { DurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableHouseholdSubjectModel";
 import type { HouseholdFinancialFocus } from "@/lib/runtime/focus/householdFinancialFocusSource";
 import FocusPanelSubjectIdentityBlock from "@/components/admin/focusPanel/FocusPanelSubjectIdentityBlock";
@@ -545,6 +546,17 @@ export default function DurableRecordSurface({
                                 cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
                             }
                         />
+                    </FocusPanelRenderErrorBoundary>
+                ) : null}
+
+                {/*
+                  * Documents (D7 batch B1): the record's own documents when it was opened for them ("Open the
+                  * record's documents" from requirement work, document attention, Work Items). Not a layout card — a
+                  * durable child composes no Documents grain — so it is mounted here for the record's subject.
+                  */}
+                {presentation === "full" && cardKey === DURABLE_RECORD_DOCUMENTS_CARD ? (
+                    <FocusPanelRenderErrorBoundary scope="card" label="durable-record-documents">
+                        <DurableRecordDocuments subjectType={subjectType} subjectId={subjectId} />
                     </FocusPanelRenderErrorBoundary>
                 ) : null}
 
