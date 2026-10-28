@@ -151,11 +151,12 @@ version**) to make the new wording live; the hosted link then shows it.
 
 ### Tour-first — the calendar leads into the inquiry form
 
-**E1. DO** — Location → **Tours** → **Preview & Share**. On the location's inquiry link (the form from Part D)
-click **Publish tour calendar here**.
-**EXPECT** — The panel reads **Tour calendar is live — Published** with rows **Hosted booking page** (Open /
-Copy), **Embed on your website (iframe)** (Copy) and **Button for your website** (Copy), and *"Step 2 is the form
-"…""* names your form. *Which form the calendar opens into is decided by the link you publish it on.*
+**E1. DO** — Location → **Tours** → **Preview & Share**. The panel lists the location's inquiry links (the E5 link
+for your Part D form appears here). On it click **Publish tour calendar here**.
+**EXPECT** — The panel reads **Tour calendar is live — Published** with rows **Hosted booking page** (Copy / Open),
+**Embed on your website (iframe)** (Copy) and **Button for your website** (Copy), and *"Step 2 is the form "…".
+Any website may frame it."* names your form. *Which form the calendar opens into is decided by the link you publish
+it on.* *Verified in a browser.*
 
 **E2. DO** — Click **Copy** on the iframe row. In a text editor create `tour-test.html` containing
 `<!doctype html><html><body><h1>Come visit QA School</h1>PASTE-THE-IFRAME-HERE</body></html>`, replace
@@ -166,7 +167,8 @@ allowed embed origins, it only loads on those sites — the panel says which.)
 **E3. DO** — In the framed calendar pick a day and time, then **Continue**.
 **EXPECT** — Step 2 opens inside the same frame with a **Requested tour** box ("not confirmed until the school
 reviews your request") and your inquiry form, including **Hear from QA School** — and **no** second "Stay in
-touch" box (the form's question replaces the default one).
+touch" box (the form's question replaces the default one). *Verified in a browser (external origin, desktop and
+390 px).*
 
 **E4. DO** — Repeat E3 on a phone, or Chrome DevTools at 390 px wide.
 **EXPECT** — Fields stack in one column, buttons are full width, nothing is cut off. Note: the iframe has a fixed
@@ -174,10 +176,12 @@ minimum height and does not resize itself — a long form scrolls inside the fra
 
 ### Form-first — the inquiry form on its own
 
-**E5. DO** — Studio → Forms → your form → **Distribution**. Copy the hosted link and the iframe (**Copy iframe**).
-Paste it into `form-test.html` (same one-line page as E2) and open it.
-**EXPECT** — The form renders in your page with the consent question; this works without any tour calendar
-because the form itself asks the question.
+**E5. DO** — Studio → Forms → your form → **Manage distribution** → **Share by location** → **Create link** on your
+location (the link routes inquiries to that school), then **Copy embed**. Paste it into `form-test.html` (same
+one-line page as E2) and open it.
+**EXPECT** — The form renders in your page with the consent question in the place you put it, both boxes unchecked;
+this works without any tour calendar because the form itself asks the question. *Verified in a browser (external
+origin, desktop and 390 px).*
 
 **E6. DO** — Submit the framed form with `you+tqa-form@…` and tick only the **email** box.
 **EXPECT** — A confirmation that your request was received; a new Processing case appears (Part F, F2).
@@ -231,8 +235,9 @@ now* / *Will not be sent — …*, and history).
 for marketing email and SMS.
 
 **G2. DO** — Submit with **email** ticked only; Approve.
-**EXPECT** — Case shows your exact email wording and its version; person: email marketing **opted in**
-(*Set by public intake · … · wording form_field.v1:…*); SMS marketing unchanged.
+**EXPECT** — Before Approve the case's **Marketing consent** reads *Email news: yes — Not applied yet* and *Captured
+… · wording form_field.v1:…*; after Approve, *Recorded as opted in* (email) and *Nothing recorded — no consent given*
+(text). Person: email marketing **opted in** (set by public intake); SMS marketing unchanged. *Verified in a browser.*
 
 **G3. DO** — Submit with **SMS** ticked only; Approve.
 **EXPECT** — SMS marketing **opted in**; email marketing unchanged.
@@ -242,8 +247,9 @@ for marketing email and SMS.
 
 **G5. DO** — On the G2 person set email marketing to **opted out**. Submit a new inquiry with the same email
 ticking email again; Approve (Review matches → *Link existing* if asked).
-**EXPECT** — Email marketing stays **opted out**; history reads *asked to opt in — opt-out kept*; the case says
-*Not applied — the opt-out stands*.
+**EXPECT** — Approve first asks you to **Review matches** (choose **Same child** → **Done**; the button then reads
+**Approve — Link existing**). Email marketing stays **opted out**; history reads *asked to opt in — opt-out kept*; the
+case says *Not applied — the person had opted out; the opt-out stands*. *Verified in a browser.*
 
 **G6. DO** — Same as G5 for SMS on the G3 person.
 **EXPECT** — SMS marketing stays **opted out**.
@@ -272,8 +278,9 @@ there is no email provider, so this is tested in H2.
 **EXPECT** — Suppressed — nothing deliverable is created.
 
 **G14. DO** — (Engineer-verified API contract) a direct send to a suppressed recipient.
-**EXPECT** — The response is **409** with `recipient_suppressed` naming the blocked message — never a 500. In the
-browser: a clear "will not be sent" message, not a server error.
+**EXPECT** — The response is **409** `outcome: blocked` with the reason (e.g. `eligibility_blocked:OPTED_OUT`, or
+`no_usable_phone` for an SMS to a person with no phone) — never a 500. In the browser: a clear "will not be sent"
+message, not a server error. *Verified on the QA preview: opted-out email → 409 `eligibility_blocked:OPTED_OUT`.*
 
 **G15. DO** — Approve a tour request whose family ticked nothing.
 **EXPECT** — The tour confirmation (transactional) still follows the approval rules regardless of marketing

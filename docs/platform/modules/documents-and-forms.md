@@ -137,6 +137,20 @@ refuses an answer from a link that does not offer it and records the evidence on
 beside `requested_tour`. Approve commits it through Communications (see `communications-platform.md`
 § Tours). Packet and enrollment journeys never show it. Evidence: `certification/tours-calendar-forms/i1/`.
 
+**Marketing consent question (Human QA V2, 2026-10-28).** An author can also place consent on the form:
+Studio → **+ Add question** → **Answer types** → **Capture** → **Marketing consent** (`type:
+"marketing_consent"`, `FormMarketingConsentConfig`). It is a typed question, not a value field and not a
+`field_source` binding: never required, unchecked by default, at least one channel, optional per-channel
+wording (empty → Communications' default, which keeps the STOP / unsubscribe line); one per form. Its answer
+is never stored in `values` — it is the same evidence record as the control above, with the authored
+heading, wording, channels shown, question id and a content-derived version (`form_field.v1:<digest>`). A
+lead-capture Processing intake link offers consent when its tour calendar is published **or** its published
+schema places the question; on any other link the question is not shown and an answer is refused. Where the
+question is present, the link's default control is not added (one consent answer). It renders through the
+shared `MarketingConsentControl` in the public runtime, the tour calendar's step two and Studio Preview. The
+legacy person `email_opt_in` / `sms_opt_in` fields are no longer offered by the Studio field library (no send
+path reads them); existing forms keep them. Evidence: `certification/tours-calendar-forms/human-qa-v2/`.
+
 ### Studio — Forms and Builder
 
 Canvas-first interaction translated from Surface Builder:

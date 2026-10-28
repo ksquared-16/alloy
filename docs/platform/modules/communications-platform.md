@@ -213,6 +213,14 @@ on (consent preference truth and canonical send enqueue). Evidence: `certificati
   evidence uncommitted with the case. Capturing consent sends nothing. The preference event carries
   `source=public_intake`, `method=form_checkbox`; the full evidence stays on the case
   (`certification/tours-calendar-forms/i1/`).
+- **Form-authored marketing consent (Human QA V2, 2026-10-28):** a Forms Studio **Marketing consent**
+  question also offers the control on a lead-capture intake link (no tour calendar needed). Same record, same
+  Approve commit, same writer of `communication_preferences` — no second store. The record adds the authored
+  heading/note, the channels shown and the question id; `language.version` is `form_field.v1:<digest>` of the
+  exact wording, and the preference event's `language_version` names it. A channel the question did not show
+  is refused at submit and can never be recorded as a yes; an affirmative answer that no Processing case can
+  hold is refused (`MARKETING_CONSENT_NOT_RECORDED`), never dropped. Browser evidence on an isolated preview:
+  `certification/tours-calendar-forms/human-qa-v2/`.
 
 ---
 
