@@ -156,7 +156,26 @@ const BUILDER_TYPE_META: Record<BuilderFieldType, string> = {
     boolean: "Yes / No",
     signature: "Signature",
     file_ref: "File upload",
+    marketing_consent: "Marketing consent",
 };
+
+/**
+ * Legacy person consent fields ("Email opt-in", "SMS opt-in", …) are not offered to new forms.
+ *
+ * They looked like consent and were not: the answer was stored in `field_values`, which no send path
+ * reads. Marketing consent is the "Marketing consent" question type, whose answer Approve records in
+ * `communication_preferences`. Forms that already contain a legacy field keep rendering it (and, where
+ * a link offers consent, the runtime drops it in favour of the real control); it is only no longer
+ * offered here. Keys mirror `UNENFORCED_LEGACY_CONSENT_FIELD_KEYS`.
+ */
+const LEGACY_CONSENT_KEY_RE = /^(?:(?:guardian|person|parent)_)?(?:sms_opt_in|email_opt_in|communication_opt_out|sms_consent|email_consent)$/;
+
+export function isLegacyConsentPaletteEntry(entry: { field_key?: string | null; rule_id?: string | null }): boolean {
+    const key = (entry.field_key ?? "").trim();
+    if (key && LEGACY_CONSENT_KEY_RE.test(key)) return true;
+    const last = (entry.rule_id ?? "").split(/[:.]/).pop()?.trim() ?? "";
+    return Boolean(last) && LEGACY_CONSENT_KEY_RE.test(last);
+}
 
 const GROUP_META_LABEL: Record<ProcessingBuilderLibraryGroup, string> = {
     child: "Child",
@@ -285,6 +304,7 @@ export function buildProcessingFormFieldLibrary(
         // `config_only: true`), which is exactly what this library was built to stop doing.
         if (seenIds.has(entry.rule_id)) continue;
         seenIds.add(entry.rule_id);
+        if (isLegacyConsentPaletteEntry(entry)) continue;
         const tier = required.has(entry.rule_id) ? "required" : recommended.has(entry.rule_id) ? "recommended" : undefined;
         const offer = offerFromPalette(entry, tier);
         if (offer.add.kind === "registry") claimedRegistryIds.add(offer.add.registryId);

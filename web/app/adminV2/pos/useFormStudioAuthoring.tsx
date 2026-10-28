@@ -1,5 +1,9 @@
 "use client";
 
+import {
+    DEFAULT_MARKETING_CONSENT_LANGUAGE,
+    findMarketingConsentField,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { useState, type ReactElement } from "react";
 import {
     addField,
@@ -55,6 +59,7 @@ export const STUDIO_QUESTION_TYPES: readonly QuestionTypeItem[] = [
     { type: "boolean", label: "Yes / No", meta: "Boolean toggle", category: "choice" },
     { type: "signature", label: "Signature", meta: "Draw or type signature", category: "capture" },
     { type: "file_ref", label: "File upload", meta: "Attach a document", category: "capture" },
+    { type: "marketing_consent", label: "Marketing consent", meta: "Optional email / SMS opt-in, unchecked", category: "capture" },
 ];
 
 export const STUDIO_QUESTION_CATEGORY_LABELS: Record<string, string> = {
@@ -128,10 +133,20 @@ export function useFormStudioAuthoring({
 
     const addQuestion = (type: BuilderFieldType) => {
         if (!schema || !editable || !librarySectionId) return;
+        if (type === "marketing_consent") {
+            // One consent question per form: it is THE consent answer. A second would ask twice.
+            const existing = findMarketingConsentField(schema);
+            if (existing) {
+                onSelectField(existing.id);
+                onSelectSection(null);
+                setLibraryOpen(false);
+                return;
+            }
+        }
         const label = STUDIO_QUESTION_TYPES.find((p) => p.type === type)?.label ?? "Question";
         const spec: BuilderFieldSpec = {
             type,
-            label: `Untitled ${label.toLowerCase()}`,
+            label: type === "marketing_consent" ? DEFAULT_MARKETING_CONSENT_LANGUAGE.heading : `Untitled ${label.toLowerCase()}`,
             sectionId: librarySectionId,
             ...(type === "select" || type === "multiselect" ? { options: DEFAULT_CHOICE } : {}),
         };

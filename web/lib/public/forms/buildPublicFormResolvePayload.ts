@@ -146,8 +146,9 @@ export async function buildPublicFormResolvePayload(
             },
             packet: v.packet,
             packet_terminal: false,
-            // Derived from the server-controlled link flag (which itself never leaves the server).
-            marketing_consent_offered: publicLinkOffersMarketingConsent(v.linkMetadata, { packet: Boolean(v.packet) }),
+            // Derived from the server-controlled link flag (which itself never leaves the server) and
+            // the published schema's own Marketing consent question.
+            marketing_consent_offered: publicLinkOffersMarketingConsent(v.linkMetadata, { packet: Boolean(v.packet), schema }),
             option_values_by_field_id: hydrated.option_values_by_field_id,
             option_choices_by_field_id: hydrated.option_choices_by_field_id,
         },

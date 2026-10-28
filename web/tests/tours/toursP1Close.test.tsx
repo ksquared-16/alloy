@@ -317,7 +317,11 @@ describe("D5 — one consent control on a public intake", () => {
 
     it("applies only where the link offers the consent control — in the browser AND on submit", () => {
         const client = web("app/forms/embed/[token]/FormEmbedClient.tsx");
-        expect(client).toMatch(/marketing_consent_offered === true \? withoutCompetingMarketingConsentFields\(authored\) : authored/);
+        // Offered → competing person opt-ins go; not offered → an authored consent question is hidden too
+        // (Human QA V2: boxes no Processing case could hold are never shown).
+        expect(client).toMatch(
+            /marketing_consent_offered === true\s*\?\s*withoutCompetingMarketingConsentFields\(authored\)\s*:\s*withoutMarketingConsentFields\(authored\)/,
+        );
         const submit = web("app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts");
         expect(submit).toMatch(/if \(marketingConsent\) \{[\s\S]*withoutCompetingMarketingConsentFields\(schema\)/);
         expect(submit).toMatch(/for \(const id of competingConsentFieldIds\) delete values\[id\]/);
