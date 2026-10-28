@@ -82,9 +82,9 @@ export default function SpaceUsesSection({
                 <p className="config-typo-sublabel">Loading uses…</p>
             : offered.length === 0 ?
                 <p className="config-typo-sublabel">No assignment categories are configured for this kind of space.</p>
-            :   <div className="space-y-2" data-testid={`${testId}-list`}>
+            :   <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3" data-testid={`${testId}-list`}>
                     {offered.map((category) => (
-                        <label key={category.id} className="flex items-center gap-2">
+                        <label key={category.id} className="flex min-w-0 items-center gap-2">
                             <input
                                 type="checkbox"
                                 checked={selected.includes(category.id)}

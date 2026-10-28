@@ -206,10 +206,12 @@ describe("5-8, 11. Inside is role-adaptive", () => {
         expect(onCreate.mock.calls[0][0].inside_location_id).toBeNull();
     });
 
-    it("offers the site itself as the default Inside choice, in operator words", async () => {
+    it("names the unassigned Inside choice 'No physical space' — the stored value is still empty", async () => {
         await renderPanel();
         const select = need<HTMLSelectElement>("locations-room-create-inside");
-        expect(select.options[0].textContent).toContain("North Campus");
+        // Director review: "North Campus (no physical room)" read as a physical room called
+        // North Campus. The empty value is unchanged — only the words.
+        expect(select.options[0].textContent).toBe("No physical space");
         expect(select.options[0].value).toBe("");
     });
 

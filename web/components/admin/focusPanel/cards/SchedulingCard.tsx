@@ -46,6 +46,14 @@ import {
     type AssignmentTypeBehavior,
 } from "@/lib/operationalAssignments/assignmentTypeBehavior";
 import type { UseForSpace } from "@/lib/location/spaceUse";
+import {
+    resolveUseForSpace,
+    spaceTakesAnyUse,
+    usesNeedingNoSpace,
+    type AssignmentUseResolution,
+    type UseCandidate,
+} from "@/lib/operationalAssignments/assignmentUseResolution";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 import {
     programCategoryIdForRoom,
@@ -859,7 +867,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
 // ── The work surface: Detail (read-only) ⇄ Editor (edit | create) ────────────
 // Both render the SAME ScheduleRegions composition. Detail passes value nodes;
 // Editor passes control nodes into the same regions.
-type SurfaceMode = "detail" | "edit" | "create" | "assignment" | "pick-type";
+type SurfaceMode = "detail" | "edit" | "create" | "assignment";
 
 function ScheduleWorkSurface({
     child,
@@ -902,6 +910,11 @@ function ScheduleWorkSurface({
     const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
     const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
+    /**
+     * A NEW assignment beside the primary, whose use is read from the room the operator picks
+     * (`resolveUseForSpace`) — there is no category step before the card any more.
+     */
+    const [useFromRoom, setUseFromRoom] = useState(false);
     const [actionBusy, setActionBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -977,10 +990,11 @@ function ScheduleWorkSurface({
     /**
      * Depth chrome matches Household/Children: ← Back in the body (not a modal ✕),
      * form abandon via footer Cancel, dismiss elevation via scrim / ESC.
-     * Edit/create/pick-type do NOT put Cancel in the header (footer owns that).
+     * Edit/create do NOT put Cancel in the header (footer owns that).
      */
     const cancelToDetail = () => {
         setPendingTypeId(null);
+        setUseFromRoom(false);
         setEditingAssignmentId(null);
         setActiveAssignmentId(null);
         setMode("detail");
@@ -994,7 +1008,7 @@ function ScheduleWorkSurface({
                       setMode("detail");
                   },
               }
-            : mode === "edit" || mode === "create" || mode === "pick-type"
+            : mode === "edit" || mode === "create"
               ? null
               : previousFocus
                 ? { label: focusPanelCardBackLabel(previousFocus.card), onClick: onBack }
@@ -1045,6 +1059,7 @@ function ScheduleWorkSurface({
         setActiveAssignmentId(null);
         setEditingAssignmentId(null);
         setPendingTypeId(null);
+        setUseFromRoom(false);
         /*
          * CANONICAL TRUTH CHANGED — tell whoever is hosting this card.
          *
@@ -1060,22 +1075,33 @@ function ScheduleWorkSurface({
         setActionError(null);
         setEditingAssignmentId(null);
         setPendingTypeId(null);
+        setUseFromRoom(false);
         /*
          * The FIRST commitment used the schedule-create path unconditionally, because that path
          * establishes a child's primary operational home. It is not subject-general: the route
          * behind it (`POST /api/admin/scheduling`) reads `customer_member_id` and refuses without
          * one, and `createOperationalAssignment` refuses `is_primary` for any non-child subject.
          *
-         * So staff always goes through the type picker into `assignment.create` — the registered
-         * action that already accepts a staff subject — including for their first assignment. That
-         * is not a lesser path; it is the canonical one for a subject with no primary-home concept.
+         * So staff always goes through `assignment.create` — the registered action that already
+         * accepts a staff subject — including for their first assignment. That is not a lesser path;
+         * it is the canonical one for a subject with no primary-home concept.
+         *
+         * Either way the card opens DIRECTLY. The category ("What category of assignment is this?")
+         * is no longer a step before it: the operator picks a room and the use is read from that
+         * space's configured Uses, inside the card (see `resolveUseForSpace`).
          */
         if (currentAssignments.length === 0 && applicability.canUseChildSchedulePath) {
             setMode("create");
             return;
         }
-        // Type picker — empty state deep-links to Studio Types (no seed/migrate dead end).
-        setMode("pick-type");
+        setUseFromRoom(true);
+        setMode("create");
+    };
+    /** Configuration lives in OPERATIONS → STUDIO → Assignment Categories — the one handoff that leaves the record. */
+    const openCategoryConfiguration = () => {
+        void import("@/lib/adminV2/workspaceModalEvents").then(({ dispatchAdminV2OpenOperationsModal }) => {
+            dispatchAdminV2OpenOperationsModal({ studioSection: "types" });
+        });
     };
 
     const runAction = async (
@@ -1129,18 +1155,11 @@ function ScheduleWorkSurface({
                         }
                         setEditingAssignmentId(activeAssignment.id);
                         setActiveAssignmentId(null);
-                        if (activeAssignment.assignmentType.id) {
-                            setPendingTypeId(activeAssignment.assignmentType.id);
-                            setMode("create");
-                            return;
-                        }
-                        if (config.assignmentTypes.length === 0) {
-                            setActionError("No Assignment Categories are configured for this organization.");
-                            setMode("detail");
-                            return;
-                        }
-                        setPendingTypeId(null);
-                        setMode("pick-type");
+                        // An established category is kept as it is; an uncategorized row reads its use
+                        // from its room, in the card, like a new one.
+                        setPendingTypeId(activeAssignment.assignmentType.id ?? null);
+                        setUseFromRoom(!activeAssignment.assignmentType.id);
+                        setMode("create");
                     }}
                     onSetPrimary={
                         // STAFF only (V7 decision P1): a child's primary is changed by editing it,
@@ -1292,13 +1311,9 @@ function ScheduleWorkSurface({
                             }
                             setEditingAssignmentId(a.id);
                             setActiveAssignmentId(null);
-                            if (a.assignmentType.id) {
-                                setPendingTypeId(a.assignmentType.id);
-                                setMode("create");
-                                return;
-                            }
-                            setPendingTypeId(null);
-                            setMode("pick-type");
+                            setPendingTypeId(a.assignmentType.id ?? null);
+                            setUseFromRoom(!a.assignmentType.id);
+                            setMode("create");
                         },
                         onSetPrimary: (id) => {
                             const a = currentAssignments.find((row) => row.id === id);
@@ -1347,45 +1362,11 @@ function ScheduleWorkSurface({
         );
     }
 
-    if (mode === "pick-type") {
-        return (
-            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-type-picker="true">
-                {header}
-                {actionError ? (
-                    <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
-                ) : null}
-                <AssignmentTypePicker
-                    types={config.assignmentTypes}
-                    onCancel={cancelToDetail}
-                    onPick={(typeId) => {
-                        setPendingTypeId(typeId);
-                        setMode("create");
-                    }}
-                    onConfigureTypes={() => {
-                        /*
-                         * Configuration lives in OPERATIONS → STUDIO → Assignment Categories.
-                         *
-                         * This opened the Assignments workspace, which is no longer a destination.
-                         * It is the one handoff that legitimately LEAVES the record — authoring
-                         * categories is configuration, not the operator's current work — and it now
-                         * lands in the same workspace their operating day is already in.
-                         */
-                        void import("@/lib/adminV2/workspaceModalEvents").then(
-                            ({ dispatchAdminV2OpenOperationsModal }) => {
-                                dispatchAdminV2OpenOperationsModal({ studioSection: "types" });
-                            },
-                        );
-                    }}
-                />
-            </div>
-        );
-    }
-
     const editingAssignment =
         editingAssignmentId != null
             ? currentAssignments.find((a) => a.id === editingAssignmentId) ?? null
             : null;
-    const createAsSecondary = Boolean(pendingTypeId) || Boolean(editingAssignment);
+    const createAsSecondary = useFromRoom || Boolean(pendingTypeId) || Boolean(editingAssignment);
     const selectedType =
         config.assignmentTypes.find((t) => t.id === pendingTypeId) ??
         (editingAssignment?.assignmentType.id
@@ -1429,6 +1410,8 @@ function ScheduleWorkSurface({
                 assignmentTypeLabel={selectedType?.label ?? null}
                 assignmentTypeBehavior={selectedType?.behavior}
                 assignmentTypeId={selectedType?.id ?? null}
+                useCandidates={useFromRoom ? config.assignmentTypes : null}
+                onConfigureUses={openCategoryConfiguration}
                 // Real program from assignment/child context — never a hardcoded null. When
                 // editing an existing assignment, its room already implies a canonical
                 // program (if any); ScheduleEditor keeps this current as the room changes.
@@ -1442,8 +1425,12 @@ function ScheduleWorkSurface({
                 onNotice={setActionError}
                 binding={binding}
                 onCreateSecondary={async (payload) => {
-                    if (!selectedType?.id) {
-                        throw new Error("Choose an Assignment Category before creating.");
+                    // The use the editor resolved from the room, or the row's established category.
+                    const useType = useFromRoom
+                        ? config.assignmentTypes.find((t) => t.id === payload.assignment_type_id) ?? null
+                        : selectedType;
+                    if (!useType?.id) {
+                        throw new Error("Choose what this assignment is for before creating.");
                     }
                     await executeAssignmentAction({
                         action_key: "assignment.create",
@@ -1454,8 +1441,8 @@ function ScheduleWorkSurface({
                             end_date: payload.end_date,
                             days: payload.days,
                             room_location_id: payload.room_location_id,
-                            assignment_type_id: selectedType.id,
-                            assignment_type_label: selectedType.label,
+                            assignment_type_id: useType.id,
+                            assignment_type_label: useType.label,
                             is_primary: false,
                             supersedes_assignment_id: editingAssignmentId,
                         }),
@@ -1463,96 +1450,6 @@ function ScheduleWorkSurface({
                     // onSaved is owned by ScheduleEditor.save so tuition quote can persist first.
                 }}
             />
-        </div>
-    );
-}
-
-function AssignmentTypePicker({
-    types,
-    onPick,
-    onCancel,
-    onConfigureTypes,
-}: {
-    types: AssignmentTypeOpt[];
-    onPick: (typeId: string) => void;
-    onCancel: () => void;
-    onConfigureTypes?: () => void;
-}) {
-    if (types.length === 0) {
-        return (
-            <div style={{ display: "grid", gap: 12, paddingTop: 4 }} data-assignment-type-picker-empty="true">
-                <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Assignment Categories needed</div>
-                    <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
-                        Configure Assignment Categories (Primary Classroom, Before Care, Enrichment, and similar)
-                        before creating additional assignments. You can return here afterward.
-                    </p>
-                </div>
-                {onConfigureTypes ? (
-                    <button
-                        type="button"
-                        data-configure-assignment-types="true"
-                        onClick={onConfigureTypes}
-                        style={{
-                            all: "unset",
-                            cursor: "pointer",
-                            background: T.pine,
-                            color: "#fff",
-                            fontSize: 12.5,
-                            fontWeight: 700,
-                            padding: "8px 14px",
-                            borderRadius: 10,
-                            width: "fit-content",
-                        }}
-                    >
-                        Configure Assignment Categories
-                    </button>
-                ) : null}
-                <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
-                    Cancel
-                </button>
-            </div>
-        );
-    }
-
-    return (
-        <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
-            <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>What category of assignment is this?</div>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
-                    Choose an Assignment Category — Primary Classroom, Before Care, Enrichment, and similar.
-                </p>
-            </div>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-                {types.map((t) => (
-                    <li key={t.id}>
-                        <button
-                            type="button"
-                            data-assignment-type-option={t.key ?? t.id}
-                            onClick={() => onPick(t.id)}
-                            style={{
-                                all: "unset",
-                                display: "block",
-                                width: "100%",
-                                boxSizing: "border-box",
-                                padding: "10px 12px",
-                                borderRadius: 10,
-                                border: `1px solid ${T.border}`,
-                                background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
-                                cursor: "pointer",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: T.forge,
-                            }}
-                        >
-                            {t.label}
-                        </button>
-                    </li>
-                ))}
-            </ul>
-            <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
-                Cancel
-            </button>
         </div>
     );
 }
@@ -1867,6 +1764,8 @@ function ScheduleEditor({
     assignmentTypeLabel = null,
     assignmentTypeBehavior,
     assignmentTypeId = null,
+    useCandidates = null,
+    onConfigureUses,
     programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
@@ -1890,6 +1789,13 @@ function ScheduleEditor({
     assignmentTypeBehavior?: AssignmentTypeBehavior;
     /** The chosen category's id — the USE the space's configuration is checked against. */
     assignmentTypeId?: string | null;
+    /**
+     * When set, the use is NOT fixed: it is read from the room the operator picks, among these
+     * categories (`resolveUseForSpace`) — one resolves, several are chosen here, none is explained.
+     */
+    useCandidates?: AssignmentTypeOpt[] | null;
+    /** Opens Assignment Category configuration (for the "nothing configured" state). */
+    onConfigureUses?: () => void;
     /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
     programCategoryId?: string | null;
     onCancel: () => void;
@@ -1904,6 +1810,8 @@ function ScheduleEditor({
         end_date: string | null;
         room_location_id: string | null;
         assignment_type_label: string;
+        /** The resolved use when it was read from the room; null when the category was fixed. */
+        assignment_type_id: string | null;
         /** The week as Assignment Time — the days and each day's hours, written with the row. */
         days: AssignmentTimeDayPayload[];
     }) => Promise<void>;
@@ -1950,6 +1858,42 @@ function ScheduleEditor({
             && initialProgramCategoryId != null
     );
     const [roomPicking, setRoomPicking] = useState(false);
+
+    /*
+     * ── THE USE, READ FROM THE SPACE ──────────────────────────────────────────────────────────
+     *
+     * With `useCandidates`, the category is not chosen before the card: the selected room's
+     * configured Uses decide it. One eligible use resolves; several are chosen in the card (an
+     * explicit choice — never the first); none is explained. A choice is only ever kept while the
+     * current room still takes it, so changing the room cannot carry an invalid use forward.
+     *
+     * `spaceless` is the explicit path for categories that use no space at all (transport, some
+     * staff duties): they can never be read from a room, so they are offered on their own.
+     */
+    const resolvingUse = Array.isArray(useCandidates);
+    const [chosenUseId, setChosenUseId] = useState<string | null>(null);
+    const [spaceless, setSpaceless] = useState(false);
+    const spacelessUses = useMemo(() => (resolvingUse ? usesNeedingNoSpace(useCandidates ?? []) : []), [resolvingUse, useCandidates]);
+    const pickedRoom = roomId ? config.operationalRooms.find((r) => r.roomId === roomId) ?? null : null;
+    const useResolution: AssignmentUseResolution | null =
+        resolvingUse && !spaceless && roomId
+            ? pickedRoom
+                ? resolveUseForSpace(pickedRoom, useCandidates ?? [], child.kind)
+                : { kind: "none", code: "no_use_for_space", message: "This space's uses could not be read. Choose another space." }
+            : null;
+    const resolvedUseId: string | null = !resolvingUse
+        ? assignmentTypeId
+        : spaceless
+          ? spacelessUses.some((c) => c.id === chosenUseId) ? chosenUseId : null
+          : useResolution?.kind === "resolved"
+            ? useResolution.useId
+            : useResolution?.kind === "choose" && chosenUseId && useResolution.useIds.includes(chosenUseId)
+              ? chosenUseId
+              : null;
+    const resolvedUse = resolvingUse ? (useCandidates ?? []).find((c) => c.id === resolvedUseId) ?? null : null;
+    const effectiveTypeLabel = resolvingUse ? resolvedUse?.label ?? null : assignmentTypeLabel;
+    const effectiveTypeBehavior = resolvingUse ? resolvedUse?.behavior : assignmentTypeBehavior;
+
     // The use this schedule is for — stable across renders so the room picker does not refetch.
     const purposeUse = useMemo<UseForSpace>(() => ({ categoryId: assignmentTypeId, subjectType: child.kind }), [assignmentTypeId, child.kind]);
     const [patternPicking, setPatternPicking] = useState(false);
@@ -2103,6 +2047,8 @@ function ScheduleEditor({
     const displayView = draftView ?? pricingView;
     /** True once the operator (or an accepted term) has made the choice — never auto-replaced. */
     const operatorChoseRef = useRef(false);
+    /** That choice was an override rate, picked as such — it survives a re-resolution as one. */
+    const choseOverrideRef = useRef(false);
     /** The rate a change made ineligible, named so the operator knows to choose again. */
     const [invalidatedRate, setInvalidatedRate] = useState<string | null>(null);
     const acceptedSeededRef = useRef(false);
@@ -2114,6 +2060,8 @@ function ScheduleEditor({
         if (!accepted || acceptedSeededRef.current) return;
         acceptedSeededRef.current = true;
         operatorChoseRef.current = true;
+        // An accepted term outside today's eligible rates reopens as the override it is.
+        choseOverrideRef.current = !pricingView?.applicable.some((o) => o.sourceId === accepted.source.id);
         setOfferingId(accepted.source.id);
         if (accepted.state === "overridden") setOverrideReason(accepted.overrideReason ?? "");
         if (accepted.customAmount) {
@@ -2129,10 +2077,12 @@ function ScheduleEditor({
             view: displayView,
             current: offeringId.trim(),
             operatorChose: operatorChoseRef.current,
+            choseOverride: choseOverrideRef.current,
         });
         if (decision.next === offeringId.trim()) return;
         if (decision.invalidated) {
             operatorChoseRef.current = false;
+            choseOverrideRef.current = false;
             setInvalidatedRate(decision.invalidated);
         }
         setOfferingId(decision.next);
@@ -2386,7 +2336,7 @@ function ScheduleEditor({
     const editState: ScheduleState =
         mode === "create" && createAsSecondary
             ? {
-                  label: assignmentTypeLabel ? `New · ${assignmentTypeLabel}` : "New assignment",
+                  label: effectiveTypeLabel ? `New · ${effectiveTypeLabel}` : "New assignment",
                   tone: "blue",
                   sub: "Independent commitment",
               }
@@ -2394,21 +2344,21 @@ function ScheduleEditor({
               ? { label: "New schedule", tone: "blue", sub: null }
               : { ...state, sub: null };
     const roomReq =
-        assignmentTypeBehavior?.roomRequirement ??
-        (assignmentTypeBehavior?.requiresRoom ? "required" : "optional");
+        effectiveTypeBehavior?.roomRequirement ??
+        (effectiveTypeBehavior?.requiresRoom ? "required" : "optional");
     // Schedules that use operational space always require a room. Category
     // "optional" still presents a required pick here; only `not_used` skips Room.
     const roomRequired = roomReq !== "not_used";
     const programReq =
-        assignmentTypeBehavior?.programRequirement ??
-        (assignmentTypeBehavior?.requiresProgram ? "required" : "optional");
+        effectiveTypeBehavior?.programRequirement ??
+        (effectiveTypeBehavior?.requiresProgram ? "required" : "optional");
     const programUsed = programReq !== "not_used";
     // Room prominence remains, but Category may not require space (Transportation, some Enrichment).
     const canSave =
         days.length > 0 &&
         !!start &&
         (!arrive || !depart || depart > arrive) &&
-        (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
+        (!createAsSecondary || Boolean(effectiveTypeLabel)) &&
         (!roomRequired || Boolean(roomId)) &&
         // A primary Save also commits tuition: an override needs its reason, a custom rate its amount.
         // A secondary commits none, so the child's tuition choices cannot hold its Save.
@@ -2761,8 +2711,10 @@ function ScheduleEditor({
                     schedule_pattern_id: pid,
                     start_date: start,
                     end_date: endDate,
-                    room_location_id: roomId || null,
-                    assignment_type_label: assignmentTypeLabel || "Assignment",
+                    // A space-less use writes no room, even if one was picked before switching.
+                    room_location_id: roomReq === "not_used" ? null : roomId || null,
+                    assignment_type_label: effectiveTypeLabel || "Assignment",
+                    assignment_type_id: resolvingUse ? resolvedUseId : null,
                     days: week,
                 });
                 await finishAfterWrite();
@@ -2826,8 +2778,10 @@ function ScheduleEditor({
                 start={start}
                 selectedRoomId={roomId}
                 seedRooms={config.operationalRooms}
-                purposeBehavior={assignmentTypeBehavior}
+                purposeBehavior={resolvingUse ? undefined : assignmentTypeBehavior}
                 purposeUse={purposeUse}
+                useCandidates={resolvingUse ? useCandidates ?? [] : null}
+                subjectType={child.kind}
                 programCategoryId={childProgramForFit}
                 onProgramResolved={(resolvedProgramCategoryId) => {
                     // Adopt the server-resolved child program only when none is known at all.
@@ -2846,12 +2800,84 @@ function ScheduleEditor({
                     });
                     setProgramCategoryId(resolved.programCategoryId);
                     setProgramFromRoom(resolved.programFromRoom);
+                    // A new space re-reads its uses from scratch: no earlier choice rides along.
+                    if (id !== roomId) setChosenUseId(null);
+                    setSpaceless(false);
                     setRoomPicking(false);
                 }}
                 onCancel={() => setRoomPicking(false)}
             />
         );
     }
+
+    const labelForUse = (id: string) => (useCandidates ?? []).find((c) => c.id === id)?.label ?? "Use";
+    const linkStyle: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine };
+    /*
+     * The compact Use line under the room — only when the use is read from the room. Resolved: shown.
+     * Several: chosen here, nothing preselected. None: the space's own reason. No room yet: the use
+     * follows the space; a space-less category is its own explicit path.
+     */
+    const useFromRoomRegion = !resolvingUse ? null : !roomId ? (
+        <div data-assignment-use="awaiting-room" style={{ fontSize: 11.5, color: T.muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <span>The use follows the space you choose.</span>
+            {spacelessUses.length > 0 ? (
+                <button type="button" style={linkStyle} data-assignment-use-spaceless-toggle="on" onClick={() => { setSpaceless(true); setChosenUseId(null); }}>
+                    No space needed
+                </button>
+            ) : null}
+        </div>
+    ) : useResolution?.kind === "resolved" ? (
+        <div data-assignment-use="resolved" data-assignment-use-id={useResolution.useId} style={{ fontSize: 12, color: T.slate }}>
+            Use · <span style={{ fontWeight: 650, color: T.forge }}>{labelForUse(useResolution.useId)}</span>
+            {useResolution.legacy ? <span style={{ color: T.muted }}> · this space&apos;s uses are not configured</span> : null}
+        </div>
+    ) : useResolution?.kind === "choose" ? (
+        <label data-assignment-use="choose" style={{ display: "grid", gap: 3, maxWidth: 280 }}>
+            <span style={{ fontSize: 10, color: T.mid40 }}>
+                Use{useResolution.legacy ? " — this space's uses are not configured" : ""}
+            </span>
+            <AlloySelect
+                value={resolvedUseId ?? ""}
+                onChange={(next) => setChosenUseId(next || null)}
+                options={useResolution.useIds.map((id) => ({ value: id, label: labelForUse(id) }))}
+                placeholder="Choose a use"
+                density="compact"
+                aria-label="Use"
+                testId="assignment-use-select"
+            />
+        </label>
+    ) : useResolution?.kind === "none" ? (
+        <div data-assignment-use="none" data-assignment-use-refusal={useResolution.code} style={{ fontSize: 11.5, color: T.ember, display: "grid", gap: 4 }}>
+            <span>{useResolution.message}</span>
+            {useResolution.code === "no_categories" && onConfigureUses ? (
+                <button type="button" style={linkStyle} data-configure-assignment-types="true" onClick={onConfigureUses}>
+                    Configure Assignment Categories
+                </button>
+            ) : null}
+        </div>
+    ) : null;
+    const spacelessRegion = (
+        <div data-assignment-use="spaceless" style={{ display: "grid", gap: 6 }}>
+            <label style={{ display: "grid", gap: 3, maxWidth: 280 }}>
+                <span style={{ fontSize: 10, color: T.mid40 }}>Use — no space</span>
+                <AlloySelect
+                    value={resolvedUseId ?? ""}
+                    onChange={(next) => setChosenUseId(next || null)}
+                    options={spacelessUses.map((c) => ({ value: c.id, label: c.label }))}
+                    placeholder="Choose a use"
+                    density="compact"
+                    aria-label="Use"
+                    testId="assignment-use-spaceless-select"
+                />
+            </label>
+            <div data-schedule-site-context="true" style={{ fontSize: 11.5, fontWeight: 500, color: T.muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <span>Site · {siteName}</span>
+                <button type="button" style={linkStyle} data-assignment-use-spaceless-toggle="off" onClick={() => { setSpaceless(false); setChosenUseId(null); }}>
+                    Choose a space instead
+                </button>
+            </div>
+        </div>
+    );
 
     return (
         <>
@@ -2904,6 +2930,10 @@ function ScheduleEditor({
                                 data-assignment-tuition-draft={draftView ? "true" : undefined}
                                 onChange={(e) => {
                                     operatorChoseRef.current = Boolean(e.target.value);
+                                    choseOverrideRef.current = Boolean(
+                                        displayView?.additional.some((o) => o.sourceId === e.target.value)
+                                        && !displayView?.applicable.some((o) => o.sourceId === e.target.value),
+                                    );
                                     setInvalidatedRate(null);
                                     setOfferingId(e.target.value);
                                 }}
@@ -2926,9 +2956,18 @@ function ScheduleEditor({
                                         {r.label}
                                     </option>
                                 ))}
-                                {tuitionChoices.some((r) => r.additional) ? (
-                                    <optgroup label="Additional rates">
-                                        {tuitionChoices.filter((r) => r.additional).map((r) => (
+                                {tuitionChoices.some((r) => r.overrideGroup === "this_program") ? (
+                                    <optgroup label="Override — other schedules in this program" data-tuition-override-group="this_program">
+                                        {tuitionChoices.filter((r) => r.overrideGroup === "this_program").map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ) : null}
+                                {tuitionChoices.some((r) => r.overrideGroup === "other_program") ? (
+                                    <optgroup label="Override — other programs" data-tuition-override-group="other_program">
+                                        {tuitionChoices.filter((r) => r.overrideGroup === "other_program").map((r) => (
                                             <option key={r.id} value={r.id}>
                                                 {r.label}
                                             </option>
@@ -2945,8 +2984,8 @@ function ScheduleEditor({
                                         style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine }}
                                     >
                                         {showAdditionalRates
-                                            ? "Hide additional rates"
-                                            : `Show additional rates (${displayView.additional.length})`}
+                                            ? "Hide override rates"
+                                            : overrideRatesLabel(overrideRateCounts(displayView))}
                                     </button>
                                 ) : null}
                                 {offeringId.trim() ? (
@@ -3423,7 +3462,7 @@ function ScheduleEditor({
                     </div>
                 }
                 siteRoom={
-                    roomReq === "not_used" ? (
+                    resolvingUse && spaceless ? spacelessRegion : roomReq === "not_used" ? (
                         <div
                             data-room-not-used="true"
                             data-assignment-program-resolved={programCategoryId ? "true" : "false"}
@@ -3462,6 +3501,7 @@ function ScheduleEditor({
                                     {roomName ? "Change" : "Select"}
                                 </button>
                             </div>
+                            {useFromRoomRegion}
                             <div data-schedule-site-context="true" style={{ fontSize: 11.5, fontWeight: 500, color: T.muted }}>
                                 Site · {siteName}
                                 {programUsed && programFromRoom ? (
@@ -3561,12 +3601,28 @@ export function tuitionRateLabel(o: {
     return `${parts.join(" · ")} — ${o.amountLabel}`;
 }
 
-/** One row of the tuition list. `additional` rows are other programs' / schedules' site rates. */
-type TuitionChoice = { id: string; label: string; cadenceKey: string; additional: boolean };
+/**
+ * One row of the tuition list. `additional` rows are site rates outside this assignment's
+ * resolution — picking one is an override. `overrideGroup` says which kind: another schedule in
+ * the program the assignment resolved to, or another program entirely.
+ */
+type TuitionChoice = {
+    id: string;
+    label: string;
+    cadenceKey: string;
+    additional: boolean;
+    overrideGroup: "this_program" | "other_program" | null;
+};
 
 /**
  * The tuition list: every applicable rate, the recommendation first and named; then, when asked
- * for, every additional site rate, named by program so an operator can tell them apart.
+ * for, every additional site rate as an OVERRIDE — this program's other schedules first, then
+ * other programs' rates — named by program so an operator can tell them apart.
+ *
+ * Director review (Assignment UX convergence): "Show additional rates (39)" was every rate the site
+ * offers, in one undifferentiated list beside the eligible ones. The set is unchanged (the override
+ * escape hatch of #1506 stays), but it is now ordered and grouped by relevance to the program the
+ * selected space resolved, and presented as what it is — an override needing a reason.
  */
 export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditional: boolean): TuitionChoice[] {
     if (!view) return [];
@@ -3579,22 +3635,49 @@ export function tuitionChoicesFor(view: AssignmentTuitionView | null, showAdditi
             label: o.sourceId === recommendedId ? `Recommended — ${describe(o)}` : describe(o),
             cadenceKey: o.cadenceKey,
             additional: false,
+            overrideGroup: null,
         }));
     if (!showAdditional) return own;
-    const extra = view.additional.map((o) => ({
-        id: o.sourceId,
-        label: describe(o),
-        cadenceKey: o.cadenceKey,
-        additional: true,
-    }));
+    const group = (o: AssignmentTuitionView["additional"][number]): "this_program" | "other_program" =>
+        view.facts?.programKey && o.programKey === view.facts.programKey ? "this_program" : "other_program";
+    const extra = view.additional
+        .map((o) => ({
+            id: o.sourceId,
+            label: describe(o),
+            cadenceKey: o.cadenceKey,
+            additional: true,
+            overrideGroup: group(o),
+        }))
+        // Stable: this program's other schedules first, then other programs, each in view order.
+        .sort((a, b) => (a.overrideGroup === "this_program" ? 0 : 1) - (b.overrideGroup === "this_program" ? 0 : 1));
     return [...own, ...extra];
+}
+
+/** The disclosure's words: what is behind it, split by relevance, and that it is an override. */
+export function overrideRatesLabel(counts: { thisProgram: number; otherPrograms: number }): string {
+    const parts = [
+        counts.thisProgram ? `${counts.thisProgram} in this program` : "",
+        counts.otherPrograms ? `${counts.otherPrograms} other program${counts.otherPrograms === 1 ? "" : "s"}` : "",
+    ].filter(Boolean);
+    return `Override with another rate (${parts.join(" · ")})`;
+}
+
+/** How the site's override rates split against the program this assignment resolved to. */
+export function overrideRateCounts(view: AssignmentTuitionView | null): { thisProgram: number; otherPrograms: number } {
+    if (!view) return { thisProgram: 0, otherPrograms: 0 };
+    const programKey = view.facts?.programKey ?? null;
+    const thisProgram = programKey ? view.additional.filter((o) => o.programKey === programKey).length : 0;
+    return { thisProgram, otherPrograms: view.additional.length - thisProgram };
 }
 
 /**
  * How the tuition selection follows an assignment change.
  *
- *  - A selection still offered (an eligible rate, or an additional rate chosen as an override)
- *    stays.
+ *  - A selection still offered stays: an eligible rate, or an additional rate the operator chose
+ *    AS an override (`choseOverride`).
+ *  - An eligible rate that a room / use / schedule change pushed out of eligibility is NOT kept
+ *    merely because the site still sells it (every site rate is "additional"): that would turn an
+ *    ordinary choice into an unannounced override. It is cleared and named like any other.
  *  - An automatic selection follows the new resolution: the recommendation when there is exactly
  *    one, nothing when rates tie (the operator chooses — never an arbitrary pick).
  *  - An OPERATOR's selection the change made ineligible is cleared and named, never silently
@@ -3604,13 +3687,15 @@ export function reconcileTuitionSelection(args: {
     view: AssignmentTuitionView;
     current: string;
     operatorChose: boolean;
+    /** The operator picked `current` from the override (additional) rates, deliberately. */
+    choseOverride?: boolean;
 }): { next: string; invalidated: string | null } {
     const { view, current } = args;
     // An automatic selection IS the resolution's answer: one recommendation, or nothing on a tie.
     if (!args.operatorChose) return { next: view.recommended?.sourceId ?? "", invalidated: null };
     const eligible = view.applicable.some((o) => o.sourceId === current);
     const additional = view.additional.some((o) => o.sourceId === current);
-    if (current && (eligible || additional)) return { next: current, invalidated: null };
+    if (current && (eligible || (additional && args.choseOverride === true))) return { next: current, invalidated: null };
     if (current) return { next: "", invalidated: current };
     return { next: view.recommended?.sourceId ?? "", invalidated: null };
 }
@@ -3634,7 +3719,7 @@ export function tuitionNoMatchMessage(view: Pick<AssignmentTuitionView, "noMatch
                 : view.noMatchReason === "no_rate_for_scope"
                   ? "No rate for this program and schedule at this site"
                   : "No rate matches this assignment";
-    return view.additional.length > 0 ? `${why} — or choose from additional rates.` : `${why}.`;
+    return view.additional.length > 0 ? `${why} — or override with another rate at this site.` : `${why}.`;
 }
 
 /** Anything but the recommendation as authored is an override, and needs a reason. */
@@ -3666,6 +3751,8 @@ function RoomPicker({
     seedRooms,
     purposeBehavior,
     purposeUse,
+    useCandidates = null,
+    subjectType = "child",
     programCategoryId,
     onProgramResolved,
     onPick,
@@ -3680,6 +3767,12 @@ function RoomPicker({
     purposeBehavior?: AssignmentTypeBehavior;
     /** The use being scheduled; the space's configured uses decide first (V7-02a). */
     purposeUse?: UseForSpace;
+    /**
+     * When the use is READ FROM the room (no use chosen yet): offer the spaces that take at least
+     * one of these uses, and name the ones that take none — rather than scoping to one use.
+     */
+    useCandidates?: UseCandidate[] | null;
+    subjectType?: "child" | "staff";
     programCategoryId?: string | null;
     /** Server-resolved Program from child/assignment context (`?view=options`), adopted
      *  only when no Program is already known client-side — never overrides a Program
@@ -3688,9 +3781,25 @@ function RoomPicker({
     onPick: (id: string, name: string | null, recommended: boolean) => void;
     onCancel: () => void;
 }) {
+    /** The picker's space scope: one fixed use, or — when the use is read from the room — any candidate use. */
+    const inScope = useCallback(
+        <R extends { roomId: string; programCategoryId?: string | null; unitRole?: SiteOperationalRoom["unitRole"]; spaceUses?: readonly string[] | null }>(rooms: R[]): R[] =>
+            useCandidates
+                ? rooms.filter((r) => !r.unitRole || spaceTakesAnyUse({ unitRole: r.unitRole, spaceUses: r.spaceUses ?? null }, useCandidates, subjectType))
+                : scopeRoomsForAssignmentPicker(rooms, purposeBehavior ?? {}, purposeUse),
+        [useCandidates, subjectType, purposeBehavior, purposeUse],
+    );
+    /** Spaces left out because they take none of the uses — named with the space's own reason. */
+    const unavailable = useMemo(() => {
+        if (!useCandidates) return [];
+        return seedRooms
+            .filter((r) => r.active !== false)
+            .map((r) => ({ room: r, verdict: resolveUseForSpace(r, useCandidates, subjectType) }))
+            .filter((x): x is { room: SiteOperationalRoom; verdict: Extract<AssignmentUseResolution, { kind: "none" }> } => x.verdict.kind === "none");
+    }, [seedRooms, useCandidates, subjectType]);
     const seedOptions = useMemo((): PlacementOption[] => {
         const active = seedRooms.filter((r) => r.active !== false);
-        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {}, purposeUse);
+        const scoped = inScope(active);
         return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
@@ -3699,7 +3808,7 @@ function RoomPicker({
             reason: "",
             programCategoryId: r.programCategoryId,
         }));
-    }, [seedRooms, purposeBehavior, purposeUse]);
+    }, [seedRooms, inScope]);
 
     const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [fitContext, setFitContext] = useState<{
@@ -3729,15 +3838,13 @@ function RoomPicker({
                 // which of them this use may take, and any use-eligible shared space the scorer
                 // does not rank is kept after them rather than vanishing once scoring lands.
                 const seedById = new Map(seedRooms.map((r) => [r.roomId, r]));
-                const scoped = scopeRoomsForAssignmentPicker(
+                const scoped = inScope(
                     raw.map((r) => ({
                         ...r,
                         programCategoryId: r.programCategoryId ?? null,
                         unitRole: seedById.get(r.roomId)?.unitRole,
                         spaceUses: seedById.get(r.roomId)?.spaceUses ?? null,
                     })),
-                    purposeBehavior ?? {},
-                    purposeUse,
                 );
                 const scoredIds = new Set(scoped.map((r) => r.roomId));
                 setScored([...scoped, ...seedOptions.filter((o) => !scoredIds.has(o.roomId))]);
@@ -3762,7 +3869,7 @@ function RoomPicker({
         // `onProgramResolved` intentionally omitted — an inline callback from the parent;
         // depending on it would refetch every render without changing behavior.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteId, patternId, childId, start, purposeBehavior, purposeUse, seedOptions, seedRooms, programCategoryId]);
+    }, [siteId, patternId, childId, start, inScope, seedOptions, seedRooms, programCategoryId]);
 
     const options = useMemo(() => {
         const list = scored ?? seedOptions;
@@ -3884,6 +3991,16 @@ function RoomPicker({
                     })}
                 </div>
             )}
+            {unavailable.length > 0 ? (
+                <div data-room-unavailable="true" style={{ display: "grid", gap: 2, fontSize: 11, color: T.muted }}>
+                    <span style={{ fontWeight: 650 }}>Not offered</span>
+                    {unavailable.map(({ room, verdict }) => (
+                        <span key={room.roomId} data-room-unavailable-id={room.roomId} data-room-unavailable-reason={verdict.code}>
+                            {room.roomName ?? "Space"} — {verdict.message}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
             <div style={{ display: "flex", borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
                 <button type="button" onClick={onCancel} style={{ all: "unset", marginLeft: "auto", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                     Cancel

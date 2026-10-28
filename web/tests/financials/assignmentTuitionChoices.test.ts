@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
     dollarsToCents,
     isTuitionOverride,
+    overrideRateCounts,
+    overrideRatesLabel,
     tuitionChoicesFor,
 } from "@/components/admin/focusPanel/cards/SchedulingCard";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
@@ -34,6 +36,7 @@ const view = {
     recommended: option("r-rec", "toddler", "$1,600.00/monthly"),
     applicable: [option("r-other", "toddler", "$1,500.00/monthly", "3 days/week"), option("r-rec", "toddler", "$1,600.00/monthly")],
     additional: [option("r-pre", "pre_k", "$1,200.00/monthly")],
+    facts: { programKey: "toddler" },
 } as unknown as AssignmentTuitionView;
 
 describe("tuitionChoicesFor", () => {
@@ -47,6 +50,33 @@ describe("tuitionChoicesFor", () => {
     it("adds the site's other rates only when asked, named by program", () => {
         const all = tuitionChoicesFor(view, true);
         expect(all.at(-1)).toMatchObject({ id: "r-pre", additional: true, label: "Pre-K · Full Time · 5 days/week — $1,200.00/monthly" });
+    });
+
+    it("groups override rates by relevance: this program's other schedules first, then other programs", () => {
+        const wide = {
+            ...view,
+            additional: [
+                option("x-pre", "pre_k", "$1,200.00/monthly"),
+                option("x-tod2", "toddler", "$900.00/monthly", "2 days/week"),
+                option("x-inf", "infant", "$2,000.00/monthly"),
+            ],
+        } as unknown as AssignmentTuitionView;
+        const extra = tuitionChoicesFor(wide, true).filter((c) => c.additional);
+        expect(extra.map((c) => [c.id, c.overrideGroup])).toEqual([
+            ["x-tod2", "this_program"],
+            ["x-pre", "other_program"],
+            ["x-inf", "other_program"],
+        ]);
+        // The eligible rates are never an override group.
+        expect(tuitionChoicesFor(wide, true).filter((c) => !c.additional).every((c) => c.overrideGroup === null)).toBe(true);
+        expect(overrideRateCounts(wide)).toEqual({ thisProgram: 1, otherPrograms: 2 });
+        expect(overrideRatesLabel(overrideRateCounts(wide))).toBe("Override with another rate (1 in this program · 2 other programs)");
+    });
+
+    it("with no resolved program every site rate is 'other program' — none is presented as this program's", () => {
+        const noProgram = { ...view, facts: { programKey: null } } as unknown as AssignmentTuitionView;
+        expect(overrideRateCounts(noProgram)).toEqual({ thisProgram: 0, otherPrograms: 1 });
+        expect(overrideRatesLabel(overrideRateCounts(noProgram))).toBe("Override with another rate (1 other program)");
     });
 });
 
@@ -90,7 +120,13 @@ describe("reconcileTuitionSelection — an assignment change never silently keep
         expect(reconcileTuitionSelection({ view, current: "r-other", operatorChose: true })).toEqual({ next: "r-other", invalidated: null });
     });
     it("an operator's additional-rate override stays an override", () => {
-        expect(reconcileTuitionSelection({ view, current: "r-pre", operatorChose: true })).toEqual({ next: "r-pre", invalidated: null });
+        expect(reconcileTuitionSelection({ view, current: "r-pre", operatorChose: true, choseOverride: true })).toEqual({ next: "r-pre", invalidated: null });
+    });
+    it("an ELIGIBLE choice a room/use change pushed out of eligibility is cleared — not kept as a silent override", () => {
+        // r-pre was the operator's eligible pick under the old room's program; the new room's
+        // resolution lists it only among the site's override rates.
+        expect(reconcileTuitionSelection({ view, current: "r-pre", operatorChose: true, choseOverride: false })).toEqual({ next: "", invalidated: "r-pre" });
+        expect(reconcileTuitionSelection({ view, current: "r-pre", operatorChose: true })).toEqual({ next: "", invalidated: "r-pre" });
     });
     it("an operator's choice the change made ineligible is cleared and named — not replaced", () => {
         expect(reconcileTuitionSelection({ view, current: "r-gone", operatorChose: true })).toEqual({ next: "", invalidated: "r-gone" });
@@ -103,7 +139,7 @@ describe("tuitionNoMatchMessage — the step to take, from the resolution's own 
     const base = { additional: [{}] as never[], facts: { daysPerWeek: null } as never };
     it("no days yet", () => {
         expect(tuitionNoMatchMessage({ ...base, noMatchReason: "unsupported_schedule_basis" })).toBe(
-            "Choose days to see matching rates — or choose from additional rates.",
+            "Choose days to see matching rates — or override with another rate at this site.",
         );
     });
     it("days with no rate", () => {
