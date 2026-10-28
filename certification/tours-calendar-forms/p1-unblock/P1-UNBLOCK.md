@@ -94,3 +94,57 @@ the two read-only participant probes answers `ok:false` with 200; every consumer
 Leads/persons for `qa+g1approve@`, `qa+g2auto@`, `qa+g3resched@`; bookings `4d5a1f61…` (confirmed, Fri)
 and `fd02ffcb…` (confirmed, Mon); earlier unapproved cases; orphan department "Tour Inquiries QA";
 enqueued (undeliverable) confirmation messages. All go with the environment.
+
+## Addendum (2026-10-28) — step 11 evidence, mock removed, staging re-reconciled
+
+**Why.** Two claims above were weaker than they read. (a) Step 11 recorded only `comms: sent`; the family's
+calendar invitation (the confirmation email's *Add to calendar* link — `tour_comms.ics` itself has no
+consumer; internal staff ICS needs configured recipients) was never captured. (b) The S7 live suite still
+mocked `resolveCreateLeadPlacement`, the mock that hid the blocker. The preview runtime is gone, so both were
+closed on the shared real database (`alloy-cert`) instead of re-activating a governed preview.
+
+**`d4b2ac7ed`** — S7's `mintLink` now applies `resolveOrgIntakeRoutingDefaults` exactly as a Studio-minted
+link does (`default_department_id` = Northwind Enrollment) and the placement mock is deleted; step 8
+asserts the confirmation email body carries `Add to calendar: https://calendar.google.com/…20330301T180000Z…`
+for the booked time. **Negative control:** with `01d76bc1b`'s `buildPlan` line reverted, 15 tests fail with
+`422 lead_placement_unresolved`; restored byte-identical (sha256 `e4daaf38…`), 22/22.
+
+**`5d3a73697`** — merge of staging `24b03991c` (Documents EN-FI-01, 7 commits; no file overlap with P1;
+0 behind). **New integrated candidate.**
+
+| Check (tree `1d7ec334a4649d60` = `5d3a73697`) | Result |
+|---|---|
+| Related suites: toursP1Close, S7 live, `tests/processing`, placement ×3, consent/unsubscribe ×4, `tests/documents`, `tests/tours/publicCalendar` | **829 passed, 0 failed**, 30 skipped |
+| Skipped | `processingIdentityCert{E2E,Operator,Rls}` — hard-wired to a dedicated `:55321/:55322` stack that is not run on this host (no private stack may be started). Not run; S7 covers public-form approval on `alloy-cert` |
+| `vac run typecheck` / `typecheck:tests` | PASSED |
+| `npm run prebuild` | exit 0 |
+| `vac run build` | **PASSED** |
+
+Browser QA was not repeated on `5d3a73697`: the staging delta is Documents-only and the browser journey
+above stands on `5bea7b940`. A preview of the new candidate is the next certification step if the Director
+wants browser evidence on the exact tree.
+
+## Program tracker (2026-10-28)
+
+| # | Item | Owner | State | Evidence |
+|---|---|---|---|---|
+| 1 | Approval blocker (422 `lead_placement_unresolved`) | Enrollment | **DONE** | `01d76bc1b`; browser §2; S7 negative control |
+| 2 | §G steps 1–10, 12–14 end to end | Enrollment | **DONE** | browser §2 on `5bea7b940`; S7 22/22 on `5d3a73697` |
+| 3 | Step 11 family calendar invitation (Add to calendar link) | Enrollment | **DONE** | S7 step 8 (`d4b2ac7ed`) |
+| 3a | Step 11 internal staff calendar invite | Tours comms config | NOT EVIDENCED | needs `tour_comms.internal_recipients.user_ids`; none configured on any QA tenant |
+| 3b | `tour_comms.ics` policy has no consumer | Tours comms | RECORDED | parsed and merged only; flag does not gate links |
+| 4 | Branding truth, readiness, one consent control, labels, scheduling UX, Preview parity | Enrollment | **PRESERVED** | toursP1Close 24/24 in the related run |
+| 5 | UX-04 anonymous 409 console noise | Enrollment | **DONE** | `17a22b3cc` |
+| 6 | T1 copy ("and") | Enrollment | **DONE** | `17a22b3cc` |
+| 7 | Studio Health / Work trend placeholders | Workspace/UI | DEFERRED | pinned by doctrine test until a historical comparison API exists |
+| 8 | S7 placement mock | Enrollment | **DONE** | `d4b2ac7ed` |
+| 9 | Staging reconcile | Enrollment | **DONE** | `5d3a73697`, 0 behind `24b03991c` |
+| 10 | Production build on final candidate | Enrollment | **DONE** | `vac run build` PASSED, tree `1d7ec334` |
+| 11 | Browser QA on exact final tree | Enrollment | OPEN (optional) | needs governed preview activation |
+| B1 | New Business Process create → `lifecycle-activation` 400 | Business Processes | OPEN | P1-CLOSE |
+| B2 | No path converts a legacy department to builder-owned | Business Processes / Lifecycle | OPEN | P1-CLOSE |
+| C1 | Operator-visible consent status and provenance (incl. COM-02 `lastChange.source` after preserved opt-out) | Communications | OPEN | §5 |
+| C2 | Governed non-500 response for an opted-out direct send | Communications | OPEN | data layer already `blocked` / `policy:OPTED_OUT` (S7 C·12) |
+| C3 | Unsubscribe round-trip certification | Communications | OPEN (owner cert) | integration green: S7 C·9–C·12 |
+| C4 | C1 Python CI coverage | Communications | OPEN | — |
+| P1x | Completed-case queue chip reads "Link existing" for a new family | Processing | RECORDED (cosmetic) | §5 |
