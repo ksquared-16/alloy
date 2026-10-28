@@ -153,6 +153,9 @@ const P = {
     processingOnly: { role: "ops", roleKeys: ["qa_processing_only"], permissionKeys: ["portal.access", "processing.operate"] },
 } satisfies Record<string, Persona>;
 
+/** The access context a route passes (EN-FI-01: the OCR preview also needs the actor's scope; unrestricted here). */
+const unrestricted = (p: Persona) => ({ ...p, departmentScope: "all", allowedDepartmentIds: null, siteScope: "all", allowedSiteLocationIds: null });
+
 function as(p: Persona) {
     mockCtx.mockResolvedValue({ ok: true, orgId: ORG, role: p.role, userId: USER_ID, permissionKeys: p.permissionKeys });
     mockAccess.mockResolvedValue({
@@ -409,14 +412,14 @@ describe("OCR text in a stored form-draft preview (D1b.2 / D1b.6)", () => {
 
     it("is blanked for an actor without processing.operate and document read; its length stays", async () => {
         for (const p of [P.reader, P.processingOnly]) {
-            const out = await discloseFormDraftTextPreview(db as never, ORG, p, draft(D.plain));
+            const out = await discloseFormDraftTextPreview(db as never, ORG, unrestricted(p), draft(D.plain));
             expect(out.diagnostics.extracted_text_preview).toBe("");
             expect(out.diagnostics.extracted_text_length).toBe(12);
         }
     });
 
     it("is shown to an actor who may read the source document's text", async () => {
-        const out = await discloseFormDraftTextPreview(db as never, ORG, P.ops, draft(D.plain));
+        const out = await discloseFormDraftTextPreview(db as never, ORG, unrestricted(P.ops), draft(D.plain));
         expect(out.diagnostics.extracted_text_preview).toBe("secret words");
     });
 
@@ -437,7 +440,7 @@ describe("OCR text in a stored form-draft preview (D1b.2 / D1b.6)", () => {
     });
 
     it("is blanked when the source document is medical and the actor lacks health.view", async () => {
-        const out = await discloseFormDraftTextPreview(db as never, ORG, P.ops, draft(D.immunization));
+        const out = await discloseFormDraftTextPreview(db as never, ORG, unrestricted(P.ops), draft(D.immunization));
         expect(out.diagnostics.extracted_text_preview).toBe("");
     });
 });
