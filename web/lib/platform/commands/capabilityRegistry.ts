@@ -115,6 +115,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
+    "health_fact.verify_immunization",
     "medical_consent.withdraw",
 ] as const;
 
@@ -339,6 +340,21 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         registeredActionKey: "health_fact.end",
         implementationStatus: "production",
         reason: "Closes a fact with an end date. Never a deletion — the record says when it stopped applying.",
+    }),
+    def({
+        capabilityKey: "health_fact.verify_immunization",
+        canonicalCommandKey: "health_fact.verify_immunization",
+        operatorLabel: "Verify immunization",
+        family: "health",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "health_fact.verify_immunization",
+        implementationStatus: "production",
+        reason: "EN-FI-10. Medical verifies a reported immunization (health.manage), optionally against a certificate Documents review accepted. The only path to verified — never a side effect of a form or an upload.",
     }),
     def({
         capabilityKey: "medical_consent.withdraw",

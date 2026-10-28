@@ -4,7 +4,7 @@
  * D6 — document readiness in the Focus Panel (Documents card), above the D4 library.
  *
  * Shows, per household member in the operator's scope, what the organization requires, what is on file, what is missing,
- * pending review, waived or blocked — the Documents evaluator's answer from `GET /api/admin/documents/requirements/readiness`,
+ * pending review, waived, expired (D7) or blocked, and when satisfied evidence stops being in force (D7) — the Documents evaluator's answer from `GET /api/admin/documents/requirements/readiness`,
  * the same evaluation Processing → Work → Documents, Work Items and Business Process read. Nothing is computed here.
  *
  * Disclosure is the server's: requirements of a class the operator is not cleared for are absent, members outside scope
@@ -28,6 +28,7 @@ const STATE_CLASS: Record<DisclosedEvaluation["state"], string> = {
     pending_review: "bg-amber-50 text-amber-800",
     satisfied: "bg-emerald-50 text-emerald-800",
     waived: "bg-sky-50 text-sky-800",
+    expired: "bg-orange-50 text-orange-800",
     blocked: "bg-stone-200 text-stone-800",
 };
 
@@ -127,6 +128,12 @@ export default function DocumentReadinessPanel({
                 <span className={`rounded-full px-2 py-0.5 ${STATE_CLASS.missing}`} data-testid="document-readiness-missing">{t.missing} missing</span>
                 <span className={`rounded-full px-2 py-0.5 ${STATE_CLASS.pending_review}`} data-testid="document-readiness-pending">{t.pending_review} pending review</span>
                 <span className={`rounded-full px-2 py-0.5 ${STATE_CLASS.waived}`} data-testid="document-readiness-waived">{t.waived} waived</span>
+                {t.expired ? <span className={`rounded-full px-2 py-0.5 ${STATE_CLASS.expired}`} data-testid="document-readiness-expired">{t.expired} expired</span> : null}
+                {t.expiring_soon ? (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800" data-testid="document-readiness-expiring">
+                        {t.expiring_soon} expiring soon
+                    </span>
+                ) : null}
                 {t.blocked ? <span className={`rounded-full px-2 py-0.5 ${STATE_CLASS.blocked}`} data-testid="document-readiness-blocked">{t.blocked} blocked</span> : null}
             </div>
             <ul className="mt-2 space-y-2">
@@ -137,7 +144,7 @@ export default function DocumentReadinessPanel({
                             {s.requirements.map((e) => {
                                 const key = `${e.requirement_id}:${e.subject_id}`;
                                 const unmet = e.state !== "satisfied" && e.state !== "waived";
-                                const onFile = [...e.evidence.accepted, ...e.evidence.pending];
+                                const onFile = [...e.evidence.accepted, ...e.evidence.pending, ...(e.evidence.expired ?? [])];
                                 return (
                                     <li key={key} className="rounded border border-alloy-stone/15 px-2 py-1.5 text-[12px]" data-testid={`document-readiness-row-${e.requirement_key}-${e.subject_id}`}>
                                         <div className="flex flex-wrap items-center gap-2">
@@ -146,6 +153,16 @@ export default function DocumentReadinessPanel({
                                                 {REQUIREMENT_STATE_LABEL[e.state]}
                                             </span>
                                             {e.policy === "optional" ? <span className="text-[11px] text-alloy-midnight/50">optional</span> : null}
+                                            {e.state === "satisfied" && e.valid_until ? (
+                                                <span
+                                                    className={`text-[11px] ${e.expiring_soon ? "font-semibold text-amber-800" : "text-alloy-midnight/55"}`}
+                                                    data-testid={`document-readiness-valid-until-${e.requirement_key}-${e.subject_id}`}
+                                                >
+                                                    {e.expiring_soon ? "Expiring soon · valid through" : "Valid through"} {e.valid_until}
+                                                    {e.renewal_pending ? " · renewal awaiting review" : ""}
+                                                </span>
+                                            ) : null}
+                                            {(e.evidence.undated ?? []).length ? <span className="text-[11px] text-alloy-midnight/60">expiration date not recorded</span> : null}
                                             {unmet && e.due_on ? (
                                                 <span className={`text-[11px] ${e.due_on < data.today ? "font-semibold text-red-700" : "text-alloy-midnight/55"}`}>
                                                     {e.due_on < data.today ? "Overdue" : "Due"} {e.due_on}
@@ -154,7 +171,7 @@ export default function DocumentReadinessPanel({
                                             <span className="ml-auto flex gap-1">
                                                 {onFile.length && onOpenDocument ? (
                                                     <button type="button" className="underline text-[11px]" onClick={() => onOpenDocument(onFile[0])} data-testid={`document-readiness-open-${e.requirement_key}`}>
-                                                        {e.state === "pending_review" ? "Review" : "View"}
+                                                        {e.state === "pending_review" ? "Review" : e.state === "expired" || e.expiring_soon ? "Renew" : "View"}
                                                     </button>
                                                 ) : null}
                                                 {canMutate && e.state === "pending_review" && e.evidence.pending.length ? (

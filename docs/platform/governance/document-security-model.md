@@ -268,6 +268,56 @@ Migration `supabase/migrations/20261212090000_documents_d6_requirements.sql`. Se
   function (its owner), never a session that sets the purge setting itself. So a governed hosted certification can
   end ZERO_RESIDUE. The zero-residue census checks it (`doc_zr_d6_*`).
 
+## 7d. Review, validity and renewal (D7)
+
+- **One review writer after filing**: `document_review_version` (service role). Current version only; never an
+  unavailable (quarantined, deleted, restricted, superseded) document; a reason for a rejection, a reopen and any
+  change to a decided version; that change only with re-review authority, which the route requires as
+  `processing.documents.manage` on top of `documents.write` and the full access decision. D5 filing keeps
+  `document_set_version_review` inside its transaction.
+- **One validity writer**: `document_set_version_validity` (service role) — current version, available documents,
+  `effective_on <= expires_on`, review untouched.
+- **History is append-only**: `document_version_review_events` (RLS on, no client grants); an UPDATE and a direct DELETE
+  raise; rows go only by cascade with their version or document (so audited deletion and governed QA teardown leave no
+  residue).
+- **The server's clock**: validity and due dates are computed on the organization-local date on the server; a browser
+  clock never decides compliance.
+- **Disclosure**: document-attention rows pass the canonical disclosure (organization, subject scope, sensitivity
+  clearance) before they are listed or counted; quarantined documents are never listed.
+
+## 7e. Forms evidence (D8)
+
+- A completed form is never accepted evidence by default: under `acceptance: "review"` its version must be accepted by
+  a reviewer (D7 authority); `submitted` is an explicit, published, versioned organization policy.
+- Never evidence: draft or void submissions, other forms, signature images, uploads under the Forms policy (they count
+  only as documents of their own type), and a signed artifact whose stored bytes do not match its recorded signed hash.
+- `form_evidence` is validated by the database (active forms of the organization only; the Completed form type must
+  accept the grain) and immutable once published, like every requirement policy field.
+- Sensitivity of form artifacts is unchanged (medical-by-linkage, D1b); evidence ids are disclosed only to actors who may
+  read them.
+
+## 7f. Document metadata outside the Documents routes (EN-FI-01)
+
+A document's title, file name and type are content: "Immunization_Record_<child>.pdf" discloses a medical fact. Every
+surface that names a document from a service-role read decides it per document with
+`web/lib/documents/documentMetadataDisclosure.ts` (`disclosableDocumentIds`) — the same three gates as the Documents
+routes: **admission** (`documents.read` or a document-read role), **subject scope** (department / site), **sensitivity
+clearance** (`health.view` for medical, safeguarding, identity, restricted). It fails closed (no reader, a failed read,
+another organization's id → hidden). A hidden document reads "Document (restricted)" or the call is 404.
+
+| Surface | Before (deployed `317eafa5`) | Now |
+|---|---|---|
+| Processing queue / case source labels | admin session only | three gates per label |
+| `GET forms/submissions/[id]` `linked_documents` | admin session only | three gates per document |
+| Packet review rollup / insight, opportunity enrollment packets | admin\|ops, no document gate | three gates per title |
+| `PATCH documents/[id]` (returns the row) | `documents.write` + scope | + clearance (404) |
+| `PATCH` / `DELETE pos/documents/[id]` | `processing.documents.manage` only | + the three read gates (404) |
+| Health card document list | `health.view` only; quarantined listed | Medical **and** Documents gates; never quarantined |
+
+Medical answers were already withheld on these surfaces; the document metadata was not. Proof:
+`web/tests/documents/documentsEnFi01MedicalMetadata.test.ts` (Documents operator, Medical-authorized, health.view without
+Documents, out-of-scope, cross-organization, anonymous; two mutations).
+
 ## 8. Certification
 
 - **D1a:** `certification/documents-v1/D1A-CERTIFICATION.md`.

@@ -1,0 +1,121 @@
+{
+  "schema": "alloy.documents_d6.zero_residue_census_repin_handoff.v1",
+  "status": "DRAFT FOR BACKEND — Director-approved census re-pin handoff (2026-10-27). The Documents lane has not changed and will not change the registry.",
+  "from_lane": "lane_aa660dc9554d",
+  "to_owner": "Vacilando Backend (lane_db3431e755a8), owner of ksquared-16/vacilando lib/qa-plan-registry.mjs",
+  "plan": "authz_q1",
+  "gate": "ZERO_RESIDUE for hosted authz_q1 runs that exercise Documents D6 requirements",
+  "registry_entry": {
+    "repository": "ksquared-16/vacilando",
+    "file": "lib/qa-plan-registry.mjs",
+    "entry": "QA_PLANS.authz_q1.residue_census",
+    "lines_at_source_commit": "205-213",
+    "source_commit": "7572850848db4d33f37e729e1a6bae56707a4ff7",
+    "installed_toolkit": "20261027-7572850848db (artifact sha256 2d800e05bbb0a1cd2238cc6c982d70e7a6d9cce00348fa6b6c8394adf4c86ed7)",
+    "installed_file_sha256": "9df9a968ad7f92bbddfde7c440283d6743bbc7ed6d34a1bfde15e3af7a1f2853",
+    "vendored_fixtures_to_update": [
+      "tests/fixtures/shared-qa-g1g2/documents-zero-residue-census.sql (currently 3be83854…; tests/fixtures/shared-qa-b2/ holds the older B2 bytes 713325aa… and is not the authz_q1 pin)"
+    ],
+    "tests_that_pin_the_old_hash": [
+      "tests/deterministic/shared-qa-run.test.mjs"
+    ]
+  },
+  "residue_census_repin": {
+    "replaces": {
+      "path": "certification/qa-shared/documents-zero-residue-census.sql",
+      "query_sha256": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
+      "source": "Alloy c4548541e (registered from staging 74fe1951, PR #1568)",
+      "checks": [
+        "doc_zr_vendors",
+        "doc_zr_qa_role_grants",
+        "doc_zr_pool_access",
+        "doc_zr_zero_sent",
+        "doc_zr_subjects",
+        "doc_zr_shared_documents",
+        "doc_zr_shared_objects",
+        "doc_zr_shared_dangling_case_sources",
+        "doc_zr_secondary_documents",
+        "doc_zr_secondary_objects",
+        "doc_zr_secondary_cases",
+        "doc_zr_qa_sessions"
+      ],
+      "defect": "asserts nothing about Documents D6 requirements: a run could bind ZERO_RESIDUE with qa_ fixture requirements, their versions or their waivers still in QA Shared / QA Secondary"
+    },
+    "path": "certification/qa-shared/documents-zero-residue-census.sql",
+    "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+    "present_on_merged_staging": {
+      "merge": "1492a2dd9fdbb36cde05db1e734e71b550e875dd",
+      "pull_request": 1605,
+      "introducing_commit": "6995e65b9 feat(documents): D6 slice 5 — QA fixture requirement purge for zero-residue certification",
+      "verified": "git show origin/staging:certification/qa-shared/documents-zero-residue-census.sql | shasum -a 256 = eb702fb6… (2026-10-27)"
+    },
+    "checks": [
+      "doc_zr_vendors",
+      "doc_zr_qa_role_grants",
+      "doc_zr_pool_access",
+      "doc_zr_zero_sent",
+      "doc_zr_subjects",
+      "doc_zr_shared_documents",
+      "doc_zr_shared_objects",
+      "doc_zr_shared_dangling_case_sources",
+      "doc_zr_secondary_documents",
+      "doc_zr_secondary_objects",
+      "doc_zr_secondary_cases",
+      "doc_zr_qa_sessions",
+      "doc_zr_d6_requirements",
+      "doc_zr_d6_requirement_versions",
+      "doc_zr_d6_waivers"
+    ],
+    "data_rows": [
+      "doc_zr_00",
+      "doc_zr_retained_audit",
+      "doc_zr_retained_d1a_audit"
+    ],
+    "added_checks": {
+      "doc_zr_d6_requirements": "public.document_requirements in either QA org with key LIKE 'qa\\_%' — zero",
+      "doc_zr_d6_requirement_versions": "public.document_requirement_versions in either QA org whose requirement is missing or has a qa_ key — zero",
+      "doc_zr_d6_waivers": "public.document_requirement_waivers in either QA org whose requirement has a qa_ key, or whose subject no longer resolves (public.document_subject_resolves) — zero"
+    },
+    "rationale": "D6 hosted certification publishes, waives and archives run-scoped qa_<run>_ requirements in QA Shared. Slice 5/6 added the audited purge (document_requirement_purge, QA orgs and the run's namespace only). Without these three checks the registered census cannot see whether that purge ran, so a bound ZERO_RESIDUE would not prove zero requirement residue.",
+    "retained_by_design": [
+      "access audit history (mutation_events) written by the audited functions"
+    ],
+    "retained_note": "doc_zr_retained_d1a_audit is a DATA row (retained workflow_events tally). Its event list now also counts document_requirement_changed, document_requirement_waiver_granted, document_requirement_waiver_revoked and document_version_reviewed. It asserts nothing and is never residue; Backend may add 'Documents audit history (workflow_events)' to retained_by_design if it wants the list to name it."
+  },
+  "verification": {
+    "prior_checks_preserved": "All 12 registered check blocks are byte-identical between 3be83854… and eb702fb6… (split on UNION ALL, compared per question_id); the header (org CTE) and the doc_zr_00 and doc_zr_retained_audit data rows are identical. The only non-additive line change is inside the data row doc_zr_retained_d1a_audit.",
+    "no_assertion_weakened": "No check was removed, renamed, reordered into a data row, or had its predicate changed. The diff is +37/-1 lines: three added check rows and one widened data-row event list.",
+    "read_only": [
+      "toolkit validateReadOnlySql (lib/trusted-host-sql-readonly.mjs, installed 20261027-7572850848db): ok, kind=select, for both 3be83854… and eb702fb6…",
+      "no INSERT/UPDATE/DELETE/TRUNCATE/ALTER/CREATE/DROP/GRANT/PERFORM tokens outside comments",
+      "the one function called by an added check, public.document_subject_resolves(uuid,text,uuid), is LANGUAGE plpgsql STABLE SECURITY DEFINER and only SELECTs (supabase/migrations/20261208090000_documents_d2_canonical_foundation.sql:168); it is not redefined later"
+    ],
+    "null_safety": "requirement_id on versions and waivers is NOT NULL REFERENCES document_requirements ON DELETE CASCADE, so the left-joined r.key is never NULL for a surviving waiver; a NULL predicate cannot silently drop a residue row from doc_zr_d6_waivers.",
+    "hosted_execution": {
+      "request_id": "gar_53d6744eb1cf1a",
+      "trusted_host_action_id": "tha_eed63c87cac610",
+      "database_target": "alloy_deployed_primary",
+      "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+      "census_run_at": "2026-10-27T17:20:36.987Z",
+      "result": "15/15 checks ~ true (12 prior + 3 D6), after qar_af1c638fd52a closed at 17:18:00Z",
+      "evidence_file": "certification/documents-v1/d6_zero_residue_extended_census.qar_af1c638fd52a.json"
+    }
+  },
+  "requested_change": [
+    "Re-pin QA_PLANS.authz_q1.residue_census.query_sha256 to eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065 after verifying the bytes at Alloy staging 1492a2dd9fdbb36cde05db1e734e71b550e875dd.",
+    "Extend residue_census.checks with doc_zr_d6_requirements, doc_zr_d6_requirement_versions, doc_zr_d6_waivers (15 checks).",
+    "Update the vendored census fixture and the shared-qa-run tests that pin 3be83854…; keep a refusal test that the old hash is no longer the registered census.",
+    "Release and install through the normal toolkit promotion; report the merge sha and installed artifact version."
+  ],
+  "do_not": [
+    "register a hash without verifying the full content at the staging merge",
+    "keep 3be83854… as an accepted alternative — the old census must stop being the registered census",
+    "change any other plan, reconciliation, contract pin or eligibility"
+  ],
+  "after_install_documents_lane_will": [
+    "verify the installed lib/qa-plan-registry.mjs pins eb702fb6… with 15 checks",
+    "re-run database.read_census on eb702fb6… against alloy_deployed_primary",
+    "attach it to qar_af1c638fd52a with environment.qa_run_close (a CLOSED run accepts census evidence; qa-run-action.mjs executeQaRunCloseSync already_closed path), replacing the binding to the 12-check census gar_36a8179c88d9bc"
+  ],
+  "disclosure": "qar_af1c638fd52a is already CLOSED with verdict ZERO_RESIDUE, bound at 17:33:32Z by gar_dc0e6f3915ff4c to gar_36a8179c88d9bc — the registered 12-check census, run on the pre-D6 bytes (3be83854…). The D6 requirement tables were proven zero only by the unregistered gar_53d6744eb1cf1a. That binding is the old-census fallback; this re-pin exists to replace it."
+}

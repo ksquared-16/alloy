@@ -7,7 +7,9 @@
  *
  * `default_sensitivity` is enforced by the database for new and re-typed documents, raise-only (D3). Since D5, subject
  * types, formats and review are enforced when a document is filed or uploaded, and replacement when it is filed or
- * replaced (`documentTypeEnforcement.ts`, `public.document_file`). Validity is still DECLARED INTENT, for D7.
+ * replaced (`documentTypeEnforcement.ts`, `public.document_file`). Since D7, validity is EVALUATED on read: the
+ * validity evaluator (`lib/documents/validity/documentValidity.ts`) derives valid / expiring soon / expired / date
+ * missing, and an expired document no longer satisfies a requirement. No write is refused for validity.
  * `POLICY_ENFORCEMENT` says so, and the Studio labels each field accordingly.
  */
 import { DECLARED_DOCUMENT_SENSITIVITIES, type DeclaredDocumentSensitivity } from "@/lib/documents/documentSensitivity";
@@ -32,7 +34,7 @@ export const POLICY_ENFORCEMENT = Object.freeze({
     replacement_policy: "enforced_replacement",
     allowed_formats: "enforced_filing",
     subject_types: "enforced_filing",
-    validity_policy: "declared_d7",
+    validity_policy: "enforced_evaluation",
 } as const);
 
 export type ValidityPolicy = {

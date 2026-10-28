@@ -17,8 +17,9 @@
 import type { RequirementEvaluation } from "@/lib/documents/requirements/documentRequirementEvaluator";
 import type { EnrollmentRequirementProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 
-const OUTSTANDING_REASON: Record<"missing" | "pending_review" | "blocked", string> = {
+const OUTSTANDING_REASON: Record<"missing" | "pending_review" | "blocked" | "expired", string> = {
     missing: "No document of this type is on file.",
+    expired: "The document on file has expired; a renewed one is needed.",
     pending_review: "A document is on file and awaiting review.",
     blocked: "The document on file cannot be used (quarantined, rejected, or the type is no longer available).",
 };

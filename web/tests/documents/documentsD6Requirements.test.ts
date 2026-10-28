@@ -8,10 +8,11 @@
  * This file pins the application half, the evaluator's outcome matrix, disclosure, and the parity between the two
  * validators and between every consumer of the evaluator.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { documentReviewStandIn } from "../harness/documentReviewStandIns";
 import { InMemorySupabase } from "../harness/inMemorySupabase";
 import { buildRequest, invokeRoute, routeParams } from "../harness/routeInvoker";
 
@@ -187,6 +188,8 @@ beforeEach(() => {
     // Stand-ins for the governed functions; their guards are proven in Postgres.
     (db as unknown as { rpc: unknown }).rpc = async (name: string, args: Record<string, unknown>) => {
         rpcCalls.push({ name, args });
+        const reviewed = documentReviewStandIn(db as never, name, args);
+        if (reviewed) return reviewed;
         if (name === "document_requirement_validate") return { data: { version_id: args.p_version_id, valid: true, problems: [] }, error: null };
         if (name === "document_requirement_publish") return { data: { version_id: args.p_version_id, version_number: 2, superseded_version_id: args.p_expected_published_version_id }, error: null };
         if (name === "document_requirement_waiver_grant") {
@@ -328,8 +331,12 @@ describe("the evaluator: missing / pending review / satisfied / waived / blocked
 // ── the two validators agree ─────────────────────────────────────────────────────────────────────────────────────
 describe("validation parity: the editor mirrors the database", () => {
     it("emits exactly the database's problem codes", () => {
-        const sql = readFileSync(resolve(join(__dirname, "../../../supabase/migrations/20261212090000_documents_d6_requirements.sql")), "utf8");
-        const fn = sql.slice(sql.indexOf("FUNCTION public.document_requirement_version_problems"), sql.indexOf("FUNCTION public.document_requirement_validate"));
+        // The LATEST migration that (re)defines the validator is the database's current definition (D6, then D8).
+        const dir = resolve(join(__dirname, "../../../supabase/migrations"));
+        const latest = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort().filter((f) => readFileSync(join(dir, f), "utf8").includes("FUNCTION public.document_requirement_version_problems")).at(-1)!;
+        const sql = readFileSync(join(dir, latest), "utf8");
+        const start = sql.indexOf("FUNCTION public.document_requirement_version_problems");
+        const fn = sql.slice(start, sql.indexOf("$$;", start));
         const sqlCodes = new Set([...fn.matchAll(/'code', '([a-z_]+)'/g)].map((m) => m[1]));
         sqlCodes.delete("not_found");
         const ts = readFileSync(resolve(join(__dirname, "../../lib/documents/requirements/documentRequirementPolicy.ts")), "utf8");

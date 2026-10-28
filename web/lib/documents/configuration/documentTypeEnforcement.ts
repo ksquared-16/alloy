@@ -11,7 +11,8 @@
  *    version PENDING review, which the library shows;
  *  - replacement: a replacement version is allowed only for `new_version` types; filing follows the same policy.
  *
- * Validity (expiration, reconfirmation, renewal) remains declared intent for D7 and is not read here.
+ * Validity (expiration, reconfirmation, renewal) is carried on the policy for the D7 validity evaluator
+ * (`lib/documents/validity/documentValidity.ts`), which derives a document's validity on read; no write is refused for it.
  *
  * The database stays the authority for filing (`public.document_file`, migration 20261210093500): this module gives
  * the routes a readable refusal before the call and the preview its problems. It never decides authorization.
@@ -22,7 +23,7 @@ import type { DeclaredDocumentSensitivity } from "@/lib/documents/documentSensit
 import type { DocumentContentKind } from "@/lib/documents/documentContentSignature";
 import { CANONICAL_DOCUMENT_MIME } from "@/lib/documents/documentContentSignature";
 import type { DocumentSubjectType } from "@/lib/documents/documentSubjects";
-import type { ReplacementPolicy } from "@/lib/documents/configuration/documentTypePolicy";
+import type { ReplacementPolicy, ValidityPolicy } from "@/lib/documents/configuration/documentTypePolicy";
 
 export type PublishedDocumentTypePolicy = {
     type_id: string;
@@ -36,6 +37,8 @@ export type PublishedDocumentTypePolicy = {
     default_sensitivity: DeclaredDocumentSensitivity;
     review_required: boolean;
     replacement_policy: ReplacementPolicy;
+    /** D7: the published validity policy (`{kind: "none"}` when the version declares none). */
+    validity_policy: ValidityPolicy;
 };
 
 export type DocumentTypeResolution =
@@ -55,7 +58,7 @@ export type DocumentTypePolicyCode =
     | "TYPE_NEW_DOCUMENT_REQUIRED";
 
 const VERSION_COLUMNS =
-    "id, label, category_id, subject_types, allowed_formats, default_sensitivity, review_required, replacement_policy, status";
+    "id, label, category_id, subject_types, allowed_formats, default_sensitivity, review_required, replacement_policy, validity_policy, status";
 
 const MIME_TO_FORMAT: Readonly<Record<string, DocumentContentKind>> = Object.freeze(
     Object.fromEntries(Object.entries(CANONICAL_DOCUMENT_MIME).map(([k, mime]) => [mime, k as DocumentContentKind])),
@@ -139,6 +142,9 @@ function toPolicy(t: { id: string; key: string }, v: Record<string, unknown> & {
         default_sensitivity: (typeof v.default_sensitivity === "string" ? v.default_sensitivity : "standard") as DeclaredDocumentSensitivity,
         review_required: v.review_required === true,
         replacement_policy: (typeof v.replacement_policy === "string" ? v.replacement_policy : "new_version") as ReplacementPolicy,
+        validity_policy: (v.validity_policy && typeof v.validity_policy === "object" && !Array.isArray(v.validity_policy)
+            ? v.validity_policy
+            : { kind: "none" }) as ValidityPolicy,
     };
 }
 

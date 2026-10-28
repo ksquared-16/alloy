@@ -264,3 +264,110 @@ export async function endHealthFact(
     if (!data) throw new HealthFactError("invalid_state", "the fact changed while it was being ended");
     return data as unknown as PersonHealthFactRow;
 }
+
+export type VerifyImmunizationFactInput = {
+    orgId: string;
+    /** D-H6. Required: verification is Medical's canonical fact authority (`health.manage`). */
+    access: HealthAccessSubject;
+    factId: string;
+    /**
+     * EN-FI-10: the certificate the verifier checked, when there is one. It must be the child's own immunization record
+     * whose CURRENT version Documents review ACCEPTED — an uploaded or rejected certificate is evidence of nothing yet.
+     * Absent: the verifier attests from another source (e.g. the state registry) and says so in `basis`.
+     */
+    evidenceDocumentId?: string | null;
+    /** Why this is verified (e.g. "Checked against the accepted certificate", "State registry lookup"). Required. */
+    basis: string;
+    actorUserId?: string | null;
+};
+
+export const IMMUNIZATION_EVIDENCE_DOCUMENT_TYPE = "immunization_record";
+
+/**
+ * EN-FI-10 — VERIFY an immunization fact: the one act that turns REPORTED vaccine information into the VERIFIED Medical
+ * immunization state.
+ *
+ * It is never a side effect. A Forms answer becomes a reported proposal (`healthCaptureProposals`, `reported: true`);
+ * an upload becomes a document; a Documents review accepts or rejects that document's evidence — and none of those
+ * touch `person_health_facts`. Only a holder of `health.manage` verifies, by this call, one active immunization fact at a
+ * time. What the fact SAYS is not changed (the immutability trigger forbids it); `confirmed_by` / `confirmed_at` record
+ * who verified it and when, and `metadata.verification` records the basis and the certificate version checked.
+ * Compare-and-set on `confirmed_at IS NULL`: verifying twice is a no-op that reports the first verification.
+ */
+export async function verifyImmunizationFact(
+    supabase: SupabaseClient,
+    input: VerifyImmunizationFactInput,
+): Promise<{ fact: PersonHealthFactRow; alreadyVerified: boolean }> {
+    assertHealthAccess(input.access, HEALTH_MANAGE_PERMISSION);
+    const basis = t(input.basis);
+    if (basis.length < 3) throw new HealthFactError("invalid_input", "say what the verification is based on");
+    const fact = await loadFact(supabase, input.orgId, t(input.factId));
+    if (fact.fact_kind !== "immunization") throw new HealthFactError("invalid_input", "only an immunization fact is verified here");
+    if (fact.status !== "active") throw new HealthFactError("invalid_state", `this immunization fact is ${fact.status}; verify its current version`);
+    if (fact.confirmed_at) return { fact, alreadyVerified: true };
+
+    let evidence: { document_id: string; version_id: string } | null = null;
+    const evidenceId = t(input.evidenceDocumentId);
+    if (evidenceId) {
+        const { data: doc, error: docErr } = await supabase
+            .from("documents")
+            .select("id, doc_type, status, current_version_id")
+            .eq("org_id", input.orgId)
+            .eq("id", evidenceId)
+            .maybeSingle();
+        if (docErr) throw new HealthFactError("db_error", docErr.message);
+        const d = doc as { id: string; doc_type: string | null; status: string | null; current_version_id: string | null } | null;
+        if (!d || d.doc_type !== IMMUNIZATION_EVIDENCE_DOCUMENT_TYPE || !d.current_version_id || ["deleted", "quarantined", "restricted"].includes(String(d.status ?? ""))) {
+            throw new HealthFactError("invalid_input", "the evidence must be an available immunization record");
+        }
+        const { data: owners, error: ownErr } = await supabase
+            .from("document_subjects")
+            .select("subject_type, subject_id")
+            .eq("org_id", input.orgId)
+            .eq("document_id", d.id)
+            .eq("association", "owner")
+            .is("ended_at", null);
+        if (ownErr) throw new HealthFactError("db_error", ownErr.message);
+        const childOwns = ((owners ?? []) as Array<{ subject_type: string; subject_id: string }>).some(
+            (o) => o.subject_type === (fact.subject_entity_type === "customer_member" ? "child" : "person") && o.subject_id === fact.subject_entity_id,
+        );
+        if (!childOwns) throw new HealthFactError("invalid_input", "the certificate does not belong to this child");
+        const { data: version, error: vErr } = await supabase
+            .from("document_versions")
+            .select("id, review_status")
+            .eq("org_id", input.orgId)
+            .eq("id", d.current_version_id)
+            .maybeSingle();
+        if (vErr) throw new HealthFactError("db_error", vErr.message);
+        if ((version as { review_status?: string | null } | null)?.review_status !== "accepted") {
+            throw new HealthFactError("invalid_state", "the certificate has not been accepted in Documents review");
+        }
+        evidence = { document_id: d.id, version_id: d.current_version_id };
+    }
+
+    const verifiedAt = new Date().toISOString();
+    const { data, error } = await supabase
+        .from(PERSON_HEALTH_FACTS_TABLE)
+        .update({
+            confirmed_by: input.actorUserId ?? null,
+            confirmed_at: verifiedAt,
+            updated_by: input.actorUserId ?? null,
+            metadata: {
+                ...(fact.metadata ?? {}),
+                verification: { basis, evidence_document_id: evidence?.document_id ?? null, evidence_version_id: evidence?.version_id ?? null, verified_at: verifiedAt },
+            },
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", fact.id)
+        .eq("status", "active")
+        .is("confirmed_at", null)
+        .select(PERSON_HEALTH_FACT_SELECT)
+        .maybeSingle();
+    if (error) throw new HealthFactError("db_error", error.message);
+    if (!data) {
+        const again = await loadFact(supabase, input.orgId, fact.id);
+        if (again.confirmed_at) return { fact: again, alreadyVerified: true };
+        throw new HealthFactError("invalid_state", "the fact changed while it was being verified — re-read and try again");
+    }
+    return { fact: data as unknown as PersonHealthFactRow, alreadyVerified: false };
+}

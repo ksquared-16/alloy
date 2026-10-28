@@ -36,6 +36,12 @@ const SUBJECT_LABEL: Record<RequirementSubjectType, string> = {
 };
 const PROBLEM_TEXT: Record<string, string> = {
     label_required: "Give the requirement a name.",
+    form_evidence_shape: "The completed-forms setting is not understood.",
+    form_evidence_field_unknown: "The completed-forms setting has an unknown field.",
+    form_evidence_forms_shape: "Choose between one and ten forms.",
+    form_evidence_form_unknown: "One of the chosen forms is not an active form of this organization.",
+    form_evidence_acceptance_unknown: "Choose whether a completed form needs review.",
+    form_evidence_type_not_accepted: "The Completed form document type does not accept this kind of record.",
     subject_type_unsupported: "Choose who the requirement applies to.",
     document_type_not_published: "Choose a published, active document type.",
     subject_type_not_accepted_by_type: "That document type is not filed for this kind of record.",
@@ -62,6 +68,7 @@ const EMPTY: DocumentRequirementDraft = {
     waivable: false,
     effective_from: null,
     effective_until: null,
+    form_evidence: null,
 };
 
 function draftFrom(v: DocumentRequirementVersion | null | undefined): DocumentRequirementDraft {
@@ -77,6 +84,7 @@ function draftFrom(v: DocumentRequirementVersion | null | undefined): DocumentRe
         waivable: v.waivable,
         effective_from: v.effective_from,
         effective_until: v.effective_until,
+        form_evidence: v.form_evidence ?? null,
     };
 }
 
@@ -216,6 +224,21 @@ function RequirementEditor({
     const [busy, setBusy] = useState(false);
 
     const published = types.filter((t) => t.status === "active" && t.published);
+    // D8: the organization's active forms, for "also satisfied by completed forms".
+    const [forms, setForms] = useState<Array<{ key: string; name: string }>>([]);
+    useEffect(() => {
+        let live = true;
+        void fetch("/api/admin/forms", { credentials: "include" })
+            .then((r) => r.json())
+            .then((j: { data?: Array<{ key?: string; name?: string }> } | Array<{ key?: string; name?: string }>) => {
+                const rows = Array.isArray(j) ? j : (j.data ?? []);
+                if (live) setForms(rows.filter((f): f is { key: string; name: string } => typeof f.key === "string").map((f) => ({ key: f.key, name: f.name ?? f.key })));
+            })
+            .catch(() => live && setForms([]));
+        return () => {
+            live = false;
+        };
+    }, []);
     const typeGrains = published.find((t) => t.key === draft.document_type_key)?.published?.subject_types ?? null;
 
     const load = useCallback(async () => {
@@ -452,6 +475,48 @@ function RequirementEditor({
                     Effective until (optional)
                     <input type="date" className={INPUT} value={draft.effective_until ?? ""} onChange={(e) => set("effective_until", e.target.value || null)} data-testid="documents-studio-requirement-until" />
                 </label>
+                <fieldset className="lg:col-span-2 rounded-lg border border-alloy-stone/15 p-3" data-testid="documents-studio-requirement-forms">
+                    <legend className="px-1 text-[12px] font-semibold text-alloy-midnight/70">Also satisfied by completed forms (optional)</legend>
+                    {forms.length === 0 ? (
+                        <p className="text-[12px] text-alloy-midnight/55">No active forms.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-3">
+                            {forms.map((f) => {
+                                const chosen = draft.form_evidence?.form_keys.includes(f.key) ?? false;
+                                return (
+                                    <label key={f.key} className="flex items-center gap-1.5 text-[12px]">
+                                        <input
+                                            type="checkbox"
+                                            checked={chosen}
+                                            data-testid={`documents-studio-requirement-form-${f.key}`}
+                                            onChange={(e) => {
+                                                const keys = new Set(draft.form_evidence?.form_keys ?? []);
+                                                if (e.target.checked) keys.add(f.key);
+                                                else keys.delete(f.key);
+                                                set("form_evidence", keys.size ? { form_keys: [...keys], acceptance: draft.form_evidence?.acceptance ?? "review" } : null);
+                                            }}
+                                        />
+                                        {f.name}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {draft.form_evidence ? (
+                        <label className="mt-2 block text-[12px] font-semibold text-alloy-midnight/70">
+                            A completed form
+                            <select
+                                className={INPUT}
+                                value={draft.form_evidence.acceptance}
+                                onChange={(e) => set("form_evidence", { form_keys: draft.form_evidence!.form_keys, acceptance: e.target.value === "submitted" ? "submitted" : "review" })}
+                                data-testid="documents-studio-requirement-form-acceptance"
+                            >
+                                <option value="review">needs a review before it counts (recommended)</option>
+                                <option value="submitted">counts once it is submitted (no review)</option>
+                            </select>
+                        </label>
+                    ) : null}
+                </fieldset>
                 <div className="lg:col-span-2">
                     {(problems.length ? problems : localProblems).length === 0 ? (
                         open?.status === "validated" ? (

@@ -1,0 +1,67 @@
+{
+  "summary": {
+    "passed": 7,
+    "total": 7,
+    "qa_run_id": "qar_af1c638fd52a",
+    "at": "2026-10-27T16:35:26Z"
+  },
+  "results": [
+    {
+      "case": "upload a document owned only by the lead",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "case": "lead deletion succeeds",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "documents_deleted": 3,
+      "documents_retained": 0
+    },
+    {
+      "case": "lead's document deleted with its stored file",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "outcome": "deleted",
+      "objects_removed": 1,
+      "objects_already_absent": 0
+    },
+    {
+      "case": "deleted document is unreachable",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "lead's document deleted with its stored file",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "outcome": "deleted",
+      "objects_removed": 1,
+      "objects_already_absent": 0
+    },
+    {
+      "case": "deleted document is unreachable",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 404,
+      "code": "NOT_FOUND"
+    },
+    {
+      "case": "another lead's document is untouched",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    }
+  ]
+}

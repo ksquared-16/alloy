@@ -59,6 +59,14 @@ const VALIDITY_LABEL: Record<(typeof VALIDITY_KINDS)[number], string> = {
     periodic_reconfirmation: "Reconfirm periodically",
     event_renewal: "Renew on an event",
 };
+
+/** B2: what each renewal event resolves from. Program year has no authoritative source, so its date must be recorded. */
+const VALIDITY_EVENT_LABEL: Record<string, string> = {
+    birthday: "Birthday (from the date of birth)",
+    enrollment_start: "Enrollment start (renews at the next enrollment)",
+    program_year_start: "Program year start (no source yet — record the expiration date)",
+};
+
 const PROBLEM_TEXT: Record<string, string> = {
     label_required: "Give the type a name.",
     category_required: "Choose a category.",
@@ -78,7 +86,7 @@ const ENFORCEMENT_LABEL: Record<string, string> = {
     enforced: "Enforced for new documents",
     enforced_filing: "Enforced when a document is filed or uploaded",
     enforced_replacement: "Enforced when a document is filed or replaced",
-    declared_d7: "Declared — enforced from D7",
+    enforced_evaluation: "Enforced — an expired document no longer satisfies a requirement",
 };
 
 const EMPTY_DRAFT: DocumentTypeDraft = {
@@ -498,7 +506,7 @@ function TypeEditor({
                             value={vp.kind}
                             onChange={(e) => {
                                 const kind = e.target.value as ValidityPolicy["kind"];
-                                set("validity_policy", kind === "duration" || kind === "periodic_reconfirmation" ? { kind, value: 12, unit: "months" } : kind === "event_renewal" ? { kind, event: "program_year_start" } : { kind });
+                                set("validity_policy", kind === "duration" || kind === "periodic_reconfirmation" ? { kind, value: 12, unit: "months" } : kind === "event_renewal" ? { kind, event: "birthday" } : { kind });
                             }}
                             data-testid="documents-studio-validity-kind"
                         >
@@ -524,7 +532,7 @@ function TypeEditor({
                             <select className={`mt-2 ${INPUT}`} value={vp.event ?? ""} onChange={(e) => setValidity({ event: e.target.value as ValidityPolicy["event"] })}>
                                 {VALIDITY_EVENTS.map((ev) => (
                                     <option key={ev} value={ev}>
-                                        {ev.replace(/_/g, " ")}
+                                        {VALIDITY_EVENT_LABEL[ev] ?? ev.replace(/_/g, " ")}
                                     </option>
                                 ))}
                             </select>

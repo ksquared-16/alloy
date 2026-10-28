@@ -134,15 +134,27 @@ export function buildWorkItemDetailModel(
 
     if (kind === "documents") {
         const state = task.document_requirement_state;
+        const attention = task.document_attention_kind;
         return {
             kind,
             completionAuthority: "documents",
-            reason:
-                state === "pending_review"
-                    ? "A required document is on file and awaiting review."
-                    : state === "blocked"
-                      ? "A required document cannot be used and needs attention."
-                      : "A required document is missing.",
+            reason: attention
+                ? attention === "expired"
+                    ? "A document on file has expired and needs renewing."
+                    : attention === "expiring_soon"
+                      ? "A document on file expires soon; renew it before it does."
+                      : attention === "review_due"
+                        ? "A document on file is awaiting review."
+                        : "A document on file needs its expiration date recorded."
+                : state === "pending_review"
+                  ? "A required document is on file and awaiting review."
+                  : state === "blocked"
+                    ? "A required document cannot be used and needs attention."
+                    : state === "expired"
+                      ? "A required document has expired; collect the renewal."
+                      : state === "expiring_soon"
+                        ? "A required document expires soon; collect the renewal before it does."
+                        : "A required document is missing.",
             originPath: trimOrNull(task.document_requirement_label),
             state: resolveWorkItemDetailState(task, nowMs),
             subjectLabel: trimOrNull(task.document_requirement_subject_label),

@@ -46,6 +46,8 @@ export type DocumentAuditEvent =
     | "document_requirement_waiver_revoked"
     // D6: the review of a document's current version (accepted / rejected), recorded before it is written.
     | "document_version_reviewed"
+    // D7: validity dates (effective / expiration) recorded on a document's current version, before they are written.
+    | "document_version_validity_set"
     | "person_profile_photo_set"
     | "person_profile_photo_cleared";
 

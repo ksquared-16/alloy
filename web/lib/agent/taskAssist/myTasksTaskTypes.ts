@@ -44,7 +44,10 @@ export type MyTasksTaskRow = {
     is_communications_projection?: boolean;
     /** Documents convergence (D6) — a derived, unmet document requirement for one record. */
     document_requirement_id?: string | null;
-    document_requirement_state?: "missing" | "pending_review" | "blocked" | null;
+    document_requirement_state?: "missing" | "pending_review" | "blocked" | "expired" | "expiring_soon" | null;
+    /** D7: a derived document-attention row (its own validity or review), when this item is one. */
+    document_attention_kind?: "expired" | "expiring_soon" | "review_due" | "date_missing" | null;
+    document_attention_document_id?: string | null;
     document_requirement_label?: string | null;
     document_requirement_subject_type?: string | null;
     document_requirement_subject_label?: string | null;
