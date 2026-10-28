@@ -37,8 +37,39 @@ import type { DocumentValidity } from "@/lib/documents/validity/documentValidity
 import type { DocumentsClock } from "@/lib/documents/validity/documentsClock";
 import type { DocumentAttentionKind, DocumentAttentionRow } from "@/lib/documents/validity/documentAttentionVocabulary";
 
-/** Documents one read may consider. */
-export const DOCUMENT_ATTENTION_POPULATION_LIMIT = 1000;
+/**
+ * B3 — the population is read COMPLETELY, in keyset pages, never silently capped.
+ *
+ * Before: the newest 1,000 tracked documents (a cap that also counted documents the reader could not see), with one
+ * `truncated` flag. Now: every tracked document is scanned in id-ordered pages of `DOCUMENT_ATTENTION_SCAN_PAGE`; one
+ * request scans at most `DOCUMENT_ATTENTION_SCAN_WINDOW` documents (a bounded window), sorts that window's attention by
+ * due date, and returns at most `limit` rows plus an opaque cursor for the rest. `complete` says whether the whole
+ * population has been returned; nothing is dropped without a cursor that reaches it.
+ */
+export const DOCUMENT_ATTENTION_SCAN_PAGE = 500;
+export const DOCUMENT_ATTENTION_SCAN_WINDOW = 20_000;
+export const DOCUMENT_ATTENTION_DEFAULT_LIMIT = 200;
+export const DOCUMENT_ATTENTION_MAX_LIMIT = 500;
+
+/** Where the next page starts: after this document id, skipping `offset` rows of that window's sorted attention. */
+export type DocumentAttentionCursor = { after_id: string | null; offset: number };
+
+export function encodeDocumentAttentionCursor(c: DocumentAttentionCursor): string {
+    return Buffer.from(JSON.stringify({ a: c.after_id, o: c.offset }), "utf8").toString("base64url");
+}
+
+export function decodeDocumentAttentionCursor(raw: string | null | undefined): DocumentAttentionCursor | null {
+    if (!raw) return { after_id: null, offset: 0 };
+    try {
+        const v = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { a?: unknown; o?: unknown };
+        const after = v.a === null ? null : typeof v.a === "string" && /^[0-9a-f-]{36}$/i.test(v.a) ? v.a : undefined;
+        const offset = Number.isInteger(v.o) && (v.o as number) >= 0 ? (v.o as number) : undefined;
+        if (after === undefined || offset === undefined) return null;
+        return { after_id: after, offset };
+    } catch {
+        return null;
+    }
+}
 
 export { DOCUMENT_ATTENTION_ACTION, DOCUMENT_ATTENTION_KINDS, DOCUMENT_ATTENTION_LABEL } from "@/lib/documents/validity/documentAttentionVocabulary";
 export type { DocumentAttentionKind, DocumentAttentionRow } from "@/lib/documents/validity/documentAttentionVocabulary";
@@ -81,37 +112,104 @@ export function requirementCoverage(rows: readonly RequirementWorkRow[]): { docu
     return { documents, renewals };
 }
 
-export type DocumentAttentionResult = { ok: true; rows: DocumentAttentionRow[]; truncated: boolean } | { ok: false; code: string };
+export type DocumentAttentionResult =
+    | {
+          ok: true;
+          rows: DocumentAttentionRow[];
+          /** Continue here for more rows; null once the whole population has been returned. */
+          next_cursor: string | null;
+          complete: boolean;
+          /** Tracked documents scanned by this request (disclosed or not). */
+          scanned: number;
+      }
+    | { ok: false; code: string };
+
+type DocRow = { id: string; title: string | null; doc_type: string; status: string | null; entity_type: string | null; entity_id: string | null; current_version_id: string | null; created_at: string | null };
+
 
 export async function listDocumentAttention(
     supabase: SupabaseClient,
     actor: RequirementActor,
-    input: { types: RequirementTypeCatalog; clock: DocumentsClock; requirementRows?: readonly RequirementWorkRow[] },
+    input: {
+        types: RequirementTypeCatalog;
+        clock: DocumentsClock;
+        requirementRows?: readonly RequirementWorkRow[];
+        /** Opaque cursor from a previous page (absent = from the start). */
+        cursor?: string | null;
+        /** Rows wanted (default 200, at most 500). */
+        limit?: number | null;
+    },
 ): Promise<DocumentAttentionResult> {
     const { orgId } = actor;
-    const { types, clock } = input;
-    if (!actor.scope) return { ok: true, rows: [], truncated: false };
+    const { types } = input;
+    const limit = Math.min(DOCUMENT_ATTENTION_MAX_LIMIT, Math.max(1, Math.floor(Number(input.limit) || DOCUMENT_ATTENTION_DEFAULT_LIMIT)));
+    const done = { ok: true as const, rows: [], next_cursor: null, complete: true, scanned: 0 };
+    if (!actor.scope) return done;
     const tracked = [...types.values()].filter((t) => t.review_required || (t.validity_policy?.kind ?? "none") !== "none").map((t) => t.key);
-    if (tracked.length === 0) return { ok: true, rows: [], truncated: false };
+    if (tracked.length === 0) return done;
+    const start = decodeDocumentAttentionCursor(input.cursor);
+    if (!start) return { ok: false, code: "INVALID_CURSOR" };
 
-    const { data: docs, error } = await supabase
-        .from("documents")
-        .select("id, title, doc_type, status, entity_type, entity_id, current_version_id, created_at")
-        .eq("org_id", orgId)
-        .in("doc_type", tracked)
-        .order("created_at", { ascending: false })
-        .limit(DOCUMENT_ATTENTION_POPULATION_LIMIT + 1);
-    if (error) return { ok: false, code: "ATTENTION_UNAVAILABLE" };
-    type DocRow = { id: string; title: string | null; doc_type: string; status: string | null; entity_type: string | null; entity_id: string | null; current_version_id: string | null; created_at: string | null };
-    const all = (docs ?? []) as DocRow[];
-    const truncated = all.length > DOCUMENT_ATTENTION_POPULATION_LIMIT;
-    const available = all.slice(0, DOCUMENT_ATTENTION_POPULATION_LIMIT).filter((d) => !isDocumentUnavailable(d.status) && d.current_version_id);
-    if (available.length === 0) return { ok: true, rows: [], truncated };
+    const rows: DocumentAttentionRow[] = [];
+    let after = start.after_id;
+    let offset = start.offset;
+    let scanned = 0;
+    while (rows.length < limit && scanned < DOCUMENT_ATTENTION_SCAN_WINDOW) {
+        // One window: scan pages until the window is full or the population ends.
+        const windowStart = after;
+        const windowDocs: DocRow[] = [];
+        let exhausted = false;
+        while (windowDocs.length < DOCUMENT_ATTENTION_SCAN_WINDOW - scanned) {
+            let q = supabase
+                .from("documents")
+                .select("id, title, doc_type, status, entity_type, entity_id, current_version_id, created_at")
+                .eq("org_id", orgId)
+                .in("doc_type", tracked);
+            const cur = windowDocs.length ? windowDocs[windowDocs.length - 1]!.id : after;
+            if (cur) q = q.gt("id", cur);
+            const { data, error } = await q.order("id", { ascending: true }).limit(DOCUMENT_ATTENTION_SCAN_PAGE);
+            if (error) return { ok: false, code: "ATTENTION_UNAVAILABLE" };
+            const page = (data ?? []) as DocRow[];
+            windowDocs.push(...page);
+            if (page.length < DOCUMENT_ATTENTION_SCAN_PAGE) {
+                exhausted = true;
+                break;
+            }
+        }
+        scanned += windowDocs.length;
+        const evaluated = await evaluateAttentionWindow(supabase, actor, input, windowDocs);
+        if (!evaluated.ok) return evaluated;
+        const take = evaluated.rows.slice(offset, offset + (limit - rows.length));
+        rows.push(...take);
+        const consumed = offset + take.length;
+        const windowEnd = windowDocs.length ? windowDocs[windowDocs.length - 1]!.id : after;
+        if (consumed < evaluated.rows.length) {
+            // The page filled inside this window: continue in the same window.
+            return { ok: true, rows, next_cursor: encodeDocumentAttentionCursor({ after_id: windowStart, offset: consumed }), complete: false, scanned };
+        }
+        if (exhausted) return { ok: true, rows, next_cursor: null, complete: true, scanned };
+        after = windowEnd;
+        offset = 0;
+    }
+    return { ok: true, rows, next_cursor: encodeDocumentAttentionCursor({ after_id: after, offset: 0 }), complete: false, scanned };
+}
+
+/** Attention rows for one scanned window of tracked documents, sorted by due date. */
+async function evaluateAttentionWindow(
+    supabase: SupabaseClient,
+    actor: RequirementActor,
+    input: { types: RequirementTypeCatalog; clock: DocumentsClock; requirementRows?: readonly RequirementWorkRow[] },
+    all: DocRow[],
+): Promise<{ ok: true; rows: DocumentAttentionRow[] } | { ok: false; code: string }> {
+    const { orgId } = actor;
+    const { types, clock } = input;
+    const available = all.filter((d) => !isDocumentUnavailable(d.status) && d.current_version_id);
+    if (available.length === 0) return { ok: true, rows: [] };
 
     // Disclosure first: nothing outside scope or clearance is evaluated, listed or counted.
     const inScope = await filterDocumentRowsInActorScope(supabase, orgId, actor.scope, available);
     const cleared = await filterDocumentRowsBySensitivity(supabase, orgId, actor, inScope);
-    if (cleared.length === 0) return { ok: true, rows: [], truncated };
+    if (cleared.length === 0) return { ok: true, rows: [] };
     const ids = cleared.map((d) => d.id);
 
     const ownerReads = await Promise.all(
@@ -188,5 +286,5 @@ export async function listDocumentAttention(
             return { ...r, subject_label: l?.label ?? "Record", household_id: l?.household_id ?? null };
         })
         .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.subject_label.localeCompare(b.subject_label) || a.id.localeCompare(b.id));
-    return { ok: true, rows, truncated };
+    return { ok: true, rows };
 }

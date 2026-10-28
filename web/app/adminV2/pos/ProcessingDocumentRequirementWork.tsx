@@ -30,7 +30,7 @@ import type { RequirementWorkRow } from "@/lib/documents/requirements/documentRe
 import { invalidateDocumentLibraries } from "@/lib/documents/library/documentLibraryClient";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
-import { invalidateDocumentRequirementWork, loadDocumentRequirementWork } from "@/lib/documents/requirements/documentRequirementWorkClient";
+import { invalidateDocumentRequirementWork, loadDocumentRequirementWork, loadMoreDocumentAttention } from "@/lib/documents/requirements/documentRequirementWorkClient";
 
 import { documentRequirementApi } from "./useDocumentRequirementApi";
 
@@ -52,6 +52,9 @@ export default function ProcessingDocumentRequirementWork({ onLeaveProcessing }:
     const [rows, setRows] = useState<RequirementWorkRow[] | null>(null);
     const [documents, setDocuments] = useState<DocumentAttentionRow[]>([]);
     const [truncated, setTruncated] = useState(false);
+    // B3: document attention is a bounded page of a complete scan; more pages until the scan says it is complete.
+    const [documentsMore, setDocumentsMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<StateFilter>("all");
     const [selected, setSelected] = useState<string | null>(null);
@@ -66,6 +69,19 @@ export default function ProcessingDocumentRequirementWork({ onLeaveProcessing }:
         setRows(r.rows);
         setDocuments(r.documents ?? []);
         setTruncated(r.truncated);
+        setDocumentsMore(!r.documentsComplete && Boolean(r.documentsNextCursor));
+    }, []);
+    const loadMore = useCallback(async () => {
+        setLoadingMore(true);
+        const r = await loadMoreDocumentAttention();
+        setLoadingMore(false);
+        if (!r.ok) {
+            setError(r.error);
+            return;
+        }
+        setRows(r.rows);
+        setDocuments(r.documents ?? []);
+        setDocumentsMore(!r.documentsComplete && Boolean(r.documentsNextCursor));
     }, []);
     useEffect(() => {
         void load(true);
@@ -183,7 +199,18 @@ export default function ProcessingDocumentRequirementWork({ onLeaveProcessing }:
                         ) : null}
                         </>
                     )}
-                    {truncated ? <p className="p-3 text-[11px] text-alloy-midnight/50">Showing the first rows only.</p> : null}
+                    {documentsMore && (filter === "all" || filter === "attention") ? (
+                        <button
+                            type="button"
+                            className="m-3 rounded border border-alloy-midnight/20 px-2 py-1 text-[11px] text-alloy-midnight/70 hover:bg-alloy-midnight/5 disabled:opacity-50"
+                            data-testid="document-attention-load-more"
+                            disabled={loadingMore}
+                            onClick={() => void loadMore()}
+                        >
+                            {loadingMore ? "Loading…" : "Show more document attention"}
+                        </button>
+                    ) : null}
+                    {truncated ? <p className="p-3 text-[11px] text-alloy-midnight/50">Showing the first requirement rows only.</p> : null}
                 </div>
             </aside>
             <section className="min-h-0 flex-1 overflow-y-auto" aria-label="Requirement">

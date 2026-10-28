@@ -10,7 +10,7 @@
  * REAL `assertDocumentAccess` and the REAL `accessScope` helpers run unmodified and a wrong or
  * missing `.eq("org_id", …)` returns the wrong rows exactly as Postgres would.
  *
- * Supported surface: `from(t).select().eq().neq().in().is().order().limit().range()`,
+ * Supported surface: `from(t).select().eq().neq().in().is().gt().gte().lt().lte().order().limit().range()`,
  * `.maybeSingle()`, `.single()`, awaiting the builder; `insert`/`update`/`delete` with the same
  * filters and an optional `.select().single()`; `storage.from(b).createSignedUrl/download/remove/
  * upload/copy`. Unknown tables read as empty. Every storage call and every write is recorded.
@@ -106,6 +106,7 @@ class QueryBuilder implements PromiseLike<Result> {
     private payload: Row[] = [];
     private patch: Row = {};
     private limitN: number | null = null;
+    private orders: Array<{ col: string; ascending: boolean }> = [];
     private returning = false;
 
     constructor(
@@ -168,7 +169,25 @@ class QueryBuilder implements PromiseLike<Result> {
         this.filters.push((r) => terms.some((t) => t(r)));
         return this;
     }
-    order(): this {
+    gt(col: string, val: unknown): this {
+        this.filters.push((r) => r[col] != null && String(r[col]) > String(val));
+        return this;
+    }
+    gte(col: string, val: unknown): this {
+        this.filters.push((r) => r[col] != null && String(r[col]) >= String(val));
+        return this;
+    }
+    lt(col: string, val: unknown): this {
+        this.filters.push((r) => r[col] != null && String(r[col]) < String(val));
+        return this;
+    }
+    lte(col: string, val: unknown): this {
+        this.filters.push((r) => r[col] != null && String(r[col]) <= String(val));
+        return this;
+    }
+    /** Sorts as Postgres would (string comparison; nulls last). Keyset pagination depends on it. */
+    order(col?: string, opts?: { ascending?: boolean }): this {
+        if (typeof col === "string") this.orders.push({ col, ascending: opts?.ascending !== false });
         return this;
     }
     limit(n: number): this {
@@ -203,7 +222,20 @@ class QueryBuilder implements PromiseLike<Result> {
             this.db.tables[this.table] = (this.db.tables[this.table] ?? []).filter((r) => !hit.has(r));
             return { data: this.returning ? [...hit] : null, error: null };
         }
-        const rows = this.matching();
+        let rows = this.matching();
+        if (this.orders.length) {
+            rows = [...rows].sort((a, b) => {
+                for (const o of this.orders) {
+                    const av = a[o.col], bv = b[o.col];
+                    if (av == null && bv == null) continue;
+                    if (av == null) return 1;
+                    if (bv == null) return -1;
+                    const c = String(av) < String(bv) ? -1 : String(av) > String(bv) ? 1 : 0;
+                    if (c) return o.ascending ? c : -c;
+                }
+                return 0;
+            });
+        }
         return { data: this.limitN == null ? rows : rows.slice(0, this.limitN), error: null };
     }
 

@@ -12,10 +12,32 @@ import type { RequirementWorkRow } from "@/lib/documents/requirements/documentRe
 import type { DocumentAttentionRow } from "@/lib/documents/validity/documentAttentionVocabulary";
 
 /** `documents` (D7): document-attention rows (expired, expiring soon, review due, date missing) from the same read. */
-export type DocumentRequirementWorkSnapshot = { rows: RequirementWorkRow[]; documents: DocumentAttentionRow[]; truncated: boolean; loadedAt: number };
-export type DocumentRequirementWorkLoad =
-    | { ok: true; rows: RequirementWorkRow[]; documents: DocumentAttentionRow[]; truncated: boolean }
-    | { ok: false; status: number; error: string };
+/** B3: `documentsNextCursor` continues the document-attention scan; `documentsComplete` once nothing remains. */
+export type DocumentRequirementWorkSnapshot = {
+    rows: RequirementWorkRow[];
+    documents: DocumentAttentionRow[];
+    truncated: boolean;
+    documentsNextCursor: string | null;
+    documentsComplete: boolean;
+    loadedAt: number;
+};
+type WorkView = Omit<DocumentRequirementWorkSnapshot, "loadedAt">;
+export type DocumentRequirementWorkLoad = ({ ok: true } & WorkView) | { ok: false; status: number; error: string };
+type WorkJson = {
+    rows?: RequirementWorkRow[];
+    documents?: DocumentAttentionRow[];
+    truncated?: boolean;
+    documents_next_cursor?: string | null;
+    documents_complete?: boolean;
+    error?: string;
+};
+const view = (s: DocumentRequirementWorkSnapshot): WorkView => ({
+    rows: s.rows,
+    documents: s.documents,
+    truncated: s.truncated,
+    documentsNextCursor: s.documentsNextCursor,
+    documentsComplete: s.documentsComplete,
+});
 
 const STALE_MS = 30_000;
 let snapshot: DocumentRequirementWorkSnapshot | null = null;
@@ -37,16 +59,23 @@ export function invalidateDocumentRequirementWork(): void {
 }
 
 export async function loadDocumentRequirementWork(opts: { fresh?: boolean } = {}): Promise<DocumentRequirementWorkLoad> {
-    if (!opts.fresh && snapshot && Date.now() - snapshot.loadedAt < STALE_MS) return { ok: true, rows: snapshot.rows, documents: snapshot.documents, truncated: snapshot.truncated };
+    if (!opts.fresh && snapshot && Date.now() - snapshot.loadedAt < STALE_MS) return { ok: true, ...view(snapshot) };
     if (inflight) return inflight;
     inflight = (async (): Promise<DocumentRequirementWorkLoad> => {
         try {
             const res = await fetch("/api/admin/documents/requirements/work", { credentials: "include" });
-            const json = (await res.json().catch(() => ({}))) as { rows?: RequirementWorkRow[]; documents?: DocumentAttentionRow[]; truncated?: boolean; error?: string };
+            const json = (await res.json().catch(() => ({}))) as WorkJson;
             if (!res.ok) return { ok: false, status: res.status, error: json.error ?? "Document requirements could not be read." };
-            snapshot = { rows: json.rows ?? [], documents: json.documents ?? [], truncated: json.truncated === true, loadedAt: Date.now() };
+            snapshot = {
+                rows: json.rows ?? [],
+                documents: json.documents ?? [],
+                truncated: json.truncated === true,
+                documentsNextCursor: json.documents_next_cursor ?? null,
+                documentsComplete: json.documents_complete !== false,
+                loadedAt: Date.now(),
+            };
             for (const l of listeners) l();
-            return { ok: true, rows: snapshot.rows, documents: snapshot.documents, truncated: snapshot.truncated };
+            return { ok: true, ...view(snapshot) };
         } catch (e) {
             return { ok: false, status: 0, error: (e as Error).message };
         } finally {
@@ -54,6 +83,32 @@ export async function loadDocumentRequirementWork(opts: { fresh?: boolean } = {}
         }
     })();
     return inflight;
+}
+
+/**
+ * B3: the next page of document attention, appended to the snapshot (de-duplicated by row id). Requirement rows are
+ * re-read with it, because they decide which documents a requirement row already represents.
+ */
+export async function loadMoreDocumentAttention(): Promise<DocumentRequirementWorkLoad> {
+    const cursor = snapshot?.documentsNextCursor;
+    if (!snapshot || !cursor) return snapshot ? { ok: true, ...view(snapshot) } : loadDocumentRequirementWork();
+    try {
+        const res = await fetch(`/api/admin/documents/requirements/work?documents_cursor=${encodeURIComponent(cursor)}`, { credentials: "include" });
+        const json = (await res.json().catch(() => ({}))) as WorkJson;
+        if (!res.ok) return { ok: false, status: res.status, error: json.error ?? "Document attention could not be read." };
+        const seen = new Set(snapshot.documents.map((d) => d.id));
+        snapshot = {
+            ...snapshot,
+            rows: json.rows ?? snapshot.rows,
+            documents: [...snapshot.documents, ...(json.documents ?? []).filter((d) => !seen.has(d.id))],
+            documentsNextCursor: json.documents_next_cursor ?? null,
+            documentsComplete: json.documents_complete !== false,
+        };
+        for (const l of listeners) l();
+        return { ok: true, ...view(snapshot) };
+    } catch (e) {
+        return { ok: false, status: 0, error: (e as Error).message };
+    }
 }
 
 export function resetDocumentRequirementWorkForTests(): void {
