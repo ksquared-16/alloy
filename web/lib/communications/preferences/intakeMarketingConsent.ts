@@ -11,7 +11,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { persistCommunicationPreference } from "@/lib/communications/v2/persistCommunicationPreference";
+import {
+    appendCommunicationPreferenceEvent,
+    persistCommunicationPreference,
+} from "@/lib/communications/v2/persistCommunicationPreference";
 import type { PreferenceCategory, PreferenceState } from "@/lib/communications/v2/preferences";
 
 export type MarketingConsentChannel = "email" | "sms";
@@ -36,6 +39,19 @@ export type CommitMarketingConsentResult =
           outcome: "opted_in" | "preserved_opt_out" | "skipped_unset" | "already_opted_in";
       }
     | { ok: false; channel: MarketingConsentChannel; error: string };
+
+/** The audit event's evidence: what was asked, when, under which wording, from which form and case. */
+function intakeEventMetadata(
+    capture: IntakeMarketingConsentCapture,
+    outcome: "opted_in" | "preserved_opt_out"
+): Record<string, unknown> {
+    return {
+        outcome,
+        ...(outcome === "preserved_opt_out" ? { requested_state: "opted_in" } : {}),
+        captured_at: capture.capturedAt,
+        ...(capture.evidence ?? {}),
+    };
+}
 
 function categoryForChannel(channel: MarketingConsentChannel): PreferenceCategory {
     return channel === "sms" ? "sms_marketing" : "email_marketing";
@@ -79,8 +95,10 @@ export async function commitMarketingConsentFromIntakeCapture(
             : null;
 
     if (fromState === "opted_out") {
-        // Preserve the opt-out, but leave an audit breadcrumb that intake asked to opt in.
-        const preserved = await persistCommunicationPreference(supabase, {
+        // Preserve the opt-out and leave an audit breadcrumb that intake asked to opt in — as an event
+        // only: the state row keeps the provenance of the opt-out (e.g. recipient_unsubscribe), so the
+        // inquiry never reads as the source of the current state.
+        const preserved = await appendCommunicationPreferenceEvent(supabase, {
             orgId: input.orgId,
             personId: input.personId,
             category,
@@ -89,10 +107,9 @@ export async function commitMarketingConsentFromIntakeCapture(
             source: input.capture.source || "public_intake",
             method: input.capture.method ?? "form_checkbox",
             actorUserId: input.actorUserId ?? null,
+            metadata: intakeEventMetadata(input.capture, "preserved_opt_out"),
         });
         if (!preserved.ok) return { ok: false, channel, error: preserved.message };
-        // Stamp metadata on a second event row via direct insert would require schema —
-        // the to_state=opted_out with source public_intake is the durable signal.
         return { ok: true, channel, category, outcome: "preserved_opt_out" };
     }
 
@@ -109,6 +126,7 @@ export async function commitMarketingConsentFromIntakeCapture(
         source: input.capture.source || "public_intake",
         method: input.capture.method ?? "form_checkbox",
         actorUserId: input.actorUserId ?? null,
+        metadata: intakeEventMetadata(input.capture, "opted_in"),
     });
     if (!result.ok) return { ok: false, channel, error: result.message };
     return { ok: true, channel, category, outcome: "opted_in" };

@@ -1,0 +1,105 @@
+{
+  "tag": "iframe-mobile",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "heading": "Schedule a Tour",
+  "title": "Schedule a Tour | Alloy",
+  "shell": {
+    "brand": "#00A283",
+    "accent": "#00856B",
+    "onAccent": "#FFFFFF",
+    "ink": "#008269"
+  },
+  "brandName": false,
+  "day": "2026-10-28",
+  "selectedDay": {
+    "text": "28",
+    "bg": "rgb(0, 133, 107)",
+    "color": "rgb(255, 255, 255)",
+    "contrast": 4.6,
+    "w": 27,
+    "h": 44
+  },
+  "selectedTime": {
+    "text": "9:00 AM",
+    "bg": "rgb(0, 133, 107)",
+    "color": "rgb(255, 255, 255)",
+    "contrast": 4.6,
+    "w": 114,
+    "h": 53
+  },
+  "continue": {
+    "text": "Continue",
+    "bg": "rgb(0, 133, 107)",
+    "color": "rgb(255, 255, 255)",
+    "contrast": 4.6,
+    "w": 202,
+    "h": 51
+  },
+  "step2Url": "http://127.0.0.1:3014/tours/<token>?start=2026-10-28T16%3A00%3A00.000Z&end=2026-10-28T16%3A30%3A00.000Z",
+  "topUrlUnchanged": true,
+  "fields": {
+    "first": {
+      "x": 73,
+      "y": 353,
+      "w": 244
+    },
+    "last": {
+      "x": 73,
+      "y": 426,
+      "w": 244
+    },
+    "email": {
+      "x": 73,
+      "y": 498,
+      "w": 244
+    },
+    "phone": {
+      "x": 73,
+      "y": 571,
+      "w": 244
+    },
+    "dob": {
+      "x": 73,
+      "y": 849,
+      "w": 244
+    }
+  },
+  "twoColumn": false,
+  "requiredMarks": [
+    "First name *",
+    "Last name *",
+    "Email *",
+    "Child first name *",
+    "Child last name *"
+  ],
+  "consent": {
+    "present": true,
+    "text": "Stay in touch (optional) Email me news, events and enrollment updates from this school. I can unsubscribe at any time. Text me news, events and enrollment updates from this school. Message and data rates may apply. Reply",
+    "boxes": [
+      {
+        "checked": false,
+        "testid": "public-marketing-consent-email"
+      },
+      {
+        "checked": false,
+        "testid": "public-marketing-consent-sms"
+      }
+    ]
+  },
+  "summary": "Requested tour Wednesday, October 28 · 9:00 AM ZZ P1 QA Campus Your tour is not confirmed until the school reviews your request. Change time",
+  "submitLabel": "Request my tour",
+  "submit": {
+    "bg": "rgb(0, 133, 107)",
+    "color": "rgb(255, 255, 255)",
+    "contrast": 4.6,
+    "w": 268,
+    "h": 49
+  },
+  "consentChecked": true,
+  "received": "Your tour request was received You asked to visit ZZ P1 QA Campus on Wednesday, October 28 · 9:00 AM. This time is not confirmed yet — the school will review your request and contact you to confirm your tour. You can close this window.",
+  "email": "qa+p1qa-mvqudlj0-iframe-mobile@example.invalid",
+  "pageErrors": []
+}

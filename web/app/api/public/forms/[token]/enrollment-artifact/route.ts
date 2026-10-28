@@ -51,7 +51,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, token);
     if (!access.ok) {
-        return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
+        // An ordinary public form link has no participant session until the family submits: that is the
+        // expected answer to this read-only probe, not a failure — answered `ok: false` without an error
+        // status, so every anonymous inquiry page stops logging a 409 (P1-close, UX-04).
+        return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : access.error.code === "NO_SESSION" ? 200 : 409, {
             code: access.error.code,
         });
     }

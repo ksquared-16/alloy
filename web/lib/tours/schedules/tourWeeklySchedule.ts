@@ -27,6 +27,11 @@
 import { isValidTourTimeZone, wallTimeToMinutes } from "@/lib/tours/schedules/tourTimeFormat";
 
 export const TOUR_SCHEDULE_METADATA_KEY = "tour_schedule";
+/**
+ * Where organization-wide tour schedules (and the organization's booking brand) are configured —
+ * the browser route for the existing `/adminV2/settings/tours/availability` surface (P1-A).
+ */
+export const TOUR_ORGANIZATION_DEFAULTS_HREF = "/organization/tours";
 export const TOUR_SCHEDULE_NAME_MAX = 80;
 export const TOUR_WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 export const TOUR_WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -442,6 +447,33 @@ export function findTourScheduleOverlaps(
                     otherName: readTourScheduleIdentity(o.metadata)?.name ?? "another window",
                 });
             }
+        }
+    }
+    return out;
+}
+
+/**
+ * Visible schedules that repeat each other exactly — same weekdays, same windows (P1-A). The usual
+ * cause is a location copy of an organization-wide schedule: the copy ADDS to the original, which
+ * keeps applying, so the operator sees the same Monday twice. Each repeated group maps to the name
+ * of one schedule it repeats. Families are unaffected (the slot engine offers an identical time
+ * once); this only makes the duplication visible.
+ */
+export function findRepeatedTourSchedules(groups: TourScheduleGroup[]): Map<string, string> {
+    const shape = (g: TourScheduleGroup) =>
+        `${[...g.days].sort((a, b) => a - b).join(",")}|${g.windows.map((w) => `${normalizeWallTime(w.start_time)}-${normalizeWallTime(w.end_time)}`).join(",")}`;
+    const byShape = new Map<string, TourScheduleGroup[]>();
+    for (const g of groups) {
+        if (!g.is_active) continue;
+        const k = shape(g);
+        byShape.set(k, [...(byShape.get(k) ?? []), g]);
+    }
+    const out = new Map<string, string>();
+    for (const same of byShape.values()) {
+        if (same.length < 2) continue;
+        for (const g of same) {
+            const other = same.find((o) => o.key !== g.key)!;
+            out.set(g.key, other.name);
         }
     }
     return out;

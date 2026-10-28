@@ -1,0 +1,19 @@
+{
+  "schema": "enrollment.final_checkpoint.yield.v1",
+  "waiting_on": "gar_671ccb17dcec10 product.activate_candidate_preview (alloy.candidate.enrollment on certenv-09342695d8, candidate af0e490822020f10713de1645ac827161c9d619a) — operator approval",
+  "done": {
+    "workflow_sms": "863739610 (step refusal, live 4/4, negative control); census tha_e9fc39c3e1310d (4 dormant legacy SMS actions, 0 runs/90d)",
+    "staff_invitations": "9e6e70b27 (typed staff recipient, Python parity) + 441da213b (Tours invite, ics semantics); live 9/9 with 3 negative controls; S7 23/23",
+    "processing_cert": "4b48999d4 (guards accept alloy-cert); 29 pass, 7 inherited (identical on base)",
+    "docs": "af0e49082 (owner map x4, comms/workflows/tours config docs, I1 CI claim corrected); docs-lint ok; 3 inherited doc failures",
+    "governance": "GOV-01 closed (contract names worktree); GOV-02 open (alloy-stack resolves bin/lib/cert-ownership.sh; fails closed on stopping alloy-cert); G0 sprint OPWORK_2CEA84351D90_SPRINT_66CB4171C472 established",
+    "environment": "certenv-09342695d8 built (gar_1de3467606e293) from staging 24b03991c"
+  },
+  "resume_plan": [
+    "restore preview QA session (environment.restore_preview_qa_session) for the activated candidate",
+    "set up Riverside schedules, author+publish the inquiry form, share by location, publish tour calendar (harness c1/e3 pattern)",
+    "browser journey 1-16: desktop + mobile, standalone + iframe; staff invitation configured; consent/opt-out/unsubscribe",
+    "vac run build on the frozen candidate; vac sprint commit-slice x N; vac sprint checkpoint",
+    "Director packet; no request-release"
+  ]
+}

@@ -46,6 +46,10 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 - **SMS keywords:** STOP opts out all SMS categories; START restores transactional + operational only (not marketing).
 - **Public intake handoff:** `commitMarketingConsentFromIntakeCapture` — Forms/Processing capture evidence before Person exists; commit preserves prior opt-outs. Wired for the S7 public tour journey (Tours I1, below): evidence record `intakeMarketingConsentRecord.ts`, commit-once handoff `lib/pos/processingCase/commitIntakeMarketingConsentForCase.ts`. Intake never re-subscribes an opted-out person — there is no intake re-subscription path.
 - **Tour parent mail:** lifecycle notices are `transactional` (`tour_coordination`); invitations are `operational`. Gated by S1 `mayCommunicateForTour`.
+- **Provenance (C-FINAL, 2026-10-28):** the state row's `source` / `method` name the act that set the current state. An act that changes nothing (a repeat inquiry asking to opt in while opted out) appends an event only (`appendCommunicationPreferenceEvent`) with its evidence in `metadata` (`outcome: preserved_opt_out`, `language_version`, form / case ids) — it never rewrites the row. Operator views read provenance from the last *state-changing* event (`loadPersonPreferencesView`), show history, and show effective eligibility from `evaluateEligibility` (`unknown` when a fact cannot be read). Processing cases show the intake answer and what Approve did (`presentIntakeMarketingConsent`).
+- **Refusals are not faults:** a send the gate refuses answers `409` with `outcome: "blocked"` and `code: recipient_suppressed` (the recipient's opt-out, suppression, missing opt-in or STOP hold) or `send_blocked` (any other policy) on both `canonicalSend` and the legacy adapter; only a real enqueue fault is `500`.
+- **Legacy workflow SMS (`public.messages`) passes `revalidate_for_dispatch`:** a row without an eligibility record is refused (`policy:SNAPSHOT_MISSING`), so a workflow `create_message` text cannot reach Twilio around an opt-out. The workflow step itself now refuses legacy `create_message` / `send_message` SMS (`legacy_workflow_sms_refused`) and writes no row; a workflow's text goes through `send_communication_template` (Template Library, lead's primary Person, `operational`, canonical eligibility). No category is ever inferred for a legacy action. Deployed census 2026-10-28 (`tha_e9fc39c3e1310d`): 4 enabled legacy SMS actions in one organization, zero runs in 90 days.
+- **Python dispatcher tests in CI:** `.github/workflows/backend-comms-tests.yml` runs the C1 Python set (dispatch eligibility, keywords, unsubscribe headers, keyword replies, legacy dispatcher gate). **It has not yet executed in GitHub Actions** — that happens on the release PR and is a merge gate; until then it is a committed job, not CI evidence.
 
 ---
 
@@ -161,9 +165,15 @@ on (consent preference truth and canonical send enqueue). Evidence: `certificati
   whose opportunity exists in the org (the lead approval boundary: a public lead has no opportunity until
   Processing **Approve**). A cancellation notice requires that the booking was confirmed before it was
   canceled — rejecting a pending request is not "your tour was canceled".
-  **Staff calendar invite debt:** `tourInternalCalendarInvite` enqueues `audience: "internal"` on email,
-  which `evaluateEligibility` blocks (`INTERNAL_TO_PROVIDER`) — do not document the invite as a sending
-  path until that classification is fixed and guarded.
+  **Staff calendar invitations (final checkpoint, 2026-10-28):** an external **transactional** email to a
+  **typed staff recipient** — `enqueueCanonicalOutboundMessage({ staffRecipient: { userId, locationId,
+  capability: "tours.book" } })`. The enqueue resolves and authorizes it (`resolveAuthorizedStaffRecipient`:
+  org membership, the capability, site scope over the tour's location, a usable email) and takes the address
+  from the resolution; a verified staff recipient satisfies `evaluateEligibility` recipient resolution for
+  transactional only. Unauthorized → a persisted blocked row (`RECIPIENT_UNRESOLVED`, reason on
+  `metadata.staff_recipient`). `audience: "internal"` still never reaches a provider (`INTERNAL_TO_PROVIDER`).
+  Deduplicated per (booking, action, start, end, recipient); every outcome recorded on
+  `tour_bookings.metadata.internal_calendar_last`. Enqueue is proven on `alloy-cert`; provider delivery is not.
 - **Every tour outbound path asks it:** `orchestrateTourCommsForBooking` (immediate sends, reminder
   scheduling, internal ICS), `processDueCommunicationScheduledSends` for `source = tour_scheduling`
   (a due reminder is re-decided at dispatch; an ineligible one is set `canceled` with

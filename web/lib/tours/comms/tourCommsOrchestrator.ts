@@ -593,7 +593,11 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     const scheduleGeneration = input.scheduleGeneration ?? resolveTourCommsScheduleGeneration(booking);
     const generationToken = String(input.immediateGenerationToken ?? scheduleGeneration).trim() || String(scheduleGeneration);
 
-    const baseContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, booking);
+    // tour_comms.ics.include_in_confirmation_email decides whether the family's messages carry the
+    // "Add to calendar" link (default on). Off, the link is simply absent — its line is stripped.
+    const baseContext = config.ics.include_in_confirmation_email
+        ? enrichTemplateContextWithCalendarLinks(loaded.templateContext, booking)
+        : loaded.templateContext;
     // Caller-supplied action URLs win: they were minted for the state the booking is
     // actually in now. Without them the templates render their optional action lines
     // empty and the lines are stripped, which is how a confirmation ended up offering

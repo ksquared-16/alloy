@@ -25,3 +25,25 @@ export async function persistCommunicationPreference(
     }
     return { ok: true, state: req.toState };
 }
+
+/**
+ * Record an act that leaves the preference as it was (e.g. a repeat public inquiry ticking "Email me
+ * news" for a person who has opted out): the audit event only. The state row is NOT rewritten — its
+ * `source` / `method` keep naming the act that actually set the current state, so the inquiry can never
+ * read as the provenance of an opt-out it did not make. Server-only.
+ */
+export async function appendCommunicationPreferenceEvent(
+    supabase: SupabaseClient,
+    req: PreferenceChangeRequest & { fromState: PreferenceChangeRequest["toState"] }
+): Promise<{ ok: true; state: string } | { ok: false; message: string }> {
+    if (req.fromState !== req.toState) {
+        return { ok: false, message: "appendCommunicationPreferenceEvent records no-change acts only; use persistCommunicationPreference." };
+    }
+    const { event } = buildPreferenceChange(req);
+    const { error } = await supabase.from(COMMS_V2_PREFERENCE_TABLES.preferenceEvents).insert(event);
+    if (error) {
+        console.error("[appendCommunicationPreferenceEvent]", error);
+        return { ok: false, message: error.message };
+    }
+    return { ok: true, state: req.toState };
+}

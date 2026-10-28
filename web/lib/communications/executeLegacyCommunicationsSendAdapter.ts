@@ -125,7 +125,42 @@ export type ExecuteCommunicationsSendFailure = {
     error: string;
     code?: string;
     thread_id?: string | null;
+    /** `blocked`: the send was refused on purpose (eligibility, render or link policy) — not a fault. */
+    outcome?: "blocked";
+    /** The enqueue's machine reason, e.g. `eligibility_blocked:OPTED_OUT`. */
+    reason?: string;
+    /** The durable `blocked` row recording the refusal (never provider-bound). */
+    blocked_communication_message_id?: string | null;
 };
+
+/** Eligibility codes that mean this recipient may not be sent this message — their own choice or a hold. */
+const RECIPIENT_SUPPRESSION_CODES = new Set([
+    "OPTED_OUT",
+    "SUPPRESSED",
+    "MARKETING_REQUIRES_OPT_IN",
+    "UNRESOLVED_INBOUND_STOP_HOLD",
+]);
+
+/**
+ * An intentional refusal by the canonical enqueue (it persisted a `blocked` row, or refused to render)
+ * is the system working, not a fault: `recipient_suppressed` when the recipient's preference or a
+ * suppression forbids it, `send_blocked` for any other policy refusal. Null for a real enqueue failure.
+ * Mirrors `canonicalSend`'s `blocked` outcome (409) so both send paths answer the same way.
+ */
+export function classifyEnqueueRefusal(res: {
+    communicationMessageId: string | null;
+    skippedReason?: string;
+}): "recipient_suppressed" | "send_blocked" | null {
+    if (res.communicationMessageId) return null;
+    const reason = res.skippedReason ?? "";
+    if (reason.startsWith("eligibility_blocked:")) {
+        return RECIPIENT_SUPPRESSION_CODES.has(reason.slice("eligibility_blocked:".length))
+            ? "recipient_suppressed"
+            : "send_blocked";
+    }
+    if (reason.startsWith("render_blocked:") || reason.startsWith("link_origin_blocked:")) return "send_blocked";
+    return null;
+}
 
 /**
  * Resolve `to` for sms/email, pick binding, enqueue via {@link enqueueCanonicalOutboundMessage}.
@@ -378,6 +413,20 @@ export async function executeLegacyCommunicationsSendAdapter(
         communicationProviderAccountId: resolvedAccountId,
         fromAddress: channel !== "in_app" && senderResolutionMeta?.ok ? (senderResolutionMeta.safe_sender_metadata as { fromAddress?: string })?.fromAddress ?? null : null,
     });
+
+    const refusal = classifyEnqueueRefusal(res);
+    if (refusal) {
+        return {
+            ok: false,
+            status: 409,
+            error: res.blockedMessage ?? "This message was not sent.",
+            code: refusal,
+            outcome: "blocked",
+            reason: res.skippedReason,
+            thread_id: res.threadId,
+            blocked_communication_message_id: res.blockedCommunicationMessageId ?? null,
+        };
+    }
 
     if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {
         return {

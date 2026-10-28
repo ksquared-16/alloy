@@ -17,6 +17,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { evaluateEligibility } from "@/lib/communications/eligibility/evaluateEligibility";
+import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
+import type { MessageCategory } from "@/lib/communications/eligibility/types";
+
 import { PREFERENCE_FIELD_DEFS, type PreferenceFieldKey } from "./communicationPreferenceLabels";
 import { persistCommunicationPreference } from "./persistCommunicationPreference";
 import type { PreferenceState } from "./preferences";
@@ -41,7 +45,35 @@ export type PreferenceRow = {
     allowedChanges: Array<"Allowed" | "Blocked">;
     /** Why a change is not offered, in plain words. */
     lockedReason: string | null;
-    lastChange: { source: string | null; method: string | null; at: string; actorUserId: string | null } | null;
+    /**
+     * The last event that CHANGED this state — its provenance. An act that left the state as it was (a
+     * repeat inquiry asking to opt in while opted out) is history, never the source of the state.
+     */
+    lastChange: PreferenceEventView | null;
+    /** Recorded events, newest first (bounded). Includes acts that changed nothing, marked as such. */
+    history: PreferenceEventView[];
+    /**
+     * Would a message of this category reach this person on this channel now — the canonical evaluator
+     * (`evaluateEligibility`) over the live facts it reads at enqueue. `unknown` when a fact could not
+     * be read: nothing is presented as allowed that was not established.
+     */
+    effective: { status: "allowed" | "blocked" | "unknown"; code: string | null; reason: string };
+};
+export type PreferenceEventView = {
+    source: string | null;
+    method: string | null;
+    at: string;
+    actorUserId: string | null;
+    fromState: string | null;
+    toState: string;
+    /** False for an act recorded without changing the state (e.g. `preserved_opt_out`). */
+    changedState: boolean;
+    /** e.g. `opted_in`, `preserved_opt_out` — from the event's evidence, when recorded. */
+    outcome: string | null;
+    /** The consent wording version the person saw, when the act carried one. */
+    consentLanguageVersion: string | null;
+    /** `state_row`: no change event exists (a legacy or imported row) — provenance read from the row itself. */
+    recordedOn: "event" | "state_row";
 };
 export type PersonPreferencesView = {
     personId: string;
@@ -99,34 +131,150 @@ async function loadPreferredChannel(supabase: SupabaseClient, orgId: string, per
     return { definitionId, value: v };
 }
 
+const HISTORY_LIMIT = 10;
+
+function eventView(e: {
+    source: string | null;
+    method: string | null;
+    actor_user_id: string | null;
+    occurred_at: string;
+    from_state: string | null;
+    to_state: string;
+    metadata: unknown;
+}): PreferenceEventView {
+    const m = e.metadata && typeof e.metadata === "object" && !Array.isArray(e.metadata) ? (e.metadata as Record<string, unknown>) : {};
+    return {
+        source: e.source,
+        method: e.method,
+        at: e.occurred_at,
+        actorUserId: e.actor_user_id,
+        fromState: e.from_state,
+        toState: e.to_state,
+        changedState: e.from_state !== e.to_state,
+        outcome: typeof m.outcome === "string" ? m.outcome : null,
+        consentLanguageVersion: typeof m.language_version === "string" ? m.language_version : null,
+        recordedOn: "event",
+    };
+}
+
+/** The canonical evaluator over the facts it reads at enqueue, for this person × category × channel. */
+async function effectiveEligibility(
+    supabase: SupabaseClient,
+    input: { orgId: string; personId: string; category: string; channel: "email" | "sms"; address: string | null }
+): Promise<PreferenceRow["effective"]> {
+    const messageCategory = input.category.slice(input.channel.length + 1) as MessageCategory;
+    if (!input.address) {
+        return { status: "blocked", code: "CHANNEL_UNAVAILABLE", reason: `No ${input.channel === "sms" ? "mobile number" : "email address"} on record.` };
+    }
+    try {
+        const ctx = await loadEligibilityContext({
+            supabase,
+            orgId: input.orgId,
+            personId: input.personId,
+            category: messageCategory,
+            channel: input.channel,
+            toAddress: input.address,
+        });
+        if (ctx.lookupFailed) return { status: "unknown", code: null, reason: "Eligibility could not be checked right now." };
+        const decision = evaluateEligibility({
+            audience: "external",
+            category: messageCategory,
+            channel: input.channel,
+            recipientPersonId: input.personId,
+            preferenceState: ctx.preferenceState,
+            suppressed: ctx.suppressed,
+            unresolvedInboundStopHold: ctx.unresolvedInboundStopHold,
+        });
+        return decision.allowed
+            ? { status: "allowed", code: null, reason: "Messages of this kind can be sent." }
+            : { status: "blocked", code: decision.code, reason: decision.reason };
+    } catch {
+        return { status: "unknown", code: null, reason: "Eligibility could not be checked right now." };
+    }
+}
+
 export async function loadPersonPreferencesView(supabase: SupabaseClient, input: { orgId: string; personId: string }): Promise<PersonPreferencesView> {
     const { data: prefRows, error } = await supabase
         .from("communication_preferences")
-        .select("category, state")
+        .select("category, state, source, method, updated_by_user_id, updated_at")
         .eq("org_id", input.orgId)
         .eq("person_id", input.personId);
     if (error) throw new Error(error.message);
-    const stateBy = new Map(((prefRows ?? []) as Array<{ category: string; state: PreferenceState }>).map((r) => [r.category, r.state]));
+    type StateRow = { category: string; state: PreferenceState; source: string | null; method: string | null; updated_by_user_id: string | null; updated_at: string };
+    const rowBy = new Map(((prefRows ?? []) as StateRow[]).map((r) => [r.category, r]));
 
     const { data: events, error: evError } = await supabase
         .from("communication_preference_events")
-        .select("category, source, method, actor_user_id, occurred_at")
+        .select("category, source, method, actor_user_id, occurred_at, from_state, to_state, metadata")
         .eq("org_id", input.orgId)
         .eq("person_id", input.personId)
         .order("occurred_at", { ascending: false })
         .limit(200);
     if (evError) throw new Error(evError.message);
-    const lastBy = new Map<string, { source: string | null; method: string | null; at: string; actorUserId: string | null }>();
-    for (const e of (events ?? []) as Array<{ category: string; source: string | null; method: string | null; actor_user_id: string | null; occurred_at: string }>) {
-        if (!lastBy.has(e.category)) lastBy.set(e.category, { source: e.source, method: e.method, at: e.occurred_at, actorUserId: e.actor_user_id });
+    const historyBy = new Map<string, PreferenceEventView[]>();
+    for (const e of (events ?? []) as Array<Parameters<typeof eventView>[0] & { category: string }>) {
+        const list = historyBy.get(e.category) ?? [];
+        list.push(eventView(e));
+        historyBy.set(e.category, list);
     }
 
-    const preferences: PreferenceRow[] = PREFERENCE_FIELD_DEFS.map((d) => {
-        const state = stateBy.get(d.category) ?? "unset";
-        const last = lastBy.get(d.category) ?? null;
-        const { allowed, lockedReason } = allowedPreferenceChanges({ control: d.control, state, lastSource: last?.source ?? null });
-        return { key: d.key, label: d.label, description: d.description, channel: d.channel, control: d.control, state, allowedChanges: allowed, lockedReason, lastChange: last };
-    });
+    const { data: person } = await supabase
+        .from("persons")
+        .select("email, phone")
+        .eq("org_id", input.orgId)
+        .eq("id", input.personId)
+        .maybeSingle();
+    const address = {
+        email: ((person as { email?: string | null } | null)?.email ?? "").trim() || null,
+        sms: ((person as { phone?: string | null } | null)?.phone ?? "").trim() || null,
+    };
+
+    const preferences: PreferenceRow[] = await Promise.all(
+        PREFERENCE_FIELD_DEFS.map(async (d) => {
+            const row = rowBy.get(d.category);
+            const state = row?.state ?? "unset";
+            const history = historyBy.get(d.category) ?? [];
+            // Provenance of the current state: the last event that changed it; failing that (a row written
+            // without an event), the row's own source. An unchanged-state act is never provenance.
+            const last =
+                history.find((h) => h.changedState && h.toState === state) ??
+                (row && state !== "unset"
+                    ? {
+                          source: row.source,
+                          method: row.method,
+                          at: row.updated_at,
+                          actorUserId: row.updated_by_user_id,
+                          fromState: null,
+                          toState: state,
+                          changedState: true,
+                          outcome: null,
+                          consentLanguageVersion: null,
+                          recordedOn: "state_row" as const,
+                      }
+                    : null);
+            const { allowed, lockedReason } = allowedPreferenceChanges({ control: d.control, state, lastSource: last?.source ?? null });
+            const effective = await effectiveEligibility(supabase, {
+                orgId: input.orgId,
+                personId: input.personId,
+                category: d.category,
+                channel: d.channel,
+                address: address[d.channel],
+            });
+            return {
+                key: d.key,
+                label: d.label,
+                description: d.description,
+                channel: d.channel,
+                control: d.control,
+                state,
+                allowedChanges: allowed,
+                lockedReason,
+                lastChange: last,
+                history: history.slice(0, HISTORY_LIMIT),
+                effective,
+            };
+        })
+    );
     const preferred = await loadPreferredChannel(supabase, input.orgId, input.personId);
     return { personId: input.personId, preferredChannel: preferred.value, preferredChannelOptions: PREFERRED_CHANNEL_OPTIONS, preferences };
 }
