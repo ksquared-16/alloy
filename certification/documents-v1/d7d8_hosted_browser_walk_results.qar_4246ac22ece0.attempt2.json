@@ -1,0 +1,93 @@
+{
+  "run": "qar_4246ac22ece0",
+  "kind": "automated_browser_qa (Playwright, QA persona sessions) — not Director Human QA",
+  "at": "2026-10-28T17:25:39.192Z",
+  "results": [
+    {
+      "id": "W1a",
+      "goal": "Studio lists the run's D7 requirement and the D8 Forms-evidence requirement",
+      "pass": true,
+      "actual": "d7=true d8=true",
+      "screenshot": "d7d8-browser-qa/01-studio-requirements.png"
+    },
+    {
+      "id": "W1b",
+      "goal": "the requirement editor states the Forms evidence policy ('Also satisfied by completed forms')",
+      "pass": true,
+      "actual": "forms_policy=true on_submission=false",
+      "screenshot": "d7d8-browser-qa/02-studio-forms-evidence-requirement.png"
+    },
+    {
+      "id": "W2a",
+      "goal": "requirement work lists the run's missing and expired requirements",
+      "pass": true,
+      "actual": "kid2=true kid3=true expired=true",
+      "screenshot": "d7d8-browser-qa/03-processing-missing-documents.png"
+    },
+    {
+      "id": "W2b",
+      "goal": "Document attention shows date-missing and expiring-soon documents for the run",
+      "pass": true,
+      "actual": "date_missing=true expiring=true",
+      "screenshot": "d7d8-browser-qa/04-processing-document-attention.png"
+    },
+    {
+      "id": "W3",
+      "goal": "B1: the child's work row opens the child's own Documents (library mounted, the child named)",
+      "pass": true,
+      "actual": "library=true child=true readiness=true",
+      "screenshot": "d7d8-browser-qa/05-child-documents-from-work.png"
+    },
+    {
+      "id": "W4",
+      "goal": "Focus Panel review/version/renewal",
+      "pass": false,
+      "actual": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'QA D7 Kid Three 4246ac22ece0' }).first()\u001b[22m\n",
+      "screenshot": "d7d8-browser-qa/07-d7-error.png"
+    },
+    {
+      "id": "W5",
+      "goal": "Forms-produced document visibility",
+      "pass": false,
+      "actual": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'QA D8 Kid A 4246ac22ece0' }).first()\u001b[22m\n",
+      "screenshot": "d7d8-browser-qa/08-d8-error.png"
+    },
+    {
+      "id": "W6a",
+      "goal": "without health.view: no medical requirement row (immunization / physical / care plan / medication) in Processing",
+      "pass": true,
+      "actual": "medical_labels=false",
+      "screenshot": "d7d8-browser-qa/09-ocr-processing-no-medical.png"
+    },
+    {
+      "id": "W6b",
+      "goal": "without health.view: standard attention (subsidy authorization) still shown, medical attention not",
+      "pass": true,
+      "actual": "subsidy=true immunization=false",
+      "screenshot": "d7d8-browser-qa/10-ocr-attention-standard-only.png"
+    },
+    {
+      "id": "W6c",
+      "goal": "in the signed-in browser: the Health card and a medical document's URL are refused",
+      "pass": true,
+      "actual": "health_card=403 medical_signed_url=403",
+      "screenshot": "d7d8-browser-qa/10-ocr-attention-standard-only.png"
+    },
+    {
+      "id": "W7",
+      "goal": "the admin surfaces read only canonical routes, all 2xx",
+      "pass": true,
+      "actual": "[\"200 GET /api/admin/documents/configuration/types\",\"200 GET /api/admin/documents/configuration/categories\",\"200 GET /api/admin/documents/configuration/requirements\",\"200 GET /api/admin/documents/configuration/requirements/:id\",\"200 GET /api/admin/documents/requirements/work\",\"200 GET /api/admin/documents/requirements/readiness\",\"200 GET /api/admin/documents/library\"]",
+      "screenshot": null
+    }
+  ],
+  "api": [
+    "200 GET /api/admin/documents/configuration/types",
+    "200 GET /api/admin/documents/configuration/categories",
+    "200 GET /api/admin/documents/configuration/requirements",
+    "200 GET /api/admin/documents/configuration/requirements/:id",
+    "200 GET /api/admin/documents/requirements/work",
+    "200 GET /api/admin/documents/requirements/readiness",
+    "200 GET /api/admin/documents/library"
+  ]
+}

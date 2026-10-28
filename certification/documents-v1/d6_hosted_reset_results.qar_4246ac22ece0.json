@@ -1,0 +1,25 @@
+{
+  "purge_enr": {
+    "status": 200,
+    "purged": true,
+    "versions": 2,
+    "waivers": 0
+  },
+  "purge_imm": {
+    "status": 200,
+    "purged": true,
+    "versions": 1,
+    "waivers": 1
+  },
+  "pos_delete_held": 200,
+  "lead_delete": 200,
+  "after": {
+    "requirement_enr": 404,
+    "requirement_imm": 404,
+    "doc_enr_c1": 404,
+    "doc_imm_c1": 404,
+    "doc_held_c2": 404,
+    "household_library": 404
+  },
+  "all_gone": true
+}

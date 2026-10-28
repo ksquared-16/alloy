@@ -129,8 +129,11 @@ if PHASE == "certify":
           s2, categories=len(cats), types=len(types))
     immun = next((x for x in types if x.get("key") == "immunization_record"), {})
     check("medical type published as medical", "fixture_admin", ((immun.get("published") or {}).get("default_sensitivity")) == "medical", s2)
-    check("enforcement is stated, not implied", "fixture_admin", ((t or {}).get("enforcement") or {}).get("validity_policy") == "declared_d7"
-          and ((t or {}).get("enforcement") or {}).get("default_sensitivity") == "enforced", s2)
+    # D3 stated validity as "declared_d7" (declared now, enforced by D7). Since D7 (55de2194e) the evaluator enforces it:
+    # "enforced_evaluation". The assertion's intent is unchanged — every field states its enforcement; sensitivity is enforced.
+    check("enforcement is stated, not implied", "fixture_admin", ((t or {}).get("enforcement") or {}).get("validity_policy") == "enforced_evaluation"
+          and ((t or {}).get("enforcement") or {}).get("default_sensitivity") == "enforced", s2,
+          enforcement=(t or {}).get("enforcement"))
     for p, want in (("doc_reader", 200), ("ocr", 200), ("no_docs", 403)):
         s, _ = call(f"{CFG}/types", p)
         check("configuration read", p, s == want, s)
