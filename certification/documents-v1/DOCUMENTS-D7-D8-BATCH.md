@@ -19,7 +19,7 @@ Batch sprint `OPWORK_AA660DC9554D_SPRINT_6389E3AA927A` (hold HELD).
 | Typecheck | `vac run typecheck`, `vac run typecheck:tests`: green |
 | Prebuild guards | verify:module-imports, service-client principal, unauthenticated side effects, route capabilities, runtime-mode audience, governed documents: all pass |
 | **Production build** | `vac run build` on `22103ecb6`: **rc=0**, compiled; `/api/admin/documents/[id]/validity` in the route manifest |
-| Merge with current staging | `git merge-tree HEAD origin/staging` (`6376564d3`, two docs-only PRs since D6): clean |
+| Merge with current staging | `git merge-tree HEAD origin/staging` (`6376564d3`, two docs-only PRs since D6): clean — **superseded 2026-10-28: conflicts with `317eafa5` (see Update)** |
 
 ## Security, tenant scope, sensitivity, audit, authorization (review)
 
@@ -115,4 +115,14 @@ then `20261214090000` (or governed applies), hosted certification of D7/D8 and t
    as `gar_124d53c257dc6d`, refused `lane_run_active`; it must be re-filed from a run that yields on it.
 4. On a separate promotion instruction only: slices d7-s1…s4, d8-s1…s4 → checkpoint → `vac sprint request-release` →
    governed PR → CI → merge → migrations → hosted D7/D8 certification.
-5. Toolkit owner (not this lane): move the authz_q1 registered residue census pin to `eb702fb6…`.
+5. ~~Toolkit owner: move the authz_q1 registered residue census pin to `eb702fb6…`.~~ Done in toolkit `1388aad78e16`;
+   qar_af1c638fd52a bound to the 15-check census by `gar_a6359b4f860c8b` (2026-10-28, 12-check binding preserved).
+
+## Update 2026-10-28 (run `erun2_692186febb16333e`, attributed to this sprint)
+
+- Slices registered: `d6-driver-d7-review-semantics` (`aea79724c`), `d6-zero-residue-15-check-supplemental` (`274673b6b`).
+- The D6 hosted driver's re-review step now expects D7 semantics (reason required; history shows "Review rejected" and
+  "Review accepted (was rejected)"). The D6 hosted record stays **73/74**: D7 is not deployed (staging `317eafa5`, product
+  tree = `1492a2dd` apart from one test file), so the review-history check has no hosted pass yet.
+- **Base merge is no longer clean:** staging `317eafa5` (PR #1609, docs recertification) conflicts with this branch in
+  `docs/platform/modules/documents-and-forms.md`. Base integration must resolve it before a checkpoint.
