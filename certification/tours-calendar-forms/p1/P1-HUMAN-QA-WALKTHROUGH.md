@@ -28,6 +28,8 @@ Use a private/incognito window for the family steps (§E), so you are not signed
 6. Under **Schedules set for South Campus**, each schedule appears **once**: weekday chips (Mon … Sun, the
    selected ones dark) and all of its time windows on one line.
    **PASS if** Monday 10:00 AM – 12:00 PM appears once, with Edit / Duplicate / Deactivate / Delete.
+   *(Deactivate appears on the older single-window rules staging has today. A schedule created with
+   **Add a schedule** is switched off with **Edit** → untick **Active** → **Save schedule**.)*
 7. Under **Organization-wide schedules (also offered here)**:
    **PASS if** these cards have **only** "Copy to this location" (no Edit/Delete), and the two identical
    **Monday window 9:00 AM – 12:00 PM** cards each say *Same days and times as "Monday window"*.

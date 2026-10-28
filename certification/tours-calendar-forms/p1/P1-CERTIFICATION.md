@@ -90,6 +90,12 @@ origin `localhost:4719` framing `127.0.0.1:3014`):
 suite covers Approve against the real database) — walkthrough §G. The Firefly production website was not
 accessed.
 
+**Isolated write-capable QA (2026-10-28):** `isolated-qa/P1-ISOLATED-QA.md` — the same candidate served as a governed
+production preview on a lane-owned certification environment (no staging credential). Walkthrough §B–§F, §H, §I and
+the operating calendar (S5/S6) PASS in the browser; §G shows the requested tour correctly, but Approve is refused by
+that tenant's Create Lead configuration (fail-closed, environment) — still covered by I1 and by §G on staging. Findings
+D1–D8 are listed there.
+
 ## Validation
 
 - Targeted: `toursPolishP1` 21/21; tours/branding/forms/configuration sweep 2,086/2,122 — the 36 failures
