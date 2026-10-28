@@ -131,7 +131,9 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     // 4. External sends require a resolved recipient. The previous gate skipped
     //    itself when recipient_person_id was absent, which made a free-text `to`
     //    a complete bypass. Fail closed instead.
-    if (!input.recipientPersonId && input.verifiedThreadEndpoint !== true) {
+    //    A verified staff recipient resolves it for transactional sends only.
+    const staffResolved = input.verifiedStaffRecipient === true && input.category === "transactional";
+    if (!input.recipientPersonId && input.verifiedThreadEndpoint !== true && !staffResolved) {
         return block(
             "RECIPIENT_UNRESOLVED",
             "External send has no resolved recipient identity; eligibility cannot be established."

@@ -403,5 +403,33 @@ class TestSnapshotValidatorDirect(unittest.TestCase):
         self.assertIsNotNone(snap)
 
 
+class TestStaffRecipient(unittest.TestCase):
+    """A staff calendar invitation: external transactional email to a typed staff recipient (no Person).
+
+    The TypeScript enqueue resolves and authorizes the staff member; at dispatch the row is held to the
+    same transport rules as any external email — suppression applies, and an internal-audience email is
+    still refused.
+    """
+
+    def _staff_row(self, **snap_over):
+        snap = snapshot(category="transactional", purpose="tour_coordination",
+                        recipient={"personId": None, "channel": "email", "staffUserId": "u-staff"}, **snap_over)
+        return message(channel="email", to_address="staff@example.invalid", eligibility_snapshot=snap)
+
+    def test_staff_transactional_email_dispatches(self):
+        self.assertEqual(decide(self._staff_row()).outcome, "send_now")
+
+    def test_staff_email_to_a_suppressed_address_is_blocked(self):
+        self.assertEqual(decide(self._staff_row(), suppressed=True).reason, "SUPPRESSED")
+
+    def test_internal_audience_email_still_never_reaches_a_provider(self):
+        self.assertEqual(decide(self._staff_row(audience="internal")).reason, "INTERNAL_TO_PROVIDER")
+
+    def test_staff_without_a_person_cannot_receive_operational(self):
+        snap = snapshot(category="operational", recipient={"personId": None, "channel": "email", "staffUserId": "u-staff"})
+        row = message(channel="email", to_address="staff@example.invalid", eligibility_snapshot=snap)
+        self.assertEqual(decide(row).reason, "RECIPIENT_UNRESOLVED")
+
+
 if __name__ == "__main__":
     unittest.main()

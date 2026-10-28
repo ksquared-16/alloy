@@ -101,6 +101,15 @@ export type EligibilityInput = {
      */
     verifiedThreadEndpoint?: boolean;
 
+    /**
+     * A staff member of this organization, resolved and authorized by the canonical enqueue itself
+     * (`resolveAuthorizedStaffRecipient`: membership, the caller's required capability, site scope over the
+     * record's location, a usable address) — never asserted by a caller. It stands in for recipient
+     * resolution for TRANSACTIONAL sends only: staff are told about operations they run; they are not
+     * data subjects of operational or marketing messaging. Any other category stays unresolved.
+     */
+    verifiedStaffRecipient?: boolean;
+
     /** Current preference state for the (category, channel) pair. */
     preferenceState?: "opted_in" | "opted_out" | "unset";
 
@@ -192,7 +201,7 @@ export type EligibilitySnapshot = {
     audience: MessageAudience;
     category: MessageCategory;
     purpose: string | null;
-    recipient: { personId: string | null; channel: MessageChannel };
+    recipient: { personId: string | null; channel: MessageChannel; staffUserId?: string | null };
     authorizedBy: { userId: string | null; permission: string | null };
     /** The sender identity chosen at enqueue. Revalidated at dispatch. */
     identity: { identityId: string | null; providerAccountId: string | null; bindingId: string | null };
