@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
@@ -48,6 +49,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: sub, error: sErr } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!sub) return jsonError("Not found", 404);
+    // R2: the same 404 for a submission outside the caller's department/site scope as for one that does not exist.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return jsonError("Not found", 404);
 
     const subRow = sub as { status: string; form_definition_version_id: string; payload: Record<string, unknown> };
     if (subRow.status !== "draft") {

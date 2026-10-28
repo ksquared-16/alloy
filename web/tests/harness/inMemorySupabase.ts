@@ -20,7 +20,7 @@ export type Row = Record<string, unknown>;
 
 type Filter = (row: Row) => boolean;
 
-type Result = { data: unknown; error: { message: string; code?: string } | null };
+type Result = { data: unknown; error: { message: string; code?: string } | null; count?: number | null };
 
 let idCounter = 0;
 function newId(): string {
@@ -108,6 +108,8 @@ class QueryBuilder implements PromiseLike<Result> {
     private limitN: number | null = null;
     private orders: Array<{ col: string; ascending: boolean }> = [];
     private returning = false;
+    /** `select(cols, { count: "exact", head? })`: report the matching row count (and no rows when `head`). */
+    private countMode: { head: boolean } | null = null;
 
     constructor(
         private readonly db: InMemorySupabase,
@@ -116,7 +118,8 @@ class QueryBuilder implements PromiseLike<Result> {
 
     /** Column lists are accepted and ignored: every seeded column is returned. */
     select(...columns: unknown[]): this {
-        void columns;
+        const opts = columns[1] as { count?: string; head?: boolean } | undefined;
+        if (opts && typeof opts === "object" && opts.count) this.countMode = { head: Boolean(opts.head) };
         if (this.op !== "select") this.returning = true;
         return this;
     }
@@ -259,6 +262,13 @@ class QueryBuilder implements PromiseLike<Result> {
         onfulfilled?: ((value: Result) => TResult1 | PromiseLike<TResult1>) | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ): PromiseLike<TResult1 | TResult2> {
-        return Promise.resolve(this.execute()).then(onfulfilled, onrejected);
+        return Promise.resolve(this.withCount(this.execute())).then(onfulfilled, onrejected);
+    }
+
+    /** Counted selects carry `count` (the filtered total, before any limit); `head` returns no rows. */
+    private withCount(res: Result): Result {
+        if (!this.countMode || this.op !== "select" || res.error) return res;
+        const count = this.matching().length;
+        return { ...res, data: this.countMode.head ? null : res.data, count } as Result;
     }
 }

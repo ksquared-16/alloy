@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { formsReadScope, formsSubjectInActorScope, linkMetadataSubject } from "@/lib/forms/formSubmissionScope";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateFormSchema } from "@/lib/forms/schema";
@@ -46,6 +47,15 @@ export async function POST(request: NextRequest) {
             : { form_context_mode: "existing_record" };
 
     const supabase = createServiceRoleClient();
+
+    // R2: a preview prefilled from a record (launch_fks, or a subject named in link_metadata) only for a record inside the
+    // caller's department/site scope — the prefill IS that record's data.
+    const scope = await formsReadScope();
+    const fks = { customer_id: launchFks.customer_id ?? null, person_id: launchFks.person_id ?? null, customer_member_id: launchFks.customer_member_id ?? null, opportunity_id: launchFks.opportunity_id ?? null };
+    const named = [fks, linkMetadataSubject(linkMetadata)].filter((x): x is NonNullable<typeof x> => Boolean(x && (x.customer_id || x.person_id || x.customer_member_id || x.opportunity_id)));
+    for (const subject of named) {
+        if (!(await formsSubjectInActorScope(supabase, ctx.orgId, scope, subject))) return Response.json({ error: "Not found" }, { status: 404 });
+    }
 
     let formDefinitionMetadata: Record<string, unknown> | null = null;
     if (formDefinitionId) {

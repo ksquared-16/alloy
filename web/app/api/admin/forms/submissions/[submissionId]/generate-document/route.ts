@@ -1,3 +1,4 @@
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const { data: source } = await supabase.from("documents").select("id").eq("org_id", ctx.orgId).eq("id", generatedFrom).maybeSingle();
         if (!source) return jsonError("generated_from_document_id is not a document of this organization", 400);
     }
+    // R2 (after the EN-FI-01 provenance check): never generate (and so never name or store) a document for a submission outside the caller's scope.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return NextResponse.json({ error: "Not found", code: "SUBMISSION_NOT_FOUND" }, { status: 404 });
     const result = await createGeneratedPdfForSubmission(supabase, {
         orgId: ctx.orgId,
         submissionId,

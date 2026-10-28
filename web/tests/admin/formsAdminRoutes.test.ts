@@ -55,6 +55,17 @@ const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
     return { mockGetAdminContext: vi.fn(), storeRef };
 });
 
+// R2: Forms submission routes consult the caller's department/site scope. These route tests act as an unrestricted
+// organization administrator (both dimensions "all"); the scope boundary itself is proven in formsSubmissionScope.test.ts.
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>("@/lib/admin/getAdminAccessContext");
+    const unrestricted = async () => ({
+        ok: true, userId: "unrestricted", orgId: "unrestricted", roleKeys: ["admin"], permissionKeys: [],
+        departmentScope: "all", allowedDepartmentIds: [], siteScope: "all", allowedSiteLocationIds: [],
+    });
+    return { ...actual, getAdminAccessContextCached: unrestricted, getAdminAccessContext: unrestricted };
+});
+
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
         "@/lib/admin/getAdminContext"

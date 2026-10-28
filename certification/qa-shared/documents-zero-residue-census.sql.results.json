@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_d2eed85ccd8846",
-  "query_hash": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
+  "trusted_host_action_id": "tha_a447315b998fd3",
+  "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-27T17:25:22.337Z",
+    "executed_at": "2026-10-28T17:53:00.666Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_d2eed85ccd8846",
-    "query_hash": "3be838546b2fc12479ab447b449e717c0a35336ca6ae239b3c297aef2773ee27",
-    "authorization_id": "grnt_2ee634e9d1de4acd",
+    "trusted_host_action_id": "tha_a447315b998fd3",
+    "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+    "authorization_id": "grnt_56156994fad54745",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-27T17:25:31.772Z",
+    "census_run_at": "2026-10-28T17:53:06.934Z",
     "question_ids": [
       "doc_zr_00",
       "doc_zr_vendors",
@@ -31,7 +31,10 @@
       "doc_zr_secondary_objects",
       "doc_zr_secondary_cases",
       "doc_zr_qa_sessions",
-      "doc_zr_retained_d1a_audit"
+      "doc_zr_retained_d1a_audit",
+      "doc_zr_d6_requirements",
+      "doc_zr_d6_requirement_versions",
+      "doc_zr_d6_waivers"
     ],
     "questions": {
       "doc_zr_00": {
@@ -84,7 +87,7 @@
             "artifact": "access audit history (mutation_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_shared_mutation_event_rows": 419
+            "qa_shared_mutation_event_rows": 461
           }
         ]
       },
@@ -152,11 +155,32 @@
             "artifact": "D1a document audit (workflow_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_org_rows": 546
+            "qa_org_rows": 811
           }
+        ]
+      },
+      "doc_zr_d6_requirements": {
+        "question_id": "doc_zr_d6_requirements",
+        "row_count": null,
+        "rows": [
+          "document_requirements ~ qa_fixture_keys ~ zero ~ true"
+        ]
+      },
+      "doc_zr_d6_requirement_versions": {
+        "question_id": "doc_zr_d6_requirement_versions",
+        "row_count": null,
+        "rows": [
+          "document_requirement_versions ~ qa_fixture_or_orphan ~ zero ~ true"
+        ]
+      },
+      "doc_zr_d6_waivers": {
+        "question_id": "doc_zr_d6_waivers",
+        "row_count": null,
+        "rows": [
+          "document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ true"
         ]
       }
     },
-    "row_count": 15
+    "row_count": 18
   }
 }

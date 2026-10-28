@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { packetSessionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!personId || !UUID_RE.test(personId)) return jsonError("person_id is required", 400);
 
     const supabase = createAdminClient();
+    // R2: a packet session outside the caller's department/site scope is not found.
+    if (!(await packetSessionReadableById(supabase, ctx.orgId, sessionId))) return jsonError("Not found", 404);
     const result = await loadParticipantProjection(supabase, { orgId: ctx.orgId, packetSessionId: sessionId, participantPersonId: personId });
     if (!result.ok) return jsonError(result.error ?? "Failed to project participant", 400);
 

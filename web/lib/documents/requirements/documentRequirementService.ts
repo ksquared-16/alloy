@@ -629,6 +629,11 @@ export type RequirementWorkRow = {
     expired_document_ids: string[];
     /** D7: for expiring_soon, the last day the evidence is in force. */
     valid_until: string | null;
+    /**
+     * D7 (R1): met only by an earlier version while its renewal is `pending` review or was `rejected`; null otherwise.
+     * Lets Processing and Work Items say "review the renewal" or "renewal rejected" instead of "renew".
+     */
+    renewal: "pending" | "rejected" | null;
 };
 
 export function requirementWorkId(requirementId: string, subject: { subject_type: string; subject_id: string }): string {
@@ -762,6 +767,7 @@ export async function listRequirementWork(
                 undated_document_ids: e.evidence.undated.filter((id) => readable.has(id)),
                 expired_document_ids: e.evidence.expired.filter((id) => readable.has(id)),
                 valid_until: e.valid_until,
+                renewal: (e.renewal_pending ? "pending" : e.renewal_rejected ? "rejected" : null) as RequirementWorkRow["renewal"],
             };
         })
         .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.subject_label.localeCompare(b.subject_label) || a.id.localeCompare(b.id));

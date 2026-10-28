@@ -1,5 +1,6 @@
 import { withholdMedicalAnswersFromSubmissions } from "@/lib/health/withholdMedicalSubmissionAnswers";
 import { NextRequest, NextResponse } from "next/server";
+import { formSubmissionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
@@ -27,6 +28,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data, error } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return jsonError("Not found", 404);
+    // R2: the same 404 for a submission outside the caller's department/site scope as for one that does not exist.
+    if (!(await formSubmissionReadableById(supabase, ctx.orgId, submissionId))) return jsonError("Not found", 404);
 
     const sub = data as { form_definition_version_id: string };
     const [{ data: ver }, { data: linked, error: linkErr }] = await Promise.all([

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { filterPacketSessionsInActorScope, formsReadScope } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
@@ -21,6 +22,7 @@ export async function GET() {
       started_via_public_link_id,
       current_sequence_index,
       crm_snapshot,
+      launch_context,
       form_packet_definitions ( name )
     `
         )
@@ -29,5 +31,7 @@ export async function GET() {
         .limit(100);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    // R2: only sessions whose subject (crm_snapshot / launch source) is inside the caller's department/site scope.
+    const rows = await filterPacketSessionsInActorScope(supabase, ctx.orgId, await formsReadScope(), (data ?? []) as Array<{ crm_snapshot?: unknown; launch_context?: unknown }>);
+    return jsonData(rows);
 }

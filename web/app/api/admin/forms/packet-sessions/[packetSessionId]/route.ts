@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { packetSessionReadableById } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
@@ -28,6 +29,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!session) return jsonError("Not found", 404);
+    // R2: the same 404 for a packet session outside the caller's department/site scope as for a missing one.
+    if (!(await packetSessionReadableById(supabase, ctx.orgId, packetSessionId))) return jsonError("Not found", 404);
 
     const { data: items, error: iErr } = await supabase
         .from("form_packet_session_items")

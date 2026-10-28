@@ -39,7 +39,7 @@ const evaluation = (state: RequirementEvaluation["state"], over: Partial<Require
     requirement_id: "r1", requirement_key: "r1", version_id: "v1", label: "Immunizations", document_type_key: "immunization_record", subject_type: "child",
     subject_id: "c1", policy: "required", blocking: state !== "satisfied" && state !== "waived", state, blocked_reason: state === "blocked" ? "evidence_quarantined" : null,
     evidence: { accepted: state === "satisfied" ? ["d1"] : [], pending: [], undated: [], expired: [], rejected: [], quarantined: [], from_forms: [] }, waiver_id: state === "waived" ? "w1" : null,
-    waivable: true, due_on: null, valid_until: null, expiring_soon: false, renewal_pending: false, ...over,
+    waivable: true, due_on: null, valid_until: null, expiring_soon: false, renewal_pending: false, renewal_rejected: false, ...over,
 });
 
 describe("authoring a stage document requirement", () => {

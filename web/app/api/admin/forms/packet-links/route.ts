@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
@@ -35,6 +36,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    // R2: a packet link launched from a record only for a record inside the caller's department/site scope.
+    const launch = body.launch_from_entity && typeof body.launch_from_entity === "object" ? (body.launch_from_entity as Record<string, unknown>) : null;
+    if (launch) {
+        const subject = namedSubject(launch.entity_type, launch.entity_id);
+        if (!subject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), subject))) return jsonError("Not found", 404);
+    }
     const result = await mintPacketPublicLinkForAdmin({
         supabase,
         orgId: ctx.orgId,

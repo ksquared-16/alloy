@@ -37,7 +37,7 @@ const DOC = "d6000000-0000-4000-8000-000000000001";
 const workRow = (over: Partial<RequirementWorkRow> = {}): RequirementWorkRow => ({
     id: `document_requirement:${R1}:child:${C1}`, requirement_id: R1, requirement_key: "immunizations", requirement_label: "Immunization record on file",
     document_type_key: "immunization_record", document_type_label: "Immunization record", subject_type: "child", subject_id: C1, subject_label: "Mia Rivera",
-    household_id: H, state: "missing", blocked_reason: null, due_on: "2026-10-20", overdue: true, waivable: true, pending_document_ids: [], undated_document_ids: [], expired_document_ids: [], valid_until: null, ...over,
+    household_id: H, state: "missing", blocked_reason: null, due_on: "2026-10-20", overdue: true, waivable: true, pending_document_ids: [], undated_document_ids: [], expired_document_ids: [], valid_until: null, renewal: null, ...over,
 });
 
 let container: HTMLDivElement;
@@ -249,5 +249,59 @@ describe("Work Items: the Documents projection", () => {
         expect(complete.indexOf("isDocumentRequirementProjectedWorkItem(task)")).toBeLessThan(complete.indexOf("patchOperationalTaskStatus") === -1 ? complete.indexOf("onPatchStatus(task.id") : complete.indexOf("patchOperationalTaskStatus"));
         const work = readFileSync(join(__dirname, "../../app/adminV2/pos/ProcessingDocumentRequirementWork.tsx"), "utf8");
         expect(work).toContain("loadDocumentRequirementWork");
+    });
+});
+
+// R1 (hosted qar_4246ac22ece0, browser W4f): the Focus Panel read "renewal awaiting review" beside a REJECTED renewal.
+// Every surface states the renewal's own review state from the server's evaluation / work row, never a guess.
+describe("R1 — the renewal's review state on the Focus Panel and in Processing", () => {
+    const satisfiedBy = (over: Record<string, unknown>) =>
+        evaluation("satisfied", { valid_until: "2026-11-09", expiring_soon: true, renewal_pending: false, renewal_rejected: false, ...over }) as never;
+    const renderReadiness = async () => {
+        await act(async () =>
+            root.render(<DocumentReadinessPanel anchor={{ subject_type: "household", subject_id: H }} focus={null} canMutate refreshNonce={0} onChanged={() => undefined} />),
+        );
+        await flush();
+    };
+    const validUntil = () => q(`document-readiness-valid-until-immunizations-${C1}`)?.textContent ?? "";
+
+    it("a pending renewal reads 'renewal awaiting review'", async () => {
+        readiness.subjects[0].requirements = [satisfiedBy({ renewal_pending: true })];
+        await renderReadiness();
+        expect(validUntil()).toContain("renewal awaiting review");
+        expect(validUntil()).not.toContain("rejected");
+    });
+    it("a rejected renewal reads 'renewal rejected — collect a new version', never 'awaiting review'", async () => {
+        readiness.subjects[0].requirements = [satisfiedBy({ renewal_rejected: true })];
+        await renderReadiness();
+        expect(validUntil()).toContain("renewal rejected — collect a new version");
+        expect(validUntil()).not.toContain("awaiting review");
+    });
+    it("an accepted renewal shows neither", async () => {
+        readiness.subjects[0].requirements = [satisfiedBy({ expiring_soon: false, valid_until: "2027-10-19" })];
+        await renderReadiness();
+        expect(validUntil()).toBe("Valid through 2027-10-19");
+    });
+    it("Processing: an expiring requirement whose renewal awaits review is review work; a rejected one is renewal work", async () => {
+        work = [workRow({ state: "expiring_soon", overdue: false, due_on: "2026-11-09", valid_until: "2026-11-09", renewal: "pending" })];
+        await act(async () => root.render(<ProcessingDocumentsWork />));
+        await flush();
+        await click(q("documents-work-mode-missing"));
+        await click(q(`requirement-work-row-immunizations-${C1}`));
+        expect(q("requirement-work-open-record")?.textContent).toBe("Review on the record");
+        expect(q("requirement-work-valid-until")?.textContent).toContain("the renewal on file awaits review");
+        expect(mapDocumentRequirementToWorkItemRow(work[0]).title).toMatch(/^Review: /);
+
+        const rejected = workRow({ state: "expiring_soon", overdue: false, due_on: "2026-11-09", valid_until: "2026-11-09", renewal: "rejected" });
+        expect(mapDocumentRequirementToWorkItemRow(rejected).title).toMatch(/^Renew: /);
+    });
+    it("Processing: a rejected renewal's row says so and offers renewal", async () => {
+        work = [workRow({ state: "expiring_soon", overdue: false, due_on: "2026-11-09", valid_until: "2026-11-09", renewal: "rejected" })];
+        await act(async () => root.render(<ProcessingDocumentsWork />));
+        await flush();
+        await click(q("documents-work-mode-missing"));
+        await click(q(`requirement-work-row-immunizations-${C1}`));
+        expect(q("requirement-work-open-record")?.textContent).toBe("Renew on the record");
+        expect(q("requirement-work-valid-until")?.textContent).toContain("the renewal on file was rejected");
     });
 });
