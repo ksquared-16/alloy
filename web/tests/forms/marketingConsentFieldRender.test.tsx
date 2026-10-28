@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer";
+import { FormPreview } from "@/app/adminV2/pos/ProcessingFormBuilder";
 import { resolveMarketingConsentLanguage } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { validateFormSchema } from "@/lib/forms/schema";
 
@@ -66,5 +67,17 @@ describe("Marketing consent question — rendering", () => {
         const html = render("readonly");
         expect(html).toContain("recorded on the Processing case");
         expect(html).not.toContain('type="checkbox"');
+    });
+});
+
+describe("Marketing consent question — Forms Studio Preview", () => {
+    it("Preview shows the same consent boxes families see, not a text box (browser-found parity defect)", () => {
+        const branding = { brand_name: "", accent_color: "#00A283", logo_url: null, description: "", brand_source: null };
+        const html = renderToStaticMarkup(<FormPreview schema={schema} branding={branding as never} runtime={false} />);
+        const cell = html.slice(html.indexOf('data-preview-field="consent"'), html.indexOf('data-preview-field="last"'));
+        expect(cell).toContain('data-testid="public-marketing-consent"');
+        expect(cell).toContain("Email me Firefly news.");
+        expect(cell).toContain('type="checkbox"');
+        expect(cell).not.toContain('type="text"');
     });
 });

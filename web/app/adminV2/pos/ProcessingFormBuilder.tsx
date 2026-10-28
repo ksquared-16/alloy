@@ -1,5 +1,10 @@
 "use client";
 
+import { MarketingConsentControl } from "@/components/forms/engine/MarketingConsentControl";
+import {
+    resolveMarketingConsentLanguage,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { composeRuntimeRows, RUNTIME_FORM_CONTAINER_CLASS, runtimeCellSpanClass, runtimeRowClass } from "@/lib/forms/fieldLayoutChunks";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
@@ -757,7 +762,10 @@ export function FormPreview({
                                                 className={row.length > 1 ? runtimeCellSpanClass(field) : undefined}
                                                 data-preview-field={field.id}
                                             >
-                                                {field.type === "text_block" ? (
+                                                {field.type === "marketing_consent" ? (
+                                                    // The control families see — same component, same wording.
+                                                    <PreviewMarketingConsent field={field} />
+                                                ) : field.type === "text_block" ? (
                                                     <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.05] px-4 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
                                                         <PreviewTokenText value={field.content} />
                                                     </div>
@@ -771,7 +779,7 @@ export function FormPreview({
                                                     <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-alloy-stone/30 text-[11px] text-alloy-midnight/40">
                                                         Sign here
                                                     </div>
-                                                ) : field.type !== "text_block" ? (
+                                                ) : field.type !== "text_block" && field.type !== "marketing_consent" ? (
                                                     <input type="text" className="mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" placeholder="" readOnly aria-label={field.label} />
                                                 ) : null}
                                             </div>
@@ -794,6 +802,20 @@ export function FormPreview({
             </button>
             </div>
         </div>
+    );
+}
+
+/** Preview's consent boxes: clickable, unchecked to start, and never sent anywhere. */
+function PreviewMarketingConsent({ field }: { field: FormField & { type: "marketing_consent" } }) {
+    const [value, setValue] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
+    return (
+        <MarketingConsentControl
+            className=""
+            language={resolveMarketingConsentLanguage(field)}
+            value={value}
+            onChange={setValue}
+            disabled={false}
+        />
     );
 }
 

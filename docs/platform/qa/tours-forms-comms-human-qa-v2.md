@@ -101,11 +101,11 @@ need attention.
 one). Make sure it has parent first name, last name, email and phone, and a child first name and date of birth.
 **EXPECT** — The form opens in **Edit** with its sections on the canvas.
 
-**D2. DO** — At the bottom of a section click **+ Add question**. In the panel, under **Answer types** →
-**Capture**, choose **Marketing consent**.
+**D2. DO** — At the bottom of a section click **+ Add question**. The panel has two tabs, **Alloy fields** and
+**Answer types**: open **Answer types** and, under **Capture**, choose **Marketing consent**.
 **EXPECT** — A question titled **Stay in touch (optional)** appears on the canvas showing two unchecked boxes
-(email and text) with Alloy's default wording. Its tag reads **Marketing consent · Optional**. *Verified in a
-browser.*
+(email and text) with Alloy's default wording. Its tag reads **Marketing consent · Optional**. Adding it again
+selects the same question instead of creating a second. *Verified in a browser.*
 
 **D3. DO** — With the question selected, read the right-hand inspector.
 **EXPECT** — No **Required** box (it says *Always optional*), no **Store answer in**, a **Marketing consent**
@@ -126,18 +126,21 @@ out"). The **Wording version** changes when you change any wording.
 **EXPECT** — The question sits where you placed it. Adding it a second time does not create a second one — it
 selects the existing question.
 
-**D7. DO** — Search the field library (in the same panel) for `opt-in`.
-**EXPECT** — The legacy person fields **Email opt-in** / **SMS opt-in** are not offered (they were stored where no
-send reads them). Forms that already contain them still open and render.
+**D7. DO** — **+ Add question** → **Alloy fields** tab → search `opt`.
+**EXPECT** — *No fields match your search* — the legacy person fields **Email opt-in** / **SMS opt-in** are no
+longer offered (they were stored where no send reads them). Forms that already contain them still open and render.
+*Verified in a browser.*
 
 **D8. DO** — Set the form's **Branding** colour and the submit button text (e.g. `Send my inquiry`). Toggle
 **Preview** at the top right.
-**EXPECT** — Preview shows the consent question in the same place, with your wording, both boxes unchecked and
-clickable; paired fields sit side by side as in Edit; the submit button shows your text in the brand colour.
+**EXPECT** — Preview shows the consent question in the same place as checkboxes (not a text box), with your
+wording, both boxes unchecked and clickable; paired fields sit side by side as in Edit; the submit button shows your
+text in the brand colour. *Verified in a browser after a repair: Preview first drew the question as a text box.*
 
 **D9. DO** — **Save draft**, then **Publish**.
-**EXPECT** — The form publishes a new version. Open its hosted link in a private window: the consent question
-renders exactly as in Preview.
+**EXPECT** — The header reads **Published** with **Copy link**, **Copy iframe**, **Open runtime**, **Manage
+distribution** and **Republish**. Open the hosted link in a private window: the consent question renders exactly as in
+Preview.
 
 **D10. DO** — In Edit, change the email wording again and **Save draft** only — do not publish. Reload the hosted
 link.
