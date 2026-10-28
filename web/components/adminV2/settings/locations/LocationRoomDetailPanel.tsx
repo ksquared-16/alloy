@@ -422,7 +422,10 @@ export default function LocationRoomDetailPanel({
 
                 <div className="space-y-2.5" data-testid="locations-room-editor">
                     <ConfigEditorSection title="Space" testId="locations-room-editor-identity">
-                        <label className="block max-w-md space-y-1">
+                        {/* Paired rows on desktop (Name + Kind, Physical space + Capacity); one
+                            column on a narrow screen. */}
+                        <div className="grid gap-3 md:grid-cols-2" data-testid="locations-room-editor-row-identity">
+                        <label className="block min-w-0 space-y-1">
                             <span className="config-typo-field-label">Name</span>
                             <input
                                 type="text"
@@ -433,7 +436,7 @@ export default function LocationRoomDetailPanel({
                                 data-testid="locations-room-name"
                             />
                         </label>
-                        <label className="block max-w-md space-y-1">
+                        <label className="block min-w-0 space-y-1">
                             <span className="config-typo-field-label">Kind</span>
                             <select
                                 value={roomType}
@@ -452,9 +455,11 @@ export default function LocationRoomDetailPanel({
                                 {roomTypeHint(roomType)}
                             </p>
                         </label>
+                        </div>
 
+                        <div className="grid gap-3 md:grid-cols-2" data-testid="locations-room-editor-row-placement">
                         {showsInside ?
-                            <label className="block max-w-md space-y-1">
+                            <label className="block min-w-0 space-y-1">
                                 <span className="config-typo-field-label">Physical space</span>
                                 <select
                                     value={insideId}
@@ -463,9 +468,9 @@ export default function LocationRoomDetailPanel({
                                     className="config-runtime-select"
                                     data-testid="locations-room-inside"
                                 >
-                                    <option value="">
-                                        {siteLabel ? `${siteLabel} (no physical room)` : "No physical room"}
-                                    </option>
+                                    {/* The empty value — the space sits in no physical room. Same stored
+                                        null; only the words changed. */}
+                                    <option value="">No physical space</option>
                                     {insideOptions.map((option) => (
                                         <option key={option.id} value={option.id}>
                                             {option.label}
@@ -475,7 +480,7 @@ export default function LocationRoomDetailPanel({
                             </label>
                         :   null}
 
-                        <label className="block max-w-36 space-y-1">
+                        <label className="block min-w-0 space-y-1">
                             <span className="config-typo-field-label">Capacity</span>
                             <input
                                 type="number"
@@ -483,7 +488,7 @@ export default function LocationRoomDetailPanel({
                                 value={capacity}
                                 disabled={!canMutate}
                                 onChange={(e) => setCapacity(e.target.value)}
-                                className="config-runtime-input"
+                                className="config-runtime-input max-w-36"
                                 data-testid="locations-room-capacity"
                             />
                             <p className="config-typo-sublabel" data-testid="locations-room-capacity-hint">
@@ -492,7 +497,8 @@ export default function LocationRoomDetailPanel({
                                 :   "How many people this space holds."}
                             </p>
                         </label>
-                        <label className="flex items-center gap-2">
+                        </div>
+                        <label className="inline-flex items-center gap-2">
                             <input
                                 type="checkbox"
                                 checked={active}
@@ -532,11 +538,11 @@ export default function LocationRoomDetailPanel({
                             <p className="config-typo-sublabel">
                                 Offer Programs at this Location before assigning them to classrooms.
                             </p>
-                        :   <div className="space-y-2" data-testid="locations-room-programs">
+                        :   <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-programs">
                                 {programOptions.map((program) => {
                                     const checked = supportedKeys.includes(program.key);
                                     return (
-                                        <label key={program.id} className="flex items-center gap-2">
+                                        <label key={program.id} className="flex min-w-0 items-center gap-2">
                                             <input
                                                 type="checkbox"
                                                 checked={checked}

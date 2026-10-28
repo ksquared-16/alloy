@@ -140,28 +140,13 @@ test.describe("Assignment Platform Phase 2C acceptance", () => {
             });
         }
 
-        // Create path: Add assignment → type picker (when types exist) or editor
+        // Create path: Add assignment opens the Assignment editor DIRECTLY — no category step.
+        // The use is read from the room inside the card (Assignment UX convergence).
         await page.locator("[data-schedule-create-new]").first().click({ force: true });
         await page.waitForTimeout(1500);
         await snap(page, "S04-create-path");
-        const picker = page.locator("[data-assignment-type-picker]");
-        const editor = page.locator("[data-schedule-editor]");
-        const createPathOk = (await picker.count()) + (await editor.count()) > 0;
-        expect(createPathOk, "create opens type picker or schedule editor").toBeTruthy();
-        if ((await picker.count()) > 0) {
-            const opts = page.locator("[data-assignment-type-option]");
-            if ((await opts.count()) > 0) {
-                await opts.first().click();
-                await page.waitForTimeout(800);
-                await snap(page, "S05-editor-after-type");
-                expect(await page.locator("[data-schedule-editor]").count()).toBeGreaterThan(0);
-            } else {
-                test.info().annotations.push({
-                    type: "note",
-                    description: "Type picker empty — operational_assignment_types not migrated on this DB",
-                });
-            }
-        }
+        expect(await page.locator("[data-assignment-type-picker]").count(), "no category-first step").toBe(0);
+        expect(await page.locator("[data-schedule-editor]").count(), "create opens the schedule editor").toBeGreaterThan(0);
 
         const realErrors = [...new Set(errors)].filter((e) => !/Hydration failed|didn't match/i.test(e));
         expect(realErrors, "no real page errors").toEqual([]);
