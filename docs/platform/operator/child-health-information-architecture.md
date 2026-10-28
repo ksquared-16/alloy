@@ -174,7 +174,7 @@ it and must never store it.
 | **A** simple child facts | dietary note, accommodation note, physician, general health note | `field_definitions` + `field_values` at `entity_type: "customer_member"` | Substrate ✅ · binding ❌ (health binds to `enrollment`) |
 | **B** structured records | allergy, condition, medication | A new child-scoped health-fact collection + a registered `CanonicalCollectionProviderDefinition` | Seam ✅ · entity and provider ❌ |
 | **C** documents / evidence | immunization, physical, medication authorization, health care plan | `documents` (+ `document_versions`, `document_field_definitions`, `document_field_values`) at `entity_type: "customer_member"` | ✅ **already sufficient** |
-| **D** requirements | "immunization before Enrolling" | `stageRequirementsV1` on the published Business Process revision | Architecture ✅ · `kind: "document"` not authorable ❌ |
+| **D** requirements | "immunization before Enrolling" | `stageRequirementsV1` on the published Business Process revision, answered by the Documents requirement evaluator (D6) | ✅ authorable since Documents D6; the four health types verified end to end (EN-FI-09, `web/tests/documents/documentsEnFi09HealthRequirements.test.ts`) |
 | **E** relationships | emergency contacts | `person.contact_role.emergency_contacts` | ✅ — Health projects, never owns |
 
 ### Why B needs structured records rather than repeaters over `field_values`
@@ -269,7 +269,7 @@ be built** — the requirement model is already org-scoped, revision-pinned and 
 | # | Gap | Consequence today | Smallest fix | Size |
 |---|---|---|---|---|
 | **A1** | `allergy_notes` and `medication_flag` bind to `entity_type: "enrollment"` | A child's allergy does not survive their enrollment episode | Re-bind the registry entries to `customer_member`; migrate existing `field_values` rows | **Small** |
-| **D1** | `requirement kind: "document"` is declared but not authorable | Health document requirements cannot be configured at all | A `doc_type` catalog for authoring, plus a satisfaction evaluator answering "does a `documents` row of type X exist for this child, accepted, and not expired". **The store already exists** — this is an evaluator, not a schema | **Medium** |
+| ~~D1~~ | ~~`requirement kind: "document"` is declared but not authorable~~ **Closed by Documents D6/D7** (stage `document` requirements, one evaluator, validity) | Health document requirements cannot be configured at all | A `doc_type` catalog for authoring, plus a satisfaction evaluator answering "does a `documents` row of type X exist for this child, accepted, and not expired". **The store already exists** — this is an evaluator, not a schema | **Medium** |
 | **B1** | No child-scoped structured health-fact entity or collection provider | Allergy severity, reaction, treatment and medication records cannot be captured at all | One entity with a `fact_kind` discriminator, one `CanonicalCollectionProviderDefinition`, one resolver, one new `CanonicalCollectionProviderKind` | **Large** |
 | ~~C1~~ | ~~No document owner outside a form submission~~ | — | **Withdrawn — `public.documents` is polymorphic, versioned and sufficient** | — |
 | **E1** | None | — | Keep projecting emergency contacts, never store | — |
