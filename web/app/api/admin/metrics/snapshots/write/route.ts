@@ -4,7 +4,6 @@ import { isInternalCronAuthorized } from "@/lib/admin/cronAuth";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { parseMetricTimeWindow } from "@/lib/metrics/timeWindow";
 import { writeAllOrgMetricSnapshots, writeOrgMetricSnapshots } from "@/lib/metrics/snapshots/writeOrgMetricSnapshots";
 import type { MetricTimeWindowKey } from "@/lib/metrics/types";
@@ -54,6 +53,12 @@ export async function POST(request: NextRequest) {
         if (!analyticsAuth.ok) return analyticsAuth.response;
         const ctx = await getAdminAccessContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
+        // WS0-A (SEC-1 sibling): the operator branch was already pinned to the session org, but a
+        // body naming another org was silently ignored. Refuse it, as the V2 runner now does.
+        const bodyOrgId = isRecord(body) && typeof body.org_id === "string" ? body.org_id.trim() || null : null;
+        if (bodyOrgId && bodyOrgId !== ctx.orgId) {
+            return NextResponse.json({ ok: false, error: "ORG_NOT_IN_SESSION_SCOPE" }, { status: 403 });
+        }
         orgIdFilter = ctx.orgId;
     }
 
@@ -94,9 +99,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "ORG_REQUIRED" }, { status: 400 });
     }
 
-    const accessCtx = cronOk ? null : await getAdminAccessContextCached();
-    const scope = accessCtx?.ok ? scopeDimensionsFromAccess(accessCtx) : undefined;
-
     const { data: orgSettings } = await supabase
         .from("org_settings")
         .select("metadata")
@@ -106,7 +108,6 @@ export async function POST(request: NextRequest) {
     const result = await writeOrgMetricSnapshots({
         supabase,
         orgId: orgIdFilter,
-        scope,
         windows: windows.length ? windows : undefined,
         includeSiteScopes,
         orgMetadata: (orgSettings as { metadata?: unknown } | null)?.metadata ?? null,
