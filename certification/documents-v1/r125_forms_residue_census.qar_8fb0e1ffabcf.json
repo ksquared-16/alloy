@@ -1,0 +1,87 @@
+{
+  "trusted_host_action_id": "tha_49bc30bc47986a",
+  "query_hash": "81e8e76404be962276f36f5e6cdeefa313b699f57d751c2f21633e8a40c84241",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-28T21:26:28.926Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_49bc30bc47986a",
+    "query_hash": "81e8e76404be962276f36f5e6cdeefa313b699f57d751c2f21633e8a40c84241",
+    "authorization_id": "grnt_8c307311a9b24fe6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-28T21:26:38.695Z",
+    "question_ids": [
+      "r125_zr_subjects",
+      "r125_zr_submissions_by_id",
+      "r125_zr_submissions_of_run_forms",
+      "r125_zr_links_of_run_forms",
+      "r125_zr_submission_documents",
+      "r125_zr_active_facts_on_deleted_children",
+      "r125_data_retained"
+    ],
+    "questions": {
+      "r125_zr_subjects": {
+        "question_id": "r125_zr_subjects",
+        "row_count": null,
+        "rows": [
+          "opportunities_customers_customer_members ~ run_fixture_ids ~ zero ~ true"
+        ]
+      },
+      "r125_zr_submissions_by_id": {
+        "question_id": "r125_zr_submissions_by_id",
+        "row_count": null,
+        "rows": [
+          "form_submissions ~ run_submission_ids ~ zero ~ true"
+        ]
+      },
+      "r125_zr_submissions_of_run_forms": {
+        "question_id": "r125_zr_submissions_of_run_forms",
+        "row_count": null,
+        "rows": [
+          "form_submissions ~ run_forms ~ zero ~ true"
+        ]
+      },
+      "r125_zr_links_of_run_forms": {
+        "question_id": "r125_zr_links_of_run_forms",
+        "row_count": null,
+        "rows": [
+          "form_public_links ~ run_forms ~ zero ~ true"
+        ]
+      },
+      "r125_zr_submission_documents": {
+        "question_id": "r125_zr_submission_documents",
+        "row_count": null,
+        "rows": [
+          "form_submission_documents ~ run_submission_ids ~ zero ~ true"
+        ]
+      },
+      "r125_zr_active_facts_on_deleted_children": {
+        "question_id": "r125_zr_active_facts_on_deleted_children",
+        "row_count": null,
+        "rows": [
+          "person_health_facts ~ active_on_missing_child_qa_shared ~ zero ~ true"
+        ]
+      },
+      "r125_data_retained": {
+        "question_id": "r125_data_retained",
+        "row_count": null,
+        "rows": [
+          {
+            "run_form_definitions": 3,
+            "run_form_definitions_active": 0,
+            "ended_facts_on_missing_children_run": 1,
+            "qar_4246_form_definitions": 2,
+            "qar_4246_submissions_of_its_forms": 3
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}
