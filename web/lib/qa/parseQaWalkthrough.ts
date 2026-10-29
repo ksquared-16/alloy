@@ -90,6 +90,12 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
     const blocks: QaBlock[] = [];
     let i = 0;
 
+    // Leading YAML frontmatter is document metadata for docs-lint, not part of the checklist.
+    if (lines[0]?.trim() === "---") {
+        const end = lines.findIndex((l, n) => n > 0 && l.trim() === "---");
+        if (end > 0) i = end + 1;
+    }
+
     const flushParagraph = (buf: string[]) => {
         if (!buf.length) return;
         const joined = buf.join(" ").trim();

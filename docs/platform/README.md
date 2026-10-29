@@ -134,6 +134,7 @@ them, so a reader (or an agent) can reach a specific authority without already k
 - [`qa/spaces-director-qa.md`](./qa/spaces-director-qa.md) — Spaces — 15 minutes, in your own words
 - [`qa/staffing-v1-final-walkthrough.md`](./qa/staffing-v1-final-walkthrough.md) — Staffing V1 — final operator walkthrough
 - [`qa/staffing-v1-human-qa-acceptance.md`](./qa/staffing-v1-human-qa-acceptance.md) — Staffing / Scheduling / Coverage V1 — human QA acceptance walkthrough
+- [`qa/tours-forms-comms-human-qa-v2.md`](./qa/tours-forms-comms-human-qa-v2.md) — Tours, Public Forms & Communications — Human QA V2
 
 ## Proposals, frozen contracts and records
 

@@ -93,3 +93,17 @@ describe("inline", () => {
         expect(parseInline("no emphasis here")).toEqual([{ kind: "text", text: "no emphasis here" }]);
     });
 });
+
+describe("frontmatter", () => {
+    it("skips a leading YAML frontmatter block", () => {
+        const blocks = parseQaWalkthrough("---\nowner: platform\nstatus: canonical\n---\n\n# Title\n\nBody text.");
+        expect(blocks.some((b) => b.kind === "rule")).toBe(false);
+        expect(JSON.stringify(blocks)).not.toContain("owner: platform");
+        expect(blocks[0]?.kind).toBe("heading");
+    });
+
+    it("keeps a rule that is not leading frontmatter", () => {
+        const blocks = parseQaWalkthrough("# Title\n\n---\n\nAfter.");
+        expect(blocks.some((b) => b.kind === "rule")).toBe(true);
+    });
+});

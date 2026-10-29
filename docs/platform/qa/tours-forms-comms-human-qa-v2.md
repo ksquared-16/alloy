@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-10-29
+supersedes: []
+---
+
 # Tours, Public Forms & Communications — Human QA V2
 
 For the Director. Every route, label and button below was read from the implementation; the parts marked
@@ -26,7 +33,7 @@ one-time handoff, or read it from the environment's secret file on the Mac mini 
 
 ## A. Organization and location setup
 
-**A1. DO** — Open [Organization › Locations](/organization/locations) and select your test location. Read the
+**A1. DO** — Open **Organization › Locations** (`/organization/locations`) and select your test location. Read the
 location's identity (name, address, **Time zone**).
 **EXPECT** — The location page opens with its tabs, including **Tours**. If Time zone reads **Not set**, use
 **Edit location › Time zone** and choose the school's zone, then save. (The Northwind seed has no time zone.
@@ -40,7 +47,7 @@ page** on the right. Click **Save booking experience**.
 **EXPECT** — Each field says *set for this location*; the preview header shows **QA School** and buttons in the
 blue with readable text (the contrast line reads ≥ 4.5:1).
 
-**A3. DO** — Open [Organization › Tours](/organization/tours) (organization-wide defaults) → **Booking
+**A3. DO** — Open **Organization › Tours** (`/organization/tours`) (organization-wide defaults) → **Booking
 experience**. Set an organization Display name `QA Org` and leave the colour empty.
 **EXPECT** — Back on the location's Booking experience, the location's own values still win (*set for this
 location*); fields you clear at the location fall back to *the organization's Booking experience* (`QA Org`).
@@ -66,7 +73,7 @@ and *"30 minute tours · 15 minute buffer · up to 2 …"*.
 **B2. DO** — On the card click **Duplicate**. Rename the copy `QA Weekdays (copy)` and save.
 **EXPECT** — Two cards; editing the copy does not change the original.
 
-**B3. DO** — Open [Organization › Tours](/organization/tours) → **Availability** and look at the location's page
+**B3. DO** — Open **Organization › Tours** (`/organization/tours`) → **Availability** and look at the location's page
 blue box.
 **EXPECT** — Inheritance is additive: the location offers its own schedules **plus** every organization-wide
 schedule. Organization-wide cards on the location page only offer **Copy to this location** (no Edit/Delete).
