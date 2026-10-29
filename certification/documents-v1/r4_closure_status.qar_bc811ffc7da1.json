@@ -1,0 +1,39 @@
+{
+  "schema": "documents.r4.closure_status.v1",
+  "qa_run": "qar_bc811ffc7da1",
+  "execution_run": "erun2_16272d88fb282391",
+  "matrix": "35/35 (r4_hosted_results.certify.qar_bc811ffc7da1.json)",
+  "product_teardown": "all_gone (r4_hosted_reset_results.qar_bc811ffc7da1.json)",
+  "registered_resets": {
+    "qa_documents_forms_residue_reset": {
+      "request": "gar_14477ac6a0bcd8",
+      "exit_code": 0,
+      "deleted": {
+        "form_definitions": 6,
+        "form_definition_versions": 6,
+        "form_submissions": 3,
+        "person_health_facts": 0,
+        "audit_rows": 0
+      }
+    },
+    "qa_authz_subject_fixture_reset": {
+      "request": "gar_704378fa66897c",
+      "exit_code": 0,
+      "fixture_sha256": "7aff2e3837d869a442d70d99dd9472dbb1175499f71be3365e5c276ed7d60e25"
+    }
+  },
+  "phase1_close": {
+    "request": "gar_62d1347398cf93",
+    "state": "CLOSED"
+  },
+  "closure_census": {
+    "request": "gar_29a81808fb6b6d",
+    "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+    "census_run_at": "2026-10-29T22:11:50.969Z",
+    "replayed_from": "gar_2585f5ebf4e7a6",
+    "verdict": "NOT A MEASUREMENT \u2014 identical census_run_at to the pre-reset census; trusted-host dedupe reuses a completed census with the same query hash within one execution run. Its 13/20 is pre-reset state."
+  },
+  "phase2_close": "NOT FILED \u2014 no fresh closure census exists",
+  "zero_residue": "UNPROVEN",
+  "dependency": "a fresh database.read_census of the registered 7957a51a artifact from a NEW execution run (dedupe is run-scoped; different bytes would break the registered pin the close binding checks), then environment.qa_run_close {qaRunId: qar_bc811ffc7da1, residueCensusRequestId: <that census>}"
+}
