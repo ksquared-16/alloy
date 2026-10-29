@@ -135,6 +135,8 @@ export type DraftWriteIntent = "create" | "recalculate" | "unchanged" | "skipped
 
 export type ChargePreviewResult = {
     intent: ChargeIntent;
+    /** The operator's name for what is being charged: the template's label, or the catalog item's name. */
+    label: string;
     /** Advisory: what a draft write WOULD do. Preview writes nothing. */
     wouldWrite: DraftWriteIntent;
     existing: { id: string; status: string } | null;
@@ -484,7 +486,7 @@ async function resolveTemplateCharge(
     }
 
     return {
-        result: { intent, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null },
+        result: { intent, label: template.label, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null },
         ctx: { template, catalog: loaded.catalog, policies, existing, chainScope, invoiceLocationId },
     };
 }

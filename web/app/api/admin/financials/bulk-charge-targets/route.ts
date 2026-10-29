@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import { loadCatalogChargeOptions } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -16,6 +18,14 @@ export const dynamic = "force-dynamic";
  *
  * Identity only: names and ids, no money and no write. The bulk charge itself is the canonical
  * `charge.add`, once per household; this route only says who can be chosen. `fin.read`.
+ *
+ * ── AND WHAT CAN BE CHARGED TO THEM ──
+ *
+ * `catalog` is the organisation's Catalog judged by the SAME rule the card's Add Charge and the
+ * `charge.add` command use (`catalogChargeOptions`): one-time fees offerable, other types listed with
+ * the flow that bills them, missing accounting blocked — on the ORGANISATION's business date (also
+ * returned, so the surface defaults its service date to it rather than the browser's UTC day), over
+ * the sites these households attend. Each target's own preview still judges its own subjects.
  */
 export async function GET(request: NextRequest) {
     const gate = await loadAdminRouteGate();
@@ -58,8 +68,19 @@ export async function GET(request: NextRequest) {
                 children.set(String(m.customer_id), list);
             }
         }
+        const businessDate = await fetchOrgBusinessDate(supabase, ctx.orgId);
+        const locationIds: Array<string | null> = [
+            null,
+            ...new Set(cohort.subjects.flatMap((s) => s.siteLocationIds ?? [])),
+        ];
+        const catalog = await loadCatalogChargeOptions(supabase, ctx.orgId, { asOf: businessDate, locationIds }).then(
+            (options) => ({ ok: true as const, options }),
+            (e: unknown) => ({ ok: false as const, options: [], error: e instanceof Error ? e.message : String(e) }),
+        );
         return NextResponse.json({
             ok: true,
+            businessDate,
+            catalog,
             households: cohort.subjects
                 .map((s) => ({
                     customerId: s.customerId,

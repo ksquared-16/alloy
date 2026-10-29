@@ -79,6 +79,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
 import FinancialsChargeDetail, { type ChargeDetailFacts, type ChargeDetailSeed } from "@/app/adminV2/financials/FinancialsChargeDetail";
+import { resolveDraftEditIdentity } from "@/lib/financials/catalogCharges/draftEditIdentity";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -789,6 +790,12 @@ export default function FinancialsCard({
     const [chargeEventDate, setChargeEventDate] = useState("");
     const [pending, setPending] = useState<{
         templateId: string;
+        /*
+         * WHICH AUTHORITY `templateId` NAMES. New charges are always `catalog`. `template` exists only
+         * while an existing template draft is being edited: it keeps that draft's template identity,
+         * and is sent as `template_id`, exactly as the draft was written.
+         */
+        source: "catalog" | "template";
         label: string;
         summary: string;
         changes: string[];
@@ -2615,7 +2622,7 @@ export default function FinancialsCard({
      * the commit that follows it.
      */
     const preview = useCallback(
-        async (templateId: string, label: string) => {
+        async (templateId: string, label: string, source: "catalog" | "template" = "catalog") => {
             if (running) return;
             if (!chargeInvocation) {
                 // An absent target is an answer the operator is owed, not a reason to do nothing.
@@ -2644,8 +2651,11 @@ export default function FinancialsCard({
                             // The household, so a pre-enrolment family has a billable subject when
                             // no child agreement exists. The resolver still prefers an agreement.
                             customer_id: customerId,
-                            /* Manual Add Charge offers the Catalog: the option id IS the catalog item. */
-                            catalog_product_id: templateId,
+                            /*
+                             * Manual Add Charge offers the Catalog: the option id IS the catalog item.
+                             * Only an edit of an existing template draft names its template instead.
+                             */
+                            ...(source === "template" ? { template_id: templateId } : { catalog_product_id: templateId }),
                             child_label: chargeInvocation.customerMemberId
                                 ? vm?.subjects.find(
                                       (s) => s.customerMemberId === chargeInvocation.customerMemberId,
@@ -2677,7 +2687,7 @@ export default function FinancialsCard({
                 const json = (await res.json()) as {
                     ok?: boolean;
                     error?: string | { message?: string };
-                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[]; blocked?: { reason?: string } | null } } };
                 };
                 const p = json?.data?.execution_result?.preview;
                 if (!json?.ok || !p) {
@@ -2685,8 +2695,11 @@ export default function FinancialsCard({
                     setCommandError(err || "This charge cannot be previewed.");
                     return;
                 }
+                /* The domain refused what was previewed: say so as the refusal it is, not as a summary. */
+                if (p.blocked?.reason) setCommandError(p.blocked.reason);
                 setPending({
                     templateId,
+                    source,
                     label,
                     summary: p.summary ?? "",
                     changes: Array.isArray(p.changes) ? p.changes : [],
@@ -2759,8 +2772,9 @@ export default function FinancialsCard({
 
     useEffect(() => {
         if (overlay !== "add_charge" || !customerId) return;
-        const template = (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === pending?.templateId)
-            ?? (vm?.chargeTemplates ?? [])[0];
+        const pool = pending?.source === "template" ? vm?.draftTemplates ?? [] : vm?.chargeTemplates ?? [];
+        const template = pool.find((tpl) => tpl.id === pending?.templateId)
+            ?? (vm?.chargeTemplates ?? []).find((tpl) => tpl.availability === "offerable");
         const categoryKey = template?.categoryKey ?? "";
         /* A household charge names no child, and a child's discounts are not the account's. */
         const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
@@ -3016,8 +3030,10 @@ export default function FinancialsCard({
                         // Same subject inputs the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
-                        /* The same catalog item the preview resolved — preview equals commit. */
-                        catalog_product_id: pending.templateId,
+                        /* The same source the preview resolved — preview equals commit. */
+                        ...(pending.source === "template"
+                            ? { template_id: pending.templateId }
+                            : { catalog_product_id: pending.templateId }),
                         // The same selection the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         ...(selectedChildIds.length > 1
@@ -3509,7 +3525,9 @@ export default function FinancialsCard({
             ?? vm.chargeTemplates.find((tpl) => tpl.availability === "offerable")?.id
             ?? null;
         if (!first) return;
-        void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
+        const source = pending?.source ?? "catalog";
+        const pool = source === "template" ? vm.draftTemplates : vm.chargeTemplates;
+        void preview(first, pool.find((t) => t.id === first)?.label ?? pending?.label ?? "", source);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
     }, [overlay, subjectFilter, chargeEventDate]);
 
@@ -5390,11 +5408,19 @@ export default function FinancialsCard({
          * under; if that version has since been superseded (W7-F017 moved Materials onto the
          * organisation's timing), the edit is made under the version in force now.
          */
-        const offerable = (vm?.chargeTemplates ?? []).filter((tpl) => tpl.availability === "offerable");
-        const current =
-            offerable.find((tpl) => tpl.id === facts.chargeTemplateId)
-            ?? offerable.find((tpl) => tpl.label === facts.label)
-            ?? null;
+        /*
+         * ── A DRAFT IS EDITED UNDER ITS OWN IDENTITY, NEVER ITS NAME ──────────────────────────
+         *
+         * A template draft stays a template draft: its template by id, else the version of the same
+         * `template_key` in force now — the lineage it was written under. A catalog draft is its
+         * catalog item by id. Nothing matches by label: a catalog item and a template can share a
+         * name, and converting a historical draft into a same-name catalog product would change what
+         * the charge is without anyone deciding it.
+         */
+        const current = resolveDraftEditIdentity(facts, {
+            draftTemplates: vm?.draftTemplates ?? [],
+            catalogOptions: vm?.chargeTemplates ?? [],
+        });
         if (!current) {
             setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
             return;
@@ -5406,7 +5432,7 @@ export default function FinancialsCard({
         setChargeEventDate(facts.serviceDate ?? "");
         setChargeAmount(facts.amountCents > 0 ? (facts.amountCents / 100).toFixed(2) : "");
         setSubjectFilter(facts.customerMemberId ?? "all");
-        setPending({ templateId: current.id, label: current.label, summary: "", changes: [] });
+        setPending({ templateId: current.id, source: current.source, label: current.label, summary: "", changes: [] });
         push({ kind: "add_charge" });
     };
 
@@ -6217,7 +6243,15 @@ export default function FinancialsCard({
         }
 
     if (overlay === "add_charge" && vm && reconciliation) {
-        const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
+        /*
+         * Editing a template draft offers exactly that draft's template — its identity is not the
+         * operator's to change in an edit. Every other Add offers the catalog.
+         */
+        const templates = (
+            pending?.source === "template"
+                ? vm.draftTemplates.filter((tpl) => tpl.id === pending.templateId)
+                : vm.chargeTemplates
+        ).map((tpl) => adaptChargeTemplateOption(tpl, currency));
         const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
         const selected =
             offerableTemplates.find((tpl) => tpl.key === pending?.templateId) ?? offerableTemplates[0] ?? null;
@@ -6328,7 +6362,7 @@ export default function FinancialsCard({
                                 } else if (subjectFilter !== "all" && !categoryPermitsChildGrain(cat)) {
                                     setSubjectFilter("all");
                                 }
-                                void preview(id, tpl?.label ?? "");
+                                void preview(id, tpl?.label ?? "", pending?.source ?? "catalog");
                             },
                             /*
                              * ── ALSO BILL THESE CHILDREN ─────────────────────────────────────

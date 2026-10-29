@@ -36,8 +36,11 @@ import { isEffective } from "@/lib/commercial/execution/evaluate/evalUtils";
 import { readProducts, readRevenueCategories } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { frequencyLabel } from "@/lib/commercial/commercialProducts";
 import { resolveGlAccountForMappingKey, type ResolvedGlAccount } from "@/lib/financials/accounting/resolveGlMapping";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
 import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
 
 /** The resolution-key namespace of a catalog charge: `tpl:catalog:<product id>:<date>:<scope>`. */
@@ -238,6 +241,66 @@ export function evaluateCatalogCharge(
 }
 
 /**
+ * ONE CATALOG OPTION as every Add Charge surface lists it — the card's command and Bulk charge alike.
+ *
+ * `id` is the catalog item's id, sent as `catalog_product_id`. `availability` is the rule's verdict:
+ * only `offerable` can be chosen; `unsupported` and `blocked` are listed with `unavailableReason`
+ * so the operator sees the whole catalog and why an item is not chargeable here.
+ */
+export type CatalogChargeOption = {
+    id: string;
+    label: string;
+    categoryKey: string;
+    categoryLabel: string;
+    amountStrategy: string;
+    amountCents: number | null;
+    currencyCode: string;
+    reviewRequired: boolean;
+    occursOnStrategy: string;
+    billableOnStrategy: string;
+    source: "catalog";
+    availability: "offerable" | "unsupported" | "blocked";
+    unavailableReason: string | null;
+    /** The account the charge will post to, as `code · name` — the catalog item's own, never a default. */
+    accountLabel: string | null;
+};
+
+/**
+ * THE OPTIONS A SURFACE OFFERS, judged by `evaluateCatalogCharge` on the business date against the
+ * sites its charges can be for. Out-of-scope items are not listed; chargeable items come first so a
+ * surface never opens on one the command would refuse. `reviewRequired` is the org's `posting_review`
+ * answer for a catalog fee (no service), resolved by the caller from the policies it already holds.
+ */
+export function catalogChargeOptions(
+    config: CatalogChargeConfig,
+    ctx: CatalogChargeContext,
+    reviewRequired: boolean,
+): CatalogChargeOption[] {
+    const rank = { offerable: 0, blocked: 1, unsupported: 2 } as const;
+    return config.products
+        .map((product) => evaluateCatalogCharge(product, config, ctx))
+        .filter((e): e is Exclude<CatalogChargeEvaluation, { status: "out_of_scope" }> => e.status !== "out_of_scope")
+        .sort((a, b) => rank[a.status] - rank[b.status] || a.product.name.localeCompare(b.product.name))
+        .map((e) => ({
+            id: e.product.id,
+            // The name the organisation gave the item in its Catalog.
+            label: e.product.name,
+            categoryKey: CATALOG_FEE_CHARGE_CATEGORY,
+            categoryLabel: chargeCategoryLabel(CATALOG_FEE_CHARGE_CATEGORY),
+            amountStrategy: "fixed",
+            amountCents: e.product.amountCents,
+            currencyCode: (e.status === "offerable" ? e.account.currency : "") || "USD",
+            occursOnStrategy: "now",
+            billableOnStrategy: "billing_policy",
+            reviewRequired,
+            source: "catalog" as const,
+            availability: e.status,
+            unavailableReason: e.status === "offerable" ? null : e.reason,
+            accountLabel: e.status === "offerable" ? `${e.account.code} · ${e.account.name}` : null,
+        }));
+}
+
+/**
  * THE CATALOG ITEM AS A CHARGE DEFINITION for the existing lifecycle resolver.
  *
  * Not a template and never persisted as one — `charges.charge_template_id` stays null for it. It
@@ -316,4 +379,22 @@ export async function readCatalogChargeConfig(
         loadGlConfigBundle(supabase, orgId),
     ]);
     return { products, revenueCategories, mappings: gl.glAccountMappings, accounts: gl.glAccounts };
+}
+
+/**
+ * THE OPTIONS FOR A SURFACE THAT HOLDS NOTHING YET (Bulk charge) — the catalog, its accounting and
+ * the org's `posting_review` answer, read here and judged by `catalogChargeOptions`. The card's read
+ * model already holds the policies and calls `catalogChargeOptions` directly; both reach one rule.
+ */
+export async function loadCatalogChargeOptions(
+    supabase: SupabaseClient,
+    orgId: string,
+    ctx: CatalogChargeContext,
+): Promise<CatalogChargeOption[]> {
+    const [config, policies] = await Promise.all([
+        readCatalogChargeConfig(supabase, orgId, ctx.asOf),
+        listFinancialPolicies(supabase, orgId),
+    ]);
+    const review = resolveFinancialPolicy(policies, "posting_review", {}, ctx.asOf);
+    return catalogChargeOptions(config, ctx, review.resolved ? review.policy.value.required === true : false);
 }

@@ -112,18 +112,20 @@ describe("bulk charge — one canonical charge.add per account", () => {
             { customerMemberId: "k2", name: "Sam" },
         ],
     };
-    const input = { templateId: "tpl", category: "one_time", grain: "child" as const, serviceDate: "2026-11-05", amountCents: null };
+    const input = { catalogProductId: "prod", category: "one_time", grain: "child" as const, serviceDate: "2026-11-05" };
 
     it("sends Add Charge's own wire shape, to the household, per child or for the household", () => {
         const child = chargeAddRequest(target, input, "execute");
         expect(child).toMatchObject({ action_key: "charge.add", entity_type: "customer", entity_id: "h1", mode: "execute", confirmation: { confirmed: true } });
-        expect(child.payload).toMatchObject({ customer_id: "h1", template_id: "tpl", customer_member_ids: ["k1", "k2"], service_date: "2026-11-05", event_date: "2026-11-05" });
+        expect(child.payload).toMatchObject({ customer_id: "h1", catalog_product_id: "prod", customer_member_ids: ["k1", "k2"], service_date: "2026-11-05", event_date: "2026-11-05" });
         expect(child.payload).not.toHaveProperty("amount_cents");
+        /* Catalog-based (2026-10-29 policy): no template is ever named by a new bulk charge. */
+        expect(child.payload).not.toHaveProperty("template_id");
         const household = chargeAddRequest({ ...target, children: [] }, { ...input, grain: "household" }, "preview");
         expect(household.payload).toMatchObject({ subject_grain: "household", customer_id: "h1" });
         expect(household).not.toHaveProperty("confirmation");
-        const manual = chargeAddRequest(target, { ...input, amountCents: 4000 }, "preview");
-        expect(manual.payload).toMatchObject({ amount_cents: 4000 });
+        /* The amount is the catalog's configured amount: the plan has no way to send one. */
+        expect(household.payload).not.toHaveProperty("amount_cents");
     });
 
     it("never offers or sends a grain the category forbids", () => {
@@ -167,7 +169,13 @@ describe("bulk charge — one canonical charge.add per account", () => {
         expect(ui).toMatch(/chargeAddRequest\(t, input, "preview"\)/);
         expect(ui).toMatch(/chargeAddRequest\(t, input, "execute"\)/);
         expect(ui).toMatch(/previewed && sendable\.length > 0 && !ran \? \(/);
-        expect(ui).toMatch(/row\.charge_category !== "tuition"/);
+        /*
+         * Tuition is never bulk-added. Since 2026-10-29 that holds by construction: Bulk charge offers
+         * the Catalog (`commercial_products` — fees, add-ons, deposits; tuition lives in
+         * `commercial_tuition_rates`) and reads no charge templates at all.
+         */
+        expect(ui).not.toContain("/api/admin/financial/charge-templates");
+        expect(ui).toMatch(/h\.catalog/);
         expect(ui).not.toMatch(/\.from\(|supabase/);
     });
 });

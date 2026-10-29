@@ -63,8 +63,7 @@ import { positionFactsFromBundle, readAccountFactBundle, type AccountFactBundle 
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
-    CATALOG_FEE_CHARGE_CATEGORY,
-    evaluateCatalogCharge,
+    catalogChargeOptions,
     readCatalogChargeConfig,
 } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
@@ -421,9 +420,12 @@ export type FinancialsChargeTemplateOption = {
     /**
      * WHERE THIS OPTION COMES FROM. Manual Add Charge offers the organisation's Catalog
      * (`commercial_products`) and nothing else — `id` is the catalog item's id, sent as
-     * `catalog_product_id`. Charge templates are no longer offered here; they still LABEL history.
+     * `catalog_product_id`. A `template` option exists only in `draftTemplates`: it is how an
+     * EXISTING template draft is edited under its own template, never a choice for a new charge.
      */
-    source: "catalog";
+    source: "catalog" | "template";
+    /** A template option's lineage key (`template_key`), shared by every version of that template. */
+    templateKey?: string;
     /**
      * `offerable` — may be charged. `unsupported` — billed by another flow. `blocked` — configuration
      * is incomplete (no account, no price). Only `offerable` can be chosen; the other two are shown
@@ -488,6 +490,14 @@ export type FinancialsCardVM = {
      */
     payments: FinancialsPaymentRow[];
     chargeTemplates: FinancialsChargeTemplateOption[];
+    /**
+     * THE TEMPLATES IN EFFECT TODAY — for editing a draft that was written from one, and nothing else.
+     *
+     * A historical template draft keeps its template identity: it is edited under that template (or
+     * the version of the same `template_key` in force now), through `template_id`, exactly as before.
+     * It is never matched to a catalog item by name — two different authorities can share a name.
+     */
+    draftTemplates: FinancialsChargeTemplateOption[];
     unavailable: FinancialsUnavailable[];
     /**
      * Canonical payment state to show the operator, or null when none exists.
@@ -736,6 +746,7 @@ function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardV
         ledgerPeriods: [],
         payments: [],
         chargeTemplates: [],
+        draftTemplates: [],
         unavailable: [],
         paymentSetup: null,
         autopayLine: null,
@@ -1333,7 +1344,7 @@ async function buildFinancialsCardVMInner(
             supabase
                 .from("financial_charge_templates")
                 .select(
-                    "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
+                    "id, template_key, label, charge_category, amount_strategy, amount_cents, currency_code, "
                     /*
                  * `review_required` and `service_id` are read because the CARD has to be able to
                  * say what confirming Add will actually do. Without them the command could only
@@ -2366,30 +2377,32 @@ async function buildFinancialsCardVMInner(
             null,
             ...agreementSites.data.map((r) => t(r.site_location_id)).filter(Boolean),
         ];
-        const rank = { offerable: 0, blocked: 1, unsupported: 2 } as const;
-        const reviewRequired = reviewPolicyForService(null);
-        vm.chargeTemplates = catalog.config.products
-            .map((product) => evaluateCatalogCharge(product, catalog.config, { asOf: today, locationIds }))
-            .filter((e): e is Exclude<typeof e, { status: "out_of_scope" }> => e.status !== "out_of_scope")
-            .sort((a, b) => rank[a.status] - rank[b.status] || a.product.name.localeCompare(b.product.name))
-            .map((e) => ({
-                id: e.product.id,
-                // The name the organisation gave the item in its Catalog.
-                label: e.product.name,
-                categoryKey: CATALOG_FEE_CHARGE_CATEGORY,
-                categoryLabel: chargeCategoryLabel(CATALOG_FEE_CHARGE_CATEGORY),
-                amountStrategy: "fixed",
-                amountCents: e.product.amountCents,
-                currencyCode: (e.status === "offerable" ? e.account.currency : "") || "USD",
-                occursOnStrategy: "now",
-                billableOnStrategy: "billing_policy",
-                reviewRequired,
-                source: "catalog" as const,
-                availability: e.status,
-                unavailableReason: e.status === "offerable" ? null : e.reason,
-                accountLabel: e.status === "offerable" ? `${e.account.code} · ${e.account.name}` : null,
-            }));
+        vm.chargeTemplates = catalogChargeOptions(catalog.config, { asOf: today, locationIds }, reviewPolicyForService(null));
     }
+    vm.draftTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
+        .filter((row) => {
+            const start = t(row.effective_start);
+            const end = t(row.effective_end);
+            return (!start || start <= today) && (!end || end >= today);
+        })
+        .map((row) => ({
+            id: t(row.id),
+            templateKey: t(row.template_key),
+            label: t(row.label),
+            categoryKey: t(row.charge_category),
+            categoryLabel: chargeCategoryLabel(t(row.charge_category)),
+            amountStrategy: t(row.amount_strategy),
+            amountCents: row.amount_cents == null ? null : Number(row.amount_cents),
+            currencyCode: t(row.currency_code) || "USD",
+            occursOnStrategy: t(row.occurs_on_strategy),
+            billableOnStrategy: t(row.billable_on_strategy),
+            reviewRequired:
+                reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
+            source: "template" as const,
+            availability: "offerable" as const,
+            unavailableReason: null,
+            accountLabel: null,
+        }));
 
     /*
      * ── WHETHER A BANK DEBIT IS EVEN POSSIBLE HERE ───────────────────────────────────────────────

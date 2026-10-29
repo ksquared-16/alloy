@@ -60,6 +60,8 @@ type ChargeDetail = {
     dueDate: string | null;
     amountCents?: number;
     chargeTemplateId?: string | null;
+    chargeTemplateKey?: string | null;
+    catalogProductId?: string | null;
     /** W7-F017: stored invoice-timing provenance; source "template" is a charge-type override. */
     invoiceRule?: { source: string; strategy: string; offsetDays: number } | null;
     postedAt: string | null;
@@ -304,6 +306,10 @@ export type ChargeDetailFacts = {
     status: string;
     label: string;
     chargeTemplateId: string | null;
+    /** The template lineage a template draft was written under — its identity across versions. */
+    chargeTemplateKey: string | null;
+    /** The catalog item a catalog draft was made from. */
+    catalogProductId: string | null;
     amountCents: number;
     serviceDate: string | null;
     customerMemberId: string | null;
@@ -344,6 +350,8 @@ export default function FinancialsChargeDetail({
             status: detail.status,
             label: detail.label || detail.description || "Charge",
             chargeTemplateId: detail.chargeTemplateId ?? null,
+            chargeTemplateKey: detail.chargeTemplateKey ?? null,
+            catalogProductId: detail.catalogProductId ?? null,
             amountCents: Number(detail.amountCents ?? 0),
             serviceDate: detail.serviceDate,
             customerMemberId: detail.customerMemberId,
