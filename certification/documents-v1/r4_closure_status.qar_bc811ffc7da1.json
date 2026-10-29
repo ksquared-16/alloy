@@ -24,16 +24,36 @@
   },
   "phase1_close": {
     "request": "gar_62d1347398cf93",
-    "state": "CLOSED"
+    "state": "CLOSED",
+    "recorded_label": "CLOSED / ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED (22:34:53.061Z)"
   },
   "closure_census": {
     "request": "gar_29a81808fb6b6d",
     "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
     "census_run_at": "2026-10-29T22:11:50.969Z",
     "replayed_from": "gar_2585f5ebf4e7a6",
-    "verdict": "NOT A MEASUREMENT \u2014 identical census_run_at to the pre-reset census; trusted-host dedupe reuses a completed census with the same query hash within one execution run. Its 13/20 is pre-reset state."
+    "verdict": "NOT A MEASUREMENT \u2014 identical census_run_at to the pre-reset census; trusted-host dedupe reuses a completed census with the same query hash within one execution run. Its 13/20 is pre-reset state.",
+    "replayed_trusted_action": "tha_89eab7be17c753"
   },
-  "phase2_close": "NOT FILED \u2014 no fresh closure census exists",
-  "zero_residue": "UNPROVEN",
-  "dependency": "a fresh database.read_census of the registered 7957a51a artifact from a NEW execution run (dedupe is run-scoped; different bytes would break the registered pin the close binding checks), then environment.qa_run_close {qaRunId: qar_bc811ffc7da1, residueCensusRequestId: <that census>}"
+  "phase2_close": "NOT FILED",
+  "zero_residue": "UNPROVEN \u2014 no post-cleanup measurement exists; 13/20 is pre-reset state and does not describe current residue",
+  "dependency": "a fresh database.read_census of the registered 7957a51a artifact from a NEW execution run (dedupe is run-scoped; different bytes would break the registered pin the close binding checks), then environment.qa_run_close {qaRunId: qar_bc811ffc7da1, residueCensusRequestId: <that census>}",
+  "fresh_census_attempt": {
+    "execution_run": "erun2_8ea69acd9f097a2c",
+    "request": "gar_0ce4df9bd575b3",
+    "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+    "databaseTarget": "alloy_deployed_primary",
+    "policy": "operator_approval_required (alloy_deployed_primary is always an operator decision)",
+    "outcome": "failed / approval_denied by operator at 2026-10-29T22:50:55.184Z, no reason recorded; trusted_host_action_id null \u2014 nothing executed, no census_run_at",
+    "refiled": false
+  },
+  "audit_provenance_gar_233dc36ea90675": {
+    "filed": "2026-10-29T22:06:12.689Z by lane_aa660dc9554d run erun2_16272d88fb282391 (installed toolkit 20261029-5b9a06e3a0bc) \u2014 this seat's filing",
+    "policy": "22:06:13.005Z awaiting_operator (policy_default_requires_operator)",
+    "deduped_attempt": "22:06:19.987Z, same lane and run (the seat's _secondary filing collapsing onto it)",
+    "approval": "operator_approved 22:07:18.170Z; decision_timing.submitted_at 22:07:17.876Z; operator_approval.actor = 'operator' (generic)",
+    "execution": "trusted action tha_b31dc11a97d96b; execution_started 22:07:19.030Z, settled 22:07:29.193Z",
+    "approver_origin": "UNRESOLVED \u2014 request, audit and notification records carry no approver identity, session, channel or surface beyond the generic 'operator' actor; no inference made",
+    "records_modified": false
+  }
 }
