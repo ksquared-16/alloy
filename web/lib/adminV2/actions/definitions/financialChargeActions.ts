@@ -382,6 +382,7 @@ async function executeMultiChildAdd(args: {
         try {
             const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,
@@ -534,7 +535,7 @@ async function refuseIllegalSubjectGrain(
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
-    description: "Create a charge for a child from a configured charge template.",
+    description: "Create a charge for a child from a configured one-time catalog fee (or, for existing callers, a charge template).",
     supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
@@ -544,14 +545,31 @@ const addCharge: RegisteredAction = {
 
     validatePayload(payload) {
         const src = payload ?? {};
-        if (!t(src.template_id)) {
+        /*
+         * ONE SOURCE, NAMED. Manual Add Charge sends `catalog_product_id` (Organization › Financials ›
+         * Catalog); generated and legacy callers still send `template_id`. Both at once would leave
+         * the writer to pick one silently, so it is refused rather than guessed.
+         */
+        if (t(src.template_id) && t(src.catalog_product_id)) {
+            return {
+                ok: false,
+                blockers: [
+                    {
+                        code: "ambiguous_charge_source",
+                        message: "Choose one charge type — a catalog item or a charge template, not both.",
+                        field: "catalog_product_id",
+                    },
+                ],
+            };
+        }
+        if (!t(src.template_id) && !t(src.catalog_product_id)) {
             return {
                 ok: false,
                 blockers: [
                     {
                         code: "missing_charge_template",
                         message: "Choose a charge type.",
-                        field: "template_id",
+                        field: "catalog_product_id",
                     },
                 ],
             };
@@ -600,6 +618,7 @@ const addCharge: RegisteredAction = {
         try {
             const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload?.template_id),
+                catalogProductId: t(payload?.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
                 operatorServiceDate: t(payload?.service_date) || null,
@@ -752,6 +771,7 @@ const addCharge: RegisteredAction = {
             const subject = subjects[0]!.subject;
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,

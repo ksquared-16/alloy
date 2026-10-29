@@ -742,6 +742,13 @@ export type ChargeTemplateOption = {
     reviewRequired: boolean;
     /** The code-owned charge category, for grain decisions. Optional: older payloads omit it. */
     categoryKey?: string;
+    /**
+     * Why this catalog item cannot be added here (billed by another flow, or its configuration is
+     * incomplete). Null/absent = chargeable. A reason renders the item disabled, never hidden.
+     */
+    unavailableReason?: string | null;
+    /** The account a chargeable catalog item posts to, `code · name`. */
+    accountLabel?: string | null;
 };
 
 export type AddChargeSpecimen = {

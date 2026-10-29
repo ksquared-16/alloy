@@ -64,6 +64,8 @@ const ROWS: Record<string, Array<Record<string, unknown>>> = {
 /** Answers nothing until released; how many times it must be released is the depth of the build. */
 function holdingClient() {
     const held: Array<{ table: string; release: () => void }> = [];
+    /* The columns each table was asked for — so a gate can tell a scope read from a chain walk. */
+    const selects: Array<{ table: string; columns: string }> = [];
     const builder = (table: string) => {
         const chain: Record<string, unknown> = {};
         for (const k of [
@@ -72,6 +74,10 @@ function holdingClient() {
         ]) {
             chain[k] = () => chain;
         }
+        chain.select = (columns?: string) => {
+            selects.push({ table, columns: String(columns ?? "*").replace(/\s+/g, " ").trim() });
+            return chain;
+        };
         const answer = { data: ROWS[table] ?? [], error: null, count: (ROWS[table] ?? []).length };
         chain.maybeSingle = () =>
             new Promise((res) => held.push({ table, release: () => res({ data: (ROWS[table] ?? [])[0] ?? null, error: null }) }));
@@ -91,6 +97,7 @@ function holdingClient() {
             }),
         } as never,
         held,
+        selects,
     };
 }
 
@@ -126,8 +133,11 @@ const BUNDLE = {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 /** Each wave is one network round trip the operator waits for, in order. */
+let lastSelects: Array<{ table: string; columns: string }> = [];
+
 async function waveStructure() {
-    const { client, held } = holdingClient();
+    const { client, held, selects } = holdingClient();
+    lastSelects = selects;
     let settled = false;
     const build = buildFinancialsCardVM(client, {
         orgId: "org", customerId: "cust-1", customerMemberId: null, today: "2026-09-24",
@@ -161,9 +171,19 @@ describe("the card build waits on as few round trips as its data actually requir
         const [first] = await waveStructure();
         expect(first, "the account fact bundle is what replaced the chain")
             .toContain("rpc:financials_account_fact_bundle");
-        /* The chain's tables must no longer be read directly by the card. */
+        /*
+         * The chain's tables must no longer be read directly by the card. ONE exception, and only in
+         * this shape: Add Charge's catalog options need the site each agreement attends
+         * (`site_location_id`, the column the command's own scope resolver reads), which the bundle
+         * does not carry. That read is keyed by the household and asks for the site and nothing else
+         * — it walks no chain — so it is allowed in this wave and pinned to exactly those columns.
+         */
+        const agreementSelects = lastSelects.filter((s) => s.table === "child_enrollment_agreements");
+        for (const s of agreementSelects) {
+            expect(s.columns, "the only direct agreement read is the catalog's site scope").toBe("id, site_location_id");
+        }
         for (const table of [
-            "child_enrollment_agreements", "charges", "payment_allocations",
+            "charges", "payment_allocations",
             "financial_responsibility_allocations", "financial_subsidy_claim_lines",
             "payment_responsibility_attributions", "financial_expected_funding",
             "financial_subsidy_claims", "commercial_policies",

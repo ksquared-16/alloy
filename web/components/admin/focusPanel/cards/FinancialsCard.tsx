@@ -2644,7 +2644,8 @@ export default function FinancialsCard({
                             // The household, so a pre-enrolment family has a billable subject when
                             // no child agreement exists. The resolver still prefers an agreement.
                             customer_id: customerId,
-                            template_id: templateId,
+                            /* Manual Add Charge offers the Catalog: the option id IS the catalog item. */
+                            catalog_product_id: templateId,
                             child_label: chargeInvocation.customerMemberId
                                 ? vm?.subjects.find(
                                       (s) => s.customerMemberId === chargeInvocation.customerMemberId,
@@ -3015,7 +3016,8 @@ export default function FinancialsCard({
                         // Same subject inputs the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
-                        template_id: pending.templateId,
+                        /* The same catalog item the preview resolved — preview equals commit. */
+                        catalog_product_id: pending.templateId,
                         // The same selection the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         ...(selectedChildIds.length > 1
@@ -3502,7 +3504,10 @@ export default function FinancialsCard({
      */
     useEffect(() => {
         if (overlay !== "add_charge" || !vm) return;
-        const first = pending?.templateId ?? vm.chargeTemplates[0]?.id ?? null;
+        /* Only an item the command accepts is opened on; unsupported and blocked ones are shown, never chosen. */
+        const first = pending?.templateId
+            ?? vm.chargeTemplates.find((tpl) => tpl.availability === "offerable")?.id
+            ?? null;
         if (!first) return;
         void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
@@ -5385,9 +5390,10 @@ export default function FinancialsCard({
          * under; if that version has since been superseded (W7-F017 moved Materials onto the
          * organisation's timing), the edit is made under the version in force now.
          */
+        const offerable = (vm?.chargeTemplates ?? []).filter((tpl) => tpl.availability === "offerable");
         const current =
-            (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === facts.chargeTemplateId)
-            ?? (vm?.chargeTemplates ?? []).find((tpl) => tpl.label === facts.label)
+            offerable.find((tpl) => tpl.id === facts.chargeTemplateId)
+            ?? offerable.find((tpl) => tpl.label === facts.label)
             ?? null;
         if (!current) {
             setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
@@ -6212,8 +6218,9 @@ export default function FinancialsCard({
 
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
+        const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
         const selected =
-            templates.find((tpl) => tpl.key === pending?.templateId) ?? templates[0] ?? null;
+            offerableTemplates.find((tpl) => tpl.key === pending?.templateId) ?? offerableTemplates[0] ?? null;
         const subjectLabel =
             subjectFilter === "all" ?
                 "Household"
@@ -6559,8 +6566,22 @@ export default function FinancialsCard({
                         }}
                     />
                 ) : (
-                    // A configured catalog with nothing in it is a configuration state, not an error.
-                    <p className="alloy-os-financials__empty">No charge types are configured.</p>
+                    /*
+                     * A catalog with nothing chargeable here is a configuration state, not an error —
+                     * and the items it does have still say where they are billed instead.
+                     */
+                    <div className="alloy-os-financials__empty" data-financials-catalog-empty="true">
+                        <p>No one-time catalog fees can be added here.</p>
+                        {templates.length > 0 ? (
+                            <ul data-testid="addcharge-unavailable">
+                                {templates.map((tpl) => (
+                                    <li key={tpl.key} data-catalog-item={tpl.key}>
+                                        {tpl.label}{tpl.amount ? ` · ${tpl.amount}` : ""} — {tpl.unavailableReason}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : null}
+                    </div>
                 )}
             </div>
         );
@@ -7901,6 +7922,9 @@ export default function FinancialsCard({
                                         <DropdownMenuItem
                                             key={tpl.id}
                                             data-financials-charge-template={tpl.id}
+                                            data-financials-charge-availability={tpl.availability}
+                                            disabled={tpl.availability !== "offerable"}
+                                            title={tpl.unavailableReason ?? undefined}
                                             onSelect={() => void preview(tpl.id, tpl.label)}
                                         >
                                             {/* The tenant's own label. Never `template_key`. */}

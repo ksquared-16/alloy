@@ -134,6 +134,11 @@ export type ChargeIntent = {
     resolutionKey: string;
 };
 
+/** An intent that cannot be written, for a definition its caller has already refused. */
+export function ineligibleChargeIntent(template: ChargeTemplateRow, reason: string, resolutionKey: string): ChargeIntent {
+    return notEligible(template, reason, resolutionKey);
+}
+
 function notEligible(template: ChargeTemplateRow, reason: string, resolutionKey: string): ChargeIntent {
     return {
         eligible: false,
