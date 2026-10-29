@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const { data: rows, error } = await supabase
         .from("form_public_links")
-        .select("id, form_definition_id, is_active, expires_at, allowed_embed_origins, metadata")
+        .select("id, form_definition_id, is_active, expires_at, allowed_embed_origins, metadata, created_at")
         .eq("org_id", ctx.orgId)
         .eq("metadata->>default_location_id", scope.locationId)
         .order("created_at", { ascending: false });

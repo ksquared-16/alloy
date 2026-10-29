@@ -478,3 +478,13 @@ export function findRepeatedTourSchedules(groups: TourScheduleGroup[]): Map<stri
     }
     return out;
 }
+
+/**
+ * A rule that belongs to the location in scope — never an organization-wide (`location_id` null) one.
+ * Tours configuration is location-specific (Tours feedback 2026-10-29); legacy organization-wide rules
+ * stay stored and still contribute slots at runtime, but are not presented for a location.
+ */
+export function isLocationOwnRule(rule: { location_id?: string | null }, locationId: string | null | undefined): boolean {
+    const target = String(locationId ?? "").trim();
+    return Boolean(target) && rule.location_id != null && String(rule.location_id) === target;
+}

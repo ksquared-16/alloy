@@ -29,7 +29,7 @@ describe("precedence: form → location → organization → platform, per field
     it("the organization default applies to every inheriting location", () => {
         const b = resolveEffectivePublicBrand({ organization: ORG, location: { display_name: null, accent_color: null, logo_url: null } });
         expect(b).toMatchObject({ displayName: ORG.display_name, accentColor: ORG.accent_color, logoUrl: ORG.logo_url });
-        expect(b.sources).toEqual({ displayName: "organization", accentColor: "organization", logoUrl: "organization", tourCtaLabel: "platform" });
+        expect(b.sources).toEqual({ displayName: "organization", accentColor: "organization", logoUrl: "organization", tourCtaLabel: "platform", tourCtaTextColor: "platform" });
     });
 
     it("a location override wins for the fields it sets, and only those", () => {
@@ -44,7 +44,7 @@ describe("precedence: form → location → organization → platform, per field
         const form = formBrandLayer({ brand_source: "form", accent_color: "#7C3AED", brand_name: "Summer Camp" });
         const b = resolveEffectivePublicBrand({ form, organization: ORG, location: LOC });
         expect(b).toMatchObject({ accentColor: "#7C3AED", displayName: "Summer Camp", logoUrl: ORG.logo_url });
-        expect(b.sources).toEqual({ displayName: "form", accentColor: "form", logoUrl: "organization", tourCtaLabel: "platform" });
+        expect(b.sources).toEqual({ displayName: "form", accentColor: "form", logoUrl: "organization", tourCtaLabel: "platform", tourCtaTextColor: "platform" });
     });
 
     it("nothing configured anywhere is the platform default, unchanged from today", () => {
@@ -54,7 +54,7 @@ describe("precedence: form → location → organization → platform, per field
 
 describe("the form layer", () => {
     it("the builder's auto-saved Bend Pine on a legacy form is not an override", () => {
-        expect(formBrandLayer({ accent_color: "#00A283", brand_name: "" })).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null });
+        expect(formBrandLayer({ accent_color: "#00A283", brand_name: "" })).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
         // So the school's colour shows...
         expect(resolveEffectivePublicBrand({ form: formBrandLayer({ accent_color: "#00A283" }), organization: ORG }).accentColor).toBe("#1F6FEB");
         // ...and with no school brand it is Bend Pine again: no unbranded form changes.
@@ -85,9 +85,9 @@ describe("nothing unsafe reaches a public page", () => {
         const read = readPublicBrandValues({
             public_brand_v1: { display_name: "  A   B ", accent_color: "red;background:url(x)", logo_url: "javascript:alert(1)" },
         });
-        expect(read).toEqual({ display_name: "A B", accent_color: null, logo_url: null, tour_cta_label: null });
+        expect(read).toEqual({ display_name: "A B", accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
         expect(readPublicBrandValues({ public_brand_v1: { logo_url: "http://insecure.example.com/x.png" } }).logo_url).toBeNull();
-        expect(readPublicBrandValues(null)).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null });
+        expect(readPublicBrandValues(null)).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
     });
 
     it("writes refuse malformed values instead of silently dropping them", () => {
@@ -96,7 +96,7 @@ describe("nothing unsafe reaches a public page", () => {
         expect(validatePublicBrandInput({ evil: 1 }).ok).toBe(false);
         expect(validatePublicBrandInput({ accent_color: "#abc", display_name: "", logo_url: null })).toEqual({
             ok: true,
-            values: { display_name: null, accent_color: "#AABBCC", logo_url: null, tour_cta_label: null },
+            values: { display_name: null, accent_color: "#AABBCC", logo_url: null, tour_cta_label: null, tour_cta_text_color: null },
         });
     });
 });
