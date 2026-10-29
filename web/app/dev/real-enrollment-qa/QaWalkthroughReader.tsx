@@ -8,12 +8,25 @@ import { parseInline, type QaBlock, type QaInline } from "@/lib/qa/parseQaWalkth
  * glance while their eyes are mostly on Alloy. Everything else stays quiet.
  */
 
-function Inline({ parts }: { parts: QaInline[] }) {
+/** One run of inline text — shared with other QA guides that render the same blocks. */
+export function Inline({ parts }: { parts: QaInline[] }) {
     return (
         <>
             {parts.map((p, i) => {
                 if (p.kind === "strong") return <strong key={i} className="font-semibold text-alloy-midnight">{p.text}</strong>;
                 if (p.kind === "em") return <em key={i}>{p.text}</em>;
+                if (p.kind === "link")
+                    return (
+                        <a
+                            key={i}
+                            href={p.href}
+                            target={p.href.startsWith("/") ? undefined : "_blank"}
+                            rel="noreferrer"
+                            className="font-medium text-alloy-bend-pine underline underline-offset-2"
+                        >
+                            {p.text}
+                        </a>
+                    );
                 if (p.kind === "code")
                     return (
                         <code key={i} className="rounded bg-alloy-midnight/[0.06] px-1.5 py-0.5 font-mono text-[13px]">

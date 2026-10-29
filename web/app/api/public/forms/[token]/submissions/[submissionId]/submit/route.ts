@@ -56,7 +56,11 @@ import {
 import { publicLinkOffersMarketingConsent } from "@/lib/tours/publicCalendar/tourCalendarLinkConfig";
 import {
     buildIntakeMarketingConsentRecord,
+    choiceFitsLanguage,
+    findMarketingConsentField,
+    marketingConsentFieldIds,
     parsePublicMarketingConsentChoice,
+    resolveMarketingConsentLanguage,
     type IntakeMarketingConsentRecord,
     withoutCompetingMarketingConsentFields,
 } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
@@ -199,29 +203,6 @@ export async function POST(
         });
     }
 
-    /*
-     * S7 × C1 — OPTIONAL MARKETING CONSENT. Only a link that offers the control can carry an answer
-     * (decided by the link, never the body). The answer is evidence on the Processing case, not a
-     * preference: Approve commits it for the resolved person through Communications. An unchecked
-     * or missing answer is recorded as "no" — submitting the form is never consent.
-     */
-    let marketingConsent: IntakeMarketingConsentRecord | null = null;
-    {
-        const parsed = parsePublicMarketingConsentChoice(body.marketing_consent);
-        if (!parsed.ok) return publicErr(parsed.message, 400, { code: "MARKETING_CONSENT_INVALID" });
-        const offered = publicLinkOffersMarketingConsent(ctx.linkMetadata, { packet: Boolean(ctx.packet) });
-        if (parsed.value && !offered) {
-            return publicErr("This form can't take a consent answer.", 400, { code: "MARKETING_CONSENT_NOT_ACCEPTED" });
-        }
-        if (offered) {
-            marketingConsent = buildIntakeMarketingConsentRecord({
-                choice: parsed.value,
-                formPublicLinkId: ctx.linkId,
-                formSubmissionId: submissionId,
-            });
-        }
-    }
-
     const { data: ver } = await supabase
         .from("form_definition_versions")
         .select("schema_json, metadata")
@@ -239,9 +220,40 @@ export async function POST(
         }
         throw e;
     }
+    /*
+     * S7 × C1 — OPTIONAL MARKETING CONSENT. Only a link that offers the control can carry an answer
+     * (decided by the server from the link and the published schema, never the body). The answer is
+     * evidence on the Processing case, not a preference: Approve commits it for the resolved person
+     * through Communications. An unchecked or missing answer is recorded as "no" — submitting the
+     * form is never consent. When the form's author placed a Marketing consent question, its wording
+     * and channels are the ones recorded; a channel it did not show can never carry a yes.
+     */
+    let marketingConsent: IntakeMarketingConsentRecord | null = null;
+    {
+        const parsed = parsePublicMarketingConsentChoice(body.marketing_consent);
+        if (!parsed.ok) return publicErr(parsed.message, 400, { code: "MARKETING_CONSENT_INVALID" });
+        const offered = publicLinkOffersMarketingConsent(ctx.linkMetadata, { packet: Boolean(ctx.packet), schema });
+        if (parsed.value && !offered) {
+            return publicErr("This form can't take a consent answer.", 400, { code: "MARKETING_CONSENT_NOT_ACCEPTED" });
+        }
+        if (offered) {
+            const language = resolveMarketingConsentLanguage(findMarketingConsentField(schema));
+            if (!choiceFitsLanguage(parsed.value, language)) {
+                return publicErr("Invalid consent answer.", 400, { code: "MARKETING_CONSENT_INVALID" });
+            }
+            marketingConsent = buildIntakeMarketingConsentRecord({
+                choice: parsed.value,
+                formPublicLinkId: ctx.linkId,
+                formSubmissionId: submissionId,
+                language,
+            });
+        }
+    }
+
     // Where this link offers the marketing-consent control, it is the one consent answer: the form's own
     // "Email opt-in" / "SMS opt-in" person fields are not shown, not required and not stored (P1-close, D5).
-    const competingConsentFieldIds = new Set<string>();
+    // A Marketing consent question never holds a value either — its answer is the record above.
+    const competingConsentFieldIds = new Set<string>(marketingConsentFieldIds(schema));
     if (marketingConsent) {
         const before = new Set(collectFieldIds(schema.fields));
         schema = withoutCompetingMarketingConsentFields(schema);
@@ -372,6 +384,12 @@ export async function POST(
         if (!built.ok && requestedTour) {
             // No Processing case could be opened, so there is nowhere to hold the request.
             return publicErr("This form can't take a tour request.", 400, { code: "TOUR_REQUEST_NOT_ACCEPTED" });
+        }
+        if (!built.ok && (marketingConsent?.choices.email || marketingConsent?.choices.sms)) {
+            // Same for a consent: no case means nowhere to hold the evidence — never accept it and drop it.
+            return publicErr("We couldn't record your request just now. Please try again.", 503, {
+                code: "MARKETING_CONSENT_NOT_RECORDED",
+            });
         }
         if (!built.ok) {
             finalPayload = {

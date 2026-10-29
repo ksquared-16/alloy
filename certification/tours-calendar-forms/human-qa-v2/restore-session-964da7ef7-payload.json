@@ -1,0 +1,7 @@
+{
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "environment.restore_preview_qa_session",
+  "purpose": "Browser re-check of Human QA V2 on the rebased isolated preview (certenv-3669337690): Forms Studio Preview renders the Marketing consent question as the families' control (D8) on the final candidate.",
+  "reason_worker_cannot_execute": "Minting a QA browser session for a candidate preview is a trusted-host credential action and requires governed authorization.",
+  "inputs": { "target": "alloy.candidate.enrollment", "candidateSha": "964da7ef7392f3188ef24538d06af6276de6641e" }
+}

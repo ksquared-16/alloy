@@ -1,0 +1,11 @@
+{
+  "lane_id": "lane_2cea84351d90",
+  "action_key": "environment.build_certification_baseline",
+  "purpose": "Isolated QA database at the current staging tip (b30914e34 = bce2364ab + PR #1615, no migration change) for the Director's Human QA V2 of the new Forms Studio Marketing consent question \u2014 no hosted staging data or providers involved.",
+  "reason_worker_cannot_execute": "Building an isolated certification environment starts Docker resources on the trusted host and requires governed authorization.",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "baseBranch": "staging",
+    "expectedBaseSha": "b30914e34be300a16fdc8976732449780d5a2948"
+  }
+}

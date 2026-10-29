@@ -8,7 +8,7 @@
  * route, and previews it with the existing FormEngineRenderer. No I/O.
  */
 
-import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormMarketingConsentConfig, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 import { relationshipCollectionGroupField } from "@/lib/forms/relationshipCollectionGroup";
@@ -25,7 +25,8 @@ export type BuilderFieldType =
     | "multiselect"
     | "boolean"
     | "file_ref"
-    | "signature";
+    | "signature"
+    | "marketing_consent";
 
 export interface BuilderFieldSpec {
     type: BuilderFieldType;
@@ -39,6 +40,8 @@ export interface BuilderFieldSpec {
     /** Inline authorization / explanatory content for text blocks. */
     content?: string;
     token_ids?: string[];
+    /** Marketing consent questions: which channels are offered and the author's wording for each. */
+    consent?: FormMarketingConsentConfig;
     /** Target section id; defaults to the first section. */
     sectionId?: string;
 }
@@ -120,6 +123,18 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
             return { ...base, type: "select", static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
         case "multiselect":
             return { ...base, type: "multiselect", static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
+        case "marketing_consent": {
+            // Never required and never bound to a value destination: the answer is consent evidence that
+            // Approve commits through Communications. Both channels offered until the author narrows it.
+            const { field_source: _unbound, ...unbound } = base as typeof base & { field_source?: unknown };
+            void _unbound;
+            return {
+                ...unbound,
+                type: "marketing_consent",
+                required: false,
+                consent: spec.consent ?? { channels: { email: true, sms: true } },
+            };
+        }
     }
 }
 
@@ -174,6 +189,25 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
             const fs = patch.field_source;
             if (fs && fs.entity_type && fs.field_key) (next as { field_source?: unknown }).field_source = { entity_type: fs.entity_type, field_key: fs.field_key, ...(fs.shared_value_key ? { shared_value_key: fs.shared_value_key } : {}) };
             else delete (next as { field_source?: unknown }).field_source;
+        }
+        if (next.type === "marketing_consent") {
+            // Consent is only ever optional, and has no value destination.
+            next.required = false;
+            delete (next as { field_source?: unknown }).field_source;
+            if (patch.consent !== undefined) {
+                const c = patch.consent;
+                const channels = { email: c.channels.email === true, sms: c.channels.sms === true };
+                // At least one channel stays offered — a consent question with no boxes asks nothing.
+                if (channels.email || channels.sms) {
+                    const wording: { email?: string; sms?: string } = {};
+                    if (c.wording?.email?.trim()) wording.email = c.wording.email;
+                    if (c.wording?.sms?.trim()) wording.sms = c.wording.sms;
+                    (next as { consent: FormMarketingConsentConfig }).consent = {
+                        channels,
+                        ...(Object.keys(wording).length ? { wording } : {}),
+                    };
+                }
+            }
         }
         if (patch.content !== undefined && next.type === "text_block") {
             (next as { content: string }).content = patch.content;

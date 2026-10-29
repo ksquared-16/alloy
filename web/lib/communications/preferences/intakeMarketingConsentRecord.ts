@@ -46,8 +46,9 @@ export type IntakeMarketingConsentRecord = {
     /** `submitted` — the control was on screen and its state was sent; `absent` — offered, nothing sent. */
     response: "submitted" | "absent";
     choices: IntakeMarketingConsentChoice;
-    language: { version: string; email: string; sms: string };
-    provenance: { form_public_link_id: string; form_submission_id: string };
+    /** Form-authored wording also records its heading, note and which channels were shown. */
+    language: { version: string; email: string; sms: string; heading?: string; note?: string; channels?: { email: boolean; sms: boolean } };
+    provenance: { form_public_link_id: string; form_submission_id: string; form_field_id?: string };
     /** Set once by Approve. Its presence is what makes a replayed approval write nothing. */
     committed?: {
         person_id: string;
@@ -77,23 +78,132 @@ export function parsePublicMarketingConsentChoice(raw: unknown): ParsedMarketing
     return { ok: true, value: { email: r.email === true, sms: r.sms === true } };
 }
 
+// ── The wording a family is shown: Communications' default, or the form author's ────────────────────
+
+/** A form-authored consent question, as the record needs it (structural — no Forms import here). */
+export type MarketingConsentFieldLike = {
+    id: string;
+    type: "marketing_consent";
+    label: string;
+    description?: string;
+    consent: { channels: { email: boolean; sms: boolean }; wording?: { email?: string; sms?: string } };
+};
+
+/** What one consent control shows, and the version the evidence will name. */
+export type ResolvedMarketingConsentLanguage = {
+    version: string;
+    heading: string;
+    note: string;
+    channels: { email: boolean; sms: boolean };
+    email: string;
+    sms: string;
+    /** The authored question this came from; null for the link-offered control. */
+    formFieldId: string | null;
+};
+
+export const DEFAULT_MARKETING_CONSENT_LANGUAGE: ResolvedMarketingConsentLanguage = {
+    version: INTAKE_MARKETING_CONSENT_LANGUAGE.version,
+    heading: INTAKE_MARKETING_CONSENT_LANGUAGE.heading,
+    note: INTAKE_MARKETING_CONSENT_LANGUAGE.note,
+    channels: { email: true, sms: true },
+    email: INTAKE_MARKETING_CONSENT_LANGUAGE.email,
+    sms: INTAKE_MARKETING_CONSENT_LANGUAGE.sms,
+    formFieldId: null,
+};
+
+/** FNV-1a (32-bit), hex — deterministic and client-safe; identifies wording, it secures nothing. */
+function wordingDigest(text: string): string {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * The wording an authored question shows. Its version is derived from the exact words and channels,
+ * so evidence names what was on screen: changing any of it (and republishing) is a new version, and
+ * republishing unchanged wording keeps the same one. Empty wording falls back per channel to the
+ * Communications default, which keeps that channel's opt-out instruction.
+ */
+export function resolveMarketingConsentLanguage(field: MarketingConsentFieldLike | null): ResolvedMarketingConsentLanguage {
+    if (!field) return DEFAULT_MARKETING_CONSENT_LANGUAGE;
+    const D = INTAKE_MARKETING_CONSENT_LANGUAGE;
+    const channels = { email: field.consent?.channels?.email === true, sms: field.consent?.channels?.sms === true };
+    const email = channels.email ? field.consent.wording?.email?.trim() || D.email : "";
+    const sms = channels.sms ? field.consent.wording?.sms?.trim() || D.sms : "";
+    const heading = field.label?.trim() || D.heading;
+    const note = field.description?.trim() || D.note;
+    const digest = wordingDigest(JSON.stringify([heading, note, channels.email, email, channels.sms, sms]));
+    return { version: `form_field.v1:${digest}`, heading, note, channels, email, sms, formFieldId: field.id };
+}
+
+type SchemaFieldNode = { id: string; type?: string; fields?: SchemaFieldNode[] };
+
+/** The form's own marketing consent question, if it has one (first found, groups included). */
+export function findMarketingConsentField(schema: { fields?: SchemaFieldNode[] } | null | undefined): MarketingConsentFieldLike | null {
+    const walk = (fields: SchemaFieldNode[] | undefined): MarketingConsentFieldLike | null => {
+        for (const f of fields ?? []) {
+            if (f.type === "marketing_consent") return f as unknown as MarketingConsentFieldLike;
+            if (Array.isArray(f.fields)) {
+                const inner = walk(f.fields);
+                if (inner) return inner;
+            }
+        }
+        return null;
+    };
+    return walk(schema?.fields);
+}
+
+/** Every marketing consent question id — their answers never belong in `values`. */
+export function marketingConsentFieldIds(schema: { fields?: SchemaFieldNode[] } | null | undefined): string[] {
+    const ids: string[] = [];
+    const walk = (fields: SchemaFieldNode[] | undefined) => {
+        for (const f of fields ?? []) {
+            if (f.type === "marketing_consent") ids.push(f.id);
+            if (Array.isArray(f.fields)) walk(f.fields);
+        }
+    };
+    walk(schema?.fields);
+    return ids;
+}
+
+/** A channel the control did not show can never carry a yes. */
+export function choiceFitsLanguage(choice: IntakeMarketingConsentChoice | null, language: ResolvedMarketingConsentLanguage): boolean {
+    if (!choice) return true;
+    return !(choice.email && !language.channels.email) && !(choice.sms && !language.channels.sms);
+}
+
 export function buildIntakeMarketingConsentRecord(input: {
     choice: IntakeMarketingConsentChoice | null;
     formPublicLinkId: string;
     formSubmissionId: string;
+    /** The wording on screen. Absent → Communications' default (the link-offered control). */
+    language?: ResolvedMarketingConsentLanguage;
     at?: Date;
 }): IntakeMarketingConsentRecord {
+    const L = input.language ?? DEFAULT_MARKETING_CONSENT_LANGUAGE;
     return {
         schema_version: INTAKE_MARKETING_CONSENT_SCHEMA,
         captured_at: (input.at ?? new Date()).toISOString(),
         response: input.choice ? "submitted" : "absent",
-        choices: { email: input.choice?.email === true, sms: input.choice?.sms === true },
-        language: {
-            version: INTAKE_MARKETING_CONSENT_LANGUAGE.version,
-            email: INTAKE_MARKETING_CONSENT_LANGUAGE.email,
-            sms: INTAKE_MARKETING_CONSENT_LANGUAGE.sms,
+        // A channel that was not on screen is never a yes, whatever arrived.
+        choices: {
+            email: L.channels.email && input.choice?.email === true,
+            sms: L.channels.sms && input.choice?.sms === true,
         },
-        provenance: { form_public_link_id: input.formPublicLinkId, form_submission_id: input.formSubmissionId },
+        language: {
+            version: L.version,
+            email: L.email,
+            sms: L.sms,
+            ...(L.formFieldId ? { heading: L.heading, note: L.note, channels: L.channels } : {}),
+        },
+        provenance: {
+            form_public_link_id: input.formPublicLinkId,
+            form_submission_id: input.formSubmissionId,
+            ...(L.formFieldId ? { form_field_id: L.formFieldId } : {}),
+        },
         committed: null,
     };
 }
@@ -167,6 +277,30 @@ export function withoutCompetingMarketingConsentFields<
         fields
             .filter((f) => {
                 if (!isCompetingMarketingConsentField(f)) return true;
+                removed.add(f.id);
+                return false;
+            })
+            .map((f) => (Array.isArray(f.fields) ? { ...f, fields: strip(f.fields) } : f));
+    const fields = strip(schema.fields);
+    if (removed.size === 0) return schema;
+    const sections = schema.sections?.map((sec) =>
+        Array.isArray(sec.field_ids) ? { ...sec, field_ids: sec.field_ids.filter((id) => !removed.has(id)) } : sec,
+    );
+    return { ...schema, fields, ...(sections ? { sections } : {}) } as S;
+}
+
+/**
+ * The schema without its Marketing consent questions (and their section references) — for a link that
+ * does not offer consent. Boxes a family could tick but no case would hold are never shown.
+ */
+export function withoutMarketingConsentFields<
+    S extends { fields: ConsentFieldLike[]; sections?: { field_ids?: string[] }[] },
+>(schema: S): S {
+    const removed = new Set<string>();
+    const strip = (fields: ConsentFieldLike[]): ConsentFieldLike[] =>
+        fields
+            .filter((f) => {
+                if (f.type !== "marketing_consent") return true;
                 removed.add(f.id);
                 return false;
             })

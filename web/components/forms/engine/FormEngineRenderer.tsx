@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useMemo, type FormEvent } from "react";
+import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import clsx from "clsx";
 import PhoneInput from "@/components/ui/PhoneInput";
 import { formatPhoneDisplay, isPhoneField } from "@/lib/phone/phonePresentation";
@@ -24,6 +24,11 @@ import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentatio
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
 import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
+import {
+    resolveMarketingConsentLanguage,
+    type IntakeMarketingConsentChoice,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { MarketingConsentControl } from "./MarketingConsentControl";
 
 export type FormEngineOptionChoice = { value: string; label: string };
 
@@ -38,6 +43,16 @@ export type FormEngineRendererProps = {
     variant?: "default" | "embed";
     /** When set (e.g. after submit), matching messages are shown next to groups and signatures. */
     validationErrors?: NormalizedValidationError[];
+    /**
+     * The family's answer to a Marketing consent question. It never lives in `values`: the owner sends
+     * it as the consent evidence on submit. Absent (Studio Preview), the boxes keep a local answer that
+     * is never sent anywhere.
+     */
+    marketingConsent?: {
+        value: IntakeMarketingConsentChoice;
+        onChange: (next: IntakeMarketingConsentChoice) => void;
+        disabled?: boolean;
+    };
 };
 
 function fieldById(fields: FormField[], id: string): FormField | undefined {
@@ -93,8 +108,10 @@ export function FormEngineRenderer({
     optionChoicesByFieldId,
     variant = "default",
     validationErrors,
+    marketingConsent,
 }: FormEngineRendererProps) {
     const readonly = mode === "readonly";
+    const [localConsent, setLocalConsent] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
 
     /**
      * Show a field when the schema's own conditions say so AND it is not a placement-only
@@ -139,6 +156,28 @@ export function FormEngineRenderer({
             errorPathPrefix?: string[]
         ) => {
             if (field.type === "group" || field.type === "signature") return null;
+            if (field.type === "marketing_consent") {
+                const language = resolveMarketingConsentLanguage(field);
+                if (readonly) {
+                    return (
+                        <div className="space-y-1" data-form-field-marketing-consent={field.id}>
+                            <p className="block text-sm font-medium text-neutral-800">{language.heading}</p>
+                            <p className="text-xs text-neutral-600">
+                                Answered as marketing consent ({language.version}) — recorded on the Processing case, not here.
+                            </p>
+                        </div>
+                    );
+                }
+                return (
+                    <MarketingConsentControl
+                        className=""
+                        language={language}
+                        value={marketingConsent?.value ?? localConsent}
+                        onChange={marketingConsent?.onChange ?? setLocalConsent}
+                        disabled={marketingConsent?.disabled === true}
+                    />
+                );
+            }
             const raw = cell[field.id];
             const fieldErrors = errorPathPrefix?.length
                 ? errorsUnderPrefix(validationErrors, errorPathPrefix)
@@ -404,7 +443,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview, controlIdBase]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors, derivedPreview, controlIdBase, marketingConsent, localConsent]
     );
 
     const renderSignatureControl = useCallback(

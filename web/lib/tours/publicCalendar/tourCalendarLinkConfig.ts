@@ -19,6 +19,7 @@
  * tour availability.
  */
 
+import { findMarketingConsentField } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
 export const TOUR_CALENDAR_LINK_METADATA_KEY = "tour_calendar_v1" as const;
@@ -44,14 +45,24 @@ export function readTourCalendarLinkConfig(linkMetadata: unknown): TourCalendarL
 
 /**
  * Whether this link's form offers the optional marketing-consent control (S7 × C1). Decided by the
- * link alone — never by the browser: a lead-capture Processing intake link whose tour calendar is
- * published. Both the hosted calendar's step two and the same token's embed render it; the submit
- * route refuses a consent answer from any other link.
+ * server from the link and the PUBLISHED schema — never by the browser. Only a lead-capture
+ * Processing intake link qualifies (anything else opens no case to hold the evidence), and then
+ * either because its tour calendar is published or because the form's author placed a Marketing
+ * consent question on it. The submit route refuses a consent answer from any other link.
  */
-export function publicLinkOffersMarketingConsent(linkMetadata: unknown, opts: { packet: boolean }): boolean {
+export function publicLinkOffersMarketingConsent(
+    linkMetadata: unknown,
+    opts: { packet: boolean; schema?: unknown },
+): boolean {
     if (opts.packet) return false;
     if (!linkMetadata || typeof linkMetadata !== "object" || Array.isArray(linkMetadata)) return false;
-    return linkRequiresLeadCapture(linkMetadata as Record<string, unknown>) && readTourCalendarLinkConfig(linkMetadata).enabled;
+    if (!linkRequiresLeadCapture(linkMetadata as Record<string, unknown>)) return false;
+    return readTourCalendarLinkConfig(linkMetadata).enabled || schemaHasMarketingConsentField(opts.schema);
+}
+
+function schemaHasMarketingConsentField(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false;
+    return findMarketingConsentField(schema as { fields?: [] }) !== null;
 }
 
 /** Client metadata can never carry the flag — only the explicit, authorized field sets it. */

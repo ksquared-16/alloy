@@ -190,6 +190,31 @@ type FormFieldBase = {
     absence?: FormFieldAbsence;
 };
 
+/**
+ * A form-authored MARKETING CONSENT question (Communications-bound, not a value field).
+ *
+ * The family's answer is never stored in `values`: it travels as the intake marketing-consent evidence
+ * record that Approve commits through Communications (`communication_preferences`), the only consent
+ * store. The field's label is the heading and its description the note under the boxes. Each offered
+ * channel is its own box, unchecked, and the field can never be required — that would be an implicit
+ * opt-in. Wording left empty uses Communications' default wording for that channel.
+ */
+export type FormMarketingConsentConfig = {
+    channels: { email: boolean; sms: boolean };
+    wording?: { email?: string; sms?: string };
+};
+
+export const formMarketingConsentConfigSchema = z
+    .object({
+        channels: z.object({ email: z.boolean(), sms: z.boolean() }).strict(),
+        wording: z
+            .object({ email: z.string().max(500).optional(), sms: z.string().max(500).optional() })
+            .strict()
+            .optional(),
+    })
+    .strict()
+    .refine((c) => c.channels.email || c.channels.sms, { message: "A marketing consent question offers at least one channel." });
+
 /** Parsed `schema_json` field node (recursive for groups). */
 export type FormField =
     | (FormFieldBase & { type: "text"; multiline?: boolean })
@@ -221,6 +246,7 @@ export type FormField =
           document_type?: string;
       })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
+    | (FormFieldBase & { type: "marketing_consent"; consent: FormMarketingConsentConfig })
     | (FormFieldBase & {
           type: "group";
           fields: FormField[];
@@ -312,6 +338,17 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
             .extend({
                 type: z.literal("signature"),
                 signature: formSignatureConfigSchema.optional(),
+            })
+            .strict(),
+        fieldCoreSchema
+            .extend({
+                type: z.literal("marketing_consent"),
+                // Never required, never derived or read-only: consent is asked, and only ever optionally.
+                required: z.literal(false).optional().default(false),
+                read_only: z.literal(false).optional().default(false),
+                derived: z.undefined().optional(),
+                field_source: z.undefined().optional(),
+                consent: formMarketingConsentConfigSchema,
             })
             .strict(),
         fieldCoreSchema

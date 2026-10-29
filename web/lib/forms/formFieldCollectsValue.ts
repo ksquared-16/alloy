@@ -16,8 +16,12 @@
 
 import type { FormField } from "@/lib/forms/schema";
 
-/** Field types that present content rather than collect it. */
-export const DISPLAY_ONLY_FORM_FIELD_TYPES: ReadonlySet<string> = new Set(["text_block"]);
+/**
+ * Field types that hold no value in `values`. A `text_block` presents content. A `marketing_consent`
+ * question is answered, but its answer is Communications consent evidence carried beside the payload —
+ * never a value, never outstanding, never a participant need (it is always optional).
+ */
+export const DISPLAY_ONLY_FORM_FIELD_TYPES: ReadonlySet<string> = new Set(["text_block", "marketing_consent"]);
 
 export function formFieldCollectsValue(field: Pick<FormField, "type">): boolean {
     return !DISPLAY_ONLY_FORM_FIELD_TYPES.has(field.type);

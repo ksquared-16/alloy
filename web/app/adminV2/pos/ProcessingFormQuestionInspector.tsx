@@ -5,7 +5,7 @@ import {
     type ProcessingLibraryFieldOffer,
     type ProcessingLibraryGroupOffer,
 } from "@/lib/forms/processingFormFieldLibrary";
-import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormMarketingConsentConfig, FormSchemaV1 } from "@/lib/forms/schema";
 import {
     calculationDateSources,
     calculationOf,
@@ -57,6 +57,10 @@ import {
     type AnswerKind,
 } from "@/lib/forms/formBuilderSchema";
 import { relationshipLabelForGroup } from "@/lib/forms/relationshipCollectionGroup";
+import {
+    DEFAULT_MARKETING_CONSENT_LANGUAGE,
+    resolveMarketingConsentLanguage,
+} from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import ProcessingCreateFieldPanel from "./ProcessingCreateFieldPanel";
 import {
     AlloyCheckbox,
@@ -80,6 +84,7 @@ const ANSWER_TYPE_LABELS: Record<string, string> = {
     multiselect: "Multi-select",
     signature: "Signature",
     file_ref: "File upload",
+    marketing_consent: "Marketing consent",
 };
 
 const STORE_SUBJECT_OPTIONS = [
@@ -706,6 +711,78 @@ function GroupPanel({
     );
 }
 
+/**
+ * MARKETING CONSENT — what the family is asked, and where the answer goes.
+ *
+ * Not a value field: there is no "Store answer in". The answer is Communications consent evidence on
+ * the Processing case, and Approve records it on the person's communication preferences — the one
+ * consent store. The author chooses the channels and may word each box; empty wording uses
+ * Communications' default (which carries the unsubscribe / STOP instruction).
+ */
+function MarketingConsentPanel({
+    field,
+    editable,
+    mutate,
+}: {
+    field: FormField & { type: "marketing_consent" };
+    editable: boolean;
+    mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
+}) {
+    const consent = field.consent;
+    const language = resolveMarketingConsentLanguage(field);
+    const setConsent = (next: FormMarketingConsentConfig) => mutate((s) => updateField(s, field.id, { consent: next }));
+    const onlyChannel = (c: "email" | "sms") => consent.channels[c] && !consent.channels[c === "email" ? "sms" : "email"];
+    return (
+        <AlloyInspectorGroup title="Marketing consent">
+            <div data-inspector-marketing-consent className="space-y-3">
+                {(["email", "sms"] as const).map((channel) => (
+                    <div key={channel} className="space-y-1.5">
+                        <AlloyCheckbox
+                            checked={consent.channels[channel]}
+                            onChange={(on) =>
+                                setConsent({ ...consent, channels: { ...consent.channels, [channel]: on } })
+                            }
+                            label={channel === "email" ? "Ask about marketing email" : "Ask about marketing texts (SMS)"}
+                            // One channel always stays offered — a consent question with no boxes asks nothing.
+                            disabled={!editable || onlyChannel(channel)}
+                        />
+                        {consent.channels[channel] ? (
+                            <div>
+                                <AlloyFieldLabel>{channel === "email" ? "Email box wording" : "Text box wording"}</AlloyFieldLabel>
+                                {editable ? (
+                                    <AlloyTextArea
+                                        value={consent.wording?.[channel] ?? ""}
+                                        onChange={(text) =>
+                                            setConsent({ ...consent, wording: { ...(consent.wording ?? {}), [channel]: text } })
+                                        }
+                                        rows={3}
+                                        placeholder={DEFAULT_MARKETING_CONSENT_LANGUAGE[channel]}
+                                        testId={`form-builder-consent-wording-${channel}`}
+                                    />
+                                ) : (
+                                    <p className="text-[12px] text-alloy-midnight/70">{language[channel]}</p>
+                                )}
+                            </div>
+                        ) : null}
+                    </div>
+                ))}
+                <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+                    Saved as consent evidence on the Processing case — the choice, this exact wording, the time and the
+                    link. Approving the case records it on the person&apos;s communication preferences. An existing
+                    opt-out is never overridden, and submitting the form sends no marketing.
+                </p>
+                <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+                    Shown only on Processing intake (lead-capture) links. On a tour calendar&apos;s form it replaces the
+                    default &ldquo;Stay in touch&rdquo; boxes.
+                </p>
+                <p className="font-mono text-[10px] text-alloy-midnight/40" data-inspector-consent-version>
+                    Wording version {language.version}
+                </p>
+            </div>
+        </AlloyInspectorGroup>
+    );
+}
+
 type Props = {
     field: FormField;
     schema: FormSchemaV1;
@@ -785,7 +862,11 @@ export default function ProcessingFormQuestionInspector({
                         <p className="text-[12px] font-medium text-alloy-midnight">{field.label}</p>
                     )}
                 </div>
-                {field.type !== "text_block" ? (
+                {field.type === "marketing_consent" ? (
+                    <p className="text-[11px] text-alloy-midnight/55" data-inspector-consent-optional>
+                        Always optional — a consent question can never be required, and both boxes start unchecked.
+                    </p>
+                ) : field.type !== "text_block" ? (
                     <AlloyCheckbox
                         checked={field.required}
                         onChange={(required) => mutate((s) => updateField(s, field.id, { required }))}
@@ -809,7 +890,7 @@ export default function ProcessingFormQuestionInspector({
                     </div>
                 ) : (
                     <div>
-                        <AlloyFieldLabel>Help text</AlloyFieldLabel>
+                        <AlloyFieldLabel>{field.type === "marketing_consent" ? "Note under the boxes" : "Help text"}</AlloyFieldLabel>
                         {editable ? (
                             <AlloyTextArea
                                 value={field.description ?? ""}
@@ -853,6 +934,11 @@ export default function ProcessingFormQuestionInspector({
                 <>
                     <AlloyInspectorDivider />
                     <GroupPanel key={field.id} field={field} schema={schema} editable={editable} mutate={mutate} />
+                </>
+            ) : field.type === "marketing_consent" ? (
+                <>
+                    <AlloyInspectorDivider />
+                    <MarketingConsentPanel field={field} editable={editable} mutate={mutate} />
                 </>
             ) : field.type !== "text_block" ? (
                 <>
@@ -980,7 +1066,7 @@ export default function ProcessingFormQuestionInspector({
                 </>
             ) : null}
 
-            {field.type !== "text_block" && !parentGroup ? (
+            {field.type !== "text_block" && field.type !== "marketing_consent" && !parentGroup ? (
                 <>
                     <AlloyInspectorDivider />
                     {/*
@@ -1056,7 +1142,7 @@ export default function ProcessingFormQuestionInspector({
             {editable && !parentGroup ? (
                 <>
                     <AlloyInspectorDivider />
-                    {onDuplicate && field.type !== "group" ? (
+                    {onDuplicate && field.type !== "group" && field.type !== "marketing_consent" ? (
                         <div className="mb-2" data-inspector-duplicate>
                             <AlloySecondaryButton onClick={onDuplicate} testId="form-builder-duplicate-field">
                                 Duplicate question
