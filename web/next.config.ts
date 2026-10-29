@@ -384,6 +384,12 @@ const nextConfig: NextConfig = {
        * Must precede the exact `/organization` rewrite. Compatibility `/settings/locations`
        * remains via the generic `/settings/:path*` rewrite.
        */
+      /**
+       * Organization Tours — organization-wide tour schedules and the organization's booking brand
+       * (P1-A). Locations inherit these; each location's own schedules live in Locations › Tours.
+       * Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/tours", destination: "/adminV2/settings/tours/availability" },
       { source: "/organization/locations", destination: "/adminV2/settings/locations" },
       { source: "/organization/locations/:path*", destination: "/adminV2/settings/locations/:path*" },
       /**

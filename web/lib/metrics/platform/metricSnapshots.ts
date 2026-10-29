@@ -6,6 +6,7 @@ import type {
 } from "@/lib/metrics/platform/types";
 import type { MetricEvaluationContext } from "@/lib/metrics/platform/types";
 import { evaluateMetricDefinition } from "@/lib/metrics/platform/metricEvaluator";
+import { CANONICAL_MATERIALIZATION_SCOPE } from "@/lib/metrics/metricScopeGuard";
 
 export type CreateSnapshotInput = {
     orgId: string;
@@ -82,6 +83,8 @@ export async function evaluateAndSnapshotMetric(params: {
         supabase: params.supabase,
         definition: params.definition,
         ctx: params.ctx,
+        // WS0-A — a snapshot is canonical truth for its context, never one operator's narrowed view.
+        accessScope: CANONICAL_MATERIALIZATION_SCOPE,
     });
     const { id, error } = await snapshotFromEvaluation(
         params.supabase,

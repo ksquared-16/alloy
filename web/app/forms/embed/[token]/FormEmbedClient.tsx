@@ -62,6 +62,7 @@ import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme"
 import {
     INTAKE_MARKETING_CONSENT_LANGUAGE,
     type IntakeMarketingConsentChoice,
+    withoutCompetingMarketingConsentFields,
 } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -626,7 +627,9 @@ export function FormEmbedClient({
                 setMessage("Invalid form schema");
                 return;
             }
-            setSchema(withoutAuthoringNotes(parsedSchema));
+            const authored = withoutAuthoringNotes(parsedSchema);
+            // Where the link offers the marketing-consent control, it is the only consent control on the page.
+            setSchema(json.data.marketing_consent_offered === true ? withoutCompetingMarketingConsentFields(authored) : authored);
             setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
             setSourceMapping(json.data.pdf_mapping_json ?? null);
             setAttachedFilenames({});

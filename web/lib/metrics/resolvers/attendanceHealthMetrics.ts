@@ -97,6 +97,9 @@ export async function resolveAttendanceCorrectionRate(
         .gte("event_at", bounds.windowStart.toISOString())
         .lte("event_at", bounds.windowEnd.toISOString());
     if (ctx.siteLocationId) q = q.eq("site_location_id", ctx.siteLocationId);
+    // WS0-A: at org scope a site-restricted caller reads only their own sites — `siteIds` was
+    // computed for exactly this and then never applied.
+    else if (ctx.scope.siteScope === "restricted") q = q.in("site_location_id", siteIds);
 
     const { data, error } = await q;
     if (error) return shell(ctx, key, null, { error: error.message }, bounds);
@@ -158,6 +161,10 @@ export async function resolveAttendanceConsequenceReviewCount(
      * This counts how many are waiting on a decision, which is an operational
      * question Attendance may legitimately ask about its own consequences.
      */
+    if (ctx.scope.siteScope === "restricted" && siteIds.length === 0) {
+        return shell(ctx, key, null, { site_count: 0 });
+    }
+
     const pending: ConsequenceStatus = "recorded";
     let q = (ctx.supabase as SupabaseClient)
         .from("consumption_events")
@@ -166,6 +173,8 @@ export async function resolveAttendanceConsequenceReviewCount(
         .eq("source_family", ATTENDANCE_CONSUMPTION_FAMILY)
         .eq("status", pending);
     if (ctx.siteLocationId) q = q.eq("location_id", ctx.siteLocationId);
+    // WS0-A: same omission as above — the readable sites bound an org-scope read.
+    else if (ctx.scope.siteScope === "restricted") q = q.in("location_id", siteIds);
 
     const { data, error } = await q;
     if (error) return shell(ctx, key, null, { error: error.message });

@@ -239,6 +239,15 @@ describe("1-2. a historical NULL-role room edits as a Classroom", () => {
 // 3-8 — the adoption journey, and what survives it.
 // ---------------------------------------------------------------------------
 describe("3-8. adopting the historical room into a physical room", () => {
+    it("names the unassigned Inside choice 'No physical space', and it is still the empty value", async () => {
+        await renderPanel("toddler");
+        await enterEdit();
+        const select = container!.querySelector<HTMLSelectElement>('[data-testid="locations-room-inside"]')!;
+        expect(select.options[0].textContent).toBe("No physical space");
+        expect(select.options[0].value).toBe("");
+        expect(select.textContent).not.toContain("(no physical room)");
+    });
+
     it("3,4,7. moves Inside Room 1, materializes the role, and keeps the SAME id", async () => {
         const idBefore = String(db.locations.find((l) => l.label === "Toddler Room")!.id);
 

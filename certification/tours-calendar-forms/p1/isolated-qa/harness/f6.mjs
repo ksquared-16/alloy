@@ -1,0 +1,30 @@
+import { open, OUT, TOUR, fillStep2, riversideTours } from "./lib.mjs";
+const fam = await open({ auth: false });
+const op = await open();
+const p = fam.page, o = op.page, r = {};
+await p.goto(TOUR, { waitUntil: "networkidle", timeout: 90000 });
+await p.getByRole("button", { name: /October 30/ }).click(); await p.waitForTimeout(1000);
+await p.getByTestId("public-tour-times").getByRole("button").first().click();
+await p.getByRole("button", { name: /Continue/ }).first().click(); await p.waitForTimeout(3500);
+await fillStep2(p, { email: "qa+enrtour3@example.invalid", first: "Casey" });
+// operator switches QA Weekdays off via Edit › Active
+const setActive = async (on) => {
+  await riversideTours(o);
+  const card = o.locator("li", { hasText: "QA Weekdays" }).first();
+  await card.getByRole("button", { name: /^Edit$/ }).click(); await o.waitForTimeout(1000);
+  const cb = o.getByTestId("locations-tour-active").first();
+  if ((await cb.isChecked()) !== on) await cb.click();
+  await o.getByRole("button", { name: /^Save schedule$/ }).click(); await o.waitForTimeout(3000);
+  return (await card.innerText()).replace(/\n+/g, " | ").slice(0, 200);
+};
+r.opOff = await setActive(false);
+await p.getByRole("button", { name: /^Submit$/ }).click(); await p.waitForTimeout(5000);
+const body = (await p.locator("body").innerText()).replace(/\n+/g, " | ");
+r.message = (body.match(/That time is no longer available[^|]*/) || [null])[0];
+r.chooseAnother = (await p.getByRole("button", { name: /Choose another time/ }).count()) > 0;
+r.answersKept = { first: await p.locator('input[type="text"]').nth(0).inputValue().catch(() => null), email: await p.locator('input[type="email"]').first().inputValue().catch(() => null) };
+r.received = /tour request was received/.test(body);
+await p.screenshot({ path: `${OUT}f6-unavailable.png`, fullPage: true });
+r.opOn = await setActive(true);
+console.log(JSON.stringify(r, null, 1));
+await fam.browser.close(); await op.browser.close();

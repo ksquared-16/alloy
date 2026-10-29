@@ -77,7 +77,18 @@ describe("failure semantics: unavailable is never zero", () => {
     });
 
     it("request-time authorization stays outside the count", () => {
-        expect(CANON).toContain("resolveMetricScopeFilter(");
+        // WS0-A: the scope filter now runs for EVERY request (an omitted site narrows to the
+        // caller's own sites) through the shared Enrollment helper, which must still be the
+        // engine's scope filter — never an inlined allow-list.
+        expect(CANON).toContain("resolveEnrollmentLocationScope(");
+        const helper = METRICS.slice(
+            METRICS.indexOf("async function resolveEnrollmentLocationScope"),
+            METRICS.indexOf("async function resolveParticipantMetric"),
+        );
+        expect(helper).toContain("resolveMetricScopeFilter(");
+        for (const banned of ["canView", "allowedLocationIds", "permissionKeys"]) {
+            expect(helper).not.toContain(banned);
+        }
         for (const banned of ["canView", "allowedLocationIds", "permissionKeys"]) {
             expect(CANON).not.toContain(banned);
         }

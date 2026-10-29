@@ -105,7 +105,10 @@ export default function LocationRoomCreatePanel({
 
             <div className="space-y-2.5">
                 <ConfigEditorSection title="Space" testId="locations-room-create-identity">
-                    <label className="block space-y-1">
+                    {/* Paired rows on desktop (Name + Kind, Physical space + Capacity); one
+                        column on a narrow screen. */}
+                    <div className="grid gap-3 md:grid-cols-2" data-testid="locations-room-create-row-identity">
+                    <label className="block min-w-0 space-y-1">
                         <span className="config-typo-field-label">Name</span>
                         <input
                             type="text"
@@ -116,7 +119,7 @@ export default function LocationRoomCreatePanel({
                             data-testid="locations-room-create-name"
                         />
                     </label>
-                    <label className="block max-w-md space-y-1">
+                    <label className="block min-w-0 space-y-1">
                         <span className="config-typo-field-label">Kind</span>
                         <select
                             value={roomType}
@@ -134,9 +137,11 @@ export default function LocationRoomCreatePanel({
                             {roomTypeHint(roomType)}
                         </p>
                     </label>
+                    </div>
 
+                    <div className="grid gap-3 md:grid-cols-2" data-testid="locations-room-create-row-placement">
                     {showsInside ?
-                        <label className="block max-w-md space-y-1">
+                        <label className="block min-w-0 space-y-1">
                             <span className="config-typo-field-label">Physical space</span>
                             <select
                                 value={insideId}
@@ -144,7 +149,7 @@ export default function LocationRoomCreatePanel({
                                 className="config-runtime-select"
                                 data-testid="locations-room-create-inside"
                             >
-                                <option value="">{siteLabel ? `${siteLabel} (no physical room)` : "No physical room"}</option>
+                                <option value="">No physical space</option>
                                 {insideOptions.map((option) => (
                                     <option key={option.id} value={option.id}>
                                         {option.label}
@@ -154,14 +159,14 @@ export default function LocationRoomCreatePanel({
                         </label>
                     :   null}
 
-                    <label className="block max-w-36 space-y-1">
+                    <label className="block min-w-0 space-y-1">
                         <span className="config-typo-field-label">Capacity</span>
                         <input
                             type="number"
                             min={0}
                             value={capacity}
                             onChange={(event) => setCapacity(event.target.value)}
-                            className="config-runtime-input"
+                            className="config-runtime-input max-w-36"
                             data-testid="locations-room-create-capacity"
                         />
                         <p className="config-typo-sublabel" data-testid="locations-room-create-capacity-hint">
@@ -170,7 +175,8 @@ export default function LocationRoomCreatePanel({
                             :   "How many people this space holds. Optional."}
                         </p>
                     </label>
-                    <label className="flex items-center gap-2">
+                    </div>
+                    <label className="inline-flex items-center gap-2">
                         <input
                             type="checkbox"
                             checked={active}
@@ -203,9 +209,9 @@ export default function LocationRoomCreatePanel({
                         <p className="config-typo-sublabel">
                             Offer Programs at this Location before assigning them to classrooms.
                         </p>
-                    :   <div className="space-y-2" data-testid="locations-room-create-program-list">
+                    :   <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-create-program-list">
                             {programOptions.map((program) => (
-                                <label key={program.id} className="flex items-center gap-2">
+                                <label key={program.id} className="flex min-w-0 items-center gap-2">
                                     <input
                                         type="checkbox"
                                         checked={supportedKeys.includes(program.key)}

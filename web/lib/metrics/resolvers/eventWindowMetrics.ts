@@ -14,6 +14,7 @@ import {
     applyTourBookingLocationScope,
     resolveMetricScopeFilter,
 } from "@/lib/metrics/scopeFilter";
+import { metricUnavailable } from "@/lib/metrics/metricScopeGuard";
 
 /** Status keys indicating a tour was scheduled (denominator-eligible). */
 export const TOUR_SCHEDULED_STATUS_KEYS = ["confirmed", "completed", "no_show"] as const;
@@ -129,7 +130,8 @@ export async function resolveEnrollmentTimeToScheduleTour(
     };
 
     if (filter.impossible) {
-        return { ...base, value: null, formattedValue: formatMetricValue(def.format, null), meta: { sample_size: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     let oppQ = ctx.supabase
@@ -199,12 +201,8 @@ export async function resolveEnrollmentTourConversionRate(
     };
 
     if (filter.impossible) {
-        return {
-            ...base,
-            value: null,
-            formattedValue: formatMetricValue(def.format, null),
-            meta: { completed: 0, scheduled: 0 },
-        };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     let bookQ = ctx.supabase
@@ -249,7 +247,8 @@ export async function resolveEnrollmentTourCompletedCount(
     };
 
     if (filter.impossible) {
-        return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { completed: 0 } };
+        // WS0-A: the caller's scope admits nothing here — refused, never a numeric answer.
+        return metricUnavailable(ctx, def.key, "scope_impossible");
     }
 
     let bookQ = ctx.supabase

@@ -34,9 +34,18 @@ export type PublicBrandValues = {
     display_name: string | null;
     accent_color: string | null;
     logo_url: string | null;
+    /**
+     * The words on the school's public tour button (P1-B) — the hosted calendar's heading and the
+     * website button snippet. Organization and location layers only; a form never sets it.
+     */
+    tour_cta_label?: string | null;
 };
 
-export const EMPTY_PUBLIC_BRAND: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null };
+export const EMPTY_PUBLIC_BRAND: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null, tour_cta_label: null };
+
+/** The platform's tour call to action when no school has written its own (Director, P1-B). */
+export const PUBLIC_TOUR_CTA_DEFAULT = "Schedule a Tour";
+export const PUBLIC_TOUR_CTA_MAX = 40;
 
 export type PublicBrandSource = "form" | "location" | "organization" | "platform";
 
@@ -44,7 +53,13 @@ export type EffectivePublicBrand = {
     displayName: string | null;
     accentColor: string;
     logoUrl: string | null;
-    sources: { displayName: PublicBrandSource; accentColor: PublicBrandSource; logoUrl: PublicBrandSource };
+    tourCtaLabel: string;
+    sources: {
+        displayName: PublicBrandSource;
+        accentColor: PublicBrandSource;
+        logoUrl: PublicBrandSource;
+        tourCtaLabel: PublicBrandSource;
+    };
 };
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -74,6 +89,14 @@ export function normalizeBrandName(raw: unknown): string | null {
     return v ? v.slice(0, PUBLIC_BRAND_NAME_MAX) : null;
 }
 
+/** One line of button text: whitespace collapsed, no markup characters, at most 40 characters. */
+export function normalizeTourCtaLabel(raw: unknown): string | null {
+    if (typeof raw !== "string") return null;
+    const v = raw.replace(/\s+/g, " ").trim();
+    if (!v || /[<>]/.test(v)) return null;
+    return v.slice(0, PUBLIC_TOUR_CTA_MAX);
+}
+
 /** Read a stored `public_brand_v1` value (org or location), dropping anything unsafe. */
 export function readPublicBrandValues(metadata: unknown): PublicBrandValues {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return { ...EMPTY_PUBLIC_BRAND };
@@ -84,6 +107,7 @@ export function readPublicBrandValues(metadata: unknown): PublicBrandValues {
         display_name: normalizeBrandName(o.display_name),
         accent_color: normalizeBrandColor(o.accent_color),
         logo_url: normalizeBrandLogoUrl(o.logo_url),
+        tour_cta_label: normalizeTourCtaLabel(o.tour_cta_label),
     };
 }
 
@@ -91,7 +115,7 @@ export function readPublicBrandValues(metadata: unknown): PublicBrandValues {
 export function validatePublicBrandInput(input: unknown): { ok: true; values: PublicBrandValues } | { ok: false; error: string } {
     if (input == null || typeof input !== "object" || Array.isArray(input)) return { ok: false, error: "Invalid brand payload" };
     const o = input as Record<string, unknown>;
-    const unknown = Object.keys(o).find((k) => !["display_name", "accent_color", "logo_url"].includes(k));
+    const unknown = Object.keys(o).find((k) => !["display_name", "accent_color", "logo_url", "tour_cta_label"].includes(k));
     if (unknown) return { ok: false, error: `Unsupported brand field: ${unknown}` };
     const blank = (v: unknown) => v === undefined || v === null || (typeof v === "string" && !v.trim());
     const accent = blank(o.accent_color) ? null : normalizeBrandColor(o.accent_color);
@@ -99,7 +123,20 @@ export function validatePublicBrandInput(input: unknown): { ok: true; values: Pu
     const logo = blank(o.logo_url) ? null : normalizeBrandLogoUrl(o.logo_url);
     if (!blank(o.logo_url) && !logo) return { ok: false, error: "Logo must be an https:// image address" };
     if (!blank(o.display_name) && typeof o.display_name !== "string") return { ok: false, error: "Display name must be text" };
-    return { ok: true, values: { display_name: blank(o.display_name) ? null : normalizeBrandName(o.display_name), accent_color: accent, logo_url: logo } };
+    const cta = blank(o.tour_cta_label) ? null : normalizeTourCtaLabel(o.tour_cta_label);
+    if (!blank(o.tour_cta_label) && !cta) return { ok: false, error: "Button text must be plain text" };
+    if (typeof o.tour_cta_label === "string" && o.tour_cta_label.replace(/\s+/g, " ").trim().length > PUBLIC_TOUR_CTA_MAX) {
+        return { ok: false, error: `Button text is limited to ${PUBLIC_TOUR_CTA_MAX} characters` };
+    }
+    return {
+        ok: true,
+        values: {
+            display_name: blank(o.display_name) ? null : normalizeBrandName(o.display_name),
+            accent_color: accent,
+            logo_url: logo,
+            tour_cta_label: cta,
+        },
+    };
 }
 
 /**
@@ -118,6 +155,7 @@ export function formBrandLayer(formBrand: unknown): PublicBrandValues | null {
         accent_color: accent && (explicit || accent !== normalizeBrandColor(DEFAULT_FORM_ACCENT)) ? accent : null,
         // Forms historically accepted http(s); kept for compatibility on the form layer only.
         logo_url: normalizeBrandLogoUrl(o.logo_url, { allowHttp: true }),
+        tour_cta_label: null,
     };
 }
 
@@ -156,11 +194,13 @@ export function resolveEffectivePublicBrand(layers: {
     const [displayName, nameSource] = pick("display_name");
     const [accent, accentSource] = pick("accent_color");
     const [logo, logoSource] = pick("logo_url");
+    const [cta, ctaSource] = pick("tour_cta_label");
     return {
         displayName,
         accentColor: accent ?? PUBLIC_BRAND_PLATFORM_ACCENT,
         logoUrl: logo,
-        sources: { displayName: nameSource, accentColor: accentSource, logoUrl: logoSource },
+        tourCtaLabel: cta ?? PUBLIC_TOUR_CTA_DEFAULT,
+        sources: { displayName: nameSource, accentColor: accentSource, logoUrl: logoSource, tourCtaLabel: ctaSource },
     };
 }
 
@@ -219,4 +259,53 @@ export function brandAccentInk(accent: string): string {
         if (contrastRatio(hex, BRAND_INK_LIGHT) >= BRAND_TEXT_CONTRAST_MIN) return hex;
     }
     return BRAND_INK_DARK;
+}
+
+/**
+ * Below this, white text needs only a modest deepening of the brand to reach 4.5:1; above it the brand
+ * is a light colour that reads best as a fill under dark text of its own hue.
+ */
+const BRAND_FILL_DEEPEN_FLOOR = 3;
+
+export type BrandButtonColors = {
+    /** The button surface: the brand itself, or the same hue deepened just enough. */
+    fill: string;
+    /** The label on that surface. Always at least 4.5:1 against `fill`. */
+    ink: string;
+    /** How the pair was chosen, for the operator preview's explanation. */
+    treatment: "brand_light_text" | "deepened_brand_light_text" | "brand_dark_text";
+};
+
+function shade(hex: string, factor: number): string {
+    const [r, g, b] = rgb(hex);
+    return `#${[r, g, b].map((c) => Math.round(c * factor).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
+/**
+ * A primary button for a brand colour (P1-B). The stored brand is never changed; only the pair is
+ * derived, and the label always holds WCAG AA 4.5:1:
+ *
+ *   - white holds on the brand → the brand, white text;
+ *   - a mid-tone brand (white at 3:1 or better) → the same hue deepened until white holds, white text
+ *     (Bend Pine #00A283 → #00856B at 4.60:1, instead of near-black text on bright green);
+ *   - a light brand (yellow, pastel) → the brand, with a deep shade of its own hue as the text.
+ */
+export function brandButtonColors(accent: string): BrandButtonColors {
+    const brand = normalizeBrandColor(accent) ?? PUBLIC_BRAND_PLATFORM_ACCENT;
+    if (contrastRatio(brand, BRAND_INK_LIGHT) >= BRAND_TEXT_CONTRAST_MIN) {
+        return { fill: brand, ink: BRAND_INK_LIGHT, treatment: "brand_light_text" };
+    }
+    if (contrastRatio(brand, BRAND_INK_LIGHT) >= BRAND_FILL_DEEPEN_FLOOR) {
+        for (let f = 0.98; f > 0.4; f -= 0.02) {
+            const fill = shade(brand, f);
+            if (contrastRatio(fill, BRAND_INK_LIGHT) >= BRAND_TEXT_CONTRAST_MIN) {
+                return { fill, ink: BRAND_INK_LIGHT, treatment: "deepened_brand_light_text" };
+            }
+        }
+    }
+    for (let f = 0.45; f > 0; f -= 0.05) {
+        const ink = shade(brand, f);
+        if (contrastRatio(brand, ink) >= BRAND_TEXT_CONTRAST_MIN) return { fill: brand, ink, treatment: "brand_dark_text" };
+    }
+    return { fill: brand, ink: brandOnAccent(brand), treatment: "brand_dark_text" };
 }

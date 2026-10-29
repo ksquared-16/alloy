@@ -61,9 +61,9 @@ describe("a calculated answer is shown to the family, never asked", () => {
 describe("the family sees the rows Forms Studio shows", () => {
     it("City | State | ZIP share one 12-column row, sized half / quarter / quarter", () => {
         const html = render(base(), {});
-        expect(html).toContain("md:grid-cols-12");
-        expect(html.match(/md:col-span-6/g)?.length).toBeGreaterThanOrEqual(1);
-        expect(html.match(/md:col-span-3/g)?.length).toBeGreaterThanOrEqual(2);
+        expect(html).toContain("@md:grid-cols-12");
+        expect(html.match(/@md:col-span-6/g)?.length).toBeGreaterThanOrEqual(1);
+        expect(html.match(/@md:col-span-3/g)?.length).toBeGreaterThanOrEqual(2);
     });
 
     it("an address group's lines keep their widths inside the group", () => {
@@ -78,8 +78,8 @@ describe("the family sees the rows Forms Studio shows", () => {
                 mode="edit"
             />,
         );
-        expect(html).toContain("md:grid-cols-12");
-        expect(html.match(/md:col-span-3/g)?.length).toBeGreaterThanOrEqual(2);
+        expect(html).toContain("@md:grid-cols-12");
+        expect(html.match(/@md:col-span-3/g)?.length).toBeGreaterThanOrEqual(2);
     });
 });
 

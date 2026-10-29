@@ -12,6 +12,8 @@
  */
 
 import { readRequestedTour } from "@/lib/tours/publicCalendar/requestedTour";
+import { readIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
+import { presentIntakeMarketingConsent } from "@/lib/communications/preferences/intakeMarketingConsentPresentation";
 import type {
     ProcessingCaseCountQuery,
     ProcessingCaseDetail,
@@ -169,5 +171,6 @@ export async function getProcessingCaseDetail(
         // Present only when the case was analysed as a packet. Read, never recomputed here.
         packetIntake: ((c.metadata as Record<string, unknown> | null)?.packet_intake ?? null) as unknown,
         requestedTour: readRequestedTour(c.metadata),
+        marketingConsent: presentIntakeMarketingConsent(readIntakeMarketingConsent(c.metadata)),
     };
 }

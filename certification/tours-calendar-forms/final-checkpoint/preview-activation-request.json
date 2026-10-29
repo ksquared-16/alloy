@@ -1,0 +1,13 @@
+{
+  "action_key": "product.activate_candidate_preview",
+  "reason_worker_cannot_execute": "Serving a candidate preview builds and runs a LaunchAgent on a Vacilando-owned port against an isolated certenv; only the trusted host may do it.",
+  "purpose": "Serve the Tours/Forms/Communications final integrated candidate on its isolated certenv for the end-to-end browser journey",
+  "inputs": {
+    "target": "alloy.candidate.enrollment",
+    "candidateSha": "af0e490822020f10713de1645ac827161c9d619a",
+    "environmentId": "certenv-09342695d8",
+    "databaseMode": "isolated",
+    "previewMode": "production",
+    "reason": "Final integration checkpoint: public tour calendar -> inquiry -> Processing approval -> confirmed tour, staff calendar invitation, consent/opt-out/unsubscribe, desktop+mobile, standalone+iframe. Isolated write-capable QA; never shared staging."
+  }
+}

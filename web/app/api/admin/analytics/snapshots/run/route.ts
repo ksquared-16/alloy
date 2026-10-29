@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/analytics/snapshots/run
- * Auth: x-cron-token (all orgs) or admin session (single org).
+ * Auth: x-cron-token (all orgs, or the body's `org_id`) or a `reports.write` session (the session
+ * org only — a body `org_id` naming another org is refused 403).
  */
 export async function POST(request: NextRequest) {
     const cronOk = isInternalCronAuthorized(request);
@@ -48,7 +49,22 @@ export async function POST(request: NextRequest) {
     const metricDefinitionIds = Array.isArray(body.metric_definition_ids)
         ? (body.metric_definition_ids as string[])
         : undefined;
-    const orgIdFilter = typeof body.org_id === "string" ? body.org_id : orgId;
+    /*
+     * SEC-1 — THE TENANT COMES FROM THE CREDENTIAL, NEVER FROM THE BODY.
+     *
+     * This read `body.org_id ?? session org` for both branches, so an operator holding
+     * `reports.write` in their own organization could name any other organization's id and have
+     * the service-role client evaluate its definitions against its tenant data and write snapshot
+     * rows into it. An operator run is pinned to the session organization; a body naming a
+     * different one is refused outright rather than silently corrected, so the caller learns the
+     * request was not honoured. Only the separately authenticated cron credential may target an
+     * organization by id (or all of them).
+     */
+    const bodyOrgId = typeof body.org_id === "string" ? body.org_id.trim() || null : null;
+    if (!cronOk && bodyOrgId && bodyOrgId !== orgId) {
+        return NextResponse.json({ error: "Organization not in session scope" }, { status: 403 });
+    }
+    const orgIdFilter = cronOk ? bodyOrgId : orgId;
 
     const supabase = createAdminClient();
 

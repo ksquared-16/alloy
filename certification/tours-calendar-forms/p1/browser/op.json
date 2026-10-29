@@ -1,0 +1,25 @@
+{
+ "orgUrl": "http://127.0.0.1:3014/organization/tours",
+ "orgScope": "organization",
+ "orgText": "Tours Organization-wide schedules offer tours at every location. Choose a location to see what it adds and how families book. Configure tours for Organization-wide (all locations) Bears Giraffe Infant A Infant A Infant B Infant B KLA Schools of Hillsboro Monkeys Playground Pre-K Preschool Preschool 1 Preschool 2 Room 1 South Campus Tigers Toddler 1 Toddler 1 Toddler 2 Toddler 2 West Campus Zebras Availability Booking experience Preview & Share These schedules offer tours at every location. A location can add its own schedules on top of them in Organization › Locations › Tours, but cannot switch these off. ORGANIZATION-WIDE SCHEDULES Friday windowauto-confirm Mon Tue Wed Thu Fri Sat Sun 9:00 AM – 12:00 PM PDT 45 minute tours · 15 minute buffer · up to 1 family per time Edit Duplicate Deactivate Delete Monday windowauto-confirm Mon Tue Wed Thu Fri Sat Sun 9:00 AM – 12:00 PM PDT 45 minute t",
+ "locations": 22,
+ "ruleCounts": {
+  "total": 6,
+  "orgWide": 4,
+  "locationsWithOwn": 2
+ },
+ "location": "South Campus",
+ "locText": "Decide when families can visit and how each booking window works. Availability Booking experience Preview & Share Families booking at South Campus see the times from 1 schedule set here plus 4 organization-wide schedules. Each time is offered once, even if two schedules cover it, and bookings at that time share its capacity. Organization-wide schedules apply at every location and are changed in Organization › Tours. To give South Campus different times only, add a schedule here; to stop offering an organization-wide time here, it has to change for every location. SCHEDULES SET FOR SOUTH CAMPUS Monday windowauto-confirm Mon Tue Wed Thu Fri Sat Sun 10:00 AM – 12:00 PM PDT 30 minute tours · 0 minute buffer · up to 1 family per time Edit Duplicate Deactivate Delete Add a schedule for South Campus ORGANIZATION-WIDE SCHEDULES (ALSO OFFERED HERE) Managed by the organization, so they can't be edited from South Campus. Edit organization-wide schedules Friday windowOrganization-wideauto-confirm Mon Tue Wed Thu Fri Sat Sun 9:00 AM – 12:00 PM PDT 45 minute tours · 15 minute buffer · up to 1 family per time Copy to this location Monday windowOrganization-wideauto-confirm Mon Tue Wed Thu Fri Sat Sun 9:00 AM – 12:00 PM PDT 45 minute tours · 15 minute buffer · up to 1 family per time Same days and times as “Monday window”. Families see each time once; both schedules stay active. Copy to this location Monday windowOrganization-wideauto-confirm Mon Tue Wed Thu Fri Sat Sun 9:00 AM – 12:00 PM PD",
+ "weekAtAGlance": false,
+ "repeatsFlags": 2,
+ "inheritedCards": 4,
+ "inheritedEditButtons": 0,
+ "orgLink": "/organization/tours",
+ "booking": "How South Campus appears on its tour booking page. Leave a field empty to use the organization's. School identity Display name Shown to families: none (Alloy default) Logo (https address of an image) Shown to families: none (Alloy default) Brand colour Colour (hex) Shown to families: #00A283 (Alloy default) White text on your exact colour would be hard to read, so buttons use a slightly deeper shade of it. Button text contrast 4.6:1 (needs 4.5:1). Booking button Button text Shown to families: “Schedule a Tour” (Alloy default) Used on your website button and as the booking page's heading. PREVIEW — BOOKING PAGE Alloy STEP 1 OF 2 Schedule a Tour South Campus 9:00 AM 9:30 AM 10:00 AM Continue W",
+ "bookingPreview": {
+  "text": "Schedule a Tour",
+  "bg": "rgb(0, 133, 107)",
+  "color": "rgb(255, 255, 255)"
+ },
+ "share": "South Campus's tour calendar is not published. The calendar is step 1; step 2 is an inquiry form. Publish it on one of South Campus's inquiry form links below. Inquire About KLA Schools of Hillsboro · Marketing Web Forms Publish tour calendar here Firefly Lead Capture · New Lead Gen This link is turned off. Marketing Site Lead Gen · Marketing Site Lead Gen This link is turned off. New Lead Generation Form · New Lead Generation Form This link is turned off."
+}

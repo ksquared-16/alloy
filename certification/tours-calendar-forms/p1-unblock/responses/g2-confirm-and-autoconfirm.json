@@ -1,0 +1,85 @@
+{
+ "confirm": {
+  "status": 200,
+  "body": {
+   "booking": {
+    "id": "4d5a1f61-851d-4ec6-8206-33421b0d773e",
+    "org_id": "00000000-0000-4000-8000-000000000001",
+    "opportunity_id": "8773aa07-51af-4b4a-b338-df4895cf83dc",
+    "location_id": "00000000-0000-4000-8000-000000000010",
+    "primary_person_id": "c7a5d90c-907f-472c-989d-5c7981b3783f",
+    "primary_contact_id": null,
+    "requested_by_user_id": null,
+    "start_at": "2026-10-30T20:00:00+00:00",
+    "end_at": "2026-10-30T20:30:00+00:00",
+    "timezone": "America/Los_Angeles",
+    "status_key": "confirmed",
+    "source": "form_submission",
+    "form_submission_id": "fed5d0de-b5f4-410f-aeb6-4f08e0ca5594",
+    "form_public_link_id": "5a1ee4f5-38b7-4b64-b135-cafbb0f08ab6",
+    "canceled_at": null,
+    "canceled_by": null,
+    "cancel_reason": null,
+    "rescheduled_from_booking_id": null,
+    "metadata": {
+     "rule_id": "1bf206a5-f8a8-4fc4-af1d-3fdfef0e9677",
+     "slot_capacity": 1,
+     "processing_case_id": "695d82c3-0602-42c7-91f8-9a2216200d54",
+     "accepted_by_user_id": "00000000-0000-4000-8000-000000000002",
+     "attendance_confirmation": {
+      "status": "awaiting_response"
+     },
+     "requested_tour_submission_key": "form_submission:fed5d0de-b5f4-410f-aeb6-4f08e0ca5594"
+    },
+    "created_at": "2026-10-28T04:36:05.42701+00:00",
+    "updated_at": "2026-10-28T04:37:46.204097+00:00",
+    "host_user_id": null
+   }
+  }
+ },
+ "confirmAgain": {
+  "status": 400,
+  "body": {
+   "error": "tour_bookings: confirm only allowed from pending_approval"
+  }
+ },
+ "mondayTimes": [
+  "9:00 AM",
+  "9:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM"
+ ],
+ "autoReceived": true,
+ "autoApprove": {
+  "status": 200,
+  "tourRequest": {
+   "kind": "booked",
+   "bookingId": "fd02ffcb-be59-408a-9be9-62770d51d812",
+   "bookingStatus": "confirmed",
+   "replay": false,
+   "comms": {
+    "status": "sent",
+    "detail": "email:sent"
+   }
+  },
+  "marketingConsent": {
+   "kind": "committed",
+   "personId": "3cd60b3f-b2af-4c21-ba6e-eb53cfbdacb8",
+   "outcomes": [
+    {
+     "channel": "email",
+     "outcome": "skipped_unset"
+    },
+    {
+     "channel": "sms",
+     "outcome": "skipped_unset"
+    }
+   ],
+   "replayed": false
+  },
+  "lead": "c1cbfd57-a4ba-4888-8be3-fcdef8a16e3d",
+  "person": "3cd60b3f-b2af-4c21-ba6e-eb53cfbdacb8"
+ }
+}

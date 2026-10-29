@@ -8,7 +8,7 @@ import { PUBLIC_BRAND_METADATA_KEY, type PublicBrandValues } from "@/lib/brandin
 function mergeBrand(metadata: unknown, values: PublicBrandValues): Record<string, unknown> {
     const current =
         metadata != null && typeof metadata === "object" && !Array.isArray(metadata) ? { ...(metadata as Record<string, unknown>) } : {};
-    if (!values.display_name && !values.accent_color && !values.logo_url) {
+    if (!values.display_name && !values.accent_color && !values.logo_url && !values.tour_cta_label) {
         delete current[PUBLIC_BRAND_METADATA_KEY];
     } else {
         current[PUBLIC_BRAND_METADATA_KEY] = values;

@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
-import ReviewDecideCard, { DECISION_TO_ACTION } from "@/app/adminV2/processing/ReviewDecideCard";
+import ReviewDecideCard, { DECISION_TO_ACTION, leadPlacementBlock } from "@/app/adminV2/processing/ReviewDecideCard";
 import { approveButtonLabel, resolveDecisionPresentation } from "@/lib/pos/decisionPresentation";
 import { buildMatchedRecords } from "@/lib/pos/matchedRecordsPresentation";
 import { buildCommitPlanLines } from "@/lib/pos/commitPlanSummary";
@@ -120,6 +120,9 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
     // Approve is offered only when the identity guard says every required subject is settled.
     // false = subjects still need a decision → the operator resolves them in "Review matches" first.
     const reviewRequired = reviewEligible === false || needsIdentityReview;
+    // Approval would be refused: the new lead has nowhere to go. Same resolver approval uses; the notice
+    // itself is shown in the Review & decide card above.
+    const placementBlocked = leadPlacementBlock(rec ?? null);
 
     // Concise "Approval will:" plan for the rail — derived from the same honest matched-record
     // cards the middle column shows, so the rail never promises a plan the records don't support.
@@ -247,16 +250,17 @@ export default function PosCaseDecisionColumn({ state, queue }: { state: PosCase
                             {/* Approve — the single commit path; gated until every required identity is resolved. */}
                             <button
                                 type="button"
-                                disabled={approving || reviewRequired}
+                                disabled={approving || reviewRequired || Boolean(placementBlocked)}
                                 onClick={() => void approve()}
-                                title={reviewRequired ? "Resolve the matches to approve" : undefined}
+                                title={reviewRequired ? "Resolve the matches to approve" : placementBlocked ?? undefined}
+                                data-testid="processing-approve"
                                 className={
-                                    reviewRequired
+                                    reviewRequired || placementBlocked
                                         ? "w-full cursor-not-allowed rounded-md border border-alloy-stone/20 bg-alloy-stone/40 px-3 py-2 text-center text-[11.5px] text-alloy-midnight/45"
                                         : `${WS_ACTION_PRIMARY} w-full`
                                 }
                             >
-                                {approving ? "Saving…" : reviewRequired ? "Resolve matches to approve" : approveLabel}
+                                {approving ? "Saving…" : reviewRequired ? "Resolve matches to approve" : placementBlocked ? "Lead setup needed to approve" : approveLabel}
                             </button>
                             <div className="flex gap-2">
                                 {canEditValues ? (

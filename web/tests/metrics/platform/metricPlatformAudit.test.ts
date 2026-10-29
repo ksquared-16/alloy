@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { validateSourceAggregation } from "@/lib/metrics/platform/metricSourceRegistry";
 import { evaluateMetricDefinition } from "@/lib/metrics/platform/metricEvaluator";
+import { CANONICAL_MATERIALIZATION_SCOPE } from "@/lib/metrics/metricScopeGuard";
 import type { MetricDefinitionRow } from "@/lib/metrics/platform/types";
 import { computeTourConversionRate } from "@/lib/metrics/resolvers/eventWindowMetrics";
 
@@ -44,6 +45,7 @@ describe("disabled adapter safety", () => {
                 supabase: {} as never,
                 definition: def,
                 ctx: { orgId: "org-1" },
+                accessScope: CANONICAL_MATERIALIZATION_SCOPE,
             })
         ).rejects.toThrow(/disabled/);
     });

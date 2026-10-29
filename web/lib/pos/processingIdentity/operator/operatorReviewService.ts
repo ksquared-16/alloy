@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import { resolveCreateLeadPlacement } from "@/lib/lifecycle/resolveCreateLeadPlacement";
+import { parseIntakeReviewConfig } from "@/lib/forms/intake/resolveIntakeReviewDecision";
 import { formIntakeLocationId } from "../formIntakeShadowHelpers";
 import {
     appendCorrectedProcessingFact,
@@ -75,6 +76,60 @@ import {
     bindCommitOutcomeToTrust,
     type ExecutionLineageDeps,
 } from "../trustAdapter/executionLineageService";
+
+/**
+ * A public-form case approved in Processing places its new lead itself (BOS → Create Lead placed its
+ * lead before opening the case, recorded as `create_lead_intake`). The ONE condition, shared by
+ * `buildPlan` (which fails closed) and `evaluateCaseLeadPlacement` (which lets the review say so first).
+ */
+export function caseResolvesOwnLeadPlacement(metadata: unknown): boolean {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+    const m = metadata as { create_lead_intake?: unknown; source_adapter?: unknown };
+    return !m.create_lead_intake && m.source_adapter === "public_form_v1";
+}
+
+/**
+ * What the case's public link says about where its lead belongs. A location-specific intake link is
+ * minted with the organization's routing (`default_department_id`, e.g. Enrollment); placement used to
+ * be asked with `{}`, so a routed form in an organization without exactly one builder-owned entry
+ * department could never be approved (422 `lead_placement_unresolved`) — while BOS Create Lead, which
+ * names its department, placed the same lead. Only the department is passed: the canonical resolver
+ * still decides the work unit and status, scoped to the org, exactly as it does for BOS.
+ */
+export function caseLeadPlacementInput(metadata: unknown): { departmentId?: string } {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+    const link = (metadata as { link_metadata?: unknown }).link_metadata;
+    if (link == null || typeof link !== "object" || Array.isArray(link)) return {};
+    const departmentId = parseIntakeReviewConfig(link as Record<string, unknown>).linkDefaults.default_department_id;
+    return departmentId ? { departmentId } : {};
+}
+
+export type CaseLeadPlacementReadiness =
+    | { readonly applies: false }
+    | { readonly applies: true; readonly ok: true }
+    | { readonly applies: true; readonly ok: false; readonly reason: "ambiguous" | "unconfigured"; readonly message: string };
+
+/**
+ * Whether approving this case as a NEW lead could be placed — asked of the same resolver approval uses
+ * (`resolveCreateLeadPlacement`), under the same condition. Read-only. Approval stays authoritative: this
+ * only lets the review show the blocked state before the operator clicks, instead of after.
+ */
+export async function evaluateCaseLeadPlacement(
+    supabase: SupabaseClient,
+    orgId: string,
+    caseId: string,
+): Promise<CaseLeadPlacementReadiness> {
+    const { data: caseRow } = await supabase
+        .from("processing_cases")
+        .select("metadata")
+        .eq("org_id", orgId)
+        .eq("id", caseId)
+        .maybeSingle();
+    const metadata = (caseRow as { metadata?: unknown } | null)?.metadata;
+    if (!caseResolvesOwnLeadPlacement(metadata)) return { applies: false };
+    const placement = await resolveCreateLeadPlacement(supabase, orgId, caseLeadPlacementInput(metadata));
+    return placement.ok ? { applies: true, ok: true } : { applies: true, ok: false, reason: placement.reason, message: placement.message };
+}
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -426,10 +481,9 @@ export async function buildPlan(
                     : null;
             // Public form intake (formIntakeAdapter) is the entry that never ran the Create Lead placement.
             // Other sources keep their existing behaviour; they are not Create Lead entries.
-            const publicFormIntake = metadata?.source_adapter === "public_form_v1";
-            if (!intake && publicFormIntake && leadSubject.decision === "create") {
+            if (caseResolvesOwnLeadPlacement(metadata) && leadSubject.decision === "create") {
                 if (needsWorkUnit) {
-                    const placement = await resolveCreateLeadPlacement(deps.supabase, deps.orgId, {});
+                    const placement = await resolveCreateLeadPlacement(deps.supabase, deps.orgId, caseLeadPlacementInput(metadata));
                     if (!placement.ok) {
                         throw new OperatorServiceError("lead_placement_unresolved", placement.message);
                     }

@@ -17,6 +17,7 @@ import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workf
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
+import { legacyWorkflowSmsRefusal } from "@/lib/workflows/actions/legacyWorkflowSms";
 import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
 import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
 import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
@@ -1750,6 +1751,12 @@ export async function executeWorkflowRun(
                         if (!smsGate.ok) {
                             throw new Error(`create_message: ${smsGate.code}: ${smsGate.detail}`);
                         }
+                        const refused = legacyWorkflowSmsRefusal("create_message");
+                        logs.push(refused.log);
+                        actionSkipped = true;
+                        skipReason = refused.skipReason;
+                        actionOutputs = refused.outputs;
+                        break;
                     }
                     const tplPayload = bridgeContactFromPersonForTemplates(payload as Record<string, unknown>);
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
@@ -1883,6 +1890,14 @@ export async function executeWorkflowRun(
                 }
                 case "send_message": {
                     const channel = (pl.channel ?? "sms") as string;
+                    if (channel.toLowerCase() === "sms") {
+                        const refused = legacyWorkflowSmsRefusal("send_message");
+                        logs.push(refused.log);
+                        actionSkipped = true;
+                        skipReason = refused.skipReason;
+                        actionOutputs = refused.outputs;
+                        break;
+                    }
                     const template = (pl.template ?? pl.body ?? "") as string;
                     const templateKey = (pl.template_key != null ? String(pl.template_key) : "") as string;
                     const recipients = (pl.recipients ?? []) as RecipientSpec[];

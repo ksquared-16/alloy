@@ -179,6 +179,7 @@ describe("one theme owner brands every phase", () => {
             logoUrl: "https://cdn.example.com/logo.png",
         });
         expect(participantBrandStyle(brand)).toEqual({
+            "--participant-brand": "#7C3AED",
             "--participant-accent": "#7C3AED",
             "--participant-on-accent": "#FFFFFF",
             "--participant-accent-ink": "#7C3AED",

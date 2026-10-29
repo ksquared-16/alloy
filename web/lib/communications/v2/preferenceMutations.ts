@@ -16,6 +16,8 @@ export type PreferenceChangeRequest = {
     source?: string | null;
     method?: string | null;
     actorUserId?: string | null;
+    /** Evidence for the audit event (consent wording version, form / case ids, outcome). Never on the state row. */
+    metadata?: Record<string, unknown> | null;
 };
 
 export type PreferenceUpsertRow = {
@@ -37,6 +39,7 @@ export type PreferenceEventRow = {
     source: string | null;
     method: string | null;
     actor_user_id: string | null;
+    metadata?: Record<string, unknown>;
 };
 
 /** Build the paired upsert + audit event for a single preference change. */
@@ -63,6 +66,7 @@ export function buildPreferenceChange(req: PreferenceChangeRequest): {
             source: req.source ?? null,
             method: req.method ?? null,
             actor_user_id: req.actorUserId ?? null,
+            ...(req.metadata ? { metadata: req.metadata } : {}),
         },
     };
 }

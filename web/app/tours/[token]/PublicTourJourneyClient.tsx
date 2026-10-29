@@ -52,6 +52,7 @@ function parseUrlSelection(sp: URLSearchParams | null, timezone: string): Public
 export default function PublicTourJourneyClient({
     token,
     brand,
+    ctaLabel,
     locationLabel,
     locationAddress,
     timezone,
@@ -59,6 +60,8 @@ export default function PublicTourJourneyClient({
 }: {
     token: string;
     brand: ParticipantBrand | null;
+    /** The school's tour call to action — the heading families arrive at from its website button. */
+    ctaLabel: string;
     locationLabel: string;
     locationAddress: string | null;
     timezone: string;
@@ -132,7 +135,9 @@ export default function PublicTourJourneyClient({
                         <IntakeCard>
                             <header className="space-y-1 pb-4">
                                 <p className="text-[13px] font-medium uppercase tracking-wide text-alloy-midnight/50">Step 1 of 2</p>
-                                <h1 className="text-2xl font-semibold leading-tight text-alloy-midnight">Book a tour</h1>
+                                <h1 className="text-2xl font-semibold leading-tight text-alloy-midnight" data-testid="public-tour-cta-heading">
+                                    {ctaLabel}
+                                </h1>
                                 <p className="text-[15px] font-medium text-alloy-midnight/80">{locationLabel}</p>
                                 {locationAddress ? <p className="text-[14px] text-alloy-midnight/60">{locationAddress}</p> : null}
                                 <p className="pt-1 text-[14px] leading-relaxed text-alloy-midnight/65">

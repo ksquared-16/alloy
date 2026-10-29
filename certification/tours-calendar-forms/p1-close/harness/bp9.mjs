@@ -1,0 +1,18 @@
+import { open, ORIGIN } from "./lib.mjs";
+const OUT = new URL("./out2/", import.meta.url).pathname;
+const { browser, page, errors } = await open();
+const net = [];
+page.on("response", async (r) => { if (r.request().method() !== "GET" && /\/api\/admin\//.test(r.url()) && !/queue-view-totals|bos|assist/.test(r.url())) { let b = ""; try { b = (await r.text()).slice(0, 260); } catch {} net.push(`${r.status()} ${r.request().method()} ${r.url().replace(/^https?:\/\/[^/]+/, "").replace(/[0-9a-f-]{36}/g, "<id>")} ${b.replace(/[0-9a-f-]{36}/g, "<id>")}`); } });
+await page.goto(`${ORIGIN}/organization/processes`, { waitUntil: "networkidle", timeout: 90000 }); await page.waitForTimeout(2500);
+await page.getByTestId("business-process-collection-rail-collapsed").click(); await page.waitForTimeout(1500);
+await page.getByTestId("business-process-collection-new").click(); await page.waitForTimeout(2000);
+await page.getByTestId("lifecycle-create-name-input").fill("Tour Inquiries QA");
+await page.getByTestId("lifecycle-create-description-input").fill("Isolated QA: public tour inquiries create leads here");
+await page.getByTestId("lifecycle-create-process-type").selectOption("staged_lifecycle");
+await page.getByTestId("lifecycle-create-primary-entity").selectOption("opportunity");
+await page.getByRole("button", { name: /^Create Process$/ }).click(); await page.waitForTimeout(10000);
+console.log("AFTER:", (await page.locator("main").first().innerText()).replace(/\n+/g, " | ").slice(0, 1600));
+await page.screenshot({ path: `${OUT}bp9-created.png`, fullPage: true });
+console.log("NET", JSON.stringify(net, null, 1));
+console.log("errors", JSON.stringify(errors.slice(0, 4)));
+await browser.close();

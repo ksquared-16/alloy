@@ -4,6 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { buildPublicFormResolvePayload } from "@/lib/public/forms/buildPublicFormResolvePayload";
 import { embedOriginFromHeaders } from "@/lib/public/forms/embedOrigin";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
+import { resolveLocationPublicBrand } from "@/lib/branding/loadPublicBrand";
+import { PUBLIC_TOUR_CTA_DEFAULT } from "@/lib/branding/publicBrand";
 import {
     PUBLIC_TOUR_CALENDAR_UNAVAILABLE_MESSAGE,
     resolvePublicTourCalendar,
@@ -67,12 +69,20 @@ export default async function PublicTourPage({ params }: { params: Promise<{ tok
         /* the form runtime fetches on its own */
     }
     const brand = (initialResolve?.brand ?? null) as ParticipantBrand | null;
+    // The school's own words for its tour call to action (location → organization → platform).
+    let ctaLabel = PUBLIC_TOUR_CTA_DEFAULT;
+    try {
+        ctaLabel = (await resolveLocationPublicBrand(supabase, { orgId: calendar.value.orgId, locationId: calendar.value.locationId })).tourCtaLabel;
+    } catch {
+        /* the platform default never breaks the page */
+    }
 
     return (
         <Suspense fallback={null}>
             <PublicTourJourneyClient
                 token={raw ?? ""}
                 brand={brand}
+                ctaLabel={ctaLabel}
                 locationLabel={calendar.value.locationLabel}
                 locationAddress={calendar.value.locationAddress}
                 timezone={calendar.value.timezone}

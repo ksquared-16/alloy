@@ -24,7 +24,7 @@ Lane `lane_2cea84351d90` · objective `OPWORK_2CEA84351D90_SPRINT_80ADA49DE68E` 
 C1 worktree (`wt3-comms-c1-consent`) was read only: clean, untouched. C1 left no certification record of its
 own; its evidence is its three unit files (green here, below). Its two Python test files
 (`backend/tests/test_email_thread_headers.py`, `test_inbound_sms_keywords.py`) were **not run** — no Python
-environment exists on this host; CI runs them.
+environment exists on this host; CI runs them. **[Corrected 2026-10-28: no CI workflow ran any backend Python test — P1-CERTIFICATION §112. A job now exists (`backend-comms-tests.yml`, C-FINAL); it has not yet executed in GitHub Actions.]**
 
 ## S7 public consent capture (closes S7-G)
 
@@ -172,7 +172,7 @@ Lease released (`alloy-stack release`). Its last-one-out stop was refused — th
 `bin/lib/cert-ownership.sh`; the stack was left running, idle, unleased.
 
 Still outstanding (not DB): browser verification of the consent control; C1 Python tests (no Python env —
-CI runs them); operator surface for consent evidence; Director release and the one protected PR.
+CI runs them **[corrected: it did not; see above]**); operator surface for consent evidence; Director release and the one protected PR.
 
 ## Promotion — migration renumbered (2026-10-26)
 
@@ -181,3 +181,12 @@ Governed merge of PR #1606 (`gar_014b48d6f7390c`) refused before execution:
 `20261210093500`, so the S1 guard would apply out of order. Renumbered (pure `git mv`, R100, SQL
 byte-identical) to **`20261211090000`**; the two code/test comments citing the version updated. Earlier
 records above cite the old version as it was at the time.
+
+## Delivered (2026-10-27)
+
+PR #1606 merged to staging (`gar_ccc4d7fceab0a8`) at **`b5abf2d02`** from candidate `0220d4b29` (checkpoint
+`ick_2f802c299baf`). A direct staging apply (`gar_fd0942c3c2e85e`) was correctly refused —
+`migration_owned_by_pending_merge`: the Supabase integration applies merged migrations itself. Catalog census on
+ALLOY_STAGING (`gar_4ae4adaa460fa2`, `tha_333e1e5193243a`, 04:07:45Z): ledger has `20261211090000`, neither old
+version; `enforce_tour_booking_slot_capacity()` present; `trg_tour_bookings_slot_capacity` present, enabled.
+`staging.workwithalloy.com/api/build-info` serves `b5abf2d02`.

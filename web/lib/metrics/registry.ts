@@ -262,6 +262,8 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "percent",
         defaultWindow: "rolling_30d",
         sources: ["communication_messages", "communication_delivery_events"],
+        // WS0-A: comms messages/events carry no site/department linkage — org-wide only.
+        orgScopeOnly: true,
     },
     "comms.reply_rate": {
         key: "comms.reply_rate",
@@ -273,6 +275,7 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "percent",
         defaultWindow: "rolling_30d",
         sources: ["communication_messages"],
+        orgScopeOnly: true,
     },
     "comms.failed_delivery_count": {
         key: "comms.failed_delivery_count",
@@ -284,6 +287,7 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "count",
         defaultWindow: "rolling_30d",
         sources: ["communication_delivery_events"],
+        orgScopeOnly: true,
     },
     "forms.completion_rate": {
         key: "forms.completion_rate",
@@ -294,6 +298,8 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "percent",
         defaultWindow: "rolling_30d",
         sources: ["form_submissions"],
+        // WS0-A: the resolver reads form_submissions with no site/department narrowing — org-wide only.
+        orgScopeOnly: true,
     },
     "forms.packet_completion_time": {
         key: "forms.packet_completion_time",
@@ -305,6 +311,7 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "duration",
         defaultWindow: "rolling_30d",
         sources: ["form_packet_sessions"],
+        orgScopeOnly: true,
     },
     "ops.work_overdue_count": {
         key: "ops.work_overdue_count",
@@ -326,6 +333,8 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         format: "percent",
         defaultWindow: "rolling_30d",
         sources: ["workflow_runs"],
+        // WS0-A: workflow_runs has no site/department linkage — the figure is only ever org-wide.
+        orgScopeOnly: true,
     },
     "ops.needs_attention_count": {
         key: "ops.needs_attention_count",

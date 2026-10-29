@@ -294,7 +294,7 @@ describe.each(PATHS)("Forms Studio authoring — %s", (_name, start) => {
             const home = s.sections[1]!.field_ids.map((id) => fieldAt(s, id));
             const rows = composeRuntimeRows(home).map((r) => r.map((f) => f.label));
             expect(rows).toEqual([["Home address line 1"], ["Home address line 2"], ["City", "State", "ZIP"]]);
-            expect(composeRuntimeRows(home)[2]!.map(runtimeCellSpanClass)).toEqual(["md:col-span-6", "md:col-span-3", "md:col-span-3"]);
+            expect(composeRuntimeRows(home)[2]!.map(runtimeCellSpanClass)).toEqual(["@md:col-span-6", "@md:col-span-3", "@md:col-span-3"]);
         });
     });
 });

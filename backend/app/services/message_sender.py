@@ -16,7 +16,7 @@ import requests
 from ..supabase_client import _get_base_url, _get_headers
 from ..integrations.twilio_client import send_sms
 from .activity_workflow_events import emit_message_lifecycle_event
-from .dispatch_eligibility import REGISTERED_QA_ORG_IDS
+from .dispatch_eligibility import REGISTERED_QA_ORG_IDS, revalidate_for_dispatch
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -153,6 +153,26 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
             )
             patch = {"status": "failed", "error": err_msg}
             _update_message(base_url, headers, msg_id, patch)
+            message_ids.append(str(msg_id))
+            errors.append(err_msg)
+            refused += 1
+            failed += 1
+            continue
+
+        # The same final policy check every Python dispatch passes (`revalidate_for_dispatch`). A legacy
+        # row written by a workflow's create_message carries no eligibility record — no category, no
+        # recipient consent — so it is refused (SNAPSHOT_MISSING) instead of reaching Twilio around an
+        # opt-out. Workflow texts are delivered through the canonical enqueue, which records one.
+        decision = revalidate_for_dispatch({**row, "org_id": _org_id, "channel": "sms"})
+        if not decision.allowed:
+            err_msg = f"policy:{decision.reason}"[:ERROR_TRUNCATE]
+            logger.warning(
+                "MESSAGE_SEND_POLICY_REFUSED id=%s workflow_run_id=%s reason=%s",
+                msg_id,
+                row.get("workflow_run_id"),
+                decision.reason,
+            )
+            _update_message(base_url, headers, msg_id, {"status": "failed", "error": err_msg})
             message_ids.append(str(msg_id))
             errors.append(err_msg)
             refused += 1
