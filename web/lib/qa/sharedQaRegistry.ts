@@ -110,8 +110,8 @@ export const QA_AUTHZ_FIXTURE_PATHS = Object.freeze({
 
 /** Exact content pins — update deliberately with Vacilando reconciliation pins. */
 export const QA_AUTHZ_FIXTURE_SHA256 = Object.freeze({
-  ensure: "09271ccd102dbb728bb336647fb61869d923652a1b89879f3bb20544f6191727",
-  reset: "35b38ce6d196f38b0d64f2b3381b0d0cb223810b5f53c6e36fd4a54200a193c9",
+  ensure: "9d23cc63f92f8df373aa5ff29ac6ae1254632157fe9588cbf7bcb559cdb5b199",
+  reset: "8c34f50479ed612010e3dc049f9ed419ff02778fa66a171c75eaefc6932d0dad",
 } as const);
 
 export const QA_CENSUS_PATHS = Object.freeze({
@@ -121,8 +121,8 @@ export const QA_CENSUS_PATHS = Object.freeze({
 } as const);
 
 export const QA_CENSUS_SHA256 = Object.freeze({
-  documents_zero_residue: "713325aae00cac5a881f27ca1a36e667ba28d249a8fd4c0fed3d5d2c6144d561",
-  bp_quiesced_retained: "dacbfc62105937d0325ca8d457105626e2009a79760ebe812df8c35b54f9b7ef",
+  documents_zero_residue: "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+  bp_quiesced_retained: "08d4fa7218fc9ef0d048bea8e0d814c264a4c5491a47f01a3a465a70d0a2670d",
   phase_a_preflight: "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
 } as const);
 
