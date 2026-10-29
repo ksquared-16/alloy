@@ -45,15 +45,35 @@
     "databaseTarget": "alloy_deployed_primary",
     "policy": "operator_approval_required (alloy_deployed_primary is always an operator decision)",
     "outcome": "failed / approval_denied by operator at 2026-10-29T22:50:55.184Z, no reason recorded; trusted_host_action_id null \u2014 nothing executed, no census_run_at",
-    "refiled": false
+    "refiled": false,
+    "denial_note": "user statement 22:51:26Z: denial was accidental (meant to approve); 22:51:37Z: asked for it to be sent again"
   },
   "audit_provenance_gar_233dc36ea90675": {
-    "filed": "2026-10-29T22:06:12.689Z by lane_aa660dc9554d run erun2_16272d88fb282391 (installed toolkit 20261029-5b9a06e3a0bc) \u2014 this seat's filing",
+    "filed": "2026-10-29T22:06:12.689Z \u2014 CORRECTED per operator: filed by the access bridge under lane_aa660dc9554d / erun2_16272d88fb282391 (the record carries no distinguishing origin field)",
     "policy": "22:06:13.005Z awaiting_operator (policy_default_requires_operator)",
-    "deduped_attempt": "22:06:19.987Z, same lane and run (the seat's _secondary filing collapsing onto it)",
+    "deduped_attempt": "22:06:19.987Z \u2014 this lane's later attempt, deduped onto it",
     "approval": "operator_approved 22:07:18.170Z; decision_timing.submitted_at 22:07:17.876Z; operator_approval.actor = 'operator' (generic)",
     "execution": "trusted action tha_b31dc11a97d96b; execution_started 22:07:19.030Z, settled 22:07:29.193Z",
     "approver_origin": "UNRESOLVED \u2014 request, audit and notification records carry no approver identity, session, channel or surface beyond the generic 'operator' actor; no inference made",
     "records_modified": false
+  },
+  "census_reissue": {
+    "request": "gar_bcf58ca61c3f22",
+    "successor_of": "gar_0ce4df9bd575b3",
+    "execution_run": "erun2_003abb3b9e959fb1",
+    "inputs_unchanged": true,
+    "filed_at": "2026-10-29T22:53:35.424Z",
+    "state": "awaiting_operator (Needs You notification 22:54:02.489Z)",
+    "authority": "user-authorized single reissue; not standing approval"
+  },
+  "defect_handoff_walden": {
+    "owner_path": "Walden canonical backlog via its owner; Documents lane has no authorized write path \u2014 handoff only, no store created",
+    "items": [
+      "census idempotency: database.read_census reuses a completed census with the same query hash within one execution run (gar_29a81808fb6b6d replayed tha_89eab7be17c753); replay unmarked; overwrote tracked results file",
+      "reconciliation-key collision: execute_registered_reconciliation dedupe omits reconciliation_key (gar_73a27bcf382c66 absorbed distinct filings while pending)",
+      "acceptance order: gar_233dc36ea90675 approved/executed 22:07:18-29Z before parent exact-scope question 22:07:51Z",
+      "audit provenance: operator_approval.actor is generic 'operator', no session/source metadata; filing origin (bridge vs lane) not distinguishable in the record",
+      "accidental-denial UX: repeated unintended denials (gar_0ce4df9bd575b3 22:50:55Z; user reports several); candidates \u2014 clearer approve/deny separation, confirm-on-deny, explicit reissue flow (successor_of exists in the request builder). Not a change to confirmation rules."
+    ]
   }
 }
