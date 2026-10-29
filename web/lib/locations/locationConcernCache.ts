@@ -168,7 +168,8 @@ async function fetchTourRulesNetwork(
     }
     // Organization-wide rules (null location) generate slots here too (D-T6): they are part of this
     // location's tour availability, shown as inherited, never hidden.
-    const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId || rule.location_id == null);
+    // The location's own rules only — Tours is location-specific (legacy organization-wide rules stay stored, unshown).
+    const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId);
     return {
         orgId,
         locationId,

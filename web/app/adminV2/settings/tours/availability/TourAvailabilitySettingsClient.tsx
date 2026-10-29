@@ -57,9 +57,9 @@ const SECTIONS: { key: ToursSection; label: string }[] = [
  *
  * Location-specific (Tours feedback 2026-10-29): this surface shows and edits only the schedules
  * that belong to the location in scope. Organization-wide rules (`location_id` null) are neither
- * listed, edited nor copied here — and nothing here deletes or rewrites them: stored rules, bookings
- * and the slot engine are unchanged, so a legacy organization-wide rule still contributes times at
- * runtime until it is retired by a governed data change.
+ * listed, edited nor copied here, and nothing here deletes or rewrites them. They no longer offer new
+ * times either (`computeAvailableTourSlots`): a location offers what is configured here, and nothing
+ * until it is. Bookings made under them are untouched.
  *
  * Every time is a wall-clock time in the schedule's own zone, said on a 12-hour clock.
  */
@@ -138,8 +138,7 @@ export default function TourAvailabilitySettingsClient({
                 if (!res.ok) throw new Error(j.error ?? res.statusText);
                 nextRules = j.rules ?? [];
             }
-            // Only this location's own rules. The API also returns organization-wide rules (the slot
-            // engine still adds them); this surface does not present them.
+            // Only this location's own rules — the set the slot engine offers new times from.
             nextRules = nextRules.filter((rule) => isLocationOwnRule(rule, target));
             if (requestSeq !== requestSeqRef.current) return;
             setRules(nextRules);
