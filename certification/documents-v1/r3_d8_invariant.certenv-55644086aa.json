@@ -1,0 +1,90 @@
+{
+  "request_id": "gar_31992407e098d2",
+  "action_key": "database.run_rollback_invariant_test",
+  "status": "complete",
+  "run_id": "erun2_549f37f9e90f7c1e",
+  "lane_id": "lane_aa660dc9554d",
+  "created_at": "2026-10-29T03:31:13.360Z",
+  "execution_started_at": "2026-10-29T03:33:38.984Z",
+  "execution_ended_at": "2026-10-29T03:33:38.984Z",
+  "trusted_host_action_id": "tha_f164d16e2fb5fd",
+  "operator_approval": {
+    "decision": "approved",
+    "actor": "operator",
+    "at": "2026-10-29T03:33:38.621Z"
+  },
+  "inputs": {
+    "target": "certenv-55644086aa",
+    "expectedSha": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "expected_repo_head": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "testPath": "certification/invariants/documents-d8-forms-evidence.sql",
+    "expectedHash": "a7073f11d3e0a1c7f673a64b20d134bf9c7b397b4d9d4eaec74dce8e13678c83",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/documents"
+  },
+  "result": {
+    "outcome": "PASSED",
+    "code": null,
+    "detail": "ran to the end; rolled back; no change persisted",
+    "target": "certenv-55644086aa",
+    "target_id": "certenv-55644086aa@127.0.0.1:56111",
+    "env_id": "ALLOY_LOCAL_CERTIFICATION",
+    "expected_sha": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "test_path": "certification/invariants/documents-d8-forms-evidence.sql",
+    "expected_hash": "a7073f11d3e0a1c7f673a64b20d134bf9c7b397b4d9d4eaec74dce8e13678c83",
+    "timeout_ms": 15000,
+    "started_at": "2026-10-29T03:33:38.984Z",
+    "executed": true,
+    "statements": 1,
+    "written_tables": [
+      "public.document_requirement_versions",
+      "public.document_requirements",
+      "public.document_types",
+      "public.form_definitions"
+    ],
+    "exit_status": 0,
+    "reached_end": true,
+    "killed": false,
+    "output": "BEGIN\nSET\nSET\nSET\nSET\nDO\n           ?column?            \n-------------------------------\n vac_rollback_test_reached_end\n(1 row)\n\nROLLBACK\n",
+    "error": "psql:/Users/vacilando/.local/state/alloy-dev/gateway/vacilando/trusted-host-actions/tmp/rollback-test-1793244821097-bf686c.sql:110: NOTICE:  D8 INVARIANTS PASS 7/7\n",
+    "fingerprint_before": {
+      "catalog": "5fb21d0881ca37bc7f2ac3db6b998122",
+      "sequences": "0535bb17c0ef0b845f08a17958604371",
+      "ledger": "550:20261214090000",
+      "seqvalues": "auth.refresh_tokens_id_seq=null,cron.jobid_seq=2,cron.runid_seq=1,graphql.seq_schema_version=10898,net.http_request_queue_id_seq=null,supabase_functions.hooks_id_seq=null",
+      "background": "1",
+      "table|public.document_requirement_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.document_requirements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.document_types": "26:d4f13b70eb7722784f12a7ffdba86702",
+      "table|public.form_definitions": "0:d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "fingerprint_after": {
+      "catalog": "5fb21d0881ca37bc7f2ac3db6b998122",
+      "sequences": "0535bb17c0ef0b845f08a17958604371",
+      "ledger": "550:20261214090000",
+      "seqvalues": "auth.refresh_tokens_id_seq=null,cron.jobid_seq=2,cron.runid_seq=1,graphql.seq_schema_version=10898,net.http_request_queue_id_seq=null,supabase_functions.hooks_id_seq=null",
+      "background": "1",
+      "table|public.document_requirement_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.document_requirements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.document_types": "26:d4f13b70eb7722784f12a7ffdba86702",
+      "table|public.form_definitions": "0:d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "verification": {
+      "verified": true,
+      "changed": [],
+      "compared": [
+        "catalog",
+        "ledger",
+        "table|public.document_requirement_versions",
+        "table|public.document_requirements",
+        "table|public.document_types",
+        "table|public.form_definitions"
+      ],
+      "sequences_changed": [],
+      "nonrolled_platform_effects": [],
+      "background_activity": false
+    },
+    "rollback": "executor ROLLBACK (no transaction control permitted in the test)",
+    "finished_at": "2026-10-29T03:33:41.356Z",
+    "audit_written": true
+  }
+}

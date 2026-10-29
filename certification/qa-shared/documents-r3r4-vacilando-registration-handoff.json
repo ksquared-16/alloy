@@ -1,0 +1,115 @@
+{
+  "schema": "alloy.documents_d7d8.r3r4_vacilando_registration_handoff.v1",
+  "status": "READY FOR THE PLAN OWNER ONCE THE ALLOY BYTES ARE ON STAGING. Prepared 2026-10-29 by lane_aa660dc9554d (run erun2_549f37f9e90f7c1e). The Documents lane changed no Vacilando file, registry, pool identity or pin.",
+  "to_owner": "Vacilando Backend (lib/qa-plan-registry.mjs, lib/reconciliation-registry.mjs, lib/hosted-fixture-safety.mjs, lib/rollback-invariant-test.mjs)",
+  "installed_toolkit": "20261029-d860bd00102b",
+  "supersedes": "certification/qa-shared/documents-d7d8-repair-qa-plan-handoff.json (draft): personas refined, reconciliation and census now implemented",
+
+  "precondition": {
+    "rule": "every pin below is of Alloy bytes on staging (the registry pins what the operator approves to run, not lane HEAD)",
+    "alloy_commits": [
+      "e0b8b73fc certification(documents): qa_documents_forms_residue_reset runner + fixture; census + 5 Forms/health checks",
+      "a458ce031 docs(qa): authorization-QA contract Revision 3 — scoped_forms, health_viewer, doc_writer"
+    ],
+    "needs": "Director-authorized governed push of agent/documents, PR to staging and merge. Certification/QA assets and one npm script only; no product route, library or migration changes.",
+    "re_verify_after_merge": "recompute each sha256 below at the merge commit; any difference means re-pin from the merged bytes, not from this file"
+  },
+
+  "registrations": [
+    {
+      "file": "lib/reconciliation-registry.mjs",
+      "key": "qa_documents_forms_residue_reset",
+      "change": {
+        "runner_path": "web/scripts/qaDocumentsFormsResidueReset.mjs",
+        "runner_sha256": "0c0cb8dfbd710072101ed4782a3eff1fb3ba24ee09b0ccdddf73b7e2cc82c895",
+        "fixture_path": "certification/fixtures/qa-documents-forms-residue-reset.sql",
+        "fixture_sha256": "3e2a31e4fa8791cf6b787e6001f71cd2ee0b13d3e0444151a8f592c265690e91",
+        "awaiting_alloy_pins": false
+      },
+      "unchanged_and_satisfied": {
+        "runner": "dev:qa:documents-forms-residue-reset (web/package.json)",
+        "frozen_context": "ORG_ID 4acc9386-c485-486f-aa1f-05d83499d142 (QA Shared); the runner refuses any other org, Firefly by id, production by project ref",
+        "apply_env": "DRY_RUN=0 CERT_FIXTURE_APPLY=1 SYNTHETIC_ONLY=1 — the runner refuses without each",
+        "result_shape": "reset | failed; the result also carries deleted.{form_definitions, form_definition_versions, form_public_links, form_submissions, form_packet_*, person_health_facts: 0, audit_rows: 0} — the append-only audit of the cleanup, kept in the governed request",
+        "qa_run": "QA_RUN_ID = the lane's OPEN hosted authz_q1 run (reconciliation-preflight); the fixture derives qa_<12 hex>_ from it and accepts no other run"
+      },
+      "contract_mapping": {
+        "require_run_and_org_ownership": "QA Shared only; open-run key prefix derived from QA_RUN_ID; closed-run rows only as a frozen id list, each re-checked for its own run prefix and is_active = false",
+        "synthetic_only_cleanup": "only run-keyed forms/packets and their children; refuses while a target submission still links a document or a drawn signature asset (storage leaves through the audited document delete); refuses if a closed run's form submission is still bound to a subject; refuses if a foreign packet uses a target form",
+        "preserve_retained_health_facts": "person_health_facts never named; proven unchanged",
+        "preserve_audit_history": "mutation_events / workflow_events never named; proven unchanged",
+        "no_general_production_deletion": "every DELETE is org- AND run-prefix- or frozen-id-scoped (hosted-fixture-safety audit: 8/8 fixture-scoped, 0 org-wide, no trigger suspension)",
+        "append_only_prior_residue_evidence": "closed runs qar_4246ac22ece0 / qar_8fb0e1ffabcf and their census bindings are not amended; the reset is a new governed act whose result and following census are new evidence",
+        "require_exact_census_sha": "census 7957a51a… below"
+      },
+      "proof": "rollback-only on alloy-cert (seed → apply → assert → ROLLBACK): removes the run's form, version, link, signed submission and packet chain, and the frozen prior form with its orphaned child-only submission; keeps a frozen id that is still active, a frozen id whose key is not its run's, another run's form, a bp_v2-style qa_ form and the same run key in another org; health facts and audit rows unchanged. Refusals proven: linked document, drawn-signature asset, prior submission bound to a subject, malformed run id, non-QA org (Firefly id), missing run."
+    },
+    {
+      "file": "lib/hosted-fixture-safety.mjs",
+      "missing": "FIXTURE_SAFETY_PROFILES.qa_documents_forms_synthetic — the registry entry names fixture_safety 'qa_documents_forms_synthetic' but no such profile exists, and a hosted fixture with no profile is refused at execution",
+      "proposed": "qa_documents_forms_synthetic: Object.freeze({ idPrefix: \"qa_documents_forms_no_id_namespace:\", ownership: Object.freeze({}), requireReplicaWindow: false })",
+      "why": "the fixture has no uuid namespace; every DELETE is scoped through a non-org psql variable (:'run_key_prefix' / :'prior_form_ids'). Audited with an idPrefix that can never match: verdict ok, 8/8 scoped — the scoping comes from the predicates, not a prefix credit"
+    },
+    {
+      "file": "lib/qa-plan-registry.mjs",
+      "plan": "authz_q1",
+      "contract": { "path": "docs/platform/governance/authorization-qa-personas.md", "sha256": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e", "revision": 3 },
+      "custom_roles_add": {
+        "qa_scoped_forms": { "label": "QA scoped Forms", "grants": ["portal.access", "documents.read", "crm.customers.read", "forms.submissions", "forms.submissions.confirm"] },
+        "qa_health_viewer": { "label": "QA health viewer", "grants": ["portal.access", "documents.read", "health.view"] },
+        "qa_doc_writer": { "label": "QA document writer", "grants": ["portal.access", "documents.read", "documents.write"] }
+      },
+      "personas_add": {
+        "scoped_forms": { "org": "qa_shared", "roles": ["qa_scoped_forms"], "session": true, "scope": { "department": { "mode": "restricted", "ids": ["qa_d1"] }, "site": { "mode": "all" } } },
+        "health_viewer": { "org": "qa_shared", "roles": ["qa_health_viewer"], "session": true, "scope": "scopeAll" },
+        "doc_writer": { "org": "qa_shared", "roles": ["qa_doc_writer"], "session": true, "scope": "scopeAll" }
+      },
+      "identities_add": {
+        "qa_pool_06": { "kind": "pool", "org": "qa_shared", "email": "qa-pool-06@example.com", "display_name": "QA Pool 06" },
+        "qa_pool_07": { "kind": "pool", "org": "qa_shared", "email": "qa-pool-07@example.com", "display_name": "QA Pool 07" },
+        "qa_pool_08": { "kind": "pool", "org": "qa_shared", "email": "qa-pool-08@example.com", "display_name": "QA Pool 08" }
+      },
+      "why_new_identities": "authz_q1 already binds all five pool identities (doc_reader, no_docs, processing_only, ocr, scoped_ops); bindPool would return qa_pool_exhausted for an eighth persona. Provisioning goes through the existing governed identity provisioning (vac-qa-identity-provision), not this lane",
+      "catalog_verified": "every grant key exists in permission_definitions (portal.access, documents.read, documents.write, crm.customers.read, forms.submissions, forms.submissions.confirm, health.view); no D5–D8 migration edits the catalog",
+      "residue_census": {
+        "path": "certification/qa-shared/documents-zero-residue-census.sql",
+        "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+        "checks": [
+          "doc_zr_vendors", "doc_zr_qa_role_grants", "doc_zr_pool_access", "doc_zr_zero_sent",
+          "doc_zr_subjects", "doc_zr_shared_documents", "doc_zr_shared_objects", "doc_zr_shared_dangling_case_sources",
+          "doc_zr_secondary_documents", "doc_zr_secondary_objects", "doc_zr_secondary_cases", "doc_zr_qa_sessions",
+          "doc_zr_d6_requirements", "doc_zr_d6_requirement_versions", "doc_zr_d6_waivers",
+          "doc_zr_forms_definitions", "doc_zr_forms_definition_versions", "doc_zr_forms_submissions",
+          "doc_zr_forms_links_and_packets", "doc_zr_health_facts_active_on_missing_subject"
+        ],
+        "retained_data_added": "doc_zr_retained_health_facts (by status; ended is retained by design, active is caught by the check above)",
+        "historical_binding_add": {
+          "query_sha256": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+          "checks": "the 15 above, unchanged",
+          "closed_qa_run": "qar_8fb0e1ffabcf",
+          "binding_request": "gar_db7822cfa675e8",
+          "note": "immutable 15-check close binding; do not rewrite"
+        },
+        "historical_questions_unchanged": "the 15 existing questions are byte-identical (diff of non-comment lines vs eb702fb6: 0 removed); the extension inserts new union branches only",
+        "proof": "rollback-only on alloy-cert with D6 relations stubbed: clean → all true; a bp_v2-style qa_ form → not counted; one archived run form → doc_zr_forms_definitions false; full Forms residue + an active fact on a missing child → all five new checks false; retained report shows {active, ended}",
+        "first_expected_result_on_staging": "doc_zr_forms_* are FALSE until qa_documents_forms_residue_reset has run once: 5 archived run forms (qar_4246ac22ece0 ×2, qar_8fb0e1ffabcf ×3) and 3 orphaned submissions remain today. Run order inside the next authz_q1 run: driver teardown → registered resets incl. this one → qa_run_close → census"
+      }
+    }
+  ],
+
+  "infrastructure_defect": {
+    "action": "database.run_rollback_invariant_test",
+    "refusal": "not_rollback_safe (refused_dynamic, refused_copy)",
+    "where": "lib/rollback-invariant-test.mjs analyzeRollbackSafety: the DENY patterns run over stripComments(raw) without masking single-quoted literals",
+    "false_positives": [
+      { "file": "certification/invariants/documents-d7-review-validity.sql", "sha256": "e3d42fad523239061ebdbdabf3ab2f78aa084c072ccf01ab8a1f77d4a39cdb05", "hits": ["'EXECUTE' — the privilege-name argument of has_function_privilege(…, 'EXECUTE') (service-role-only assertion)", "'Clear copy confirmed' — a review reason string"] },
+      { "file": "certification/invariants/documents-d6-requirements.sql", "sha256": "37cdd92e8c8662954e9ff9308269497995cbdc159724dab25159c18e7e70e768", "hits": ["has_function_privilege(…, 'EXECUTE')"] },
+      { "file": "certification/invariants/documents-d5-filing.sql", "sha256": "72342d33bc35db41fffa4037624f056a8dc8486998e3483b04dd3f6ebd5a5fd8", "hits": ["has_function_privilege(…, 'EXECUTE')"] }
+    ],
+    "missing_contract": "a literal is data, not a statement: DENY keyword patterns must not match inside a single-quoted string literal (inside a DO body the dollar-quoted body is still analysed; only '…' literals are masked). A has_function_privilege privilege-name argument is the canonical way to assert service-role-only execution and cannot execute anything",
+    "not_worked_around": "the Documents lane did not obfuscate the literals to slip past the analyzer. D8 (no such literal) PASSED 7/7 on the isolated environment; D7 waits for this contract",
+    "measured_with": "the installed analyzer itself (node import of analyzeRollbackSafety): D8 ok; D5/D6 refused_dynamic; D7 refused_copy + refused_dynamic"
+  },
+
+  "observation_contract_pin_drift": "the installed authz_q1 pins Revision 2 as a1ad543a…; staging carries c3707ff7… (commit 154f6bcbc added one §3 paragraph after approval). qar_8fb0e1ffabcf opened regardless, so the pin is not compared at open. Revision 3 includes the paragraph; re-pin to the merged Revision 3 bytes"
+}
