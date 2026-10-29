@@ -1,0 +1,107 @@
+{
+  "request_id": "gar_e8022e56a63f84",
+  "action_key": "environment.build_certification_baseline",
+  "status": "complete",
+  "run_id": "erun2_549f37f9e90f7c1e",
+  "lane_id": "lane_aa660dc9554d",
+  "created_at": "2026-10-29T03:26:29.925Z",
+  "execution_started_at": "2026-10-29T03:27:03.953Z",
+  "execution_ended_at": "2026-10-29T03:27:03.953Z",
+  "trusted_host_action_id": "tha_c9dbb1053e21c1",
+  "operator_approval": {
+    "decision": "approved",
+    "actor": "operator",
+    "at": "2026-10-29T03:27:03.593Z"
+  },
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "baseBranch": "staging",
+    "expectedBaseSha": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "expected_repo_head": "1045a8ce0794ce99e37074495b346237d99c4650",
+    "expected_repo_ref": "refs/remotes/origin/staging",
+    "leaseHours": 24,
+    "leaseLane": "lane_aa660dc9554d",
+    "runNonce": "documents-r3-1045a8ce",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/documents"
+  },
+  "result": {
+    "environment_id": "certenv-55644086aa",
+    "target": "certenv-55644086aa",
+    "state": "ready",
+    "project_id": "vac-certenv-55644086aa",
+    "ports": {
+      "db": 56111,
+      "base": 56110
+    },
+    "baseline": {
+      "repository": "ksquared-16/alloy",
+      "base_branch": "staging",
+      "base_sha": "1045a8ce0794ce99e37074495b346237d99c4650",
+      "migrations": 550,
+      "first_version": "20260328120000",
+      "head_version": "20261214090000",
+      "migration_manifest_sha256": "f41ccbcbcd94f6fdf06cb97352a9cdab9d48a83f8bca835ad069a712e5cd4fb8",
+      "seed_manifest_sha256": "79a296b6e585b3a87e2e5167051f80ce57b74ad3e9b583918b7b8dc3659f4999",
+      "seed": [
+        {
+          "path": "supabase/seed/local_representative_seed.sql",
+          "sha256": "accc6ccf939c0ca62853ff15180ac55549fffa2f347d49062eb0d4ee1e0ddd79"
+        },
+        {
+          "path": "certification/operator-credential.sql",
+          "sha256": "09fd876a176de293ed9d9b4e505f78eead1f6baed73b0d8866a98a2b5de6a617"
+        },
+        {
+          "path": "certification/environment-buckets.sql",
+          "sha256": "d3b4b71aa559a3d4e4dd37483d22627f53012648cf2a14e1ac3c42795bb0fa31"
+        },
+        {
+          "path": "certification/inbound-sms-binding.sql",
+          "sha256": "df1997383e7ba90381927626bb4cbd630ea2ac4e9aab22ac3018e4f65b1fb86f"
+        },
+        {
+          "path": "certification/search-platform/01-search-certification-fixtures.sql",
+          "sha256": "241ad2d07caf85dae03b1123e4b7487951632fe30709c8297319fcb2955c1009"
+        },
+        {
+          "path": "certification/attendance/01-attendance-fixture.sql",
+          "sha256": "9d4b5d5261d2495cc825b1a48597b7a4f9ffefae1d7d57bf42047cd8e02c6d13"
+        },
+        {
+          "path": "certification/kiosk/01-kiosk-fixture.sql",
+          "sha256": "92ce276adf6faa894ca3906a7c0f31c61985ace4c057fbb119e2d8b05501aa09"
+        }
+      ],
+      "fingerprint": {
+        "schema": "1a6f4f0712c266236b386bad139cb980",
+        "rows": "a0d602e5002f6c39f69bca162caae854",
+        "rows_total": 18352,
+        "ledger_set": "a2427973ef2206f1a5309f032fa262ca",
+        "ledger_count": 550
+      },
+      "replays": 2,
+      "replays_agree": true,
+      "ledger_matches_manifest": true,
+      "tools": {
+        "supabase_cli": "2.116.0",
+        "postgres_client": "psql (PostgreSQL) 18.6"
+      },
+      "certified_at": "2026-10-29T03:29:10.398Z"
+    },
+    "lease": {
+      "holder_lane": "lane_aa660dc9554d",
+      "acquired_at": "2026-10-29T03:29:10.398Z",
+      "expires_at": "2026-10-30T03:29:11.753Z"
+    },
+    "credentials": {
+      "governed": true,
+      "rotated": [
+        "postgres",
+        "supabase_admin",
+        "qa_operator"
+      ],
+      "location": "trusted host only"
+    },
+    "diagnostic": null
+  }
+}

@@ -1,14 +1,16 @@
 ---
 owner: platform
 status: proposed
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-28
 supersedes: []
 ---
 
 # Authorization QA: governed hosted personas and fixtures
 
-**Status: proposed. Revision 2 (2026-10-22), awaiting Director approval.** Revision 1 (sha256 `734a502f…c51f9`)
-is the contract the installed Vacilando `authz_q1` plan pins. Revision 2 adopts the approved **shared QA operating model**
+**Status: proposed. Revision 3 (2026-10-28), awaiting Director approval.** Revision 2 (sha256 `a1ad543a…eff162`,
+Alloy PR #1566) is the contract the installed Vacilando `authz_q1` plan pins. Revision 3 adds three restricted personas,
+three pooled identities and the Forms residue obligations; it changes no existing persona, grant, scope or refusal (§11).
+Revision 1 (sha256 `734a502f…c51f9`) is superseded. Revision 2 adopts the approved **shared QA operating model**
 (Shared QA Tenant Architecture V1, installed toolkit `95f887719db0`). It does not change a single authorization
 refusal requirement. §10 lists every change.
 
@@ -55,10 +57,13 @@ The registry is the toolkit's `authz_q1` plan. It is frozen and code-reviewed. I
 | processing-only operator | `processing_only` | QA Shared | pooled | `qa_processing_only` | `portal.access`, `processing.operate` | all |
 | OCR-authorized operator | `ocr` | QA Shared | pooled | `qa_ocr` | `portal.access`, `documents.read`, `processing.operate` | all |
 | department-restricted operator | `scoped_ops` | QA Shared | pooled | `qa_scoped_ops` | `portal.access`, `documents.read`, `processing.operate`, `crm.customers.read` | department **restricted to D1**; site all |
+| department-restricted Forms operator | `scoped_forms` | QA Shared | pooled | `qa_scoped_forms` | `portal.access`, `documents.read`, `crm.customers.read`, `forms.submissions`, `forms.submissions.confirm` | department **restricted to D1**; site all |
+| Medical viewer | `health_viewer` | QA Shared | pooled | `qa_health_viewer` | `portal.access`, `documents.read`, `health.view` | all |
+| first-decision document reviewer | `doc_writer` | QA Shared | pooled | `qa_doc_writer` | `portal.access`, `documents.read`, `documents.write` | all |
 
-**Identities.** Seven reusable managed identities:
+**Identities.** Ten reusable managed identities:
 - **Two dedicated organization administrators.** `qa-shared-actor@example.com` and `qa-secondary-admin@example.com` hold `admin` permanently in exactly their own org. Each is the explicit actor of every audited access change in that org, so the W-18 delegation ceiling bounds the toolkit exactly as it bounds a human administrator.
-- **Five pooled identities.** `qa-pool-01` … `qa-pool-05@example.com`, all in QA Shared. They hold **nothing** between runs. A run leases one per pooled persona, exclusively, for the run's life.
+- **Eight pooled identities.** `qa-pool-01` … `qa-pool-08@example.com`, all in QA Shared (`06`–`08` added by Revision 3 for the three restricted personas). They hold **nothing** between runs. A run leases one per pooled persona, exclusively, for the run's life.
 
 Every identity belongs to exactly one organization, forever, because a second membership resolves to no access at all (`resolveAdminAccessCore`, W-22). No Person record is created; each identity carries a display name.
 
@@ -78,6 +83,20 @@ prior roles and scopes is retained in `mutation_events`.
 - a permission key outside the persona's registered set, or a change that exceeds the actor's own grants;
 - any write to a user, role or package that is not a registered QA artifact, including default role packages and ordinary users;
 - caller-supplied email, org, role, scope, URL, key or path.
+
+### 3a. Restricted personas: what each must be allowed and refused
+
+Each restricted persona exists to prove one boundary that no other persona can, because every persona holding the
+positive capability also held the authority the boundary refuses. Grants are the **smallest** set that reaches the
+boundary through Alloy's own gates; nothing here is a parallel permission model.
+
+| Persona | Must succeed (positive) | Must be refused (negative) | Gate that decides |
+|---|---|---|---|
+| `scoped_forms` | Forms actions on a QA **D1** subject: create a submission, submit, generate the document, manual-link, confirm-linkage, mint a packet link, POS compose; read and list D1 submissions | the same actions on a QA **D2** opportunity or an out-of-scope child-only subject → **404, naming nothing**; out-of-scope list filters → `200 []`; form authoring (`forms.author` absent) → 403; medical answers withheld (`health.view` absent) | `requireFormsCapability` (`lib/access/formsAuthority.ts`) **then** the subject-scope filter — so the 404 is a scope refusal, not a capability one (`scoped_ops` cannot show this: it has no `forms.*`) |
+| `health_viewer` | medical answers present on a Forms submission; medical documents and requirements readable | `health_fact.verify_immunization` and every other Medical mutation (`health.manage` absent) → 403; a document review (`documents.write` absent) → 403 | the health action registry (`health.manage`) and the review route (`documents.write`) — today every `health.view` holder also has `health.manage` |
+| `doc_writer` | the FIRST review decision on a pending version (accept, or reject with a reason); validity dates on the current version; a renewal upload | re-review or reopen of a decided version → **403 `REREVIEW_NOT_AUTHORIZED`** with `required_permission: processing.documents.manage`, the version unchanged; a medical-class document (`health.view` absent) is not reviewable | `app/api/admin/documents/[id]/review/route.ts` (D7) — today every `documents.write` holder also has `processing.documents.manage` |
+
+The same refusals as every persona apply (§3): a restricted persona never receives a key outside its row.
 
 ## 4. Sessions
 
@@ -103,6 +122,7 @@ A run never touches another run's fixtures, nor another plan's artifacts. **QA S
 | Unattached `.txt` intake document (OCR text and preview), opening a Processing case | QA Shared | `/api/admin/documents/upload?open_processing_case=true` | `DELETE /api/admin/pos/documents/[id]` (document, case, object) |
 | A document attached to `V1` | QA Shared | `/api/admin/documents/upload` (`entity_type=vendor`) | `DELETE /api/admin/pos/documents/[id]`, **before** the vendor reset |
 | One opportunity document (cross-organization target) | QA Secondary | registered subject reconciliation plus upload as `cross_org_admin` | `DELETE /api/admin/pos/documents/[id]` as `cross_org_admin`, then its reset |
+| Run forms and packets keyed `qa_<run hex>_` (definitions, versions, public links, packet definitions / items / sessions) and their submissions | QA Shared | product Forms routes as `fixture_admin` | product lead deletion for child-only submissions (R5); then registered reconciliation `qa_documents_forms_residue_reset` (runner `web/scripts/qaDocumentsFormsResidueReset.mjs`, fixture `certification/fixtures/qa-documents-forms-residue-reset.sql`), which also removes the frozen, enumerated residue of closed runs `qar_4246ac22ece0` and `qar_8fb0e1ffabcf` |
 
 Product-API fixtures exercise the real upload path. Synthetic data only; customer data is never a fixture.
 
@@ -121,6 +141,7 @@ Product-API fixtures exercise the real upload path. Synthetic data only; custome
    - in **QA Shared**: `documents` rows and storage objects tagged `qa-authz-`, and documents attached to any `aa000000-` subject or vendor;
    - in **QA Shared**: Processing-case sources whose source document no longer exists. A case left behind by a deleted fixture is caught here without guessing at its content.
    - in **QA Secondary** (Documents-only): all `documents` rows, all storage objects under its `<org_id>/` prefix, and all Processing cases.
+   - in **both QA orgs** (Revision 3): form definitions, versions, public links, packet definitions / sessions and submissions of run-keyed forms (`^qa_[0-9a-f]{12}_`; never a broader key, so `bp_v2`'s forms are not counted) — archived run forms and orphaned child-only submissions are residue — and any **active** health fact on a QA child that no longer exists.
 
    None of these checks may count another plan's retained artifacts, and none may be weakened to tolerate them.
 
@@ -131,7 +152,8 @@ Product-API fixtures exercise the real upload path. Synthetic data only; custome
 - the two permanent organizations and their structure;
 - the seven identities, with no active temporary access;
 - the actors' permanent `admin` memberships;
-- emptied, inactive `qa_*` role definitions.
+- emptied, inactive `qa_*` role definitions;
+- ended health facts on deleted QA children (`person_health_facts` refuses DELETE; ending is the product's only disposal).
 
 ## 7. Change sets and ownership
 
@@ -179,3 +201,12 @@ has no override flag. Hosted fixtures exist only as governed reconciliations.
 6. Immutable audit history is **retained by design** and reported as data (§6).
 7. Lifecycle steps are mapped to the installed governed actions (§6); session storage to the per-run path (§4).
 8. **Unchanged:** every refusal requirement (§3), every persona's grants and scope, department scope, cross-organization isolation, storage-object authorization and removal, and the requirement that cleanup be *proven* rather than claimed.
+
+## 11. Revision 3 changes (from Revision 2)
+
+1. Three restricted personas, `scoped_forms`, `health_viewer` and `doc_writer`, with custom roles `qa_scoped_forms`, `qa_health_viewer` and `qa_doc_writer` and exactly the grants in §3; §3a states what each must be allowed and refused, and which Alloy gate decides it. `scoped_forms` is restricted to D1, like `scoped_ops`. Compared with the 2026-10-28 handoff draft, `scoped_forms` drops `forms.author` (authoring is not subject-scoped; fixtures author) and adds `forms.submissions.confirm` (so confirm-linkage reaches its scope check).
+2. Pooled identities `qa-pool-06` … `08` (§3).
+3. Forms run fixtures and their registered reset, `qa_documents_forms_residue_reset` (§5).
+4. The zero-residue census adds five Forms / health checks and reports ended health facts on deleted children as retained data (§6). The 15 existing questions are unchanged.
+5. **Unchanged:** every Revision 2 persona, grant, scope and refusal requirement; QA Shared / QA Secondary; the lifecycle.
+6. **Pin drift recorded.** Staging carries this file as `c3707ff7…`, not the pinned `a1ad543a…`. The difference is one paragraph that commit `154f6bcbc` (an Access fix) added to §3 after Revision 2 was approved: `remove_member_access_audited` also deletes `user_access_profiles`. Revision 3 includes that paragraph. The toolkit pin moves to the merged Revision 3 bytes.

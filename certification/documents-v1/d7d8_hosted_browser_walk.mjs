@@ -134,6 +134,25 @@ try {
     rec("W4f", "readiness does not describe a REJECTED renewal as 'renewal awaiting review'", /Satisfied/.test(immLine) && !/renewal awaiting review/.test(immLine), immLine.slice(0, 160), s2);
 } catch (e) { rec("W4", "Focus Panel review/version/renewal", false, String(e).slice(0, 200), await S.shot("07-d7-error.png")); }
 
+// W4g R1 (PR #1612): a REJECTED renewal of EXPIRING evidence (Kid Three, left rejected by the D7 driver's R1 section).
+// Processing's requirement-work panel and the Focus Panel readiness line must both say "rejected", never "awaits review".
+if (D7.r1?.c3) try {
+    const kid3 = `QA D7 Kid Three ${SUFFIX}`;
+    await S.missingDocuments();
+    await S.page.locator("[role=dialog] button").filter({ hasText: kid3 }).filter({ hasText: /immunization \(D7\)/ }).first().click(); await S.page.waitForTimeout(4000);
+    const panel = (await S.page.locator('[data-testid="requirement-work-panel"]').first().innerText().catch(() => "")).replace(/\s+/g, " ");
+    const s1 = await S.shot("07g-r1-processing-rejected-renewal.png");
+    rec("W4g-processing", "Processing: the rejected renewal reads 'was rejected — upload a new version', action 'Renew on the record', never 'awaits review'",
+        /was rejected — upload a new version/.test(panel) && /Renew on the record/.test(panel) && !/awaits review/.test(panel) && !/Review on the record/.test(panel), panel.slice(0, 220), s1);
+    await S.inDialog(/Renew on the record/).click(); await S.page.waitForTimeout(14000);
+    await S.focusChip(kid3);
+    const rt = (await S.page.locator('[data-testid="document-readiness"]').first().innerText().catch(() => "")).replace(/\s+/g, " ");
+    const line = rt.match(/immunization \(D7\)[^]*?(?=qa-authz|$)/)?.[0] ?? "";
+    const s2 = await S.shot("07g-r1-focus-rejected-renewal.png");
+    rec("W4g-focus", "Focus Panel: 'renewal rejected — collect a new version', not 'renewal awaiting review'",
+        /renewal rejected — collect a new version/.test(line) && !/renewal awaiting review/.test(line), line.slice(0, 200), s2);
+} catch (e) { rec("W4g", "R1 rejected renewal labels (Processing + Focus Panel)", false, String(e).slice(0, 200), await S.shot("07g-r1-error.png")); }
+
 // W5 Forms-produced document visibility and readiness (D8 household).
 const da = D8.docs["a_f1"];
 try {

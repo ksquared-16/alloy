@@ -200,7 +200,8 @@ def check(section, case, persona, ok, status, code=None, **extra):
 
 
 ONLY = sys.argv[3] if len(sys.argv) > 3 else None
-RAN = {"B2": {"D7.B2-event-dates"}, "R3B": {"D7.3b-rejected-renewal"}}.get(ONLY, set())
+RAN = {"B2": {"D7.B2-event-dates"}, "R3B": {"D7.3b-rejected-renewal"}, "R1": {"R1-rejected-renewal"},
+       "R1B": {"R1B-subsequent-acceptance"}}.get(ONLY, set())
 REASON = sys.argv[4] if len(sys.argv) > 4 else None
 
 if PHASE == "certify":
@@ -639,6 +640,124 @@ if PHASE == "certify":
             check(S, f"{t}: lapsed → expired and blocking", A, e.get("state") == "expired" and e.get("blocking") is True, s, None, state=e.get("state"))
             s, b = call(f"/api/admin/documents/{dd}/signed-url", "doc_reader")
             check(S, f"{t}: the medical document itself is refused to a reader without health.view", "doc_reader", s in (403, 404) and not leaks(b), s, code_of(b))
+
+    # ═══════════════════════════════════════════════════════════════════════════════ R1 fix-forward (PR #1612)
+    # A rejected renewal of EXPIRING evidence: the case D7.3b could not reach (its in-force version was a year out, so no
+    # work row existed). Kid Two and Kid Three each get an accepted v1 expiring soon and a rejected v2 renewal. Kid Two is
+    # then re-reviewed by an authorized reviewer; Kid Three is left rejected for the browser walk, and R1B accepts new
+    # evidence (v3) for it afterwards. Work Items' verb is the deployed mapper's rule applied to the hosted row.
+    def wi_verb(r):
+        st, rn = r.get("state"), r.get("renewal")
+        return ("Review" if st == "pending_review" or rn == "pending" else "Resolve" if st == "blocked"
+                else "Renew" if st in ("expired", "expiring_soon") else "Collect")
+
+    def processing_action(r):
+        st, rn = r.get("state"), r.get("renewal")
+        return ("Review on the record" if st == "pending_review" or rn == "pending" else
+                "Renew on the record" if st in ("expired", "expiring_soon") else "Open the record's documents")
+
+    if ONLY == "R1":
+        S = "R1-rejected-renewal"
+        rimm = reqs["imm"]
+        r1_soon = TODAY + datetime.timedelta(days=5)
+        r1_new = TODAY + datetime.timedelta(days=365)
+        r1 = ids.setdefault("r1", {})
+        for ck, cid in (("c2", c2), ("c3", c3)):
+            s, b, dd = upload(A, cid, "immunization_record", f"r1-imm-{ck}")
+            check(S, f"{ck}: immunization v1 uploaded", A, s == 200 and bool(dd), s, code_of(b))
+            s, b = validity(A, dd, "PUT", effective_on=iso(TODAY - datetime.timedelta(days=300)), expires_on=iso(r1_soon), reason=f"{TAG} r1 v1 dates")
+            check(S, f"{ck}: v1 dated to expire inside the warning window", A, s == 200 and ((b or {}).get("validity") or {}).get("status") == "expiring_soon", s, code_of(b))
+            s, b = review(A, dd, "accepted")
+            check(S, f"{ck}: v1 accepted", A, s == 200 and (b or {}).get("review_status") == "accepted", s, code_of(b))
+            s, vs = versions(A, dd)
+            v1 = (vs[0] if vs else {}).get("id")
+            s, b = renew(A, dd, f"r1-imm-{ck}-v2", f"{TAG} r1 renewal to reject", effective_on=iso(TODAY), expires_on=iso(r1_new))
+            v2 = (b or {}).get("version_id")
+            check(S, f"{ck}: renewal v2 stored", A, s == 200 and bool(v2), s, code_of(b))
+            s, b = readiness(A)
+            e = state_of(b, rimm, cid) or {}
+            check(S, f"{ck}: while v2 awaits review: satisfied, renewal_pending, not rejected", A,
+                  e.get("state") == "satisfied" and e.get("renewal_pending") is True and e.get("renewal_rejected") is False and e.get("valid_until") == iso(r1_soon), s, None,
+                  state=e.get("state"), renewal_pending=e.get("renewal_pending"), renewal_rejected=e.get("renewal_rejected"))
+            s, b = work(A)
+            rows = work_rows(b, rimm, cid)
+            check(S, f"{ck}: pending renewal is REVIEW work (row renewal=pending; Processing 'Review on the record'; Work Items 'Review:')", A,
+                  len(rows) == 1 and rows[0].get("renewal") == "pending" and processing_action(rows[0]) == "Review on the record" and wi_verb(rows[0]) == "Review", s, None,
+                  rows=[{k: x.get(k) for k in ("state", "renewal", "valid_until")} for x in rows])
+            s, b = review(A, dd, "rejected", f"{TAG} r1 renewal illegible", version_id=v2)
+            check(S, f"{ck}: renewal v2 rejected with a reason", A, s == 200 and (b or {}).get("review_status") == "rejected", s, code_of(b))
+            s, b = readiness(A)
+            e = state_of(b, rimm, cid) or {}
+            check(S, f"{ck}: a REJECTED renewal is not pending: renewal_pending=false, renewal_rejected=true", A,
+                  e.get("renewal_pending") is False and e.get("renewal_rejected") is True, s, None,
+                  renewal_pending=e.get("renewal_pending"), renewal_rejected=e.get("renewal_rejected"))
+            check(S, f"{ck}: v1 still satisfies until its own date and is still expiring soon (new evidence needed)", A,
+                  e.get("state") == "satisfied" and e.get("valid_until") == iso(r1_soon) and e.get("expiring_soon") is True, s, None,
+                  state=e.get("state"), valid_until=e.get("valid_until"), expiring_soon=e.get("expiring_soon"))
+            s, b = work(A)
+            rows = work_rows(b, rimm, cid)
+            check(S, f"{ck}: rejected renewal stays RENEW work (row renewal=rejected; Processing 'Renew on the record'; Work Items 'Renew:')", A,
+                  len(rows) == 1 and rows[0].get("renewal") == "rejected" and rows[0].get("state") == "expiring_soon"
+                  and processing_action(rows[0]) == "Renew on the record" and wi_verb(rows[0]) == "Renew", s, None,
+                  rows=[{k: x.get(k) for k in ("state", "renewal", "valid_until")} for x in rows])
+            s, b = review(A, dd, "accepted", f"{TAG} r1 old version", version_id=v1)
+            check(S, f"{ck}: the superseded v1 cannot be re-decided to clear the renewal (current version only)", A, s == 409 and code_of(b) == "NOT_CURRENT_VERSION", s, code_of(b))
+            r1[ck] = {"doc": dd, "v1": v1, "v2": v2}
+            save(ids)
+        dd, v2 = r1["c2"]["doc"], r1["c2"]["v2"]
+        for p in ("doc_reader", "ocr", "scoped_ops", "no_docs", "processing_only"):
+            s, b = review(p, dd, "accepted", f"{TAG} r1 unauthorized re-review", version_id=v2)
+            check(S, "re-reviewing the rejected renewal needs documents.write and clearance", p, s in (403, 404) and not leaks(b), s, code_of(b))
+        s, b = review("cross_org_admin", dd, "accepted", f"{TAG} r1 cross-org re-review", version_id=v2)
+        check(S, "another organization: re-review not found", "cross_org_admin", s == 404 and not leaks(b), s, code_of(b))
+        s, b = review(A, dd, "accepted", version_id=v2)
+        check(S, "re-review of the rejected renewal without a reason is refused", A, s == 400 and code_of(b) == "REASON_REQUIRED", s, code_of(b))
+        s, vs = versions(A, dd)
+        cur = next((x for x in vs if x.get("id") == v2), {})
+        check(S, "refused re-reviews left the renewal rejected", A, cur.get("review_status") == "rejected", s, None, review_status=cur.get("review_status"))
+        s, b = review(A, dd, "accepted", f"{TAG} r1 legible on second look", version_id=v2)
+        check(S, "c2: authorized re-review (rejected → accepted) with reason", A, s == 200 and (b or {}).get("review_status") == "accepted", s, code_of(b))
+        s, b = readiness(A)
+        e = state_of(b, rimm, c2) or {}
+        check(S, "c2: after re-review: valid-through moves to v2's date, no renewal flags, not expiring", A,
+              e.get("state") == "satisfied" and e.get("valid_until") == iso(r1_new) and e.get("renewal_pending") is False
+              and e.get("renewal_rejected") is False and e.get("expiring_soon") is False, s, None, valid_until=e.get("valid_until"))
+        s, b = work(A)
+        check(S, "c2: the renewal work row is gone after re-review", A, not work_rows(b, rimm, c2), s)
+        s, h = history(dd)
+        check(S, "c2: history keeps the rejection and the re-review (append-only)", A, s == 200 and len(h) >= 4, s, None, actions=h[-6:])
+
+    if ONLY == "R1B":
+        S = "R1B-subsequent-acceptance"
+        rimm = reqs["imm"]
+        r1 = ids["r1"]
+        dd, v2 = r1["c3"]["doc"], r1["c3"]["v2"]
+        r1_v3 = TODAY + datetime.timedelta(days=400)
+        s, b = readiness(A)
+        e = state_of(b, rimm, c3) or {}
+        check(S, "c3 precondition: renewal still rejected after the browser walk", A, e.get("renewal_rejected") is True and e.get("renewal_pending") is False, s, None,
+              renewal_rejected=e.get("renewal_rejected"))
+        s, b = renew(A, dd, "r1-imm-c3-v3", f"{TAG} r1 new evidence after rejection", effective_on=iso(TODAY), expires_on=iso(r1_v3))
+        v3 = (b or {}).get("version_id")
+        check(S, "c3: new evidence (v3) uploaded after the rejection", A, s == 200 and bool(v3) and (b or {}).get("supersedes_version_id") == v2, s, code_of(b))
+        s, b = readiness(A)
+        e = state_of(b, rimm, c3) or {}
+        check(S, "c3: new evidence awaits review: renewal_pending again, not rejected", A, e.get("renewal_pending") is True and e.get("renewal_rejected") is False, s, None)
+        s, b = work(A)
+        rows = work_rows(b, rimm, c3)
+        check(S, "c3: the row turns into REVIEW work", A, len(rows) == 1 and rows[0].get("renewal") == "pending" and wi_verb(rows[0]) == "Review", s, None,
+              rows=[{k: x.get(k) for k in ("state", "renewal")} for x in rows])
+        s, b = review(A, dd, "accepted", version_id=v3)
+        check(S, "c3: subsequent acceptance (v3 first decision)", A, s == 200 and (b or {}).get("review_status") == "accepted", s, code_of(b))
+        s, b = readiness(A)
+        e = state_of(b, rimm, c3) or {}
+        check(S, "c3: accepted new evidence moves valid-through; no renewal flags", A,
+              e.get("state") == "satisfied" and e.get("valid_until") == iso(r1_v3) and e.get("renewal_pending") is False and e.get("renewal_rejected") is False, s, None,
+              valid_until=e.get("valid_until"))
+        s, b = work(A)
+        check(S, "c3: the work row is gone", A, not work_rows(b, rimm, c3), s)
+        s, vs = versions(A, dd)
+        check(S, "c3: all three versions kept, rejected v2 still rejected", A, len(vs) == 3 and any(x.get("id") == v2 and x.get("review_status") == "rejected" for x in vs), s, None, versions=len(vs))
 
     superseded = []
     if ONLY and os.path.exists(RESULTS_FILE):
