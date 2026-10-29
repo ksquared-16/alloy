@@ -647,26 +647,33 @@ function ScheduleEditor({
                         {draft.windows.map((w, i) => (
                             <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid={`tours-schedule-window-${i}`}>
                                 {/* `.config-runtime-input` is width:100% and un-layered, so it beats a
-                                    Tailwind width utility; a fixed grid track bounds it instead and keeps
-                                    start and end side by side. */}
-                                <div className="grid grid-cols-[8rem_auto_8rem] items-center gap-2">
-                                <input
-                                    type="time"
-                                    className="config-runtime-input"
-                                    value={wallTimeToInputValue(w.start_time)}
-                                    aria-label={`Window ${i + 1} start`}
-                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, start_time: `${e.target.value}:00` } : x)))}
-                                    data-testid={`tours-schedule-window-start-${i}`}
-                                />
-                                <span>to</span>
-                                <input
-                                    type="time"
-                                    className="config-runtime-input"
-                                    value={wallTimeToInputValue(w.end_time)}
-                                    aria-label={`Window ${i + 1} end`}
-                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, end_time: `${e.target.value}:00` } : x)))}
-                                    data-testid={`tours-schedule-window-end-${i}`}
-                                />
+                                    Tailwind width utility on the input itself. Each input fills a fixed
+                                    8rem box instead — the narrowest width at which a time field shows
+                                    "11:00 AM" and its picker without clipping. Start and end sit side by
+                                    side wherever two boxes fit; in a narrower panel (a phone) the end
+                                    wraps under the start rather than being cut off. */}
+                                <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid={`tours-schedule-window-times-${i}`}>
+                                    <span className="block w-32 shrink-0">
+                                        <input
+                                            type="time"
+                                            className="config-runtime-input"
+                                            value={wallTimeToInputValue(w.start_time)}
+                                            aria-label={`Window ${i + 1} start`}
+                                            onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, start_time: `${e.target.value}:00` } : x)))}
+                                            data-testid={`tours-schedule-window-start-${i}`}
+                                        />
+                                    </span>
+                                    <span>to</span>
+                                    <span className="block w-32 shrink-0">
+                                        <input
+                                            type="time"
+                                            className="config-runtime-input"
+                                            value={wallTimeToInputValue(w.end_time)}
+                                            aria-label={`Window ${i + 1} end`}
+                                            onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, end_time: `${e.target.value}:00` } : x)))}
+                                            data-testid={`tours-schedule-window-end-${i}`}
+                                        />
+                                    </span>
                                 </div>
                                 <span className="text-alloy-midnight/55">{formatTourWallTimeRange(w.start_time, w.end_time)}</span>
                                 {draft.windows.length > 1 ?

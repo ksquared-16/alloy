@@ -93,12 +93,16 @@ describe("/organization design tokens replace legacy Tours sky / navy", () => {
 });
 
 describe("compact schedule editor", () => {
-    it("is bounded and keeps start and end in one fixed-track row", () => {
+    it("is bounded; start and end are fixed readable boxes that sit side by side and wrap rather than clip", () => {
         expect(client).toMatch(/max-w-2xl rounded-lg[^"]*" data-testid="tours-schedule-editor"/);
-        const row = client.slice(client.indexOf("tours-schedule-window-${i}"), client.indexOf("tours-schedule-window-end-${i}"));
-        expect(row).toContain("grid grid-cols-[8rem_auto_8rem]");
+        const start = client.indexOf('<div className="flex min-w-0 flex-wrap items-center gap-2" data-testid={`tours-schedule-window-times-${i}`}>');
+        expect(start).toBeGreaterThan(-1);
+        const row = client.slice(start, client.indexOf("formatTourWallTimeRange(w.start_time, w.end_time)", start));
+        // Both inputs live in a non-shrinking 8rem box; no fixed grid track that overflows a phone-width panel.
+        expect(row.match(/<span className="block w-32 shrink-0">\s*<input\s+type="time"/g) ?? []).toHaveLength(2);
         expect(row).toContain("tours-schedule-window-start-${i}");
-        expect(row).not.toContain("w-32");
+        expect(row).toContain("tours-schedule-window-end-${i}");
+        expect(client).not.toContain("grid-cols-[8rem_auto_8rem]");
     });
 });
 
