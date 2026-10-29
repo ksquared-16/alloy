@@ -22,6 +22,9 @@ migration or release request. Record only.
 | `gar_90db3b9eac8fbd` | build baseline at `b30914e34` | `certenv-7048d30add`, 550 migrations, loopback-only |
 | `gar_8f1fe4449d764d` | activate preview `alloy.candidate.enrollment` = `b84a37a3d`, isolated, production | ACTIVE, production build certified; no Resend/Twilio credentials in the preview env |
 | `gar_a72db2273e3097` | restore preview QA session | storage state fresh |
+| `gar_18a3bc29aad6ff` | build baseline at `1045a8ce0` (staging advanced again: #1614, analytics metric scope hardening, no migration) | `certenv-3669337690`, 550 migrations `20260328120000`..`20261214090000`, migration manifest `f41ccbcb…` identical to the `b30914e34` baseline; lease held by this lane; credentials rotated, trusted host only; trusted-host action `tha_d1132ea4f1c5d2` |
+| `gar_25d927b11ecb3d` | activate preview = final candidate `964da7ef7` on `certenv-3669337690`, isolated, production | ACTIVE, `production_build_certified` (build `bQgNTs8XsrUaNMahUu-v0`) |
+| `gar_d2058089c86b9c` | restore preview QA session for `964da7ef7` | complete, storage state rewritten |
 
 Guide URL: `https://vacilandos-mac-mini.tail2aa1af.ts.net:4412/dev/tours-qa` — HTTP 200 over the tailnet and loopback;
 browser-navigated at 1440 and 390 px (66 tests, statuses persist across reload, Markdown export downloads).
@@ -36,7 +39,8 @@ browser-navigated at 1440 and 390 px (66 tests, statuses persist across reload, 
 | D5 | Untick SMS | SMS leaves the canvas |
 | D6 | Adding it again | still 1 question (selects the existing one) |
 | D7 | Alloy fields search "opt" | *No fields match your search* (`s4-library-search-opt.png`) |
-| D8 | Studio Preview | **DEFECT** — drawn as a text box (`s5-preview-defect-before-fix.png`); fixed in `927707010`, regression test fails on the pre-fix Preview. Browser re-check on the final preview is pending (below). |
+| D8 | Studio Preview | **DEFECT** — drawn as a text box (`s5-preview-defect-before-fix.png`); fixed in `927707010`, regression test fails on the pre-fix Preview. Re-checked on the final candidate: PASS (below). |
+| D8 (re-check) | Studio Preview on `964da7ef7` / `certenv-3669337690` | **PASS** — the consent question renders as the families' control: authored label and wording, 2 boxes unchecked, clickable, note under the boxes, 0 console errors (`s5-preview-after-fix-964da7ef7.png`). D2–D7 and D9 reproduced on the new baseline. |
 | D9 | Publish | header *Published* with Copy link / Copy iframe / Open runtime / Manage distribution / Republish |
 | E5/E6 | Form-first, embedded on `https://qa-school.example` | 1 consent control, authored id + version, in place between *Date of birth* and *Parent / guardian first name*, unchecked (desktop, 390 px); submit body `marketing_consent {email:true, sms:false}`, no consent value in `values` |
 | E1–E4 | Tour-first, embedded | calendar → 8 AM/PM times → Continue stays in the frame; step 2 *Requested tour … not confirmed*; **exactly 1** consent control = the authored question, no default "Stay in touch" (desktop, 390 px); submit `{email:false, sms:true}` + requested tour; *Your tour request was received … not confirmed yet* |
@@ -55,7 +59,7 @@ browser-navigated at 1440 and 390 px (66 tests, statuses persist across reload, 
 | Broad: tests/forms, communications, tours, qa, publicForms, pos | 5507 passed, 63 failed, 1 skipped — all 63 fail identically (same 33 files, same counts) on base `bce2364ab` (probe worktree) |
 | `vac run typecheck` / `typecheck:tests` | PASSED (after the TS2783 fix) |
 | `npm run prebuild` (6 guards) | exit 0 |
-| `vac run build` | pending — host memory below the build's predicted peak; filed with Vacilando |
+| Production build | `964da7ef7` built and certified by the governed preview activation `gar_25d927b11ecb3d` (`production_build_certified`) |
 
 ## Not done / blockers
 
