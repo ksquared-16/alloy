@@ -35,8 +35,13 @@
     "verdict": "NOT A MEASUREMENT \u2014 identical census_run_at to the pre-reset census; trusted-host dedupe reuses a completed census with the same query hash within one execution run. Its 13/20 is pre-reset state.",
     "replayed_trusted_action": "tha_89eab7be17c753"
   },
-  "phase2_close": "NOT FILED",
-  "zero_residue": "UNPROVEN \u2014 no post-cleanup measurement exists; 13/20 is pre-reset state and does not describe current residue",
+  "phase2_close": {
+    "state": "PREPARED, NOT FILED",
+    "payload": ".vacilando-payloads/r4-qa-run-close-bind-census.json",
+    "semantics": "qa-run-action.mjs already_closed branch: verifyResidueCensus + append supplemental residue_census to the local QA run ledger (history 'census_attached'); no hosted data or access mutation",
+    "authority": "requires a new operator decision: governed-action-request.mjs:4051 auto-closes only when residueCensusRequestId is null; objective authorization refuses census binding (objective_authorization_qa_census_is_operators)"
+  },
+  "zero_residue": "MEASURED 20/20 post-cleanup (gar_bcf58ca61c3f22, census_run_at 2026-10-29T23:03:41.849Z); NOT YET BOUND to the closed QA run record",
   "dependency": "a fresh database.read_census of the registered 7957a51a artifact from a NEW execution run (dedupe is run-scoped; different bytes would break the registered pin the close binding checks), then environment.qa_run_close {qaRunId: qar_bc811ffc7da1, residueCensusRequestId: <that census>}",
   "fresh_census_attempt": {
     "execution_run": "erun2_8ea69acd9f097a2c",
@@ -63,8 +68,11 @@
     "execution_run": "erun2_003abb3b9e959fb1",
     "inputs_unchanged": true,
     "filed_at": "2026-10-29T22:53:35.424Z",
-    "state": "awaiting_operator (Needs You notification 22:54:02.489Z)",
-    "authority": "user-authorized single reissue; not standing approval"
+    "state": "complete",
+    "authority": "user-authorized single reissue; not standing approval",
+    "trusted_host_action_id": "tha_600d2394d06f41",
+    "census_run_at": "2026-10-29T23:03:41.849Z",
+    "result": "20/20 true"
   },
   "defect_handoff_walden": {
     "owner_path": "Walden canonical backlog via its owner; Documents lane has no authorized write path \u2014 handoff only, no store created",
