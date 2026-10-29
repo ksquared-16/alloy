@@ -14,7 +14,7 @@ For the Director. Every route, label and button below was read from the implemen
 | Environment | What it is | Use it for |
 |---|---|---|
 | **QA preview** (the site serving this guide) | This candidate's exact build on the Mac mini, against an **isolated database** (synthetic Northwind tenant). No messaging providers are connected, so nothing reaches a real inbox or phone. | Parts A–G and I. It is the **only** place the new **Marketing consent** question exists until the Director approves a release. |
-| **Staging** — [https://staging.workwithalloy.com](https://staging.workwithalloy.com) | Deployed `bce2364ab` (PR #1613) on the hosted staging database, with real email/SMS providers. | Part H only (actual provider delivery), with your own address and phone. The Marketing consent *question* is not on staging yet; Part H uses the tour calendar's built-in "Stay in touch" boxes, which are. |
+| **Staging** — [https://staging.workwithalloy.com](https://staging.workwithalloy.com) | Deployed `1045a8ce0` (PR #1614, after #1613 and #1615) on the hosted staging database, with real email/SMS providers. | Part H only (actual provider delivery), with your own address and phone. The Marketing consent *question* is not on staging yet; Part H uses the tour calendar's built-in "Stay in touch" boxes, which are. |
 
 Links in this guide that start with `/` open in the same site as this guide (the QA preview).
 
@@ -29,8 +29,10 @@ one-time handoff, or read it from the environment's secret file on the Mac mini 
 **A1. DO** — Open [Organization › Locations](/organization/locations) and select your test location. Read the
 location's identity (name, address, **Time zone**).
 **EXPECT** — The location page opens with its tabs, including **Tours**. If Time zone reads **Not set**, use
-**Edit location › Time zone** and choose the school's zone, then save. (The Northwind seed has no time zone;
-tour scheduling and the operating calendar refuse to work until it is set — that is correct, fail-closed.)
+**Edit location › Time zone** and choose the school's zone, then save. (The Northwind seed has no time zone.
+The operating calendar refuses entries until it is set — *"Set this location's time zone (or the organization's)
+before adding calendar entries"* — which is correct, fail-closed. A tour schedule carries its own time zone, filled
+from the location when there is one.) *Verified in a browser.*
 
 **A2. DO** — Open the location's **Tours** tab → **Booking experience**. Under **School identity** set Display
 name `QA School`, a logo URL you own, and under **Brand colour** type `#1F6FEB`. Watch the **Preview — booking
@@ -98,7 +100,8 @@ need attention.
 ## D. Forms Studio — inquiry form with the Marketing consent question
 
 **D1. DO** — Sidebar **Processing** → **Studio** → **Forms**. Open the location's public inquiry form (or create
-one). Make sure it has parent first name, last name, email and phone, and a child first name and date of birth.
+one). Make sure it has the **Alloy fields** *Parent / guardian first name*, *Parent / guardian last name*, *Email*,
+*Phone*, *Child first name*, *Child last name* and *Date of birth* (search the Alloy fields tab by those names).
 **EXPECT** — The form opens in **Edit** with its sections on the canvas.
 
 **D2. DO** — At the bottom of a section click **+ Add question**. The panel has two tabs, **Alloy fields** and
@@ -214,21 +217,36 @@ nothing has been sent to the family yet."*
 **F3. DO** — Click **Approve — Create enrollment lead**.
 **EXPECT** — The case completes; the person, family, child and lead are created (or resolved); the tour is
 booked (or, if the schedule requires staff approval, *pending approval*); a confirmation is enqueued only for an
-approved booking.
+approved booking. The case's **Requested tour** panel then reads **Tour booked** with *Family message — Confirmation
+sent to the family*. Approve books the time exactly once. *Verified in a browser.*
+**Staff calendar invitation:** the booking sends an internal calendar invitation only when staff recipients are
+configured: **Communications › Templates** → the Tour confirmation template → **Send internal calendar
+notifications** and pick the staff. Without recipients, nothing goes to staff, and the booking records that no
+staff recipients were configured. (This path is read from the implementation; the engineer set the same setting
+through its settings API.) *Engineer-verified on the QA preview: with one staff recipient the invitation was queued;
+with none, nothing was queued.*
 
 **F4. DO** — Submit a new request for a time, then before approving make that time unavailable (deactivate the
 schedule or add a closure), and Approve.
-**EXPECT** — **Lead accepted — tour needs rescheduling** with current openings; no booking at the gone time.
+**EXPECT** — Before Approve the case says *This time is no longer open. Approving still accepts the lead; the
+tour will need rescheduling.* After Approve: **Lead accepted — tour needs rescheduling**, *No confirmation — none is
+due for this booking state*, no booking at the gone time, and current openings when the schedule still offers any.
+Re-activate the schedule afterwards. *Verified in a browser.*
 
 **F5. DO** — Approve the same case again (reload and click Approve if offered).
 **EXPECT** — Nothing is duplicated: one lead, one booking, one confirmation.
 
 ## G. Communications consent and opt-out
 
-Use a new `+tag` address per scenario. Consent is shown on the **case** ("what the family answered, under which
-wording, and what Approve did") and on the **person** (open the person from the case's linked records →
-**Household card → Communication preferences**: state, *Set by … · date · wording …*, eligibility *Can be sent
-now* / *Will not be sent — …*, and history).
+Use a new `+tag` address **and a new family surname and phone** per scenario. Re-using a parent name, child name
+or phone from an earlier scenario makes Alloy propose a match: Approve then reads **Resolve matches to approve**
+until you choose in **Review matches** (that is duplicate prevention working, not a failure).
+
+Consent is shown on the **case** ("what the family answered, under which wording, and what Approve did") and on the
+**person**: use the top **Search** bar → type the family surname → open the **Household** result → click the
+parent's name → **Communication preferences** → expand **Essential and marketing messages**. Each marketing channel
+shows its state, *Set by … · date · wording …*, *Can be sent now* / *Will not be sent — …*, and **History**. (If the
+floating BOS panel covers the card, click **Close** on it.) *Verified in a browser.*
 
 **G1. DO** — Form-first form: submit with **no** box ticked; Approve.
 **EXPECT** — Case: the family answered no on both channels → *Nothing recorded*. Person: *No consent on record*
@@ -272,7 +290,10 @@ delivery.
 
 **G12. DO** — On staging (Part H) use the unsubscribe link in a delivered marketing email. On the QA preview
 there is no email provider, so this is tested in H2.
-**EXPECT** — Recorded under H2.
+**EXPECT** — Recorded under H2. *Engineer-verified on the QA preview with the link minted into a queued marketing
+email: the link opens a confirmation page, **Unsubscribe** gives "You have been unsubscribed", the person's marketing
+email reads opted out (set by unsubscribe link) with texts unchanged, the next marketing email is refused (409), and an
+altered link reads "This unsubscribe link is no longer valid" and changes nothing.*
 
 **G13. DO** — After G5's opt-out, try another marketing email to that person.
 **EXPECT** — Suppressed — nothing deliverable is created.
@@ -287,11 +308,13 @@ message, not a server error. *Verified on the QA preview: opted-out email → 40
 consent; no marketing message is created by submitting or approving.
 
 **G16. DO** — Note only: legacy workflow SMS (`create_message`) cannot bypass suppression.
-**EXPECT** — Certified in #1613 (dispatch refuses legacy rows without an eligibility record). Mark PASS if you
-accept that evidence, NOT RUN otherwise.
+**EXPECT** — Certified in #1613 (dispatch refuses legacy rows without an eligibility record) and re-run on this
+candidate against a real database (`workflowSmsGovernance.live`). Mark PASS if you accept that evidence, NOT RUN
+otherwise.
 
 **G17. DO** — Note only: scheduled messages are re-checked at dispatch.
-**EXPECT** — Certified in #1613 (a send scheduled while opted in is refused after opt-out). Mark as for G16.
+**EXPECT** — Certified in #1613 (a send scheduled while opted in is refused after opt-out) and re-run on this
+candidate (unit suites). Mark as for G16.
 
 ## H. Actual provider delivery (staging, your own address and phone only)
 
@@ -354,6 +377,15 @@ discarded when the environment is retired.)
 ---
 
 ## Known limitations
+
+- A **completed** Processing case re-reads identity against today's records: after approval it can show *Matched
+  by exact email … Link existing* and *Lead stage — Will be created after approval* although the lead exists. Read the
+  case's **Completed** status and its Requested tour / Marketing consent panels, not the identity panel, after
+  approval. Owner: Processing.
+- The floating BOS panel can cover buttons on the location and household pages at a 1440 px window; close it or
+  widen the window. Owner: Workspace shell.
+- No approved QA email/SMS recipient list exists for staging, so the engineer sent nothing through a real
+  provider; Part H is the Director's, with recipients the Director owns. Owner: Communications.
 
 - The Marketing consent question is on this candidate only; staging gets it after a Director-approved release.
 - The QA preview has no email/SMS providers: Parts G10–G13 prove refusal and suppression there; delivery and
