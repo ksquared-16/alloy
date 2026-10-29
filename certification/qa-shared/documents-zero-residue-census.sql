@@ -7,6 +7,11 @@
 --         sessions of the seven QA identities;
 --   ZERO (B2): alloy_qa_fixture / aa000000- vendors in QA orgs; qa_* custom role grants;
 --         non-actor memberships in either QA org; provider-sent communication_messages.
+--   ZERO (Documents R3/R4, D8 Forms): run-keyed (qa_<12 hex>_) form definitions, their versions, public links,
+--         submissions and packet definitions / sessions in QA orgs — archived run forms and the child-only
+--         submissions a deleted child leaves are residue until qa_documents_forms_residue_reset removes them —
+--         and any ACTIVE health fact on a QA child that no longer exists.
+--   RETAINED BY DESIGN (D8): ended health facts on deleted QA children (append-only; ending is the only disposal).
 --   RETAINED BY DESIGN: access audit history (mutation_events) and the D1a document audit (workflow_events)
 --   — reported as data, never as residue. QA Shared is shared with bp_v2: no check counts its artifacts.
 -- Persistent orgs/users/actors are retained.
@@ -209,6 +214,92 @@ from (
                   and (r.key like 'qa\_%' or not public.document_subject_resolves(w.org_id, w.subject_type, w.subject_id))
               ), 'false'),
            '17'
+    union all
+    -- D8 Forms: what a Documents run creates is keyed qa_<run hex>_ (the drivers' KEY_PREFIX). QA Shared is shared
+    -- with bp_v2, so nothing broader than that run-key shape is counted.
+    select 'doc_zr_forms_definitions', 'check',
+           'form_definitions ~ qa_run_keys ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.form_definitions f
+                where f.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and f.key ~ '^qa_[0-9a-f]{12}_'
+              ), 'false'),
+           '18'
+    union all
+    select 'doc_zr_forms_definition_versions', 'check',
+           'form_definition_versions ~ qa_run_keys ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.form_definition_versions v
+                join public.form_definitions f on f.id = v.form_definition_id
+                where v.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and f.key ~ '^qa_[0-9a-f]{12}_'
+              ), 'false'),
+           '19'
+    union all
+    -- Includes the child-only submissions left subjectless when their child was deleted.
+    select 'doc_zr_forms_submissions', 'check',
+           'form_submissions ~ qa_run_forms ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.form_submissions s
+                join public.form_definitions f on f.id = s.form_definition_id
+                where s.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and f.key ~ '^qa_[0-9a-f]{12}_'
+              ), 'false'),
+           '20'
+    union all
+    select 'doc_zr_forms_links_and_packets', 'check',
+           'form_public_links_form_packet_definitions_sessions ~ qa_run_keys ~ zero ~ '
+           || coalesce((((select count(*)
+                           from public.form_public_links l
+                           join public.form_definitions f on f.id = l.form_definition_id
+                          where l.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                            and f.key ~ '^qa_[0-9a-f]{12}_')
+                      + (select count(*)
+                           from public.form_packet_definitions pd
+                          where pd.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                            and coalesce(pd.key, '') ~ '^qa_[0-9a-f]{12}_')
+                      + (select count(*)
+                           from public.form_packet_sessions ps
+                           join public.form_packet_definitions pd on pd.id = ps.packet_definition_id
+                          where ps.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                            and coalesce(pd.key, '') ~ '^qa_[0-9a-f]{12}_')) = 0)::text, 'false'),
+           '21'
+    union all
+    -- A health fact is never deleted (enforce_person_health_fact_immutability); ending it is the disposal, so an
+    -- ACTIVE fact on a child that no longer exists is the defect, and ended ones are reported as data below.
+    select 'doc_zr_health_facts_active_on_missing_subject', 'check',
+           'person_health_facts ~ active_on_missing_qa_child ~ zero ~ '
+           || coalesce((
+                select (count(*) = 0)::text
+                from public.person_health_facts h
+                where h.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                  and h.status = 'active'
+                  and h.subject_entity_type = 'customer_member'
+                  and not exists (select 1 from public.customer_members m where m.id = h.subject_entity_id)
+              ), 'false'),
+           '22'
+    union all
+    select 'doc_zr_retained_health_facts', 'data',
+           json_build_object(
+               'artifact', 'person_health_facts on deleted QA children (append-only)',
+               'status', 'retained_by_design',
+               'not_residue', true,
+               'by_status', coalesce((
+                 select json_object_agg(t.status, t.n)
+                 from (
+                   select h.status, count(*)::int as n
+                   from public.person_health_facts h
+                   where h.org_id in ('4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid)
+                     and h.subject_entity_type = 'customer_member'
+                     and not exists (select 1 from public.customer_members m where m.id = h.subject_entity_id)
+                   group by h.status
+                 ) t
+               ), '{}'::json)
+           )::text,
+           '23'
     union all
     select 'doc_zr_retained_d1a_audit', 'data',
            json_build_object(
