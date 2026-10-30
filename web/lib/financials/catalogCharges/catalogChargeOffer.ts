@@ -11,9 +11,11 @@
  *
  * ── WHAT THIS COMMAND MAY INCUR (operator policy, 2026-10-29) ────────────────────────────────
  *
- * ONE-TIME FEES. Everything else in the catalog stays VISIBLE and says where it is billed instead —
- * recurring and metered items by periodic billing / attendance, add-ons through the enrollment,
- * deposits as held money. This command does not invent incurrence semantics for any of them.
+ * ONE-TIME FEES. Everything else in the catalog stays VISIBLE and says what it is and why it is not
+ * charged here. The reasons state only what is true: measured 2026-10-30, NO flow charges a
+ * recurring, usage-priced, add-on, package or deposit catalog item — periodic billing values tuition
+ * only (`commercialValuation`), and enrollment fees reference charge templates. So no reason names a
+ * flow that would bill the item; this command does not invent incurrence semantics for any of them.
  *
  * ── THE ACCOUNT IS THE CATALOG'S, OR THERE IS NO CHARGE ──────────────────────────────────────
  *
@@ -154,33 +156,33 @@ export function resolveCatalogChargeAccount(
     };
 }
 
-/** Why a catalog item is billed elsewhere, or null when it is a one-time fee. */
+/** Why a catalog item is not chargeable by manual Add Charge, or null when it is a one-time fee. */
 function unsupportedReason(product: CommercialProductDef): { code: string; reason: string } | null {
     const cadence = (product.cadenceKey ?? "").trim();
     if (product.commercialType === "deposit") {
         return {
             code: "catalog_deposit_not_manual",
-            reason: "Deposit — held money, collected through enrollment rather than added as a charge.",
+            reason: "Deposit — held money, not a charge. Add charge adds one-time fees only, and deposits are not collected from the Catalog yet.",
         };
     }
     if (product.commercialType === "addon") {
         return {
             code: "catalog_addon_not_manual",
             reason: product.behavior.package != null
-                ? "Add-on package — sold and used through the child's enrollment, not added as a charge."
-                : "Add-on — billed through the child's enrollment, not added as a charge.",
+                ? "Add-on package — Add charge adds one-time fees only, and packages are not sold from the Catalog yet."
+                : "Add-on — Add charge adds one-time fees only, and add-ons are not charged from the Catalog yet.",
         };
     }
     if (cadence && RECURRING_CADENCES.has(cadence)) {
         return {
             code: "catalog_recurring_not_manual",
-            reason: `${frequencyLabel(cadence)} — billed by periodic billing, not added as a one-time charge.`,
+            reason: `${frequencyLabel(cadence)} — a recurring Catalog item. Add charge adds one-time fees only, and recurring Catalog items are not billed by any flow yet. To charge it here, set its frequency to One-time.`,
         };
     }
     if (cadence) {
         return {
             code: "catalog_metered_not_manual",
-            reason: `${frequencyLabel(cadence)} — billed from attendance and usage, not added as a one-time charge.`,
+            reason: `${frequencyLabel(cadence)} — a usage-priced Catalog item. Add charge adds one-time fees only, and usage-priced Catalog items are not billed by any flow yet.`,
         };
     }
     return null;
@@ -224,7 +226,7 @@ export function evaluateCatalogCharge(
             status: "unsupported",
             product,
             code: "catalog_program_scoped",
-            reason: "Offered for one program only — billed through that program's enrollment, not added as a charge.",
+            reason: "Offered for one program only — a manual charge carries no program to check that against, so it cannot be added here.",
         };
     }
     if (!(product.amountCents > 0)) {

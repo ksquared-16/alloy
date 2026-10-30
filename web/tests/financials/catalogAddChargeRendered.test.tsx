@@ -38,7 +38,7 @@ function option(id: string, over: Partial<CatalogChargeOption> = {}): CatalogCha
 }
 const OPTIONS: CatalogChargeOption[] = [
     option("p-fee", { label: "Alpha Fee", amountCents: 2500 }),
-    option("p-monthly", { label: "Monthly Fee", availability: "unsupported", accountLabel: null, unavailableReason: "Monthly — billed by periodic billing, not added as a one-time charge." }),
+    option("p-monthly", { label: "Monthly Fee", availability: "unsupported", accountLabel: null, unavailableReason: "Monthly — a recurring Catalog item. Add charge adds one-time fees only, and recurring Catalog items are not billed by any flow yet. To charge it here, set its frequency to One-time." }),
     option("p-unmapped", { label: "Unmapped Fee", availability: "blocked", accountLabel: null, unavailableReason: "Revenue category “Unmapped” is not mapped to a GL account. Map it in Organization › Financials › GL Codes." }),
 ];
 
@@ -85,7 +85,7 @@ describe("Add › Charge on the account card", () => {
         expect(text).toContain("1 catalog fees");
         expect(text).toContain("posts to 4010 · Activity Revenue");
         const list = host.querySelector('[data-testid="addcharge-unavailable"]')!;
-        expect(list.textContent).toContain("Monthly Fee · $25.00 — Monthly — billed by periodic billing");
+        expect(list.textContent).toContain("Monthly Fee · $25.00 — Monthly — a recurring Catalog item");
         expect(list.textContent).toContain("Unmapped Fee · $25.00 — Revenue category “Unmapped” is not mapped to a GL account");
 
         const trigger = host.querySelector<HTMLButtonElement>('[data-testid="addcharge-template"] button')!;

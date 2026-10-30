@@ -160,7 +160,7 @@ describe("Bulk charge offers the catalog through the card's own rule", () => {
         expect(by.get("p-reg-a")?.availability).toBe("offerable");
         expect(by.get("p-site")?.availability).toBe("offerable");
         expect(by.get("p-monthly")).toMatchObject({ availability: "unsupported" });
-        expect(by.get("p-monthly")?.unavailableReason).toMatch(/periodic billing/);
+        expect(by.get("p-monthly")?.unavailableReason).toMatch(/^Monthly — a recurring Catalog item/);
         expect(by.get("p-deposit")).toMatchObject({ availability: "unsupported" });
         expect(by.get("p-unmapped")).toMatchObject({ availability: "blocked", accountLabel: null });
         expect(by.get("p-unmapped")?.unavailableReason).toMatch(/not mapped to a GL account/);

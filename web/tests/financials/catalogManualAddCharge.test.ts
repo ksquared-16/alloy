@@ -153,18 +153,27 @@ describe("the one rule — what manual Add Charge may incur from the catalog", (
     });
 
     it.each([
-        ["p-annual", "catalog_recurring_not_manual", /periodic billing/],
-        ["p-session", "catalog_metered_not_manual", /attendance and usage/],
-        ["p-addon", "catalog_addon_not_manual", /enrollment/],
+        ["p-annual", "catalog_recurring_not_manual", /Annual — a recurring Catalog item.*set its frequency to One-time/],
+        ["p-session", "catalog_metered_not_manual", /usage-priced Catalog item/],
+        ["p-addon", "catalog_addon_not_manual", /Add-on — Add charge adds one-time fees only/],
         ["p-package", "catalog_addon_not_manual", /package/i],
         ["p-deposit", "catalog_deposit_not_manual", /held money/],
         ["p-program", "catalog_program_scoped", /one program/],
-    ])("%s is VISIBLE but unsupported, naming the flow that bills it (%s)", (id, code, reason) => {
+    ])("%s is VISIBLE but unsupported, saying truthfully why (%s)", (id, code, reason) => {
         const e = evalAt(id);
         expect(e.status).toBe("unsupported");
         if (e.status === "offerable") return;
         expect(e.code).toBe(code);
         expect(e.reason).toMatch(reason);
+    });
+
+    it("no unsupported reason names a billing flow that does not exist (measured 2026-10-30: none bills these)", () => {
+        for (const id of ["p-annual", "p-session", "p-addon", "p-package", "p-deposit", "p-program"]) {
+            const e = evalAt(id);
+            if (e.status === "offerable") throw new Error(id);
+            expect(e.reason, id).not.toMatch(/billed by periodic billing|through the child's enrollment|collected through enrollment|from attendance and usage/);
+            expect(e.reason, id).not.toMatch(/^\s*$/);
+        }
     });
 
     it.each([
@@ -283,7 +292,7 @@ describe("the command — preview and write agree with each other and with the r
         ["p-unmapped", /not mapped to a GL account/],
         ["p-orphan", /No posting mapping uses GL account 4020/],
         ["p-deposit", /held money/],
-        ["p-annual", /periodic billing/],
+        ["p-annual", /recurring Catalog item/],
         ["p-future", /not in effect/],
         ["p-other-site", /different location/],
         ["p-zero", /nothing to charge/],
