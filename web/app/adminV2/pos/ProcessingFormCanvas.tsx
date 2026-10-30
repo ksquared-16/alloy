@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveMarketingConsentLanguage } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import clsx from "clsx";
 import { useMemo } from "react";
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
@@ -124,6 +125,7 @@ const TYPE_LABELS: Record<string, string> = {
     multiselect: "Multi-select",
     signature: "Signature",
     file_ref: "File upload",
+    marketing_consent: "Marketing consent",
 };
 
 
@@ -408,6 +410,18 @@ function QuestionBlock({
                 <div className="mt-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.08] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/65">
                     <InlineTokenText value={field.content || "Authorization language…"} />
                 </div>
+            ) : field.type === "marketing_consent" ? (
+                // The boxes families see, unchecked — the exact wording, per offered channel.
+                <ul className="mt-1.5 space-y-1" data-canvas-marketing-consent={field.id}>
+                    {(["email", "sms"] as const)
+                        .filter((c) => field.consent.channels[c])
+                        .map((c) => (
+                            <li key={c} className="flex items-start gap-1.5 text-[10px] leading-snug text-alloy-midnight/65">
+                                <span aria-hidden className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-alloy-stone/40 bg-white" />
+                                <span>{resolveMarketingConsentLanguage(field)[c]}</span>
+                            </li>
+                        ))}
+                </ul>
             ) : (
                 <div
                     className={clsx(

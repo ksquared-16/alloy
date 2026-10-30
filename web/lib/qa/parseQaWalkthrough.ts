@@ -4,8 +4,8 @@
  * ## Why a closed parser and not a markdown library
  *
  * This renders exactly ONE document, whose constructs are known and finite: headings, tables,
- * blockquotes, ordered and unordered lists, rules, inline code and emphasis. There are no links in
- * it. A general markdown pipeline would be a dependency and an HTML-injection surface for a page
+ * blockquotes, ordered and unordered lists, rules, inline code, emphasis and plain links (an app path
+ * or an http(s) URL only — anything else stays text). A general markdown pipeline would be a dependency and an HTML-injection surface for a page
  * whose only job is to let an operator read a QA script beside the product.
  *
  * The document stays the single source of truth. This only decides how its lines are grouped, so a
@@ -19,7 +19,9 @@ export type QaInline =
     | { kind: "text"; text: string }
     | { kind: "strong"; text: string }
     | { kind: "em"; text: string }
-    | { kind: "code"; text: string };
+    | { kind: "code"; text: string }
+    /** `[text](href)` — only an app path (`/…`) or an http(s) URL; anything else stays plain text. */
+    | { kind: "link"; text: string; href: string };
 
 export type QaBlock =
     /** `#`/`##`/`###`. `slug` is the anchor id, e.g. "part-d". */
@@ -47,10 +49,18 @@ export function slugForHeading(text: string): string {
         .slice(0, 48);
 }
 
-/** Emphasis and code spans. Deliberately non-nesting — the document never nests them. */
+/** A link target the reader may render: an app path or an http(s) URL. Nothing else is a link. */
+export function safeQaHref(href: string): string | null {
+    const h = href.trim();
+    if (/^\/(?!\/)[^\s]*$/.test(h)) return h;
+    if (/^https?:\/\/[^\s]+$/i.test(h)) return h;
+    return null;
+}
+
+/** Emphasis, code spans and links. Deliberately non-nesting — the documents never nest them. */
 export function parseInline(raw: string): QaInline[] {
     const out: QaInline[] = [];
-    const re = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*/g;
+    const re = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
     let last = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(raw)) !== null) {
@@ -58,6 +68,10 @@ export function parseInline(raw: string): QaInline[] {
         if (m[1] !== undefined) out.push({ kind: "strong", text: m[1] });
         else if (m[2] !== undefined) out.push({ kind: "code", text: m[2] });
         else if (m[3] !== undefined) out.push({ kind: "em", text: m[3] });
+        else if (m[4] !== undefined) {
+            const href = safeQaHref(m[5]!);
+            out.push(href ? { kind: "link", text: m[4], href } : { kind: "text", text: m[4] });
+        }
         last = re.lastIndex;
     }
     if (last < raw.length) out.push({ kind: "text", text: raw.slice(last) });
@@ -75,6 +89,12 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
     const lines = markdown.replace(/\r\n/g, "\n").split("\n");
     const blocks: QaBlock[] = [];
     let i = 0;
+
+    // Leading YAML frontmatter is document metadata for docs-lint, not part of the checklist.
+    if (lines[0]?.trim() === "---") {
+        const end = lines.findIndex((l, n) => n > 0 && l.trim() === "---");
+        if (end > 0) i = end + 1;
+    }
 
     const flushParagraph = (buf: string[]) => {
         if (!buf.length) return;
@@ -152,9 +172,9 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
         }
 
         // A numbered step: "**A1. DO** — ..." or "**E3. EXPECT** — ...".
-        // "A1" through "G9", Part 0's "0.1", and a gate-scoped "H1a" for the human QA overlay,
-        // whose steps belong to a GATE rather than to a lettered part.
-        const step = trimmed.match(/^\*\*((?:H\d+[a-z]|[A-G]\d+|0\.\d+))\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
+        // "A1" through "Z99" with an optional letter ("H1a", the gate-scoped human QA overlay, and the
+        // Tours guide's parts A–I), and Part 0's "0.1".
+        const step = trimmed.match(/^\*\*((?:[A-Z]\d+[a-z]?|0\.\d+))\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
         if (step) {
             flushParagraph(para);
             const body: string[] = [step[3]!];
@@ -163,7 +183,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*(?:H\d+[a-z]|[A-G]\d+|0\.\d+)\.\s*(?:DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:[A-Z]\d+[a-z]?|0\.\d+)\.\s*(?:DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }
@@ -185,7 +205,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*(?:H\d+[a-z]|[A-G]\d+|0\.\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:[A-Z]\d+[a-z]?|0\.\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }

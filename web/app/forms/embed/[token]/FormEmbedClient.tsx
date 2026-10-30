@@ -30,6 +30,7 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { outstandingRequiredCollections } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
+import { MarketingConsentControl } from "@/components/forms/engine/MarketingConsentControl";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
 import { subSchemaForFieldsGrouped } from "@/lib/forms/guidedIntakePartition";
@@ -60,9 +61,11 @@ import {
 import { participantSignaturePrompt } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import {
-    INTAKE_MARKETING_CONSENT_LANGUAGE,
+    DEFAULT_MARKETING_CONSENT_LANGUAGE,
+    findMarketingConsentField,
     type IntakeMarketingConsentChoice,
     withoutCompetingMarketingConsentFields,
+    withoutMarketingConsentFields,
 } from "@/lib/communications/preferences/intakeMarketingConsentRecord";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -332,45 +335,6 @@ function RequestedTourSummary({ tour, slotGone }: { tour: PublicFormTourRequest;
     );
 }
 
-/**
- * S7 × C1 — optional marketing consent. One unchecked box per channel, each with its own wording
- * (Communications-owned, versioned). Nothing here is required, and nothing here is sent until submit.
- */
-function MarketingConsentControl({
-    value,
-    onChange,
-    disabled,
-}: {
-    value: IntakeMarketingConsentChoice;
-    onChange: (next: IntakeMarketingConsentChoice) => void;
-    disabled: boolean;
-}) {
-    const L = INTAKE_MARKETING_CONSENT_LANGUAGE;
-    return (
-        <fieldset
-            className="mt-6 rounded-xl border border-alloy-midnight/10 px-4 py-3"
-            data-testid="public-marketing-consent"
-            data-consent-language-version={L.version}
-        >
-            <legend className="px-1 text-[13px] font-medium text-alloy-midnight/60">{L.heading}</legend>
-            {(["email", "sms"] as const).map((channel) => (
-                <label key={channel} className="flex items-start gap-3 py-1.5 text-[14px] text-alloy-midnight/80">
-                    <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-participant-accent"
-                        checked={value[channel]}
-                        disabled={disabled}
-                        onChange={(e) => onChange({ ...value, [channel]: e.target.checked })}
-                        data-testid={`public-marketing-consent-${channel}`}
-                    />
-                    <span>{L[channel]}</span>
-                </label>
-            ))}
-            <p className="pt-1 text-[13px] text-alloy-midnight/60">{L.note}</p>
-        </fieldset>
-    );
-}
-
 export function FormEmbedClient({
     token,
     showPreviewBanner = false,
@@ -405,6 +369,12 @@ export function FormEmbedClient({
     /** S7 × C1 — offered by the link (server-derived); both boxes start unchecked. */
     const [marketingConsentOffered, setMarketingConsentOffered] = useState(false);
     const [marketingConsent, setMarketingConsent] = useState<IntakeMarketingConsentChoice>({ email: false, sms: false });
+    // The form's own Marketing consent question, if the published schema places one (never in `values`).
+    const formConsentField = useMemo(() => (marketingConsentOffered ? findMarketingConsentField(schema) : null), [marketingConsentOffered, schema]);
+    const consentRendererProp = useMemo(
+        () => (formConsentField ? { value: marketingConsent, onChange: setMarketingConsent, disabled: submitting } : undefined),
+        [formConsentField, marketingConsent, submitting],
+    );
     useEffect(() => {
         setTourSlotGone(false);
     }, [tourRequest?.startAt, tourRequest?.endAt]);
@@ -629,7 +599,14 @@ export function FormEmbedClient({
             }
             const authored = withoutAuthoringNotes(parsedSchema);
             // Where the link offers the marketing-consent control, it is the only consent control on the page.
-            setSchema(json.data.marketing_consent_offered === true ? withoutCompetingMarketingConsentFields(authored) : authored);
+            // Offered: the one consent answer is Communications' (the form's own question, or the link's
+            // control) — competing person opt-in fields go. Not offered: a consent question no case
+            // could hold is not shown at all.
+            setSchema(
+                json.data.marketing_consent_offered === true
+                    ? withoutCompetingMarketingConsentFields(authored)
+                    : withoutMarketingConsentFields(authored),
+            );
             setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
             setSourceMapping(json.data.pdf_mapping_json ?? null);
             setAttachedFilenames({});
@@ -1703,6 +1680,7 @@ export function FormEmbedClient({
                                         <IntakeHeading title={prompt.title} subtitle={prompt.detail} />
                                         <div className="[&_header]:hidden">
                                             <FormEngineRenderer
+                                                marketingConsent={consentRendererProp}
                                                 schema={reviewControlSubSchema(schema, [peopleFocus], participantLabels)}
                                                 payload={payload}
                                                 onChange={(nextPayload) => {
@@ -1751,6 +1729,7 @@ export function FormEmbedClient({
                                 renderInput={(control) => (
                                     <div className="[&_header]:hidden">
                                         <FormEngineRenderer
+                                            marketingConsent={consentRendererProp}
                                             schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                             payload={payload}
                                             onChange={(next) => {
@@ -1801,6 +1780,7 @@ export function FormEmbedClient({
                                 /* No authored placement on this version — the Forms control stands. */
                                 <div className="[&_header]:hidden">
                                     <FormEngineRenderer
+                                        marketingConsent={consentRendererProp}
                                         schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
@@ -1836,6 +1816,7 @@ export function FormEmbedClient({
                                         Please confirm you&rsquo;ve reviewed the information above.
                                     </p>
                                     <FormEngineRenderer
+                                        marketingConsent={consentRendererProp}
                                         schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
@@ -1984,6 +1965,7 @@ export function FormEmbedClient({
                             // engine renders it, so type, options and validation stay authored.
                             <div className="[&_header]:hidden">
                                 <FormEngineRenderer
+                                    marketingConsent={consentRendererProp}
                                     schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                     payload={payload}
                                     onChange={(next) => {
@@ -2011,6 +1993,7 @@ export function FormEmbedClient({
                                 Please confirm you&rsquo;ve reviewed the information above.
                             </p>
                             <FormEngineRenderer
+                                marketingConsent={consentRendererProp}
                                 schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
@@ -2036,6 +2019,7 @@ export function FormEmbedClient({
                                 {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
                             <FormEngineRenderer
+                                marketingConsent={consentRendererProp}
                                 schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
@@ -2072,6 +2056,7 @@ export function FormEmbedClient({
                         <IntakeHeading title={famStep.title} subtitle={famStep.subtitle} />
                         {famStep.kind === "child" && famStep.child ? (
                             <FormEngineRenderer
+                                marketingConsent={consentRendererProp}
                                 schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
                                 payload={{ values: childSlices[famStep.child.customer_member_id] ?? {}, groups: {}, signatures: {} } as FormPayload}
                                 onChange={(next) => onFamilyChildChange(famStep.child!.customer_member_id, next)}
@@ -2083,6 +2068,7 @@ export function FormEmbedClient({
                             />
                         ) : (
                             <FormEngineRenderer
+                                marketingConsent={consentRendererProp}
                                 schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
                                 payload={payload}
                                 onChange={onFamilyBaseChange}
@@ -2126,6 +2112,7 @@ export function FormEmbedClient({
                         ) : null}
                         <IntakeHeading title={guidedStep.title} subtitle={guidedStep.subtitle} />
                         <FormEngineRenderer
+                            marketingConsent={consentRendererProp}
                             schema={subSchemaForFieldsGrouped(schema, guidedStep.fieldIds, guidedStep.title)}
                             payload={payload}
                             onChange={onGuidedChange}
@@ -2157,6 +2144,7 @@ export function FormEmbedClient({
                         an organization's page, the form's own title is the host page's job. */}
                     <div className={chrome === "none" ? "[&_header]:hidden" : undefined}>
                     <FormEngineRenderer
+                        marketingConsent={consentRendererProp}
                         schema={schema}
                         payload={payload}
                         onChange={(next) => {
@@ -2172,8 +2160,14 @@ export function FormEmbedClient({
                         validationErrors={validationErrors ?? undefined}
                     />
                     </div>
-                    {marketingConsentOffered ? (
-                        <MarketingConsentControl value={marketingConsent} onChange={setMarketingConsent} disabled={submitting} />
+                    {/* The link's control — unless the form places its own Marketing consent question, which is then the one. */}
+                    {marketingConsentOffered && !formConsentField ? (
+                        <MarketingConsentControl
+                            language={DEFAULT_MARKETING_CONSENT_LANGUAGE}
+                            value={marketingConsent}
+                            onChange={setMarketingConsent}
+                            disabled={submitting}
+                        />
                     ) : null}
                     <IntakeFooter
                         errorLines={errorLines}

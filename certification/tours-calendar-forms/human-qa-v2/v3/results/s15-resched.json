@@ -1,0 +1,176 @@
+{
+ "iframeShape": "<iframe src=\"https://vacilandos-mac-mini.tail2aa1af.ts.net:4412/tours/<token>\" title=\"Schedule a Tour — Northwind — Riverside Campus\" style=\"width:100%;max-width:760px;min-height:900px;border:0;\" loading=\"lazy\"></iframe>",
+ "T2b_approve": {
+  "panelBefore": "REQUESTED TOUR | Tour requested — pending acceptance (not booked) | Requested | Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST | Location | Northwind — Riverside Campus | This time is no longer open. Approving still accepts the lead; the tour will need rescheduling. Nothing is booked and nothing has been sent to the family yet. | MARKETING CONSENT | Email news: no",
+  "caseIdSeen": "7896e6e4-7cca-4861-bc00-da4a73c2ef02",
+  "viewBefore": {
+   "state": "pending_acceptance",
+   "acceptance": "pending",
+   "headline": "Tour requested — pending acceptance (not booked)",
+   "reason": null,
+   "reasonLabel": null,
+   "requested": {
+    "startAt": "2026-11-03T21:00:00.000Z",
+    "endAt": "2026-11-03T21:30:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:42:23.941Z",
+   "stillAvailable": false,
+   "opportunityId": null,
+   "booking": null,
+   "comms": null,
+   "alternatives": [],
+   "error": null
+  },
+  "approveLabel": "Approve — Create enrollment lead",
+  "approve": {
+   "status": 200,
+   "caseId": "7896e6e4-7cca-4861-bc00-da4a73c2ef02",
+   "opp": "a5b4250f-decf-4aa4-9d2d-152f5a4213c3",
+   "person": "986b1200-fd2a-4cc1-b914-77322bd80571",
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "986b1200-fd2a-4cc1-b914-77322bd80571",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "skipped_unset"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": false
+   },
+   "tourRequest": {
+    "kind": "needs_rescheduling",
+    "reason": "slot_unavailable",
+    "replay": false,
+    "existingBookingId": null
+   }
+  },
+  "panelAfter": "REQUESTED TOUR | Lead accepted — tour needs rescheduling | Requested | Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST | Location | Northwind — Riverside Campus | Family message | No confirmation — none is due for this booking state | no_booking | The requested time is no longer available (it filled up or the schedule changed). The original request is kept on this ",
+  "viewAfter": {
+   "state": "needs_rescheduling",
+   "acceptance": "accepted",
+   "headline": "Lead accepted — tour needs rescheduling",
+   "reason": "slot_unavailable",
+   "reasonLabel": "The requested time is no longer available (it filled up or the schedule changed).",
+   "requested": {
+    "startAt": "2026-11-03T21:00:00.000Z",
+    "endAt": "2026-11-03T21:30:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:42:23.941Z",
+   "stillAvailable": null,
+   "opportunityId": "a5b4250f-decf-4aa4-9d2d-152f5a4213c3",
+   "booking": null,
+   "comms": {
+    "detail": "no_booking",
+    "status": "not_applicable"
+   },
+   "alternatives": [],
+   "error": null
+  },
+  "replay": {
+   "status": 200,
+   "alreadyDone": true,
+   "tourRequest": {
+    "kind": "needs_rescheduling",
+    "reason": "slot_unavailable",
+    "replay": true,
+    "existingBookingId": null
+   },
+   "marketingConsent": {
+    "kind": "committed",
+    "personId": "986b1200-fd2a-4cc1-b914-77322bd80571",
+    "outcomes": [
+     {
+      "channel": "email",
+      "outcome": "skipped_unset"
+     },
+     {
+      "channel": "sms",
+      "outcome": "skipped_unset"
+     }
+    ],
+    "replayed": true
+   }
+  },
+  "replay2": {
+   "status": 200,
+   "alreadyDone": true,
+   "tourRequest": {
+    "kind": "needs_rescheduling",
+    "reason": "slot_unavailable",
+    "replay": true,
+    "existingBookingId": null
+   }
+  },
+  "bookings": {
+   "bookings": [],
+   "active_bookings": [],
+   "calendar_attention": {},
+   "requested_tour_attention": [
+    {
+     "caseId": "7896e6e4-7cca-4861-bc00-da4a73c2ef02",
+     "state": "needs_rescheduling",
+     "reason": "slot_unavailable",
+     "message": "The requested time is no longer available (it filled up or the schedule changed).",
+     "requestedLabel": "Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST"
+    }
+   ]
+  },
+  "prefs": [
+   [
+    "email_marketing",
+    "unset",
+    null
+   ],
+   [
+    "sms_marketing",
+    "unset",
+    null
+   ]
+  ],
+  "viewAfterReplay": {
+   "state": "needs_rescheduling",
+   "acceptance": "accepted",
+   "headline": "Lead accepted — tour needs rescheduling",
+   "reason": "slot_unavailable",
+   "reasonLabel": "The requested time is no longer available (it filled up or the schedule changed).",
+   "requested": {
+    "startAt": "2026-11-03T21:00:00.000Z",
+    "endAt": "2026-11-03T21:30:00.000Z",
+    "timezone": "America/Los_Angeles",
+    "label": "Tue, Nov 3, 2026 · 1:00 PM – 1:30 PM PST"
+   },
+   "location": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "label": "Northwind — Riverside Campus"
+   },
+   "requestedAt": "2026-10-29T00:42:23.941Z",
+   "stillAvailable": null,
+   "opportunityId": "a5b4250f-decf-4aa4-9d2d-152f5a4213c3",
+   "booking": null,
+   "comms": {
+    "detail": "no_booking",
+    "status": "not_applicable"
+   },
+   "alternatives": [],
+   "error": null
+  }
+ },
+ "reactivate": "QA Weekdaysauto-confirm | Mon | Tue | Wed | Thu | Fri | Sat | Sun | 9:00 – 11:00 AM · 1:00 – 3:00 PM PDT | 30 minute tours · 0 minute buffer · up to 2 families per time | Edit | Duplicate | Delete | Add a schedule for No"
+}
