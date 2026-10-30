@@ -10,6 +10,8 @@ import {
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { filterLinksInActorScope, formsReadScope } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope, linkMetadataDestination } from "@/lib/forms/formsDestinationScope";
 import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
 import { publicFormLinkLocationId } from "@/lib/branding/loadPublicBrand";
 import {
@@ -58,6 +60,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: existing, error: exErr } = await dbGetPublicLinkForForm(supabase, ctx.orgId, formId, linkId);
     if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
     if (!existing) return jsonError("Not found", 404);
+    // R2: a link naming a subject outside the caller's department/site scope is not found here, as it is absent from the
+    // caller's list; a link naming no subject stays editable.
+    const scope = await formsReadScope();
+    if ((await filterLinksInActorScope(supabase, ctx.orgId, scope, [existing])).length === 0) return jsonError("Not found", 404);
 
     const patch: {
         is_active?: boolean;
@@ -105,6 +111,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 ? { ...(existing.metadata as Record<string, unknown>) }
                 : {};
         const meta = { ...existingMeta, ...incoming };
+        // R2: metadata may not re-point the link at a subject (prefill source, child, recipient) outside the caller's scope.
+        if (!(await formsDestinationInActorScope(supabase, ctx.orgId, scope, linkMetadataDestination(meta)))) return jsonError("Not found", 404);
         const label =
             typeof body.label === "string"
                 ? body.label.trim()

@@ -1,0 +1,310 @@
+{
+  "run": "qar_bc811ffc7da1",
+  "phase": "certify",
+  "contract_sha256": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e",
+  "summary": {
+    "passed": 35,
+    "total": 35
+  },
+  "sections": {
+    "R4-scoped_forms": {
+      "passed": 19,
+      "total": 19
+    },
+    "R4-health_viewer": {
+      "passed": 9,
+      "total": 9
+    },
+    "R4-doc_writer": {
+      "passed": 7,
+      "total": 7
+    }
+  },
+  "results": [
+    {
+      "section": "R4-scoped_forms",
+      "case": "create a submission on the in-scope (QA D1) opportunity",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "read its own in-scope submission",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "read the admin's in-scope submission",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "medical answer withheld (no health.view): allergy absent and flagged, standard answer kept",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "withheld": true
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "list filtered by the in-scope opportunity returns the run's in-scope submissions",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "listed": 2
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "intake-source for the in-scope opportunity is served",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "enrollment-packets for the in-scope opportunity is served",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "create on the QA D2 opportunity \u2192 404 (scope, not capability)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "create on an out-of-scope child (QA D2 household) \u2192 404",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "read s_opp2 (QA D2 opportunity) \u2192 404 and names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "read s_ku (out-of-scope child) \u2192 404 and names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "list filtered by an out-of-scope subject (QA D2 opportunity) is empty, not a refusal",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "list filtered by an out-of-scope subject (out-of-scope child) is empty, not a refusal",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "intake-source for the QA D2 opportunity \u2192 404",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "enrollment-packets for the QA D2 opportunity \u2192 404",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "packet link launched from the QA D2 opportunity \u2192 404 (scope gate before mint)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "packet link launched from the QA D1 opportunity passes the scope gate (not 404/403; no packet named, so nothing minted)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 400,
+      "code": null,
+      "note": "no packet id supplied; proves scope admission only"
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "authoring (create a form) \u2192 403",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-scoped_forms",
+      "case": "authoring (new version of the run form) \u2192 403",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "medical answer readable (health.view): allergy answer present",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "Health card readable",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "medical document readable (signed URL issued)",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "health_fact.verify_immunization needs health.manage \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "health_fact.add needs health.manage \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "health_fact.edit needs health.manage \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "health_fact.end needs health.manage \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "review of the plain document needs documents.write \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-health_viewer",
+      "case": "review of the medical document needs documents.write \u2192 403",
+      "persona": "health_viewer",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "first review decision (pending \u2192 accepted) with documents.write",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "re-review (accepted \u2192 rejected) \u2192 403 REREVIEW_NOT_AUTHORIZED",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 403,
+      "code": "REREVIEW_NOT_AUTHORIZED",
+      "required_permission": "processing.documents.manage"
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "reopen (accepted \u2192 pending) \u2192 403 REREVIEW_NOT_AUTHORIZED",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 403,
+      "code": "REREVIEW_NOT_AUTHORIZED"
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "validity set (PUT /validity)",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "expires_on": "2027-05-17"
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "renewal upload (new version)",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "first review decision on the renewed (current, pending) version",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R4-doc_writer",
+      "case": "medical document: review refused without health clearance (403/404, nothing named)",
+      "persona": "doc_writer",
+      "pass": true,
+      "status": 403,
+      "code": "SENSITIVE_DOCUMENT"
+    }
+  ]
+}

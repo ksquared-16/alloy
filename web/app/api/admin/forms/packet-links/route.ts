@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope, linkMetadataDestination } from "@/lib/forms/formsDestinationScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
@@ -42,6 +43,18 @@ export async function POST(request: NextRequest) {
         const subject = namedSubject(launch.entity_type, launch.entity_id);
         if (!subject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), subject))) return jsonError("Not found", 404);
     }
+    // R2: the caller's metadata and enrollment selection name destinations too — a metadata `source_entity_*` becomes the
+    // prefill source when no launch is given, and the selected child / recipient are minted into the link. Every one of
+    // them is checked (children and recipients against the launch opportunity's household roster).
+    const launchSubject = launch ? namedSubject(launch.entity_type, launch.entity_id) : null;
+    const meta = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? { ...(body.metadata as Record<string, unknown>) } : {};
+    const sel = body.enrollment_selection && typeof body.enrollment_selection === "object" && !Array.isArray(body.enrollment_selection)
+        ? (body.enrollment_selection as Record<string, unknown>)
+        : {};
+    const dest = linkMetadataDestination(meta, launchSubject);
+    if (typeof sel.customer_member_id === "string") dest.childIds = [...(dest.childIds ?? []), sel.customer_member_id];
+    if (typeof sel.recipient_person_id === "string") dest.recipientIds = [...(dest.recipientIds ?? []), sel.recipient_person_id];
+    if (!(await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), dest))) return jsonError("Not found", 404);
     const result = await mintPacketPublicLinkForAdmin({
         supabase,
         orgId: ctx.orgId,

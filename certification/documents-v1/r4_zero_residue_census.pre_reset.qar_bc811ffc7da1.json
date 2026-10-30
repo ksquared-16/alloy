@@ -1,0 +1,42 @@
+{
+  "schema": "documents.r4.zero_residue_census.v1",
+  "qa_run": "qar_bc811ffc7da1",
+  "request_id": "gar_2585f5ebf4e7a6",
+  "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+  "census_run_at": "2026-10-29T22:11:50.969Z",
+  "database_target": "alloy_deployed_primary",
+  "checks": {
+    "doc_zr_vendors": "vendors ~ alloy_qa_fixture ~ zero ~ true",
+    "doc_zr_qa_role_grants": "role_permission_grants ~ qa_custom_roles ~ zero ~ false",
+    "doc_zr_pool_access": "user_roles ~ qa_orgs_non_actor ~ zero ~ false",
+    "doc_zr_zero_sent": "communication_messages ~ status_sent ~ zero ~ true",
+    "doc_zr_subjects": "opportunities_work_units_departments ~ aa000000_fixture ~ zero ~ false",
+    "doc_zr_shared_documents": "documents ~ qa_shared_qa_authz_tagged_or_on_fixture ~ zero ~ true",
+    "doc_zr_shared_objects": "storage_objects ~ qa_shared_qa_authz_tagged ~ zero ~ true",
+    "doc_zr_shared_dangling_case_sources": "processing_case_sources ~ qa_shared_document_source_without_document ~ zero ~ true",
+    "doc_zr_secondary_documents": "documents ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_secondary_objects": "storage_objects ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_secondary_cases": "processing_cases ~ qa_secondary_all ~ zero ~ true",
+    "doc_zr_qa_sessions": "auth_sessions ~ seven_qa_identities ~ zero ~ false",
+    "doc_zr_d6_requirements": "document_requirements ~ qa_fixture_keys ~ zero ~ true",
+    "doc_zr_d6_requirement_versions": "document_requirement_versions ~ qa_fixture_or_orphan ~ zero ~ true",
+    "doc_zr_d6_waivers": "document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ true",
+    "doc_zr_forms_definitions": "form_definitions ~ qa_run_keys ~ zero ~ false",
+    "doc_zr_forms_definition_versions": "form_definition_versions ~ qa_run_keys ~ zero ~ false",
+    "doc_zr_forms_submissions": "form_submissions ~ qa_run_forms ~ zero ~ false",
+    "doc_zr_forms_links_and_packets": "form_public_links_form_packet_definitions_sessions ~ qa_run_keys ~ zero ~ true",
+    "doc_zr_health_facts_active_on_missing_subject": "person_health_facts ~ active_on_missing_qa_child ~ zero ~ true"
+  },
+  "true": 13,
+  "total": 20,
+  "stage": "post product-route teardown, PRE registered resets and PRE close \u2014 not a closure census",
+  "false_and_owner": {
+    "doc_zr_forms_definitions": "qa_documents_forms_residue_reset (gar_14477ac6a0bcd8)",
+    "doc_zr_forms_definition_versions": "qa_documents_forms_residue_reset (gar_14477ac6a0bcd8)",
+    "doc_zr_forms_submissions": "qa_documents_forms_residue_reset (gar_14477ac6a0bcd8)",
+    "doc_zr_subjects": "qa_authz_subject_fixture_reset (not yet filed; one pending reconciliation at a time \u2014 dedupe omits reconciliation_key)",
+    "doc_zr_qa_role_grants": "open QA run (grants live); zero in prior run's closure census",
+    "doc_zr_pool_access": "open QA run (persona user_roles live)",
+    "doc_zr_qa_sessions": "open QA run (persona sessions live)"
+  }
+}

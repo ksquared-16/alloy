@@ -1,0 +1,87 @@
+{
+  "schema": "documents.r4.closure_status.v1",
+  "qa_run": "qar_bc811ffc7da1",
+  "execution_run": "erun2_16272d88fb282391",
+  "matrix": "35/35 (r4_hosted_results.certify.qar_bc811ffc7da1.json)",
+  "product_teardown": "all_gone (r4_hosted_reset_results.qar_bc811ffc7da1.json)",
+  "registered_resets": {
+    "qa_documents_forms_residue_reset": {
+      "request": "gar_14477ac6a0bcd8",
+      "exit_code": 0,
+      "deleted": {
+        "form_definitions": 6,
+        "form_definition_versions": 6,
+        "form_submissions": 3,
+        "person_health_facts": 0,
+        "audit_rows": 0
+      }
+    },
+    "qa_authz_subject_fixture_reset": {
+      "request": "gar_704378fa66897c",
+      "exit_code": 0,
+      "fixture_sha256": "7aff2e3837d869a442d70d99dd9472dbb1175499f71be3365e5c276ed7d60e25"
+    }
+  },
+  "phase1_close": {
+    "request": "gar_62d1347398cf93",
+    "state": "CLOSED",
+    "recorded_label": "CLOSED / ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED (22:34:53.061Z)"
+  },
+  "closure_census": {
+    "request": "gar_29a81808fb6b6d",
+    "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+    "census_run_at": "2026-10-29T22:11:50.969Z",
+    "replayed_from": "gar_2585f5ebf4e7a6",
+    "verdict": "NOT A MEASUREMENT \u2014 identical census_run_at to the pre-reset census; trusted-host dedupe reuses a completed census with the same query hash within one execution run. Its 13/20 is pre-reset state.",
+    "replayed_trusted_action": "tha_89eab7be17c753"
+  },
+  "phase2_close": {
+    "state": "PREPARED, NOT FILED",
+    "payload": ".vacilando-payloads/r4-qa-run-close-bind-census.json",
+    "semantics": "qa-run-action.mjs already_closed branch: verifyResidueCensus + append supplemental residue_census to the local QA run ledger (history 'census_attached'); no hosted data or access mutation",
+    "authority": "requires a new operator decision: governed-action-request.mjs:4051 auto-closes only when residueCensusRequestId is null; objective authorization refuses census binding (objective_authorization_qa_census_is_operators)"
+  },
+  "zero_residue": "MEASURED 20/20 post-cleanup (gar_bcf58ca61c3f22, census_run_at 2026-10-29T23:03:41.849Z); NOT YET BOUND to the closed QA run record",
+  "dependency": "a fresh database.read_census of the registered 7957a51a artifact from a NEW execution run (dedupe is run-scoped; different bytes would break the registered pin the close binding checks), then environment.qa_run_close {qaRunId: qar_bc811ffc7da1, residueCensusRequestId: <that census>}",
+  "fresh_census_attempt": {
+    "execution_run": "erun2_8ea69acd9f097a2c",
+    "request": "gar_0ce4df9bd575b3",
+    "query_sha256": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+    "databaseTarget": "alloy_deployed_primary",
+    "policy": "operator_approval_required (alloy_deployed_primary is always an operator decision)",
+    "outcome": "failed / approval_denied by operator at 2026-10-29T22:50:55.184Z, no reason recorded; trusted_host_action_id null \u2014 nothing executed, no census_run_at",
+    "refiled": false,
+    "denial_note": "user statement 22:51:26Z: denial was accidental (meant to approve); 22:51:37Z: asked for it to be sent again"
+  },
+  "audit_provenance_gar_233dc36ea90675": {
+    "filed": "2026-10-29T22:06:12.689Z \u2014 CORRECTED per operator: filed by the access bridge under lane_aa660dc9554d / erun2_16272d88fb282391 (the record carries no distinguishing origin field)",
+    "policy": "22:06:13.005Z awaiting_operator (policy_default_requires_operator)",
+    "deduped_attempt": "22:06:19.987Z \u2014 this lane's later attempt, deduped onto it",
+    "approval": "operator_approved 22:07:18.170Z; decision_timing.submitted_at 22:07:17.876Z; operator_approval.actor = 'operator' (generic)",
+    "execution": "trusted action tha_b31dc11a97d96b; execution_started 22:07:19.030Z, settled 22:07:29.193Z",
+    "approver_origin": "UNRESOLVED \u2014 request, audit and notification records carry no approver identity, session, channel or surface beyond the generic 'operator' actor; no inference made",
+    "records_modified": false
+  },
+  "census_reissue": {
+    "request": "gar_bcf58ca61c3f22",
+    "successor_of": "gar_0ce4df9bd575b3",
+    "execution_run": "erun2_003abb3b9e959fb1",
+    "inputs_unchanged": true,
+    "filed_at": "2026-10-29T22:53:35.424Z",
+    "state": "complete",
+    "authority": "user-authorized single reissue; not standing approval",
+    "trusted_host_action_id": "tha_600d2394d06f41",
+    "census_run_at": "2026-10-29T23:03:41.849Z",
+    "result": "20/20 true"
+  },
+  "defect_handoff_walden": {
+    "owner_path": "Walden canonical backlog via its owner; Documents lane has no authorized write path \u2014 handoff only, no store created",
+    "items": [
+      "census idempotency: database.read_census reuses a completed census with the same query hash within one execution run (gar_29a81808fb6b6d replayed tha_89eab7be17c753); replay unmarked; overwrote tracked results file",
+      "reconciliation-key collision: execute_registered_reconciliation dedupe omits reconciliation_key (gar_73a27bcf382c66 absorbed distinct filings while pending)",
+      "acceptance order: gar_233dc36ea90675 approved/executed 22:07:18-29Z before parent exact-scope question 22:07:51Z",
+      "audit provenance: operator_approval.actor is generic 'operator', no session/source metadata; filing origin (bridge vs lane) not distinguishable in the record",
+      "accidental-denial UX: repeated unintended denials (gar_0ce4df9bd575b3 22:50:55Z; user reports several); candidates \u2014 clearer approve/deny separation, confirm-on-deny, explicit reissue flow (successor_of exists in the request builder). Not a change to confirmation rules."
+    ]
+  }
+}
