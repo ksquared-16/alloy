@@ -107,6 +107,8 @@
     "dev:qa:documents-household-fixture-ensure": "node scripts/qaDocumentsHouseholdFixtureEnsure.mjs",
     "dev:qa:documents-household-fixture-reset": "node scripts/qaDocumentsHouseholdFixtureReset.mjs",
     "dev:qa:documents-forms-residue-reset": "node scripts/qaDocumentsFormsResidueReset.mjs",
+    "dev:qa:financials-historical-draft-fixture": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+    "test:qa:financials-isolated": "node scripts/qa/financialsIsolatedTests.mjs",
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",
