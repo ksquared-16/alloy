@@ -258,7 +258,15 @@ export function verifyToursFixtureShape(state: ToursFixtureState): { passed: str
     return { passed, failed };
 }
 
-/** Marker rows that are LIVE fixture state. A withdrawn link is revoked and no longer counted. */
+/**
+ * Marker rows that are LIVE fixture state. A withdrawn link is revoked and is not counted here — but it is
+ * still a physical row (the product has no link deletion), reported separately by `retainedRevokedLinksOf`,
+ * so a census of 0 never reads as "no fixture rows remain".
+ */
+export function retainedRevokedLinksOf(links: readonly LocationLinkRow[]): number {
+    return links.filter((l) => markerOf(l) && !l.is_active).length;
+}
+
 export function censusOf(state: Pick<ToursFixtureState, "rules" | "bookings" | "family" | "links">): number {
     const family = [state.family.personId, state.family.customerId, state.family.opportunityId].filter(Boolean).length + state.family.membershipIds.length;
     const activeLinks = state.links.filter((l) => markerOf(l) && l.is_active).length;
@@ -343,6 +351,7 @@ export async function ensureToursFixture(p: ToursFixturePorts, out: Sink, now: D
     for (const c of v.passed) out.ok(c);
     for (const c of v.failed) out.fail(c);
     out.raw(`census count=${censusOf(state)}`);
+    out.ok(`retained_revoked_links=${retainedRevokedLinksOf(state.links)}`);
     return v.failed.length || out.failed() ? 1 : 0;
 }
 
@@ -351,6 +360,7 @@ export async function countToursFixture(p: ToursFixturePorts, out: Sink): Promis
     const forms = await p.resolveForms(TOURS_FIXTURE_FORM_TITLES);
     const state = await readState(p, Array.isArray(forms) ? forms : []);
     out.raw(`census count=${censusOf(state)}`);
+    out.ok(`retained_revoked_links=${retainedRevokedLinksOf(state.links)}`);
     if (censusOf(state) === 0) {
         out.ok("fixture_absent");
         return 0;
@@ -362,7 +372,9 @@ export async function countToursFixture(p: ToursFixturePorts, out: Sink): Promis
 }
 
 export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promise<number> {
+    // `removed` is PHYSICAL deletions only. Withdrawn links stay as revoked rows and are reported on their own.
     let removed = 0;
+    let revoked = 0;
     const report = () => out.raw(`reset namespace=${TOURS_FIXTURE_NAMESPACE} removed=${removed}`);
     if (!(await preconditions(p, out))) {
         report();
@@ -388,7 +400,7 @@ export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promis
         removed += await p.deleteBookings(bookings.map((b) => b.id));
         for (const l of activeLinks) {
             await p.withdrawLink({ formId: l.form_definition_id, linkId: l.id });
-            removed += 1;
+            revoked += 1;
         }
         const schedules = [...new Set(rules.map((r) => r.schedule_id).filter((s): s is string => Boolean(s)))];
         for (const s of schedules) removed += await p.deleteRuleSchedule(s);
@@ -400,7 +412,8 @@ export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promis
         report();
         return 1;
     }
-    out.ok("withdrawn_links_retained_revoked");
+    out.ok(`links_revoked_this_reset=${revoked}`);
+    out.ok(`retained_revoked_links=${retainedRevokedLinksOf(links) + revoked}`);
     report();
     return removed <= TOURS_FIXTURE_RESET_LIMIT ? 0 : 1;
 }

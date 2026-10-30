@@ -193,6 +193,8 @@ describe("ensure → count → reset", () => {
         expect(r.code, r.lines.join("\n")).toBe(0);
         // 1 legacy rule + 1 booking + person, household, opportunity, membership + 3 active links (the 4th is withdrawn).
         expect(census(r.lines)).toBe(1 + 1 + 4 + 3);
+        // The withdrawn G-T5 link is a physical row outside the census, and is said so.
+        expect(r.lines).toContain("✓ retained_revoked_links=1");
         expect(r.lines.filter((l) => l.startsWith("✗"))).toEqual([]);
         expect(w.state.links).toHaveLength(LINK_PLAN.length);
     });
@@ -237,19 +239,24 @@ describe("ensure → count → reset", () => {
         expect(census(c.lines)).toBe(0);
     });
 
-    it("reset removes only fixture rows, revokes links through the product route, and reports within the bound", async () => {
+    it("reset deletes only fixture rows, revokes links through the product route, and never counts a revocation as a removal", async () => {
         const w = world();
         await run("--ensure", w);
         const r = await run("--reset", w);
         expect(r.code, r.lines.join("\n")).toBe(0);
         const m = resetLine(r.lines)!;
         expect(m[1]).toBe(TOURS_FIXTURE_NAMESPACE);
-        expect(Number(m[2])).toBe(9);
+        // PHYSICAL deletions only: booking, rule, person, household, membership, opportunity.
+        expect(Number(m[2])).toBe(6);
         expect(Number(m[2])).toBeLessThanOrEqual(TOURS_FIXTURE_RESET_LIMIT);
-        expect(census((await run("--count", w)).lines)).toBe(0);
-        // Withdrawn, never deleted: the product has no link deletion.
+        expect(r.lines).toContain("✓ links_revoked_this_reset=3");
+        expect(r.lines).toContain("✓ retained_revoked_links=4");
+        // Withdrawn, never deleted (the product has no link deletion): census 0 is NOT zero physical rows.
+        const after = await run("--count", w);
+        expect(census(after.lines)).toBe(0);
+        expect(after.lines).toContain("✓ retained_revoked_links=4");
+        expect(w.state.links).toHaveLength(4);
         expect(w.state.links.every((l) => l.is_active === false)).toBe(true);
-        expect(r.lines).toContain("✓ withdrawn_links_retained_revoked");
     });
 
     it("reset twice is safe: the second removes nothing", async () => {
@@ -259,6 +266,8 @@ describe("ensure → count → reset", () => {
         const again = await run("--reset", w);
         expect(again.code).toBe(0);
         expect(Number(resetLine(again.lines)![2])).toBe(0);
+        expect(again.lines).toContain("✓ links_revoked_this_reset=0");
+        expect(again.lines).toContain("✓ retained_revoked_links=4");
     });
 
     it("reset refuses an unbounded marker match before touching anything", async () => {
