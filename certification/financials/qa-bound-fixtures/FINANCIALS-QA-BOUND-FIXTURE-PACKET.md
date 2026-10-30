@@ -30,12 +30,12 @@ against the registry with `vac certify-fixture --list`.
 The digest pins the command line only. The code it runs is pinned by `--candidate`: the executor
 refuses unless worktree HEAD is exactly that commit with no tracked file modified.
 
-## 2. HostCapacity handoff — two registry corrections BLOCK authorized live execution
+## 2. HostCapacity handoff — two registry corrections and one binding gap BLOCK authorized live execution
 
 Owner: the HostCapacity / isolated-executor lane (its latest run completed; earlier WAITING/FAILED
 labels were stale). File: installed toolkit `lib/certification-fixture.mjs`, `CERTIFICATION_FIXTURES`.
-**Not changed by this lane.** Until both are resolved, a live run cannot rely on the registry's
-contract for these fixtures.
+**Not changed by this lane.** Until H1 and H2 are resolved, a live run cannot rely on the registry's
+contract for these fixtures. Until H3 is resolved, no browser persona proof can be built on them.
 
 **H1 — `financials_isolated_tests.run` is wrong: `mutating: false`.**
 - Fact: the pinned suite `web/tests/financials/live/catalogAddCharge.live.test.ts` (on this candidate)
@@ -62,9 +62,36 @@ contract for these fixtures.
 - The product binding (`web/scripts/qa/financialsIsolatedBinding.mjs`) already accepts exactly
   `count → ["--count"]`. No other operation or argv was added.
 
+**H3 — fixture org and browser persona org are different tenants; the executor passes no org or origin.**
+- Fact (read-only, installed toolkit `b3c80db2e9aa`): every `bp_v2` persona (`admin`, `director`,
+  `restricted_operator`, `no_finance_operator`) binds org `qa_shared` =
+  `4acc9386-c485-486f-aa1f-05d83499d142` (`lib/qa-plan-registry.mjs`). The historical draft fixture,
+  like every financials live suite, writes into the seed certification org
+  `00000000-0000-4000-8000-000000000001` (`IDS`/`ORG` in `financialsHistoricalDraftFixtureCore.ts`).
+- Fact: `isolatedSuiteTarget` resolves `persona.org_key`, but `fixtureChildEnv` passes only
+  `ALLOY_QA_RUN_ID`, `ALLOY_QA_ENVIRONMENT_ID`, `ALLOY_QA_PERSONA`, `ALLOY_QA_IDENTITY_KEY`,
+  `ALLOY_QA_SESSION_FILE` and the namespace/fixture/operation. No authoritative org id and no preview
+  origin reach the fixture.
+- Consequence: the two proofs are distinct and neither substitutes for the other.
+  - **Domain-service fixture authority** (these scripts, service credential, seed org) proves the
+    domain rules on real Postgres.
+  - **Browser persona proof** (a managed session as a `qa_shared` persona) cannot see seed-org
+    fixture rows.
+  
+  Nothing here widens a grant, adds a membership, or claims a browser persona saw fixture data.
+- Required before a browser proof can use this fixture (owner: HostCapacity with the product owner):
+  1. The executor passes the persona's authoritative org id (resolved from `persona.org_key`, e.g.
+     `ALLOY_QA_ORG_ID`) and the preview origin bound to the certenv.
+  2. The product fixture is then changed to take its org from that binding, refusing when it is
+     absent or differs. It keeps the seed org only for domain-service runs, and says which it used.
+     That change is NOT made in this candidate.
+  3. Alternatively, a governed, audited grant decision for a `qa_shared` persona on the seed
+     org. That is an operator decision, not a fixture side effect.
+  
+  Until then, browser acceptance of the historical draft is out of reach by construction.
+
 Also noted, no change requested: the persona is bound and checked, but neither script acts as it.
 Both use the certenv service credential the executor injects, as every financials live suite does.
-A persona-authorized surface proof is a separate QA step.
 
 ## 3. Preconditions — the parent QA access/data batch (pending, not done here)
 
@@ -203,6 +230,83 @@ variable and never its value.
    certenv's migration head are proven only by the first live `ensure`.
 2. Billing-period materialization for the fixture household on 2026-03-16 in that environment (the
    rows reset removes are counted, not assumed).
-3. HostCapacity H1 (mutating flag) and H2 (census registration), §2.
+3. HostCapacity H1 (mutating flag), H2 (census registration) and H3 (org / preview-origin binding), §2.
 4. Integrated sprint checkpoint: full Tier 1 on the exact integrated tree plus ONE production build
    (`build_sensitive`: web/package.json changed — scripts only, no dependency change).
+
+## 10. Baseline comparison — the two runtime gate suites, base vs candidate
+
+Measured 2026-10-30 through the broker (`vac run command`, serialized). Each tree was an exact
+`git archive` export of `web/` under `web/.vac-validation/baseline-probe/` (a seat-artifact path),
+run with that tree's own vitest config, so `@/` resolved inside the export. Dependencies came from
+the lane's `web/node_modules`; `package-lock.json`, `vitest.config.ts` and `tsconfig.json` are
+byte-identical between the commits. The probe was pinned: every report path lies inside its own
+export, and the candidate export holds the shared GL read (`glConfigP`) where the base export
+does not.
+
+| tree | commit | passed | failed | skipped |
+|---|---|---|---|---|
+| base | `4272e85dc8fbf552cfa21444c57272987eb06efd` | 30 | 9 | 1 |
+| candidate | `80c1608d3c1547f86ce7dbcd6b4774c622959598` | 30 | 9 | 1 |
+
+**The same 9 test IDs fail at base and at candidate.** Eight have an identical assertion message.
+The ninth (`financialsBuildSerialization > the concurrency was not bought with extra database work >
+THE GATE: the query multiset is exactly what it was before the repair`) fails at both, with a
+different received multiset.
+
+- Inherited, proven: both read-count gates (`… query multiset is exactly …` and
+  `financialsPaymentViewsConcurrency > the query multiset is unchanged on the success path > THE GATE:
+  the same reads, the same number of them`) are already red at base. Base itself reads a set far from
+  the pinned pre-repair multiset (`financials_account_fact_bundle`, `payment_holds`,
+  `payment_autopay_arrangements`, `financial_policies`, `customer_persons ×2`, …).
+- Sprint contribution, measured from the full received multisets:
+  - At `6a4266076`, five reads were added: `child_enrollment_agreements +1`,
+    `commercial_products +1`, `commercial_revenue_categories +1`, and `gl_account_mappings` and
+    `gl_accounts` each 1→2.
+  - The two GL re-reads were redundant. `readCatalogChargeConfig` issued its own
+    `loadGlConfigBundle` beside the card's. **Fixed in `80c1608d3`:** one shared read, each consumer
+    keeping its failure meaning.
+  - At `80c1608d3`, the sprint delta at both gates is exactly `child_enrollment_agreements 0→1,
+    commercial_products 0→1, commercial_revenue_categories 0→1`. That is the Catalog itself and the
+    agreement sites it is judged against. One first-wave read each, not N+1.
+  - The agreement-sites read is not available elsewhere on the card path: the
+    `financials_account_fact_bundle` agreements projection carries no `site_location_id`
+    (`20261025120000`), and the card does not call `financials_account_subject_facts`.
+- The other 7 failures are byte-identical at base and candidate, so they are not this sprint's:
+  - `outstandingCents 29000 vs 0` (×2);
+  - `unmeasured await: resolveOperatingDay`;
+  - collectibility-loop source pins (×2);
+  - payment-views failure contract (`payer_split` lacks `payments`);
+  - payment-id merge source pin.
+
+  They are out of this sprint's scope and were not repaired.
+- The two read-count gates were not edited. Their pinned expectation predates the fact bundle, so
+  updating them is baseline repair, not this sprint's. They stay red. New sprint-owned gates in
+  `tests/financials/catalogManualAddCharge.test.ts` pin the catalog's reads instead: each of the five
+  tables is read exactly once by the card, and a failed GL read leaves the catalog unavailable.
+
+## 11. Scope ledger for this candidate
+
+- Product work: catalog Add Charge slices (`2e63aea1a` … `55995004f`), QA-bound fixture scripts and
+  tests (`f2968d4c8`, `ce0b450ae`, `d12aaa0b9`), and the shared GL read (`80c1608d3`).
+- **Evidence-only addition, not product work: `6a4266076`.** It commits seven W7 evidence files
+  byte-identical (sha256 verified before and after), which were present but untracked beside tracked
+  siblings of the same kind: three deployed screenshots, the attribution-charge census query and
+  result, and two preqa census results. Nothing was edited, moved or deleted. It exists so the broker
+  sees a clean tree and can store exact-candidate receipts.
+- **Incident, 2026-10-30 15:52:13–15:52:32Z (`req_1793375528498836_49075`):** a grep-built test list
+  for a non-live regression run included live suites. Through `web/.env.certification.local`, these
+  executed against the shared local `alloy-cert` stack (127.0.0.1:54421) during a turn that forbade
+  database access:
+  - `paymentApplication.live` (3 failed);
+  - `tuitionGeneration.live` (4 failed);
+  - `chargeCorrectionLineage.live` (3 failed);
+  - `financialsCardPayments.live` (8 skipped);
+  - `accountCohortParity.live` and `businessProcesses/billingDueParity.live` (no write calls in
+    source).
+
+  Charge inserts were refused by `charges_billing_period_childcare_chk`; seed rows written before
+  those failures may remain. No cleanup or verifying read was performed, since either would be
+  further database access. The residue needs an operator-authorized census of alloy-cert.
+  Hosted/staging data was not touched. Every later run excluded `*.live.test.*`, except the
+  isolated-only `catalogAddCharge.live`, which skips without an isolated target.
