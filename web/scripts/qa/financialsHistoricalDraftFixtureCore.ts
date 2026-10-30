@@ -282,6 +282,31 @@ async function ledgerRefusal(db: SupabaseClient): Promise<string | null> {
     return null;
 }
 
+/**
+ * How many fixture rows exist — drafts, open periods and configuration — as `census count=<n>`.
+ * Read-only; zero after a reset is the proof that the reset reached everything it owns. A
+ * non-fixture row at a fixture id is an identity conflict, never counted.
+ */
+export async function censusHistoricalDraft(db: SupabaseClient): Promise<FixtureOutcome & { count: number | null }> {
+    let count = 0;
+    let household = false;
+    for (const p of plannedRows()) {
+        const existing = await byId(db, p.table, p.id);
+        if (!existing) continue;
+        if (!inOrg(existing) || !p.owned(existing)) {
+            return { ...identityConflict(`${p.table} ${p.id} already exists and is not the fixture's`), count: null };
+        }
+        if (p.table === "customers") household = true;
+        count += 1;
+    }
+    count += (await fixtureDrafts(db)).length;
+    if (household) {
+        count += (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", ORG).eq("customer_id", IDS.customer)))
+            .filter((r) => r.status === "open").length;
+    }
+    return { exitCode: 0, checks: [], lines: [`census count=${count}`], count };
+}
+
 export async function resetHistoricalDraft(db: SupabaseClient): Promise<FixtureOutcome & { removed: number }> {
     const done = (exitCode: 0 | 1 | 3, checks: Check[], removed: number) => ({
         exitCode, checks, removed, lines: [`reset namespace=${NAMESPACE} removed=${removed}`],

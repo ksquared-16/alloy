@@ -39,6 +39,7 @@ import {
 import { main as historicalMain } from "../../scripts/qa/financialsHistoricalDraftFixture";
 import {
     BUSINESS_DATE,
+    censusHistoricalDraft,
     CATALOG_AMOUNT_CENTS,
     CHILD_EMAIL,
     ensureHistoricalDraft,
@@ -335,6 +336,22 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
         expect(r).toMatchObject({ exitCode: 1, removed: 0 });
         expect(r.checks[0].check).toMatch(/exceed the limit of 50/);
         expect(JSON.stringify(store)).toBe(before);
+    });
+
+    it("census counts exactly what reset removes, and reads zero after it — measured, not assumed", async () => {
+        const { db } = setup();
+        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
+        await ensureHistoricalDraft(db as never);
+        const before = await censusHistoricalDraft(db as never);
+        expect(before.count).toBeGreaterThan(plannedRows().length);
+        const reset = await resetHistoricalDraft(db as never);
+        expect(reset.removed).toBe(before.count);
+        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
+    });
+
+    it("census refuses a non-fixture row at a fixture id rather than counting it", async () => {
+        const { db } = setup({ customers: [{ id: IDS.customer, org_id: ORG, name: "Somebody real", metadata: {} }] });
+        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 3, count: null });
     });
 
     it("reset refuses a non-fixture row at a fixture id and touches nothing", async () => {
