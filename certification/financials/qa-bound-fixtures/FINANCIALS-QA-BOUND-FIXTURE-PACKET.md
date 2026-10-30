@@ -90,6 +90,22 @@ contract for these fixtures. Until H3 is resolved, no browser persona proof can 
   
   Until then, browser acceptance of the historical draft is out of reach by construction.
 
+**H4 — no verifiable operation authority exists for any live-suite run.**
+- The runner guard (`web/tests/harness/liveSuiteAuthority.mjs`) default-denies every live suite. It
+  admits only the isolated executor's binding for `financials_isolated_tests`, and only its pinned
+  suite. A shared-stack resource lease is not operation authority, so no shared-stack live suite can
+  run.
+- The isolated binding carries no expiry and no proof that the executor produced it.
+- Required: the executor passes a request id and binding digest that the child can verify against the
+  executor's in-flight request record (read-only), so expiry and executor origin become checkable.
+  Any shared-stack live run needs a governed per-run operation grant that a runner can verify; none
+  exists.
+
+**H5 — no census action can reach `certification_local`.**
+- `database.read_census` accepts only `alloy_deployed_primary`.
+- Required: a count-only, read-only census target for alloy-cert (127.0.0.1:54422), as specified in
+  the incident plan §4. Do not repurpose the migration or ledger paths.
+
 Also noted, no change requested: the persona is bound and checked, but neither script acts as it.
 Both use the certenv service credential the executor injects, as every financials live suite does.
 
@@ -230,7 +246,8 @@ variable and never its value.
    certenv's migration head are proven only by the first live `ensure`.
 2. Billing-period materialization for the fixture household on 2026-03-16 in that environment (the
    rows reset removes are counted, not assumed).
-3. HostCapacity H1 (mutating flag), H2 (census registration) and H3 (org / preview-origin binding), §2.
+3. HostCapacity H1 (mutating flag), H2 (census registration), H3 (org / preview-origin binding),
+   H4 (verifiable operation authority for live runs) and H5 (certification_local census), §2.
 4. Integrated sprint checkpoint: full Tier 1 on the exact integrated tree plus ONE production build
    (`build_sensitive`: web/package.json changed — scripts only, no dependency change).
 
@@ -294,19 +311,13 @@ different received multiset.
   siblings of the same kind: three deployed screenshots, the attribution-charge census query and
   result, and two preqa census results. Nothing was edited, moved or deleted. It exists so the broker
   sees a clean tree and can store exact-candidate receipts.
-- **Incident, 2026-10-30 15:52:13–15:52:32Z (`req_1793375528498836_49075`):** a grep-built test list
-  for a non-live regression run included live suites. Through `web/.env.certification.local`, these
-  executed against the shared local `alloy-cert` stack (127.0.0.1:54421) during a turn that forbade
-  database access:
-  - `paymentApplication.live` (3 failed);
-  - `tuitionGeneration.live` (4 failed);
-  - `chargeCorrectionLineage.live` (3 failed);
-  - `financialsCardPayments.live` (8 skipped);
-  - `accountCohortParity.live` and `businessProcesses/billingDueParity.live` (no write calls in
-    source).
-
-  Charge inserts were refused by `charges_billing_period_childcare_chk`; seed rows written before
-  those failures may remain. No cleanup or verifying read was performed, since either would be
-  further database access. The residue needs an operator-authorized census of alloy-cert.
-  Hosted/staging data was not touched. Every later run excluded `*.live.test.*`, except the
-  isolated-only `catalogAddCharge.live`, which skips without an isolated target.
+- **Incident, 2026-10-30 15:52:13–15:52:32Z (`req_1793375528498836_49075`). CORRECTED;** full
+  record in `certification/financials/incidents/2026-10-30-alloy-cert-live-suites/INCIDENT-AND-CENSUS-PLAN.md`.
+  A grep-built test list ran live suites against the shared `alloy-cert` stack during a turn that
+  forbade database access. `tuitionGeneration.live` runs an org-wide seed-org `cleanup()` in
+  `beforeAll` and `afterAll`: every pricing term, every tuition consumption event and its
+  obligations, every draft tuition charge, and its fixed agreement. Pre-existing rows may therefore
+  have been **deleted**, not only left behind. Its four failures stem from a missing billing calendar;
+  the six Payment/Correction cases failed at the initial charge insert on
+  `charges_billing_period_childcare_chk`. No cleanup, census or verifying read was performed, and none
+  is claimed. Prevention is the live-suite runner guard (`web/tests/harness/liveSuiteAuthority.mjs`).
