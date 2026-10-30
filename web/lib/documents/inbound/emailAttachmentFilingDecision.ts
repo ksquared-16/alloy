@@ -82,7 +82,9 @@ export type HoldReason =
     | "malware_pending"
     | "malware_rejected"
     | "malware_verdict_unbound"
-    | "case_open_failed";
+    | "case_open_failed"
+    /** The atomic Processing open is not in this database yet: D10 never uses the orphan-prone sequence. */
+    | "processing_atomic_open_unavailable";
 
 export type AttachmentFilingDecision =
     | { action: "hold"; reasons: HoldReason[] }
@@ -121,7 +123,7 @@ export type FilingPolicy = { requireMalwareScan: boolean };
 export const DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY: Readonly<FilingPolicy> = Object.freeze({ requireMalwareScan: true });
 
 export type FilingDependency = {
-    key: "ws11_attachment_storage" | "d1c2_malware_scanning" | "communications_ingestion_hook";
+    key: "ws11_attachment_storage" | "d1c2_malware_scanning" | "communications_ingestion_hook" | "processing_atomic_open";
     owner: string;
     state: "missing" | "ready";
     proof: string;
@@ -148,8 +150,15 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
         key: "communications_ingestion_hook",
         owner: "Communications (inbound email ingestion)",
         state: "missing",
-        proof: "ingestResendInboundEmail calls fileInboundAttachmentsForPersistedMessage(deps, { orgId, messageId }) (lib/documents/inbound/inboundAttachmentHook.ts) after the message persists. The hook exists, never throws, re-reads ownership itself and is safe on redelivery; the call site in the Communications-owned ingestion is not added",
-        next: "a one-call addition by Communications with the fetcher; no new ingress",
+        proof: "ingestResendInboundEmail calls fileInboundAttachmentsForPersistedMessage after the message persists (and again on a resolved redelivery), isolated so it can never change the ingestion outcome. WIRED locally; it remains missing as a capability because it releases nothing until the fetcher and scanner exist",
+        next: "nothing further at the call site; it activates when the two capabilities above ship",
+    },
+    {
+        key: "processing_atomic_open",
+        owner: "Processing / database (supabase/migrations/20261215093000_processing_open_case_atomic.sql)",
+        state: "missing",
+        proof: "open_processing_case_with_primary_source applied to the target database, then the single-session invariant (certification/invariants/processing-open-case-atomic.sql) and a two-session race test on an isolated database. Until then D10 holds every releasable attachment as processing_atomic_open_unavailable and writes no case or source",
+        next: "apply the migration BEFORE any D10 capability is enabled; code may deploy first (other callers keep their fallback)",
     },
 ]);
 

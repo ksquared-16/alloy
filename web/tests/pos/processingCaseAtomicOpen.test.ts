@@ -18,7 +18,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { openProcessingCaseFromSource } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
+import {
+    AtomicProcessingOpenUnavailableError,
+    openProcessingCaseFromSource,
+} from "@/lib/pos/processingCase/openProcessingCaseFromSource";
+import { openNonFormProcessingCaseFromSource } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { isMissingFunctionError, makeProcessingCaseDbDeps } from "@/lib/pos/processingCase/processingCaseDb";
 import type { ProcessingCaseDeps } from "@/lib/pos/processingCase/types";
 
@@ -188,18 +192,44 @@ describe("the repair: an atomic port", () => {
         expect(db.cases).toHaveLength(1);
         expect(db.sources).toHaveLength(1);
     });
+
+    it("requireAtomic: an unavailable atomic path (null, or no port) is refused with a typed error BEFORE any legacy call", async () => {
+        const refuse = async () => { throw new Error("legacy sequence must not run when atomicity is required"); };
+        const legacyRefusing = { findCaseIdByPrimarySource: refuse, insertCase: refuse, insertSource: refuse } as unknown as ProcessingCaseDeps;
+        for (const deps of [{ ...legacyRefusing, openCaseWithPrimarySource: async () => null }, legacyRefusing]) {
+            const err = await openProcessingCaseFromSource(deps, { ...args(), requireAtomic: true }).catch((e) => e);
+            expect(err).toBeInstanceOf(AtomicProcessingOpenUnavailableError);
+            expect(err.code).toBe("processing_atomic_open_unavailable");
+            // The non-form on-ramp forwards the requirement.
+            await expect(openNonFormProcessingCaseFromSource(deps, { ...args(), requireAtomic: true })).rejects.toBeInstanceOf(AtomicProcessingOpenUnavailableError);
+        }
+    });
+
+    it("requireAtomic with the atomic path present: identical to the atomic open (two concurrent → one case, no orphan)", async () => {
+        const db = memoryDb();
+        const port = atomicPort(db);
+        const [a, b] = await Promise.all([
+            openProcessingCaseFromSource(port, { ...args(), requireAtomic: true }),
+            openProcessingCaseFromSource(port, { ...args(), requireAtomic: true }),
+        ]);
+        expect(a.processingCaseId).toBe(b.processingCaseId);
+        expect(db.cases).toHaveLength(1);
+        expect(orphans(db)).toEqual([]);
+    });
 });
 
 describe("the Supabase port", () => {
     function fakeClient(rpc: (fn: string, a: Record<string, unknown>) => { data: unknown; error: { code?: string; message: string } | null }) {
         const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
         const tableWrites: string[] = [];
+        const tablesTouched: string[] = [];
         const client = {
             rpc: async (fn: string, a: Record<string, unknown>) => {
                 calls.push({ fn, args: a });
                 return rpc(fn, a);
             },
             from: (table: string) => {
+                tablesTouched.push(table);
                 const q = {
                     select: () => q, eq: () => q,
                     maybeSingle: async () => ({ data: null, error: null }),
@@ -208,7 +238,7 @@ describe("the Supabase port", () => {
                 return q;
             },
         };
-        return { client, calls, tableWrites };
+        return { client, calls, tableWrites, tablesTouched };
     }
 
     it("calls the function with org, kind, source and case type, and maps its row", async () => {
@@ -228,6 +258,17 @@ describe("the Supabase port", () => {
             expect(f.tableWrites).toEqual(["processing_cases", "processing_case_sources"]);
         }
         expect(isMissingFunctionError({ code: "23505" })).toBe(false);
+    });
+
+    it("requireAtomic over a database WITHOUT the function (PGRST202 / 42883): typed refusal, zero legacy reads or writes", async () => {
+        for (const code of ["PGRST202", "42883"]) {
+            const f = fakeClient(() => ({ data: null, error: { code, message: "function not found" } }));
+            const err = await openProcessingCaseFromSource(makeProcessingCaseDbDeps(f.client as never), { orgId: ORG, sourceKind: "email_attachment", sourceId: SRC, requireAtomic: true }).catch((e) => e);
+            expect(err).toBeInstanceOf(AtomicProcessingOpenUnavailableError);
+            expect(f.calls).toHaveLength(1);
+            expect(f.tablesTouched).toEqual([]);
+            expect(f.tableWrites).toEqual([]);
+        }
     });
 
     it("any other error is a real failure: thrown, and no fallback writes", async () => {

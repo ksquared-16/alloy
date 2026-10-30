@@ -73,6 +73,23 @@ function okAudit() {
     return { audit, events };
 }
 
+/**
+ * Models the migration's `open_processing_case_with_primary_source` on the in-memory client (find, else both inserts
+ * with no await between them). The client's default `rpc` answers PGRST202 — a database without the function.
+ */
+function withAtomicOpen(db: InMemorySupabase) {
+    db.rpc = async (fn: string, a?: Record<string, unknown>) => {
+        if (fn !== "open_processing_case_with_primary_source" || !a) return { data: null, error: { code: "PGRST202", message: "missing" } };
+        const hit = db.rows("processing_case_sources").find((x) => x.org_id === a.p_org_id && x.source_kind === a.p_source_kind && x.source_id === a.p_source_id && x.role === "primary");
+        if (hit) return { data: [{ processing_case_id: hit.processing_case_id, created: false }], error: null };
+        const id = `ca5e0000-0000-4000-8000-${String(db.rows("processing_cases").length + 1).padStart(12, "0")}`;
+        db.seed("processing_cases", [{ id, org_id: a.p_org_id, status: "received", case_type: a.p_case_type, metadata: {} }]);
+        db.seed("processing_case_sources", [{ org_id: a.p_org_id, processing_case_id: id, source_kind: a.p_source_kind, source_id: a.p_source_id, role: "primary" }]);
+        return { data: [{ processing_case_id: id, created: true }], error: null };
+    };
+    return db;
+}
+
 let seq = 0;
 const ids = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
 const storeArgs = (bytes = pdf()) => ({
@@ -260,7 +277,7 @@ describe("the Communications hook", () => {
 
     it("composed with a fetcher and a version-bound verdict: one document, one annotated case in the filing queue; redelivery adds nothing", async () => {
         adminDb.current = new InMemorySupabase();
-        const db = seededDb();
+        const db = withAtomicOpen(seededDb());
         const f = fakeFetcher();
         const filing = {
             storage: createWs11AttachmentStorage({ supabase: db as never, fetchContent: f.fetchContent, audit: okAudit().audit, newId: ids }),
@@ -281,6 +298,26 @@ describe("the Communications hook", () => {
         expect(caseRequiresFiling(caseRow)).toBe(true);
         expect(caseRow.metadata).toMatchObject({ source_document_filename: "shot record.pdf", inbound_email: { communication_message_id: MSG, attachment_id: "att-1", document_id: docId } });
         expect((await loadDocumentCase(db as never, ORG, caseRow.id))?.documentId).toBe(docId);
+    });
+
+    it("a database WITHOUT the atomic function (PGRST202): held as processing_atomic_open_unavailable; no case, no source, no legacy write", async () => {
+        const db = seededDb();
+        const filing = {
+            storage: createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids }),
+            malware: boundVerdicts("clean"),
+            processing: makeProcessingCaseDbDeps(db as never),
+            annotateCase: makeInboundCaseAnnotator(db as never),
+        };
+        const r = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
+        expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["processing_atomic_open_unavailable"] });
+        expect(db.rows("processing_cases")).toHaveLength(0);
+        expect(db.rows("processing_case_sources")).toHaveLength(0);
+        // Once the function exists, a redelivery opens the case on the SAME stored document — no second upload.
+        withAtomicOpen(db);
+        const again = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing: { ...filing, processing: makeProcessingCaseDbDeps(db as never) } }, { orgId: ORG, messageId: MSG });
+        expect(again.status === "filed" && again.outcomes[0]).toMatchObject({ outcome: "case_opened", documentId: inboundAttachmentDocumentId(ORG, MSG, "att-1") });
+        expect(db.uploadCalls).toHaveLength(1);
+        expect(db.rows("processing_case_sources")).toHaveLength(1);
     });
 
     it("a verdict about other bytes never releases: stored, but held with no case", async () => {

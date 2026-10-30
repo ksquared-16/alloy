@@ -52,7 +52,7 @@ describe("today's capabilities are the measured ones", () => {
 
     it("every missing prerequisite has an owner, a proof and a next step", () => {
         const keys = EMAIL_ATTACHMENT_FILING_DEPENDENCIES.map((d) => d.key).sort();
-        expect(keys).toEqual(["communications_ingestion_hook", "d1c2_malware_scanning", "ws11_attachment_storage"]);
+        expect(keys).toEqual(["communications_ingestion_hook", "d1c2_malware_scanning", "processing_atomic_open", "ws11_attachment_storage"]);
         for (const d of EMAIL_ATTACHMENT_FILING_DEPENDENCIES) {
             expect(d.state, d.key).toBe("missing");
             expect(d.owner.length).toBeGreaterThan(5);

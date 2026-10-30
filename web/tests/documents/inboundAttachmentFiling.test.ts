@@ -56,19 +56,39 @@ function memoryStorage(bytesById: Record<string, Uint8Array>, docOrg = ORG) {
     return { storage, rows, calls };
 }
 
-function memoryCases() {
+/**
+ * In-memory case storage. `atomic` (default) models the migration's one-transaction function — the check and both
+ * inserts happen with no await between them, so no interleaving can split them. `atomic: "missing"` models a database
+ * without the function (the port answers null, like PGRST202). Every legacy-sequence call is counted.
+ */
+function memoryCases(opts: { atomic?: true | "missing" } = {}) {
     const cases: Array<{ id: string; orgId: string; status: string; caseType: string | null }> = [];
     const sources: Array<{ orgId: string; processingCaseId: string; sourceKind: string; sourceId: string; role: string }> = [];
+    const legacy = { find: 0, insertCase: 0, insertSource: 0 };
+    const primaryOf = (orgId: string, sourceKind: string, sourceId: string) =>
+        sources.find((s) => s.orgId === orgId && s.sourceKind === sourceKind && s.sourceId === sourceId && s.role === "primary")?.processingCaseId ?? null;
     const deps: ProcessingCaseDeps = {
+        async openCaseWithPrimarySource({ orgId, sourceKind, sourceId, caseType }) {
+            if (opts.atomic === "missing") return null;
+            const existing = primaryOf(orgId, sourceKind, sourceId);
+            if (existing) return { processingCaseId: existing, created: false };
+            const id = `ca5e0000-0000-4000-8000-${String(cases.length + 1).padStart(12, "0")}`;
+            cases.push({ id, orgId, status: "received", caseType });
+            sources.push({ orgId, processingCaseId: id, sourceKind, sourceId, role: "primary" });
+            return { processingCaseId: id, created: true };
+        },
         async findCaseIdByPrimarySource({ orgId, sourceKind, sourceId }) {
+            legacy.find += 1;
             return sources.find((s) => s.orgId === orgId && s.sourceKind === sourceKind && s.sourceId === sourceId && s.role === "primary")?.processingCaseId ?? null;
         },
         async insertCase({ orgId, status, caseType }) {
+            legacy.insertCase += 1;
             const id = `ca5e0000-0000-4000-8000-${String(cases.length + 1).padStart(12, "0")}`;
             cases.push({ id, orgId, status, caseType });
             return { id };
         },
         async insertSource(s) {
+            legacy.insertSource += 1;
             // uq_pcs_primary_source_once (org_id, source_kind, source_id) WHERE role='primary'
             if (s.role === "primary" && sources.some((x) => x.orgId === s.orgId && x.sourceKind === s.sourceKind && x.sourceId === s.sourceId && x.role === "primary")) {
                 throw Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" });
@@ -76,7 +96,7 @@ function memoryCases() {
             sources.push({ ...s });
         },
     };
-    return { deps, cases, sources };
+    return { deps, cases, sources, legacy };
 }
 
 /** A synthetic verdict source (NOT a scanner): answers about exactly the version it was asked about. */
@@ -133,26 +153,31 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         expect(mem.calls).toEqual({ retrieve: 1, store: 1 });
     });
 
-    it("a concurrent redelivery that loses the unique-index race converges on the winner's case", async () => {
+    it("two concurrent deliveries of one attachment: one case, one primary source, no orphan, through the atomic open only", async () => {
         const mem = memoryStorage({ "att-1": pdf() });
         const cases = memoryCases();
-        let raced = false;
-        const racing: ProcessingCaseDeps = {
-            ...cases.deps,
-            // The first lookup misses (the other delivery has not committed), then the insert hits the unique index.
-            async findCaseIdByPrimarySource(a) {
-                if (!raced) {
-                    raced = true;
-                    const winner = await cases.deps.insertCase({ orgId: a.orgId, status: "received", caseType: null });
-                    await cases.deps.insertSource({ orgId: a.orgId, processingCaseId: winner.id, sourceKind: a.sourceKind, sourceId: a.sourceId, role: "primary" });
-                    return null;
-                }
-                return cases.deps.findCaseIdByPrimarySource(a);
-            },
-        };
-        const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: racing }, message());
-        expect(out[0]).toMatchObject({ outcome: "case_existing", processingCaseId: cases.cases[0].id });
-        expect(cases.sources.filter((s) => s.role === "primary")).toHaveLength(1);
+        const deps = { storage: mem.storage, malware: scanner("clean"), processing: cases.deps };
+        const [a, b] = await Promise.all([fileInboundEmailAttachments(deps, message()), fileInboundEmailAttachments(deps, message())]);
+        expect([a[0].outcome, b[0].outcome].sort()).toEqual(["case_existing", "case_opened"]);
+        expect(cases.cases).toHaveLength(1);
+        expect(cases.sources).toHaveLength(1);
+        expect(cases.cases.every((c) => cases.sources.some((s) => s.processingCaseId === c.id))).toBe(true);
+        expect(cases.legacy).toEqual({ find: 0, insertCase: 0, insertSource: 0 });
+    });
+
+    it("D10 requires the atomic open: without it (function missing, or no atomic port) the attachment is HELD and no case or source is written", async () => {
+        const missing = memoryCases({ atomic: "missing" });
+        const noPort = memoryCases();
+        const { openCaseWithPrimarySource: _drop, ...legacyOnly } = noPort.deps;
+        void _drop;
+        for (const [cases, processing] of [[missing, missing.deps], [noPort, legacyOnly as ProcessingCaseDeps]] as const) {
+            const mem = memoryStorage({ "att-1": pdf() });
+            const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing }, message());
+            expect(out[0]).toMatchObject({ outcome: "held", reasons: ["processing_atomic_open_unavailable"], documentId: "d0000000-0000-4000-8000-000000000001" });
+            expect(cases.cases).toHaveLength(0);
+            expect(cases.sources).toHaveLength(0);
+            expect(cases.legacy).toEqual({ find: 0, insertCase: 0, insertSource: 0 });
+        }
     });
 
     it("unowned and ambiguous messages: refused before anything is retrieved or stored", async () => {

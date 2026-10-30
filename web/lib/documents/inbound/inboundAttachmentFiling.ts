@@ -10,8 +10,9 @@
  *      refused is never stored, flagged is stored `quarantined` (the existing review queue), clean is stored;
  *   4. malware scanning, when the policy requires it and a scanner exists;
  *   5. the gate (`decideInboundAttachmentFiling`), then ONE Processing case through the existing non-form opener,
- *      `source_kind = 'email_attachment'`, `source_id = document id`. A concurrent redelivery that loses the race on the
- *      database's unique primary-source index re-reads and converges on the winner's case.
+ *      `source_kind = 'email_attachment'`, `source_id = document id`, with `requireAtomic`: only the one-transaction
+ *      `open_processing_case_with_primary_source` may open it. Where that function is not in the database yet the
+ *      attachment is HELD (`processing_atomic_open_unavailable`) — never opened by the orphan-prone legacy sequence.
  * Filing is then the existing document path: the case appears in the filing queue and is filed by `commitDocumentFiling`
  * under `processing_case:<case>:document:<document>`; nothing here files, proposes a subject, or sends a message.
  *
@@ -22,6 +23,7 @@ import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
 import { PUBLIC_UPLOAD_MAX_FILE_BYTES } from "@/lib/documents/publicUploadGuard";
 import { openNonFormProcessingCaseFromSource } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
+import { isAtomicProcessingOpenUnavailable } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import type { ProcessingCaseDeps } from "@/lib/pos/processingCase/types";
 import {
     DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
@@ -208,9 +210,16 @@ export async function fileInboundEmailAttachments(
                 sourceKind: "email_attachment",
                 sourceId: decision.sourceId,
                 caseType: null,
+                // D10 deliveries race by design (provider redelivery): only the one-transaction open is acceptable.
+                requireAtomic: true,
             });
-        } catch {
-            // A concurrent redelivery won the unique primary-source race: converge on its case rather than fail or fork.
+        } catch (e) {
+            if (isAtomicProcessingOpenUnavailable(e)) {
+                held(["processing_atomic_open_unavailable"], decision.documentId);
+                continue;
+            }
+            // Any other failure of the atomic open (a transient error after a concurrent delivery committed): a read-only
+            // re-find converges on the committed case; nothing is written here.
             const existing = await deps.processing
                 .findCaseIdByPrimarySource({ orgId: decision.orgId, sourceKind: "email_attachment", sourceId: decision.sourceId })
                 .catch(() => null);
