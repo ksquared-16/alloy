@@ -90,21 +90,26 @@ contract for these fixtures. Until H3 is resolved, no browser persona proof can 
   
   Until then, browser acceptance of the historical draft is out of reach by construction.
 
-**H4 — no verifiable operation authority exists for any live-suite run.**
-- The runner guard (`web/tests/harness/liveSuiteAuthority.mjs`) default-denies every live suite. It
-  admits only the isolated executor's binding for `financials_isolated_tests`, and only its pinned
-  suite. A shared-stack resource lease is not operation authority, so no shared-stack live suite can
-  run.
+**H4 — no verifiable operation authority exists for any live-suite run** (owner: A741,
+`OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9`).
+- The runner guard (`web/tests/harness/liveSuiteAuthority.mjs`) is accepted **only as
+  accidental-execution prevention**. It default-denies every live suite, and admits only the isolated
+  executor's binding for `financials_isolated_tests`, and only its pinned suite. A shared-stack
+  resource lease is not operation authority, so no shared-stack live suite can run.
 - The isolated binding carries no expiry and no proof that the executor produced it.
-- Required: the executor passes a request id and binding digest that the child can verify against the
-  executor's in-flight request record (read-only), so expiry and executor origin become checkable.
-  Any shared-stack live run needs a governed per-run operation grant that a runner can verify; none
-  exists.
+- Required (A741): the executor passes a request id and binding digest that the child can verify
+  against the executor's in-flight request record (read-only), so expiry and provenance become
+  child-verifiable. Any shared-stack live run needs a governed per-run operation grant that a runner
+  can verify; none exists.
 
-**H5 — no census action can reach `certification_local`.**
+**H5 — no installed census action can reach the shared alloy-cert stack** (owner: A741).
 - `database.read_census` accepts only `alloy_deployed_primary`.
-- Required: a count-only, read-only census target for alloy-cert (127.0.0.1:54422), as specified in
-  the incident plan §4. Do not repurpose the migration or ledger paths.
+- A741 is drafting `vacilando.shared_cert_count_census.v1`
+  (`lib/shared-cert-census-contract.mjs`). It is uncommitted and not installed, and registers only
+  the superseded v1 query.
+- Required: register `financials_alloy_cert_incident_20261030_v2` exactly as in
+  `certification/financials/incidents/2026-10-30-alloy-cert-live-suites/CENSUS-V2-REQUEST-PACKET.json`,
+  then release and install. Until then the packet is a dependency, not a filed request.
 
 Also noted, no change requested: the persona is bound and checked, but neither script acts as it.
 Both use the certenv service credential the executor injects, as every financials live suite does.

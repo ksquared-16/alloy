@@ -41,3 +41,4 @@ tests/runtime/firstOrderConfigurationCompiler.test.ts
 tests/surfaces/financialsGrainAndHeadline.test.ts
 tests/surfaces/producerAuthorizationParity.test.ts
 tests/harness/liveSuiteAuthority.test.ts
+tests/financials/incidentCensusV2.test.ts

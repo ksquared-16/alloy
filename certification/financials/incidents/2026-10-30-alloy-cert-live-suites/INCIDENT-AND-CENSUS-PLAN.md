@@ -54,60 +54,55 @@ an env file, a flag or a running process. Proven by `web/tests/harness/liveSuite
 (canaries, synthetic env, no real live suite executed). The lane's focused validation uses the
 explicit list `certification/financials/qa-bound-fixtures/FOCUSED-SAFE-TEST-LIST.txt`.
 
-## 4. Census plan — count-only, fixed identities (NOT executed)
+## 4. Census — v2, exact incident identities only (NOT executed)
 
-**Why it cannot run today.** Installed `trusted-host-action-registry` `database.read_census`
-(lines ~483–506) accepts only `DEFAULT_TARGET` = `alloy_deployed_primary` (hosted staging) and
-refuses any other target. `trusted-host-database-target` does resolve `certification_local`
-(`alloy-cert@127.0.0.1:54422`), but that resolver serves migration / ledger operations, which must
-not be repurposed for an audit.
+**Use v2.** `alloy-cert-incident-census.v2.sql` (sha256
+`dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421`; executed-SQL sha256
+`31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45`; 27 statements) asks only about
+fixed identities, with the org pinned. Each constant comes from the suites' own source or from the
+preserved runner output:
+- the tuition agreement `77000000-…00a1`;
+- the terms `…00b1` / `…00b2`;
+- the two exact tuition event keys `cev:tuition:00000000-0000-4000-8000-700000000ac0:2322-01` / `:2322-02`;
+- the spine agreement `fc500000-…0a0001` and household `fc500000-…0c0001`.
 
-**Registration request to HostCapacity.** A `database.read_census_certification_local` action, or a
-`certification_local` target for `read_census`, with:
-- the target pinned to `alloy-cert` on 54422, refusing any certenv or hosted URL;
-- a READ ONLY transaction, rolled back;
-- output limited to `question_id|kind|payload` with count payloads;
-- validation that refuses row-valued projections;
-- operator approval per run;
-- a receipt recording the query hash, target fingerprint and measured-at time.
+Dependencies are joined only through those exact identities. Every question splits rows into
+`_before`, `_during` and `_after`, relative to the claim window 15:52:11.391Z–15:52:32.859Z:
+- `_before`: pre-existing, for example the spine fixture rows;
+- `_during`: attributable to the window;
+- `_after`: later writers.
 
-**Query.** `alloy-cert-incident-census.sql` (beside this file):
+**Not asked, because the identity is not derivable:**
+- the payment suite's run key `live-<Date.now()>`;
+- the tuition household and assignment rows;
+- every row the tuition cleanup could have deleted org-wide.
 
-| id | question | what it can tell |
-|---|---|---|
-| q01–q05 | seed-org pricing terms, tuition events, their obligations, draft and non-draft tuition charges | what exists now in the cleanup's scope. Without a baseline, zero cannot distinguish "deleted" from "never existed". |
-| q06, q07 | fixed agreements `77000000-…a1`, `fc500000-…a0001` | whether the suites' fixed identities remain |
-| q08 | payments keyed `live-1793375%` | survivors of the payment suite's own writes |
-| q09 | per-table rows created inside 15:52:13–15:52:33Z | surviving inserts from the window |
-| q10, q11 | `pg_stat_user_tables` `n_tup_ins/n_tup_del/n_live_tup` and the stats reset time | catalog evidence of cumulative deletes. Not attributable to the window by itself. |
+**Current absence never proves deletion.**
 
-**Baseline limits, stated.** No committed fixture inserts `enrollment_pricing_terms`:
-`financials-demo-tenant.sql` and `thread-8c-collection-subject.sql` only delete them. So the seed
-org's pre-incident pricing terms, tuition lineage and draft tuition charges came from other flows or
-lanes, and no file in this repository reconstructs them. The only possible pre-incident baselines are
-external:
-- other lanes' QA or census evidence dated before 15:52Z;
-- a prior `pg_stat` reading;
-- a backup or snapshot of the alloy-cert volume, if one exists.
+**v1 is superseded but kept byte-identical.** `alloy-cert-incident-census.sql` (sha256 `6a3a03bd…26aa`)
+asked org-wide, prefix, whole-org window and `pg_stat` questions. A draft HostCapacity contract pins
+its bytes, so it is not edited. That registration should be withdrawn in favour of v2.
 
-## 5. Remedy plan — reversible and bounded (PLAN ONLY; nothing done)
+**Contract owner and status.** HostCapacity objective `OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9`.
+Its contract `vacilando.shared_cert_count_census.v1` (`lib/shared-cert-census-contract.mjs`: target
+`alloy_cert` → `alloy-cert@127.0.0.1:54422`, class `shared_local_certification`, hash-pinned file,
+read-only frame, `qNN_…|count|<int>` output) exists only **uncommitted** in its worktree. The
+installed toolkit and the branch tip are both `b3c80db2`, without it, and the draft registers v1
+only. **Dependency, not a payload:** `CENSUS-V2-REQUEST-PACKET.json` holds the proposed v2
+registration, the exact request inputs, the expected hashes and a per-question interpretation. It is
+marked `DEPENDENCY_NOT_INSTALLED` and is filed with nothing.
 
-1. **Hold.** Keep the explicit alloy-cert LIVE HOLD in place. No lane runs live suites or certification
-   against alloy-cert until steps 2–4 are decided. The runner guard above enforces this for vitest.
-2. **Snapshot before any change.** A governed, read-only export of the affected tables for the seed
-   org (`enrollment_pricing_terms`, `consumption_events` `cev:tuition:%`, their `resolved_obligations`,
-   tuition `charges`, the two fixed agreements), stored outside the repository with checksums. It is
-   the rollback point for step 4.
-3. **Census** (§4) after registration and approval. Compare against any external baseline found.
-   Report present, absent and unknown per question.
-4. **Decide, operator-owned, one of:**
-   - (a) accept and record as-is, if no dependent lane needs the deleted kinds;
-   - (b) re-create only what an owning lane can specify exactly, through that lane's own domain
-     operations or fixtures (idempotent, fixed ids), bounded to the seed org and the listed tables,
-     with before/after census counts and the step-2 snapshot as rollback;
-   - (c) a full `alloy-cert` rebuild via `certification/alloy-certify` under the shared-stack lease
-     model. This is destructive to every lane's local state and needs all holders' agreement.
+Read-only checks done locally:
+- the v2 file passes the draft's frame, label and per-statement checks (27 statements, none refused);
+- the installed `validateReadOnlySql` accepts every statement.
 
-   Never replay the suites' cleanup, and never delete to "tidy up": posted money is immutable by
-   design.
-5. **Close** with the census receipt, the decision, and an updated LIVE HOLD state.
+The installed toolkit lacks the `stripCommentsAndStrings` export the contract needs.
+
+## 5. What remains an operator decision (nothing here is approved or planned for execution)
+
+- Run the v2 census, once the contract is registered and installed and you approve the request.
+- Then, separately, whether any repair is wanted at all. No restoration is proposed by this lane:
+  counts cannot show what the org-wide cleanup removed, and only an owning lane with an exact
+  specification, or an outside baseline, could justify one.
+- The suites' cleanup is never replayed, and nothing is deleted to "tidy up". The alloy-cert LIVE
+  HOLD stays as you set it.
