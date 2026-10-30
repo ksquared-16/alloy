@@ -941,6 +941,9 @@ export function adaptChargeTemplateOption(
          * never interpreted here.
          */
         categoryKey: tpl.categoryKey,
+        /* Null = chargeable. Otherwise the catalog item is shown, disabled, with the server's reason. */
+        unavailableReason: tpl.availability === "offerable" ? null : tpl.unavailableReason,
+        accountLabel: tpl.accountLabel,
     };
 }
 

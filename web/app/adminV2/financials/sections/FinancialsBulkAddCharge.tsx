@@ -3,8 +3,8 @@
 /**
  * NEW BULK CHARGE — apply one charge to many accounts (W7-F021).
  *
- * Choose a charge type, the amount (configured, or entered for a manually priced type) and a service
- * date; choose the households — and, for a child-grained type, the children — it applies to; preview;
+ * Choose a catalog fee (its configured amount is the amount) and a service date; choose the
+ * households — and, for a child-grained type, the children — it applies to; preview;
  * confirm. Every selected household receives its own canonical charge through the registered
  * `charge.add`, exactly as Add Charge on that account would create it. See `bulkChargePlan.ts` for why
  * that orchestration is safe (per-charge database idempotency, no shared obligation, posting by the
@@ -13,6 +13,10 @@
  * The preview is the same action in `preview` mode for every target, so the date chain an operator
  * reads — billing period, invoice date, due date, posting — is the canonical resolver's, per account.
  * A refused row is shown refused before anything is written, and stays visible after the run.
+ *
+ * The options are the organisation's Catalog, judged server-side by the same `catalogChargeOptions`
+ * rule the account card uses: one-time fees chargeable; other catalog types listed, disabled, with the
+ * flow that bills them; missing accounting blocked. No charge template is offered.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,6 +25,7 @@ import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import {
+    bulkPreviewOutcome,
     chargeAddRequest,
     legalBulkGrains,
     obligationsFor,
@@ -31,26 +36,11 @@ import {
     type BulkRowState,
     type BulkTarget,
 } from "@/lib/financials/bulkCharge/bulkChargePlan";
+import type { CatalogChargeOption } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
-type TemplateRow = {
-    id: string;
-    label: string;
-    charge_category: string;
-    amount_strategy: string;
-    amount_cents: number | null;
-    currency_code: string | null;
-    is_active: boolean | null;
-    effective_start: string | null;
-    effective_end: string | null;
-};
-
 type Household = { customerId: string; householdName: string; children: Array<{ customerMemberId: string; name: string }> };
-
-function today(): string {
-    return new Date().toISOString().slice(0, 10);
-}
 
 async function execute(body: unknown): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
     const res = await fetch("/api/admin/actions/execute", {
@@ -79,12 +69,12 @@ export default function FinancialsBulkAddCharge({
     /** Re-read committed truth after the run. */
     onCommitted: () => Promise<void> | void;
 }) {
-    const [templates, setTemplates] = useState<TemplateRow[]>([]);
+    const [options, setOptions] = useState<CatalogChargeOption[]>([]);
     const [households, setHouseholds] = useState<Household[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [templateId, setTemplateId] = useState("");
-    const [amount, setAmount] = useState("");
-    const [serviceDate, setServiceDate] = useState(today);
+    const [productId, setProductId] = useState("");
+    /* The ORGANISATION's business date, from the server — never the browser's UTC day. */
+    const [serviceDate, setServiceDate] = useState("");
     const [chosenGrain, setGrain] = useState<BulkGrain>("child");
     const [query, setQuery] = useState("");
     /* customerId → selected child ids (household grain uses the key alone). */
@@ -98,26 +88,14 @@ export default function FinancialsBulkAddCharge({
         void (async () => {
             try {
                 const site = siteLocationId ? `?site_location_id=${encodeURIComponent(siteLocationId)}` : "";
-                const [t, h] = await Promise.all([
-                    fetch("/api/admin/financial/charge-templates", { credentials: "include" }).then((r) => r.json()),
-                    fetch(`/api/admin/financials/bulk-charge-targets${site}`, { credentials: "include" }).then((r) => r.json()),
-                ]);
+                const h = await fetch(`/api/admin/financials/bulk-charge-targets${site}`, { credentials: "include" }).then((r) => r.json());
                 if (!live) return;
-                const day = today();
-                setTemplates(
-                    ((t.templates ?? []) as TemplateRow[])
-                        .filter(
-                            (row) =>
-                                row.is_active !== false
-                                && (!row.effective_start || row.effective_start <= day)
-                                && (!row.effective_end || row.effective_end >= day)
-                                /* Tuition is generated from accepted terms — Tuition billing — never bulk-added. */
-                                && row.charge_category !== "tuition",
-                        )
-                        .sort((a, b) => a.label.localeCompare(b.label)),
-                );
+                const catalog = (h.catalog ?? null) as { ok: boolean; options?: CatalogChargeOption[]; error?: string } | null;
+                setOptions(catalog?.options ?? []);
+                if (typeof h.businessDate === "string") setServiceDate((current) => current || h.businessDate);
                 setHouseholds((h.households ?? []) as Household[]);
                 if (h.ok === false) setLoadError(h.error ?? "Accounts could not be read.");
+                else if (catalog && catalog.ok === false) setLoadError(`The catalog could not be read (${catalog.error ?? "unknown"}).`);
             } catch (e) {
                 if (live) setLoadError(e instanceof Error ? e.message : "Bulk charge could not load.");
             }
@@ -127,13 +105,13 @@ export default function FinancialsBulkAddCharge({
         };
     }, [siteLocationId]);
 
-    const template = templates.find((t) => t.id === templateId) ?? null;
-    const grains = useMemo(() => (template ? legalBulkGrains(template.charge_category) : []), [template]);
+    /* Only a chargeable item can be the selection; unsupported and blocked ones are listed, disabled. */
+    const template = options.find((o) => o.id === productId && o.availability === "offerable") ?? null;
+    const unavailable = options.filter((o) => o.availability !== "offerable");
+    const grains = useMemo(() => (template ? legalBulkGrains(template.categoryKey) : []), [template]);
     /* The grain is DERIVED: the operator's choice when the charge type permits it, else what it permits. */
     const grain: BulkGrain = grains.length && !grains.includes(chosenGrain) ? grains[0]! : chosenGrain;
-    const manual = template?.amount_strategy === "manual";
-    const amountCents = manual ? Math.round(Number(amount) * 100) : null;
-    const configured = template && !manual ? template.amount_cents : null;
+    const configured = template?.amountCents ?? null;
 
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -160,19 +138,13 @@ export default function FinancialsBulkAddCharge({
     const input = useMemo(
         () =>
             template && serviceDate
-                ? {
-                      templateId: template.id,
-                      category: template.charge_category,
-                      grain,
-                      serviceDate,
-                      amountCents: manual && Number.isFinite(amountCents) && (amountCents ?? 0) > 0 ? amountCents : null,
-                  }
+                ? { catalogProductId: template.id, category: template.categoryKey, grain, serviceDate }
                 : null,
-        [template, serviceDate, grain, manual, amountCents],
+        [template, serviceDate, grain],
     );
-    const ready = Boolean(input) && targets.length > 0 && (!manual || (input?.amountCents ?? 0) > 0);
+    const ready = Boolean(input) && targets.length > 0;
     const tally = tallyBulk(targets, grain, states);
-    const unitCents = manual ? input?.amountCents ?? null : configured;
+    const unitCents = configured;
     const previewed = targets.length > 0 && targets.every((t) => states[t.customerId] && states[t.customerId]!.state !== "pending");
     const sendable = targets.filter((t) => states[t.customerId]?.state === "previewed");
 
@@ -216,24 +188,7 @@ export default function FinancialsBulkAddCharge({
                 next[t.customerId] = { state: "refused", reason: refusal };
                 return;
             }
-            const r = await execute(chargeAddRequest(t, input, "preview"));
-            const result = (r.data?.execution_result ?? {}) as {
-                eligibility?: { eligible?: boolean; blockers?: Array<{ message?: string }> };
-                preview?: { summary?: string; changes?: string[] };
-            };
-            if (!r.ok) next[t.customerId] = { state: "refused", reason: r.error ?? "Refused." };
-            else if (result.eligibility && result.eligibility.eligible === false) {
-                next[t.customerId] = {
-                    state: "refused",
-                    reason: result.eligibility.blockers?.map((b) => b.message).filter(Boolean).join(" ") || "Not eligible.",
-                };
-            } else {
-                next[t.customerId] = {
-                    state: "previewed",
-                    summary: result.preview?.summary ?? "",
-                    changes: result.preview?.changes ?? [],
-                };
-            }
+            next[t.customerId] = bulkPreviewOutcome(await execute(chargeAddRequest(t, input, "preview")));
             setStates({ ...next });
         });
         setStates({ ...next });
@@ -306,39 +261,38 @@ export default function FinancialsBulkAddCharge({
                     <AlloySelect
                         aria-label="Charge type"
                         testId="bulk-charge-template"
-                        value={templateId}
-                        placeholder="Choose a charge type…"
-                        options={templates.map((t) => ({ value: t.id, label: t.label }))}
+                        value={productId}
+                        placeholder="Choose a catalog fee…"
+                        options={options.map((o) => ({
+                            value: o.id,
+                            label: o.availability === "offerable" ? o.label : `${o.label} — not available here`,
+                            disabled: o.availability !== "offerable",
+                        }))}
                         onChange={(next) => {
-                            setTemplateId(next);
+                            setProductId(next);
                             setStates({});
                             setRan(false);
                         }}
                     />
+                    {template?.accountLabel ? (
+                        <span className="text-[11px] text-alloy-midnight/50">Posts to {template.accountLabel}</span>
+                    ) : null}
+                    {unavailable.length ? (
+                        <ul className="text-[11px] text-alloy-midnight/55" data-financials-bulk-charge-unavailable="true">
+                            {unavailable.map((o) => (
+                                <li key={o.id} data-catalog-item={o.id} data-catalog-availability={o.availability}>
+                                    {o.label}
+                                    {o.amountCents != null ? ` · ${moneyExact(o.amountCents, o.currencyCode)}` : ""} — {o.unavailableReason}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
                 </label>
                 <label className="flex flex-col gap-1">
                     <span className="text-xs text-alloy-midnight/60">Amount</span>
-                    {manual ? (
-                        <input
-                            inputMode="decimal"
-                            value={amount}
-                            onChange={(e) => {
-                                setAmount(e.target.value.replace(/[^0-9.]/g, ""));
-                                setStates({});
-                            }}
-                            placeholder="0.00"
-                            data-financials-bulk-charge-amount="manual"
-                            className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-xs"
-                        />
-                    ) : (
-                        <span className="py-1 text-sm text-alloy-midnight" data-financials-bulk-charge-amount="configured">
-                            {template
-                                ? configured != null
-                                    ? `${moneyExact(configured, template.currency_code ?? "USD")} · configured`
-                                    : "From each child's rate"
-                                : "—"}
-                        </span>
-                    )}
+                    <span className="py-1 text-sm text-alloy-midnight" data-financials-bulk-charge-amount="configured">
+                        {template && configured != null ? `${moneyExact(configured, template.currencyCode)} · configured in Catalog` : "—"}
+                    </span>
                 </label>
                 <label className="flex flex-col gap-1">
                     <span className="text-xs text-alloy-midnight/60">Service date</span>
@@ -372,7 +326,7 @@ export default function FinancialsBulkAddCharge({
                             ))}
                             {grains.length === 1 ? (
                                 <span className="self-center text-[11px] text-alloy-midnight/50">
-                                    {chargeCategoryLabel(template.charge_category)} is billed {grains[0] === "child" ? "per child" : "to the household"}
+                                    {chargeCategoryLabel(template.categoryKey)} is billed {grains[0] === "child" ? "per child" : "to the household"}
                                 </span>
                             ) : null}
                         </span>
@@ -462,7 +416,7 @@ export default function FinancialsBulkAddCharge({
                     <p className="text-alloy-midnight" data-financials-bulk-charge-tally="true">
                         <span className="font-semibold">{sendable.length}</span> account{sendable.length === 1 ? "" : "s"} ·{" "}
                         {obligationsToCreate} charge{obligationsToCreate === 1 ? "" : "s"}
-                        {unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currency_code ?? "USD")}` : ""}
+                        {unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currencyCode ?? "USD")}` : ""}
                         {tally.refused ? ` · ${tally.refused} refused` : ""}
                     </p>
                     {chain.length ? (
@@ -509,7 +463,7 @@ export default function FinancialsBulkAddCharge({
                         {busy === "execute"
                             ? "Creating…"
                             : `Create ${obligationsToCreate} charge${obligationsToCreate === 1 ? "" : "s"}${
-                                  unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currency_code ?? "USD")}` : ""
+                                  unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currencyCode ?? "USD")}` : ""
                               }`}
                     </button>
                 ) : null}

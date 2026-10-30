@@ -19,8 +19,15 @@
  *     charge in a future period stays a draft and posts when its period begins.
  *
  * Preview runs the same action in `preview` mode for every target first. A row the domain refuses
- * (grain, an account it cannot bill) is shown refused before anything is written, and the operator
- * confirms knowing the count, the total and what is left out.
+ * (grain, an account it cannot bill, a catalog item that does not apply to a child's site) is shown
+ * refused before anything is written, and the operator confirms knowing the count, the total and
+ * what is left out.
+ *
+ * ── WHAT IS CHARGED IS A CATALOG ITEM ──
+ *
+ * Like Add Charge on an account, Bulk charge offers the organisation's Catalog through the shared
+ * `catalogChargeOptions` rule and sends `catalog_product_id`: one-time fees at their configured
+ * amount, to their configured account. Nothing here prices anything — the amount is the catalog's.
  */
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 
@@ -36,13 +43,12 @@ export type BulkTarget = {
 };
 
 export type BulkChargeInput = {
-    templateId: string;
+    /** The catalog item (`commercial_products.id`) every target is charged. */
+    catalogProductId: string;
     category: string;
     grain: BulkGrain;
     /** YYYY-MM-DD — the service date every charge resolves its date chain from. */
     serviceDate: string;
-    /** Sent only for a manually priced charge type; a configured amount is the template's. */
-    amountCents: number | null;
 };
 
 /** Can this charge type be billed at this grain? The category decides; the operator never overrides it. */
@@ -71,7 +77,7 @@ export function chargeAddRequest(target: BulkTarget, input: BulkChargeInput, mod
         ...(mode === "execute" ? { confirmation: { confirmed: true } } : {}),
         payload: {
             customer_id: target.customerId,
-            template_id: input.templateId,
+            catalog_product_id: input.catalogProductId,
             ...(input.grain === "household"
                 ? { subject_grain: "household" }
                 : childIds.length === 1
@@ -79,7 +85,6 @@ export function chargeAddRequest(target: BulkTarget, input: BulkChargeInput, mod
                   : { customer_member_ids: childIds, child_labels: target.children.map((c) => c.name) }),
             event_date: input.serviceDate,
             service_date: input.serviceDate,
-            ...(input.amountCents != null ? { amount_cents: input.amountCents } : {}),
         },
     };
 }
@@ -95,6 +100,35 @@ export type BulkRowState =
     | { state: "refused"; reason: string }
     | { state: "created"; chargeIds: string[]; note: string }
     | { state: "failed"; reason: string };
+
+/**
+ * WHAT ONE TARGET'S PREVIEW SAID — read from `charge.add`'s own answer.
+ *
+ * Refused when the request failed, when eligibility said no, or when the preview itself carries the
+ * domain's refusal (`blocked`) — a catalog item that does not apply to this household's site, for
+ * example. Only an unrefused preview is `previewed`, and only previewed rows are ever sent.
+ */
+export function bulkPreviewOutcome(response: {
+    ok: boolean;
+    error?: string;
+    data?: Record<string, unknown>;
+}): BulkRowState {
+    if (!response.ok) return { state: "refused", reason: response.error ?? "Refused." };
+    const result = (response.data?.execution_result ?? {}) as {
+        eligibility?: { eligible?: boolean; blockers?: Array<{ message?: string }> };
+        preview?: { summary?: string; changes?: string[]; blocked?: { reason?: string } | null };
+    };
+    if (result.eligibility && result.eligibility.eligible === false) {
+        return {
+            state: "refused",
+            reason: result.eligibility.blockers?.map((b) => b.message).filter(Boolean).join(" ") || "Not eligible.",
+        };
+    }
+    if (result.preview?.blocked) {
+        return { state: "refused", reason: result.preview.blocked.reason || result.preview.summary || "Refused." };
+    }
+    return { state: "previewed", summary: result.preview?.summary ?? "", changes: result.preview?.changes ?? [] };
+}
 
 /** A target the plan can never send: the wrong grain, or a child grain with no child chosen. */
 export function refusalBeforeSending(target: BulkTarget, input: BulkChargeInput): string | null {

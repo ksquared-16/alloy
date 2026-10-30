@@ -285,7 +285,12 @@ export default function AddChargeCommand({
                         allowEmpty={false}
                         value={controls.selectedTemplateId ?? ""}
                         /* LABELS, never internal keys. The catalog owns the wording. */
-                        options={templates.map((opt) => ({ value: opt.key, label: opt.label }))}
+                        /* Unsupported and blocked catalog items stay listed, disabled; why is stated below. */
+                        options={templates.map((opt) => ({
+                            value: opt.key,
+                            label: opt.unavailableReason ? `${opt.label} — not available here` : opt.label,
+                            disabled: Boolean(opt.unavailableReason),
+                        }))}
                         onChange={(next) => controls.onSelectTemplate(next)}
                     />
                 ) : (
@@ -297,8 +302,18 @@ export default function AddChargeCommand({
                     </span>
                 )}
                 <span className="alloy-os-addcharge__optioncount">
-                    {templates.length} configured types
+                    {templates.filter((opt) => !opt.unavailableReason).length} catalog fees
+                    {t.accountLabel ? ` · posts to ${t.accountLabel}` : ""}
                 </span>
+                {templates.some((opt) => opt.unavailableReason) ? (
+                    <ul className="alloy-os-addcharge__unavailable" data-testid="addcharge-unavailable">
+                        {templates.filter((opt) => opt.unavailableReason).map((opt) => (
+                            <li key={opt.key} data-catalog-item={opt.key}>
+                                {opt.label}{opt.amount ? ` · ${opt.amount}` : ""} — {opt.unavailableReason}
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
             </Field>
             {/*
               * THE CONFIG STRIP IS GONE, and the semantics it described are untouched.

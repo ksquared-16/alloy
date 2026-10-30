@@ -118,6 +118,11 @@ export type ActionEligibility = {
 export type ActionPreview = {
     summary: string;
     changes: string[];
+    /**
+     * Present when the DOMAIN refuses what was previewed — the write would refuse the same way. A
+     * caller that previews before writing (Bulk charge) shows the row refused instead of ready.
+     */
+    blocked?: { reason: string } | null;
     before?: Record<string, unknown> | null;
     after?: Record<string, unknown> | null;
 };

@@ -34,6 +34,7 @@
  * scoped to the current period and says so on its face; a selected obligation is not, and an
  * October charge opened in September is still an October charge.
  */
+import { draftIdentityFromCharge } from "@/lib/financials/catalogCharges/draftEditIdentity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readResponsibility } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
@@ -143,6 +144,14 @@ export type ChargeDetail = {
     awaiting: AwaitingPostingReason | null;
     correctionOfChargeId: string | null;
     chargeTemplateId: string | null;
+    /**
+     * THE DRAFT'S OWN IDENTITY, as the charge recorded it — never inferred from its name.
+     * `chargeTemplateKey` is the template lineage a template charge was written under
+     * (`metadata.charge_template_key`); `catalogProductId` is the catalog item a catalog charge was
+     * made from (`metadata.catalog_item.product_id`). Editing a draft resolves through these.
+     */
+    chargeTemplateKey: string | null;
+    catalogProductId: string | null;
     origin: ChargeOrigin;
     originDescription: string;
 
@@ -893,6 +902,8 @@ export async function resolveChargeDetail(
         postedByName: actorNames.get(charge.posted_by ?? "") ?? null,
         correctionOfChargeId: charge.source_charge_id ?? null,
         chargeTemplateId: charge.charge_template_id ?? null,
+        chargeTemplateKey: draftIdentityFromCharge(charge as never).chargeTemplateKey,
+        catalogProductId: draftIdentityFromCharge(charge as never).catalogProductId,
         origin,
         originDescription: describeChargeOrigin(origin, actorNames.get(charge.created_by ?? "") ?? null),
         /*

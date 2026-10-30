@@ -1,0 +1,197 @@
+{
+  "schema": "financials.alloy_cert_incident_census_request.v2",
+  "status": "DEPENDENCY_NOT_INSTALLED",
+  "dependency": {
+    "owner_objective": "OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9",
+    "contract": "vacilando.shared_cert_count_census.v1",
+    "observed": "lib/shared-cert-census-contract.mjs exists UNCOMMITTED in the HostCapacity worktree (sha256 0931f3333e7b8f503d3d93bb9c8d72ba62a7738ed74d65d978174c9968237b29, read 2026-10-30); the branch tip and the installed toolkit are both b3c80db2 and carry no shared-cert census; the draft registers only v1",
+    "required": "register the v2 entry below, commit, release and install; until then no payload is filed"
+  },
+  "incident": "req_1793375528498836_49075",
+  "supersedes": {
+    "path": "certification/financials/incidents/2026-10-30-alloy-cert-live-suites/alloy-cert-incident-census.sql",
+    "sha256": "6a3a03bdfe4ed2c061dd85e9b668281b7f31f0016f779c2e6f3ff6eae1bc26aa",
+    "kept": "byte-identical \u2014 the draft contract pins it; withdraw that registration in favour of v2"
+  },
+  "proposed_registration": {
+    "census_id": "financials_alloy_cert_incident_20261030_v2",
+    "owner": {
+      "product": "financials",
+      "lane_id": "lane_b77b3cbb5840",
+      "worktree": "financials"
+    },
+    "repository": "ksquared-16/alloy",
+    "path": "certification/financials/incidents/2026-10-30-alloy-cert-live-suites/alloy-cert-incident-census.v2.sql",
+    "sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421",
+    "source_commit": "the commit that adds this file (stated in the lane report; a file cannot name its own commit)",
+    "incident": "req_1793375528498836_49075",
+    "statements": 27,
+    "question_ids": [
+      "q01_tuition_agreement_before",
+      "q02_tuition_agreement_during",
+      "q03_tuition_agreement_after",
+      "q04_tuition_terms_before",
+      "q05_tuition_terms_during",
+      "q06_tuition_terms_after",
+      "q07_tuition_events_before",
+      "q08_tuition_events_during",
+      "q09_tuition_events_after",
+      "q10_tuition_obligations_before",
+      "q11_tuition_obligations_during",
+      "q12_tuition_obligations_after",
+      "q13_tuition_charges_before",
+      "q14_tuition_charges_during",
+      "q15_tuition_charges_after",
+      "q16_tuition_charges_nondraft_any_time",
+      "q17_spine_agreement_before",
+      "q18_spine_agreement_any_time",
+      "q19_spine_household_any_time",
+      "q20_spine_charges_before",
+      "q21_spine_charges_during",
+      "q22_spine_charges_after",
+      "q23_spine_correction_children_during",
+      "q24_spine_allocations_during",
+      "q25_spine_household_payments_during",
+      "q26_spine_household_payments_after",
+      "q27_spine_household_periods_during"
+    ],
+    "triples": []
+  },
+  "request_inputs": {
+    "censusId": "financials_alloy_cert_incident_20261030_v2",
+    "queryArtifactPath": "certification/financials/incidents/2026-10-30-alloy-cert-live-suites/alloy-cert-incident-census.v2.sql",
+    "artifactRoot": "/Users/vacilando/Code/alloy-worktrees/financials",
+    "databaseTarget": "alloy_cert",
+    "targetBinding": {
+      "target_id": "alloy-cert@127.0.0.1:54422",
+      "target_class": "shared_local_certification",
+      "census_id": "financials_alloy_cert_incident_20261030_v2"
+    },
+    "requestLaneId": "lane_b77b3cbb5840"
+  },
+  "expected_hashes": {
+    "file_sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421",
+    "executed_sql_sha256": "31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45"
+  },
+  "window": {
+    "from": "2026-10-30T15:52:11.391Z",
+    "to": "2026-10-30T15:52:32.859Z",
+    "source": "validation claim vcl_mvv5hk73_1 acquired/released"
+  },
+  "questions": [
+    {
+      "id": "q01_tuition_agreement_before",
+      "interpretation": "0 expected: beforeAll deletes this id before inserting it; >0 means an earlier CERT_KEEP run left it and it pre-dates the incident"
+    },
+    {
+      "id": "q02_tuition_agreement_during",
+      "interpretation": "0 if afterAll cleanup ran (CERT_KEEP unset); 1 means the incident's beforeAll insert survives"
+    },
+    {
+      "id": "q03_tuition_agreement_after",
+      "interpretation": "later writers of the same fixed id (another run of the suite)"
+    },
+    {
+      "id": "q04_tuition_terms_before",
+      "interpretation": "0 expected (acceptTerm deletes org-wide before inserting); >0 pre-dates the incident"
+    },
+    {
+      "id": "q05_tuition_terms_during",
+      "interpretation": "0 if afterAll cleanup ran; >0 = incident-written terms that survive"
+    },
+    {
+      "id": "q06_tuition_terms_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q07_tuition_events_before",
+      "interpretation": "pre-existing events with the exact keys (an earlier run); the incident's cleanup would have deleted any such row, so 0 does not prove there were none"
+    },
+    {
+      "id": "q08_tuition_events_during",
+      "interpretation": "incident-written events that survive; generation errored on the billing calendar, so 0 is the hypothesis, not a claim"
+    },
+    {
+      "id": "q09_tuition_events_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q10_tuition_obligations_before",
+      "interpretation": "as q07, for obligations on those exact events"
+    },
+    {
+      "id": "q11_tuition_obligations_during",
+      "interpretation": "as q08"
+    },
+    {
+      "id": "q12_tuition_obligations_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q13_tuition_charges_before",
+      "interpretation": "pre-existing charges on the tuition agreement; draft ones would have been deleted by the cleanup, so 0 does not prove absence"
+    },
+    {
+      "id": "q14_tuition_charges_during",
+      "interpretation": "incident-written charges that survive"
+    },
+    {
+      "id": "q15_tuition_charges_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q16_tuition_charges_nondraft_any_time",
+      "interpretation": "posted/void charges on the tuition agreement \u2014 immutable, so they survive any cleanup; 0 expected (no test reached posting)"
+    },
+    {
+      "id": "q17_spine_agreement_before",
+      "interpretation": "1 expected: pre-existing fixture row (financials-charge-spine.sql)"
+    },
+    {
+      "id": "q18_spine_agreement_any_time",
+      "interpretation": "1 expected; 0 = the fixture agreement is gone (not caused by these suites' code, which never deletes it)"
+    },
+    {
+      "id": "q19_spine_household_any_time",
+      "interpretation": "1 expected: pre-existing fixture household"
+    },
+    {
+      "id": "q20_spine_charges_before",
+      "interpretation": "pre-existing charges on the fixture agreement (fixture and earlier runs) \u2014 informational baseline, not incident-attributable"
+    },
+    {
+      "id": "q21_spine_charges_during",
+      "interpretation": "0 expected: all six Payment/Correction inserts failed charges_billing_period_childcare_chk; >0 = a write in the window survived"
+    },
+    {
+      "id": "q22_spine_charges_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q23_spine_correction_children_during",
+      "interpretation": "0 expected (no parent charge was written)"
+    },
+    {
+      "id": "q24_spine_allocations_during",
+      "interpretation": "0 expected"
+    },
+    {
+      "id": "q25_spine_household_payments_during",
+      "interpretation": "0 expected (payments come after the failed charge insert)"
+    },
+    {
+      "id": "q26_spine_household_payments_after",
+      "interpretation": "later writers"
+    },
+    {
+      "id": "q27_spine_household_periods_during",
+      "interpretation": "0 expected: financialsCardPayments failed on the missing billing calendar before materialising"
+    }
+  ],
+  "provenance_limit": "counts bound what is present at census time; they cannot prove historical deletion. The tuition cleanup's org-wide deletions have no fixed identity and no baseline and are NOT measured here.",
+  "not_asked": [
+    "payment run key live-<Date.now()> (not recorded)",
+    "tuition household / assignment rows (read at runtime, not recorded)",
+    "any org-wide scope"
+  ]
+}

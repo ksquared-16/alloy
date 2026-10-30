@@ -382,6 +382,7 @@ async function executeMultiChildAdd(args: {
         try {
             const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,
@@ -534,7 +535,7 @@ async function refuseIllegalSubjectGrain(
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
-    description: "Create a charge for a child from a configured charge template.",
+    description: "Create a charge for a child from a configured one-time catalog fee (or, for existing callers, a charge template).",
     supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
@@ -544,14 +545,31 @@ const addCharge: RegisteredAction = {
 
     validatePayload(payload) {
         const src = payload ?? {};
-        if (!t(src.template_id)) {
+        /*
+         * ONE SOURCE, NAMED. Manual Add Charge sends `catalog_product_id` (Organization › Financials ›
+         * Catalog); generated and legacy callers still send `template_id`. Both at once would leave
+         * the writer to pick one silently, so it is refused rather than guessed.
+         */
+        if (t(src.template_id) && t(src.catalog_product_id)) {
+            return {
+                ok: false,
+                blockers: [
+                    {
+                        code: "ambiguous_charge_source",
+                        message: "Choose one charge type — a catalog item or a charge template, not both.",
+                        field: "catalog_product_id",
+                    },
+                ],
+            };
+        }
+        if (!t(src.template_id) && !t(src.catalog_product_id)) {
             return {
                 ok: false,
                 blockers: [
                     {
                         code: "missing_charge_template",
                         message: "Choose a charge type.",
-                        field: "template_id",
+                        field: "catalog_product_id",
                     },
                 ],
             };
@@ -598,18 +616,52 @@ const addCharge: RegisteredAction = {
         );
         if (!subject.ok) return { summary: subject.message, changes: [] };
         try {
-            const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
-                templateId: t(payload?.template_id),
-                ...billableSourceForSubject(subject),
-                eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
-                operatorServiceDate: t(payload?.service_date) || null,
-                servicePeriodStart: t(payload?.service_period_start) || null,
-                unitAmountCents:
-                    payload?.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
-            });
+            const catalogProductId = t(payload?.catalog_product_id) || null;
+            const today = t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId));
+            const previewFor = (s: Extract<ChargeSubject, { ok: true }>) =>
+                previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
+                    templateId: t(payload?.template_id),
+                    catalogProductId,
+                    ...billableSourceForSubject(s),
+                    eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
+                    operatorServiceDate: t(payload?.service_date) || null,
+                    servicePeriodStart: t(payload?.service_period_start) || null,
+                    unitAmountCents:
+                        payload?.amount_cents == null ? null : Number(payload.amount_cents),
+                    today,
+                });
+            const { intent, label } = await previewFor(subject);
             if (!intent.eligible) {
-                return { summary: intent.reason ?? "This charge cannot be created right now.", changes: [] };
+                const reason = intent.reason ?? "This charge cannot be created right now.";
+                return { summary: reason, changes: [], blocked: { reason } };
+            }
+            /*
+             * ── A CATALOG ITEM IS JUDGED FOR EVERY CHILD, NOT ONLY THE FIRST ─────────────────
+             *
+             * Whether a catalog item applies depends on the site each child's own agreement attends,
+             * so a selection can be fine for one child and refused for the next. The write judges
+             * each child; the preview has to say the same thing before anything is confirmed, or a
+             * multi-child (and therefore every bulk) Add would preview clean and half-refuse at commit.
+             */
+            if (catalogProductId && selected.length > 1) {
+                const labelsByIndex = Array.isArray(payload?.child_labels)
+                    ? (payload.child_labels as unknown[]).map((v) => t(v))
+                    : [];
+                for (let i = 1; i < selected.length; i++) {
+                    const other = await resolveChargeSubject(
+                        supabase as SupabaseClient, ctx.orgId, selected[i]!, t(payload?.customer_id) || null,
+                    );
+                    const who = labelsByIndex[i] || "one of the selected children";
+                    if (!other.ok) {
+                        const reason = `${who}: ${other.message}`;
+                        return { summary: reason, changes: [], blocked: { reason } };
+                    }
+                    const r = await previewFor(other);
+                    if (!r.intent.eligible) {
+                        const reason = `${who}: ${r.intent.reason ?? "This charge cannot be created right now."}`;
+                        return { summary: reason, changes: [], blocked: { reason } };
+                    }
+                }
             }
             const amount =
                 intent.amountCents == null
@@ -665,7 +717,9 @@ const addCharge: RegisteredAction = {
                       ]),
                 intent.periodIssue ? `Billing period · ${intent.periodIssue.message}` : null,
             ].filter((v): v is string => Boolean(v));
-            return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
+            /* A catalog charge is named by its catalog item; a template charge keeps its historical summary. */
+            const what = catalogProductId ? label : intent.templateKey;
+            return { summary: `${what} ${amount}${multi ? " per child" : ""}`, changes };
         } catch (err) {
             return {
                 summary: err instanceof Error ? err.message : "This charge cannot be previewed.",
@@ -752,6 +806,7 @@ const addCharge: RegisteredAction = {
             const subject = subjects[0]!.subject;
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,

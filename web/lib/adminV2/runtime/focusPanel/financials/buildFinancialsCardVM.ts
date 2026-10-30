@@ -62,6 +62,11 @@ import { resolveCollectiblePositionsForCharges } from "@/lib/financials/workspac
 import { positionFactsFromBundle, readAccountFactBundle, type AccountFactBundle } from "@/lib/financials/workspace/readAccountFactBundle";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import {
+    catalogChargeOptions,
+    readCatalogChargeConfig,
+} from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import { shapeAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
 import {
@@ -413,6 +418,24 @@ export type FinancialsChargeTemplateOption = {
     reviewRequired: boolean;
     occursOnStrategy: string;
     billableOnStrategy: string;
+    /**
+     * WHERE THIS OPTION COMES FROM. Manual Add Charge offers the organisation's Catalog
+     * (`commercial_products`) and nothing else — `id` is the catalog item's id, sent as
+     * `catalog_product_id`. A `template` option exists only in `draftTemplates`: it is how an
+     * EXISTING template draft is edited under its own template, never a choice for a new charge.
+     */
+    source: "catalog" | "template";
+    /** A template option's lineage key (`template_key`), shared by every version of that template. */
+    templateKey?: string;
+    /**
+     * `offerable` — may be charged. `unsupported` — billed by another flow. `blocked` — configuration
+     * is incomplete (no account, no price). Only `offerable` can be chosen; the other two are shown
+     * with `unavailableReason` so the operator sees the whole catalog and why an item is not here.
+     */
+    availability: "offerable" | "unsupported" | "blocked";
+    unavailableReason: string | null;
+    /** The account the charge will post to, as `code · name` — the catalog item's own, never a default. */
+    accountLabel: string | null;
 };
 
 /** A fact the platform does not own yet, named rather than rendered as zero. */
@@ -468,6 +491,14 @@ export type FinancialsCardVM = {
      */
     payments: FinancialsPaymentRow[];
     chargeTemplates: FinancialsChargeTemplateOption[];
+    /**
+     * THE TEMPLATES IN EFFECT TODAY — for editing a draft that was written from one, and nothing else.
+     *
+     * A historical template draft keeps its template identity: it is edited under that template (or
+     * the version of the same `template_key` in force now), through `template_id`, exactly as before.
+     * It is never matched to a catalog item by name — two different authorities can share a name.
+     */
+    draftTemplates: FinancialsChargeTemplateOption[];
     unavailable: FinancialsUnavailable[];
     /**
      * Canonical payment state to show the operator, or null when none exists.
@@ -716,6 +747,7 @@ function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardV
         ledgerPeriods: [],
         payments: [],
         chargeTemplates: [],
+        draftTemplates: [],
         unavailable: [],
         paymentSetup: null,
         autopayLine: null,
@@ -1306,14 +1338,24 @@ async function buildFinancialsCardVMInner(
      * `.catch` is attached at creation because the early-return paths below never await these, and
      * an unawaited rejection must not surface as an unhandled one.
      */
+    /*
+     * ONE GL CONFIGURATION READ, TWO CONSUMERS. The card resolves a charge's account from it, and the
+     * Catalog it offers resolves each item's account from the same two tables. The catalog reader
+     * used to issue its own `loadGlConfigBundle`, so every card read `gl_accounts` and
+     * `gl_account_mappings` twice. Now the shared reader runs once and both join it — each keeping
+     * its own failure meaning: the card degrades to no account labels (as before, when either read
+     * failed), the catalog still fails closed ("could not be read", never "unmapped").
+     */
+    const glConfigP = loadGlConfigBundle(supabase, args.orgId);
+    glConfigP.catch(() => undefined);
     const configRead = clock.time("config_ms", () =>
         Promise.all([
-            supabase.from("gl_account_mappings").select("key, gl_account_id, is_active").eq("org_id", args.orgId),
-            supabase.from("gl_accounts").select("id, code, name, is_active").eq("org_id", args.orgId),
+            glConfigP.then((gl) => ({ data: gl.glAccountMappings as unknown }), () => ({ data: [] as unknown })),
+            glConfigP.then((gl) => ({ data: gl.glAccounts as unknown }), () => ({ data: [] as unknown })),
             supabase
                 .from("financial_charge_templates")
                 .select(
-                    "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
+                    "id, template_key, label, charge_category, amount_strategy, amount_cents, currency_code, "
                     /*
                  * `review_required` and `service_id` are read because the CARD has to be able to
                  * say what confirming Add will actually do. Without them the command could only
@@ -1369,6 +1411,31 @@ async function buildFinancialsCardVMInner(
      * unawaited rejection, and a policy read that fails still degrades to "no policy resolved"
      * rather than taking the card down.
      */
+    /*
+     * ── THE CATALOG MANUAL ADD CHARGE OFFERS — read by the same reader the command validates with ──
+     *
+     * `.catch` at creation for the same reason as the reads above: an early return never awaits it.
+     */
+    const catalogConfigP = readCatalogChargeConfig(supabase, args.orgId, today, glConfigP).then(
+        (config) => ({ ok: true as const, config }),
+        (err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : "catalog read failed" }),
+    );
+    /*
+     * THE SITES THIS ACCOUNT'S CHARGES CAN BE FOR — `site_location_id`, the column
+     * `resolveFinancialPolicyScope` reads for the command. Keyed by the household (or the child, when
+     * only a child is in scope) so it goes out in this first wave; the fact bundle does not carry it.
+     */
+    const agreementSitesP = Promise.resolve(
+        supabase
+            .from("child_enrollment_agreements")
+            .select("id, site_location_id")
+            .eq("org_id", args.orgId)
+            .eq(customerId ? "customer_id" : "customer_member_id", customerId ?? memberId ?? ""),
+    ).then(
+        (r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>>, error: r.error?.message ?? null }),
+        (err: unknown) => ({ data: [] as Array<Record<string, unknown>>, error: err instanceof Error ? err.message : "site read failed" }),
+    );
+
     const financialPoliciesP = clock
         .time("policies_ms", () => listFinancialPolicies(supabase, args.orgId))
         .catch(() => [] as Awaited<ReturnType<typeof listFinancialPolicies>>);
@@ -2299,7 +2366,31 @@ async function buildFinancialsCardVMInner(
         return r.resolved ? r.policy.value.required === true : false;
     };
 
-    vm.chargeTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
+    /*
+     * ── ADD CHARGE OFFERS THE CATALOG, JUDGED BY THE COMMAND'S OWN RULE ──────────────────────────
+     *
+     * `evaluateCatalogCharge` is what `charge.add` runs on preview and on write. It is given the same
+     * business date and the sites this account's charges can be for — the household (no site) and
+     * each agreement's site — so an item listed here is one the command accepts for at least one
+     * subject, at the price shown. Out-of-scope items (inactive, not in effect today, another
+     * location's) are not listed; unsupported and blocked ones are listed and cannot be chosen.
+     *
+     * `templateResult` is still read: it is what labels charges made from templates before this.
+     */
+    const [catalog, agreementSites] = await Promise.all([catalogConfigP, agreementSitesP]);
+    if (!catalog.ok || agreementSites.error) {
+        /* FAIL CLOSED: an option list judged against a scope we could not read would be a guess. */
+        const why = !catalog.ok ? catalog.error : agreementSites.error;
+        vm.unavailable.push({ fact: "catalog", reason: `The catalog could not be read (${why}).` });
+        vm.chargeTemplates = [];
+    } else {
+        const locationIds: Array<string | null> = [
+            null,
+            ...agreementSites.data.map((r) => t(r.site_location_id)).filter(Boolean),
+        ];
+        vm.chargeTemplates = catalogChargeOptions(catalog.config, { asOf: today, locationIds }, reviewPolicyForService(null));
+    }
+    vm.draftTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
         .filter((row) => {
             const start = t(row.effective_start);
             const end = t(row.effective_end);
@@ -2307,7 +2398,7 @@ async function buildFinancialsCardVMInner(
         })
         .map((row) => ({
             id: t(row.id),
-            // The operator-facing label the tenant configured. Never `template_key`.
+            templateKey: t(row.template_key),
             label: t(row.label),
             categoryKey: t(row.charge_category),
             categoryLabel: chargeCategoryLabel(t(row.charge_category)),
@@ -2318,6 +2409,10 @@ async function buildFinancialsCardVMInner(
             billableOnStrategy: t(row.billable_on_strategy),
             reviewRequired:
                 reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
+            source: "template" as const,
+            availability: "offerable" as const,
+            unavailableReason: null,
+            accountLabel: null,
         }));
 
     /*
