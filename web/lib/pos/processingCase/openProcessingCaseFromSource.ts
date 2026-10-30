@@ -26,6 +26,19 @@ export async function openProcessingCaseFromSource(
         caseType?: string | null;
     }
 ): Promise<OpenProcessingCaseResult> {
+    // The atomic path: one transaction for the case and its primary source, so a lost race leaves no orphan case.
+    if (deps.openCaseWithPrimarySource) {
+        const atomic = await deps.openCaseWithPrimarySource({
+            orgId: args.orgId,
+            sourceKind: args.sourceKind,
+            sourceId: args.sourceId,
+            caseType: args.caseType ?? null,
+        });
+        if (atomic) return atomic;
+    }
+
+    // Pre-migration fallback (and pure test ports without the atomic method). Not atomic: a concurrent open can leave
+    // the losing case without a source. Kept only so code deployed before the migration behaves exactly as before.
     const existingCaseId = await deps.findCaseIdByPrimarySource({
         orgId: args.orgId,
         sourceKind: args.sourceKind,

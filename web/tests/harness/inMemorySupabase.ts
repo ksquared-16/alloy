@@ -57,6 +57,15 @@ export class InMemorySupabase {
         return new QueryBuilder(this, table);
     }
 
+    /**
+     * No SQL function exists in memory. PostgREST answers an unknown function with `PGRST202`, so callers take the
+     * same path they take against a database that has not received the function yet. A test that needs a function
+     * assigns its own `rpc`.
+     */
+    async rpc(fn: string): Promise<{ data: null; error: { code: string; message: string } }> {
+        return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` } };
+    }
+
     get storage() {
         return {
             from: (bucket: string) => ({
