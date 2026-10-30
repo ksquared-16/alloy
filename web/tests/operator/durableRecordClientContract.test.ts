@@ -149,7 +149,12 @@ describe("the wire format preserves the card maps", () => {
         // cards and no error.
         expect(decoded.cardModels).toBeInstanceOf(Map);
         expect(decoded.cardReadiness).toBeInstanceOf(Map);
-        expect([...decoded.cardModels.keys()]).toEqual(["staff"]);
+        // Every card the model composed survives, in order — compared to the model itself rather than
+        // a hard-coded list, so the Staff cards added beside `staff` (qualifications, availability,
+        // readiness, compensation) do not turn a wire-format guard into a card-inventory test.
+        expect([...model.cardModels.keys()].length).toBeGreaterThan(0);
+        expect([...decoded.cardModels.keys()]).toEqual([...model.cardModels.keys()]);
+        expect([...decoded.cardModels.keys()][0]).toBe("staff");
         expect(decoded.cardReadiness.get("staff")).toBe("ready");
         expect(decoded.cardModels.get("staff")?.insight).toBe("Lead Teacher at Riverside");
     });
