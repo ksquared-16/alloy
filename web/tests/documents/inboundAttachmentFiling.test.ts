@@ -48,7 +48,7 @@ function memoryStorage(bytesById: Record<string, Uint8Array>, docOrg = ORG) {
             const existing = rows.get(key);
             if (existing) return existing;
             n += 1;
-            const row = { key, documentId: `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`, orgId: docOrg, status };
+            const row = { key, documentId: `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`, orgId: docOrg, status, versionId: `5e000000-0000-4000-8000-${String(n).padStart(12, "0")}`, checksumSha256: "c".repeat(64) };
             rows.set(key, row);
             return row;
         },
@@ -79,7 +79,14 @@ function memoryCases() {
     return { deps, cases, sources };
 }
 
-const scanner = (verdict: "clean" | "infected" | "pending"): MalwareScanBoundary => ({ available: true, verdict: async () => ({ verdict }) });
+/** A synthetic verdict source (NOT a scanner): answers about exactly the version it was asked about. */
+const scanner = (verdict: "clean" | "infected" | "pending"): MalwareScanBoundary => ({
+    available: true,
+    verdict: async ({ documentId, versionId, checksumSha256 }) => ({
+        verdict,
+        subject: versionId && checksumSha256 ? { documentId, versionId, checksumSha256 } : null,
+    }),
+});
 
 const message = (over: Partial<InboundMessageForFiling> = {}): InboundMessageForFiling => ({
     id: MSG,
@@ -210,6 +217,60 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
             expect((out[0] as { reasons: string[] }).reasons).toContain(reason);
             expect(cases.cases).toHaveLength(0);
         }
+    });
+
+    it("D1c-2 fails closed: a throwing scanner, a verdict about another version and a version-less row all hold", async () => {
+        const throwing: MalwareScanBoundary = { available: true, verdict: async () => { throw new Error("scanner down"); } };
+        const otherVersion: MalwareScanBoundary = {
+            available: true,
+            verdict: async ({ documentId, checksumSha256 }) => ({ verdict: "clean", subject: { documentId, versionId: "5e000000-0000-4000-8000-0000000000ff", checksumSha256: checksumSha256 ?? "" } }),
+        };
+        for (const [malware, reason] of [[throwing, "malware_rejected"], [otherVersion, "malware_verdict_unbound"]] as const) {
+            const mem = memoryStorage({ "att-1": pdf() });
+            const cases = memoryCases();
+            const out = await fileInboundEmailAttachments({ storage: mem.storage, malware, processing: cases.deps }, message());
+            expect(out[0]).toMatchObject({ outcome: "held", reasons: [reason] });
+            expect(cases.cases).toHaveLength(0);
+        }
+        // Storage that cannot name the version: even the bound test double cannot release it.
+        const mem = memoryStorage({ "att-1": pdf() });
+        const versionless: typeof mem.storage = { ...mem.storage, store: async (x) => ({ ...(await mem.storage.store(x)), versionId: null }) };
+        const cases = memoryCases();
+        const out = await fileInboundEmailAttachments({ storage: versionless, malware: scanner("clean"), processing: cases.deps }, message());
+        expect(out[0]).toMatchObject({ outcome: "held", reasons: ["malware_verdict_unbound"] });
+        expect(cases.cases).toHaveLength(0);
+    });
+
+    it("the case is annotated on every converged open (a lost annotation is repaired by redelivery); a failing annotator never forks or fails", async () => {
+        const mem = memoryStorage({ "att-1": pdf() });
+        const cases = memoryCases();
+        const seen: string[] = [];
+        let fail = true;
+        const annotateCase = async (x: { processingCaseId: string; documentId: string; messageId: string; attachmentId: string; filename: string | null }) => {
+            seen.push(`${x.processingCaseId}|${x.documentId}|${x.messageId}|${x.attachmentId}|${x.filename}`);
+            if (fail) { fail = false; throw new Error("lost"); }
+        };
+        const deps = { storage: mem.storage, malware: scanner("clean"), processing: cases.deps, annotateCase };
+        const first = await fileInboundEmailAttachments(deps, message());
+        const second = await fileInboundEmailAttachments(deps, message());
+        expect(first[0].outcome).toBe("case_opened");
+        expect(second[0].outcome).toBe("case_existing");
+        expect(cases.cases).toHaveLength(1);
+        expect(seen).toHaveLength(2);
+        expect(new Set(seen).size).toBe(1);
+        expect(seen[0]).toBe(`${cases.cases[0].id}|d0000000-0000-4000-8000-000000000001|${MSG}|att-1|immunizations.pdf`);
+    });
+
+    it("a storage failure holds that attachment only; the next one proceeds", async () => {
+        const mem = memoryStorage({ "a1": pdf(), "a2": pdf() });
+        const flaky: typeof mem.storage = { ...mem.storage, store: async (x) => { if (x.attachmentId === "a1") throw new Error("bucket down"); return mem.storage.store(x); } };
+        const cases = memoryCases();
+        const out = await fileInboundEmailAttachments(
+            { storage: flaky, malware: scanner("clean"), processing: cases.deps },
+            message({ attachments: ["a1", "a2"].map((id) => ({ id, filename: `${id}.pdf`, content_type: "application/pdf", content_disposition: "attachment", size: 400 })) }),
+        );
+        expect(out.map((o) => o.outcome)).toEqual(["held", "case_opened"]);
+        expect(out[0]).toMatchObject({ reasons: ["attachment_not_stored"] });
     });
 
     it("an explicit structural-only policy releases on D1c-1 alone", async () => {

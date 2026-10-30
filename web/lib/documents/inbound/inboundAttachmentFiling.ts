@@ -33,6 +33,7 @@ import {
     type FilingPolicy,
     type HoldReason,
     type InboundOwnership,
+    type MalwareVerdict,
 } from "@/lib/documents/inbound/emailAttachmentFilingDecision";
 
 /** One owned inbound message, as Communications persists it (`communication_messages` + `metadata.attachments[]`). */
@@ -43,7 +44,11 @@ export type InboundMessageForFiling = {
     attachments: Array<{ id: string; filename: string | null; content_type: string | null; content_disposition: string | null; size: number | null }>;
 };
 
-export type StoredAttachment = { documentId: string; orgId: string; status: string | null };
+/**
+ * The stored document, and the exact version WS11 wrote (`documents.current_version_id` + its SHA-256). A malware
+ * verdict releases a file only when it names this version; a row without them can never be released on a scan.
+ */
+export type StoredAttachment = { documentId: string; orgId: string; status: string | null; versionId?: string | null; checksumSha256?: string | null };
 
 /**
  * The WS11 contract this pipeline consumes. Communications owns its implementation; `store` must be idempotent on
@@ -65,9 +70,14 @@ export interface AttachmentStorageBoundary {
     }): Promise<StoredAttachment>;
 }
 
+/**
+ * D1c-2. Asked about ONE stored version — document, version id and content hash — and answers about that version. The
+ * gate checks the answer's `subject` against what was stored: a verdict about any other bytes holds the file
+ * (`malware_verdict_unbound`). No implementation exists; structural screening is never an implementation of this.
+ */
 export interface MalwareScanBoundary {
     readonly available: boolean;
-    verdict(args: { orgId: string; documentId: string }): Promise<{ verdict: "clean" | "infected" | "suspicious" | "pending" | "failed" }>;
+    verdict(args: { orgId: string; documentId: string; versionId: string | null; checksumSha256: string | null }): Promise<MalwareVerdict>;
 }
 
 /** Today's WS11 reality: no retrieval, no storage. Calling it is a programming error — the gate holds first. */
@@ -81,7 +91,7 @@ export const UNAVAILABLE_ATTACHMENT_STORAGE: AttachmentStorageBoundary = Object.
 /** Today's D1c-2 reality: no scanner. */
 export const UNAVAILABLE_MALWARE_SCAN: MalwareScanBoundary = Object.freeze({
     available: false,
-    async verdict(): Promise<{ verdict: "pending" }> { return { verdict: "pending" }; },
+    async verdict(): Promise<MalwareVerdict> { return { verdict: "pending", subject: null }; },
 });
 
 export type InboundAttachmentFilingDeps = {
@@ -90,6 +100,12 @@ export type InboundAttachmentFilingDeps = {
     processing: ProcessingCaseDeps;
     policy?: FilingPolicy;
     now?: () => Date;
+    /**
+     * Marks the case as a document to file (`processing_intent = store_document`) and records where it came from. Run on
+     * EVERY converged open, not only on creation, and must be an idempotent merge: a redelivery repairs an annotation a
+     * crash lost. Without it the case opens but never reaches the filing queue (`caseRequiresFiling`).
+     */
+    annotateCase?: (args: { orgId: string; processingCaseId: string; documentId: string; messageId: string; attachmentId: string; filename: string | null }) => Promise<void>;
 };
 
 export type AttachmentFilingOutcome =
@@ -125,7 +141,11 @@ export async function fileInboundEmailAttachments(
         const orgId = message.orgId;
 
         // 2–3. Reuse what is stored; otherwise retrieve, screen as an outside file, store.
-        let stored = await deps.storage.findStored({ orgId, messageId: message.id, attachmentId: a.id });
+        let stored = await deps.storage.findStored({ orgId, messageId: message.id, attachmentId: a.id }).catch(() => undefined);
+        if (stored === undefined) {
+            held(["attachment_not_stored"]);
+            continue;
+        }
         let structural: "clean" | "quarantined" | "refused" | null = stored ? (stored.status === "quarantined" ? "quarantined" : "clean") : null;
         if (!stored) {
             if (typeof a.size === "number" && a.size > PUBLIC_UPLOAD_MAX_FILE_BYTES) {
@@ -147,7 +167,8 @@ export async function fileInboundEmailAttachments(
                 held(["screening_refused"]);
                 continue;
             }
-            stored = await deps.storage.store({
+            stored = await deps.storage
+                .store({
                 orgId,
                 messageId: message.id,
                 attachmentId: a.id,
@@ -156,12 +177,23 @@ export async function fileInboundEmailAttachments(
                 bytes: got.bytes,
                 status: screened.status,
                 screening: screened.screening,
-            });
+                })
+                // One attachment's storage failure holds that attachment; the others still proceed, and a redelivery retries.
+                .catch(() => null);
+            if (!stored) {
+                held(["attachment_not_stored"]);
+                continue;
+            }
             structural = screened.status === "quarantined" ? "quarantined" : "clean";
         }
 
         // 4. Malware verdict, only where the policy requires one and a scanner exists.
-        const malware = policy.requireMalwareScan && deps.malware.available ? await deps.malware.verdict({ orgId, documentId: stored.documentId }) : null;
+        const malware =
+            policy.requireMalwareScan && deps.malware.available
+                ? await deps.malware
+                      .verdict({ orgId, documentId: stored.documentId, versionId: stored.versionId ?? null, checksumSha256: stored.checksumSha256 ?? null })
+                      .catch((): MalwareVerdict => ({ verdict: "failed", subject: null }))
+                : null;
 
         // 5. The gate, then one case.
         const decision = decideInboundAttachmentFiling({ ...base, stored, structural, malware }, capability, policy);
@@ -169,22 +201,35 @@ export async function fileInboundEmailAttachments(
             held(decision.reasons, stored.documentId);
             continue;
         }
+        let opened: { processingCaseId: string; created: boolean } | null = null;
         try {
-            const opened = await openNonFormProcessingCaseFromSource(deps.processing, {
+            opened = await openNonFormProcessingCaseFromSource(deps.processing, {
                 orgId: decision.orgId,
                 sourceKind: "email_attachment",
                 sourceId: decision.sourceId,
                 caseType: null,
             });
-            out.push({ attachmentId: a.id, sourceKey, outcome: opened.created ? "case_opened" : "case_existing", processingCaseId: opened.processingCaseId, documentId: decision.documentId });
         } catch {
             // A concurrent redelivery won the unique primary-source race: converge on its case rather than fail or fork.
             const existing = await deps.processing
                 .findCaseIdByPrimarySource({ orgId: decision.orgId, sourceKind: "email_attachment", sourceId: decision.sourceId })
                 .catch(() => null);
-            if (existing) out.push({ attachmentId: a.id, sourceKey, outcome: "case_existing", processingCaseId: existing, documentId: decision.documentId });
-            else held(["case_open_failed"], decision.documentId);
+            if (existing) opened = { processingCaseId: existing, created: false };
         }
+        if (!opened) {
+            held(["case_open_failed"], decision.documentId);
+            continue;
+        }
+        // Best-effort and idempotent: the case exists either way; the next delivery re-applies a lost annotation.
+        await deps.annotateCase?.({
+            orgId: decision.orgId,
+            processingCaseId: opened.processingCaseId,
+            documentId: decision.documentId,
+            messageId: message.id,
+            attachmentId: a.id,
+            filename: a.filename,
+        }).catch(() => undefined);
+        out.push({ attachmentId: a.id, sourceKey, outcome: opened.created ? "case_opened" : "case_existing", processingCaseId: opened.processingCaseId, documentId: decision.documentId });
     }
     return out;
 }

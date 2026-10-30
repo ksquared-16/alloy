@@ -36,13 +36,36 @@ export type InboundAttachmentInput = {
         id: string;
         disposition: string | null;
     };
-    /** The `documents` row WS11 holds for this attachment, when it exists. */
-    stored: { documentId: string; orgId: string; status: string | null } | null;
+    /**
+     * The `documents` row WS11 holds for this attachment, when it exists. `versionId` / `checksumSha256` name the exact
+     * stored bytes (`documents.current_version_id`, the D2 version row); a malware verdict is only ever about them.
+     */
+    stored: { documentId: string; orgId: string; status: string | null; versionId?: string | null; checksumSha256?: string | null } | null;
     /** Structural screening (D1c-1) of the stored bytes; `refused` means nothing was stored. */
     structural: "clean" | "quarantined" | "refused" | null;
     /** Malware verdict (D1c-2), when a scanner exists. */
-    malware: { verdict: "clean" | "infected" | "suspicious" | "pending" | "failed" } | null;
+    malware: MalwareVerdict | null;
 };
+
+/**
+ * A D1c-2 verdict, and WHICH bytes it is about. A verdict that does not name the exact stored version — its document,
+ * version id and content hash — is no verdict: it cannot release a file, however "clean" it says it is.
+ */
+export type MalwareVerdict = {
+    verdict: "clean" | "infected" | "suspicious" | "pending" | "failed";
+    subject?: { documentId: string; versionId: string; checksumSha256: string } | null;
+};
+
+/** True only when the verdict is bound to exactly the stored version. Absent identity on either side is never a match. */
+export function malwareVerdictBindsStoredVersion(
+    stored: InboundAttachmentInput["stored"],
+    malware: MalwareVerdict | null,
+): boolean {
+    const s = malware?.subject;
+    if (!stored || !s) return false;
+    if (!stored.versionId || !stored.checksumSha256) return false;
+    return s.documentId === stored.documentId && s.versionId === stored.versionId && s.checksumSha256 === stored.checksumSha256;
+}
 
 export type HoldReason =
     | "storage_unavailable"
@@ -58,6 +81,7 @@ export type HoldReason =
     | "document_unavailable"
     | "malware_pending"
     | "malware_rejected"
+    | "malware_verdict_unbound"
     | "case_open_failed";
 
 export type AttachmentFilingDecision =
@@ -110,22 +134,22 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
         key: "ws11_attachment_storage",
         owner: "Communications (Conversation Platform WS11)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.storage ? "ready" : "missing",
-        proof: "attachment retrieval from the receiving provider plus a migration creating communication_message_attachments (org_id, message_id, document_id → documents, disposition, UNIQUE (message_id, document_id)) — schema prepared for owner review in certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql, not applied — and an AttachmentStorageBoundary implementation over it",
-        next: "WS11 storage slice (Communications); Documents' pipeline consumes it through the injected boundary unchanged",
+        proof: "an AttachmentContentFetcher (lib/documents/inbound/ws11AttachmentStorage.ts) that retrieves one listed attachment's bytes from the receiving provider under the organization's own binding credential, with retryable/permanent outcomes. The storage half exists: createWs11AttachmentStorage stores through the existing document sequence, idempotent on a stable document id, no new table. The provider's attachment-content contract is not in the repository and is not invented. The communication_message_attachments link remains Communications' own (draft: certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql, not applied)",
+        next: "Communications implements the fetcher; makeInboundAttachmentFilingDeps(supabase, { fetchContent }) consumes it unchanged",
     },
     {
         key: "d1c2_malware_scanning",
         owner: "Documents security (D1c-2, deferred in D5)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.malwareScanning ? "ready" : "missing",
-        proof: "a recorded malware verdict per stored version before release; no verdict = not scanned. Alternatively an explicit organization policy accepting D1c-1 structural screening alone",
+        proof: "a MalwareScanBoundary whose verdict names the exact stored version — document id, documents.current_version_id and its SHA-256 — from a trusted scanner; any other verdict holds (malware_verdict_unbound), a scanner error holds (malware_rejected), no verdict = not scanned. Structural screening is not a scanner. Alternatively an explicit organization policy accepting D1c-1 structural screening alone (not enabled)",
         next: "choose a scanner within existing services (no new paid provider without approval), or the policy decision",
     },
     {
         key: "communications_ingestion_hook",
         owner: "Communications (inbound email ingestion)",
         state: "missing",
-        proof: "ingestResendInboundEmail calls fileInboundEmailAttachments after the message persists (owned messages only), best-effort, never failing ingestion",
-        next: "a one-call hook added with WS11 storage; no new ingress",
+        proof: "ingestResendInboundEmail calls fileInboundAttachmentsForPersistedMessage(deps, { orgId, messageId }) (lib/documents/inbound/inboundAttachmentHook.ts) after the message persists. The hook exists, never throws, re-reads ownership itself and is safe on redelivery; the call site in the Communications-owned ingestion is not added",
+        next: "a one-call addition by Communications with the fetcher; no new ingress",
     },
 ]);
 
@@ -170,6 +194,8 @@ export function decideInboundAttachmentFiling(
         const v = input.malware?.verdict ?? null;
         if (v === null || v === "pending") reasons.push("malware_pending");
         else if (v !== "clean") reasons.push("malware_rejected");
+        // A clean verdict releases only the version it names. Another version, another hash or no identity holds.
+        else if (!malwareVerdictBindsStoredVersion(stored, input.malware)) reasons.push("malware_verdict_unbound");
     }
 
     if (reasons.length > 0 || !stored || !input.message.orgId) {

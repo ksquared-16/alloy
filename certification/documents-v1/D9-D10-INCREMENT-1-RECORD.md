@@ -129,9 +129,87 @@ as wholly missing, which was wrong:
 
   Restored byte-for-byte afterwards.
 
-**Finding for the Processing owner (not changed here).** `openProcessingCaseFromSource` inserts the case before its primary source. A delivery that loses the unique-index race therefore leaves an orphan `processing_cases` row without a source. Uniqueness of the primary still holds, and D10 converges on the winner. This affects every source kind.
+**Finding: orphan case on a lost race (repaired locally in `f1d8d0789`, awaiting DB proof).** `openProcessingCaseFromSource` inserted the case before its primary source. A delivery that lost the unique-index race therefore left an orphan `processing_cases` row without a source. This affected every source kind. See c2.1.
 
 **Product decision available:** whether an organization may release email attachments on D1c-1 structural screening alone. That would match the public upload paths. The default holds until D1c-2 exists.
+
+## c2.1 — atomic opener, WS11 seams, version-bound malware gate (local; synthetic proof)
+
+**1. Atomic Processing opener (`f1d8d0789`).**
+- `supabase/migrations/20261215093000_processing_open_case_atomic.sql` is authored and **NOT applied**. `open_processing_case_with_primary_source` writes the case and its primary source inside one PL/pgSQL exception block (a savepoint). A unique violation rolls back both, then the function returns the winner's case.
+- Nothing is deleted after the fact. It is SECURITY INVOKER, executable by `service_role` only.
+- `makeProcessingCaseDbDeps` calls it, falling back to the previous sequence ONLY when the function is missing (`PGRST202` / `42883`). Code can therefore ship before the migration.
+- Proof: `tests/pos/processingCaseAtomicOpen.test.ts` **16/16**.
+  - The legacy orphan is reproduced.
+  - Atomic-port interleavings give one case and one source.
+  - Every source kind, tenancy, and other errors are not swallowed.
+- **Awaiting DB proof:**
+  - real two-session concurrency against the function;
+  - the single-session invariant `certification/invariants/processing-open-case-atomic.sql`, prepared and not run;
+  - fake ports do not prove database atomicity.
+
+**2. WS11 storage seam and Communications hook (this slice).**
+- `lib/documents/inbound/ws11AttachmentStorage.ts` implements `AttachmentStorageBoundary` over the EXISTING document sequence:
+  - `document_upload_authorized` audit first;
+  - then the object at `<org>/pos_intake/` in `org_documents`;
+  - then one `documents` row naming `current_version_id` (the D2 trigger writes version 1) and its SHA-256, with `processing_intent = store_document` and the message/attachment provenance.
+- **No new table:** the document id is a stable hash of (organization, message, attachment), so idempotency is the `documents` primary key.
+  - A concurrent duplicate removes ONLY its own uploaded object and returns the winner.
+  - No row is ever deleted.
+  - Communications' `communication_message_attachments` stays theirs. The draft is unchanged and not turned into a migration (schema-ownership review); nothing duplicates it.
+- **Retrieval goes only through an injected `AttachmentContentFetcher`.** It is Communications-owned and given the provider message id and the binding id, never a credential.
+  - It is used only for an inbound email of the same organization whose persisted metadata lists that attachment.
+  - Without a fetcher the boundary is unavailable.
+  - The provider's attachment-content API is not in the repository and was not invented.
+- **Audit actor:** `recordDocumentAudit` accepts a closed `system` principal (`inbound_email_attachment` only). An unnamed process is refused.
+- **Hook (`lib/documents/inbound/inboundAttachmentHook.ts`):**
+  - `fileInboundAttachmentsForPersistedMessage(deps, { orgId, messageId })` never throws and re-reads the message under the organization.
+  - `makeInboundCaseAnnotator` merges the filing intent and provenance into the case on EVERY converged open, so a redelivery repairs a lost annotation.
+  - `makeInboundAttachmentFilingDeps(supabase, { fetchContent })` is the production wiring: no fetcher and no scanner, so everything is held before a byte is read.
+  - The call site inside `ingestResendInboundEmail` is Communications' to add. Not added; no concurrent edits to that file exist on other branches.
+- **Pipeline hardening:** one attachment's storage failure holds that attachment only.
+
+**3. D1c-2 fails closed, bound to the exact version.**
+- A verdict now carries `subject {documentId, versionId, checksumSha256}`, and the scanner is asked about that exact version.
+- `clean` releases only when the subject equals the stored document, `current_version_id` and hash.
+- These hold, as `malware_verdict_unbound`:
+  - another version, another hash or another document;
+  - a missing subject;
+  - a stored row without a version or hash.
+- A scanner exception holds as `malware_rejected`.
+- No scanner was written. The capability stays `false`, the default policy still requires a scan, and the structural-only policy is not enabled.
+
+**Proof (broker, synthetic):**
+- `ws11AttachmentStorage.test.ts` **17/17**: InMemorySupabase with the `documents` primary key enforced, a fake fetcher, and a version-bound verdict double that is NOT a scanner. It covers:
+  - audit before upload; no audit means no file;
+  - idempotent repeat; concurrent duplicate gives one row and the loser's object only removed;
+  - cross-org, outbound and unlisted attachments are never fetched;
+  - production wiring holds even with a fetcher;
+  - composed end-to-end: one document, one annotated case, filing-queue eligible, resolved by `loadDocumentCase`; redelivery adds nothing;
+  - a stale verdict is stored but held.
+- `inboundAttachmentFiling.test.ts` **15/15**, `emailAttachmentFilingDecision.test.ts` **24/24**.
+- The screening-coverage and D2 writer census guards pass with the adapter registered: screened by its pipeline, no legacy parent columns.
+- Mutation check, restored byte-for-byte afterwards:
+
+| Mutation | Result |
+|---|---|
+| Version binding disabled | 8 fail |
+| Loser keeps its object | 2 fail |
+| Random (non-stable) document id | 5 fail |
+| Unlisted attachment fetched | 1 fails |
+
+**Harness:** InMemorySupabase gained opt-in `uniqueOn`, and its default `rpc` signature was widened. That repairs a `typecheck:tests` break that `f1d8d0789` introduced in `tests/metrics/ws0aMetricScopeIntegrity.test.ts`.
+
+**Still external (proof boundaries):**
+
+| Item | Owner | What is still unproven |
+|---|---|---|
+| (a) Attachment-content fetcher | Communications | The provider contract and the org-credential implementation |
+| (b) Ingestion call site | Communications | — |
+| (c) Trusted malware scanner and verdict store | Documents security D1c-2 | The service and credentials are external |
+| (d) Atomic-opener migration | DB | Apply, then the two-session concurrency proof |
+| (e) D2 insert trigger with an explicit `current_version_id` | DB | Real-DB confirmation; in-memory only so far |
+| (f) Storage RLS and bucket policy for the system writer | DB | Not exercised |
 
 ## c3 — local only; history preserved
 

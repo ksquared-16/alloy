@@ -18,15 +18,18 @@ const ROOT = resolve(__dirname, "../../..");
 const ORG = "0a000000-0000-4000-8000-0000000000d1";
 const MSG = "3e000000-0000-4000-8000-0000000000d1";
 const DOC = "d0000000-0000-4000-8000-0000000000d1";
+const VER = "5e000000-0000-4000-8000-0000000000d1";
+const SHA = "a".repeat(64);
+const BOUND = { documentId: DOC, versionId: VER, checksumSha256: SHA };
 const ALL = { storage: true, structuralScreening: true, malwareScanning: true };
 const STRUCTURAL_ONLY = { requireMalwareScan: false };
 
 const input = (over: Partial<InboundAttachmentInput> = {}): InboundAttachmentInput => ({
     message: { id: MSG, ownership: "owned", orgId: ORG },
     attachment: { id: "att-1", disposition: "attachment" },
-    stored: { documentId: DOC, orgId: ORG, status: "uploaded" },
+    stored: { documentId: DOC, orgId: ORG, status: "uploaded", versionId: VER, checksumSha256: SHA },
     structural: "clean",
-    malware: { verdict: "clean" },
+    malware: { verdict: "clean", subject: BOUND },
     ...over,
 });
 
@@ -85,6 +88,13 @@ describe("the gate, with every capability present", () => {
         ["malware scan absent", { malware: null }, "malware_pending"],
         ["infected", { malware: { verdict: "infected" } }, "malware_rejected"],
         ["scan failed", { malware: { verdict: "failed" } }, "malware_rejected"],
+        // D1c-2 binding: "clean" releases only the exact stored version it names.
+        ["clean verdict naming no bytes", { malware: { verdict: "clean" } }, "malware_verdict_unbound"],
+        ["clean verdict for an earlier version", { malware: { verdict: "clean", subject: { ...BOUND, versionId: "5e000000-0000-4000-8000-0000000000d2" } } }, "malware_verdict_unbound"],
+        ["clean verdict for other bytes (hash differs)", { malware: { verdict: "clean", subject: { ...BOUND, checksumSha256: "b".repeat(64) } } }, "malware_verdict_unbound"],
+        ["clean verdict for another document", { malware: { verdict: "clean", subject: { ...BOUND, documentId: "d0000000-0000-4000-8000-0000000000d2" } } }, "malware_verdict_unbound"],
+        ["stored row without a version", { stored: { documentId: DOC, orgId: ORG, status: "uploaded", versionId: null, checksumSha256: SHA } }, "malware_verdict_unbound"],
+        ["stored row without a content hash", { stored: { documentId: DOC, orgId: ORG, status: "uploaded", versionId: VER, checksumSha256: null } }, "malware_verdict_unbound"],
     ];
     for (const [why, over, reason] of held) {
         it(`${why} → held (${reason})`, () => {
