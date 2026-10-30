@@ -13,20 +13,23 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+/* The planted sentinel: every failure path below is made to carry it, and no output may. */
+const SENTINEL = vi.hoisted(() => "sk_synthetic_never_print_0123456789abcdef");
 const spawned = vi.hoisted(() => ({ calls: 0 }));
 vi.mock("node:child_process", async (orig) => ({
     ...(await orig<typeof import("node:child_process")>()),
     spawn: vi.fn(() => {
         spawned.calls += 1;
-        throw new Error("no process may start in this suite");
+        throw new Error(`spawn refused in this suite: ${SENTINEL}`);
     }),
 }));
-const clients = vi.hoisted(() => ({ created: 0 }));
+const clients = vi.hoisted(() => ({ created: 0, impl: null as null | (() => unknown) }));
 vi.mock("@supabase/supabase-js", async (orig) => ({
     ...(await orig<typeof import("@supabase/supabase-js")>()),
     createClient: vi.fn(() => {
         clients.created += 1;
-        throw new Error("no client may be created in this suite");
+        if (clients.impl) return clients.impl();
+        throw new Error(`no client may be created in this suite: ${SENTINEL}`);
     }),
 }));
 
@@ -66,7 +69,7 @@ import {
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 /* A synthetic credential: if it ever appears in output, the suite fails. */
-const SECRET = "sk_synthetic_never_print_0123456789abcdef";
+const SECRET = SENTINEL;
 
 function boundEnv(fixture: string, operation: string, over: Record<string, string | undefined> = {}) {
     return {
@@ -88,6 +91,7 @@ function boundEnv(fixture: string, operation: string, over: Record<string, strin
 beforeEach(() => {
     spawned.calls = 0;
     clients.created = 0;
+    clients.impl = null;
 });
 
 describe("the isolated QA binding", () => {
@@ -172,12 +176,12 @@ describe("test:qa:financials-isolated", () => {
     });
 
     it.each([
-        ["the suite skipped itself (no target reached it)", [file([{ status: "skipped" }, { status: "skipped" }], "skipped")], /skipped/],
-        ["one test is pending", [file([{ status: "passed" }, { status: "pending" }])], /skipped\/pending\/todo/],
-        ["one test failed", [file([{ status: "passed" }, { status: "failed" }], "failed")], /failed/],
-        ["the suite failed to load", [file([], "failed")], /failed/],
-        ["the pinned file reported nothing", [], /reported nothing/],
-        ["an unpinned file ran", [file([{ status: "passed" }]), file([{ status: "passed" }], "passed", "/w/tests/other.test.ts")], /not pinned/],
+        ["the suite skipped itself (no target reached it)", [file([{ status: "skipped" }, { status: "skipped" }], "skipped")], /^tests_not_run count=2$/m],
+        ["one test is pending", [file([{ status: "passed" }, { status: "pending" }])], /^tests_not_run count=1$/m],
+        ["one test failed", [file([{ status: "passed" }, { status: "failed" }], "failed")], /^tests_failed count=1$/m],
+        ["the suite failed to load", [file([], "failed")], /^tests_failed count=1$/m],
+        ["the pinned file reported nothing", [], /^pinned_file_reported_nothing file=catalogAddCharge\.live$/m],
+        ["an unpinned file ran", [file([{ status: "passed" }]), file([{ status: "passed" }], "passed", "/w/tests/other.test.ts")], /^unpinned_file_ran count=1$/m],
     ])("is NOT proof when %s", (_label, results, why) => {
         const s = summarize(results as unknown[]);
         expect(s.ok).toBe(false);
@@ -185,7 +189,7 @@ describe("test:qa:financials-isolated", () => {
     });
 
     it("is NOT proof when vitest wrote no report", () => {
-        expect(summarizeVitestReport(null)).toMatchObject({ ok: false, problems: ["vitest produced no readable report"] });
+        expect(summarizeVitestReport(null)).toMatchObject({ ok: false, problems: ["vitest_report_absent"] });
     });
 });
 
@@ -264,9 +268,9 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
     });
 
     it.each([
-        ["a same-named household outside the fixture", { customers: [{ id: "22222222-0000-4000-8000-000000000001", org_id: ORG, name: HOUSEHOLD_NAME, metadata: {} }] }, /household\(s\) outside the fixture are named/],
+        ["a same-named household outside the fixture", { customers: [{ id: "22222222-0000-4000-8000-000000000001", org_id: ORG, name: HOUSEHOLD_NAME, metadata: {} }] }, /household\(s\) outside the fixture carry its name/],
         ["a second household bound to the namespace", { customers: [{ id: "22222222-0000-4000-8000-000000000002", org_id: ORG, name: "x", external_source: NAMESPACE, external_id: "other", metadata: {} }] }, /other household\(s\) are bound/],
-        ["another template with the fixture's key", { financial_charge_templates: [{ id: "tpl-other", org_id: ORG, template_key: "fincert_hist_registration", label: "x", metadata: {} }] }, /carry template_key/],
+        ["another template with the fixture's key", { financial_charge_templates: [{ id: "tpl-other", org_id: ORG, template_key: "fincert_hist_registration", label: "x", metadata: {} }] }, /carry its template_key/],
         ["a same-named Catalog item outside the fixture", { commercial_products: [{ id: "p-other", org_id: ORG, name: FEE_LABEL, metadata: {} }] }, /Catalog item\(s\) outside the fixture/],
         ["a non-fixture row at a fixture id", { customers: [{ id: IDS.customer, org_id: ORG, name: "Somebody real", external_source: null, external_id: null, metadata: {} }] }, /already exists and is not the fixture's/],
     ])("ensure refuses %s as an identity conflict, writing nothing", async (_label, extra, why) => {
@@ -329,7 +333,7 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
         const { store, db } = setup();
         await ensureHistoricalDraft(db as never);
         for (let i = 0; i < RESET_LIMIT; i++) {
-            store.charges.push({ id: `draft-extra-${i}`, org_id: ORG, billable_source_id: IDS.agreement, status: "draft", metadata: {} });
+            store.charges.push({ id: `draft-extra-${i}`, org_id: ORG, billable_source_id: IDS.agreement, charge_template_id: IDS.template, status: "draft", metadata: {} });
         }
         const before = JSON.stringify(store);
         const r = await resetHistoricalDraft(db as never);
@@ -380,5 +384,338 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
         expect(clients.created).toBe(0);
         expect(out.join("\n")).toMatch(/^✗ refused before any IO/);
         expect(out.join("\n")).not.toContain(SECRET);
+    });
+});
+
+/* ── planted-sentinel failure paths: no backend, process or report text reaches output ────────── */
+
+/*
+ * The executor's line grammar, restated from the installed toolkit's
+ * lib/isolated-fixture-execution.mjs `parseIsolatedFixtureOutput` (b3c80db2e9aa). Restated, not
+ * imported: a product test must not load host toolkit code. Every line a script prints is either
+ * one of these structured forms or a plain informational line; none may carry the sentinel.
+ */
+const GRAMMAR = {
+    check: /^\s*([✓✗])\s+(.+)$/,
+    census: /^\s*census count=(\d{1,9})\s*$/,
+    reset: /^\s*reset namespace=(\S+) removed=(\d{1,9})\s*$/,
+    tests: /^\s*tests passed=(\d{1,9}) failed=(\d{1,9})\s*$/,
+};
+
+function expectSafeContract(out: string[], { reset = false, tests = false, census = false } = {}) {
+    const text = out.join("\n");
+    expect(text).not.toContain(SENTINEL);
+    expect(text).not.toMatch(/boom|Error:|at .+\(.+:\d+:\d+\)/);
+    for (const line of out) {
+        const m = GRAMMAR.check.exec(line);
+        if (m) expect(m[2].length, line).toBeLessThanOrEqual(200);
+    }
+    const resets = out.map((l) => GRAMMAR.reset.exec(l)).filter(Boolean) as RegExpExecArray[];
+    if (reset) {
+        expect(resets).toHaveLength(1);
+        expect(resets[0][1]).toBe(NAMESPACE);
+        expect(Number(resets[0][2])).toBeLessThanOrEqual(RESET_LIMIT);
+    }
+    if (tests) expect(out.filter((l) => GRAMMAR.tests.test(l))).toHaveLength(1);
+    if (census) expect(out.filter((l) => GRAMMAR.census.test(l))).toHaveLength(1);
+    return resets[0] ? Number(resets[0][2]) : null;
+}
+
+type Fault = {
+    table: string;
+    op: "select" | "insert" | "delete";
+    /** `error`: a PostgREST-shaped error carrying the sentinel · `throw`: a rejected request · `hook`: run `before`, then pass through. */
+    kind: "error" | "throw" | "hook";
+    skip?: number;
+    before?: () => void;
+};
+
+/** The in-memory client with one planted fault. Every fault carries the sentinel. */
+function faulty(db: any, fault: Fault) {
+    let seen = 0;
+    const errorResult = () => ({ data: null, error: { message: `boom ${SENTINEL}`, details: SENTINEL, hint: SENTINEL, code: "XX000" } });
+    const fire = (op: string) => op === fault.op && seen++ >= (fault.skip ?? 0);
+    const wrap = (target: any, state: { op: string }): any => new Proxy(target, {
+        get(t, prop) {
+            if (prop === "insert" || prop === "delete" || prop === "update") state.op = prop as string;
+            if (prop === "then" || prop === "single" || prop === "maybeSingle") {
+                const original = t[prop];
+                return (...args: any[]) => {
+                    if (fire(state.op)) {
+                        if (fault.kind === "hook") fault.before?.();
+                        else {
+                            const p = fault.kind === "throw" ? Promise.reject(new Error(`boom ${SENTINEL}`)) : Promise.resolve(errorResult());
+                            return prop === "then" ? p.then(args[0], args[1]) : p;
+                        }
+                    }
+                    return original.apply(t, args);
+                };
+            }
+            const v = t[prop];
+            if (typeof v !== "function") return v;
+            return (...a: any[]) => {
+                const r = v.apply(t, a);
+                return r === t ? wrap(t, state) : r;
+            };
+        },
+    });
+    return { ...db, from: (table: string) => (table === fault.table ? wrap(db.from(table), { op: "select" }) : db.from(table)) };
+}
+
+async function runEntry(op: "ensure" | "verify" | "reset" | "count", db: unknown) {
+    clients.impl = () => db;
+    const out: string[] = [];
+    const code = await historicalMain(boundEnv("financials_historical_draft", op) as never, [`--${op}`], (l) => out.push(l));
+    return { code, out };
+}
+
+describe("no backend or process text reaches the historical fixture's output", () => {
+    it.each([
+        ["an org read error", { table: "orgs", op: "select", kind: "error" }, "✗ ensure failed: read_failed table=orgs sqlstate=XX000"],
+        ["an org read that throws", { table: "orgs", op: "select", kind: "throw" }, "✗ ensure failed: read_failed table=orgs"],
+    ] as const)("ensure: %s → a stable code", async (_l, fault, line) => {
+        const { db } = setup();
+        const { code, out } = await runEntry("ensure", faulty(db, fault as Fault));
+        expect(code).toBe(1);
+        expect(out).toContain(line);
+        expectSafeContract(out);
+    });
+
+    it("ensure: a seed insert error → table, SQLSTATE and the exact seeded count", async () => {
+        const { store, db } = setup();
+        const { code, out } = await runEntry("ensure", faulty(db, { table: "persons", op: "insert", kind: "error" }));
+        expect(code).toBe(1);
+        expect(out).toContain("✗ seed_failed table=persons sqlstate=XX000 seeded_before_failure=2");
+        expect(store.customers.some((c) => c.id === IDS.customer)).toBe(true);
+        expectSafeContract(out);
+    });
+
+    it("ensure: the product's draft write failing → its code, never its message", async () => {
+        const { db } = setup();
+        const { code, out } = await runEntry("ensure", faulty(db, { table: "charges", op: "insert", kind: "error" }));
+        expect(code).toBe(1);
+        expect(out).toContain("✗ draft_write_failed reason=db_error");
+        expectSafeContract(out);
+    });
+
+    it("verify: a failing read inside the product's catalog loader → unexpected_error or a code, nothing else", async () => {
+        const { db } = setup();
+        await ensureHistoricalDraft(db as never);
+        const { code, out } = await runEntry("verify", faulty(db, { table: "commercial_products", op: "select", kind: "throw" }));
+        expect(code).toBe(1);
+        expect(out.filter((l) => l.startsWith("✗")).length).toBeGreaterThan(0);
+        expectSafeContract(out);
+    });
+
+    it("count: a failing read → a code, and no census line is invented", async () => {
+        const { db } = setup();
+        const { code, out } = await runEntry("count", faulty(db, { table: "customers", op: "select", kind: "error" }));
+        expect(code).toBe(1);
+        expect(out).toContain("✗ count failed: read_failed table=customers sqlstate=XX000");
+        expect(out.some((l) => GRAMMAR.census.test(l))).toBe(false);
+        expectSafeContract(out);
+    });
+
+    it("reset: a failing preflight read → a code and an exact removed=0", async () => {
+        const { store, db } = setup();
+        await ensureHistoricalDraft(db as never);
+        const before = JSON.stringify(store);
+        const { code, out } = await runEntry("reset", faulty(db, { table: "customers", op: "select", kind: "throw" }));
+        expect(code).toBe(1);
+        expect(out).toContain("✗ reset failed: read_failed table=customers");
+        expect(expectSafeContract(out, { reset: true })).toBe(0);
+        expect(JSON.stringify(store)).toBe(before);
+    });
+
+    it("a client that cannot be created → unexpected_error, and no reset line it could not stand behind", async () => {
+        clients.impl = () => {
+            throw new Error(`connect ${SENTINEL}`);
+        };
+        const out: string[] = [];
+        const code = await historicalMain(boundEnv("financials_historical_draft", "reset") as never, ["--reset"], (l) => out.push(l));
+        expect(code).toBe(1);
+        expect(out).toContain("✗ reset failed: unexpected_error");
+        expect(out.some((l) => GRAMMAR.reset.test(l))).toBe(false);
+        expectSafeContract(out);
+    });
+});
+
+describe("reset enforces identity at every delete, and reports a partial reset exactly", () => {
+    async function ensured() {
+        const env = setup();
+        await ensureHistoricalDraft(env.db as never);
+        const before = (await censusHistoricalDraft(env.db as never)).count!;
+        return { ...env, before };
+    }
+
+    it.each([
+        ["returns an error", "error", "delete_failed table=gl_accounts sqlstate=XX000"],
+        ["throws", "throw", "delete_failed table=gl_accounts"],
+    ] as const)("a delete that %s stops the reset: exact removed count, PARTIAL, never full cleanup", async (_l, kind, diag) => {
+        const { store, db, before } = await ensured();
+        const { code, out } = await runEntry("reset", faulty(db, { table: "gl_accounts", op: "delete", kind }));
+        expect(code).toBe(1);
+        const removed = expectSafeContract(out, { reset: true })!;
+        const after = (await censusHistoricalDraft(db as never)).count!;
+        expect(removed).toBe(before - after);
+        expect(removed).toBeGreaterThan(0);
+        expect(after).toBeGreaterThan(0);
+        expect(out.join("\n")).toContain(`reset PARTIAL: ${diag} removed=${removed} of ${before} — the fixture is NOT fully removed`);
+        expect(out.join("\n")).not.toMatch(/reset complete/);
+        expect(store.gl_accounts.some((g) => g.id === IDS.glAccount)).toBe(true);
+    });
+
+    it("a row whose ownership key changed after preflight is NOT deleted — the delete's own filter refuses it", async () => {
+        const { store, db } = await ensured();
+        const { code, out } = await runEntry("reset", faulty(db, {
+            table: "persons", op: "delete", kind: "hook",
+            before: () => {
+                const person = store.persons.find((p) => p.id === IDS.person)!;
+                person.email = "somebody@example.org";
+            },
+        }));
+        expect(code).toBe(1);
+        expect(out.join("\n")).toMatch(/reset PARTIAL: identity_changed_during_reset table=persons removed=\d+ of \d+/);
+        expect(store.persons.find((p) => p.id === IDS.person)).toMatchObject({ email: "somebody@example.org" });
+        /* What it references stays too: the reset stopped before the household. */
+        expect(store.customers.some((c) => c.id === IDS.customer)).toBe(true);
+        expectSafeContract(out, { reset: true });
+    });
+
+    it("history appearing mid-reset stops it before the household's periods and rows; the posted charge survives", async () => {
+        const { store, db } = await ensured();
+        const posted = { id: "posted-midway", org_id: ORG, billable_source_id: IDS.agreement, charge_template_id: IDS.template, status: "posted", metadata: {} };
+        const { code, out } = await runEntry("reset", faulty(db, { table: "charges", op: "delete", kind: "hook", before: () => store.charges.push(posted) }));
+        expect(code).toBe(1);
+        const removed = expectSafeContract(out, { reset: true });
+        expect(out.join("\n")).toContain(`reset PARTIAL: ledger_appeared_during_reset removed=${removed} of`);
+        expect(store.charges).toContainEqual(posted);
+        expect(store.financial_billing_periods.some((p) => p.customer_id === IDS.customer)).toBe(true);
+        expect(store.customers.some((c) => c.id === IDS.customer)).toBe(true);
+        expect(fixtureDrafts(store).filter((c) => c.status === "draft")).toHaveLength(0);
+    });
+
+    it.each([
+        ["a tag on the household (customer_tags, CASCADE)", { customer_tags: [{ id: "tag-1", customer_id: IDS.customer }] }, /customer_tags row\(s\) depend on the fixture by customer_id/],
+        ["an autopay arrangement on the household (CASCADE)", { payment_autopay_arrangements: [{ id: "ap-1", customer_id: IDS.customer }] }, /payment_autopay_arrangements/],
+        ["attendance on the fixture agreement (CASCADE)", { child_attendance_events: [{ id: "att-1", enrollment_agreement_id: IDS.agreement }] }, /child_attendance_events/],
+        ["a line item on the fixture draft (CASCADE)", "line-item", /charge_line_items row\(s\) depend on the fixture by charge_id/],
+        ["a second location under the household", { locations: [{ id: "loc-foreign", org_id: ORG, customer_id: IDS.customer, label: "Real", location_type: "address" }] }, /locations row\(s\) under the fixture household are not the fixture's/],
+        ["a draft on the fixture agreement from another template", "foreign-draft", /not written from the fixture template/],
+    ] as const)("reset refuses %s and removes nothing", async (_l, plant, why) => {
+        const { store, db } = await ensured();
+        if (plant === "line-item") store.charge_line_items = [{ id: "li-1", charge_id: fixtureDrafts(store)[0].id }];
+        else if (plant === "foreign-draft") store.charges.push({ id: "draft-other", org_id: ORG, billable_source_id: IDS.agreement, charge_template_id: null, status: "draft", metadata: {} });
+        else for (const [t, rs] of Object.entries(plant)) store[t] = [...(store[t] ?? []), ...rs];
+        const before = JSON.stringify(store);
+        const { code, out } = await runEntry("reset", db);
+        expect(code).toBe(1);
+        expect(out.join("\n")).toMatch(why);
+        expect(expectSafeContract(out, { reset: true })).toBe(0);
+        expect(JSON.stringify(store)).toBe(before);
+    });
+
+    it("a complete reset says so, with the exact count, and census then measures zero", async () => {
+        const { db, before } = await ensured();
+        const { code, out } = await runEntry("reset", db);
+        expect(code).toBe(0);
+        expect(expectSafeContract(out, { reset: true })).toBe(before);
+        expect(out).toContain(`✓ reset complete: removed ${before} of ${before} fixture row(s); no ledger touched`);
+        const census = await runEntry("count", db);
+        expect(census.code).toBe(0);
+        expectSafeContract(census.out, { census: true });
+        expect(census.out).toContain("census count=0");
+    });
+
+    it("every planned row's ownership key is applied on its own delete", () => {
+        for (const p of plannedRows()) expect(Object.keys(p.key).length, p.table).toBeGreaterThan(0);
+    });
+});
+
+describe("no report or process text reaches the isolated runner's output", () => {
+    const env = () => boundEnv("financials_isolated_tests", "run");
+    const writeReport = (report: unknown) => async (_files: string[], _env: unknown, reportPath: string) => {
+        const { writeFileSync } = await import("node:fs");
+        writeFileSync(reportPath, JSON.stringify(report));
+        return { code: 1 };
+    };
+    const pinned = `${process.cwd()}/${FINANCIALS_ISOLATED_SUITE[0]}`;
+
+    it("names failing tests by approved identifier only — never their titles or the suite's message", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({
+            env: env(), argv: [], out: (l: string) => out.push(l),
+            run: writeReport({
+                testResults: [{
+                    name: pinned, status: "failed", message: `suite blew up: ${SENTINEL}`,
+                    assertionResults: [
+                        { status: "passed", title: `ok ${SENTINEL}`, fullName: `catalog ok ${SENTINEL}` },
+                        { status: "failed", title: `posts ${SENTINEL}`, fullName: `catalog posts ${SENTINEL}`, failureMessages: [`expected ${SENTINEL}`] },
+                        { status: "skipped", title: SENTINEL },
+                    ],
+                }],
+            }),
+        });
+        expect(code).toBe(1);
+        expect(out).toEqual(expect.arrayContaining([
+            "✓ catalogAddCharge.live#1 passed", "✗ catalogAddCharge.live#2 failed", "✗ catalogAddCharge.live#3 not_run",
+            "✗ tests_not_run count=1", "✗ tests_failed count=1", "✗ vitest_exit_nonzero code=1", "tests passed=1 failed=1",
+        ]));
+        expectSafeContract(out, { tests: true });
+    });
+
+    it("an unpinned file is counted, never named", async () => {
+        const out: string[] = [];
+        await isolatedMain({
+            env: env(), argv: [], out: (l: string) => out.push(l),
+            run: writeReport({ testResults: [{ name: `/x/${SENTINEL}.test.ts`, status: "passed", assertionResults: [{ status: "passed", fullName: SENTINEL }] }] }),
+        });
+        expect(out).toEqual(expect.arrayContaining(["✗ unpinned_file_ran count=1", "✗ pinned_file_reported_nothing file=catalogAddCharge.live"]));
+        expectSafeContract(out, { tests: true });
+    });
+
+    it("no report and a non-zero exit → codes only", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({ env: env(), argv: [], out: (l: string) => out.push(l), run: async () => ({ code: 1 }) });
+        expect(code).toBe(1);
+        expect(out).toEqual(expect.arrayContaining(["✗ vitest_report_absent", "✗ vitest_exit_nonzero code=1", "tests passed=0 failed=0"]));
+        expectSafeContract(out, { tests: true });
+    });
+
+    it("a runner that throws → runner_error, never the exception", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({
+            env: env(), argv: [], out: (l: string) => out.push(l),
+            run: async () => {
+                throw new Error(`exploded ${SENTINEL}`);
+            },
+        });
+        expect(code).toBe(1);
+        expect(out).toEqual(expect.arrayContaining(["✗ runner_error", "tests passed=0 failed=0"]));
+        expectSafeContract(out, { tests: true });
+    });
+
+    it("the real spawn path failing → runner_error, never the spawn error", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({ env: env(), argv: [], out: (l: string) => out.push(l) });
+        expect(spawned.calls).toBe(1);
+        expect(code).toBe(1);
+        expect(out).toContain("✗ runner_error");
+        expectSafeContract(out, { tests: true });
+    });
+
+    it("a fully passing pinned report and exit 0 is the only proof, and parses as the executor reads it", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({
+            env: env(), argv: [], out: (l: string) => out.push(l),
+            run: async (files: string[], e: unknown, reportPath: string) => {
+                await writeReport({ testResults: [{ name: pinned, status: "passed", assertionResults: [{ status: "passed", fullName: SENTINEL }, { status: "passed" }] }] })(files, e, reportPath);
+                return { code: 0 };
+            },
+        });
+        expect(code).toBe(0);
+        expect(out.filter((l) => l.startsWith("✓") || l.startsWith("✗"))).toEqual(["✓ catalogAddCharge.live#1 passed", "✓ catalogAddCharge.live#2 passed"]);
+        expect(GRAMMAR.tests.exec(out[out.length - 1])?.slice(1)).toEqual(["2", "0"]);
+        expectSafeContract(out, { tests: true });
     });
 });

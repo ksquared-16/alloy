@@ -9,7 +9,9 @@
  *   · the binding is judged first (financialsIsolatedBinding.mjs) and a refusal exits 2 before any
  *     client exists — no connection is attempted to an absent or forbidden target;
  *   · the service credential is read from the executor-built environment straight into the client
- *     and never printed; output is ids, ✓/✗ checks and the executor's `reset …` line only;
+ *     and never printed; output is fixture ids, ✓/✗ checks built from fixed text and counts, stable
+ *     diagnostic codes, and the executor's `reset …` / `census …` lines — never an exception, backend
+ *     or process message;
  *   · exit 0 ok · 1 failed · 2 refused before IO · 3 identity conflict for the operator.
  *
  * `--count` (`census count=<n>`) is PREPARED, not yet registered: the installed registry lists
@@ -22,6 +24,8 @@ import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBindin
 import {
     censusHistoricalDraft,
     ensureHistoricalDraft,
+    FixtureError,
+    NAMESPACE,
     resetHistoricalDraft,
     verifyHistoricalDraft,
     type FixtureOutcome,
@@ -43,18 +47,20 @@ export async function main(
         return 2;
     }
     out(`binding ${describeBinding(judged.binding)}`);
-    const db = createClient(String(env.SUPABASE_URL), String(env.SUPABASE_SERVICE_ROLE_KEY), {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
     let result: FixtureOutcome;
     try {
+        const db = createClient(String(env.SUPABASE_URL), String(env.SUPABASE_SERVICE_ROLE_KEY), {
+            auth: { persistSession: false, autoRefreshToken: false },
+        });
         result = operation === "ensure" ? await ensureHistoricalDraft(db)
             : operation === "verify" ? await verifyHistoricalDraft(db)
             : operation === "count" ? await censusHistoricalDraft(db)
             : await resetHistoricalDraft(db);
     } catch (e) {
-        out(`✗ ${operation} failed: ${String((e as Error)?.message ?? e).split("\n")[0].slice(0, 200)}`);
-        if (operation === "reset") out("reset namespace=financials-cert.alloy.invalid removed=0");
+        /* A code, never the message: backend and process text can carry row values or credentials. */
+        out(`✗ ${operation} failed: ${e instanceof FixtureError ? e.diagnostic : "unexpected_error"}`);
+        /* Reset throws only from its preflight reads, before the first delete — so zero is exact. */
+        if (operation === "reset" && e instanceof FixtureError) out(`reset namespace=${NAMESPACE} removed=0`);
         return 1;
     }
     const last = (l: string) => l.startsWith("reset ") || l.startsWith("census ");
@@ -65,5 +71,8 @@ export async function main(
 }
 
 if (process.argv[1] && /financialsHistoricalDraftFixture\.ts$/.test(process.argv[1])) {
-    main().then((code) => process.exit(code));
+    main().then((code) => process.exit(code), () => {
+        console.log("✗ runner failed: unexpected_error");
+        process.exit(1);
+    });
 }
