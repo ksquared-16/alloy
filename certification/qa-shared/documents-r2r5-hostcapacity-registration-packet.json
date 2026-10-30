@@ -1,6 +1,6 @@
 {
  "schema": "alloy.documents_r2r5.hostcapacity_registration_packet.v1",
- "status": "PREPARED FOR THE HOSTCAPACITY OWNER — nothing registered, provisioned or filed by the Documents lane. 2026-10-30, lane_aa660dc9554d, run erun2_78366e017a2fd6e7.",
+ "status": "PREPARED FOR THE HOSTCAPACITY OWNER — nothing registered, provisioned or filed by the Documents lane. Updated 2026-10-30 (run erun2_42c0584500721590) with the Revision 4 contract candidate.",
  "candidate": {
   "pr": 1618,
   "url": "https://github.com/ksquared-16/alloy/pull/1618",
@@ -28,17 +28,62 @@
  "B_scoped_author_persona": {
   "operator_approval": "Kelly approved provisioning AFTER contract registration: qa-pool-09@example.com / qa_scoped_author; portal.access, documents.read, crm.customers.read, forms.author; QA Shared organization, department QA D1 (0704e72c-f73d-44b2-87d9-89924e222464) only, all sites; run-leased; access removed at run close. No other grants or identities.",
   "proposal": "certification/qa-shared/documents-r2-scoped-author-persona-proposal.json (9abf0b782c2024e5b6cdb7095fdbcd5ba1b49bfc83b41d1c94d57e27e9b6e17b)",
-  "contract_gap": "the authz_q1 plan pins docs/platform/governance/authorization-qa-personas.md Revision 3 (e6d619f2…). Registering scoped_author needs that contract to carry it (Revision 4) on staging and the plan re-pinned; the Revision 4 text is NOT in #1618 (adding it would move the approved head). Owner decision: a Revision 4 contract change in a follow-up PR, or the registry's own contract mechanism if HostCapacity provides one.",
+  "contract_gap": "closed locally by the Revision 4 candidate above; open until it is merged to staging and the plan is re-pinned",
   "registry": [
    "custom_roles.qa_scoped_author {label 'QA scoped Forms author', grants [portal.access, documents.read, crm.customers.read, forms.author]}",
    "personas.scoped_author {org qa_shared, roles [qa_scoped_author], scope department restricted [QA D1], site all, session true}",
    "pool identity qa_pool_09 (qa-pool-09@example.com), QA Shared only, holds nothing between runs"
   ],
-  "then": "environment.provision_qa_identity for qa_pool_09 through the governed action (Kelly's approval above covers exactly this one identity and grant set)"
+  "then": "environment.provision_qa_identity for qa_pool_09 through the governed action (Kelly's approval above covers exactly this one identity and grant set)",
+  "revision_4_contract_candidate": {
+   "path": "docs/platform/governance/authorization-qa-personas.md",
+   "sha256_revision_4": "beb34123ebff24c422895b5201670613a479deb9c058b7fefa65f4b873c7d5d2",
+   "sha256_revision_3_pinned": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e",
+   "carried_by": "the Documents follow-up slice after ace21237849a (NOT in PR #1618; its approved head is unchanged). It reaches staging only after #1618 merges, through its own certified checkpoint and PR; pin from those merged bytes.",
+   "change": "adds scoped_author (qa_scoped_author; portal.access, documents.read, crm.customers.read, forms.author; QA Shared, D1 only, sites all) and qa-pool-09; corrects Revision 3 §3a (POS compose is not a scoped_forms positive); §12 change log; every Revision 3 persona, grant, scope and refusal unchanged",
+   "local_proof": "web/tests/certification/authorizationQaPersonasRevision4.test.ts 10/10 (5 fail against the Revision 3 bytes — the negative control)"
+  }
  },
  "C_merge_blocker": {
   "finding": "the supported delivery chain cannot merge #1618: trusted-host-merge.mjs:1212 refuses a draft (pr_is_draft); trusted-host-open-pr.mjs:284-296 refuses to convert an existing draft for the same head; no governed ready-for-review action exists in toolkit b3c80db2e9aa.",
-  "needs": "either the operator marks #1618 ready for review on GitHub (one state change, head unchanged), or HostCapacity adds a governed ready-for-review action. Then: vac promote merge --lane lane_aa660dc9554d --pr 1618 --head ace21237849a6091e0a41eb1d4bd440ec27c898f --target staging (operator-approved merge; Kelly's approval covers this exact head into staging)."
+  "needs": "either the operator marks #1618 ready for review on GitHub (one state change, head unchanged), or HostCapacity adds a governed ready-for-review action. Then: vac promote merge --lane lane_aa660dc9554d --pr 1618 --head ace21237849a6091e0a41eb1d4bd440ec27c898f --target staging (operator-approved merge; Kelly's approval covers this exact head into staging).",
+  "requested_capability": {
+   "what": "a governed, head-bound 'mark ready for review' for an existing draft PR, executed by the trusted host",
+   "binding": {
+    "repository": "ksquared-16/alloy",
+    "pr": 1618,
+    "expectedHeadSha": "ace21237849a6091e0a41eb1d4bd440ec27c898f",
+    "base": "staging"
+   },
+   "authority": "the operator's EXISTING approval to merge #1618 at exactly this head into staging (2026-10-30). Refuse if the head moved, the PR is not a draft, or the base is not staging; no new generic approval question.",
+   "then": "vac promote merge --lane lane_aa660dc9554d --pr 1618 --head ace21237849a6091e0a41eb1d4bd440ec27c898f --target staging (inputs.promotion.disposition per the merge contract)"
+  }
  },
- "then_hosted": "certification/documents-v1/R2-R5-PROOF-SUPPORT.md §5 — only after staging serves the merge commit and A (and, for R2-authoring, B) are registered"
+ "then_hosted": "certification/documents-v1/R2-R5-PROOF-SUPPORT.md §5 — only after staging serves the merge commit and A (and, for R2-authoring, B) are registered",
+ "bound_to": {
+  "objective": "OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9",
+  "owner_lane": "lane_25ad3858de4d",
+  "queue_position": "queued behind the active OPWORK 6C252D9B80F4 work; the Documents lane does not dispatch or interrupt it — the parent coordinates admission"
+ },
+ "expected_hosted_proofs": {
+  "driver": "certification/documents-v1/r4_hosted_restricted_personas_cert.py (ensure, certify, ensure_r2r5, certify_r2r5, reset_r2r5, reset)",
+  "R4_regression": "35 cases (scoped_forms 19, health_viewer 9, doc_writer 7)",
+  "R2-packet": "14",
+  "R2-writes": "19",
+  "R2-links": "6",
+  "R2-authoring": "18 (16 scoped_author + 2 scoped_forms capability controls)",
+  "R5-shared": "8",
+  "acceptance": "every case PASS with no 'not run' row; product teardown all gone; registered resets ok with shared-child residue 0; registered 20-check census 20/20 bound to the closed run; R5 census r5sc_* 6/6",
+  "matrix_proof": "certification/documents-v1/test_r4_r2r5_matrix.py — 65 cases on a conforming synthetic product; each defect fails its case"
+ },
+ "resumption_sequence": [
+  "1 HostCapacity: governed head-bound mark-ready for #1618 (C)",
+  "2 Documents: governed merge of #1618 at ace21237849a into staging; verify /api/build-info serves the merge commit",
+  "3 Documents: certify the Revision 4 follow-up slice on the merged base; ONE draft PR; operator merge decision (separate — not implied by the #1618 approval)",
+  "4 HostCapacity: register qa_documents_shared_child_ensure/_reset + profile qa_documents_shared_child (A), from merged bytes",
+  "5 HostCapacity: re-pin authz_q1 to Revision 4 and register qa_scoped_author / scoped_author / qa_pool_09 (B), from merged bytes",
+  "6 Documents: environment.provision_qa_identity for qa_pool_09 exactly as approved (one identity, four grants, QA Shared D1)",
+  "7 Documents: hosted run per certification/documents-v1/R2-R5-PROOF-SUPPORT.md §5 — open, fixtures, driver phases, teardown, resets (Forms residue → shared-child → subjects), close, both censuses from fresh runs, binding",
+  "Steps 4 and 7 without 5–6 prove R2-packet / R2-writes / R2-links / R5 only; R2-authoring stays not-run and R2 uncertified"
+ ]
 }

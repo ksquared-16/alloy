@@ -278,6 +278,16 @@ def check(section, case, persona, ok, status, code=None, **extra):
     print(("PASS " if ok else "FAIL ") + f"[{section}][{persona}] {case} :: status={status} code={code}" + (f" {json.dumps(extra)}" if extra else ""))
 
 
+CONTRACT_PATH = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs/platform/governance/authorization-qa-personas.md")
+
+
+def contract_sha256():
+    """The persona contract this checkout carries (Revision 3 = e6d619f2…, R4 receipts; Revision 4 for scoped_author runs)."""
+    import hashlib
+    with open(CONTRACT_PATH, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
 def finish():
     summary = {"passed": sum(1 for r in results if r["pass"]), "total": len(results)}
     by = {}
@@ -285,7 +295,7 @@ def finish():
         x = by.setdefault(r["section"], {"passed": 0, "total": 0})
         x["total"] += 1
         x["passed"] += 1 if r["pass"] else 0
-    json.dump({"run": RUN, "phase": PHASE, "contract_sha256": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e",
+    json.dump({"run": RUN, "phase": PHASE, "contract_sha256": contract_sha256(),
                "summary": summary, "sections": by, "results": results}, open(RESULTS_FILE, "w"), indent=2)
     print("SECTIONS", json.dumps(by))
     print("SUMMARY", json.dumps(summary))
