@@ -11,7 +11,7 @@
  *   · the historical draft keeps its template identity next to a same-name Catalog item, identity is
  *     never matched by name, and reset is bounded to the namespace and never removes ledger.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /* The planted sentinel: every failure path below is made to carry it, and no output may. */
 const SENTINEL = vi.hoisted(() => "sk_synthetic_never_print_0123456789abcdef");
@@ -60,9 +60,11 @@ import {
 import {
     FINANCIALS_ISOLATED_SUITE,
     main as isolatedMain,
+    main as isolatedMainUnderTest,
     suiteChildEnv,
     summarizeVitestReport,
 } from "../../scripts/qa/financialsIsolatedTests.mjs";
+import { syntheticExecutorStore } from "../harness/syntheticFixtureAuthority";
 import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
@@ -163,9 +165,42 @@ describe("test:qa:financials-isolated", () => {
         expect(out.join("\n")).not.toContain(SECRET);
     });
 
-    it("hands the suite the bound target under the suite's own isolated-env names", () => {
-        const env = suiteChildEnv(boundEnv("financials_isolated_tests", "run"));
-        expect(env).toMatchObject({ CATALOG_LIVE_ISOLATED: "1", CERT_SUPABASE_URL: "http://127.0.0.1:56102", CERT_SERVICE_ROLE_KEY: SECRET });
+    it("hands the suite the bound target and the bound seed org under the suite's own isolated-env names", () => {
+        const env = suiteChildEnv(boundEnv("financials_isolated_tests", "run", { ALLOY_CERT_FIXTURE_ORG_ID: "00000000-0000-4000-8000-000000000001" }));
+        expect(env).toMatchObject({ CATALOG_LIVE_ISOLATED: "1", CERT_SUPABASE_URL: "http://127.0.0.1:56102", CERT_SERVICE_ROLE_KEY: SECRET, CERT_FIXTURE_ORG_ID: "00000000-0000-4000-8000-000000000001" });
+    });
+
+    it("a complete binding WITHOUT the executor's live authority is refused before any process starts", async () => {
+        const out: string[] = [];
+        const code = await isolatedMain({ env: boundEnv("financials_isolated_tests", "run"), argv: [], out: (l: string) => out.push(l) });
+        expect(code).toBe(2);
+        expect(spawned.calls).toBe(0);
+        expect(out).toEqual(["✗ refused before any process: fixture_authority_absent", "tests passed=0 failed=0"]);
+    });
+
+    it("a forged / completed / wrong-candidate authority is refused before any process starts — codes and field names only", async () => {
+        const s = syntheticExecutorStore();
+        try {
+            const run = async (env: Record<string, string | undefined>, authority: Record<string, unknown>) => {
+                const out: string[] = [];
+                const code = await isolatedMain({ env: { ...env, SUPABASE_SERVICE_ROLE_KEY: SECRET }, argv: [], out: (l: string) => out.push(l), authority });
+                return { code, out };
+            };
+            const noRoot = await run(s.env(), { ...s.options(), storeRoot: null });
+            expect(noRoot.out[0]).toBe("✗ refused before any process: fixture_authority_store_root_untrusted");
+            const wrongHead = await run(s.env(), s.options({ readHead: () => "d".repeat(40) }));
+            expect(wrongHead.out[0]).toBe("✗ refused before any process: fixture_authority_mismatch fields=candidate_sha");
+            s.writeRequest({ state: "complete" });
+            const replay = await run(s.env(), s.options());
+            expect(replay.out[0]).toBe("✗ refused before any process: fixture_authority_no_live_request");
+            for (const r of [noRoot, wrongHead, replay]) {
+                expect(r.code).toBe(2);
+                expect(r.out.join("\n")).not.toContain(SECRET);
+            }
+            expect(spawned.calls).toBe(0);
+        } finally {
+            s.cleanup();
+        }
     });
 
     const file = (assertionResults: Array<{ status: string; fullName?: string }>, status = "passed", name = `/w/${FINANCIALS_ISOLATED_SUITE[0]}`) => ({ name, status, assertionResults });
@@ -633,7 +668,11 @@ describe("reset enforces identity at every delete, and reports a partial reset e
 });
 
 describe("no report or process text reaches the isolated runner's output", () => {
-    const env = () => boundEnv("financials_isolated_tests", "run");
+    /* Each run is under a live synthetic executor authority, so the runner gets past its guard. */
+    const live = syntheticExecutorStore();
+    afterAll(() => live.cleanup());
+    const env = () => ({ ...live.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET });
+    const isolatedMain = (io: NonNullable<Parameters<typeof isolatedMainUnderTest>[0]>) => isolatedMainUnderTest({ authority: live.options(), ...io });
     const writeReport = (report: unknown) => async (_files: string[], _env: unknown, reportPath: string) => {
         const { writeFileSync } = await import("node:fs");
         writeFileSync(reportPath, JSON.stringify(report));

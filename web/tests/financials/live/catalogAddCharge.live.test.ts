@@ -9,8 +9,9 @@
  *
  * The other live suites fall back to `web/.env.certification.local`, which is the SHARED local
  * `alloy-cert` stack. This one does not: it runs only when the caller names an isolated
- * environment explicitly (`CATALOG_LIVE_ISOLATED=1` + `CERT_SUPABASE_URL` + `CERT_SERVICE_ROLE_KEY`,
- * as a lane-owned `certenv-*` provides them), never on the shared stack's port, never on a hosted
+ * environment explicitly (`CATALOG_LIVE_ISOLATED=1` + `CERT_SUPABASE_URL` + `CERT_SERVICE_ROLE_KEY`
+ * + `CERT_FIXTURE_ORG_ID`, as `test:qa:financials-isolated` hands them over from the executor's verified
+ * binding), never on the shared stack's port, never on a hosted
  * project. It POSTS a charge, and posted money is immutable — which is only acceptable in an
  * environment that is retired afterwards.
  */
@@ -29,23 +30,25 @@ import { ensureAccountingPeriodCovers } from "./certEnvironment";
 /** The shared local stack's API port — never an isolated environment. */
 const SHARED_CERT_PORT = "54421";
 
-function isolatedEnv(): { url: string; serviceKey: string } | null {
+function isolatedEnv(): { url: string; serviceKey: string; orgId: string } | null {
     if (process.env.CATALOG_LIVE_ISOLATED !== "1") return null;
     const url = (process.env.CERT_SUPABASE_URL ?? "").trim();
     const serviceKey = (process.env.CERT_SERVICE_ROLE_KEY ?? "").trim();
-    if (!url || !serviceKey) return null;
+    /* The organization is the executor's bound seed org (verified by the runner), never a constant here. */
+    const orgId = (process.env.CERT_FIXTURE_ORG_ID ?? "").trim();
+    if (!url || !serviceKey || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(orgId)) return null;
     const u = new URL(url);
     const loopback = u.hostname === "127.0.0.1" || u.hostname === "localhost";
     if (!loopback || u.port === SHARED_CERT_PORT) {
         throw new Error(`catalog live suite refuses ${u.hostname}:${u.port} — isolated loopback certification environments only`);
     }
-    return { url, serviceKey };
+    return { url, serviceKey, orgId };
 }
 
 const env = isolatedEnv();
 const describeLive = env ? describe : describe.skip;
 
-const ORG = "00000000-0000-4000-8000-000000000001";
+const ORG = env?.orgId ?? "";
 const RUN = randomUUID().slice(0, 8);
 const P = `ca7a${RUN.slice(0, 4)}-0000-4000-8000-`;
 const CUSTOMER = `${P}0000000c0001`;

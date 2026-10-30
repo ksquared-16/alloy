@@ -27,6 +27,7 @@ import {
     liveSuiteNotice,
     liveSuiteSelection,
 } from "./liveSuiteAuthority.mjs";
+import { syntheticExecutorStore } from "./syntheticFixtureAuthority";
 
 const WEB = resolve(__dirname, "../..");
 const REPO = resolve(WEB, "..");
@@ -69,12 +70,24 @@ describe("live-suite authority — default deny; the governed isolated binding a
         expect(JSON.stringify(j)).not.toContain(SECRET);
     });
 
-    it("the governed isolated binding admits EXACTLY the pinned isolated suite — and names its operation", () => {
+    it("a binding WITHOUT the executor's live authority admits nothing — the binding is a shape, not an origin", () => {
         const j = judge(isolatedEnv());
-        expect(j).toMatchObject({ admit: "pinned", authority: "isolated_qa_binding", files: [...FINANCIALS_ISOLATED_SUITE] });
-        expect(j.admit === "pinned" && j.detail).toBe("qa_run=qar_0123456789ab environment=certenv-0123456789 operation=run");
-        expect(FINANCIALS_ISOLATED_SUITE).toEqual(["tests/financials/live/catalogAddCharge.live.test.ts"]);
+        expect(j).toMatchObject({ admit: "none", code: R.NONE });
+        expect(j.admit === "none" && j.detail).toMatch(/no live executor authority \(fixture_authority_absent\)/);
         expect(JSON.stringify(j)).not.toContain(SECRET);
+    });
+
+    it("the binding PLUS the executor's live in-flight authority admits EXACTLY the pinned isolated suite — and names its request", () => {
+        const s = syntheticExecutorStore();
+        try {
+            const j = judgeLiveSuiteAuthority({ env: s.env(), authority: s.options() });
+            expect(j).toMatchObject({ admit: "pinned", authority: "isolated_qa_authority", files: [...FINANCIALS_ISOLATED_SUITE] });
+            expect(j.admit === "pinned" && j.detail).toBe("request=req-fin-auth-0001 qa_run=qar_0123456789ab environment=certenv-0123456789 operation=run");
+            expect(FINANCIALS_ISOLATED_SUITE).toEqual(["tests/financials/live/catalogAddCharge.live.test.ts"]);
+            expect(JSON.stringify(j)).not.toContain("sk_synthetic");
+        } finally {
+            s.cleanup();
+        }
     });
 
     it.each([
@@ -98,13 +111,15 @@ describe("live-suite authority — default deny; the governed isolated binding a
         expect(JSON.stringify(j)).not.toContain(SECRET);
     });
 
-    it("a STALE binding cannot be detected from inside the run — so even a valid one reaches only the pinned isolated suite", () => {
-        /* The env carries no expiry and no executor proof (toolkit dependency, see the module header).
-           What the runner CAN guarantee: whatever binding is present, no shared-stack suite is admitted. */
-        const j = judge(isolatedEnv());
-        expect(j.admit).toBe("pinned");
-        const files = j.admit === "pinned" ? j.files : [];
-        expect(files.filter((f) => f !== "tests/financials/live/catalogAddCharge.live.test.ts")).toEqual([]);
+    it("a STALE authority (expired, or its request completed) admits nothing", () => {
+        const s = syntheticExecutorStore();
+        try {
+            expect(judgeLiveSuiteAuthority({ env: s.env(), authority: s.options({ nowMs: Date.parse(String(s.rec.expires_at)) }) }).admit).toBe("none");
+            s.writeRequest({ state: "complete" });
+            expect(judgeLiveSuiteAuthority({ env: s.env(), authority: s.options() }).admit).toBe("none");
+        } finally {
+            s.cleanup();
+        }
     });
 });
 
@@ -211,22 +226,28 @@ describe("accidental selection cannot import a live suite — the real runner", 
         expect(r.out).not.toContain(SECRET);
     }, 120_000);
 
-    it("a valid binding admits only the pinned suite: the canary and the incident's suites stay excluded (listed, not imported)", () => {
-        const env = isolatedEnv();
-        const all = vitest(["list", "--filesOnly"], env);
-        expect(all.out).toContain("[live-suite-guard] only 1 pinned isolated suite(s) ADMITTED by isolated_qa_binding");
-        expect(listed(all.out)).toEqual([...FINANCIALS_ISOLATED_SUITE]);
-        const named = vitest(["list", "--filesOnly",
-            "tests/financials/live/tuitionGeneration.live.test.ts",
-            "tests/financials/live/paymentApplication.live.test.ts",
-            "tests/financials/live/chargeCorrectionLineage.live.test.ts",
-            ...CANARIES,
-        ], env);
-        expect(listed(named.out)).toEqual([]);
-        const canary = vitest(["run", CANARIES[0]], env);
-        expect(canary.code).not.toBe(0);
-        expect(canary.markers).toEqual([]);
-        expect(`${all.out}${named.out}${canary.out}`).not.toContain(SECRET);
+    it("a FORGED complete authority (a self-consistent record + request in a temp store, matching env and digest) is refused by the real runner: the trusted root is not the env's", () => {
+        /* The real config resolves the Gateway root from the OS account, so a forged store elsewhere is not
+           the executor's — whatever HOME or ALLOY_RUNTIME_ROOT say. Real live files are listed, never run. */
+        const s = syntheticExecutorStore();
+        try {
+            const env = { ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET, ALLOY_RUNTIME_ROOT: s.root };
+            const all = vitest(["list", "--filesOnly"], env);
+            expect(all.out).toContain(`EXCLUDED (not run, not passed): ${R.NONE}`);
+            expect(listed(all.out).filter(isLiveSuitePath)).toEqual([]);
+            const named = vitest(["list", "--filesOnly",
+                "tests/financials/live/catalogAddCharge.live.test.ts",
+                "tests/financials/live/tuitionGeneration.live.test.ts",
+                ...CANARIES,
+            ], env);
+            expect(listed(named.out)).toEqual([]);
+            const canary = vitest(["run", CANARIES[0]], env);
+            expect(canary.code).not.toBe(0);
+            expect(canary.markers).toEqual([]);
+            expect(`${all.out}${named.out}${canary.out}`).not.toContain(SECRET);
+        } finally {
+            s.cleanup();
+        }
     }, 180_000);
 
     it("explicitly naming the incident's suites and a live directory, with no authority: nothing is selected", () => {

@@ -25,6 +25,7 @@ tests/financials/payments/reversalOriginProjection.test.ts
 tests/financials/payments/storedMethodProjection.test.ts
 tests/financials/prepaidPresentation.test.ts
 tests/financials/qaIsolatedFinancialsFixtures.test.ts
+tests/financials/qaFixtureAuthority.test.ts
 tests/financials/readAccountPrepaidPosition.test.ts
 tests/financials/reductionProvenance.test.ts
 tests/financials/refundExpression.test.ts

@@ -6,9 +6,13 @@
  * It is not a new suite. It runs the existing live suites listed in FINANCIALS_ISOLATED_SUITE, which
  * already refuse every shared or hosted target, and only hands them the binding the executor built:
  *
- *   1. judge the binding (financialsIsolatedBinding.mjs) — refused before any IO, exit 2;
+ *   1. judge the binding (financialsIsolatedBinding.mjs) and the executor's operation authority
+ *      (financialsFixtureAuthority.mjs: the live in-flight request in the trusted Gateway store names
+ *      this exact record, request, operation, candidate and pinned script) — refused before any
+ *      process starts, exit 2;
  *   2. run exactly the pinned files with the bound target mapped onto the suite's own isolated-env
- *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL`, `CERT_SERVICE_ROLE_KEY`) — in the
+ *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL`, `CERT_SERVICE_ROLE_KEY`, and the bound
+ *      seed organization as `CERT_FIXTURE_ORG_ID`) — in the
  *      child's environment only, never on a command line, never printed;
  *   3. read vitest's JSON report and decide proof here, not by exit code alone: a skipped, pending or
  *      todo test, a pinned file that reported nothing, or zero passes is NOT a pass. The suites
@@ -27,6 +31,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
 import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBinding.mjs";
 
 const WEB = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -111,13 +116,18 @@ export function summarizeVitestReport(report, files = FINANCIALS_ISOLATED_SUITE,
     return { ok: problems.length === 0, passed, failed, skipped, checks, problems };
 }
 
-/** The suite child's environment: the executor's own, plus the suite's isolated-env names. */
+/**
+ * The suite child's environment: the executor's own, plus the suite's isolated-env names. The fixture
+ * organization is the executor's bound one (verified to be the certification seed org), never a constant
+ * of the suite's.
+ */
 export function suiteChildEnv(env) {
     return {
         ...env,
         CATALOG_LIVE_ISOLATED: "1",
         CERT_SUPABASE_URL: env.SUPABASE_URL,
         CERT_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
+        CERT_FIXTURE_ORG_ID: env.ALLOY_CERT_FIXTURE_ORG_ID,
     };
 }
 
@@ -136,16 +146,25 @@ function runVitest(files, env, reportPath) {
 }
 
 /**
- * @param {{ env?: Record<string, string | undefined>, argv?: string[], out?: (line: string) => void, run?: typeof runVitest }} [io]
+ * `authority` is the verifier's options (tests pass a synthetic store root); it is never read from `env`.
+ *
+ * @param {{ env?: Record<string, string | undefined>, argv?: string[], out?: (line: string) => void, run?: typeof runVitest, authority?: Parameters<typeof verifyFinancialsFixtureAuthority>[1] }} [io]
  * @returns {Promise<number>}
  */
-export async function main({ env = process.env, argv = process.argv.slice(2), out = console.log, run = runVitest } = {}) {
+export async function main({ env = process.env, argv = process.argv.slice(2), out = console.log, run = runVitest, authority = undefined } = {}) {
     const judged = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv });
     if (!judged.ok) {
         out(`✗ refused before any IO: ${judged.code} — ${judged.detail}`);
         out("tests passed=0 failed=0");
         return 2;
     }
+    const auth = verifyFinancialsFixtureAuthority(env, authority);
+    if (!auth.ok) {
+        out(`✗ refused before any process: ${auth.code}${auth.fields ? ` fields=${auth.fields.join(",")}` : ""}`);
+        out("tests passed=0 failed=0");
+        return 2;
+    }
+    out(`authority request=${auth.authority.request_id} candidate=${auth.authority.candidate_sha.slice(0, 12)}`);
     out(`binding ${describeBinding(judged.binding)}`);
     let dir = null;
     try {

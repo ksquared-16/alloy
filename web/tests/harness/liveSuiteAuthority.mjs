@@ -27,17 +27,20 @@
  * persona ids; loopback certenv port band; credential present; no disagreeing target). It admits EXACTLY
  * `FINANCIALS_ISOLATED_SUITE` — never any other live suite, never a shared-stack one.
  *
- * What the child CANNOT verify, stated: the binding carries no expiry and no proof that the executor
- * (rather than a hand-set environment) produced it. The executor checks the lease before it spawns and
- * records `qa_run_lease_ended_during_execution` afterwards; verifying either from inside the run needs a
- * toolkit change (a request id / binding digest the child can check against the executor's in-flight
- * record). Until then the binding is the existing contract, and it reaches only one pinned, isolated-only
- * suite that itself refuses every shared and hosted target.
+ * The binding alone is NOT the admission. The executor's operation authority must also hold
+ * (`scripts/qa/financialsFixtureAuthority.mjs`): a record directly inside the trusted Gateway store's
+ * isolated-fixture authority directory (root resolved from the OS account, never the environment), named
+ * by the executor's live `in_flight` request with the same binding digest and the exact bytes, unexpired,
+ * for this request / operation / suite / candidate / pinned script, with the bound seed organization. A
+ * forged record plus a matching environment, a completed request, altered bytes, or a record outside the
+ * store all admit nothing. A same-user rewrite of the executor's own store is outside what this can detect.
  *
  * `CATALOG_LIVE_ISOLATED=1`, `ALLOY_CERTIFICATION=1`, `CERT_SEED_DEMO=1`, `CERT_KEEP`, `CI`, a lease
  * file, a running process, a present env file or a present key are each refused: none is authority.
- * This module reads no file, lists no directory and starts no process.
+ * With no binding this module reads no file and starts no process; only a complete binding is checked
+ * against the executor's store (and `git rev-parse HEAD` for the exact candidate).
  */
+import { verifyFinancialsFixtureAuthority } from "../../scripts/qa/financialsFixtureAuthority.mjs";
 import { readIsolatedBinding } from "../../scripts/qa/financialsIsolatedBinding.mjs";
 import { FINANCIALS_ISOLATED_SUITE } from "../../scripts/qa/financialsIsolatedTests.mjs";
 
@@ -58,25 +61,34 @@ export const LIVE_AUTHORITY_REFUSALS = Object.freeze({
 });
 
 /**
- * Which live suites this process may import, and why. Pure over `env`.
+ * Which live suites this process may import, and why. `authority` is the verifier's options (tests pass a
+ * synthetic store root); it is never read from `env`.
  *
- * @param {{ env?: Record<string, string | undefined> }} [input]
+ * @param {{ env?: Record<string, string | undefined>, authority?: Parameters<typeof verifyFinancialsFixtureAuthority>[1] }} [input]
  * @returns {{ admit: "none", code: string, detail: string } | { admit: "pinned", files: string[], authority: string, detail: string }}
  */
-export function judgeLiveSuiteAuthority({ env = process.env } = {}) {
+export function judgeLiveSuiteAuthority({ env = process.env, authority = undefined } = {}) {
     const isolated = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv: [] });
-    if (isolated.ok) {
+    if (!isolated.ok) {
         return {
-            admit: "pinned",
-            files: [...FINANCIALS_ISOLATED_SUITE],
-            authority: "isolated_qa_binding",
-            detail: `qa_run=${isolated.binding.qaRunId} environment=${isolated.binding.environmentId} operation=${isolated.binding.operation}`,
+            admit: "none",
+            code: LIVE_AUTHORITY_REFUSALS.NONE,
+            detail: `no governed isolated binding (${isolated.code}); shared-stack live suites are never admitted by the runner`,
+        };
+    }
+    const op = verifyFinancialsFixtureAuthority(env, authority);
+    if (!op.ok) {
+        return {
+            admit: "none",
+            code: LIVE_AUTHORITY_REFUSALS.NONE,
+            detail: `no live executor authority (${op.code}); shared-stack live suites are never admitted by the runner`,
         };
     }
     return {
-        admit: "none",
-        code: LIVE_AUTHORITY_REFUSALS.NONE,
-        detail: `no governed isolated binding (${isolated.code}); shared-stack live suites are never admitted by the runner`,
+        admit: "pinned",
+        files: [...FINANCIALS_ISOLATED_SUITE],
+        authority: "isolated_qa_authority",
+        detail: `request=${op.authority.request_id} qa_run=${isolated.binding.qaRunId} environment=${isolated.binding.environmentId} operation=${isolated.binding.operation}`,
     };
 }
 
