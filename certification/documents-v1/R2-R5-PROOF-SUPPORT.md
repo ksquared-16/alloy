@@ -1,210 +1,229 @@
-# Documents V1 — R2 / R5 hosted proof support (local), and D9 / D10 scope reconciliation
+# Documents V1 — R2 / R5 local acceptance support, and the hosted approval packet
 
-**Status: LOCAL PROOF SUPPORT COMMITTED, NOT PROMOTED. Nothing hosted ran.**
+**Status: LOCAL WORK COMMITTED, NOT PROMOTED. Nothing hosted ran. R2 and R5 are NOT certified on hosted.**
 
-Not done in this objective:
-- no hosted QA run, fixture, census or session;
-- no database, credential or environment use;
-- no registration, push, PR, merge or install.
+Since the first version of this record (`b6977b3b2`), the R2 scope rule has been extended to the **destination** of five Forms writes and one read (`e1c511967`). The matrix now covers a restricted Forms **author**, a persona that is proposed and not yet provisioned (`4e739925b`).
 
-The R2 / R5 gates named in `R1-R2-R5-HOSTED-CERTIFICATION.md` ("Outstanding") are still **open on hosted**. This record supplies the driver, the fixture and the tests they need, and the exact hosted sequence below.
+No hosted test, fixture, session, credential, registration, push, PR, merge or install happened.
 
 | | |
 |---|---|
-| Objective / lane / run | `OPWORK_AA660DC9554D_SPRINT_C4FDA4F0FE93` / `lane_aa660dc9554d` / `erun2_0e90d18602014572` |
-| Base | `agent/documents` at `b0b1a8f03` (R4 census 20/20 record). Completed D7 / R4 / census receipts are untouched |
-| Slices | `1e8649588` fixture pair, runner, invariant, census, contract; `182acb160` driver R2/R5 phases and matrix test. `vac sprint commit-slice`: `COMPLETE_COMMITTED_NOT_PROMOTED` at `182acb160` |
-| Toolkit | `20261030-3bedabeea2a6` |
+| Objective / lane / runs | `OPWORK_AA660DC9554D_SPRINT_C4FDA4F0FE93` / `lane_aa660dc9554d` / `erun2_0e90d18602014572` (slices 1–3), `erun2_ab8cf4a1e3fdac9f` (slices 4–6) |
+| Candidate | `agent/documents`. HEAD is the commit that carries this record; the checkpoint section names its exact sha |
+| Toolkit | installed `current` → `b3c80db2e9aa` (HostCapacity PR451 release, `gar_d1ed1de75a3693` / `tha_e45fd26adf5792`) |
+| Preserved | every earlier commit, receipt and closed QA run: `qar_bc811ffc7da1`, `qar_8fb0e1ffabcf`, D7 `gar_3c51d48448eba3`, census `gar_bcf58ca61c3f22` / `gar_6c56f9fdac73a5`. Persona contract Revision 3 (`e6d619f2…`) is byte-identical |
 
-## What was built
+## Slices
 
-| Artifact | Path | sha256 (at `1e8649588` / `182acb160`) |
+| # | Commit | What |
 |---|---|---|
-| Shared-child ENSURE | `certification/fixtures/qa-documents-shared-child-ensure.sql` | `e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4` |
-| Shared-child RESET | `certification/fixtures/qa-documents-shared-child-reset.sql` | `afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5` |
-| Runner (`ensure` / `reset`) | `web/scripts/qaDocumentsSharedChildFixture.mjs` (npm `dev:qa:documents-shared-child-ensure` / `-reset`) | `38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16` |
-| Supplementary residue census | `certification/qa-shared/documents-r5-shared-child-residue-census.sql` | `87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd` |
-| Rollback invariant (prepared, not run) | `certification/invariants/documents-r5-shared-child-fixture.sql` | `dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac` |
-| Registration contract for HostCapacity | `certification/qa-shared/documents-r5-shared-child-fixture-contract.json` | (carries the pins above) |
-| Hosted driver phases | `certification/documents-v1/r4_hosted_restricted_personas_cert.py`: `ensure_r2r5`, `certify_r2r5`, `reset_r2r5`. The R4 `ensure` / `certify` / `reset` phases are byte-identical apart from the importable argv preamble | — |
-| Local tests | `web/tests/certification/qaDocumentsSharedChildFixture.test.ts`, `certification/documents-v1/test_r4_r2r5_matrix.py` | — |
+| 1 | `1e8649588` | R5 shared-child fixture: ensure/reset SQL, runner, rollback invariant, residue census, registration contract |
+| 2 | `182acb160` | Driver R2/R5 phases and local matrix test |
+| 3 | `b6977b3b2` | First version of this record |
+| 4 | `e1c511967` | **Product fix:** R2 scope of a Forms write's destination (`lib/forms/formsDestinationScope.ts`; manual-link, POS compose, form link POST/PATCH, packet links, packet roster) |
+| 5 | `4e739925b` | Driver: R2-authoring section, packet-link destination cases, skip removed, missing persona = not run. `scoped_author` persona proposal |
+| 6 | (this record) | Safety-audit parser finding (handoff only); this record |
 
-**Fixture shape.** The R5 shape that no product route can build:
-- Household H, children SHARED and ONLY_A, and leads A and B, both on H.
-- The leads sit on a fixture work unit under the **permanent** QA D1 department.
-- A carries SHARED and ONLY_A; B carries SHARED.
+## 1. Production authorization contract, verified against the driver before changing code
 
-**Namespace `ac000000-0000-4000-8000-0000000005xx`.** It is reserved to this fixture and kept separate from two existing ones:
-- The authz_q1 subject ensure/reset delete **every** `aa000000-%` opportunity and work unit.
-- The D4 household fixture deletes every `ab000000-%` customer and member.
+The canonical rule is `web/lib/forms/formSubmissionScope.ts:1-17`, the same department/site rule used across the product:
+- An **opportunity's** work-unit department and site decide.
+- A child, household or person with **no opportunity** is readable only by an unrestricted actor.
+- A failed access context is no scope at all.
 
-Either would therefore reach rows placed inside its prefix. These rows sit in neither prefix, and this fixture's deletes name only its own exact ids.
+`create` already refused out-of-scope subjects. The driver's assertion "a write's target is scoped too" is that same rule applied to the target, so the driver was right and the routes were wrong. One driver-side defect was found and fixed: the synthetic product in `test_r4_r2r5_matrix.py` had admitted a child-only subject in a D1 household. Production refuses it, and the fake now matches production.
 
-**Protections.** Each one is tested locally; see the test lists below.
-- Org and run:
-  - QA Shared only;
-  - `qa_run_id` must be `qar_<12 hex>`;
-  - the ensure refuses another run's rows.
-- Every DELETE is `org_id = :'org' and id in (<exact ids>)`. There are no prefix deletes and none on:
-  - documents, storage or Forms rows;
-  - `person_health_facts`, `mutation_events`, `workflow_events`;
-  - `process_instances`, departments or orgs.
-- Refusals, before any write:
-  - a fixture id in another org;
-  - an unmarked `ac000000-` row;
-  - a document on a fixture subject;
-  - a form submission naming a fixture subject;
-  - an Enrollment journey on a fixture child or participation;
-  - the permanent D1 department missing (ensure only).
-- One transaction with `ON_ERROR_STOP`: a refusal or a failure part-way leaves the database unchanged.
-- **Reset after partial failure.** Any subset of rows is cleaned the same way: none, after lead A, after both leads, or never started.
-  - A second reset removes nothing.
-  - The reset asserts the namespace is empty inside its own transaction, and raises (rolling back) if not.
-  - The runner refuses a result with `residue != 0`.
-  - The reset returns `removed_run_ids`. It is deliberately not limited to the open run: a run that never reached its reset would otherwise strand its rows.
-- **Runner gates**, every one checked before any database connection:
-  - armed (`CERT_FIXTURE_APPLY=1`, `DRY_RUN=0`), with `SYNTHETIC_ONLY=1`;
-  - production project refused, and any project other than staging;
-  - the `FIXTURE_SHA256` pin;
-  - the org is QA Shared;
-  - the run id is well-formed;
-  - trusted DB connectivity only.
+**Confirmed gaps, now fixed in `e1c511967`.** A department-restricted actor could:
 
-## Local results (what was proven, and how)
-
-| Check | Result |
+| Route | Gap |
 |---|---|
-| `vac run test tests/certification/qaDocumentsSharedChildFixture.test.ts` | **30/30** |
-| `vac run test tests/certification tests/qa/sharedQaInfrastructure.test.ts` (neighbours: G1/G2 binding, shared QA registry) | **81/81** (4 files) |
-| `vac run test tests/scripts/governedReconciliationExecutor.test.ts` | **19/19** |
-| `vac run typecheck:tests` | **PASSED** (0 errors, after a cast fix in the new test) |
-| `python3 -I -B certification/documents-v1/test_r4_r2r5_matrix.py` | **14/14** |
-| Installed toolkit `hosted-fixture-safety` audit (read-only) | ensure and reset **ok** under `qa_authz_vendors` and a proposed `ac000000-` profile; the reset is also ok under a synthetic-style profile; the ensure is refused there because it INSERTs, as expected |
-| `vacilando-suite --tier=1 --targeted` | **Not applicable here.** The installed runner scans the toolkit's own `tests/deterministic`, which the install does not ship: ENOENT before any test. Not worked around |
-| Rollback invariant | **Not run.** It needs `database.run_rollback_invariant_test` on an isolated certenv, which is governed; no live database was used |
-| Production build | **Not run.** `validation-classify` says `build_sensitive`, because `web/package.json` gained two npm scripts and no dependencies. Per worker.validation.v1, ONE `vac run build` belongs at the integrated checkpoint |
+| `POST …/submissions/[id]/manual-link` | Re-point an in-scope submission at an out-of-scope opportunity, or unlink it to a subject only unrestricted actors hold. Its distinct 400s ("not found in this organization" / "does not match") also disclosed whether an out-of-scope id existed |
+| `POST /api/admin/pos/packets/compose` | Mint links for another household's children or recipients under an in-scope anchor (only the anchor was checked) |
+| `POST /api/admin/forms/[form]/public-links` | Name an out-of-scope prefill source (`form_context_mode` + `source_entity_*`), child or recipient in caller metadata. `resolveFormPrefillValues` and the submission subject derive from it |
+| `PATCH /api/admin/forms/[form]/public-links/[link]` | Edit a link naming an out-of-scope subject (the list hides it, the PATCH did not), or re-point a link's metadata at one |
+| `POST /api/admin/forms/packet-links` (`forms.submissions`, **reachable by the existing `scoped_forms`**) | The same through metadata (`source_entity_*` becomes the prefill source when no launch is given) and the enrollment selection |
+| `GET /api/admin/pos/packets/roster` | Read any household's children (with dates of birth) and parent recipients with an admin session alone: no capability, no scope |
 
-**What the vitest file proves:**
-- Every DML statement and refusal guard of both fixtures appears, substituted, in the rollback invariant. The other-run guard is exercised with a different run id.
-- Ownership and no-prefix deletes, one transaction, guards outside dollar quotes, no psql escape hatch, no trigger suspension.
-- The ensure and the reset share their refusal predicates.
-- Namespace disjointness from the `aa000000-` / `ab000000-` prefix deletes.
-- The census is read-only and covers every fixture table.
-- 14 runner refusals, each before any connection. The spawn env is only PATH plus the case's variables, so no inherited database URL is possible.
+**The repair is one rule.** `formsDestinationInActorScope`:
+- every named subject must pass `formsSubjectInActorScope`;
+- every child and recipient must belong to the in-scope opportunity's own household (household members, and the composer's recipient roster).
 
-**What the matrix test proves.** A conforming synthetic product passes all R2/R5 cases, and each defect fails the case that names it:
-- an unfiltered session list;
-- 403-for-scope on reads and writes;
-- a 404 that leaks the body;
-- an out-of-scope write;
-- unscoped link lists or preview;
-- lead deletion taking the shared child;
-- an unscoped manual-link target.
+It is checked before any write. A restricted refusal is the same 404 a missing record gets. Unrestricted actors are unchanged: the helper answers true without reading, and they keep their descriptive 400s.
 
-It also proves the public packet tokens are never persisted, that reset after a partial certify is clean and idempotent, and that the driver ids are bound to the fixture's `\set` values.
+The roster now declares `forms.author` in `routeCapabilities.declared.json`. Its only consumer is the Packet Composer (`PosPacketsPanel.tsx:166`), whose compose route is `forms.author`, and that UI already degrades a non-OK response to an empty roster.
 
-## Findings from the route survey (code reading only; nothing changed)
+**Restricted-actor behaviour that changed, by design:**
+- A restricted actor can no longer name, through any of these routes, a child or recipient outside the in-scope opportunity's household.
+- It also gets 404 instead of a descriptive 400 for a manual-link target it may not hold.
 
-1. **`manual-link` does not scope its TARGET.**
-   - `web/app/api/admin/forms/submissions/[submissionId]/manual-link/route.ts` scope-checks only the submission's current subject (line 61).
-   - The new `person_id` / `customer_id` / `customer_member_id` / `opportunity_id` are checked for organization and household consistency, never with `formsSubjectInActorScope`.
-   - So a department-restricted actor holding `forms.submissions` can re-link an in-scope submitted row onto a QA D2 lead.
-   - The driver asserts the R2 rule (404) in a case marked `known_gap`. Run `--skip-manual-link-target` to leave it out until a product decision is made.
-   - **Decision needed:** authorize a small Forms fix (scope-check every target subject), or record the gap as accepted.
-2. **POS compose and public-link minting cannot be scope-measured with Revision 3 personas.**
-   - Both are gated on `forms.author`, which `scoped_forms` does not hold, so a refusal would be capability, not scope.
-   - Compose checks only its anchor. `child_ids` / `recipient_ids` beyond a single child are written into link metadata unchecked.
-   - **Decision needed** (persona-contract owner): a department-restricted author persona, or accept local-only proof.
-3. **Toolkit observation, for HostCapacity; not changed.** `destructiveStatements()` captures the table of `delete from public.<t>` as `public`. An ownership-bearing safety profile is therefore blind to schema-qualified DELETEs.
+No legitimate client sends subject keys in link-mint metadata. Measured callers:
+- `useProcessingFormApi` (`buildProcessingPublicLinkMetadata`);
+- `FormOperationalIntentPicker`;
+- `FormOutcomeConfigPanel`;
+- the preview flow.
 
-## Hosted action packet (prepared; every step needs its own authorization)
+`FormExistingRecordSendPanel` uses `launch_from_entity`.
 
-**Preconditions, in order:**
-1. **Promotion of these bytes to staging.** Director-released checkpoint, ONE PR, merge; then re-verify every sha256 at the merge commit. Not authorized now.
-2. **HostCapacity registers, from the merged bytes:**
-   - `qa_documents_shared_child_ensure` / `_reset` (`lib/reconciliation-registry.mjs`);
-   - the profile `qa_documents_shared_child` (`idPrefix ac000000-`, `ownership {}`, no replica window);
-   - the `authz_q1` `fixture_reconciliations` wiring;
-   - then a release and install through its own PR451 path.
+**Persona contract defect.** Revision 3 §3a lists "POS compose" and "mint a packet link" as `scoped_forms` positive cases, but `scoped_forms` holds no `forms.author`, and compose is `forms.author`. That row can never pass. It is corrected in the Revision 4 proposal below; the Revision 3 bytes are left pinned and unchanged.
 
-   The exact entries are in `certification/qa-shared/documents-r5-shared-child-fixture-contract.json`. The Documents lane edits no toolkit file.
-3. **Optional:** run the rollback invariant on an isolated certenv (`database.run_rollback_invariant_test`). This is governed and needs a lease or environment grant.
-4. **The `manual-link` decision** (finding 1).
+## 2. Local results
 
-**Run:**
+| Check (via the broker unless noted) | Result |
+|---|---|
+| `tests/forms/formsWriteDestinationScope.test.ts` | **39/39**. Positive, negative, ambiguous (unlinking the opportunity), cross-org, indistinguishable-404 (existing versus missing target), zero-write table snapshots on every refusal, unrestricted unchanged, capability 403 controls |
+| Negative control: the same file without the fix | **21 fail** (19 write-route + 2 roster), each a refusal or zero-write case. The 18 that pass are in-scope or unrestricted preserved behaviour |
+| `tests/tours/publicCalendar/tourCalendarPublication.test.ts` | **8/8**. The suite gained the unrestricted access context the scoped PATCH now reads (it failed closed without one: 5 reds, cause verified) |
+| Regression: `tests/forms tests/admin/*forms/packetSession* tests/tours/* tests/pos tests/access` | 4,734 pass. **52 reds in 30 files reproduce identically on the base without this change**, the same set on both runs. They predate this work and are not fixed here |
+| `typecheck`, `typecheck:tests` | **PASSED** (0 errors) |
+| Prebuild guards: `check:route-capabilities`, `verify:module-imports`, `check:service-client-principal`, `check:unauthenticated-side-effects`, `check:runtime-mode-audience`, `check:governed-documents` | **all PASSED** (`verify:module-imports` after the helper was committed) |
+| `qaDocumentsSharedChildFixture.test.ts` (slice 1) | 30/30 (unchanged bytes) |
+| `python3 -I -B certification/documents-v1/test_r4_r2r5_matrix.py` | **18/18**. 65 cases on a conforming product (R2-packet 14, R2-writes 19, R2-authoring 18, R2-links 6, R5-shared 8). Every defect fails the case that names it: compose destination, compose reading only the first child, roster scope, link metadata, PATCH of an out-of-scope link, packet-link destination, manual-link target. A missing `scoped_author` gives 16 FAIL "not run"; a missing `scoped_forms` fails every section. The skip option is gone, and the test asserts it |
+| Production build and checkpoint | see §6 |
 
-| # | Act | Actor / mechanism | Writes |
+## 3. Restricted Forms author: local contract only
+
+`certification/qa-shared/documents-r2-scoped-author-persona-proposal.json` holds a **Revision 4 delta** for the persona-contract owner and HostCapacity:
+
+| Field | Value |
+|---|---|
+| Persona | `scoped_author` |
+| Role | `qa_scoped_author` |
+| Grants | `portal.access`, `documents.read`, `crm.customers.read`, `forms.author` |
+| Scope | department restricted to QA D1, all sites |
+| Identity | new pooled identity `qa-pool-09` |
+
+Its matrix row covers roster, compose, link mint and PATCH. No grant, role, identity, credential or session was created.
+
+**Until it is adopted and provisioned, every R2-authoring case is FAIL "not run". R2 is not certified while any case is not run.**
+
+## 4. Safety-audit parser finding (handoff only; not implemented)
+
+The handoff is `certification/qa-shared/hosted-fixture-safety-qualified-delete-finding.json`, for HostCapacity.
+
+**Defect in `lib/hosted-fixture-safety.mjs` (installed `b3c80db2e9aa`):**
+- `destructiveStatements()` reads `delete from public.t` as table `public`, so ownership rules are blind to schema-qualified DELETEs.
+- `delete from "public"."t" …` is not matched at all.
+- The synthetic profile's preserved-table regex has the same blind spot.
+
+**Minimal reproduction** (read-only import of the installed module):
+- `delete from "public"."financial_subsidy_claims" where org_id = :'org';` → verdict `ok: true`.
+- A synthetic fixture with one legitimate run-scoped delete plus a quoted `person_health_facts` delete, or a quoted org-only delete → `ok: true`.
+
+**Proposed fix** (22-line diff in the handoff): an optional `ONLY`, an optional quoted schema and a quoted table. It reports the bare table plus `schema`, and the preserved-table regex accepts the same shapes.
+
+Measured on a throwaway copy: every bypass case is refused for the right reason, and **all 8 fixtures checked keep their verdict** (financials demo tenant, Forms residue reset, the four authz fixtures, the proposed shared-child pair).
+
+## 5. Hosted approval packet (prepared; nothing here is authorized by this record)
+
+**Target.** `alloy_staging_web` (hosted staging), organization **QA Shared** `4acc9386-c485-486f-aa1f-05d83499d142`. QA Secondary `ad53fee2-…` is used only by `cross_org_admin`. Plan `authz_q1`. No production, no other organization, no certenv (BP `certenv-8e770c96ef` stays retired).
+
+### 5.1 Preconditions (each its own decision, in order)
+
+1. **Promote this candidate.**
+   - A Director-released checkpoint (§6), then ONE PR to staging, CI, merge.
+   - Staging must then serve the merge commit (`/api/build-info`).
+   - Re-verify every fixture sha256 at the merge commit.
+2. **HostCapacity registration**, from the merged bytes, through its installed framework (no duplicate):
+   - **Already adopted:** none of the items below.
+   - `qa_documents_shared_child_ensure` / `_reset` and the `qa_documents_shared_child` safety profile (`documents-r5-shared-child-fixture-contract.json`).
+   - Persona contract **Revision 4** (`scoped_author`, `qa_scoped_author`, `qa-pool-09`) and the `authz_q1` contract re-pin. The contract owner adopts it first (Director approval).
+   - **Optional:** the parser fix (§4).
+3. **Optional, governed:** run the R5 rollback invariant on an isolated certenv (`database.run_rollback_invariant_test`).
+4. **A hosted QA run approval** with `hosted_qa_authority.declared: true`. This is the Director's labelled HOSTED STAGING decision.
+
+### 5.2 Actors, sessions and credentials
+
+All of these are registered `authz_q1` identities, provisioned only by the toolkit's audited functions inside the run. No credential is created or read by the lane.
+
+| Persona | Org | Capabilities (from the contract) | Used for |
 |---|---|---|---|
-| 1 | `environment.qa_run_open` plan `authz_q1`, target `alloy_staging_web`, `hosted_qa_authority.declared: true` | operator approval (HOSTED STAGING) | QA access grants for the run's personas |
-| 2 | Persona sessions | registered pool identities (`fixture_admin`, `scoped_forms`, `cross_org_admin`; `health_viewer`, `doc_writer`, `doc_reader` for the R4 regression) | QA sessions (closed at run close) |
-| 3 | `qa_authz_subject_fixture_ensure` (QA Shared) | registered reconciliation | `aa000000-` WU1/WU2, OPP1/OPP2 |
-| 4 | `qa_documents_shared_child_ensure` (QA Shared) | registered reconciliation (new) | `ac000000-` H, SHARED, ONLY_A, WU (D1), leads A and B, 3 participations |
-| 5 | driver `ensure` | `fixture_admin`, product routes | L1 (D1) and L2 (D2) via `create_lead` with households; K1 and KU; run form `qa_<run>_r4form` published; s_opp1 / s_opp2 / s_ku; plain and medical document on K1; an immunization fact on K1 |
-| 6 | driver `certify` (R4 regression, 35 cases) | the three restricted personas | `scoped_forms`: one in-scope submission; `doc_writer`: review, validity, renewal version |
-| 7 | driver `ensure_r2r5` | `fixture_admin`; one anonymous public resolve per packet link | packet `qa_<run>_r2pkt` and its item; packet links from L1, L2 and KU; 3 packet sessions (public resolve); form links naming L1, L2 and nothing; R5 submissions on SHARED, ONLY_A, lead A and lead B |
-| 8 | driver `certify_r2r5` [`--skip-manual-link-target`] | `scoped_forms`, `fixture_admin`, `cross_org_admin` | `scoped_forms`: one draft on L1 and its submit; one packet link from L1 (the manual-link target case, if run against the current code, re-links that draft onto L2). `fixture_admin`: product deletion of lead A |
-| 9 | driver `reset_r2r5` | `fixture_admin` | product deletion of lead B (takes H, SHARED and their submissions) |
-| 10 | driver `reset` (R4) | `fixture_admin` | health fact ended (retained by design); L1 / L2 lead deletions; run form deleted or archived |
-| 11 | `qa_documents_forms_residue_reset` | registered | run packet and items, sessions, links and the run form's submissions and versions |
-| 12 | `qa_documents_shared_child_reset` | registered (new) | whatever `ac000000-` rows remain (normally none); `residue: 0` |
-| 13 | `qa_authz_subject_fixture_reset` | registered | `aa000000-` subjects |
-| 14 | `environment.qa_run_close` | operator approval | access revoked |
-| 15 | `database.read_census` of the registered `7957a51a…` census, from a NEW execution run, target `alloy_deployed_primary`; then the close binding (`residueCensusRequestId`) | operator approval (deployed primary is always an operator decision) | none (read-only) |
-| 16 | `database.read_census` of `documents-r5-shared-child-residue-census.sql` (`87d96cdd…`), NEW execution run | operator approval | none (read-only) |
+| `fixture_admin` | QA Shared | admin package | fixtures through product routes, controls, R5 lead deletions, teardown |
+| `scoped_forms` | QA Shared, D1 only | `portal.access`, `documents.read`, `crm.customers.read`, `forms.submissions`, `forms.submissions.confirm` | R2-packet, R2-writes, R2-links; capability control on compose and roster |
+| `scoped_author` (**Revision 4, not yet existing**) | QA Shared, D1 only | `portal.access`, `documents.read`, `crm.customers.read`, `forms.author` | R2-authoring |
+| `cross_org_admin` | QA Secondary | admin package | cross-org 404 |
+| `health_viewer`, `doc_writer` (and `doc_reader`) | QA Shared | Revision 3 | R4 regression (35 cases) in the same run |
 
-**Ordering constraints:**
-- 11 must come before 12: the shared-child reset refuses while a run-form submission still names a fixture subject.
-- Documents leave only through the product (lead deletion or the audited document delete); never through SQL.
-- 15 and 16 must each run in a fresh execution run, because the census dedupe is run-scoped.
+**Sessions:**
+- The toolkit restores each persona's session into `~/.local/state/alloy-dev/gateway/auth/qa-runs/<run>/<persona>/storage-state.json`.
+- The driver reads only the cookie and never prints it, a token or a signed URL.
+- Public packet tokens are used once for the resolve route and never stored.
 
-**Acceptance:**
-- `certify_r2r5` all PASS, with the manual-link target either fixed or explicitly skipped by decision.
+### 5.3 Exact fixture objects and product writes (bounded, all synthetic)
+
+| # | Act | By | Objects written |
+|---|---|---|---|
+| 1 | `qa_authz_subject_fixture_ensure` (registered) | toolkit | `aa000000-…101/102` work units (QA D1 / D2), `…111/112` opportunities |
+| 2 | `qa_documents_shared_child_ensure` (**to register**) | toolkit | `ac000000-…501` household H; `…521` SHARED, `…522` ONLY_A; `…531` work unit (QA D1); `…541` lead A, `…542` lead B; participations `…551/552/553` |
+| 3 | driver `ensure` | `fixture_admin` | leads L1 (D1) and L2 (D2) via `create_lead` with their households; children K1 and KU; run form `qa_<run>_r4form` (published); submissions `s_opp1`, `s_opp2`, `s_ku`; one plain and one immunization document on K1; one reported immunization fact on K1 |
+| 4 | driver `certify` (R4 regression) | restricted personas | `scoped_forms`: one D1 submission; `doc_writer`: review, validity, renewal version |
+| 5 | driver `ensure_r2r5` | `fixture_admin`, plus 3 anonymous public resolves | packet `qa_<run>_r2pkt` and its item; packet links from L1, L2 and KU, each opened once (3 sessions); form links naming L1, L2 and nothing; R5 submissions on SHARED, ONLY_A, lead A and lead B; one recipient id each for L1 and L2, read from the admin roster |
+| 6 | driver `certify_r2r5` | `scoped_forms`, `scoped_author`, `cross_org_admin`, `fixture_admin` | `scoped_forms`: one draft on L1 and its submit; one packet link from L1. `scoped_author`: one compose packet `qa_<run>_r2compose` (one item, one link) on L1/K1/L1 recipient; two form links (L1 launch, subject-less); one PATCH of the subject-less link. `fixture_admin`: product deletion of lead A |
+| 7 | driver `reset_r2r5` | `fixture_admin` | product deletion of lead B (takes H, SHARED and their submissions) |
+| 8 | driver `reset` (R4) | `fixture_admin` | fact ended (retained by design); L1 and L2 deleted (children, submissions and documents go with them); run form deleted, or archived if published |
+
+### 5.4 Expected refusals: every one a 404 that names nothing and writes nothing
+
+**`scoped_forms`:**
+- L2 and child-only KU packet sessions: read, list, rollup, insight, review.
+- `submit` / `generate-document` / `manual-link` / `confirm-linkage` on `s_opp2` and `s_ku`, with each row re-read unchanged.
+- `manual-link` of its own submission onto L2.
+- Packet links with an L2 prefill source in metadata, the KU enrollment selection, or metadata children `[K1, KU]`.
+- Link lists drop L2 and KU links; preview-payload refuses L2 and KU.
+- Cross-org: 404 on our session.
+
+**`scoped_author`:**
+- Roster of L2 and of KU.
+- Compose on L2; on L1 naming KU; naming `[K1, KU]`; naming an L2 recipient.
+- Link mint with L2 as prefill source, or L1 with children `[K1, KU]`.
+- PATCH of the L2 link; PATCH re-pointing the subject-less link at L2.
+- After all of these, the admin's link list is unchanged.
+
+**Capability controls (403, recorded as capability, never as scope proof):** `scoped_forms` on compose and on the roster.
+
+**R5:** lead A's deletion takes `s_r5_oppa`, `s_r5_only` and ONLY_A; it keeps SHARED, `s_r5_shared`, H, lead B and `s_r5_oppb`.
+
+### 5.5 Cleanup order, census and binding
+
+1. Driver `reset_r2r5`, then driver `reset`. Product teardown must read `product_teardown_gone: true` and `all_gone: true`.
+2. **`qa_documents_forms_residue_reset`** (registered). It removes:
+   - the run packets `qa_<run>_r2pkt` and `qa_<run>_r2compose`, their items, sessions and links;
+   - the run form's links, submissions and versions.
+
+   It must run **before** step 3, because the shared-child reset refuses while a run-form submission still names a fixture subject.
+3. **`qa_documents_shared_child_reset`** (to register). It must report `residue: 0`.
+4. **`qa_authz_subject_fixture_reset`** (registered).
+5. **`environment.qa_run_close`**.
+6. **`database.read_census`** of the registered 20-check census `7957a51a…`:
+   - from a **new** execution run (census dedupe is run-scoped);
+   - target `alloy_deployed_primary` (always an operator decision);
+   - then the close binding: `qa_run_close` with `residueCensusRequestId`.
+7. **`database.read_census`** of `documents-r5-shared-child-residue-census.sql` (`87d96cdd…`), from another new execution run.
+
+**Retained by design, never residue:** a published run form archived instead of deleted, the ended health fact, and audit history (`mutation_events`, `workflow_events`).
+
+### 5.6 Acceptance (no partial certification)
+
+R2/R5 is certified on hosted only when **all** of these hold:
+- `certify_r2r5`: every case PASS, with **no** "not run" row. That needs `scoped_author` to exist.
 - R4 regression 35/35.
-- `reset_r2r5` `product_teardown_gone: true`; R4 reset `all_gone`.
-- Every registered reset `ok` (shared-child `residue: 0`).
-- Registered census 20/20 true and **bound** to the closed run.
-- Supplementary R5 census: all six `r5sc_*` checks true.
-- Retained by design, never residue: the archived run form if not deletable, the ended health fact, audit history.
+- Product teardowns all gone.
+- Every registered reset ok, with `residue: 0`.
+- Registered census 20/20 true **and bound** to the closed run.
+- R5 census: all six `r5sc_*` checks true.
 
-## D9 / D10 — scope reconciliation (before asking for a restatement)
+**A run without `scoped_author` can at most prove R2-packet / R2-writes / R2-links / R5. R2-authoring then stays open and R2 stays uncertified.** No skip flag exists.
 
-The search covered every Documents file ever committed, commit messages across all refs, pickaxe for `D9` / `D10` / "email ingestion" / "D9 consequences", and the module, API and planning docs. **No Documents V1 phase roadmap (D0–D10) exists in this repository or its history.** Every D9/D10 hit under another numbering scheme (Conversation Platform, BP-v2, phase-5 closeout, access-identity, doc-truth audit) was excluded.
+## 6. Integrated candidate and checkpoint
 
-**D9 — scope LOCATED (partial).** It was named and constrained in `b5a2509c2` (the D5 record):
-- `D5-PROCESSING-FILING.md:5` "D9 (external API) … out of scope".
-- `docs/api/documents-forms-api.md:70-74`:
-  - an external Documents API must call `commitDocumentFiling`, so it inherits the transaction, the Studio policy, the clearance check and the audit;
-  - it takes a caller-supplied idempotency key;
-  - it publishes the stable refusal codes;
-  - "No external route is published by D5."
-- The authorization boundary is canonical in `docs/api/api-architecture.md:52-54,75`: `/api/v1/**`, Application Principal (Developer Application → Installation → Credential → scopes + resource boundary), no admin session, no caller-selected tenant.
-- **Not located:** the endpoint list, scopes, read versus filing, and the phase boundary.
-- **Inference only:** `docs/api/developer-platform/product/06-gaps-and-slice-b.md:52` records documents as not modelled as external resources, and `openapi/alloy-public-api.v1.json` has no documents path.
+Local product certification follows `lib/product-repository-certification.mjs`: build (full), typecheck (or the build's typecheck graph) and test (scoped allowed), each green, stable and on a clean tree, for the **exact** candidate commit. The broker run results and the `vac sprint checkpoint` outcome are recorded in the final report for this objective, because a commit cannot name its own sha.
 
-**D10 — scope NOT LOCATED.** That is unlocated, not proof of no plan: the original scope was probably set in a Director authorization or sprint packet outside this repository. The Vacilando objective and Director stores were not searched.
+## 7. Remaining gates (open)
 
-The repository carries only "D9/D10 not started". **The only basis for reading D10 as email ingestion is inference:**
-- `processing_case_sources.source_kind` has admitted `'email_attachment'` since `20260612120100_pos_processing_cases_v1.sql:66-68`, re-asserted in later migrations.
-- The UI labels it "Email". No code ever creates such a source.
-- Communications inbound email (`webhooks/resend` → `ingestResendInboundEmail`) records attachment metadata only: "attachment support is not available yet" (`inboundEmailNormalization.ts:316`). Retrieval is Conversation Platform WS11, which plans to reuse `documents`.
-
-**Boundary if D10 is email ingestion (inference):**
-- WS11 fetches the attachment into a `documents` row.
-- A Processing case opens with `source_kind = 'email_attachment'`.
-- Filing goes through `commitDocumentFiling`.
-- No new inbound route and no new provider. The authorization is the existing Processing and filing gates; nothing public.
-
-None of this was built.
-
-**Decision needed (Kelly):**
-- confirm or restate D9's endpoint and scope set;
-- confirm whether D10 = email-attachment ingestion through WS11 → Processing → `commitDocumentFiling`;
-- or point to the Director packet that defined them.
-
-## Not touched
-
-- Immunization enforcement and fee: awaiting Kelly's answer; nothing assumed.
-- HostCapacity run `erun2_5901517804d09e41` (WAITING): not steered.
-- PR451: not touched.
-- BP `certenv-8e770c96ef`: stays retired.
-- Every closed QA run, receipt and binding is unchanged: `qar_bc811ffc7da1`, `qar_8fb0e1ffabcf`, D7 `gar_3c51d48448eba3`, census `gar_bcf58ca61c3f22` / `gar_6c56f9fdac73a5`.
+1. **Promotion of the candidate** (Director release, PR, CI, merge, staging serving the merge).
+2. **HostCapacity registration** of the shared-child fixture pair and profile.
+3. **Revision 4 adoption** (contract owner) and provisioning of `scoped_author` (HostCapacity).
+4. **Hosted run**: every step in §5, each operator-approved.
+5. **Optional:** the rollback invariant on a certenv, and the parser fix (§4).
+6. **R1 / R3 / R4 / D7 / D8:** unchanged.
+7. **D9 / D10:** scope as reconciled in `b6977b3b2`. D9 is partly located; D10 is **unlocated** (not proven absent). No API or email code was written.
+8. **Immunization enforcement / fee:** awaiting Kelly; nothing assumed.
