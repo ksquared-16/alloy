@@ -1,6 +1,7 @@
 """Documents V1 R4 — hosted restricted personas (authz_q1 contract Revision 3: scoped_forms, health_viewer, doc_writer).
 
 Usage: r4_hosted_restricted_personas_cert.py <qa_run_id> ensure|certify|reset
+       r4_hosted_restricted_personas_cert.py <qa_run_id> ensure_r2r5|certify_r2r5|reset_r2r5 [--skip-manual-link-target]
 
   ensure   as fixture_admin, through the deployed product's own audited routes (helpers reused from the R2/R5, D7 and
            D8/FI-10 drivers): L1 in QA D1 (scoped_forms' department) with child K1; L2 in QA D2 with child KU; one run-scoped
@@ -18,15 +19,43 @@ Usage: r4_hosted_restricted_personas_cert.py <qa_run_id> ensure|certify|reset
            (health facts are retained as ended data). The registered qa_documents_forms_residue_reset and the 20-check
            census are separate governed acts.
 
-Never prints a cookie, signed URL or answer content: statuses, booleans and counts.
+  ensure_r2r5   after `ensure` (reuses its L1 / L2 / K1 / KU, run form and submissions) and after the registered
+                qa_documents_shared_child_ensure (ac000000- household H, children SHARED and ONLY_A, leads A and B on H):
+                as fixture_admin, a run-keyed packet (qa_<run>_r2pkt) on the run form; packet links launched from L1, L2
+                and KU, each opened once through the public resolve route (that creates the packet session); form public
+                links naming L1, L2 and nothing; and the R5 submissions s_r5_shared / s_r5_only / s_r5_oppa / s_r5_oppb.
+  certify_r2r5  the remaining hosted R2 / R5 gates (R1-R2-R5-HOSTED-CERTIFICATION.md "Outstanding"):
+             R2-packet  scoped_forms: in-scope (L1) session listed / readable / rollup / insight / review admitted; L2 and
+                        child-only KU sessions → 404 naming nothing and absent from the list; cross_org_admin → 404.
+             R2-writes  scoped_forms (holds forms.submissions + .confirm, so a refusal is SCOPE, not capability):
+                        submit / generate-document / manual-link / confirm-linkage on s_opp2 and s_ku → 404 and nothing
+                        changed; confirm-linkage / manual-link on in-scope s_opp1 → 200; a packet link minted from L1 → 201;
+                        manual-link of its own in-scope submission ONTO L2 → 404 (the R2 rule for a write's target; this
+                        route checks the target's org and household only — run with --skip-manual-link-target to leave
+                        that one known gap out of the run until the product decision is made).
+             R2-links   form and packet public-link lists drop links naming L2 / KU and keep L1's and the link naming nothing;
+                        preview-payload prefilled from L2 or KU → 404, from L1 → 200.
+             R5-shared  delete-preview of lead A counts exactly s_r5_oppa + s_r5_only, one child, and retains H and SHARED;
+                        the product deletion of A then takes those and keeps SHARED, s_r5_shared, lead B and s_r5_oppb.
+  reset_r2r5    the product deletion of lead B (H, SHARED and their submissions go with it). The run packet, its links and
+                sessions, and the run form's links leave through qa_documents_forms_residue_reset; then
+                qa_documents_shared_child_reset, then the R4 `reset`, then the registered and R5 censuses.
+
+POS packet compose (forms.author) and public-link MINTING (forms.author) are not in the matrix: no Revision 3 persona is
+both department-restricted and an author, so a refusal there would be capability, not scope.
+
+Never prints a cookie, signed URL, token or answer content: statuses, booleans and counts.
 """
 import datetime, json, os, sys, urllib.error, urllib.request, uuid
 
 BASE = "https://staging.workwithalloy.com"
 AUTH = os.path.expanduser("~/.local/state/alloy-dev/gateway/auth/qa-runs")
 HERE = os.path.dirname(os.path.abspath(__file__))
-RUN = sys.argv[1]
-PHASE = sys.argv[2]
+# Imported (the local matrix test, test_r4_r2r5_matrix.py) it runs no phase: the run id is a placeholder.
+_ARGV = sys.argv[1:] if __name__ == "__main__" else ["qar_000000000000", "import"]
+RUN = _ARGV[0]
+PHASE = _ARGV[1]
+OPTIONS = set(_ARGV[2:])
 TAG = f"qa-authz-{RUN}"
 SUFFIX = RUN.split("_", 1)[1]
 KEY_PREFIX = f"qa_{SUFFIX}_"
@@ -410,3 +439,278 @@ if PHASE == "reset":
     print("RESET", json.dumps(out))
     json.dump(out, open(os.path.join(HERE, f"r4_hosted_reset_results.{RUN}.json"), "w"), indent=2)
     sys.exit(0 if out["all_gone"] else 1)
+
+# ============================================================================================================ R2 / R5
+# The remaining hosted R2 / R5 gates. Functions, so the local matrix test can drive them against a synthetic product.
+X = "cross_org_admin"
+R2R5_STATE_FILE = os.path.join(HERE, f"r4_r2r5_fixture_ids.{RUN}.json")
+# qa-documents-shared-child-ensure.sql `\set` values (test_r4_r2r5_matrix.py binds them to the SQL bytes).
+SC = {
+    "household": "ac000000-0000-4000-8000-000000000501",
+    "child_shared": "ac000000-0000-4000-8000-000000000521",
+    "child_only_a": "ac000000-0000-4000-8000-000000000522",
+    "lead_a": "ac000000-0000-4000-8000-000000000541",
+    "lead_b": "ac000000-0000-4000-8000-000000000542",
+}
+
+
+def load_r2r5():
+    return json.load(open(R2R5_STATE_FILE)) if os.path.exists(R2R5_STATE_FILE) else {}
+
+
+def save_r2r5(ext):
+    json.dump(ext, open(R2R5_STATE_FILE, "w"), indent=2)
+
+
+def data_of(b):
+    return (b or {}).get("data") if isinstance(b, dict) else None
+
+
+def leaks_any(b, needles=()):
+    raw = json.dumps(b)
+    return any(x and x in raw for x in (TAG, NOTE, ALLERGY, *needles))
+
+
+def preview(opp):
+    s, b = call(f"/api/admin/opportunities/{opp}/delete-preview", A)
+    pv = (b or {}).get("preview") or {} if isinstance(b, dict) else {}
+    return s, pv
+
+
+def ensure_r2r5(ids, ext, save_fn=save_r2r5):
+    """fixture_admin, product routes only. Returns False on the first step that could not be built."""
+    L1, L2, KU = ids["L1"]["opp"], ids["L2"]["opp"], ids["KU"]
+    fid, vid = ids["form"]["id"], ids["form"]["version_id"]
+    s, pv = preview(SC["lead_a"])
+    if s != 200:
+        print(f"shared-child fixture absent (delete-preview lead A: {s}); apply qa_documents_shared_child_ensure first")
+        return False
+    if "packet" not in ext:
+        s, b = j("/api/admin/forms/packet-definitions", A, {"name": f"{TAG} R2 packet", "key": f"{KEY_PREFIX}r2pkt", "is_active": True})
+        pid = (data_of(b) or {}).get("id")
+        s2, _ = j(f"/api/admin/forms/packet-definitions/{pid}/items", A, {"items": [{"form_definition_id": fid, "pinned_form_definition_version_id": vid}]}, "PUT")
+        print(f"packet: create={s} items={s2}")
+        if not pid or s2 != 200:
+            return False
+        ext["packet"] = pid
+        save_fn(ext)
+    sessions = ext.setdefault("sessions", {})
+    links = ext.setdefault("packet_links", {})
+    for k, launch in (("ps_d1", {"entity_type": "opportunity", "entity_id": L1}),
+                      ("ps_d2", {"entity_type": "opportunity", "entity_id": L2}),
+                      ("ps_ku", {"entity_type": "customer_member", "entity_id": KU})):
+        if k in sessions:
+            continue
+        s, b = j("/api/admin/forms/packet-links", A, {"packet_definition_id": ext["packet"], "launch_from_entity": launch})
+        d = data_of(b) or {}
+        token, link_id = d.get("plaintext_token"), d.get("id")
+        print(f"packet link {k}: status={s} has_id={bool(link_id)}")
+        if not (token and link_id):
+            return False
+        s2, _ = call(f"/api/public/forms/{token}/resolve")
+        token = None  # never stored: a public bearer link
+        s3, b3 = call("/api/admin/forms/packet-sessions", A)
+        sid = next((r.get("id") for r in (data_of(b3) or []) if isinstance(r, dict) and r.get("started_via_public_link_id") == link_id), None)
+        print(f"session {k}: resolve={s2} has_id={bool(sid)}")
+        if not sid:
+            return False
+        links[k], sessions[k] = link_id, sid
+        save_fn(ext)
+    form_links = ext.setdefault("form_links", {})
+    for k, launch in (("fl_d1", {"entity_type": "opportunity", "entity_id": L1}),
+                      ("fl_d2", {"entity_type": "opportunity", "entity_id": L2}),
+                      ("fl_none", None)):
+        if k in form_links:
+            continue
+        s, b = j(f"/api/admin/forms/{fid}/public-links", A, {"label": f"{TAG} {k}", **({"launch_from_entity": launch} if launch else {})})
+        lid = (data_of(b) or {}).get("id")
+        print(f"form link {k}: status={s} has_id={bool(lid)}")
+        if not lid:
+            return False
+        form_links[k] = lid
+        save_fn(ext)
+    subs = ext.setdefault("r5_subs", {})
+    for k, subj in (("s_r5_shared", {"customer_member_id": SC["child_shared"]}), ("s_r5_only", {"customer_member_id": SC["child_only_a"]}),
+                    ("s_r5_oppa", {"opportunity_id": SC["lead_a"]}), ("s_r5_oppb", {"opportunity_id": SC["lead_b"]})):
+        if k in subs:
+            continue
+        s, b = submit(A, vid, subj)
+        sid = (data_of(b) or {}).get("id")
+        print(f"submission {k}: status={s} has_id={bool(sid)}")
+        if not sid:
+            return False
+        subs[k] = sid
+        save_fn(ext)
+    return True
+
+
+def certify_r2r5(ids, ext, skip=frozenset()):
+    subs = ids["subs"]
+    L1, L2, KU = ids["L1"]["opp"], ids["L2"]["opp"], ids["KU"]
+    ses, fl, pl, r5 = ext["sessions"], ext["form_links"], ext["packet_links"], ext["r5_subs"]
+
+    def nothing_named(b, *ids_):
+        return not leaks_any(b, ids_) and data_of(b) is None
+
+    # ═══════════════════════════════════════════════════════════════════════ R2-packet: packet-session scope
+    S = "R2-packet"
+    s, b = call("/api/admin/forms/packet-sessions", A)
+    got = {r.get("id") for r in (data_of(b) or []) if isinstance(r, dict)}
+    check(S, "control: the unrestricted admin lists all three run sessions", A, s == 200 and set(ses.values()) <= got, s, code_of(b))
+    s, b = call("/api/admin/forms/packet-sessions", SF)
+    got = {r.get("id") for r in (data_of(b) or []) if isinstance(r, dict)}
+    check(S, "list shows the in-scope (L1) session and neither the L2 nor the child-only (KU) session", SF,
+          s == 200 and ses["ps_d1"] in got and ses["ps_d2"] not in got and ses["ps_ku"] not in got, s, code_of(b))
+    for suffix, name in (("", "session"), ("/review-rollup", "review-rollup"), ("/review-insight", "review-insight")):
+        s, b = call(f"/api/admin/forms/packet-sessions/{ses['ps_d1']}{suffix}", SF)
+        check(S, f"{name} of the in-scope session is served", SF, s == 200, s, code_of(b))
+        for k, why in (("ps_d2", "QA D2 opportunity"), ("ps_ku", "child-only, out-of-scope child")):
+            s, b = call(f"/api/admin/forms/packet-sessions/{ses[k]}{suffix}", SF)
+            check(S, f"{name} of the {why} session → 404, names nothing", SF, s == 404 and nothing_named(b, ses[k], L2, KU), s, code_of(b))
+    s, b = j(f"/api/admin/forms/packet-sessions/{ses['ps_d1']}/review", SF, {"operator_review_status": "approved"}, "PATCH")
+    check(S, "review of the in-scope session is admitted past the scope gate (409: not completed)", SF, s == 409, s, code_of(b))
+    s, b = j(f"/api/admin/forms/packet-sessions/{ses['ps_d2']}/review", SF, {"operator_review_status": "approved"}, "PATCH")
+    check(S, "review of the QA D2 session → 404 (scope)", SF, s == 404 and nothing_named(b, ses["ps_d2"]), s, code_of(b))
+    s, b = call(f"/api/admin/forms/packet-sessions/{ses['ps_d1']}", X)
+    check(S, "another organization's admin → 404 on our session", X, s == 404 and nothing_named(b, ses["ps_d1"]), s, code_of(b))
+
+    # ═══════════════════════════════════════════════════════════════════════ R2-writes: out-of-scope Forms writes
+    S = "R2-writes"
+    for k in ("s_opp2", "s_ku"):
+        sid = subs[k]
+        for verb, body in (("submit", {}), ("generate-document", {}), ("manual-link", {"opportunity_id": L1}), ("confirm-linkage", {})):
+            s, b = j(f"/api/admin/forms/submissions/{sid}/{verb}", SF, body)
+            check(S, f"{verb} on {k} (out of scope) → 404, names nothing", SF, s == 404 and nothing_named(b, sid), s, code_of(b))
+        s, b = call(f"/api/admin/forms/submissions/{sid}", A)
+        d = data_of(b) or {}
+        check(S, f"{k} unchanged after the refused writes (admin read: same subject, no generated document)", A,
+              s == 200 and d.get("opportunity_id") == (L2 if k == "s_opp2" else None)
+              and d.get("customer_member_id") == (KU if k == "s_ku" else None)
+              and not d.get("generated_document_id"), s, code_of(b))
+    # In scope the route reaches its own state rules (200, or 409 when the row's status does not allow the act): admitted.
+    s, b = j(f"/api/admin/forms/submissions/{subs['s_opp1']}/confirm-linkage", SF, {})
+    check(S, "confirm-linkage on in-scope s_opp1 is admitted past the scope gate (200 / 409)", SF, s in (200, 409), s, code_of(b))
+    s, b = j(f"/api/admin/forms/submissions/{subs['s_opp1']}/manual-link", SF, {"opportunity_id": L1})
+    check(S, "manual-link of in-scope s_opp1 to its own opportunity is admitted past the scope gate (200 / 409)", SF, s in (200, 409), s, code_of(b))
+    s, b = j("/api/admin/forms/packet-links", SF, {"packet_definition_id": ext["packet"], "launch_from_entity": {"entity_type": "opportunity", "entity_id": L1}})
+    d = data_of(b) or {}
+    if d.get("id"):
+        ext.setdefault("sf_packet_links", []).append(d["id"])
+        save_r2r5(ext)
+    check(S, "packet link minted from the in-scope L1 opportunity → 201", SF, s == 201 and bool(d.get("id")), s, code_of(b))
+    s, b = j("/api/admin/forms/packet-links", SF, {"packet_definition_id": ext["packet"], "launch_from_entity": {"entity_type": "customer_member", "entity_id": KU}})
+    check(S, "packet link minted from the out-of-scope child KU → 404 (scope gate before mint)", SF, s == 404 and nothing_named(b, KU), s, code_of(b))
+    # A positive submit, and the write-target rule: scoped_forms' own draft on L1 (standard answer only, no child, so no
+    # medical answer and no child write-back), submitted, then re-linked ONTO the QA D2 opportunity.
+    if "s_sf_r2" not in ext:
+        s, b = j("/api/admin/forms/submissions", SF, {"form_definition_version_id": ids["form"]["version_id"], "opportunity_id": L1,
+                                                      "payload": {"values": {"child_note": f"{NOTE} {TAG} r2"}}})
+        if (data_of(b) or {}).get("id"):
+            ext["s_sf_r2"] = data_of(b)["id"]
+            save_r2r5(ext)
+    mine = ext.get("s_sf_r2")
+    s, b = j(f"/api/admin/forms/submissions/{mine}/submit", SF, {}) if mine else (None, None)
+    check(S, "submit of its own in-scope draft (L1) → 200", SF, s == 200, s, code_of(b))
+    if "manual_link_target" not in skip:
+        s, b = j(f"/api/admin/forms/submissions/{mine}/manual-link", SF, {"opportunity_id": L2, "customer_id": ids["L2"].get("hh")}) if mine else (None, None)
+        check(S, "manual-link of an in-scope submission ONTO the QA D2 opportunity → 404 (a write's target is scoped too)", SF,
+              s == 404 and nothing_named(b, L2), s, code_of(b), known_gap="manual-link checks the target's org/household, not scope")
+
+    # ═══════════════════════════════════════════════════════════════════════ R2-links: link lists and preview payload
+    S = "R2-links"
+    fid = ids["form"]["id"]
+    s, b = call(f"/api/admin/forms/{fid}/public-links", SF)
+    got = {r.get("id") for r in (data_of(b) or []) if isinstance(r, dict)}
+    check(S, "form link list keeps L1's and the subject-less link, drops L2's", SF,
+          s == 200 and fl["fl_d1"] in got and fl["fl_none"] in got and fl["fl_d2"] not in got, s, code_of(b))
+    s, b = call(f"/api/admin/forms/{fid}/public-links", A)
+    got = {r.get("id") for r in (data_of(b) or []) if isinstance(r, dict)}
+    check(S, "control: the admin's form link list has all three", A, s == 200 and set(fl.values()) <= got, s, code_of(b))
+    s, b = call(f"/api/admin/forms/packet-definitions/{ext['packet']}/public-links", SF)
+    got = {r.get("id") for r in (data_of(b) or []) if isinstance(r, dict)}
+    check(S, "packet link list keeps L1's, drops L2's and KU's", SF,
+          s == 200 and pl["ps_d1"] in got and pl["ps_d2"] not in got and pl["ps_ku"] not in got, s, code_of(b))
+    schema = {"schema_version": 1, "title": "R2 preview", "sections": [{"id": "s1", "title": "Child", "field_ids": ["child_note"]}],
+              "fields": [{"id": "child_note", "label": "Note", "type": "text", "required": False}]}
+    for fks, want, why in (({"opportunity_id": L1}, 200, "in-scope L1"), ({"opportunity_id": L2}, 404, "QA D2 L2"),
+                           ({"customer_member_id": KU}, 404, "out-of-scope child KU")):
+        s, b = j("/api/admin/forms/preview-payload", SF, {"schema_json": schema, "form_definition_id": fid, "launch_fks": fks})
+        ok = s == want and (want == 200 or nothing_named(b, L2, KU))
+        check(S, f"preview-payload prefilled from {why} → {want}", SF, ok, s, code_of(b))
+
+    # ═══════════════════════════════════════════════════════════════════════ R5-shared: a child on two leads
+    S = "R5-shared"
+
+    def sub_status(k):
+        return call(f"/api/admin/forms/submissions/{r5[k]}", A)[0]
+
+    def child_status(mid):
+        return call(f"/api/admin/documents/library?subject_type=child&subject_id={mid}", A)[0]
+
+    before = {k: sub_status(k) for k in r5}
+    check(S, "before: the four R5 submissions exist", A, all(v == 200 for v in before.values()), None, None, before=before)
+    s, pv = preview(SC["lead_a"])
+    wd, wr = pv.get("will_delete") or {}, pv.get("will_retain") or {}
+    check(S, "delete-preview of lead A: not blocked; exactly its own and ONLY_A's submissions; one child; household retained", A,
+          s == 200 and not pv.get("blocked") and wd.get("form_submissions") == 2 and wd.get("customer_members") == 1
+          and wd.get("customers") == 0 and (wr.get("customers") or 0) >= 1 and (wr.get("customer_members") or 0) >= 1, s, None,
+          will_delete={k: wd.get(k) for k in ("form_submissions", "customer_members", "customers")},
+          will_retain={k: wr.get(k) for k in ("customer_members", "customers")})
+    s, b = call(f"/api/admin/opportunities/{SC['lead_a']}/delete", A, "POST", b"{}", "application/json")
+    ok = s == 200 and (b or {}).get("ok") is not False
+    if ok:
+        ext["lead_a_deleted"] = True
+        save_r2r5(ext)
+    check(S, "lead A deleted through the audited product route", A, ok, s, code_of(b))
+    after = {k: sub_status(k) for k in r5}
+    check(S, "lead A's own submission and ONLY_A's child-only submission are gone", A,
+          after["s_r5_oppa"] == 404 and after["s_r5_only"] == 404, None, None, after=after)
+    check(S, "SHARED's child-only submission survives (SHARED is still on lead B)", A, after["s_r5_shared"] == 200, after["s_r5_shared"])
+    check(S, "lead B's submission is untouched", A, after["s_r5_oppb"] == 200, after["s_r5_oppb"])
+    check(S, "ONLY_A is gone; SHARED is kept", A, child_status(SC["child_only_a"]) == 404 and child_status(SC["child_shared"]) == 200, None)
+    s, pv = preview(SC["lead_b"])
+    wd = pv.get("will_delete") or {}
+    check(S, "lead B and household H remain; B's preview now takes SHARED and its submission", A,
+          s == 200 and wd.get("form_submissions") == 2 and wd.get("customer_members") == 1 and wd.get("customers") == 1, s, None,
+          will_delete={k: wd.get(k) for k in ("form_submissions", "customer_members", "customers")})
+
+
+def reset_r2r5(ext):
+    out = {}
+    if not ext.get("lead_b_deleted"):
+        s, b = call(f"/api/admin/opportunities/{SC['lead_b']}/delete", A, "POST", b"{}", "application/json")
+        out["delete_lead_b"] = s
+        if s == 200:
+            ext["lead_b_deleted"] = True
+            save_r2r5(ext)
+    if not ext.get("lead_a_deleted"):
+        s, b = call(f"/api/admin/opportunities/{SC['lead_a']}/delete", A, "POST", b"{}", "application/json")
+        out["delete_lead_a"] = s
+        if s == 200:
+            ext["lead_a_deleted"] = True
+            save_r2r5(ext)
+    gone = {f"sub_{k}": call(f"/api/admin/forms/submissions/{v}", A)[0] for k, v in (ext.get("r5_subs") or {}).items()}
+    for k in ("lead_a", "lead_b"):
+        gone[f"opp_{k}"] = call(f"/api/admin/opportunities/{SC[k]}/delete-preview", A)[0]
+    out["after"] = gone
+    out["product_teardown_gone"] = all(v == 404 for v in gone.values())
+    out["left_for_registered_resets"] = {
+        "qa_documents_forms_residue_reset": "run packet qa_<run>_r2pkt, its items, links and sessions; the run form's public links",
+        "qa_documents_shared_child_reset": "whatever ac000000- rows the product deletion did not take (normally none)",
+    }
+    return out
+
+
+if PHASE in ("ensure_r2r5", "certify_r2r5", "reset_r2r5"):
+    ids, ext = load(), load_r2r5()
+    if PHASE == "ensure_r2r5":
+        ok = ensure_r2r5(ids, ext)
+        print("ENSURE_R2R5", json.dumps({k: (bool(v) if not isinstance(v, dict) else {x: bool(y) for x, y in v.items()}) for k, v in ext.items()}))
+        sys.exit(0 if ok else 1)
+    if PHASE == "certify_r2r5":
+        certify_r2r5(ids, ext, skip=frozenset({"manual_link_target"} if "--skip-manual-link-target" in OPTIONS else ()))
+        finish()
+    out = reset_r2r5(ext)
+    print("RESET_R2R5", json.dumps(out))
+    json.dump(out, open(os.path.join(HERE, f"r4_r2r5_reset_results.{RUN}.json"), "w"), indent=2)
+    sys.exit(0 if out["product_teardown_gone"] else 1)
