@@ -32,6 +32,15 @@ vi.mock("@/lib/admin/getAdminContext", async (orig) => ({
     ...(await orig<typeof import("@/lib/admin/getAdminContext")>()),
     getAdminContextCached: vi.fn(async () => ctx.current),
 }));
+// The link PATCH scopes the link to the caller's department/site (R2, formsDestinationScope): this suite's actor is
+// unrestricted, so the scope check admits every link it edits.
+vi.mock("@/lib/admin/getAdminAccessContext", async (orig) => ({
+    ...(await orig<typeof import("@/lib/admin/getAdminAccessContext")>()),
+    getAdminAccessContextCached: vi.fn(async () => ({
+        ok: true, userId: USER, orgId: (ctx.current as { orgId?: string } | null)?.orgId ?? null, roleKeys: ["admin"], permissionKeys: [],
+        departmentScope: "all", allowedDepartmentIds: null, siteScope: "all", allowedSiteLocationIds: null,
+    })),
+}));
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/admin/forms/formsAdminDb", () => ({
     dbGetPublicLinkForForm: vi.fn(async () => ({ data: linkRow.current, error: null })),
