@@ -1,22 +1,24 @@
 /**
- * D10 pilot — what Documents does with ONE inbound email attachment. A pure decision; nothing here reads, stores, opens
- * or sends anything.
+ * D10 pilot — may ONE inbound email attachment become a Processing case? A pure gate; it reads, stores, opens and sends
+ * nothing. `inboundAttachmentFiling.ts` runs the pipeline around it.
  *
  * The pipeline is the existing one and only that (user-approved 2026-10-30):
  *   Communications receives and owns the message (`ingestResendInboundEmail`, ownership `resolveInboundEmailOwnership`,
- *   one receipt per provider message id)  →  WS11 stores the attachment as a `documents` row
- *   (`communication_message_attachments`, planned in CONVERSATION-PLATFORM-V1-PLAN.md)  →  the document is screened
- *   →  ONE Processing case with `source_kind = 'email_attachment'` (already admitted by `chk_pcs_source_kind`)  →
- *   the filing workspace  →  `commitDocumentFiling` with the key below.
- * There is no second pipeline, no new ingress and no subject guess: the case opens WITHOUT a proposed child or family,
- * so it lands in the existing "Needs a record" lane (`awaiting_subject`) for an operator to resolve.
+ *   one receipt per provider message id)  →  WS11 retrieves and stores the attachment as a `documents` row
+ *   →  D1c-1 structural screening (`decideIngestion`: refuse = nothing stored, quarantine = stored unavailable, clean)
+ *   →  [malware scanning, D1c-2, when the organization's policy requires it]
+ *   →  ONE Processing case, `source_kind = 'email_attachment'`, `source_id = <document id>` (idempotent at the database:
+ *      `uq_pcs_primary_source_once (org_id, source_kind, source_id) WHERE role='primary'`)
+ *   →  the document filing queue  →  `commitDocumentFiling` under `processing_case:<case>:document:<document>`.
+ * No subject is ever proposed: the case lands in the existing "Needs a record" lane (`awaiting_subject`).
  *
- * ── HELD UNTIL PROVEN SAFE ──
- * Today two prerequisites do not exist, and the decision says so instead of pretending: WS11 storage (no migration
- * creates `communication_message_attachments`; attachments are metadata only) and content screening (D1c-2 malware
- * scanning, deferred in D5). Every attachment is therefore HELD, with the reasons, until both are real. A dependency is
- * marked available only by changing `EMAIL_ATTACHMENT_FILING_CAPABILITY` in the same change that ships it — never by
- * configuration, and never by assuming a scan happened.
+ * ── WHAT EXISTS AND WHAT DOES NOT (measured, not assumed) ──
+ *   storage            ABSENT. Communications records attachment metadata only ("Retrieval and storage are WS11");
+ *                      no migration creates `communication_message_attachments`.
+ *   structural screen  PRESENT. D1c-1 `decideIngestion` is the screening every outside file already passes; it is not
+ *                      antivirus and never claims a file is "safe".
+ *   malware scanning   ABSENT. D1c-2 is deferred. No scanner is invented; a policy that requires one holds everything.
+ * A capability is changed only by the change that ships it.
  */
 import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 
@@ -34,23 +36,29 @@ export type InboundAttachmentInput = {
         id: string;
         disposition: string | null;
     };
-    /** The `documents` row WS11 created for this attachment, when it exists. */
+    /** The `documents` row WS11 holds for this attachment, when it exists. */
     stored: { documentId: string; orgId: string; status: string | null } | null;
-    /** The screening verdict for that document, when a screening service exists. */
-    screening: { verdict: "clean" | "infected" | "suspicious" | "pending" | "failed" } | null;
+    /** Structural screening (D1c-1) of the stored bytes; `refused` means nothing was stored. */
+    structural: "clean" | "quarantined" | "refused" | null;
+    /** Malware verdict (D1c-2), when a scanner exists. */
+    malware: { verdict: "clean" | "infected" | "suspicious" | "pending" | "failed" } | null;
 };
 
 export type HoldReason =
     | "storage_unavailable"
-    | "screening_unavailable"
+    | "malware_scanning_unavailable"
     | "message_not_owned"
     | "message_ownership_ambiguous"
     | "not_an_attachment"
     | "attachment_not_stored"
+    | "retrieval_failed"
     | "stored_in_another_organization"
+    | "screening_refused"
+    | "screening_missing"
     | "document_unavailable"
-    | "screening_pending"
-    | "screening_rejected";
+    | "malware_pending"
+    | "malware_rejected"
+    | "case_open_failed";
 
 export type AttachmentFilingDecision =
     | { action: "hold"; reasons: HoldReason[] }
@@ -59,94 +67,121 @@ export type AttachmentFilingDecision =
           orgId: string;
           documentId: string;
           sourceKind: "email_attachment";
-          /** Idempotency: one case and one filing per (message, document), however often the email is redelivered. */
+          /** `processing_case_sources.source_id`: the stored document. Redelivery converges on the same case. */
+          sourceId: string;
+          /** Provenance and idempotency label of this attachment's ingestion. */
           sourceKey: string;
-          filingKey: string;
           /** No subject is proposed: the operator chooses the child or family. */
           proposedSubject: null;
       };
 
-/** The real state of the two prerequisites. Changed only by the change that ships each one. */
-export const EMAIL_ATTACHMENT_FILING_CAPABILITY = Object.freeze({
-    /** WS11: `communication_message_attachments` + attachment bytes stored as `documents`. Absent. */
+export type FilingCapability = { storage: boolean; structuralScreening: boolean; malwareScanning: boolean };
+
+/** The real state today. Changed only by the change that ships each capability. */
+export const EMAIL_ATTACHMENT_FILING_CAPABILITY: Readonly<FilingCapability> = Object.freeze({
+    /** WS11: retrieval + `communication_message_attachments` + bytes stored as `documents`. Absent. */
     storage: false,
-    /** D1c-2: malware / content screening with a recorded verdict. Absent. */
-    screening: false,
+    /** D1c-1 `decideIngestion`, already applied to every outside file. Present. */
+    structuralScreening: true,
+    /** D1c-2 malware scanning. Absent. */
+    malwareScanning: false,
 });
 
+export type FilingPolicy = { requireMalwareScan: boolean };
+
+/**
+ * The default policy: an email attachment from an arbitrary sender is NOT released on structural screening alone. An
+ * organization may decide otherwise (parity with the public upload paths, which store on structural screening); that is
+ * a product decision, passed in explicitly — never a default.
+ */
+export const DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY: Readonly<FilingPolicy> = Object.freeze({ requireMalwareScan: true });
+
 export type FilingDependency = {
-    key: "ws11_attachment_storage" | "d1c2_content_screening" | "d10_case_opening";
+    key: "ws11_attachment_storage" | "d1c2_malware_scanning" | "communications_ingestion_hook";
     owner: string;
     state: "missing" | "ready";
     proof: string;
     next: string;
 };
 
-/** The prerequisites, their owners and the proof each needs — so "held" always names what would release it. */
+/** What would release a held attachment, with its owner. */
 export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] = Object.freeze([
     {
         key: "ws11_attachment_storage",
         owner: "Communications (Conversation Platform WS11)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.storage ? "ready" : "missing",
-        proof: "a migration creating communication_message_attachments (org_id, message_id, document_id → documents, disposition, UNIQUE (message_id, document_id)) and ingestion storing attachment bytes as documents in org_documents",
-        next: "WS11 storage slice; Documents consumes it unchanged",
+        proof: "attachment retrieval from the receiving provider plus a migration creating communication_message_attachments (org_id, message_id, document_id → documents, disposition, UNIQUE (message_id, document_id)) — schema prepared for owner review in certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql, not applied — and an AttachmentStorageBoundary implementation over it",
+        next: "WS11 storage slice (Communications); Documents' pipeline consumes it through the injected boundary unchanged",
     },
     {
-        key: "d1c2_content_screening",
+        key: "d1c2_malware_scanning",
         owner: "Documents security (D1c-2, deferred in D5)",
-        state: EMAIL_ATTACHMENT_FILING_CAPABILITY.screening ? "ready" : "missing",
-        proof: "a screening verdict recorded per document version before release from quarantine; no verdict = not screened",
-        next: "decide the screening provider within existing services (no new paid provider without approval), then the D1c-2 slice",
+        state: EMAIL_ATTACHMENT_FILING_CAPABILITY.malwareScanning ? "ready" : "missing",
+        proof: "a recorded malware verdict per stored version before release; no verdict = not scanned. Alternatively an explicit organization policy accepting D1c-1 structural screening alone",
+        next: "choose a scanner within existing services (no new paid provider without approval), or the policy decision",
     },
     {
-        key: "d10_case_opening",
-        owner: "Documents / Processing",
+        key: "communications_ingestion_hook",
+        owner: "Communications (inbound email ingestion)",
         state: "missing",
-        proof: "the existing non-form case opener called with this decision, and email_attachment added to the filing queue's document sources",
-        next: "the bounded consumer slice after both prerequisites are ready",
+        proof: "ingestResendInboundEmail calls fileInboundEmailAttachments after the message persists (owned messages only), best-effort, never failing ingestion",
+        next: "a one-call hook added with WS11 storage; no new ingress",
     },
 ]);
 
-export function emailAttachmentSourceKey(messageId: string, documentId: string): string {
-    return `email_attachment:${messageId}:${documentId}`;
+export function emailAttachmentSourceKey(messageId: string, attachmentId: string): string {
+    return `email_attachment:${messageId}:${attachmentId}`;
+}
+
+/** Holds that are knowable BEFORE anything is retrieved or stored — an unowned message's attachment is never stored. */
+export function preStorageHolds(
+    input: Pick<InboundAttachmentInput, "message" | "attachment">,
+    capability: FilingCapability = EMAIL_ATTACHMENT_FILING_CAPABILITY,
+    policy: FilingPolicy = DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
+): HoldReason[] {
+    const reasons: HoldReason[] = [];
+    if (!capability.storage) reasons.push("storage_unavailable");
+    if (policy.requireMalwareScan && !capability.malwareScanning) reasons.push("malware_scanning_unavailable");
+    if (input.message.ownership === "cross_org_ambiguous") reasons.push("message_ownership_ambiguous");
+    else if (input.message.ownership !== "owned" || !input.message.orgId) reasons.push("message_not_owned");
+    // Inline images and link parts are not documents a family sent.
+    if ((input.attachment.disposition ?? "attachment").toLowerCase() !== "attachment") reasons.push("not_an_attachment");
+    return reasons;
 }
 
 export function decideInboundAttachmentFiling(
     input: InboundAttachmentInput,
-    capability: { storage: boolean; screening: boolean } = EMAIL_ATTACHMENT_FILING_CAPABILITY,
+    capability: FilingCapability = EMAIL_ATTACHMENT_FILING_CAPABILITY,
+    policy: FilingPolicy = DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
 ): AttachmentFilingDecision {
-    const reasons: HoldReason[] = [];
-    if (!capability.storage) reasons.push("storage_unavailable");
-    if (!capability.screening) reasons.push("screening_unavailable");
+    const reasons = preStorageHolds(input, capability, policy);
 
-    if (input.message.ownership === "cross_org_ambiguous") reasons.push("message_ownership_ambiguous");
-    else if (input.message.ownership !== "owned" || !input.message.orgId) reasons.push("message_not_owned");
-
-    // Inline images and link parts are not documents a family sent us.
-    if ((input.attachment.disposition ?? "attachment").toLowerCase() !== "attachment") reasons.push("not_an_attachment");
-
+    if (input.structural === "refused") reasons.push("screening_refused");
     const stored = input.stored;
-    if (!stored) reasons.push("attachment_not_stored");
-    else {
+    if (!stored) {
+        if (input.structural !== "refused") reasons.push("attachment_not_stored");
+    } else {
         if (input.message.orgId && stored.orgId !== input.message.orgId) reasons.push("stored_in_another_organization");
-        if (isDocumentUnavailable(stored.status)) reasons.push("document_unavailable");
+        if (!capability.structuralScreening || input.structural === null) reasons.push("screening_missing");
+        if (input.structural === "quarantined" || isDocumentUnavailable(stored.status)) reasons.push("document_unavailable");
     }
 
-    const verdict = input.screening?.verdict ?? null;
-    if (capability.screening) {
-        if (verdict === null || verdict === "pending") reasons.push("screening_pending");
-        else if (verdict !== "clean") reasons.push("screening_rejected");
+    if (policy.requireMalwareScan && capability.malwareScanning) {
+        const v = input.malware?.verdict ?? null;
+        if (v === null || v === "pending") reasons.push("malware_pending");
+        else if (v !== "clean") reasons.push("malware_rejected");
     }
 
-    if (reasons.length > 0 || !stored || !input.message.orgId) return { action: "hold", reasons: reasons.length ? reasons : ["attachment_not_stored"] };
-    const key = emailAttachmentSourceKey(input.message.id, stored.documentId);
+    if (reasons.length > 0 || !stored || !input.message.orgId) {
+        return { action: "hold", reasons: reasons.length ? [...new Set(reasons)] : ["attachment_not_stored"] };
+    }
     return {
         action: "open_processing_case",
         orgId: input.message.orgId,
         documentId: stored.documentId,
         sourceKind: "email_attachment",
-        sourceKey: key,
-        filingKey: key,
+        sourceId: stored.documentId,
+        sourceKey: emailAttachmentSourceKey(input.message.id, input.attachment.id),
         proposedSubject: null,
     };
 }

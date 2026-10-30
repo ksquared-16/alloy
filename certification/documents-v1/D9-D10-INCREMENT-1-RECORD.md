@@ -79,45 +79,66 @@ Restored byte-for-byte afterwards.
 - the organization-wide feed (deliberately absent);
 - HTTP exercise against a running server, and the hosted proof.
 
-## c2 — D10: existing contracts, held until safe
+## c2 — D10: inbound attachments → Processing → canonical filing (pipeline implemented; three edges blocked)
 
-**Seam:** `lib/documents/inbound/emailAttachmentFilingDecision.ts`, a pure decision. It reads, stores, opens and sends nothing.
-- **Releasing a case.** It only ever releases ONE Processing case, with:
-  - `source_kind = 'email_attachment'` (already admitted);
-  - idempotency key `email_attachment:<message>:<document>`, shared by the case source and `commitDocumentFiling`;
-  - **no proposed subject**, so the case lands in the existing "Needs a record" lane.
-- **Held** when:
-  - the message isn't owned, or its ownership is ambiguous;
-  - the part is inline or a link;
-  - the attachment isn't stored, or is stored in another organization;
-  - the document is unavailable or quarantined;
-  - screening is unavailable, pending, infected, suspicious or failed.
+**What changed since the first D10 slice (`5d4fc84ac`).** That slice was only the pure gate. It also recorded screening
+as wholly missing, which was wrong:
+- **D1c-1 structural screening exists.** `decideIngestion` is applied to every outside file today and is now reused here. It is not antivirus.
+- **What's missing is D1c-2 malware scanning.**
 
-**Prerequisites, as of this record:**
+**Implemented, all local:**
 
-| Dependency | Owner | State | Proof that would release it |
-|---|---|---|---|
-| WS11 attachment storage | Communications (Conversation Platform WS11) | **missing**: no migration creates `communication_message_attachments`; attachments are metadata only | the migration plus bytes stored as `documents` |
-| D1c-2 content screening | Documents security (deferred in D5) | **missing** | a recorded verdict per version before release from quarantine; provider within existing services (no new paid provider without approval) |
-| D10 case opening | Documents / Processing | **missing** (bounded next slice) | the existing non-form opener called with this decision; `email_attachment` added to the filing queue's document sources |
+| Edge | Seam | State |
+|---|---|---|
+| Owned message → per-attachment holds before any bytes | `preStorageHolds` (unowned, ambiguous, inline/link, storage absent, scan required but absent) | **done**. An unowned message's attachment is never retrieved or stored |
+| Retrieval + storage (WS11) | `AttachmentStorageBoundary` (`findStored` / `retrieve` / `store`, idempotent on message+attachment). Production default `UNAVAILABLE_ATTACHMENT_STORAGE` | **boundary done; implementation BLOCKED.** Owner: Communications WS11 |
+| Screening of an outside file | size cap (`PUBLIC_UPLOAD_MAX_FILE_BYTES`), byte sniffing (`sniffPublicUploadKind`: PDF/PNG/JPEG), `decideIngestion`: refuse = never stored, quarantine = stored `quarantined` (the existing review queue), clean = stored | **done**, reusing the public-upload contract exactly |
+| Malware scanning | `MalwareScanBoundary`. Production default `UNAVAILABLE_MALWARE_SCAN`. Default policy `requireMalwareScan: true` holds everything; a structural-only policy is an explicit organization choice | **boundary done; scanner BLOCKED.** Owner: Documents security D1c-2. No scanner invented |
+| Gate | `decideInboundAttachmentFiling` | **done** |
+| Case opening | existing `openNonFormProcessingCaseFromSource` with `source_kind = 'email_attachment'`, `source_id = document id`. Idempotent through `uq_pcs_primary_source_once`; a race loser re-reads and converges | **done**. No subject is proposed |
+| Filing | `email_attachment` added to `DOCUMENT_SOURCE_KINDS`, so `loadDocumentCase` → filing workspace → `commitDocumentFiling` under `processing_case:<case>:document:<document>`. The approve route files these cases exactly like uploads | **done** |
+| Ingestion hook | `ingestResendInboundEmail` calls `fileInboundEmailAttachments` after the message persists (owned only, best-effort) | **BLOCKED** until WS11 storage. Owner: Communications. No new ingress added |
+| Sends | none. The pipeline's dependencies carry no messaging capability | by construction |
 
-`EMAIL_ATTACHMENT_FILING_CAPABILITY` is `{storage: false, screening: false}`. It is changed only by the change that ships each prerequisite. A test ties `storage` to the migrations, so it can't be flipped while WS11 is absent.
+**Schema:**
+- `certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql` is the planned `communication_message_attachments` shape from CONVERSATION-PLATFORM-V1-PLAN.md :414-422, plus a proposed `provider_attachment_id` uniqueness for idempotency.
+- It is drafted for the Communications owner's review, **outside `supabase/migrations`**.
+- Nothing was applied or queried.
 
-**Proof:** `tests/documents/emailAttachmentFilingDecision.test.ts` **18/18**:
-- held today with both reasons;
-- dependencies owned;
-- release only when ready;
-- the same key on redelivery;
-- eleven hold cases;
-- storage without screening still held.
+**Proof:**
+- `tests/documents/inboundAttachmentFiling.test.ts` **12/12**. Real `decideIngestion` and the real opener, over in-memory boundaries that enforce the unique primary-source rule:
+  - production wiring holds everything;
+  - a clean owned attachment gives one case with no subject;
+  - redelivery gives no second retrieval, document or case;
+  - a lost concurrent race converges on the winner's case;
+  - unowned and ambiguous messages: nothing retrieved;
+  - a document from another org is held;
+  - active-content PDF is stored quarantined and held; a fake PDF is never stored;
+  - oversized, inline and unretrievable attachments are held;
+  - infected, pending and no-scanner are held;
+  - an explicit structural-only policy releases;
+  - the filing path resolves an `email_attachment` case to its document.
+- `emailAttachmentFilingDecision.test.ts` **21/21**.
+- Mutation check:
 
-**Not done (correctly):** no new ingress, no case opened, no outbound message, no screening faked.
+| Mutation | Result |
+|---|---|
+| Pre-storage holds removed | 3 fail |
+| Stored-attachment reuse removed | 1 fails |
+| `email_attachment` dropped from filing sources | 1 fails |
+
+  Restored byte-for-byte afterwards.
+
+**Finding for the Processing owner (not changed here).** `openProcessingCaseFromSource` inserts the case before its primary source. A delivery that loses the unique-index race therefore leaves an orphan `processing_cases` row without a source. Uniqueness of the primary still holds, and D10 converges on the winner. This affects every source kind.
+
+**Product decision available:** whether an organization may release email attachments on D1c-1 structural screening alone. That would match the public upload paths. The default holds until D1c-2 exists.
 
 ## c3 — local only; history preserved
 
 **Validation (broker):**
 - `tests/platform/external` + `tests/documents`: **883 passed**, 257 skipped (live-DB suites skipped by design).
-- `typecheck` and `typecheck:tests`: clean.
+- `typecheck` and `typecheck:tests`: clean (re-run after the D10 pipeline).
+- D10 regression: `tests/documents` and `tests/pos` give 2,102 passed. The 1 failure (`tests/pos/formDraft.test.ts`) is pre-existing and identical on the base.
 - Prebuild guards: route-capabilities, service-client-principal, unauthenticated-side-effects, runtime-mode-audience and governed-documents pass. `verify:module-imports` runs after commit.
 
 **No production build:** the installed broker's candidate-build containment is unresolved (HostCapacity, Rev4 `vreq_597c4c1e28d3`), so no build was requested. The checkpoint waits on that.

@@ -82,10 +82,13 @@ describe("the gaps the document states are still gaps", () => {
         expect(hits).toEqual([]);
     });
 
-    it("D10: email_attachment is an admitted case source but not a filing-queue document source", () => {
+    // D10 pilot landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): email_attachment is now a filing-queue document source,
+    // and the Documents pipeline (lib/documents/inbound/inboundAttachmentFiling.ts) opens cases through the existing
+    // non-form opener — but ingestion still does not call it, because WS11 storage does not exist.
+    it("D10: email_attachment is an admitted case source AND a filing-queue document source", () => {
         expect(read("supabase/migrations/20261124090000_processing_participant_child_requests.sql")).toContain("'email_attachment'");
         const m = /DOCUMENT_SOURCE_KINDS[^=]*=\s*\[([^\]]*)\]/.exec(read("web/lib/pos/documentFiling/documentFilingModel.ts"));
-        expect(m?.[1] ?? "").not.toContain("email_attachment");
+        expect(m?.[1] ?? "").toContain("email_attachment");
     });
 
     it("D10: no inbound-email code opens a Processing case", () => {
