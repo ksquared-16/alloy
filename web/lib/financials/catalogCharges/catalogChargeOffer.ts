@@ -43,7 +43,7 @@ import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeT
 import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
-import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
+import type { GlAccountMappingRow, GlAccountRow, GlConfigBundle } from "@/lib/financials/gl/glConfigTypes";
 
 /** The resolution-key namespace of a catalog charge: `tpl:catalog:<product id>:<date>:<scope>`. */
 export const CATALOG_CHARGE_KEY_PREFIX = "catalog:";
@@ -368,19 +368,28 @@ export function catalogChargeSnapshot(product: CommercialProductDef, account: Ca
     };
 }
 
-/** The org's catalog and the accounting it needs, in one parallel read. */
+/**
+ * The org's catalog and the accounting it needs, in one parallel read.
+ *
+ * `gl` is the org's GL configuration when the caller has ALREADY issued that exact read
+ * (`loadGlConfigBundle` — same tables, columns, predicates and order), so a surface that needs both
+ * does not read `gl_accounts` and `gl_account_mappings` twice. It must be the shared reader's own
+ * promise, not a degraded copy: a GL read that fails still rejects here, and the catalog still fails
+ * closed rather than calling every item unmapped.
+ */
 export async function readCatalogChargeConfig(
     supabase: SupabaseClient,
     orgId: string,
     asOf: string,
+    gl?: Promise<GlConfigBundle>,
 ): Promise<CatalogChargeConfig> {
     const ctx = { supabase, orgId, asOf };
-    const [products, revenueCategories, gl] = await Promise.all([
+    const [products, revenueCategories, glConfig] = await Promise.all([
         readProducts(ctx),
         readRevenueCategories(ctx),
-        loadGlConfigBundle(supabase, orgId),
+        gl ?? loadGlConfigBundle(supabase, orgId),
     ]);
-    return { products, revenueCategories, mappings: gl.glAccountMappings, accounts: gl.glAccounts };
+    return { products, revenueCategories, mappings: glConfig.glAccountMappings, accounts: glConfig.glAccounts };
 }
 
 /**

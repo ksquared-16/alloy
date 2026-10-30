@@ -22,6 +22,7 @@ import type { CommercialProductDef } from "@/lib/commercial/execution/commercial
 import { resolveGlAccountForMappingKey } from "@/lib/financials/accounting/resolveGlMapping";
 import {
     evaluateCatalogCharge,
+    readCatalogChargeConfig,
     type CatalogChargeConfig,
 } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY } from "@/lib/financials/chargeCategories";
@@ -364,8 +365,13 @@ describe("charge.add names exactly one source", () => {
 
 /* ── THE PICKER: the card's read model, built over the same catalog ───────────────────────────── */
 
-function immediateClient(rows: Record<string, Array<Record<string, unknown>>>, bundle: Record<string, unknown>) {
+function immediateClient(
+    rows: Record<string, Array<Record<string, unknown>>>,
+    bundle: Record<string, unknown>,
+    opts: { reads?: Map<string, number>; failTable?: string } = {},
+) {
     const builder = (table: string) => {
+        opts.reads?.set(table, (opts.reads.get(table) ?? 0) + 1);
         const chain: Record<string, unknown> = {};
         for (const k of [
             "select", "eq", "in", "is", "not", "gte", "lte", "lt", "gt", "or", "order",
@@ -373,7 +379,9 @@ function immediateClient(rows: Record<string, Array<Record<string, unknown>>>, b
         ]) {
             chain[k] = () => chain;
         }
-        const answer = { data: rows[table] ?? [], error: null, count: (rows[table] ?? []).length };
+        const answer = table === opts.failTable
+            ? { data: null, error: { message: "read failed", code: "XX000" }, count: null }
+            : { data: rows[table] ?? [], error: null, count: (rows[table] ?? []).length };
         chain.maybeSingle = async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null });
         chain.single = chain.maybeSingle;
         chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve(answer).then(resolve);
@@ -442,6 +450,38 @@ describe("the picker offers what the command accepts", () => {
         /* Chargeable items come first, so the command never opens on one it would refuse. */
         expect(opts[0]!.availability).toBe("offerable");
         expect(byId.get("p-fee")).toMatchObject({ amountCents: 2500, label: "Alpha One-time Fee", accountLabel: "4010 · Activity Revenue" });
+    });
+
+    it("the catalog joins the card's ONE GL read — each table read once, no second gl_accounts/gl_account_mappings trip", async () => {
+        const reads = new Map<string, number>();
+        const vm = await buildFinancialsCardVM(immediateClient(rows, bundle, { reads }), {
+            orgId: ORG_ID, customerId: BILLING_CUSTOMER_ID, customerMemberId: null, today: TODAY,
+        });
+        for (const table of ["gl_accounts", "gl_account_mappings", "commercial_products", "commercial_revenue_categories", "child_enrollment_agreements"]) {
+            expect(reads.get(table), table).toBe(1);
+        }
+        /* Sharing the read changed no answer: the same options as the unshared reader produces. */
+        expect(vm.chargeTemplates).toEqual(await options());
+        expect(vm.chargeTemplates.find((o) => o.id === "p-fee")).toMatchObject({ accountLabel: "4010 · Activity Revenue" });
+    });
+
+    it.each(["gl_accounts", "gl_account_mappings"])("a failed %s read leaves the catalog UNAVAILABLE — never every item 'unmapped'", async (failTable) => {
+        const vm = await buildFinancialsCardVM(immediateClient(rows, bundle, { failTable }), {
+            orgId: ORG_ID, customerId: BILLING_CUSTOMER_ID, customerMemberId: null, today: TODAY,
+        });
+        expect(vm.chargeTemplates).toEqual([]);
+        expect(vm.unavailable.map((u) => u.fact)).toContain("catalog");
+    });
+
+    it("the catalog reader uses a GL bundle it is handed, and still fails closed when that bundle rejects", async () => {
+        const reads = new Map<string, number>();
+        const client = immediateClient(rows, bundle, { reads });
+        const gl = Promise.resolve({ glAccounts: GL_ACCOUNTS as never, glAccountMappings: GL_MAPPINGS as never });
+        const config = await readCatalogChargeConfig(client, ORG_ID, TODAY, gl);
+        expect(config.accounts).toEqual(GL_ACCOUNTS);
+        expect(config.mappings).toEqual(GL_MAPPINGS);
+        expect(reads.has("gl_accounts") || reads.has("gl_account_mappings")).toBe(false);
+        await expect(readCatalogChargeConfig(client, ORG_ID, TODAY, Promise.reject(new Error("gl down")))).rejects.toThrow("gl down");
     });
 
     it("every offered price is the price the command previews and writes", async () => {

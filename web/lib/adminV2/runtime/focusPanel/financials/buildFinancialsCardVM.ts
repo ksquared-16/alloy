@@ -66,6 +66,7 @@ import {
     catalogChargeOptions,
     readCatalogChargeConfig,
 } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import { shapeAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
 import {
@@ -1337,10 +1338,20 @@ async function buildFinancialsCardVMInner(
      * `.catch` is attached at creation because the early-return paths below never await these, and
      * an unawaited rejection must not surface as an unhandled one.
      */
+    /*
+     * ONE GL CONFIGURATION READ, TWO CONSUMERS. The card resolves a charge's account from it, and the
+     * Catalog it offers resolves each item's account from the same two tables. The catalog reader
+     * used to issue its own `loadGlConfigBundle`, so every card read `gl_accounts` and
+     * `gl_account_mappings` twice. Now the shared reader runs once and both join it — each keeping
+     * its own failure meaning: the card degrades to no account labels (as before, when either read
+     * failed), the catalog still fails closed ("could not be read", never "unmapped").
+     */
+    const glConfigP = loadGlConfigBundle(supabase, args.orgId);
+    glConfigP.catch(() => undefined);
     const configRead = clock.time("config_ms", () =>
         Promise.all([
-            supabase.from("gl_account_mappings").select("key, gl_account_id, is_active").eq("org_id", args.orgId),
-            supabase.from("gl_accounts").select("id, code, name, is_active").eq("org_id", args.orgId),
+            glConfigP.then((gl) => ({ data: gl.glAccountMappings as unknown }), () => ({ data: [] as unknown })),
+            glConfigP.then((gl) => ({ data: gl.glAccounts as unknown }), () => ({ data: [] as unknown })),
             supabase
                 .from("financial_charge_templates")
                 .select(
@@ -1405,7 +1416,7 @@ async function buildFinancialsCardVMInner(
      *
      * `.catch` at creation for the same reason as the reads above: an early return never awaits it.
      */
-    const catalogConfigP = readCatalogChargeConfig(supabase, args.orgId, today).then(
+    const catalogConfigP = readCatalogChargeConfig(supabase, args.orgId, today, glConfigP).then(
         (config) => ({ ok: true as const, config }),
         (err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : "catalog read failed" }),
     );
