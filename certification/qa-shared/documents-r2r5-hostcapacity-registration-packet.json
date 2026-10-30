@@ -1,13 +1,13 @@
 {
  "schema": "alloy.documents_r2r5.hostcapacity_registration_packet.v1",
- "status": "PREPARED FOR THE HOSTCAPACITY OWNER — nothing registered, provisioned or filed by the Documents lane. Updated 2026-10-30 (run erun2_42c0584500721590) with the Revision 4 contract candidate.",
+ "status": "PREPARED FOR THE HOSTCAPACITY OWNER (A741) — nothing registered, provisioned or filed by the Documents lane. Refreshed 2026-10-30 (run erun2_73a8af45220a9267) after PR #1618 merged and deployed.",
  "candidate": {
   "pr": 1618,
   "url": "https://github.com/ksquared-16/alloy/pull/1618",
   "head": "ace21237849a6091e0a41eb1d4bd440ec27c898f",
   "base": "staging@4272e85dc8fbf552cfa21444c57272987eb06efd",
   "checkpoint": "ick_874b7d635ea7 CERTIFIED",
-  "state_at_writing": "OPEN, DRAFT, required checks pass, mergeStateStatus CLEAN, not merged; staging /api/build-info gitSha 4272e85dc8fb"
+  "state_at_writing": "MERGED 2026-10-30T18:49:13Z as 8ef45da545ecbec854224ba0c12d0d6a5de44ce8 (gar_0f3d4aa1198023 / tha_fcd38015a47db1); staging /api/build-info gitSha 8ef45da545ec… (dpl_5536S33eRRssQB9rjgcVqCfbMkSJ, project ikaxilmwmrmbagoidedu) since 18:57:24Z"
  },
  "pin_rule": "pin only bytes on staging after #1618 merges; recompute each sha256 at the merge commit — the values below are the candidate's bytes (verified identical at ace21237849a)",
  "A_shared_child_fixture": {
@@ -23,7 +23,17 @@
    "lib/reconciliation-registry.mjs: qa_documents_shared_child_ensure (runner dev:qa:documents-shared-child-ensure) and qa_documents_shared_child_reset (dev:qa:documents-shared-child-reset); frozen ORG_ID QA Shared; environments [staging]; apply_env DRY_RUN=0 CERT_FIXTURE_APPLY=1 SYNTHETIC_ONLY=1; result_shape seeded|failed / reset|failed",
    "lib/hosted-fixture-safety.mjs: profile qa_documents_shared_child {idPrefix 'ac000000-', ownership {}, requireReplicaWindow false} (both files measured ok with the installed audit)",
    "lib/qa-plan-registry.mjs authz_q1.fixture_reconciliations += documents_shared_child_ensure / documents_shared_child_reset"
-  ]
+  ],
+  "safety_profile": {
+   "key": "qa_documents_shared_child",
+   "shape": {
+    "idPrefix": "ac000000-",
+    "ownership": {},
+    "requireReplicaWindow": false
+   },
+   "measured": "ensure and reset ok under qa_authz_vendors and this proposed profile with the installed audit (toolkit b3c80db2e9aa); bytes unchanged at 8ef45da5"
+  },
+  "ready_to_register": "YES — every pinned file is on staging at 8ef45da5 with the hashes above"
  },
  "B_scoped_author_persona": {
   "operator_approval": "Kelly approved provisioning AFTER contract registration: qa-pool-09@example.com / qa_scoped_author; portal.access, documents.read, crm.customers.read, forms.author; QA Shared organization, department QA D1 (0704e72c-f73d-44b2-87d9-89924e222464) only, all sites; run-leased; access removed at run close. No other grants or identities.",
@@ -39,10 +49,11 @@
    "path": "docs/platform/governance/authorization-qa-personas.md",
    "sha256_revision_4": "beb34123ebff24c422895b5201670613a479deb9c058b7fefa65f4b873c7d5d2",
    "sha256_revision_3_pinned": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e",
-   "carried_by": "the Documents follow-up slice after ace21237849a (NOT in PR #1618; its approved head is unchanged). It reaches staging only after #1618 merges, through its own certified checkpoint and PR; pin from those merged bytes.",
+   "carried_by": "lane source commit after c342ea871 on agent/documents, rebuilt on staging 8ef45da5 by the governed clean-base candidate (see revision_4_candidate). NOT published: a publication hold is in force; no push, PR, review request or merge is authorized for it.",
    "change": "adds scoped_author (qa_scoped_author; portal.access, documents.read, crm.customers.read, forms.author; QA Shared, D1 only, sites all) and qa-pool-09; corrects Revision 3 §3a (POS compose is not a scoped_forms positive); §12 change log; every Revision 3 persona, grant, scope and refusal unchanged",
    "local_proof": "web/tests/certification/authorizationQaPersonasRevision4.test.ts 10/10 (5 fail against the Revision 3 bytes — the negative control)"
-  }
+  },
+  "ready_to_register": "NO — Revision 4 (beb34123…) is not on staging; it reaches staging only through its own publication + merge decision"
  },
  "C_merge_blocker": {
   "finding": "the supported delivery chain cannot merge #1618: trusted-host-merge.mjs:1212 refuses a draft (pr_is_draft); trusted-host-open-pr.mjs:284-296 refuses to convert an existing draft for the same head; no governed ready-for-review action exists in toolkit b3c80db2e9aa.",
@@ -85,5 +96,50 @@
   "6 Documents: environment.provision_qa_identity for qa_pool_09 exactly as approved (one identity, four grants, QA Shared D1)",
   "7 Documents: hosted run per certification/documents-v1/R2-R5-PROOF-SUPPORT.md §5 — open, fixtures, driver phases, teardown, resets (Forms residue → shared-child → subjects), close, both censuses from fresh runs, binding",
   "Steps 4 and 7 without 5–6 prove R2-packet / R2-writes / R2-links / R5 only; R2-authoring stays not-run and R2 uncertified"
- ]
+ ],
+ "deployed": {
+  "staging_commit": "8ef45da545ecbec854224ba0c12d0d6a5de44ce8",
+  "verified_by": "git show 8ef45da5:<path> | sha256 (lane run erun2_73a8af45220a9267)",
+  "pins_on_staging": {
+   "certification/fixtures/qa-documents-shared-child-ensure.sql": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+   "certification/fixtures/qa-documents-shared-child-reset.sql": "afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
+   "web/scripts/qaDocumentsSharedChildFixture.mjs": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
+   "certification/qa-shared/documents-r5-shared-child-residue-census.sql": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd",
+   "certification/invariants/documents-r5-shared-child-fixture.sql": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac",
+   "certification/qa-shared/documents-r5-shared-child-fixture-contract.json": "dd1de1e297db7de1fe5e4be51c6d9a102ff3095dcc3c5f2b882f3aecdda7a9d1",
+   "certification/qa-shared/documents-zero-residue-census.sql (registered, unchanged)": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+   "docs/platform/governance/authorization-qa-personas.md (Revision 3, the installed pin)": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e"
+  },
+  "npm_scripts": "dev:qa:documents-shared-child-ensure / -reset present in web/package.json at 8ef45da5"
+ },
+ "readiness_map": {
+  "independent_of_the_persona_gate": {
+   "sections": [
+    "R2-packet (14)",
+    "R2-writes (19)",
+    "R2-links (6)",
+    "R5-shared (8)",
+    "R4 regression (35)"
+   ],
+   "needs": [
+    "deployed fix — DONE (8ef45da5)",
+    "A741 registers A (shared-child pair + profile) — R5 only; R2-packet/writes/links need no new registration",
+    "authz_q1 open/close/sessions for fixture_admin, scoped_forms, cross_org_admin (installed, Revision 3)",
+    "operator approval of the hosted run (approved batch), with HostCapacity's installed runtime verified"
+   ],
+   "note": "R2-packet / R2-writes / R2-links run on Revision 3 personas alone; R5-shared needs registration A"
+  },
+  "behind_the_persona_gate": {
+   "sections": [
+    "R2-authoring (18: 16 scoped_author + 2 scoped_forms capability controls)"
+   ],
+   "needs": [
+    "Revision 4 published and merged to staging (publication hold)",
+    "A741 re-pins authz_q1 to Revision 4 and registers B",
+    "environment.provision_qa_identity for qa_pool_09 exactly as approved"
+   ],
+   "note": "until then the driver records every R2-authoring case FAIL 'not run' — R2 cannot certify"
+  }
+ },
+ "publication_hold": "2026-10-30: the combined publication dispatch for the Revision 4 follow-up was rejected before delivery; Dot resolves approval provenance separately. The Documents lane prepares the local candidate only."
 }
