@@ -5982,6 +5982,30 @@
         "reason": "External read of the caller's own installation context, admitted by a bearer access token resolved through resolveAccessTokenPrincipal. Same reasoning as the token route: the principal is a non-human application, not an org member, so no catalog capability applies. It returns only the caller's own application, installation, organization id, granted scopes and resource boundary \u2014 no domain data, so no domain capability is implicated."
       }
     },
+    "app/api/v1/document-categories/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Organization configuration only (active categories and published types); no subject data."
+      }
+    },
+    "app/api/v1/documents/[id]/download-link/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Visibility adds no rule: children through public.list_external_children, households through public.list_external_households, persons only as active parent/guardian relationships of a visible child; a document belongs to its primary owner, unavailable documents are excluded, and only documents with an EMPTY effective sensitivity (resolveDocumentSensitivity, fail-closed) are returned. Missing and withheld are one 404. Issues a signed URL for signedUrlExpirySeconds('download') only after recordDocumentAudit writes document_link_issued naming the application, installation and credential; never returns a storage path."
+      }
+    },
+    "app/api/v1/documents/[id]/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Visibility adds no rule: children through public.list_external_children, households through public.list_external_households, persons only as active parent/guardian relationships of a visible child; a document belongs to its primary owner, unavailable documents are excluded, and only documents with an EMPTY effective sensitivity (resolveDocumentSensitivity, fail-closed) are returned. Missing and withheld are one 404."
+      }
+    },
+    "app/api/v1/documents/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Visibility adds no rule: children through public.list_external_children, households through public.list_external_households, persons only as active parent/guardian relationships of a visible child; a document belongs to its primary owner, unavailable documents are excluded, and only documents with an EMPTY effective sensitivity (resolveDocumentSensitivity, fail-closed) are returned. Missing and withheld are one 404. Exactly one subject filter (child_id | household_id | person_id) is required: no organization-wide export."
+      }
+    },
     "app/api/v1/enrollments/end/route.ts": {
       "POST": {
         "status": "none",

@@ -1,6 +1,6 @@
 # Documents V1 — D9 / D10 first increment: contract proposal
 
-**Status: PROPOSAL, local preparation only.**
+**Status: PROPOSAL — implemented as D9.1 under `OPWORK_AA660DC9554D_SPRINT_5D62877D85D6` with the user-approved A2 breadth (children, households AND parents/guardians, standard sensitivity), and with detail and download as `GET /api/v1/documents/{id}` and `GET /api/v1/documents/{id}/download-link` (the admin signed-URL route is a GET too).** The proposal text below is kept as written.
 - Nothing is implemented, published or registered.
 - It builds on `D9-D10-ACCEPTANCE-PREPARATION.md` (commit `f7fb93ab0`) and does not repeat its census or history search.
 - Every repository claim it relies on is pinned by `web/tests/documents/d9FirstIncrementTraceability.test.ts`.

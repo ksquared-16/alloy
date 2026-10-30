@@ -54,11 +54,12 @@ describe("REPO facts the proposal relies on", () => {
     });
 });
 
-describe("what increment 1 would add is still absent", () => {
-    it("no documents scope or operation in the public catalog", () => {
+describe("increment 1 has landed as proposed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6)", () => {
+    it("documents.read and the four operations exist; writes stay absent", () => {
         const catalog = read("web/lib/platform/external/scopeCatalog.ts");
-        expect(catalog).not.toMatch(/["']documents\.read["']/);
-        expect(catalog).not.toMatch(/listDocuments|getDocument|createDocumentDownloadLink|listDocumentCategories/);
+        expect(catalog).toMatch(/"documents\.read": \{/);
+        expect(catalog).toMatch(/listDocumentCategories[\s\S]*listDocuments[\s\S]*getDocument[\s\S]*getDocumentDownloadLink/);
+        expect(catalog).not.toMatch(/["']documents\.write["']/);
     });
 });
 

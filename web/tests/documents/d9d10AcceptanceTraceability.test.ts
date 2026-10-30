@@ -62,16 +62,17 @@ describe("capabilities the document says to reuse exist, and the document names 
 });
 
 describe("the gaps the document states are still gaps", () => {
-    it("D9: no documents scope in the public scope catalog", () => {
+    // D9.1 landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): the read scope and its four operations now exist. What
+    // §1.3 still lists as remaining — writes, uploads, filing through the API — is still absent.
+    it("D9.1 implemented: documents.read and four read operations; no documents WRITE scope or operation yet", () => {
         const catalog = read("web/lib/platform/external/scopeCatalog.ts");
-        const block = catalog.slice(catalog.indexOf("export const PUBLIC_SCOPES"), catalog.indexOf("export const PUBLIC_OPERATIONS"));
-        expect(block.length).toBeGreaterThan(0);
-        expect(block).not.toMatch(/["']documents[.:]/);
-    });
-
-    it("D9: the public OpenAPI spec has no documents path", () => {
-        const spec = JSON.parse(read("docs/api/openapi/alloy-public-api.v1.json")) as { paths?: Record<string, unknown> };
-        expect(Object.keys(spec.paths ?? {}).some((p) => p.includes("document"))).toBe(false);
+        expect(catalog).toMatch(/"documents\.read": \{/);
+        for (const op of ["listDocumentCategories", "listDocuments", "getDocument", "getDocumentDownloadLink"]) expect(catalog).toContain(op);
+        expect(catalog).not.toMatch(/["']documents\.write["']/);
+        const spec = JSON.parse(read("docs/api/openapi/alloy-public-api.v1.json")) as { paths?: Record<string, Record<string, unknown>> };
+        const docPaths = Object.entries(spec.paths ?? {}).filter(([p]) => p.includes("document"));
+        expect(docPaths.map(([p]) => p).sort()).toEqual(["/api/v1/document-categories", "/api/v1/documents", "/api/v1/documents/{id}", "/api/v1/documents/{id}/download-link"]);
+        for (const [, methods] of docPaths) expect(Object.keys(methods)).toEqual(["get"]);
     });
 
     it("D10: WS11's communication_message_attachments is planned but in no migration", () => {

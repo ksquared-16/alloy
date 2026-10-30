@@ -1,6 +1,6 @@
 # Documents V1 — D9 (external API) / D10 (email ingestion) acceptance preparation, and paperwork accountability
 
-**Status: PREPARATION ONLY.**
+**Status: PREPARATION (2026-10-30), since partly implemented.** D9.1 (read-only standard documents, four operations) landed under `OPWORK_AA660DC9554D_SPRINT_5D62877D85D6`; §1.3 items 1–3 and the read half of 6 are now code. D10 holds every attachment until WS11 storage and screening exist. The rest of this document is the preparation record as written.
 - Nothing in this document is implemented, and no API or email code was written.
 - Every "exists" claim cites code. The cited symbols, and the stated absences, are pinned by `web/tests/documents/d9d10AcceptanceTraceability.test.ts`, so this document fails CI if it drifts from the tree.
 - Objective `OPWORK_AA660DC9554D_SPRINT_6A4F60B1555E`, lane `lane_aa660dc9554d`, 2026-10-30.
