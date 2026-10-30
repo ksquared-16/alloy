@@ -1,0 +1,43 @@
+# Financials lane focused validation — EXPLICIT, reviewed list (never grep-derived).
+# Paths are relative to web/. No live suite may appear here: enforced by
+# web/tests/harness/liveSuiteAuthority.test.ts. Run with:
+#   vac run test $(grep -v '^#' certification/financials/qa-bound-fixtures/FOCUSED-SAFE-TEST-LIST.txt)
+tests/businessProcesses/billingDueViews.test.ts
+tests/financials/accountChargeLedgerParity.test.ts
+tests/financials/accountCohortIsComplete.test.ts
+tests/financials/accountFactBundleContract.test.ts
+tests/financials/accountLenses.test.ts
+tests/financials/accountSurfaceConvergence.test.ts
+tests/financials/businessDate.test.ts
+tests/financials/canonicalIdentity.test.ts
+tests/financials/cardBuildRoundDepth.test.ts
+tests/financials/catalogBulkAndDraftIdentity.test.ts
+tests/financials/catalogManualAddCharge.test.ts
+tests/financials/collectibleExcludesOffsetRows.test.ts
+tests/financials/financialsCardGateOrdering.test.ts
+tests/financials/financialsCardReadModel.test.ts
+tests/financials/ledgerCollectibleBatching.test.ts
+tests/financials/openCollectionsBoundary.test.ts
+tests/financials/partialAllocationDisclosure.test.ts
+tests/financials/paymentPresentation.test.ts
+tests/financials/payments/paymentsProductionMounts.test.ts
+tests/financials/payments/reversalOriginProjection.test.ts
+tests/financials/payments/storedMethodProjection.test.ts
+tests/financials/prepaidPresentation.test.ts
+tests/financials/qaIsolatedFinancialsFixtures.test.ts
+tests/financials/readAccountPrepaidPosition.test.ts
+tests/financials/reductionProvenance.test.ts
+tests/financials/refundExpression.test.ts
+tests/financials/unifiedAddTarget.test.ts
+tests/financials/w7F013LateAddDueSemantics.test.ts
+tests/financials/w7F026AccountTimeline.test.tsx
+tests/financials/w7F031AccountSummaryPaymentLedger.test.tsx
+tests/financials/w7F041PaymentsPrepaidHeader.test.tsx
+tests/financials/w7F053SettlementAgingReconciliation.test.ts
+tests/financials/w7Scenario8DraftConvergence.test.ts
+tests/runtime/financialsGateConcurrency.test.ts
+tests/runtime/firstOrderComposer.test.ts
+tests/runtime/firstOrderConfigurationCompiler.test.ts
+tests/surfaces/financialsGrainAndHeadline.test.ts
+tests/surfaces/producerAuthorizationParity.test.ts
+tests/harness/liveSuiteAuthority.test.ts
