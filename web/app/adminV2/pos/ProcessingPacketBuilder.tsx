@@ -10,6 +10,7 @@ import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentForm
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { derivedPacketEditGuidance, derivedPacketOwner, type DerivedPacketOwner } from "@/lib/forms/packets/derivedPacketReadOnly";
 import PacketDeferredCapabilities, { type PacketDeferredCapability } from "./PacketDeferredCapabilities";
 
 type PacketItem = {
@@ -47,7 +48,9 @@ export default function ProcessingPacketBuilder({
     const [sessionCount, setSessionCount] = useState(0);
     const [deferred, setDeferred] = useState<PacketDeferredCapability[]>([]);
     /** The Business-Process-derived Enrollment packet: sent with Start enrollment, never shared as a document. */
-    const [isEnrollmentPacket, setIsEnrollmentPacket] = useState(false);
+    /** The owning Business Process stage when this packet is requirement-derived (FI-12: read-only). */
+    const [derivedOwner, setDerivedOwner] = useState<DerivedPacketOwner | null>(null);
+    const isEnrollmentPacket = derivedOwner != null;
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -88,7 +91,7 @@ export default function ProcessingPacketBuilder({
             // What the packet knowingly does not ask for, recorded when it was realized.
             const dc = def.definition.metadata?.deferred_capabilities;
             setDeferred(Array.isArray(dc) ? (dc as PacketDeferredCapability[]) : []);
-            setIsEnrollmentPacket(def.definition.metadata?.derived_from === "business_process_requirements");
+            setDerivedOwner(derivedPacketOwner(def.definition.metadata));
             const it = def.items ?? [];
             setItems(it);
 
@@ -139,6 +142,10 @@ export default function ProcessingPacketBuilder({
     }, [loadAll]);
 
     const saveMeta = async () => {
+        if (derivedOwner) {
+            setErr(derivedPacketEditGuidance(derivedOwner));
+            return;
+        }
         setBusy(true);
         setErr(null);
         setOkBanner(null);
@@ -164,6 +171,10 @@ export default function ProcessingPacketBuilder({
     };
 
     const saveSteps = async () => {
+        if (derivedOwner) {
+            setErr(derivedPacketEditGuidance(derivedOwner));
+            return;
+        }
         setBusy(true);
         setErr(null);
         setOkBanner(null);
@@ -332,6 +343,7 @@ export default function ProcessingPacketBuilder({
                             createdLink={createdLink}
                             busy={busy}
                             viewerTz={viewerTz}
+                            derivedOwner={derivedOwner}
                             onDefNameChange={setDefName}
                             onDefDescChange={setDefDesc}
                             onDefActiveChange={setDefActive}

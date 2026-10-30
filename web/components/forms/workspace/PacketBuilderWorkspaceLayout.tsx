@@ -25,6 +25,7 @@ import {
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
+import { DERIVED_PACKET_OWNER_HREF, derivedPacketEditGuidance, type DerivedPacketOwner } from "@/lib/forms/packets/derivedPacketReadOnly";
 import {
     buildPacketStepDisplayRows,
     packetOrchestrationStatusLabel,
@@ -70,6 +71,12 @@ type Props = {
     createdLink: PacketCreatedLinkPayload | null;
     busy: boolean;
     viewerTz: string;
+    /**
+     * Set when the packet is requirement-derived (FI-12): its forms and order belong to a Business
+     * Process stage, so the overview and step editors are replaced by guidance to that owner. The
+     * server refuses these edits too; this is not the only guard.
+     */
+    derivedOwner?: DerivedPacketOwner | null;
     onDefNameChange: (v: string) => void;
     onDefDescChange: (v: string) => void;
     onDefActiveChange: (v: boolean) => void;
@@ -107,6 +114,7 @@ export function PacketBuilderWorkspaceLayout({
     createdLink,
     busy,
     viewerTz,
+    derivedOwner = null,
     onDefNameChange,
     onDefDescChange,
     onDefActiveChange,
@@ -165,54 +173,75 @@ export function PacketBuilderWorkspaceLayout({
                     lead="Name, description, and whether this workflow accepts new intake."
                     data-testid="packet-region-overview"
                 >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 text-sm sm:col-span-2">
-                            <span className={opMutedMeta}>Name</span>
-                            <input
-                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
-                                value={defName}
-                                disabled={busy}
-                                onChange={(e) => onDefNameChange(e.target.value)}
-                            />
-                        </label>
-                        <label className="flex items-center gap-2 pt-1 text-sm sm:col-span-2">
-                            <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-alloy-forge/25 text-alloy-bend-pine accent-alloy-bend-pine focus:ring-alloy-bend-pine/30"
-                                checked={defActive}
-                                disabled={busy}
-                                onChange={(e) => onDefActiveChange(e.target.checked)}
-                            />
-                            <span className={opMetadata}>Active — allow new packet runs</span>
-                        </label>
-                        <label className="space-y-1 text-sm sm:col-span-2">
-                            <span className={opMutedMeta}>Description</span>
-                            <input
-                                className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
-                                value={defDesc}
-                                disabled={busy}
-                                onChange={(e) => onDefDescChange(e.target.value)}
-                            />
-                        </label>
-                    </div>
-                    <div className="mt-3">
-                        {/*
-                         * Pine, not the shared PrimaryButton.
-                         *
-                         * `PrimaryButton` is `bg-alloy-blue` and is used app-wide, so changing it is
-                         * not this pass's business. Alloy's Configuration doctrine is that a primary
-                         * action is Bend Pine, so this surface states that directly rather than
-                         * inheriting a blue that contradicts it.
-                         */}
-                        <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:opacity-50"
-                            disabled={busy}
-                            onClick={onSaveMeta}
+                    {derivedOwner ?
+                        <div
+                            className="rounded-lg bg-alloy-bend-pine/[0.06] px-4 py-3 text-sm text-alloy-midnight ring-1 ring-alloy-bend-pine/20"
+                            role="note"
+                            data-testid="packet-derived-readonly"
                         >
-                            Save overview
-                        </button>
-                    </div>
+                            <p className="font-semibold">{defName} · managed by its Business Process</p>
+                            <p className="mt-1 text-alloy-midnight/80">{derivedPacketEditGuidance(derivedOwner)}</p>
+                            <p className={clsx("mt-1", opMutedMeta)}>
+                                {defActive ? "Active" : "Inactive"} · {stepCount} form{stepCount === 1 ? "" : "s"}
+                                {derivedOwner.businessProcessRevisionId ? ` · revision ${derivedOwner.businessProcessRevisionId.slice(0, 8)}` : ""}
+                            </p>
+                            <div className="mt-2">
+                                <FormsOperationalLink href={DERIVED_PACKET_OWNER_HREF} data-testid="packet-derived-owner-link">
+                                    Edit the stage&apos;s Form requirements in Organization › Processes
+                                </FormsOperationalLink>
+                            </div>
+                        </div>
+                    :   <>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1 text-sm sm:col-span-2">
+                                <span className={opMutedMeta}>Name</span>
+                                <input
+                                    className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
+                                    value={defName}
+                                    disabled={busy}
+                                    onChange={(e) => onDefNameChange(e.target.value)}
+                                />
+                            </label>
+                            <label className="flex items-center gap-2 pt-1 text-sm sm:col-span-2">
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-alloy-forge/25 text-alloy-bend-pine accent-alloy-bend-pine focus:ring-alloy-bend-pine/30"
+                                    checked={defActive}
+                                    disabled={busy}
+                                    onChange={(e) => onDefActiveChange(e.target.checked)}
+                                />
+                                <span className={opMetadata}>Active — allow new packet runs</span>
+                            </label>
+                            <label className="space-y-1 text-sm sm:col-span-2">
+                                <span className={opMutedMeta}>Description</span>
+                                <input
+                                    className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm"
+                                    value={defDesc}
+                                    disabled={busy}
+                                    onChange={(e) => onDefDescChange(e.target.value)}
+                                />
+                            </label>
+                        </div>
+                        <div className="mt-3">
+                            {/*
+                             * Pine, not the shared PrimaryButton.
+                             *
+                             * `PrimaryButton` is `bg-alloy-blue` and is used app-wide, so changing it is
+                             * not this pass's business. Alloy's Configuration doctrine is that a primary
+                             * action is Bend Pine, so this surface states that directly rather than
+                             * inheriting a blue that contradicts it.
+                             */}
+                            <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:opacity-50"
+                                disabled={busy}
+                                onClick={onSaveMeta}
+                            >
+                                Save overview
+                            </button>
+                        </div>
+                        </>
+                    }
                 </IntakeWorkspaceRegion>
 
                 {pipelinePreview.length > 0 ?
@@ -252,6 +281,7 @@ export function PacketBuilderWorkspaceLayout({
                     </section>
                 :   null}
 
+                {derivedOwner ? null : (
                 <section id="packet-steps" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-steps">
                     {/*
                      * Confirm and reorder — not rebuild.
@@ -279,6 +309,7 @@ export function PacketBuilderWorkspaceLayout({
                         />
                     </IntakeWorkspaceRegion>
                 </section>
+                )}
 
                 <section id="packet-distribution" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-distribution">
                     {/*
