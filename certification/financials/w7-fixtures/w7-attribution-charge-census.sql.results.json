@@ -1,0 +1,45 @@
+{
+  "trusted_host_action_id": "tha_b5aa76361f313a",
+  "query_hash": "0e0b0f5bdd6178ff8d400d34c7acc496a50a0dfec89f80e5b3d293edaa96c18e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-12T23:45:25.901Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b5aa76361f313a",
+    "query_hash": "0e0b0f5bdd6178ff8d400d34c7acc496a50a0dfec89f80e5b3d293edaa96c18e",
+    "authorization_id": "grnt_7369d689f1754318",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-12T23:45:31.019Z",
+    "question_ids": [
+      "attribution"
+    ],
+    "questions": {
+      "attribution": {
+        "question_id": "attribution",
+        "row_count": null,
+        "rows": [
+          {
+            "found": true,
+            "charge_id": "a0caad25-6eda-4202-a009-4ad6c03b069d",
+            "created_at": "2026-10-12T23:45:04.404622+00:00",
+            "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "description": "field_trip",
+            "amount_cents": 4000,
+            "household": "Alvarez Household (demo)",
+            "is_w7_household": false,
+            "actor_person": "QA Operator · Slot 1",
+            "actor_person_source": "alloy_qa_fixture",
+            "active_link_count": 1
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
