@@ -1,5 +1,6 @@
 /**
- * OPERATION AUTHORITY for `test:qa:financials-isolated` — the child-side check (QAFX-AUTH-01, Financials H4).
+ * OPERATION AUTHORITY for the Financials QA-bound fixtures — the child-side check (QAFX-AUTH-01, Financials H4):
+ * `test:qa:financials-isolated` and `dev:qa:financials-historical-draft-fixture`.
  *
  * The product's copy of the toolkit's `verifyFixtureAuthority` (`lib/isolated-fixture-execution.mjs`, A741
  * candidate bab9c92752479ded535f86e152246e1ae935b349): same schema, same refusal codes, same order. A
@@ -19,9 +20,16 @@
  *   4. what THIS program is, from the program itself: its own npm script name, the suite, the pinned
  *      package.json script body (its sha256 equals the record's `script_sha256`), and the exact candidate
  *      (the record's `candidate_sha` is this checkout's HEAD);
- *   5. the fixture organization is the one the executor bound from the environment's seed manifest
- *      (`ALLOY_CERT_FIXTURE_ORG_ID`, source `seed_manifest`) and is exactly the certification seed org —
- *      never a persona org, never Firefly, never a shared-stack fallback.
+ *   5. the fixture organization, by the PROGRAM's registered binding (A741 `fixture_org`):
+ *      · `seed_manifest` (`test:qa:financials-isolated`): exactly the certification seed org, source
+ *        `seed_manifest` — never a persona org, never Firefly, never a shared-stack fallback;
+ *      · `persona` (`dev:qa:financials-historical-draft-fixture`): source `persona`, and the org the
+ *        executor's own QA-run ledger (`<root>/vacilando/qa-runs/runs.json`) binds — the record's run is
+ *        OPEN, local, targets the record's environment, binds `ALLOY_QA_PERSONA`, and that persona's
+ *        `org_key` names a registered QA org whose id is `ALLOY_CERT_FIXTURE_ORG_ID`. Never the seed org.
+ *      `ALLOY_CERT_FIXTURE_ORG_ID` is an assertion until it agrees with that; it is never the source.
+ *
+ * One verifier, one program descriptor per registered fixture (below); no other program is admitted.
  *
  * THE BOUNDARY, STATED. The executor and this child run as the same OS user, and no credential passes
  * between them, so nothing here authenticates an issuer cryptographically. This refuses a manual run, a
@@ -54,16 +62,36 @@ export const FIXTURE_AUTHORITY_REFUSALS = Object.freeze({
     MISMATCH: "fixture_authority_mismatch",
     /* Financials-only: the bound fixture organization is not the isolated certification seed org. */
     ORG: "fixture_authority_org_not_the_seed_org",
+    /* Financials-only: the persona org does not agree with the executor's QA-run ledger. */
+    PERSONA_ORG: "fixture_authority_persona_org_unverified",
+    /* Financials-only: not a registered program, or not one of its registered operations. */
+    PROGRAM: "fixture_authority_program_unregistered",
 });
 
-/** What this program is. Restated from the toolkit registry entry `financials_isolated_tests`. */
+/** What a program is. Restated from the toolkit registry (A741 `lib/certification-fixture.mjs`). */
 export const FINANCIALS_ISOLATED_PROGRAM = Object.freeze({
     fixture: "financials_isolated_tests",
-    operation: "run",
+    operations: Object.freeze(["run"]),
     suite: "financials",
     npm_script: "test:qa:financials-isolated",
     /* The package.json script body the executor pins by digest (`expectedScriptSha256`). */
     script_body: "node scripts/qa/financialsIsolatedTests.mjs",
+    org_binding: "seed_manifest",
+});
+
+export const FINANCIALS_HISTORICAL_DRAFT_PROGRAM = Object.freeze({
+    fixture: "financials_historical_draft",
+    operations: Object.freeze(["ensure", "verify", "reset", "count"]),
+    suite: "financials",
+    npm_script: "dev:qa:financials-historical-draft-fixture",
+    script_body: "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+    org_binding: "persona",
+});
+
+/** A741 `QA_ORGS` (lib/qa-plan-registry.mjs), the only organizations a persona-bound fixture may act in. */
+export const QA_PERSONA_ORGS = Object.freeze({
+    qa_shared: "4acc9386-c485-486f-aa1f-05d83499d142",
+    qa_secondary: "ad53fee2-2570-460f-9300-f0e106c473b6",
 });
 
 /** The toolkit's CERTIFICATION_SEED_ORG — the only organization this fixture may act in. */
@@ -98,11 +126,17 @@ export function trustedGatewayStoreRoot({ account = () => userInfo() } = {}) {
 const storeDir = (root) => join(root, "vacilando", "isolated-fixture");
 const authorityDir = (root) => join(storeDir(root), "authority");
 const requestPath = (root, id) => join(storeDir(root), "requests", `${id}.json`);
+const qaRunsPath = (root) => join(root, "vacilando", "qa-runs", "runs.json");
+const PROGRAMS = [FINANCIALS_ISOLATED_PROGRAM, FINANCIALS_HISTORICAL_DRAFT_PROGRAM];
 
-/** The pinned script body from this program's own web/package.json, or null. */
-export function readOwnScriptBody({ webDir = WEB, readFile = (p) => readFileSync(p, "utf8") } = {}) {
+/**
+ * The pinned script body from this program's own web/package.json, or null.
+ *
+ * @param {{ webDir?: string, readFile?: (p: string) => string, program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM }} [opts]
+ */
+export function readOwnScriptBody({ webDir = WEB, readFile = (p) => readFileSync(p, "utf8"), program = FINANCIALS_ISOLATED_PROGRAM } = {}) {
     try {
-        const body = JSON.parse(readFile(join(webDir, "package.json")))?.scripts?.[FINANCIALS_ISOLATED_PROGRAM.npm_script];
+        const body = JSON.parse(readFile(join(webDir, "package.json")))?.scripts?.[program.npm_script];
         return typeof body === "string" ? body : null;
     } catch {
         return null;
@@ -122,22 +156,26 @@ export function readOwnHead({ webDir = WEB } = {}) {
 /**
  * The child-side check. Returns `{ ok: true, authority }` or `{ ok: false, code, fields? }`.
  *
- * `storeRoot` defaults to the trusted resolution above; tests pass a synthetic root. It is a parameter of
- * the CALLER (code), never a value of `env`.
+ * `program` and `operation` are what the CALLING program is and was invoked to do (from its own
+ * registered argv) — never from `env`. `storeRoot` defaults to the trusted resolution above; tests pass a
+ * synthetic root. Both are parameters of the caller (code), never values of `env`.
  *
  * @param {Record<string, string | undefined>} [env]
- * @param {{ storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null }} [opts]
+ * @param {{ program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation?: string, storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null }} [opts]
  */
 export function verifyFinancialsFixtureAuthority(env = {}, {
+    program = FINANCIALS_ISOLATED_PROGRAM,
+    operation = "run",
     storeRoot = trustedGatewayStoreRoot(),
     nowMs = Date.now(),
     readFile = (p) => readFileSync(p, "utf8"),
     realpath = (p) => realpathSync(p),
     readHead = () => readOwnHead(),
-    readScriptBody = () => readOwnScriptBody(),
+    readScriptBody = () => readOwnScriptBody({ program }),
 } = {}) {
     const R = FIXTURE_AUTHORITY_REFUSALS;
-    const P = FINANCIALS_ISOLATED_PROGRAM;
+    const P = program;
+    if (!PROGRAMS.includes(P) || !P.operations.includes(operation)) return { ok: false, code: R.PROGRAM };
     if (!storeRoot) return { ok: false, code: R.UNTRUSTED_ROOT };
     const path = String(env.ALLOY_QA_AUTHORITY_FILE || "");
     if (!path) return { ok: false, code: R.ABSENT };
@@ -194,7 +232,7 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
     /* What this program is — from the program, never from the environment. */
     const body = readScriptBody();
     const fromProgram = [
-        ["fixture", P.fixture], ["operation", P.operation], ["suite", P.suite], ["npm_script", P.npm_script],
+        ["fixture", P.fixture], ["operation", operation], ["suite", P.suite], ["npm_script", P.npm_script],
         ["script_sha256", body === P.script_body ? sha256(body) : null],
         ["candidate_sha", readHead()],
     ];
@@ -203,14 +241,42 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
     if (env.npm_lifecycle_event && env.npm_lifecycle_event !== P.npm_script) bad.push("npm_lifecycle_event");
     if (bad.length) return { ok: false, code: R.MISMATCH, fields: bad };
 
-    if (env.ALLOY_CERT_FIXTURE_ORG_ID !== FINANCIALS_FIXTURE_ORG.id || env.ALLOY_CERT_FIXTURE_ORG_SOURCE !== FINANCIALS_FIXTURE_ORG.source) {
-        return { ok: false, code: R.ORG };
+    let orgId;
+    if (P.org_binding === "seed_manifest") {
+        if (env.ALLOY_CERT_FIXTURE_ORG_ID !== FINANCIALS_FIXTURE_ORG.id || env.ALLOY_CERT_FIXTURE_ORG_SOURCE !== FINANCIALS_FIXTURE_ORG.source) {
+            return { ok: false, code: R.ORG };
+        }
+        orgId = FINANCIALS_FIXTURE_ORG.id;
+    } else {
+        orgId = verifyPersonaOrg(env, a, { storeRoot, readFile });
+        if (!orgId) return { ok: false, code: R.PERSONA_ORG };
     }
     return {
         ok: /** @type {const} */ (true),
         authority: {
             request_id: a.request_id, fixture: a.fixture, operation: a.operation, npm_script: a.npm_script,
-            candidate_sha: a.candidate_sha, expires_at: a.expires_at, org_id: FINANCIALS_FIXTURE_ORG.id,
+            candidate_sha: a.candidate_sha, expires_at: a.expires_at, org_id: orgId,
         },
     };
+}
+
+/**
+ * The persona org as the executor's own QA-run ledger binds it (A741 `resolveFixtureOrg`, persona
+ * branch: `QA_ORGS[persona.org_key]`), or null. The environment's org and persona are assertions this
+ * either confirms or refuses.
+ */
+function verifyPersonaOrg(env, a, { storeRoot, readFile }) {
+    if (env.ALLOY_CERT_FIXTURE_ORG_SOURCE !== "persona") return null;
+    let runs;
+    try {
+        runs = JSON.parse(readFile(qaRunsPath(storeRoot)))?.runs;
+    } catch {
+        return null;
+    }
+    const run = runs && typeof runs === "object" ? runs[a.qa_run_id] : null;
+    if (!run || run.run_id !== a.qa_run_id || run.state !== "OPEN" || run.target?.kind !== "local" || run.target?.key !== a.environment_id) return null;
+    const persona = (Array.isArray(run.personas) ? run.personas : []).find((p) => p?.persona_key && p.persona_key === env.ALLOY_QA_PERSONA);
+    const id = persona && Object.prototype.hasOwnProperty.call(QA_PERSONA_ORGS, persona.org_key) ? QA_PERSONA_ORGS[persona.org_key] : null;
+    if (!id || id === FINANCIALS_FIXTURE_ORG.id || env.ALLOY_CERT_FIXTURE_ORG_ID !== id) return null;
+    return id;
 }

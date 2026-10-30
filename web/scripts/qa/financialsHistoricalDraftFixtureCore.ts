@@ -44,8 +44,18 @@ export const NAMESPACE = "financials-cert.alloy.invalid";
 export const RESET_LIMIT = 50;
 export const FIXTURE_KEY = "historical_draft_v1";
 
-/** The certification tenant every financials live suite runs in. */
-export const ORG = "00000000-0000-4000-8000-000000000001";
+/*
+ * NO ORGANIZATION CONSTANT. The fixture acts in the organization the executor bound for the run's
+ * persona (A741 registry: `financials_historical_draft` is `fixture_org: PERSONA_ORG`), verified by
+ * the runner against the executor's live authority and QA-run ledger before any client exists, and
+ * passed in as `org`. The certification seed org is the isolated-tests contract, not this one: it is
+ * refused here as a second line, as is anything that is not a UUID.
+ */
+const SEED_ORG = "00000000-0000-4000-8000-000000000001";
+function boundOrg(org: string): string {
+    if (!UUID_RE.test(String(org)) || org === SEED_ORG) throw new FixtureError(FIXTURE_CODES.ORG_UNBOUND);
+    return org;
+}
 const P = "fc0d0000-0000-4000-8000-";
 export const IDS = Object.freeze({
     customer: `${P}00000000c001`,
@@ -157,12 +167,12 @@ export function plannedRows(): Planned[] {
 }
 
 /** The row as inserted: org, id, ownership key and values. */
-function insertRow(p: Planned): Row {
-    return { id: p.id, org_id: ORG, ...p.row, ...p.key };
+function insertRow(p: Planned, org: string): Row {
+    return { id: p.id, org_id: org, ...p.row, ...p.key };
 }
 
-function owned(p: Planned, r: Row): boolean {
-    return r.org_id === ORG && Object.entries(p.key).every(([c, v]) => r[c] === v);
+function owned(p: Planned, r: Row, org: string): boolean {
+    return r.org_id === org && Object.entries(p.key).every(([c, v]) => r[c] === v);
 }
 
 /**
@@ -208,6 +218,7 @@ export const FIXTURE_CODES = Object.freeze({
     IDENTITY_CHANGED: "identity_changed_during_reset",
     LEDGER_APPEARED: "ledger_appeared_during_reset",
     ORG_ABSENT: "certification_org_absent",
+    ORG_UNBOUND: "fixture_org_unbound",
 });
 
 /** A failure carrying only a code, a table from this file and a well-formed SQLSTATE — never a message. */
@@ -262,7 +273,7 @@ async function byId(db: SupabaseClient, table: string, id: string): Promise<Row 
 }
 
 /** Rows outside the fixture that hold one of its unique or logical names — never resolved by name. */
-async function ambiguityProbe(db: SupabaseClient): Promise<string | null> {
+async function ambiguityProbe(db: SupabaseClient, org: string): Promise<string | null> {
     const probes: Array<[string, string, string, string, string]> = [
         ["customers", "external_source", NAMESPACE, IDS.customer, `other household(s) are bound to ${NAMESPACE}`],
         ["customers", "name", HOUSEHOLD_NAME, IDS.customer, "household(s) outside the fixture carry its name"],
@@ -275,20 +286,21 @@ async function ambiguityProbe(db: SupabaseClient): Promise<string | null> {
         ["persons", "email", CHILD_EMAIL, IDS.person, "person(s) outside the fixture carry its reserved email"],
     ];
     for (const [table, column, value, id, what] of probes) {
-        const scoped = table === "persons" ? (q: any) => q.eq(column, value) : (q: any) => q.eq("org_id", ORG).eq(column, value);
+        const scoped = table === "persons" ? (q: any) => q.eq(column, value) : (q: any) => q.eq("org_id", org).eq(column, value);
         const others = (await rows(db, table, scoped, "id")).filter((r) => r.id !== id);
         if (others.length) return `ambiguous: ${others.length} ${what}`;
     }
     return null;
 }
 
-async function fixtureDrafts(db: SupabaseClient): Promise<Row[]> {
-    return rows(db, "charges", (q) => q.eq("org_id", ORG).eq("billable_source_id", IDS.agreement).eq("status", "draft"));
+async function fixtureDrafts(db: SupabaseClient, org: string): Promise<Row[]> {
+    return rows(db, "charges", (q) => q.eq("org_id", org).eq("billable_source_id", IDS.agreement).eq("status", "draft"));
 }
 
-export async function ensureHistoricalDraft(db: SupabaseClient): Promise<FixtureOutcome> {
-    if (!(await byId(db, "orgs", ORG))) return fail(`${FIXTURE_CODES.ORG_ABSENT} org=${ORG}`);
-    const ambiguous = await ambiguityProbe(db);
+export async function ensureHistoricalDraft(db: SupabaseClient, fixtureOrg: string): Promise<FixtureOutcome> {
+    const org = boundOrg(fixtureOrg);
+    if (!(await byId(db, "orgs", org))) return fail(`${FIXTURE_CODES.ORG_ABSENT} org=${org}`);
+    const ambiguous = await ambiguityProbe(db, org);
     if (ambiguous) return identityConflict(ambiguous);
 
     /* Probe every row before writing any: a conflict found halfway would leave half a fixture. */
@@ -297,13 +309,13 @@ export async function ensureHistoricalDraft(db: SupabaseClient): Promise<Fixture
     for (const p of plan) {
         const existing = await byId(db, p.table, p.id);
         if (!existing) missing.push(p);
-        else if (!owned(p, existing)) return identityConflict(`${p.table} ${p.id} already exists and is not the fixture's`);
+        else if (!owned(p, existing, org)) return identityConflict(`${p.table} ${p.id} already exists and is not the fixture's`);
     }
     let seeded = 0;
     for (const p of missing) {
         let error: unknown;
         try {
-            ({ error } = await db.from(p.table).insert(insertRow(p)));
+            ({ error } = await db.from(p.table).insert(insertRow(p, org)));
         } catch {
             error = {};
         }
@@ -317,7 +329,7 @@ export async function ensureHistoricalDraft(db: SupabaseClient): Promise<Fixture
     const lines = [`customer=${IDS.customer}`, `agreement=${IDS.agreement}`, `seeded ${missing.length} of ${plan.length} fixture row(s)`];
     let written: Awaited<ReturnType<typeof writeTemplateDraftCharge>>;
     try {
-        written = await writeTemplateDraftCharge(db, ORG, {
+        written = await writeTemplateDraftCharge(db, org, {
             templateId: IDS.template,
             agreementId: IDS.agreement,
             billableSource: { type: "enrollment_agreement", id: IDS.agreement },
@@ -334,21 +346,22 @@ export async function ensureHistoricalDraft(db: SupabaseClient): Promise<Fixture
         return { ...fail(`${FIXTURE_CODES.DRAFT_NOT_WRITTEN} status=${written.status}${reason ? ` reason=${reason}` : ""}`), lines };
     }
     lines.push(`draft=${UUID_RE.test(written.chargeId) ? written.chargeId : "(id withheld)"} ${written.status}`);
-    const verified = await verifyHistoricalDraft(db);
+    const verified = await verifyHistoricalDraft(db, org);
     return { ...verified, lines: [...lines, ...verified.lines] };
 }
 
-export async function verifyHistoricalDraft(db: SupabaseClient): Promise<FixtureOutcome> {
+export async function verifyHistoricalDraft(db: SupabaseClient, fixtureOrg: string): Promise<FixtureOutcome> {
+    const org = boundOrg(fixtureOrg);
     const checks: Check[] = [];
     const check = (ok: boolean, label: string) => {
         checks.push({ ok, check: label });
         return ok;
     };
     const household = await byId(db, "customers", IDS.customer);
-    check(Boolean(household && owned(plannedRows()[0], household)), `household ${IDS.customer} is bound to ${NAMESPACE}`);
-    check((await ambiguityProbe(db)) === null, "no same-named or namespace-bound identity outside the fixture");
+    check(Boolean(household && owned(plannedRows()[0], household, org)), `household ${IDS.customer} is bound to ${NAMESPACE}`);
+    check((await ambiguityProbe(db, org)) === null, "no same-named or namespace-bound identity outside the fixture");
 
-    const drafts = await fixtureDrafts(db);
+    const drafts = await fixtureDrafts(db, org);
     check(drafts.length === 1, `exactly one historical draft on the fixture agreement (found ${drafts.length})`);
     const draft = drafts[0];
     if (draft) {
@@ -359,35 +372,35 @@ export async function verifyHistoricalDraft(db: SupabaseClient): Promise<Fixture
         check(Number(draft.amount_cents) === TEMPLATE_AMOUNT_CENTS, `the draft is at the template's price (${TEMPLATE_AMOUNT_CENTS}), not the Catalog item's`);
         check(String(draft.service_date ?? draft.occurs_on ?? "") === HISTORICAL_SERVICE_DATE, `the draft is dated ${HISTORICAL_SERVICE_DATE}`);
 
-        const catalogOptions = await loadCatalogChargeOptions(db, ORG, { asOf: BUSINESS_DATE, locationIds: [null, IDS.site] });
+        const catalogOptions = await loadCatalogChargeOptions(db, org, { asOf: BUSINESS_DATE, locationIds: [null, IDS.site] });
         const twin = catalogOptions.find((o) => o.id === IDS.sameNameProduct);
         check(twin?.availability === "offerable" && twin.label === FEE_LABEL, "the same-name Catalog item is offerable (the hazard is live)");
-        const templates = await rows(db, "financial_charge_templates", (q) => q.eq("org_id", ORG).eq("id", IDS.template));
+        const templates = await rows(db, "financial_charge_templates", (q) => q.eq("org_id", org).eq("id", IDS.template));
         const identity = resolveDraftEditIdentity(draftIdentityFromCharge(draft as never), {
             draftTemplates: templates.map((t) => ({ id: String(t.id), label: String(t.label), templateKey: String(t.template_key) })),
             catalogOptions,
         });
         check(identity?.source === "template" && identity.id === IDS.template, "the draft is edited under its template, not the same-name Catalog item");
     }
-    const ledger = await ledgerRefusal(db);
+    const ledger = await ledgerRefusal(db, org);
     check(ledger === null, ledger ?? "no posted/void charge, payment, journal entry or closed period on the fixture");
     return { exitCode: checks.every((c) => c.ok) ? 0 : 1, checks, lines: [] };
 }
 
 /** Why removing the fixture would touch history — or null. Read-only. */
-async function ledgerRefusal(db: SupabaseClient): Promise<string | null> {
+async function ledgerRefusal(db: SupabaseClient, org: string): Promise<string | null> {
     const sources: string[] = [IDS.agreement, IDS.customer];
-    const nonDraft = (await rows(db, "charges", (q) => q.eq("org_id", ORG).in("billable_source_id", sources), "id, status"))
+    const nonDraft = (await rows(db, "charges", (q) => q.eq("org_id", org).in("billable_source_id", sources), "id, status"))
         .filter((c) => c.status !== "draft");
     if (nonDraft.length) return `${nonDraft.length} posted/void charge(s) on the fixture's sources are ledger`;
-    const foreign = (await rows(db, "charges", (q) => q.eq("org_id", ORG).eq("charge_template_id", IDS.template), "id, billable_source_id"))
+    const foreign = (await rows(db, "charges", (q) => q.eq("org_id", org).eq("charge_template_id", IDS.template), "id, billable_source_id"))
         .filter((c) => !sources.includes(String(c.billable_source_id)));
     if (foreign.length) return `${foreign.length} charge(s) outside the fixture use the fixture template`;
     for (const table of ["payments", "financial_journal_entries"]) {
-        const found = await rows(db, table, (q) => q.eq("org_id", ORG).eq("customer_id", IDS.customer), "id");
+        const found = await rows(db, table, (q) => q.eq("org_id", org).eq("customer_id", IDS.customer), "id");
         if (found.length) return `${found.length} ${table} row(s) on the fixture household are ledger`;
     }
-    const closed = (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", ORG).eq("customer_id", IDS.customer), "id, status"))
+    const closed = (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", org).eq("customer_id", IDS.customer), "id, status"))
         .filter((p) => p.status !== "open");
     if (closed.length) return `${closed.length} closed billing period(s) on the fixture household are history`;
     return null;
@@ -412,7 +425,8 @@ async function cascadeRefusal(db: SupabaseClient, draftIds: string[]): Promise<s
 
 export type ResetOutcome = FixtureOutcome & { removed: number; complete: boolean };
 
-export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOutcome> {
+export async function resetHistoricalDraft(db: SupabaseClient, fixtureOrg: string): Promise<ResetOutcome> {
+    const org = boundOrg(fixtureOrg);
     let removed = 0;
     const result = (exitCode: 0 | 1 | 3, check: Check, complete: boolean): ResetOutcome => ({
         exitCode, checks: [check], removed, complete, lines: [`reset namespace=${NAMESPACE} removed=${removed}`],
@@ -425,12 +439,12 @@ export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOut
     for (const p of plan) {
         const existing = await byId(db, p.table, p.id);
         if (!existing) continue;
-        if (!owned(p, existing)) return refused(3, `identity conflict — ${p.table} ${p.id} already exists and is not the fixture's`);
+        if (!owned(p, existing, org)) return refused(3, `identity conflict — ${p.table} ${p.id} already exists and is not the fixture's`);
         present.push(p);
     }
-    const ledger = await ledgerRefusal(db);
+    const ledger = await ledgerRefusal(db, org);
     if (ledger) return refused(1, ledger);
-    const drafts = await fixtureDrafts(db);
+    const drafts = await fixtureDrafts(db, org);
     const foreignDrafts = drafts.filter((d) => d.charge_template_id !== IDS.template);
     if (foreignDrafts.length) return refused(1, `${foreignDrafts.length} draft(s) on the fixture agreement were not written from the fixture template`);
     const draftIds = drafts.map((d) => String(d.id));
@@ -438,7 +452,7 @@ export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOut
     if (cascade) return refused(1, cascade);
     const household = present.some((p) => p.table === "customers");
     const periods = household
-        ? (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", ORG).eq("customer_id", IDS.customer), "id, status")).filter((r) => r.status === "open")
+        ? (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", org).eq("customer_id", IDS.customer), "id, status")).filter((r) => r.status === "open")
         : [];
     const total = drafts.length + periods.length + present.length;
     if (total > RESET_LIMIT) return refused(1, `${total} rows exceed the limit of ${RESET_LIMIT}`);
@@ -451,7 +465,7 @@ export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOut
     const remove = async (table: string, ids: string[], build: (q: any) => any): Promise<ResetOutcome | null> => {
         let res: { data: unknown; error: unknown };
         try {
-            res = await build(db.from(table).delete().eq("org_id", ORG).in("id", ids)).select("id");
+            res = await build(db.from(table).delete().eq("org_id", org).in("id", ids)).select("id");
         } catch {
             return partial(FIXTURE_CODES.DELETE_FAILED, table);
         }
@@ -467,7 +481,7 @@ export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOut
             if (r) return r;
         }
         /* History can appear between preflight and here; re-measure before the household goes. */
-        if (await ledgerRefusal(db)) return partial(FIXTURE_CODES.LEDGER_APPEARED, null);
+        if (await ledgerRefusal(db, org)) return partial(FIXTURE_CODES.LEDGER_APPEARED, null);
         if (periods.length) {
             const r = await remove("financial_billing_periods", periods.map((p) => String(p.id)), (q) => q.eq("customer_id", IDS.customer).eq("status", "open"));
             if (r) return r;
@@ -489,19 +503,20 @@ export async function resetHistoricalDraft(db: SupabaseClient): Promise<ResetOut
  * Read-only; zero after a reset is the proof that the reset reached everything it owns. A
  * non-fixture row at a fixture id is an identity conflict, never counted.
  */
-export async function censusHistoricalDraft(db: SupabaseClient): Promise<FixtureOutcome & { count: number | null }> {
+export async function censusHistoricalDraft(db: SupabaseClient, fixtureOrg: string): Promise<FixtureOutcome & { count: number | null }> {
+    const org = boundOrg(fixtureOrg);
     let count = 0;
     let household = false;
     for (const p of plannedRows()) {
         const existing = await byId(db, p.table, p.id);
         if (!existing) continue;
-        if (!owned(p, existing)) return { ...identityConflict(`${p.table} ${p.id} already exists and is not the fixture's`), count: null };
+        if (!owned(p, existing, org)) return { ...identityConflict(`${p.table} ${p.id} already exists and is not the fixture's`), count: null };
         if (p.table === "customers") household = true;
         count += 1;
     }
-    count += (await fixtureDrafts(db)).length;
+    count += (await fixtureDrafts(db, org)).length;
     if (household) {
-        count += (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", ORG).eq("customer_id", IDS.customer), "id, status"))
+        count += (await rows(db, "financial_billing_periods", (q) => q.eq("org_id", org).eq("customer_id", IDS.customer), "id, status"))
             .filter((r) => r.status === "open").length;
     }
     return { exitCode: 0, checks: [], lines: [`census count=${count}`], count };

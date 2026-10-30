@@ -40,7 +40,7 @@
  * With no binding this module reads no file and starts no process; only a complete binding is checked
  * against the executor's store (and `git rev-parse HEAD` for the exact candidate).
  */
-import { verifyFinancialsFixtureAuthority } from "../../scripts/qa/financialsFixtureAuthority.mjs";
+import { FINANCIALS_ISOLATED_PROGRAM, verifyFinancialsFixtureAuthority } from "../../scripts/qa/financialsFixtureAuthority.mjs";
 import { readIsolatedBinding } from "../../scripts/qa/financialsIsolatedBinding.mjs";
 import { FINANCIALS_ISOLATED_SUITE } from "../../scripts/qa/financialsIsolatedTests.mjs";
 
@@ -76,7 +76,8 @@ export function judgeLiveSuiteAuthority({ env = process.env, authority = undefin
             detail: `no governed isolated binding (${isolated.code}); shared-stack live suites are never admitted by the runner`,
         };
     }
-    const op = verifyFinancialsFixtureAuthority(env, authority);
+    /* The program is the isolated tests, always: a caller option cannot name another. */
+    const op = verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_ISOLATED_PROGRAM, operation: "run" });
     if (!op.ok) {
         return {
             admit: "none",

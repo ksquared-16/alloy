@@ -11,6 +11,8 @@
  *   · the historical draft keeps its template identity next to a same-name Catalog item, identity is
  *     never matched by name, and reset is bounded to the namespace and never removes ledger.
  */
+import { createHash } from "node:crypto";
+
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /* The planted sentinel: every failure path below is made to carry it, and no output may. */
@@ -50,7 +52,6 @@ import {
     HOUSEHOLD_NAME,
     IDS,
     NAMESPACE,
-    ORG,
     plannedRows,
     RESET_LIMIT,
     resetHistoricalDraft,
@@ -64,7 +65,8 @@ import {
     suiteChildEnv,
     summarizeVitestReport,
 } from "../../scripts/qa/financialsIsolatedTests.mjs";
-import { syntheticExecutorStore } from "../harness/syntheticFixtureAuthority";
+import { FINANCIALS_FIXTURE_ORG, FINANCIALS_HISTORICAL_DRAFT_PROGRAM, FIXTURE_AUTHORITY_REFUSALS as AUTH } from "../../scripts/qa/financialsFixtureAuthority.mjs";
+import { SYNTHETIC_PERSONA_ORG, syntheticExecutorStore } from "../harness/syntheticFixtureAuthority";
 import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
@@ -72,6 +74,19 @@ import {
 
 /* A synthetic credential: if it ever appears in output, the suite fails. */
 const SECRET = SENTINEL;
+
+/* The historical fixture acts in the run persona's org (A741: QA Shared), passed in — never a core constant. */
+const ORG = SYNTHETIC_PERSONA_ORG;
+
+/* The historical entry under a live synthetic executor authority for exactly this operation. */
+const historicalStores: Array<{ cleanup: () => void }> = [];
+afterAll(() => historicalStores.forEach((s) => s.cleanup()));
+function historicalUnderAuthority(op: string, over: Record<string, string | undefined>, argv: string[], out: (l: string) => void) {
+    const operation = FINANCIALS_HISTORICAL_DRAFT_PROGRAM.operations.includes(op) ? op : "ensure";
+    const s = syntheticExecutorStore({ program: FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation });
+    historicalStores.push(s);
+    return historicalMain({ ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET, ...over } as never, argv, out, s.options());
+}
 
 function boundEnv(fixture: string, operation: string, over: Record<string, string | undefined> = {}) {
     return {
@@ -264,7 +279,7 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it("ensure writes ONE template draft beside a same-name offerable Catalog item, and verify proves its identity", async () => {
         const { store, db } = setup();
-        const r = await ensureHistoricalDraft(db as never);
+        const r = await ensureHistoricalDraft(db as never, ORG);
         expect(r.checks.filter((c) => !c.ok)).toEqual([]);
         expect(r.exitCode).toBe(0);
         const drafts = fixtureDrafts(store);
@@ -279,9 +294,9 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it("ensure is idempotent: a second run writes nothing new", async () => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         const before = JSON.stringify(store);
-        const again = await ensureHistoricalDraft(db as never);
+        const again = await ensureHistoricalDraft(db as never, ORG);
         expect(again.exitCode).toBe(0);
         expect(again.lines).toContain(`seeded 0 of ${plannedRows().length} fixture row(s)`);
         expect(fixtureDrafts(store)).toHaveLength(1);
@@ -290,10 +305,10 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it("verify FAILS when the draft has been re-pointed at the same-name Catalog item", async () => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         const draft = fixtureDrafts(store)[0];
         Object.assign(draft, { charge_template_id: null, metadata: { ...(draft.metadata as object), catalog_item: { product_id: IDS.sameNameProduct } } });
-        const v = await verifyHistoricalDraft(db as never);
+        const v = await verifyHistoricalDraft(db as never, ORG);
         expect(v.exitCode).toBe(1);
         expect(v.checks.filter((c) => !c.ok).map((c) => c.check)).toEqual(expect.arrayContaining([
             "the draft records its template id",
@@ -311,7 +326,7 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
     ])("ensure refuses %s as an identity conflict, writing nothing", async (_label, extra, why) => {
         const { store, db } = setup(extra);
         const before = JSON.stringify(store);
-        const r = await ensureHistoricalDraft(db as never);
+        const r = await ensureHistoricalDraft(db as never, ORG);
         expect(r.exitCode).toBe(3);
         expect(r.checks[0].check).toMatch(/^identity conflict/);
         expect(r.checks[0].check).toMatch(why);
@@ -320,8 +335,8 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it("reset removes only the fixture, bounded, reported in the executor's line — and is idempotent", async () => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
-        const r = await resetHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
+        const r = await resetHistoricalDraft(db as never, ORG);
         expect(r.exitCode).toBe(0);
         expect(r.removed).toBeGreaterThan(0);
         expect(r.removed).toBeLessThanOrEqual(RESET_LIMIT);
@@ -331,7 +346,7 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
         expect(store.financial_billing_periods.filter((bp) => bp.customer_id === IDS.customer)).toHaveLength(0);
         expect(store.customers.map((c) => c.id)).toEqual([NEIGHBOUR]);
 
-        const again = await resetHistoricalDraft(db as never);
+        const again = await resetHistoricalDraft(db as never, ORG);
         expect(again).toMatchObject({ exitCode: 0, removed: 0, lines: [`reset namespace=${NAMESPACE} removed=0`] });
     });
 
@@ -353,10 +368,10 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
         }, /closed billing period/],
     ])("reset refuses %s and removes nothing", async (_label, plant, why) => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         plant(store);
         const before = JSON.stringify(store);
-        const r = await resetHistoricalDraft(db as never);
+        const r = await resetHistoricalDraft(db as never, ORG);
         expect(r.exitCode).toBe(1);
         expect(r.removed).toBe(0);
         expect(r.checks[0].check).toMatch(why);
@@ -366,12 +381,12 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it(`reset refuses more than ${RESET_LIMIT} rows before the first delete`, async () => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         for (let i = 0; i < RESET_LIMIT; i++) {
             store.charges.push({ id: `draft-extra-${i}`, org_id: ORG, billable_source_id: IDS.agreement, charge_template_id: IDS.template, status: "draft", metadata: {} });
         }
         const before = JSON.stringify(store);
-        const r = await resetHistoricalDraft(db as never);
+        const r = await resetHistoricalDraft(db as never, ORG);
         expect(r).toMatchObject({ exitCode: 1, removed: 0 });
         expect(r.checks[0].check).toMatch(/exceed the limit of 50/);
         expect(JSON.stringify(store)).toBe(before);
@@ -379,24 +394,24 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
 
     it("census counts exactly what reset removes, and reads zero after it — measured, not assumed", async () => {
         const { db } = setup();
-        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
-        await ensureHistoricalDraft(db as never);
-        const before = await censusHistoricalDraft(db as never);
+        expect(await censusHistoricalDraft(db as never, ORG)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
+        await ensureHistoricalDraft(db as never, ORG);
+        const before = await censusHistoricalDraft(db as never, ORG);
         expect(before.count).toBeGreaterThan(plannedRows().length);
-        const reset = await resetHistoricalDraft(db as never);
+        const reset = await resetHistoricalDraft(db as never, ORG);
         expect(reset.removed).toBe(before.count);
-        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
+        expect(await censusHistoricalDraft(db as never, ORG)).toMatchObject({ exitCode: 0, count: 0, lines: ["census count=0"] });
     });
 
     it("census refuses a non-fixture row at a fixture id rather than counting it", async () => {
         const { db } = setup({ customers: [{ id: IDS.customer, org_id: ORG, name: "Somebody real", metadata: {} }] });
-        expect(await censusHistoricalDraft(db as never)).toMatchObject({ exitCode: 3, count: null });
+        expect(await censusHistoricalDraft(db as never, ORG)).toMatchObject({ exitCode: 3, count: null });
     });
 
     it("reset refuses a non-fixture row at a fixture id and touches nothing", async () => {
         const { store, db } = setup({ customers: [{ id: IDS.customer, org_id: ORG, name: "Somebody real", metadata: {} }] });
         const before = JSON.stringify(store);
-        const r = await resetHistoricalDraft(db as never);
+        const r = await resetHistoricalDraft(db as never, ORG);
         expect(r).toMatchObject({ exitCode: 3, removed: 0 });
         expect(JSON.stringify(store)).toBe(before);
     });
@@ -414,11 +429,140 @@ describe("dev:qa:financials-historical-draft-fixture", () => {
     ])("the entry refuses %s with exit 2 before any client exists", async (_label, argv, over) => {
         const op = argv[0]?.replace(/^--/, "") ?? "ensure";
         const out: string[] = [];
-        const code = await historicalMain(boundEnv("financials_historical_draft", op, over) as never, argv, (l) => out.push(l));
+        const code = await historicalUnderAuthority(op, over, argv, (l) => out.push(l));
         expect(code).toBe(2);
         expect(clients.created).toBe(0);
         expect(out.join("\n")).toMatch(/^✗ refused before any IO/);
         expect(out.join("\n")).not.toContain(SECRET);
+    });
+});
+
+/* ── the historical fixture's authority and organization: refused before any client exists ──── */
+
+describe("dev:qa:financials-historical-draft-fixture — executor authority and the persona organization", () => {
+    const P = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
+    const SEED = FINANCIALS_FIXTURE_ORG.id;
+    const live: Array<ReturnType<typeof syntheticExecutorStore>> = [];
+    const store = (operation = "ensure", record: Record<string, unknown> = {}) => {
+        const s = syntheticExecutorStore({ program: P, operation, record });
+        live.push(s);
+        return s;
+    };
+    afterEach(() => {
+        while (live.length) live.pop()!.cleanup();
+    });
+    async function entry(s: ReturnType<typeof store>, op: string, envOver: Record<string, string | undefined> = {}, optOver: Record<string, unknown> = {}) {
+        const out: string[] = [];
+        const code = await historicalMain({ ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET, ...envOver } as never, [`--${op}`], (l) => out.push(l), s.options(optOver));
+        return { code, out };
+    }
+    const refusedBeforeClient = (r: { code: number; out: string[] }, code: string) => {
+        expect(r.code).toBe(2);
+        expect(clients.created).toBe(0);
+        expect(r.out[0]).toMatch(new RegExp(`^✗ refused before any IO: ${code}( fields=|$)`));
+        expect(r.out.join("\n")).not.toContain(SECRET);
+        expect(r.out.join("\n")).not.toContain(SEED);
+    };
+
+    it("is registered as A741 names it: script, body digest, persona-bound, four operations", () => {
+        expect(pkg.scripts[P.npm_script as keyof typeof pkg.scripts]).toBe(P.script_body);
+        expect(createHash("sha256").update(P.script_body).digest("hex")).toBe("07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8");
+        expect(P).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", org_binding: "persona", operations: ["ensure", "verify", "reset", "count"] });
+    });
+
+    it("a FORGED environment (complete binding, persona org asserted, no authority record) never reaches a client", async () => {
+        const out: string[] = [];
+        const code = await historicalMain(boundEnv("financials_historical_draft", "ensure", { ALLOY_CERT_FIXTURE_ORG_ID: ORG, ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }) as never, ["--ensure"], (l) => out.push(l));
+        refusedBeforeClient({ code, out }, AUTH.ABSENT);
+    });
+
+    it("no trusted store root → refused", async () => {
+        refusedBeforeClient(await entry(store(), "ensure", {}, { storeRoot: null }), AUTH.UNTRUSTED_ROOT);
+    });
+
+    it("a self-consistent record outside the executor's store → refused", async () => {
+        const s = store();
+        const { mkdtempSync, writeFileSync } = await import("node:fs");
+        const { tmpdir } = await import("node:os");
+        const dir = mkdtempSync(`${tmpdir()}/forge-hist-`);
+        writeFileSync(`${dir}/${s.name}`, s.text);
+        refusedBeforeClient(await entry(s, "ensure", { ALLOY_QA_AUTHORITY_FILE: `${dir}/${s.name}` }), AUTH.ORIGIN);
+    });
+
+    it("a REPLAY (the request completed) → refused", async () => {
+        const s = store();
+        s.writeRequest({ state: "complete" });
+        refusedBeforeClient(await entry(s, "ensure"), AUTH.PROVENANCE);
+    });
+
+    it("authority for one operation does not admit another (verify record, --reset invoked)", async () => {
+        const s = store("verify");
+        refusedBeforeClient(await entry(s, "reset", { ALLOY_CERT_OPERATION: "reset" }), AUTH.MISMATCH);
+    });
+
+    it("the isolated-tests record does not admit the historical program", async () => {
+        const s = store("ensure", { fixture: "financials_isolated_tests", operation: "run", npm_script: "test:qa:financials-isolated" });
+        refusedBeforeClient(await entry(s, "ensure", { ALLOY_CERT_FIXTURE: "financials_historical_draft", ALLOY_CERT_OPERATION: "ensure" }), AUTH.MISMATCH);
+    });
+
+    it("another candidate (record and env agree, HEAD does not) → refused", async () => {
+        refusedBeforeClient(await entry(store(), "ensure", {}, { readHead: () => "d".repeat(40) }), AUTH.MISMATCH);
+    });
+
+    it.each([
+        ["the seed org asserted as seed_manifest (the isolated-tests contract)", { ALLOY_CERT_FIXTURE_ORG_ID: SEED, ALLOY_CERT_FIXTURE_ORG_SOURCE: "seed_manifest" }, {}, {}],
+        ["the seed org asserted as persona", { ALLOY_CERT_FIXTURE_ORG_ID: SEED }, {}, {}],
+        ["no org at all", { ALLOY_CERT_FIXTURE_ORG_ID: undefined, ALLOY_CERT_FIXTURE_ORG_SOURCE: undefined }, {}, {}],
+        ["the secondary QA org while the ledger binds QA Shared", { ALLOY_CERT_FIXTURE_ORG_ID: "ad53fee2-2570-460f-9300-f0e106c473b6" }, {}, {}],
+        ["a persona the run did not bind", { ALLOY_QA_PERSONA: "no_finance_operator" }, {}, {}],
+        ["a persona with an unregistered org key", {}, {}, { org_key: "firefly" }],
+        ["a run that is not OPEN", {}, { state: "CLOSED" }, {}],
+        ["a run on another environment", {}, { target: { kind: "local", key: "certenv-ffffffffff" } }, {}],
+        ["a hosted run", {}, { target: { kind: "hosted", key: "certenv-0123456789" } }, {}],
+    ])("org: %s → refused before any client", async (_l, envOver, runOver, personaOver) => {
+        const s = store();
+        s.writeRun(runOver, personaOver);
+        refusedBeforeClient(await entry(s, "ensure", envOver), AUTH.PERSONA_ORG);
+    });
+
+    it("org: no QA-run ledger in the trusted store → refused before any client", async () => {
+        const s = store();
+        const { rmSync } = await import("node:fs");
+        rmSync(s.runsFile);
+        refusedBeforeClient(await entry(s, "ensure"), AUTH.PERSONA_ORG);
+    });
+
+    it("VERIFIED: the fixture writes only in the ledger-bound persona org, never the seed org", async () => {
+        const { store: rows, db } = setup();
+        clients.impl = () => db;
+        const r = await entry(store(), "ensure");
+        expect(r.code).toBe(0);
+        expect(clients.created).toBe(1);
+        const written = Object.values(rows).flat().filter((x) => x && typeof x === "object" && "org_id" in x) as Array<Record<string, unknown>>;
+        expect(written.length).toBeGreaterThan(0);
+        expect(written.filter((x) => x.org_id !== ORG)).toEqual([]);
+        expect(JSON.stringify(rows)).not.toContain(SEED);
+    });
+
+    it("no seed-org fallback: with only the seed org present, the verified persona org is absent and nothing is written", async () => {
+        const { store: rows, db } = setup();
+        rows.orgs = [{ id: SEED }];
+        const before = JSON.stringify(rows);
+        clients.impl = () => db;
+        const r = await entry(store(), "ensure");
+        expect(r.code).toBe(1);
+        expect(r.out).toContain(`✗ certification_org_absent org=${ORG}`);
+        expect(JSON.stringify(rows)).toBe(before);
+    });
+
+    it.each([["the seed org", SEED], ["an empty org", ""], ["a non-UUID", "qa_shared"]])("the core itself refuses %s before any read", async (_l, org) => {
+        const { store: rows, db } = setup();
+        const before = JSON.stringify(rows);
+        await expect(ensureHistoricalDraft(db as never, org)).rejects.toMatchObject({ code: "fixture_org_unbound" });
+        await expect(resetHistoricalDraft(db as never, org)).rejects.toMatchObject({ code: "fixture_org_unbound" });
+        await expect(censusHistoricalDraft(db as never, org)).rejects.toMatchObject({ code: "fixture_org_unbound" });
+        await expect(verifyHistoricalDraft(db as never, org)).rejects.toMatchObject({ code: "fixture_org_unbound" });
+        expect(JSON.stringify(rows)).toBe(before);
     });
 });
 
@@ -500,7 +644,7 @@ function faulty(db: any, fault: Fault) {
 async function runEntry(op: "ensure" | "verify" | "reset" | "count", db: unknown) {
     clients.impl = () => db;
     const out: string[] = [];
-    const code = await historicalMain(boundEnv("financials_historical_draft", op) as never, [`--${op}`], (l) => out.push(l));
+    const code = await historicalUnderAuthority(op, {}, [`--${op}`], (l) => out.push(l));
     return { code, out };
 }
 
@@ -535,7 +679,7 @@ describe("no backend or process text reaches the historical fixture's output", (
 
     it("verify: a failing read inside the product's catalog loader → unexpected_error or a code, nothing else", async () => {
         const { db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         const { code, out } = await runEntry("verify", faulty(db, { table: "commercial_products", op: "select", kind: "throw" }));
         expect(code).toBe(1);
         expect(out.filter((l) => l.startsWith("✗")).length).toBeGreaterThan(0);
@@ -553,7 +697,7 @@ describe("no backend or process text reaches the historical fixture's output", (
 
     it("reset: a failing preflight read → a code and an exact removed=0", async () => {
         const { store, db } = setup();
-        await ensureHistoricalDraft(db as never);
+        await ensureHistoricalDraft(db as never, ORG);
         const before = JSON.stringify(store);
         const { code, out } = await runEntry("reset", faulty(db, { table: "customers", op: "select", kind: "throw" }));
         expect(code).toBe(1);
@@ -567,7 +711,7 @@ describe("no backend or process text reaches the historical fixture's output", (
             throw new Error(`connect ${SENTINEL}`);
         };
         const out: string[] = [];
-        const code = await historicalMain(boundEnv("financials_historical_draft", "reset") as never, ["--reset"], (l) => out.push(l));
+        const code = await historicalUnderAuthority("reset", {}, ["--reset"], (l) => out.push(l));
         expect(code).toBe(1);
         expect(out).toContain("✗ reset failed: unexpected_error");
         expect(out.some((l) => GRAMMAR.reset.test(l))).toBe(false);
@@ -578,8 +722,8 @@ describe("no backend or process text reaches the historical fixture's output", (
 describe("reset enforces identity at every delete, and reports a partial reset exactly", () => {
     async function ensured() {
         const env = setup();
-        await ensureHistoricalDraft(env.db as never);
-        const before = (await censusHistoricalDraft(env.db as never)).count!;
+        await ensureHistoricalDraft(env.db as never, ORG);
+        const before = (await censusHistoricalDraft(env.db as never, ORG)).count!;
         return { ...env, before };
     }
 
@@ -591,7 +735,7 @@ describe("reset enforces identity at every delete, and reports a partial reset e
         const { code, out } = await runEntry("reset", faulty(db, { table: "gl_accounts", op: "delete", kind }));
         expect(code).toBe(1);
         const removed = expectSafeContract(out, { reset: true })!;
-        const after = (await censusHistoricalDraft(db as never)).count!;
+        const after = (await censusHistoricalDraft(db as never, ORG)).count!;
         expect(removed).toBe(before - after);
         expect(removed).toBeGreaterThan(0);
         expect(after).toBeGreaterThan(0);

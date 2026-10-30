@@ -15,8 +15,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import pkg from "../../package.json";
 import {
     FINANCIALS_FIXTURE_ORG,
+    FINANCIALS_HISTORICAL_DRAFT_PROGRAM,
     FINANCIALS_ISOLATED_PROGRAM,
     FIXTURE_AUTHORITY_REFUSALS as A,
+    QA_PERSONA_ORGS,
     FIXTURE_AUTHORITY_SCHEMA,
     readOwnScriptBody,
     trustedGatewayStoreRoot,
@@ -49,7 +51,7 @@ describe("the contract is the toolkit's, restated and pinned", () => {
     });
 
     it("the program's own npm script and pinned body are what package.json declares, at the registered digest", () => {
-        expect(FINANCIALS_ISOLATED_PROGRAM).toMatchObject({ fixture: "financials_isolated_tests", operation: "run", suite: "financials", npm_script: "test:qa:financials-isolated" });
+        expect(FINANCIALS_ISOLATED_PROGRAM).toMatchObject({ fixture: "financials_isolated_tests", operations: ["run"], suite: "financials", npm_script: "test:qa:financials-isolated", org_binding: "seed_manifest" });
         expect(pkg.scripts["test:qa:financials-isolated"]).toBe(FINANCIALS_ISOLATED_PROGRAM.script_body);
         expect(readOwnScriptBody()).toBe(FINANCIALS_ISOLATED_PROGRAM.script_body);
         expect(sha(FINANCIALS_ISOLATED_PROGRAM.script_body)).toBe("78453bfcd3d60c0757d800c64f42577265fc27ff458d48e03cc610b818f1c169");
@@ -260,5 +262,49 @@ describe("live executor authority admits; nothing else does", () => {
         writeFileSync(s.file, forged);
         s.writeRequest({}, { sha256: sha(forged) });
         expect(verify(s.env({ ALLOY_QA_AUTHORITY_SHA256: undefined }), s.options()).ok).toBe(true);
+    });
+});
+
+describe("one verifier, an explicit program descriptor per registered fixture", () => {
+    const H = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
+
+    it("the historical descriptor is the A741 registration; the persona orgs are A741 QA_ORGS", () => {
+        expect(H).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", npm_script: "dev:qa:financials-historical-draft-fixture", org_binding: "persona", operations: ["ensure", "verify", "reset", "count"] });
+        expect(pkg.scripts["dev:qa:financials-historical-draft-fixture"]).toBe(H.script_body);
+        expect(readOwnScriptBody({ program: H })).toBe(H.script_body);
+        expect(sha(H.script_body)).toBe("07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8");
+        expect(QA_PERSONA_ORGS).toEqual({ qa_shared: "4acc9386-c485-486f-aa1f-05d83499d142", qa_secondary: "ad53fee2-2570-460f-9300-f0e106c473b6" });
+        expect(Object.values(QA_PERSONA_ORGS)).not.toContain(FINANCIALS_FIXTURE_ORG.id);
+    });
+
+    it("an unregistered program or an unregistered operation is refused before anything is read", () => {
+        const s = make();
+        let reads = 0;
+        const readFile = () => { reads += 1; return ""; };
+        expect(verify(s.env(), s.options({ program: { ...FINANCIALS_ISOLATED_PROGRAM }, readFile })).code).toBe(A.PROGRAM);
+        expect(verify(s.env(), s.options({ program: FINANCIALS_ISOLATED_PROGRAM, operation: "reset", readFile })).code).toBe(A.PROGRAM);
+        expect(verify(s.env(), s.options({ program: H, operation: "run", readFile })).code).toBe(A.PROGRAM);
+        expect(reads).toBe(0);
+    });
+
+    it("the isolated program's authority does not satisfy the historical program, nor the reverse", () => {
+        const iso = make();
+        expect(verify(iso.env(), iso.options({ program: H, operation: "ensure", readScriptBody: () => H.script_body }))).toMatchObject({ code: A.MISMATCH });
+        const hist = make({ program: H, operation: "ensure" });
+        expect(verify(hist.env(), hist.options({ readScriptBody: () => FINANCIALS_ISOLATED_PROGRAM.script_body }))).toMatchObject({ code: A.MISMATCH });
+        expect(judgeLiveSuiteAuthority({ env: hist.env(), authority: hist.options() }).admit).toBe("none");
+    });
+
+    it("the historical program verifies its persona org from the executor's QA-run ledger", () => {
+        const s = make({ program: H, operation: "reset" });
+        expect(verify(s.env(), s.options({ program: H, operation: "reset" }))).toMatchObject({ ok: true, authority: { fixture: "financials_historical_draft", operation: "reset", org_id: QA_PERSONA_ORGS.qa_shared } });
+        s.writeRun({}, { org_key: "qa_secondary" });
+        expect(verify(s.env(), s.options({ program: H, operation: "reset" })).code).toBe(A.PERSONA_ORG);
+        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_secondary }), s.options({ program: H, operation: "reset" }))).toMatchObject({ ok: true, authority: { org_id: QA_PERSONA_ORGS.qa_secondary } });
+    });
+
+    it("the isolated program's seed-manifest org rule is unchanged: a persona org refuses it", () => {
+        const s = make();
+        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_shared, ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }), s.options()).code).toBe(A.ORG);
     });
 });

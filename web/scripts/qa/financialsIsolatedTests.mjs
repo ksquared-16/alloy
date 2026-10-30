@@ -31,7 +31,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
+import { FINANCIALS_ISOLATED_PROGRAM, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
 import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBinding.mjs";
 
 const WEB = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -158,7 +158,7 @@ export async function main({ env = process.env, argv = process.argv.slice(2), ou
         out("tests passed=0 failed=0");
         return 2;
     }
-    const auth = verifyFinancialsFixtureAuthority(env, authority);
+    const auth = verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_ISOLATED_PROGRAM, operation: "run" });
     if (!auth.ok) {
         out(`✗ refused before any process: ${auth.code}${auth.fields ? ` fields=${auth.fields.join(",")}` : ""}`);
         out("tests passed=0 failed=0");
