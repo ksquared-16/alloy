@@ -97,7 +97,7 @@ as wholly missing, which was wrong:
 | Gate | `decideInboundAttachmentFiling` | **done** |
 | Case opening | existing `openNonFormProcessingCaseFromSource` with `source_kind = 'email_attachment'`, `source_id = document id`. Idempotent through `uq_pcs_primary_source_once`; a race loser re-reads and converges | **done**. No subject is proposed |
 | Filing | `email_attachment` added to `DOCUMENT_SOURCE_KINDS`, so `loadDocumentCase` → filing workspace → `commitDocumentFiling` under `processing_case:<case>:document:<document>`. The approve route files these cases exactly like uploads | **done** |
-| Ingestion hook | `ingestResendInboundEmail` calls `fileInboundEmailAttachments` after the message persists (owned only, best-effort) | **BLOCKED** until WS11 storage. Owner: Communications. No new ingress added |
+| Ingestion hook | `ingestResendInboundEmail` calls `fileInboundEmailAttachments` after the message persists (owned only, best-effort) | **BLOCKED** until WS11 storage. Owner: Communications. No new ingress added. *Superseded: wired locally in c2.2* |
 | Sends | none. The pipeline's dependencies carry no messaging capability | by construction |
 
 **Schema:**
@@ -205,11 +205,72 @@ as wholly missing, which was wrong:
 | Item | Owner | What is still unproven |
 |---|---|---|
 | (a) Attachment-content fetcher | Communications | The provider contract and the org-credential implementation |
-| (b) Ingestion call site | Communications | — |
+| (b) Ingestion call site | — | **Wired locally in c2.2** (`81ec658ab`) |
 | (c) Trusted malware scanner and verdict store | Documents security D1c-2 | The service and credentials are external |
 | (d) Atomic-opener migration | DB | Apply, then the two-session concurrency proof |
 | (e) D2 insert trigger with an explicit `current_version_id` | DB | Real-DB confirmation; in-memory only so far |
 | (f) Storage RLS and bucket policy for the system writer | DB | Not exercised |
+
+## c2.2 — Communications call site wired; D10 requires the atomic open (`81ec658ab`, local; synthetic proof)
+
+**Ownership check:** before editing `web/lib/communications/email/inboundEmailIngestion.ts` I checked for competing writers:
+- no `origin` branch has commits to it beyond this lane;
+- no local worktree has uncommitted or unmerged changes to it.
+
+The user's D10 approval covers this local integration.
+
+**1. Call site.**
+- **Where:** `ingestResendInboundEmail` step 7b hands a persisted, owned email with attachments to `fileInboundAttachmentsForPersistedMessage`. It runs after persistence, the receipt and the receive event, and before the observe-only step 8, which stays last.
+- **Redelivery:** a resolved redelivery hands off again. That is the retry path, and every step after it converges.
+- **Never handed off:** unowned, cross-organization-ambiguous and admission-refused emails.
+- **Isolated:** a throwing hand-off leaves outcome, message, thread, event, receipt and observation byte-identical (differential test).
+- **Default is production:**
+  - `makeInboundAttachmentFilingDeps` with no content fetcher and no scanner;
+  - every attachment is held (`storage_unavailable`, `malware_scanning_unavailable`) before a byte is read;
+  - no document, object, case or source is written.
+- **Content-fetch seam:** the `AttachmentContentFetcher` interface only. No provider endpoint was invented or called.
+
+**2. Atomic open required for D10.**
+- `openProcessingCaseFromSource({ requireAtomic: true })` throws a typed `AtomicProcessingOpenUnavailableError` BEFORE any legacy read or write when:
+  - the atomic port is absent; or
+  - the function is missing (`PGRST202` / `42883`).
+- D10 always sets it and holds the attachment as `processing_atomic_open_unavailable`.
+- **Proof:**
+  - zero case/source writes;
+  - zero legacy calls;
+  - zero table touches on the Supabase port;
+  - after the function exists, a redelivery opens the case on the SAME stored document without a second upload.
+- Other callers (upload route, forms, packets) keep the pre-migration fallback unchanged.
+- No compensating deletion anywhere.
+- New register entry: `processing_atomic_open` (state `missing`).
+
+**Deployment order (none of it performed):**
+1. Code may deploy first. D10 stays held: no fetcher, no scanner, no atomic function.
+2. Apply `20261215093000_processing_open_case_atomic.sql`, then run its single-session invariant and the two-session race proof on an isolated database.
+3. Only then enable a content fetcher (Communications) and a trusted scanner (D1c-2). Before step 2, a fully enabled pipeline still holds, as `processing_atomic_open_unavailable`.
+
+**Proof (broker, exact tree `7dde6a6b0d94d99b` at `81ec658ab`):**
+- **Affected suites:** 19 files, **329/329**, receipt `req_1793402098422610_94003`. They include:
+  - the new `inboundEmailAttachmentHandOff.test.ts` (9);
+  - every existing `tests/communications/inbound*`, admission, stop-hold and anchor-parity suite;
+  - the D10 / D9 / atomic-open / census suites;
+  - the metrics suite that extends the shared harness.
+- **Mutation check** (restored, hash-verified):
+
+| Mutation | Result |
+|---|---|
+| Call site removed | 3 fail |
+| Isolation removed | 1 fails |
+| Redelivery hand-off removed | 1 fails |
+| `requireAtomic` refusal removed | 4 fail |
+
+- **Checks:** `typecheck` and `typecheck:tests` PASSED; the six prebuild guards rc=0.
+
+**Baseline reds, now MEASURED (no longer inferred from imports):**
+- The 19 files that failed in the broad run were run at HEAD (`req_1793402028491520_78347`, tree `7dde6a6b`) and on the pre-sprint base `2b213d02b` bytes (`req_1793402048567218_82529`, tree `4357ca45`).
+- Both runs: 19 files failed, **32 failed / 117 passed**, with the failing test names IDENTICAL.
+- The working tree was restored to HEAD afterwards, verified.
+- So these 32 are pre-existing on this lane's base and not caused by D9/D10 or the shared-harness changes. They are not diagnosed, and this is not a full-green certification.
 
 ## c3 — local only; history preserved
 
