@@ -1,7 +1,7 @@
 """Documents V1 R4 — hosted restricted personas (authz_q1 contract Revision 3: scoped_forms, health_viewer, doc_writer).
 
 Usage: r4_hosted_restricted_personas_cert.py <qa_run_id> ensure|certify|reset
-       r4_hosted_restricted_personas_cert.py <qa_run_id> ensure_r2r5|certify_r2r5|reset_r2r5 [--skip-manual-link-target]
+       r4_hosted_restricted_personas_cert.py <qa_run_id> ensure_r2r5|certify_r2r5|reset_r2r5
 
   ensure   as fixture_admin, through the deployed product's own audited routes (helpers reused from the R2/R5, D7 and
            D8/FI-10 drivers): L1 in QA D1 (scoped_forms' department) with child K1; L2 in QA D2 with child KU; one run-scoped
@@ -23,16 +23,22 @@ Usage: r4_hosted_restricted_personas_cert.py <qa_run_id> ensure|certify|reset
                 qa_documents_shared_child_ensure (ac000000- household H, children SHARED and ONLY_A, leads A and B on H):
                 as fixture_admin, a run-keyed packet (qa_<run>_r2pkt) on the run form; packet links launched from L1, L2
                 and KU, each opened once through the public resolve route (that creates the packet session); form public
-                links naming L1, L2 and nothing; and the R5 submissions s_r5_shared / s_r5_only / s_r5_oppa / s_r5_oppb.
+                links naming L1, L2 and nothing; the R5 submissions s_r5_shared / s_r5_only / s_r5_oppa / s_r5_oppb; and,
+                from the admin's composer roster, one recipient of L1's household and one of L2's.
   certify_r2r5  the remaining hosted R2 / R5 gates (R1-R2-R5-HOSTED-CERTIFICATION.md "Outstanding"):
              R2-packet  scoped_forms: in-scope (L1) session listed / readable / rollup / insight / review admitted; L2 and
                         child-only KU sessions → 404 naming nothing and absent from the list; cross_org_admin → 404.
              R2-writes  scoped_forms (holds forms.submissions + .confirm, so a refusal is SCOPE, not capability):
                         submit / generate-document / manual-link / confirm-linkage on s_opp2 and s_ku → 404 and nothing
-                        changed; confirm-linkage / manual-link on in-scope s_opp1 → 200; a packet link minted from L1 → 201;
-                        manual-link of its own in-scope submission ONTO L2 → 404 (the R2 rule for a write's target; this
-                        route checks the target's org and household only — run with --skip-manual-link-target to leave
-                        that one known gap out of the run until the product decision is made).
+                        changed; confirm-linkage / manual-link on in-scope s_opp1 admitted; its own draft submitted; a
+                        packet link minted from L1 → 201; manual-link of its own in-scope submission ONTO L2 → 404 (the
+                        target is scoped too, fix e1c511967); packet links whose metadata names L2 as prefill source, or
+                        whose enrollment selection / metadata children name KU → 404.
+             R2-authoring  scoped_author (Revision 4 PROPOSAL: forms.author, department D1 — see
+                        certification/qa-shared/documents-r2-scoped-author-persona-proposal.json): roster, POS compose,
+                        form public-link mint and PATCH — in-scope succeed; L2 anchor, another household's child (alone or
+                        second) or recipient, metadata naming L2 or KU, and editing / re-pointing a link at L2 → 404 and
+                        the admin's link list unchanged; scoped_forms on compose / roster → 403 (capability control only).
              R2-links   form and packet public-link lists drop links naming L2 / KU and keep L1's and the link naming nothing;
                         preview-payload prefilled from L2 or KU → 404, from L1 → 200.
              R5-shared  delete-preview of lead A counts exactly s_r5_oppa + s_r5_only, one child, and retains H and SHARED;
@@ -41,8 +47,8 @@ Usage: r4_hosted_restricted_personas_cert.py <qa_run_id> ensure|certify|reset
                 sessions, and the run form's links leave through qa_documents_forms_residue_reset; then
                 qa_documents_shared_child_reset, then the R4 `reset`, then the registered and R5 censuses.
 
-POS packet compose (forms.author) and public-link MINTING (forms.author) are not in the matrix: no Revision 3 persona is
-both department-restricted and an author, so a refusal there would be capability, not scope.
+A persona with no session in this run (scoped_author does not exist until Revision 4 is adopted and provisioned) is
+NOT skipped: every case of its section is recorded as FAIL "not run", so the summary can never read as complete.
 
 Never prints a cookie, signed URL, token or answer content: statuses, booleans and counts.
 """
@@ -529,6 +535,15 @@ def ensure_r2r5(ids, ext, save_fn=save_r2r5):
             return False
         form_links[k] = lid
         save_fn(ext)
+    if "recipients" not in ext:
+        rcp = {}
+        for k, opp in (("l1", L1), ("l2", L2)):
+            s, b = call(f"/api/admin/pos/packets/roster?entity_type=opportunity&entity_id={opp}", A)
+            people = [r.get("person_id") for r in ((data_of(b) or {}).get("recipients") or []) if isinstance(r, dict) and r.get("person_id")]
+            rcp[k] = people[0] if people else None
+            print(f"roster {k}: status={s} recipients={len(people)}")
+        ext["recipients"] = rcp
+        save_fn(ext)
     subs = ext.setdefault("r5_subs", {})
     for k, subj in (("s_r5_shared", {"customer_member_id": SC["child_shared"]}), ("s_r5_only", {"customer_member_id": SC["child_only_a"]}),
                     ("s_r5_oppa", {"opportunity_id": SC["lead_a"]}), ("s_r5_oppb", {"opportunity_id": SC["lead_b"]})):
@@ -544,7 +559,21 @@ def ensure_r2r5(ids, ext, save_fn=save_r2r5):
     return True
 
 
-def certify_r2r5(ids, ext, skip=frozenset()):
+def has_session(p):
+    return os.path.exists(os.path.join(AUTH, RUN, p, "storage-state.json"))
+
+
+def not_run(section, persona, cases):
+    for c in cases:
+        check(section, c, persona, False, "not_run", None, reason=f"persona {persona} has no session in this run — case not run, not proven")
+
+
+def certify_r2r5(ids, ext):
+    missing = [p for p in (A, SF, X) if not has_session(p)]
+    if missing:
+        for section in ("R2-packet", "R2-writes", "R2-links", "R5-shared"):
+            check(section, f"section not run: no session for {', '.join(missing)}", missing[0], False, "not_run", None)
+        return
     subs = ids["subs"]
     L1, L2, KU = ids["L1"]["opp"], ids["L2"]["opp"], ids["KU"]
     ses, fl, pl, r5 = ext["sessions"], ext["form_links"], ext["packet_links"], ext["r5_subs"]
@@ -611,10 +640,79 @@ def certify_r2r5(ids, ext, skip=frozenset()):
     mine = ext.get("s_sf_r2")
     s, b = j(f"/api/admin/forms/submissions/{mine}/submit", SF, {}) if mine else (None, None)
     check(S, "submit of its own in-scope draft (L1) → 200", SF, s == 200, s, code_of(b))
-    if "manual_link_target" not in skip:
-        s, b = j(f"/api/admin/forms/submissions/{mine}/manual-link", SF, {"opportunity_id": L2, "customer_id": ids["L2"].get("hh")}) if mine else (None, None)
-        check(S, "manual-link of an in-scope submission ONTO the QA D2 opportunity → 404 (a write's target is scoped too)", SF,
-              s == 404 and nothing_named(b, L2), s, code_of(b), known_gap="manual-link checks the target's org/household, not scope")
+    s, b = j(f"/api/admin/forms/submissions/{mine}/manual-link", SF, {"opportunity_id": L2, "customer_id": ids["L2"].get("hh")}) if mine else (None, None)
+    check(S, "manual-link of an in-scope submission ONTO the QA D2 opportunity → 404 (a write's target is scoped too)", SF,
+          s == 404 and nothing_named(b, L2), s, code_of(b))
+    pkt = ext["packet"]
+    for why, body in (("metadata naming L2 as prefill source (no launch)", {"packet_definition_id": pkt, "metadata": {"source_entity_type": "opportunity", "source_entity_id": L2}}),
+                      ("launched from L1, enrollment selection of the out-of-scope child KU", {"packet_definition_id": pkt, "launch_from_entity": {"entity_type": "opportunity", "entity_id": L1}, "enrollment_selection": {"customer_member_id": KU}}),
+                      ("launched from L1, metadata children [K1, KU] (not only the first is read)", {"packet_definition_id": pkt, "launch_from_entity": {"entity_type": "opportunity", "entity_id": L1}, "metadata": {"selected_customer_member_ids": [ids["K1"], KU]}})):
+        s, b = j("/api/admin/forms/packet-links", SF, body)
+        check(S, f"packet link {why} → 404, names nothing", SF, s == 404 and nothing_named(b, L2, KU), s, code_of(b))
+
+    # ═══════════════════════════════════════════════════════════════════════ R2-authoring: forms.author destinations
+    S = "R2-authoring"
+    SA = "scoped_author"
+    K1 = ids["K1"]
+    fid = ids["form"]["id"]
+    rcp = ext.get("recipients") or {}
+    authoring_cases = [
+        "roster of the QA D2 lead → 404", "roster of the out-of-scope child KU → 404", "compose anchored on the QA D2 lead → 404",
+        "compose on L1 naming KU → 404", "compose on L1 naming [K1, KU] → 404", "compose on L1 naming an L2 household recipient → 404",
+        "link mint whose metadata names L2 as existing-record prefill source → 404", "link mint from L1 whose metadata selects [K1, KU] → 404",
+        "PATCH of the link naming L2 → 404", "PATCH re-pointing the subject-less link at L2 → 404",
+        "refusals wrote no link (admin list unchanged)", "roster of L1 lists K1", "compose on L1 with K1 and an L1 recipient → 201",
+        "link mint launched from L1 → 201", "subject-less intake link mint → 201", "PATCH of the subject-less link → 200",
+    ]
+    if not has_session(SA):
+        not_run(S, SA, authoring_cases)
+    else:
+        def link_ids():
+            s_, b_ = call(f"/api/admin/forms/{fid}/public-links", A)
+            return {r.get("id") for r in (data_of(b_) or []) if isinstance(r, dict)}
+        before = link_ids()
+        refusals = [
+            ("roster of the QA D2 lead → 404", lambda: call(f"/api/admin/pos/packets/roster?entity_type=opportunity&entity_id={L2}", SA)),
+            ("roster of the out-of-scope child KU → 404", lambda: call(f"/api/admin/pos/packets/roster?entity_type=customer_member&entity_id={KU}", SA)),
+            ("compose anchored on the QA D2 lead → 404", lambda: j("/api/admin/pos/packets/compose", SA, {"name": f"{KEY_PREFIX}r2c_x1", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L2}})),
+            ("compose on L1 naming KU → 404", lambda: j("/api/admin/pos/packets/compose", SA, {"name": f"{KEY_PREFIX}r2c_x2", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L1}, "child_ids": [KU]})),
+            ("compose on L1 naming [K1, KU] → 404", lambda: j("/api/admin/pos/packets/compose", SA, {"name": f"{KEY_PREFIX}r2c_x3", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L1}, "child_ids": [K1, KU]})),
+            ("compose on L1 naming an L2 household recipient → 404", lambda: j("/api/admin/pos/packets/compose", SA, {"name": f"{KEY_PREFIX}r2c_x4", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L1}, "recipient_ids": [rcp.get("l2") or "00000000-0000-4000-8000-000000000000"]})),
+            ("link mint whose metadata names L2 as existing-record prefill source → 404", lambda: j(f"/api/admin/forms/{fid}/public-links", SA, {"label": f"{TAG} x5", "metadata": {"form_context_mode": "existing_record", "source_entity_type": "opportunity", "source_entity_id": L2}})),
+            ("link mint from L1 whose metadata selects [K1, KU] → 404", lambda: j(f"/api/admin/forms/{fid}/public-links", SA, {"label": f"{TAG} x6", "launch_from_entity": {"entity_type": "opportunity", "entity_id": L1}, "metadata": {"selected_customer_member_ids": [K1, KU]}})),
+            ("PATCH of the link naming L2 → 404", lambda: j(f"/api/admin/forms/{fid}/public-links/{fl['fl_d2']}", SA, {"is_active": True}, "PATCH")),
+            ("PATCH re-pointing the subject-less link at L2 → 404", lambda: j(f"/api/admin/forms/{fid}/public-links/{fl['fl_none']}", SA, {"metadata": {"form_context_mode": "packet", "source_entity_type": "opportunity", "source_entity_id": L2}}, "PATCH")),
+        ]
+        for case, fn in refusals:
+            s, b = fn()
+            ok = s == 404 and nothing_named(b, L2, KU) and not (case.endswith("recipient → 404") and not rcp.get("l2"))
+            check(S, case, SA, ok, s, code_of(b), **({"note": "no L2 recipient was found by ensure_r2r5; case not proven"} if case.endswith("recipient → 404") and not rcp.get("l2") else {}))
+        check(S, "refusals wrote no link (admin list unchanged)", A, link_ids() == before, None, None)
+        s, b = call(f"/api/admin/pos/packets/roster?entity_type=opportunity&entity_id={L1}", SA)
+        kids = {c.get("customer_member_id") for c in ((data_of(b) or {}).get("children") or []) if isinstance(c, dict)}
+        check(S, "roster of L1 lists K1", SA, s == 200 and K1 in kids, s, code_of(b))
+        s, b = j("/api/admin/pos/packets/compose", SA, {"name": f"{KEY_PREFIX}r2compose", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L1},
+                                                       "child_ids": [K1], **({"recipient_ids": [rcp["l1"]]} if rcp.get("l1") else {})})
+        d = data_of(b) or {}
+        if d.get("packet_definition_id"):
+            ext["sa_compose_packet"] = d["packet_definition_id"]
+            save_r2r5(ext)
+        check(S, "compose on L1 with K1 and an L1 recipient → 201", SA, s == 201 and bool(d.get("packet_definition_id")) and bool(rcp.get("l1")), s, code_of(b),
+              **({} if rcp.get("l1") else {"note": "no L1 recipient was found by ensure_r2r5; recipient half not proven"}))
+        for case, body in (("link mint launched from L1 → 201", {"label": f"{TAG} sa_l1", "launch_from_entity": {"entity_type": "opportunity", "entity_id": L1}}),
+                           ("subject-less intake link mint → 201", {"label": f"{TAG} sa_none", "metadata": {"label": f"{TAG} sa_none"}})):
+            s, b = j(f"/api/admin/forms/{fid}/public-links", SA, body)
+            if (data_of(b) or {}).get("id"):
+                ext.setdefault("sa_links", []).append(data_of(b)["id"])
+                save_r2r5(ext)
+            check(S, case, SA, s == 201, s, code_of(b))
+        s, b = j(f"/api/admin/forms/{fid}/public-links/{fl['fl_none']}", SA, {"is_active": True}, "PATCH")
+        check(S, "PATCH of the subject-less link → 200", SA, s == 200, s, code_of(b))
+    if has_session(SF):
+        s, b = j("/api/admin/pos/packets/compose", SF, {"name": f"{KEY_PREFIX}r2c_sf", "form_definition_ids": [fid], "anchor": {"entity_type": "opportunity", "entity_id": L1}})
+        check(S, "capability control: scoped_forms (no forms.author) on compose → 403 — not a scope proof", SF, s == 403, s, code_of(b))
+        s, b = call(f"/api/admin/pos/packets/roster?entity_type=opportunity&entity_id={L1}", SF)
+        check(S, "capability control: scoped_forms on the roster → 403 — not a scope proof", SF, s == 403, s, code_of(b))
 
     # ═══════════════════════════════════════════════════════════════════════ R2-links: link lists and preview payload
     S = "R2-links"
@@ -708,7 +806,7 @@ if PHASE in ("ensure_r2r5", "certify_r2r5", "reset_r2r5"):
         print("ENSURE_R2R5", json.dumps({k: (bool(v) if not isinstance(v, dict) else {x: bool(y) for x, y in v.items()}) for k, v in ext.items()}))
         sys.exit(0 if ok else 1)
     if PHASE == "certify_r2r5":
-        certify_r2r5(ids, ext, skip=frozenset({"manual_link_target"} if "--skip-manual-link-target" in OPTIONS else ()))
+        certify_r2r5(ids, ext)
         finish()
     out = reset_r2r5(ext)
     print("RESET_R2R5", json.dumps(out))
