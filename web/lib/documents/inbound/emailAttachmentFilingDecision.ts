@@ -136,8 +136,8 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
         key: "ws11_attachment_storage",
         owner: "Communications (Conversation Platform WS11)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.storage ? "ready" : "missing",
-        proof: "an AttachmentContentFetcher (lib/documents/inbound/ws11AttachmentStorage.ts) that retrieves one listed attachment's bytes from the receiving provider under the organization's own binding credential, with retryable/permanent outcomes. The storage half exists: createWs11AttachmentStorage stores through the existing document sequence, idempotent on a stable document id, no new table. The provider's attachment-content contract is not in the repository and is not invented. The communication_message_attachments link remains Communications' own (draft: certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql, not applied)",
-        next: "Communications implements the fetcher; makeInboundAttachmentFilingDeps(supabase, { fetchContent }) consumes it unchanged",
+        proof: "the per-attachment adapter exists and is NOT enabled: makeResendAttachmentContentFetcher (lib/documents/inbound/resendAttachmentContentFetcher.ts) follows Resend's published contract — GET api.resend.com/emails/receiving/{email_id}/attachments/{id} with the organization's key, then the signed inbound-cdn.resend.com download_url (one hour) with no credentials, no redirects, a size cap and one deadline; never the raw message. Storage half: createWs11AttachmentStorage. Missing for enablement: the binding-credential resolver wired to it, and a live proof of the documented contract (unspecified in the docs: download auth, error codes, size limits)",
+        next: "Communications wires resolveApiKey to resolveInboundRetrievalCredential and passes the fetcher to makeInboundAttachmentFilingDeps after a live contract proof and the scanner exist",
     },
     {
         key: "d1c2_malware_scanning",

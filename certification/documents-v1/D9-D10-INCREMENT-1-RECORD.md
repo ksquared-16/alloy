@@ -272,6 +272,42 @@ The user's D10 approval covers this local integration.
 - The working tree was restored to HEAD afterwards, verified.
 - So these 32 are pre-existing on this lane's base and not caused by D9/D10 or the shared-harness changes. They are not diagnosed, and this is not a full-green certification.
 
+## c2.3 — provider attachment adapter (synthetic) and verdict-store design (approved 2026-10-31T01:35Z, items 2–3)
+
+**Official contract.** Public documentation only; no account, mailbox, credential or API request.
+- [Retrieve Attachment](https://resend.com/docs/api-reference/emails/retrieve-received-email-attachment): `GET https://api.resend.com/emails/receiving/{email_id}/attachments/{id}`, Bearer key. The response carries `id, filename, size, content_type, content_disposition, content_id, download_url (inbound-cdn.resend.com), expires_at`.
+- [Process Receiving Attachments](https://resend.com/docs/dashboard/receiving/attachments): the `download_url` is valid for one hour; ask again afterwards.
+- This is per attachment. The no-raw-MIME policy (`raw.download_url` never fetched) is unchanged.
+
+**Not stated by the docs, failed closed in the adapter:**
+- download authentication: none sent;
+- error codes: 429 / 5xx retryable, others permanent;
+- size limits: our 10 MB cap, checked on the declared size, the Content-Length and the streamed bytes;
+- redirects: refused.
+
+**Adapter.** `lib/documents/inbound/resendAttachmentContentFetcher.ts` (`makeResendAttachmentContentFetcher`).
+- The key goes to `api.resend.com` only.
+- The download host is exactly `inbound-cdn.resend.com` over HTTPS: no SSRF and no credentials in the URL.
+- One deadline covers both requests.
+- The provider's attachment id must equal the requested one.
+- Failure reasons never carry the key, the signed URL or a body.
+- Credential: the organization's own, from its binding, through an injected resolver.
+- **NOT enabled.** Production deps still pass no fetcher, so everything stays held.
+
+**Proof:**
+- `tests/documents/resendAttachmentContentFetcher.test.ts` **39/39** on a fake HTTP transport. It includes the composed pipeline: fetched once, stored once, one case; a redelivery makes no provider request; an unlisted attachment is never requested.
+- Mutation check, all caught, restored byte-for-byte:
+
+| Mutation | Result |
+|---|---|
+| Key sent to the CDN | 1 fails |
+| Any HTTPS host trusted | 4 fail |
+| Redirects followed | 1 fails |
+| Attachment-id binding removed | 2 fail |
+| Streaming cap removed | 1 fails |
+
+**Verdict store.** `D10-MALWARE-VERDICT-STORE-DESIGN.md` is design only, with no migration. The smallest remaining decision is to authorize authoring (not applying) that migration, and to name the scan process principal.
+
 ## c3 — local only; history preserved
 
 **Validation (broker):**
