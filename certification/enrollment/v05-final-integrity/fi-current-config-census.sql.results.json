@@ -1,0 +1,171 @@
+{
+  "trusted_host_action_id": "tha_c90d333317310d",
+  "query_hash": "387bded01e6d9b5574ed43e245e5649f4f41d314830be05ee25a66f2ee1c17cf",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-30T01:36:19.077Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c90d333317310d",
+    "query_hash": "387bded01e6d9b5574ed43e245e5649f4f41d314830be05ee25a66f2ee1c17cf",
+    "authorization_id": "grnt_77ad961458fa4387",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-30T01:36:24.899Z",
+    "question_ids": [
+      "b1_rev59",
+      "b2_latest_rev",
+      "b3_publication",
+      "f1_forms",
+      "f2_forms_missing",
+      "m1_fee_template",
+      "m2_same_key_templates",
+      "p1_packet",
+      "p2_packet_items",
+      "p3_same_name_packets"
+    ],
+    "questions": {
+      "b1_rev59": {
+        "question_id": "b1_rev59",
+        "row_count": null,
+        "rows": [
+          "a32816b4 | rev=59 | published_at=2026-10-21 01:15:05.953721+00"
+        ]
+      },
+      "b2_latest_rev": {
+        "question_id": "b2_latest_rev",
+        "row_count": null,
+        "rows": [
+          "a32816b4 | rev=59 | published_at=2026-10-21 01:15:05.953721+00 | refs_packet=false | refs_fee=false | forms_referenced=5"
+        ]
+      },
+      "b3_publication": {
+        "question_id": "b3_publication",
+        "row_count": null,
+        "rows": [
+          "business_process | 0a39c12f | rev=12 | published_at=2026-08-13 19:52:25.481768+00",
+          "business_process | 1759c8d1 | rev=14 | published_at=2026-08-26 16:18:05.238276+00",
+          "business_process | 17b62b87 | rev=16 | published_at=2026-08-26 16:26:32.881452+00",
+          "business_process | 1985e358 | rev=11 | published_at=2026-08-12 18:05:14.377499+00",
+          "business_process | 1b1a669d | rev=24 | published_at=2026-09-04 16:31:40.606195+00",
+          "business_process | 1fce9d3f | rev=21 | published_at=2026-08-28 17:58:56.047923+00",
+          "business_process | 26b25e94 | rev=20 | published_at=2026-08-28 05:50:13.274749+00",
+          "business_process | 2fcffa56 | rev=41 | published_at=2026-10-16 20:31:41.231348+00",
+          "business_process | 356c13ea | rev=32 | published_at=2026-09-14 21:22:56.664813+00",
+          "business_process | 38a12079 | rev=10 | published_at=2026-08-11 23:50:19.669331+00",
+          "business_process | 393160d0 | rev=50 | published_at=2026-10-20 14:51:37.037381+00",
+          "business_process | 438c7f5f | rev=35 | published_at=2026-09-17 00:54:40.798961+00",
+          "business_process | 47638d81 | rev=9 | published_at=2026-08-11 23:38:43.9327+00",
+          "business_process | 49781035 | rev=27 | published_at=2026-09-11 19:55:28.403734+00",
+          "business_process | 4e2f43df | rev=30 | published_at=2026-09-12 02:51:02.238213+00",
+          "business_process | 54dae047 | rev=47 | published_at=2026-10-17 12:18:53.840581+00",
+          "business_process | 556603bc | rev=7 | published_at=2026-08-08 21:25:50.622401+00",
+          "business_process | 5724629a | rev=19 | published_at=2026-08-28 05:39:38.178695+00",
+          "business_process | 57a24292 | rev=18 | published_at=2026-08-27 21:42:04.459106+00",
+          "business_process | 5b984ae8 | rev=15 | published_at=2026-08-26 16:23:29.901539+00",
+          "business_process | 63ee5486 | rev=52 | published_at=2026-10-20 17:51:13.014826+00",
+          "business_process | 6642e9ba | rev=54 | published_at=2026-10-20 20:56:21.366858+00",
+          "business_process | 6692737e | rev=34 | published_at=2026-09-16 22:20:55.995457+00",
+          "business_process | 6958e579 | rev=39 | published_at=2026-10-15 20:27:52.359987+00",
+          "business_process | 6cb57e99 | rev=31 | published_at=2026-09-12 15:13:49.226667+00",
+          "business_process | 70ef910c | rev=17 | published_at=2026-08-26 16:42:35.259764+00",
+          "business_process | 715f5787 | rev=28 | published_at=2026-09-11 19:59:41.337668+00",
+          "business_process | 727f9ea0 | rev=25 | published_at=2026-09-10 01:25:01.628793+00",
+          "business_process | 776e6a45 | rev=51 | published_at=2026-10-20 17:06:56.613454+00",
+          "business_process | 7a448d4c | rev=6 | published_at=2026-08-08 21:22:52.710311+00",
+          "business_process | 7e100974 | rev=37 | published_at=2026-09-25 00:06:05.62519+00",
+          "business_process | 81a1393c | rev=1 | published_at=2026-08-06 23:54:14.818119+00",
+          "business_process | 8323ff7b | rev=2 | published_at=2026-08-06 23:55:18.846435+00",
+          "business_process | 8565c745 | rev=36 | published_at=2026-09-24 22:13:35.559524+00",
+          "business_process | 896081a3 | rev=53 | published_at=2026-10-20 20:31:45.087593+00",
+          "business_process | 8aa7d236 | rev=8 | published_at=2026-08-11 16:25:37.970114+00",
+          "business_process | 8bea6339 | rev=23 | published_at=2026-09-04 16:30:38.33225+00",
+          "business_process | 8d4d9831 | rev=45 | published_at=2026-10-16 22:31:38.457233+00",
+          "business_process | 8e06d742 | rev=44 | published_at=2026-10-16 22:31:21.512159+00",
+          "business_process | 8e10a39f | rev=33 | published_at=2026-09-14 21:40:23.120222+00",
+          "business_process | 905fc542 | rev=40 | published_at=2026-10-16 17:07:24.641684+00",
+          "business_process | 998c28eb | rev=13 | published_at=2026-08-17 17:22:58.394744+00",
+          "business_process | 9fe108a9 | rev=22 | published_at=2026-08-28 18:01:02.766585+00",
+          "business_process | a32816b4 | rev=59 | published_at=2026-10-21 01:15:05.953721+00",
+          "business_process | a9f9e9cb | rev=29 | published_at=2026-09-12 01:14:03.268328+00",
+          "business_process | affdaf17 | rev=49 | published_at=2026-10-20 14:46:25.843235+00",
+          "business_process | b5791da5 | rev=43 | published_at=2026-10-16 21:56:19.156651+00",
+          "business_process | b9a7dd67 | rev=58 | published_at=2026-10-21 00:11:56.85058+00",
+          "business_process | c185e435 | rev=26 | published_at=2026-09-10 01:28:07.353219+00",
+          "business_process | c6464045 | rev=56 | published_at=2026-10-20 21:30:57.375919+00",
+          "business_process | c8112137 | rev=38 | published_at=2026-09-28 23:36:31.189031+00",
+          "business_process | d664054c | rev=42 | published_at=2026-10-16 21:54:12.732951+00",
+          "business_process | d692e374 | rev=46 | published_at=2026-10-17 04:11:56.006806+00",
+          "business_process | d6ea055d | rev=4 | published_at=2026-08-07 17:28:21.256281+00",
+          "business_process | d97b2a38 | rev=57 | published_at=2026-10-20 23:50:11.311061+00",
+          "business_process | e365c050 | rev=48 | published_at=2026-10-17 14:09:00.841007+00",
+          "business_process | f202beeb | rev=5 | published_at=2026-08-07 20:10:12.912121+00",
+          "business_process | f69ccc18 | rev=3 | published_at=2026-08-07 17:28:06.236629+00",
+          "business_process | fc86c8a1 | rev=55 | published_at=2026-10-20 21:24:44.417118+00"
+        ]
+      },
+      "f1_forms": {
+        "question_id": "f1_forms",
+        "row_count": null,
+        "rows": [
+          "application | 0a84c578 | Lil' Sunshine — Enrollment Application | active=true | published_versions=1 | latest_published=v1",
+          "immunization | 01fc00c4 | Oregon Certificate of Immunization Status — Lil' Sunshine | active=true | published_versions=2 | latest_published=v2",
+          "medical_release | f2d4c0a0 | Lil' Sunshine — Medical Records Release | active=true | published_versions=1 | latest_published=v1",
+          "occ_ta806 | e54ddde3 | Oregon Child Enrollment Authorization (TA-806) — Lil' Sunshine | active=true | published_versions=4 | latest_published=v4",
+          "sunscreen | 6628005d | Lil' Sunshine — Sunscreen Permission | active=true | published_versions=1 | latest_published=v1"
+        ]
+      },
+      "f2_forms_missing": {
+        "question_id": "f2_forms_missing",
+        "row_count": null,
+        "rows": [
+          "0 of 5 historical forms absent"
+        ]
+      },
+      "m1_fee_template": {
+        "question_id": "m1_fee_template",
+        "row_count": null,
+        "rows": [
+          "c03e638e | registration_fee | Registration fee | fixed | amount_cents=7500 | trigger=manual:- | active=true | updated=2026-08-26 18:56:21.955807+00"
+        ]
+      },
+      "m2_same_key_templates": {
+        "question_id": "m2_same_key_templates",
+        "row_count": null,
+        "rows": [
+          "1 active templates share template_key with c03e638e (1 = not recreated)"
+        ]
+      },
+      "p1_packet": {
+        "question_id": "p1_packet",
+        "row_count": null,
+        "rows": [
+          "84fc5674 | bp_rev_a32816b441c448489e6f9e554fb73d58_enrolling | Enrollment | active=true"
+        ]
+      },
+      "p2_packet_items": {
+        "question_id": "p2_packet_items",
+        "row_count": null,
+        "rows": [
+          "0 | 0a84c578 | pinned=- | Lil' Sunshine — Enrollment Application",
+          "1 | e54ddde3 | pinned=- | Oregon Child Enrollment Authorization (TA-806) — Lil' Sunshine",
+          "2 | 01fc00c4 | pinned=- | Oregon Certificate of Immunization Status — Lil' Sunshine",
+          "3 | 6628005d | pinned=- | Lil' Sunshine — Sunscreen Permission",
+          "4 | f2d4c0a0 | pinned=- | Lil' Sunshine — Medical Records Release"
+        ]
+      },
+      "p3_same_name_packets": {
+        "question_id": "p3_same_name_packets",
+        "row_count": null,
+        "rows": [
+          "4 packet definitions share key or name with 84fc5674 (1 = not recreated)"
+        ]
+      }
+    },
+    "row_count": 76
+  }
+}
