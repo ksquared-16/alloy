@@ -14,9 +14,15 @@ const src = readFileSync(join(process.cwd(), FINANCIALS_ISOLATED_SUITE[0]), "utf
 describe("the live suite, as written", () => {
     it("verifies the executor's v2 authority before its client exists, and takes target and org from the verdict", () => {
         const verify = src.indexOf("verifyFinancialsFixtureAuthority(process.env");
-        const client = src.indexOf("createClient(env!.url");
+        const gate = src.indexOf("runAttestedFinancialsConnection(process.env");
+        const client = src.indexOf("createClient(String(c.apiOrigin)");
         expect(verify).toBeGreaterThan(0);
-        expect(client).toBeGreaterThan(verify);
+        expect(gate).toBeGreaterThan(verify);
+        /* The client is built inside the gate's connect, from the frozen attested origin — and nowhere else. */
+        expect(client).toBeGreaterThan(gate);
+        expect(src.match(/createClient\(/g)).toHaveLength(1);
+        expect(src).toContain("connection: { url: process.env.DATABASE_URL, clientEnv: process.env, apiOrigin: url }");
+        expect(src).toContain("url: process.env.DATABASE_URL, clientEnv: process.env, apiOrigin: env!.url");
         expect(src).toContain("url !== auth.authority.api_url || orgId !== auth.authority.org_id");
         expect(src).not.toMatch(/describe\.skip\s*\(\s*"catalog/);
     });

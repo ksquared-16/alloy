@@ -7,7 +7,8 @@
  * case. What is proven: each of the three Financials entry points — the isolated runner, the historical draft
  * fixture and the vitest live-suite guard — refuses BEFORE it spawns, creates a client or admits a live suite,
  * unless the executor's v2 authority names exactly this program, operation, candidate, script, organization,
- * database connection and clear target hold, and the API origin is in that database's environment block.
+ * database connection and clear target hold, and the API origin handed to the client IS the record's API identity
+ * (platform 4b55fc0b INC-94E9-02) — attested again on the exact frozen configuration immediately before the client.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -39,22 +40,26 @@ import {
     FIXTURE_AUTHORITY_REFUSALS as A,
     programPinsDigest,
     QA_PERSONA_ORGS,
-    apiInBoundEnvironment,
-    certenvBlockOf,
+    runAttestedFinancialsConnection,
     verifyFinancialsFixtureAuthority as verify,
 } from "../../scripts/qa/financialsFixtureAuthority.mjs";
 import { main as historicalMain } from "../../scripts/qa/financialsHistoricalDraftFixture";
 import { main as isolatedMain } from "../../scripts/qa/financialsIsolatedTests.mjs";
 import {
+    API_IDENTITY_REFUSALS as API,
     TOOLKIT_SOURCE,
+    apiIdentityOf,
     connectionTargetOf,
     databaseIdentityOf,
+    issuableApiIdentity,
     targetHoldRecordDigest,
+    verifyApiIdentity,
     verifyConnectionTarget,
+    verifyIsolatedFixtureAuthorityV2,
     verifyTargetHoldDisposition,
 } from "../../scripts/qa/isolatedFixtureAuthorityV2.mjs";
 import { judgeLiveSuiteAuthority } from "../harness/liveSuiteAuthority.mjs";
-import { SYNTHETIC_DB_URL, SYNTHETIC_ENVIRONMENT, SYNTHETIC_HEAD, syntheticExecutorStore, syntheticHoldRecord, syntheticProgramPins } from "../harness/syntheticFixtureAuthority";
+import { SYNTHETIC_API_URL, SYNTHETIC_DB_URL, SYNTHETIC_ENVIRONMENT, SYNTHETIC_HEAD, syntheticApiIdentity, syntheticExecutorStore, syntheticHoldRecord, syntheticProgramPins } from "../harness/syntheticFixtureAuthority";
 
 const H = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
 const I = FINANCIALS_ISOLATED_PROGRAM;
@@ -104,12 +109,36 @@ async function refusedEverywhere(s: Store, env: Record<string, string | undefine
     expect(text).not.toContain(s.root);
 }
 
-describe("the shared verifier is reused, byte-identical, not restated again", () => {
+describe("the shared verifier is reused (one file), pinned by the platform's vendored vectors", () => {
     const web = process.cwd();
-    it("is Enrollment's committed file (80eb7446656f) and the toolkit's vendored vectors (eeaa6dac6860)", () => {
-        expect(sha(readFileSync(join(web, "scripts/qa/isolatedFixtureAuthorityV2.mjs"), "utf8"))).toBe("bf6e405fcaf3a158842ed33732c0e5af8bae4119c3404f7f50e94aa0933e3876");
-        expect(sha(readFileSync(join(web, "tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json"), "utf8"))).toBe("c028b885672509e5f28e30b12f0cf3f2128bba92d45999002daad6894cb94d4c");
+    it("the vectors are platform candidate 4b55fc0b's (api_identity appended to eeaa6dac6860's)", () => {
+        expect(sha(readFileSync(join(web, "tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json"), "utf8"))).toBe("5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28");
         expect(TOOLKIT_SOURCE.commit).toBe("eeaa6dac68600dee8862962decd42b60169523b9");
+    });
+
+    it("reproduces the platform's api_identity vectors: issued, not issuable, and every origin", () => {
+        const v = JSON.parse(readFileSync(join(web, "tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json"), "utf8")).api_identity;
+        const issued = v.issued;
+        expect(issuableApiIdentity(issued.port, issued.environment_id)).toEqual({ ok: true, identity: issued });
+        expect(apiIdentityOf(`http://127.0.0.1:${issued.port}`, issued.environment_id)).toEqual({ ok: true, identity: issued });
+        for (const x of v.not_issuable) expect(issuableApiIdentity(x.api_port, issued.environment_id)).toEqual({ ok: false, code: x.refusal });
+        expect(v.vectors.length).toBeGreaterThanOrEqual(12);
+        for (const x of v.vectors) {
+            const r = verifyApiIdentity(issued, x.origin);
+            expect(r.ok ? r.identity.digest : r.code, x.note).toBe(x.expected.ok ? x.expected.digest : x.expected.code);
+        }
+    });
+
+    it("the identity is computed, never supplied: an altered or foreign record identity refuses", () => {
+        const issued = syntheticApiIdentity();
+        expect(verifyApiIdentity(issued, SYNTHETIC_API_URL)).toMatchObject({ ok: true });
+        /* product strictness: an edited port beside the kept digest is not an identity */
+        expect(verifyApiIdentity({ ...issued, port: 56103 }, "http://127.0.0.1:56103")).toEqual({ ok: false, code: API.MALFORMED });
+        /* a re-digested identity for another port is another identity */
+        expect(verifyApiIdentity(syntheticApiIdentity(56103), SYNTHETIC_API_URL)).toEqual({ ok: false, code: API.MISMATCH });
+        expect(verifyApiIdentity({ ...issued, digest: "f".repeat(64) }, SYNTHETIC_API_URL)).toEqual({ ok: false, code: API.MALFORMED });
+        expect(verifyApiIdentity({ ...issued, schema: "vacilando.api_identity.v0" }, SYNTHETIC_API_URL)).toEqual({ ok: false, code: API.ABSENT });
+        expect(verifyApiIdentity(undefined, SYNTHETIC_API_URL)).toEqual({ ok: false, code: API.ABSENT });
     });
 
     it("reproduces the toolkit's connection-target and hold vectors", () => {
@@ -250,42 +279,175 @@ describe("inherited connection overrides cannot redirect the client", () => {
     });
 });
 
-describe("the API origin the client is handed", () => {
-    it("the shared stack's API (54421) → refused", async () => {
+describe("the API the client is handed IS the record's api_identity — the port block is not identity", () => {
+    it.each([
+        ["another port inside the same certenv block (56103)", "http://127.0.0.1:56103", API.MISMATCH],
+        ["the database port handed as the API (56101)", "http://127.0.0.1:56101", API.MISMATCH],
+        ["a SIBLING environment's API (block 1, 56112)", "http://127.0.0.1:56112", API.MISMATCH],
+        ["the default local stack (54321)", "http://127.0.0.1:54321", API.MISMATCH],
+        ["the shared alloy-cert API (54421)", "http://127.0.0.1:54421", API.SHARED],
+        ["localhost for 127.0.0.1", "http://localhost:56102", API.NOT_LOOPBACK],
+        ["a hosted project", "https://abcdefgh.supabase.co", API.MALFORMED],
+        ["a path and a query", "http://127.0.0.1:56102/rest/v1?x=1", API.MALFORMED],
+        ["credentials in the origin", "http://u:p@127.0.0.1:56102", API.MALFORMED],
+        ["an implicit port", "http://127.0.0.1", API.MALFORMED],
+    ])("SUPABASE_URL = %s → refused", async (_l, origin, code) => {
         const s = make();
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:54421" }), "fixture_api_target_shared_refused");
+        await refusedEverywhere(s, s.env({ SUPABASE_URL: origin, NEXT_PUBLIC_SUPABASE_URL: origin }), code);
     });
 
-    it("a SIBLING environment's API beside this database (block 1 vs block 0) → not the bound environment", async () => {
+    it("no SUPABASE_URL → api identity absent", async () => {
         const s = make();
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:56112" }), A.API_ENVIRONMENT);
+        await refusedEverywhere(s, s.env({ SUPABASE_URL: undefined, NEXT_PUBLIC_SUPABASE_URL: undefined }), API.ABSENT);
     });
 
-    it("an API outside the certenv band (the default local stack 54321) → not the bound environment", async () => {
-        const s = make();
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:54321" }), A.API_ENVIRONMENT);
+    it.each([
+        ["a record without api_identity (registered required: the child requires it)", { api_identity: undefined }, API.ABSENT],
+        ["an api_identity for another environment", { api_identity: syntheticApiIdentity(56102, "certenv-9999999999") }, API.ABSENT],
+        ["an api_identity with its port edited and its digest kept", { api_identity: { ...syntheticApiIdentity(), port: 56112 } }, API.MALFORMED],
+        ["an api_identity re-issued for another port in the block", { api_identity: syntheticApiIdentity(56103) }, API.MISMATCH],
+        ["an api_identity naming the shared API, handed the shared API", { api_identity: (apiIdentityOf("http://127.0.0.1:54421", SYNTHETIC_ENVIRONMENT) as { identity: unknown }).identity }, API.SHARED],
+    ])("%s → refused, both programs", async (label, record, code) => {
+        const over = label.includes("shared API") ? { SUPABASE_URL: "http://127.0.0.1:54421", NEXT_PUBLIC_SUPABASE_URL: undefined } : {};
+        const s = make({ record });
+        await refusedEverywhere(s, s.env(over), code);
+        const h = make({ program: H, operation: "ensure", record });
+        await refusedEverywhere(h, h.env(over), code, H);
     });
 
-    it("the database port handed as the API → not the bound environment", async () => {
-        const s = make();
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:56101" }), A.API_ENVIRONMENT);
+    it("the shared verifier: requireApi makes an absent api_identity a refusal; without it a record without one keeps the earlier guard", () => {
+        const s = make({ record: { api_identity: undefined, program_pins: undefined } });
+        const call = (requireApi: boolean) => verifyIsolatedFixtureAuthorityV2(s.env(), {
+            ...s.options(), requireApi,
+            program: { fixture: I.fixture, operation: "run", suite: I.suite, npm_script: I.npm_script, script_body: I.script_body },
+            org: { id: "00000000-0000-4000-8000-000000000001", key: "certification_seed", source: "seed_manifest" },
+        } as never);
+        expect(call(true)).toEqual({ ok: false, code: API.ABSENT });
+        const legacy = call(false);
+        expect(legacy.ok).toBe(true);
+        expect(legacy.ok && legacy.authority).not.toHaveProperty("api_identity_digest");
+        /* a record that names one is checked whether or not the caller requires it */
+        const named = make({ record: { program_pins: undefined } });
+        expect(verifyIsolatedFixtureAuthorityV2(named.env({ SUPABASE_URL: "http://127.0.0.1:56103" }), {
+            ...named.options(), program: { fixture: I.fixture, operation: "run", suite: I.suite, npm_script: I.npm_script, script_body: I.script_body },
+            org: { id: "00000000-0000-4000-8000-000000000001", key: "certification_seed", source: "seed_manifest" },
+        } as never)).toEqual({ ok: false, code: API.MISMATCH });
     });
 
-    it("a malformed or hosted origin → malformed", async () => {
-        const s = make();
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "https://abcdefgh.supabase.co" }), "fixture_api_target_malformed");
-        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:56102/rest/v1?x=1" }), "fixture_api_target_malformed");
+    it("the historical draft refuses a swapped API port too", async () => {
+        const s = make({ program: H, operation: "ensure" });
+        await refusedEverywhere(s, s.env({ SUPABASE_URL: "http://127.0.0.1:56103", NEXT_PUBLIC_SUPABASE_URL: undefined }), API.MISMATCH, H);
     });
 
-    it("the block rule, stated", () => {
-        expect(certenvBlockOf(56100)).toBe(0);
-        expect(certenvBlockOf(56109)).toBe(0);
-        expect(certenvBlockOf(56110)).toBe(1);
-        expect(certenvBlockOf(56299)).toBe(19);
-        expect(certenvBlockOf(56300)).toBeNull();
-        expect(certenvBlockOf(54421)).toBeNull();
-        expect(apiInBoundEnvironment("http://127.0.0.1:56140", "postgresql://p@127.0.0.1:56141/postgres")).toBe(true);
-        expect(apiInBoundEnvironment("http://127.0.0.1:56130", "postgresql://p@127.0.0.1:56141/postgres")).toBe(false);
+    it("an accepted verdict carries the identity's digest and its exact origin, both programs", () => {
+        const s = make();
+        expect(verify(s.env(), s.options())).toMatchObject({ ok: true, authority: { api_url: SYNTHETIC_API_URL, api_identity_digest: syntheticApiIdentity().digest } });
+        const t = make();
+        expect(verify(t.env({ SUPABASE_URL: `${SYNTHETIC_API_URL}/` }), t.options())).toMatchObject({ ok: true, authority: { api_url: SYNTHETIC_API_URL } });
+        const h = make({ program: H, operation: "verify" });
+        expect(verify(h.env(), h.options({ program: H, operation: "verify" }))).toMatchObject({ ok: true, authority: { api_url: SYNTHETIC_API_URL, api_identity_digest: syntheticApiIdentity().digest } });
+    });
+});
+
+describe("THE GATE: the exact configuration, frozen and attested immediately before the client", () => {
+    const gate = (s: Store, over: Record<string, unknown> = {}, connect: (c: { url: string; clientEnv: Record<string, string | undefined>; apiOrigin?: string }) => unknown = (c) => c) =>
+        runAttestedFinancialsConnection(s.env(), { ...s.options(), program: I, operation: "run", url: SYNTHETIC_DB_URL, clientEnv: s.env(), apiOrigin: SYNTHETIC_API_URL, connect, ...over } as never);
+
+    it("connect receives exactly the attested, frozen copy", async () => {
+        const s = make();
+        const g = await gate(s) as { ok: boolean; authority: { api_identity_digest: string }; result: { url: string; apiOrigin: string; clientEnv: object } };
+        expect(g.ok).toBe(true);
+        expect(g.result).toMatchObject({ url: SYNTHETIC_DB_URL, apiOrigin: SYNTHETIC_API_URL });
+        expect(Object.isFrozen(g.result) && Object.isFrozen(g.result.clientEnv)).toBe(true);
+        expect(g.authority.api_identity_digest).toBe(syntheticApiIdentity().digest);
+    });
+
+    it.each([
+        ["a swapped API port inside the block", { apiOrigin: "http://127.0.0.1:56103" }, API.MISMATCH],
+        ["another environment's API", { apiOrigin: "http://127.0.0.1:56112" }, API.MISMATCH],
+        ["the shared API", { apiOrigin: "http://127.0.0.1:54421" }, API.SHARED],
+        ["no API origin handed over", { apiOrigin: undefined }, API.ABSENT],
+        ["a client env carrying PGPORT", { clientEnv: { PGPORT: "54422" } }, "connection_target_client_env_override"],
+        ["another database URL", { url: "postgresql://postgres:SYNTHETIC-DB-SENTINEL@127.0.0.1:56111/postgres" }, "database_identity_mismatch"],
+    ])("%s → refused, connect never called", async (_l, over, code) => {
+        const s = make();
+        let called = 0;
+        const g = await gate(s, over, () => { called += 1; });
+        expect(g).toMatchObject({ ok: false, code });
+        expect(called).toBe(0);
+    });
+
+    it.each([
+        ["held since the first check", (s: Store) => s.writeHold(syntheticHoldRecord(SYNTHETIC_ENVIRONMENT, { state: "held", revision: 2, previous_sha256: s.hold.record_sha256 })), "target_hold_held"],
+        ["changed since the first check", (s: Store) => s.writeHold(syntheticHoldRecord(SYNTHETIC_ENVIRONMENT, { revision: 2, previous_sha256: s.hold.record_sha256 })), "target_hold_changed_since_issue"],
+        ["unavailable at the gate", (s: Store) => s.writeHold("{not json"), "target_hold_store_unavailable"],
+        ["missing at the gate", (s: Store) => s.writeHold(null), "target_hold_record_absent"],
+        ["the request completed since the first check", (s: Store) => s.writeRequest({ state: "complete" }), A.PROVENANCE],
+    ])("the hold / request %s → the gate refuses, connect never called", async (_l, mutate, code) => {
+        const s = make();
+        expect(verify(s.env(), s.options()).ok).toBe(true);
+        mutate(s);
+        let called = 0;
+        expect(await gate(s, {}, () => { called += 1; })).toMatchObject({ ok: false, code });
+        expect(called).toBe(0);
+    });
+
+    it("a post-check rewrite of the caller's objects cannot reach the client; the frozen copy cannot be rewritten", async () => {
+        const s = make();
+        const clientEnv: Record<string, string | undefined> = s.env();
+        const g = await runAttestedFinancialsConnection(s.env(), {
+            ...s.options(), program: I, operation: "run", url: SYNTHETIC_DB_URL, clientEnv, apiOrigin: SYNTHETIC_API_URL,
+            connect: (c: { url: string; clientEnv: Record<string, string | undefined>; apiOrigin?: string }) => {
+                clientEnv.PGPORT = "54422";
+                clientEnv.CERT_SUPABASE_URL = "http://127.0.0.1:54421";
+                expect(() => { (c as { apiOrigin?: string }).apiOrigin = "http://127.0.0.1:56103"; }).toThrow(TypeError);
+                expect(() => { c.clientEnv.PGPORT = "54422"; }).toThrow(TypeError);
+                return { apiOrigin: c.apiOrigin, pg: c.clientEnv.PGPORT };
+            },
+        } as never) as { ok: boolean; result: unknown };
+        expect(g).toMatchObject({ ok: true, result: { apiOrigin: SYNTHETIC_API_URL, pg: undefined } });
+    });
+
+    it("the runner hands its child exactly the attested configuration; a hold changed between its check and its spawn starts nothing", async () => {
+        const s = make();
+        const seen: Array<Record<string, string | undefined>> = [];
+        const out: string[] = [];
+        const exit = await isolatedMain({
+            env: { ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SENTINEL }, argv: [], out: (l: string) => out.push(l), authority: s.options(),
+            run: async (_f: string[], env: Record<string, string | undefined>) => { seen.push(env); return { code: 1 }; },
+        });
+        expect(exit).toBe(1);
+        expect(seen).toHaveLength(1);
+        expect(seen[0]).toMatchObject({ CERT_SUPABASE_URL: SYNTHETIC_API_URL, DATABASE_URL: SYNTHETIC_DB_URL, CATALOG_LIVE_ISOLATED: "1" });
+        expect(out.join("\n")).toContain(`api=${syntheticApiIdentity().digest.slice(0, 12)}`);
+
+        const t = make();
+        let holdReads = 0;
+        const readFile = (p: string) => {
+            if (p.endsWith(`target-holds/${SYNTHETIC_ENVIRONMENT}.json`) && ++holdReads > 1) return JSON.stringify(syntheticHoldRecord(SYNTHETIC_ENVIRONMENT, { state: "held", revision: 2, previous_sha256: t.hold.record_sha256 }));
+            return readFileSync(p, "utf8");
+        };
+        let ran = 0;
+        const out2: string[] = [];
+        const exit2 = await isolatedMain({ env: t.env(), argv: [], out: (l: string) => out2.push(l), authority: t.options({ readFile }), run: async () => { ran += 1; return { code: 0 }; } });
+        expect(holdReads).toBe(2);
+        expect(exit2).toBe(2);
+        expect(ran).toBe(0);
+        expect(out2.join("\n")).toMatch(/refused before any process: target_hold_held/);
+    });
+
+    it("the historical draft builds its client only after the gate, from the attested origin", async () => {
+        const t = make({ program: H, operation: "ensure" });
+        let holdReads = 0;
+        const readFile = (p: string) => {
+            if (p.endsWith(`target-holds/${SYNTHETIC_ENVIRONMENT}.json`) && ++holdReads > 1) return "{not json";
+            return readFileSync(p, "utf8");
+        };
+        const out: string[] = [];
+        const exit = await historicalMain({ ...t.env(), SUPABASE_SERVICE_ROLE_KEY: SENTINEL } as never, ["--ensure"], (l) => out.push(l), t.options({ readFile }));
+        expect(exit).toBe(2);
+        expect(clients.created).toBe(0);
+        expect(out.join("\n")).toMatch(/refused before any IO: target_hold_store_unavailable/);
     });
 });
 

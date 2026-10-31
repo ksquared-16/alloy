@@ -4,10 +4,10 @@
  *
  * No framework of its own. Every step of the executor's v2 contract (store root, record location, live request
  * provenance, window, binding, program/candidate/script, organization, database connection identity, target
- * hold, API origin) is the shared product verifier `verifyIsolatedFixtureAuthorityV2`
- * (`./isolatedFixtureAuthorityV2.mjs`, taken byte-identical from Enrollment commit
- * 80eb7446656f89f0c43da01105836e4d1c64aa56, blob 20f04adeb14b, restating toolkit 20261031-eeaa6dac6860 and pinned
- * by its vendored vectors). This module adds only what is Financials':
+ * hold, API identity) is the shared product verifier `verifyIsolatedFixtureAuthorityV2`
+ * (`./isolatedFixtureAuthorityV2.mjs`, taken from Enrollment commit 80eb7446656f89f0c43da01105836e4d1c64aa56,
+ * restating toolkit 20261031-eeaa6dac6860, plus the API identity restated from platform candidate 4b55fc0b7322 —
+ * pinned by the vendored vectors). This module adds only what is Financials':
  *
  *   · the two program descriptors and their registered operations (an unregistered program or operation is
  *     refused before anything is read);
@@ -18,10 +18,10 @@
  *         record's environment, binds `ALLOY_QA_PERSONA`, and that persona's `org_key` is a registered QA org.
  *         The seed org is never accepted. The shared verifier then requires the v2 record's `fixture_org` to be
  *         exactly that org (id, key, source);
- *   · a guard (not authority): the PostgREST origin and the database are in the SAME certification-environment
- *     port block (installed `CERTENV_PORT_BASE` 56100, `CERTENV_PORT_BLOCK` 10, 20 blocks). The v2 identity names
- *     the Postgres target only, so without this a sibling environment's API beside this environment's database
- *     would pass. The authoritative fix is an API identity in the v2 record — a platform request, not claimed.
+ *   · `requireApi: true`, always: both clients call the environment's Supabase API, so the record MUST carry
+ *     `api_identity` (registered `api_identity: "required"`, INC-94E9-02) naming `ALLOY_QA_ENVIRONMENT_ID`, and
+ *     the exact origin handed to the clients must be that identity. The earlier same-port-block guard is gone:
+ *     another port in the block, or another environment's API, is `api_identity_mismatch`, not a guess.
  *
  * PROGRAM PINS. Financials runs TypeScript service calls, not a SQL artifact, so it adopts the platform's explicit
  * non-SQL `program` pin variant (draft contract ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT.md, objective
@@ -34,7 +34,10 @@
  * fallback. Execution resumes only when the platform registers and installs a compatible v2 contract for them.
  *
  * Callers use the verdict's `authority.api_url` and `authority.org_id` — the values that were verified — never a
- * second read of the environment.
+ * second read of the environment. IMMEDIATELY BEFORE a client (or a child that is one) exists, a caller attests
+ * the exact configuration it hands over with `runAttestedFinancialsConnection` — `{ url, clientEnv, apiOrigin }`
+ * frozen once, the whole check re-run on that copy (request, window, binding, pins, org, database, API, hold), and
+ * `connect` handed exactly that copy.
  *
  * THE BOUNDARY (as the toolkit states it). Executor and child are the same OS user; nothing authenticates the
  * issuer cryptographically. A same-user rewrite of the executor's own store (request, authority, hold and QA-run
@@ -47,11 +50,13 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+    API_IDENTITY_REFUSALS,
     FIXTURE_AUTHORITY_REFUSALS as SHARED_REFUSALS,
     FIXTURE_AUTHORITY_SCHEMA_V2,
     canonicalJson,
     readOwnHead,
     readOwnScriptBody as readScriptBodyFor,
+    runAttestedConnection,
     sha256,
     trustedGatewayStoreRoot,
     verifyIsolatedFixtureAuthorityV2,
@@ -60,7 +65,7 @@ import {
 /** The repository root (artifact paths are repository-relative, as the executor's `git show <sha>:<path>`). */
 const REPO = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
-export { readOwnHead, trustedGatewayStoreRoot };
+export { API_IDENTITY_REFUSALS, readOwnHead, trustedGatewayStoreRoot };
 
 /** The only schema this child accepts. */
 export const FIXTURE_AUTHORITY_SCHEMA = FIXTURE_AUTHORITY_SCHEMA_V2;
@@ -71,8 +76,6 @@ export const FIXTURE_AUTHORITY_REFUSALS = Object.freeze({
     PERSONA_ORG: "fixture_authority_persona_org_unverified",
     /* Financials-only: not a registered program, or not one of its registered operations. */
     PROGRAM: "fixture_authority_program_unregistered",
-    /* Financials-only guard: the API origin is not in the bound database's environment port block. */
-    API_ENVIRONMENT: "fixture_api_target_not_the_bound_environment",
     /* Program pins (platform draft ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT, objective 94E98241AD37). */
     PINS_ABSENT: "fixture_program_pins_absent",
     PINS_INVALID: "fixture_program_pins_invalid",
@@ -142,11 +145,6 @@ export const FINANCIALS_FIXTURE_ORG = Object.freeze({
     source: "seed_manifest",
 });
 
-/** Installed certification-environment port allocation (`lib/certification-environments.mjs`). */
-export const CERTENV_PORT_BASE = 56100;
-export const CERTENV_PORT_BLOCK = 10;
-export const CERTENV_PORT_BLOCKS = 20;
-
 const PROGRAMS = [FINANCIALS_ISOLATED_PROGRAM, FINANCIALS_HISTORICAL_DRAFT_PROGRAM];
 const qaRunsPath = (root) => join(root, "vacilando", "qa-runs", "runs.json");
 /* Never matches a record: a persona program whose ledger proves no org is refused, never given a default. */
@@ -159,30 +157,6 @@ const UNRESOLVED_ORG = Object.freeze({ id: "", key: "", source: "persona" });
  */
 export function readOwnScriptBody({ webDir, readFile, program = FINANCIALS_ISOLATED_PROGRAM } = {}) {
     return readScriptBodyFor(program.npm_script, { ...(webDir ? { webDir } : {}), ...(readFile ? { readFile } : {}) });
-}
-
-/** The certenv port block a loopback port belongs to, or null outside the band. */
-export function certenvBlockOf(port) {
-    const p = Number(port);
-    if (!Number.isInteger(p) || p < CERTENV_PORT_BASE || p >= CERTENV_PORT_BASE + CERTENV_PORT_BLOCK * CERTENV_PORT_BLOCKS) return null;
-    return Math.floor((p - CERTENV_PORT_BASE) / CERTENV_PORT_BLOCK);
-}
-
-/**
- * The guard: the API origin's port and the database's port are two different ports of ONE environment block.
- * Both URLs have already passed the shared verifier's shape and identity checks.
- */
-export function apiInBoundEnvironment(apiUrl, dbUrl) {
-    let api;
-    let db;
-    try {
-        api = Number(new URL(String(apiUrl)).port);
-        db = Number(new URL(String(dbUrl)).port);
-    } catch {
-        return false;
-    }
-    const a = certenvBlockOf(api);
-    return a !== null && a === certenvBlockOf(db) && api !== db;
 }
 
 /**
@@ -268,8 +242,11 @@ function verifyProgramPins(env, P, { storeRoot, readFile, realpath, readHead, re
 
 /**
  * @typedef {import("./isolatedFixtureAuthorityV2.mjs").VerifiedFixtureAuthority & {
- *   fixture: string, operation: string, npm_script: string, org_source: string, api_url: string, program_pins_digest: string
+ *   fixture: string, operation: string, npm_script: string, org_source: string, api_url: string, api_identity_digest: string, program_pins_digest: string
  * }} FinancialsFixtureAuthority
+ * @typedef {import("./isolatedFixtureAuthorityV2.mjs").FixtureConnection} FixtureConnection
+ * @typedef {Readonly<{ url: string, clientEnv: Readonly<Record<string, string | undefined>>, apiOrigin?: string }>} FrozenConnection
+ * @typedef {{ program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation?: string, storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null, readArtifact?: (repoRelativePath: string) => string | Buffer }} FinancialsVerifyOptions
  * @typedef {{ ok: true, authority: FinancialsFixtureAuthority, code?: undefined, fields?: undefined } | { ok: false, code: string, fields?: string[], authority?: undefined }} FinancialsAuthorityVerdict
  */
 
@@ -277,16 +254,18 @@ function verifyProgramPins(env, P, { storeRoot, readFile, realpath, readHead, re
  * The child-side check. Returns `{ ok: true, authority }` or `{ ok: false, code, fields? }`.
  *
  * `program` and `operation` are what the CALLING program is and was invoked to do (from its own registered
- * argv) — never from `env`. `storeRoot`, `nowMs`, `readFile`, `realpath`, `readHead` and `readScriptBody` default
- * to the trusted resolutions and are parameters for tests only.
+ * argv) — never from `env`. `connection` is the configuration the client is handed (default: `DATABASE_URL`, `env`,
+ * `SUPABASE_URL`). The API identity is always required. `storeRoot`, `nowMs`, `readFile`, `realpath`, `readHead`
+ * and `readScriptBody` default to the trusted resolutions and are parameters for tests only.
  *
  * @param {Record<string, string | undefined>} [env]
- * @param {{ program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation?: string, storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null, readArtifact?: (repoRelativePath: string) => string | Buffer }} [opts]
+ * @param {FinancialsVerifyOptions & { connection?: FixtureConnection }} [opts]
  * @returns {FinancialsAuthorityVerdict}
  */
 export function verifyFinancialsFixtureAuthority(env = {}, {
     program = FINANCIALS_ISOLATED_PROGRAM,
     operation = "run",
+    connection = { url: env.DATABASE_URL, clientEnv: env, apiOrigin: env.SUPABASE_URL },
     storeRoot = trustedGatewayStoreRoot(),
     nowMs = Date.now(),
     readFile = (p) => readFileSync(p, "utf8"),
@@ -304,6 +283,9 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
     const v = verifyIsolatedFixtureAuthorityV2(env, {
         program: { fixture: P.fixture, operation, suite: P.suite, npm_script: P.npm_script, script_body: P.script_body },
         org,
+        connection,
+        /* Financials' clients call the Supabase API: an authority that does not name it is refused. */
+        requireApi: true,
         storeRoot,
         nowMs,
         readFile,
@@ -316,20 +298,42 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
         if (P.org_binding === "persona" && v.code === R.ORG_NOT_REGISTERED) return { ok: false, code: R.PERSONA_ORG };
         return v;
     }
-    if (!apiInBoundEnvironment(env.SUPABASE_URL, env.DATABASE_URL)) return { ok: false, code: R.API_ENVIRONMENT };
+    if (!v.authority.api_identity_digest || !v.authority.api_origin) return { ok: false, code: API_IDENTITY_REFUSALS.ABSENT };
     const pins = verifyProgramPins(env, P, { storeRoot, readFile, realpath, readHead, readScriptBody, readArtifact });
     if (!pins.ok) return pins;
+    const { api_origin: apiOrigin, ...verified } = v.authority;
     return {
         ok: true,
         authority: {
-            ...v.authority,
+            ...verified,
             fixture: P.fixture,
             operation,
             npm_script: P.npm_script,
             org_source: org.source,
-            /* The verified PostgREST origin: the one value a caller may hand its client. */
-            api_url: new URL(String(env.SUPABASE_URL)).origin,
+            /* The attested API origin (`http://127.0.0.1:<port>` of the identity): the one value a caller may hand its client. */
+            api_url: apiOrigin,
+            api_identity_digest: v.authority.api_identity_digest,
             program_pins_digest: pins.digest,
         },
     };
+}
+
+/**
+ * THE GATE, immediately before a client: freeze `{ url, clientEnv, apiOrigin }` once, re-run the whole Financials
+ * check on that copy, and only then call `connect` with exactly that copy. → the refusal (connect never called) or
+ * `{ ok: true, authority, result }`.
+ *
+ * @template T
+ * @param {Record<string, string | undefined>} env the executor-built environment the authority is judged from
+ * @param {FinancialsVerifyOptions & FixtureConnection & { connect: (c: FrozenConnection) => T | Promise<T> }} input
+ * @returns {Promise<FinancialsAuthorityVerdict | { ok: true, authority: FinancialsFixtureAuthority, result: T, code?: undefined, fields?: undefined }>}
+ */
+export function runAttestedFinancialsConnection(env, { url, clientEnv, apiOrigin, connect, ...opts }) {
+    return runAttestedConnection({
+        url,
+        clientEnv,
+        apiOrigin,
+        attest: (frozen) => verifyFinancialsFixtureAuthority(env, { ...opts, connection: frozen }),
+        connect,
+    });
 }

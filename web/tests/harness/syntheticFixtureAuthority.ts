@@ -2,7 +2,8 @@
  * A SYNTHETIC executor store, shaped as the toolkit's isolated executor writes it for an AUTHORITY v2 fixture
  * (`lib/isolated-fixture-execution.mjs`, toolkit 20261031-eeaa6dac6860, INC-A83E-01): the v2 authority record
  * under `<root>/vacilando/isolated-fixture/authority/<request>.<hex>.json` (with `fixture_org`,
- * `database_identity` and `target_hold_disposition`), the in-flight request record naming its file and sha256,
+ * `database_identity`, `target_hold_disposition` and — registered `api_identity: "required"`, platform 4b55fc0b
+ * INC-94E9-02 — `api_identity` from the environment's assigned API port), the in-flight request record naming its file and sha256,
  * a clear hash-chained target-hold record under `<root>/vacilando/target-holds/<environment>.json`, and the
  * QA-run ledger. In a temp directory only — never the real Gateway store. No credential: every key and the
  * database URL are synthetic strings; nothing listens on those ports and nothing connects to them.
@@ -22,7 +23,7 @@ import {
     QA_PERSONA_ORGS,
     programPinsDigest,
 } from "../../scripts/qa/financialsFixtureAuthority.mjs";
-import { databaseIdentityOf, targetHoldRecordDigest } from "../../scripts/qa/isolatedFixtureAuthorityV2.mjs";
+import { databaseIdentityOf, issuableApiIdentity, targetHoldRecordDigest } from "../../scripts/qa/isolatedFixtureAuthorityV2.mjs";
 
 export const SYNTHETIC_HEAD = "c".repeat(40);
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -38,6 +39,15 @@ export const SYNTHETIC_PERSONA_ORG = QA_PERSONA_ORGS.qa_shared;
 export const SYNTHETIC_ENVIRONMENT = "certenv-0123456789";
 export const SYNTHETIC_API_URL = "http://127.0.0.1:56102";
 export const SYNTHETIC_DB_URL = "postgresql://postgres:SYNTHETIC-DB-SENTINEL@127.0.0.1:56101/postgres";
+/** The environment's assigned API port, from which the executor issues `api_identity`. */
+export const SYNTHETIC_API_PORT = 56102;
+
+/** The `api_identity` the executor issues for an environment's assigned API port (platform issuableApiIdentity). */
+export function syntheticApiIdentity(port: number = SYNTHETIC_API_PORT, environmentId: string = SYNTHETIC_ENVIRONMENT) {
+    const r = issuableApiIdentity(port, environmentId);
+    if (!r.ok) throw new Error(`synthetic api identity: ${r.code}`);
+    return r.identity;
+}
 
 /** The repository root: program pin paths are repository-relative. */
 export const REPO_ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -107,6 +117,7 @@ export function syntheticExecutorStore({ now = Date.now(), requestId = "req-fin-
             evaluated_at: new Date(now - 1000).toISOString(),
         },
         program_pins: syntheticProgramPins(program, head),
+        api_identity: syntheticApiIdentity(),
         ...record,
     };
     const text = `${JSON.stringify(rec, null, 2)}\n`;

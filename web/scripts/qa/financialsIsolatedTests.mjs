@@ -9,13 +9,16 @@
  *   1. the executor's v2 operation authority FIRST (financialsFixtureAuthority.mjs over the shared
  *      isolatedFixtureAuthorityV2.mjs: live in-flight request, record, operation, candidate, pinned script,
  *      seed org, the database connection identity of DATABASE_URL with this environment as the client's,
- *      the target hold re-read clear, and the API origin in the database's environment block), then the
- *      binding (financialsIsolatedBinding.mjs) — refused before any credential is used or process starts,
- *      exit 2. A v1 record is refused: there is no v1 fallback;
+ *      the target hold re-read clear, and the record's API identity = SUPABASE_URL), then the binding
+ *      (financialsIsolatedBinding.mjs) — refused before any credential is used or process starts, exit 2.
+ *      A v1 record, or one without `api_identity`, is refused: there is no fallback;
  *   2. run exactly the pinned files with the VERIFIED target mapped onto the suite's own isolated-env
- *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL` = the verified API origin,
+ *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL` = the attested API origin,
  *      `CERT_SERVICE_ROLE_KEY`, `CERT_FIXTURE_ORG_ID` = the verified org, `FIN_ISOLATED_PROOF_FILE` in this
- *      runner's private temp dir) — in the child's environment only, never on a command line, never printed;
+ *      runner's private temp dir) — in the child's environment only, never on a command line, never printed.
+ *      Immediately before the spawn, that exact child configuration (its DATABASE_URL, its whole environment,
+ *      its CERT_SUPABASE_URL) is attested (runAttestedFinancialsConnection) and the spawn is handed the frozen
+ *      copy — refused, exit 2, nothing started;
  *   3. read vitest's JSON report and decide proof here, not by exit code alone: a skipped, pending or
  *      todo test, a pinned file that reported nothing, or zero passes is NOT a pass. The suites
  *      `describe.skip` themselves when their target is missing, so a silent skip is exactly the
@@ -36,7 +39,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { FINANCIALS_ISOLATED_PROGRAM, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
+import { FINANCIALS_ISOLATED_PROGRAM, runAttestedFinancialsConnection, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
 import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBinding.mjs";
 import { CATALOG_PROOF_FILE_NAME, judgeCatalogProof } from "./financialsIsolatedProof.mjs";
 
@@ -175,14 +178,26 @@ export async function main({ env = process.env, argv = process.argv.slice(2), ou
         out("tests passed=0 failed=0");
         return 2;
     }
-    out(`authority v2 request=${auth.authority.request_id} candidate=${auth.authority.candidate_sha.slice(0, 12)} database=${auth.authority.database_identity_digest.slice(0, 12)} hold_revision=${auth.authority.hold_revision}`);
+    out(`authority v2 request=${auth.authority.request_id} candidate=${auth.authority.candidate_sha.slice(0, 12)} database=${auth.authority.database_identity_digest.slice(0, 12)} api=${auth.authority.api_identity_digest.slice(0, 12)} hold_revision=${auth.authority.hold_revision}`);
     out(`binding ${describeBinding(judged.binding)}`);
     let dir = null;
     try {
         dir = mkdtempSync(join(tmpdir(), "fin-isolated-"));
         const reportPath = join(dir, "report.json");
         const proofPath = join(dir, CATALOG_PROOF_FILE_NAME);
-        const result = await run([...FINANCIALS_ISOLATED_SUITE], suiteChildEnv(env, auth.authority, proofPath), reportPath);
+        const childEnv = suiteChildEnv(env, auth.authority, proofPath);
+        /* The gate, immediately before the child: the exact configuration it is handed, frozen and attested. */
+        const gated = await runAttestedFinancialsConnection(env, {
+            ...authority, program: FINANCIALS_ISOLATED_PROGRAM, operation: "run",
+            url: childEnv.DATABASE_URL, clientEnv: childEnv, apiOrigin: childEnv.CERT_SUPABASE_URL,
+            connect: (c) => run([...FINANCIALS_ISOLATED_SUITE], { ...c.clientEnv }, reportPath),
+        });
+        if (!gated.ok) {
+            out(`✗ refused before any process: ${gated.code}${gated.fields ? ` fields=${gated.fields.join(",")}` : ""}`);
+            out("tests passed=0 failed=0");
+            return 2;
+        }
+        const result = gated.result;
         const readJson = (p) => {
             try {
                 return JSON.parse(readFileSync(p, "utf8"));

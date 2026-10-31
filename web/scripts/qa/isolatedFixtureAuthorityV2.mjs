@@ -9,9 +9,15 @@
  *   - contract `docs/architecture/ISOLATED-FIXTURE-AUTHORITY-V2-CONTRACT.md` at that commit;
  *   - vectors `tests/deterministic/fixtures/isolated-fixture-authority-v2.vectors.json` at that commit, vendored as
  *     `web/tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json` (sha256 pinned by the test).
+ *   - THE API IDENTITY (INC-94E9-02), restated from platform candidate 4b55fc0b732231300b240f007859f7b378f2a804
+ *     (tree 1e3eac224b16, objective OPWORK_C86B7CC3C436_SPRINT_94E98241AD37 — locally certified, NOT installed):
+ *     `lib/fixture-target-contract.mjs` apiIdentityOf / issuableApiIdentity / verifyApiIdentity and
+ *     `lib/isolated-fixture-execution.mjs` attestFixtureConnection / runAttestedConnection (`apiOrigin`,
+ *     `requireApi`); its vectors (`api_identity`, appended, earlier sections unchanged) are the vendored file.
  * Same schemas, same refusal codes, same order. The only additions are product codes that say why a record that
  * is otherwise the executor's still does not authorize THIS program (`fixture_authority_org_unbound`,
- * `fixture_authority_org_not_registered`, `fixture_api_target_*`).
+ * `fixture_authority_org_not_registered`, `fixture_api_target_*`), and one product strictness: a record's
+ * `api_identity` whose own fields do not recompute to its digest is `api_identity_malformed`.
  *
  * WHY v2. `ALLOY_CERT_FIXTURE_ORG_ID` is an environment variable: anyone who can start the child can set it. The
  * v1 authority record names request, run, environment and candidate, but no organization, so under v1 the org
@@ -37,9 +43,17 @@
  *      environment as the client's equals it (loopback, never the shared stack);
  *   9. target hold: the disposition is for this target and request, and the record it was issued from is STILL that
  *      intact, clear record, re-read from the store this module located;
- *  10. API target: the PostgREST origin the Supabase client will use is the executor's shape
- *      (`http://127.0.0.1:<port>`, never the shared stack's API port). The v2 identity names the Postgres target
- *      only; it does not name this origin, so this step is a guard, not authority (stated, not hidden).
+ *  10. API: when the record names an `api_identity` — or the caller passes `requireApi: true`, as a program whose
+ *      clients call the Supabase API must — the EXACT origin handed to the clients (`connection.apiOrigin`) is that
+ *      identity: `http://127.0.0.1:<port>` of the owned environment, digest recomputed here (checked after the
+ *      database identity and before the hold, as the platform orders it). A record without one, for a caller
+ *      that does not require one, keeps the earlier shape guard (`http://127.0.0.1:<port>`, never 54421) — a
+ *      guard, not authority.
+ *
+ * THE GATE. `connection` is `{ url, clientEnv, apiOrigin }`: the exact configuration the caller is about to hand
+ * its client. It defaults to `DATABASE_URL`, the whole environment and `SUPABASE_URL`; a caller about to connect
+ * attests what it actually hands over, immediately before (`attestConnection` / `runAttestedConnection` freeze
+ * one copy and pass `connect` exactly that copy, so nothing can be rewritten between the check and the client).
  *
  * THE BOUNDARY, STATED (as the toolkit states it). Executor and child run as the same OS user and no credential
  * passes between them, so nothing here authenticates an issuer cryptographically. This refuses a manual run, a
@@ -106,7 +120,17 @@ export const CONNECTION_TARGET_REFUSALS = Object.freeze({
     CLIENT_ENV_OVERRIDE: "connection_target_client_env_override",
 });
 
-/* product: the PostgREST origin guard (step 10) */
+/* The API identity (platform 4b55fc0b, lib/fixture-target-contract.mjs). */
+export const API_IDENTITY_SCHEMA = "vacilando.api_identity.v1";
+export const API_IDENTITY_REFUSALS = Object.freeze({
+    ABSENT: "api_identity_absent",
+    MALFORMED: "api_identity_malformed",
+    NOT_LOOPBACK: "api_identity_not_loopback",
+    SHARED: "api_identity_shared_target_refused",
+    MISMATCH: "api_identity_mismatch",
+});
+
+/* product: the PostgREST origin guard (step 10, for a record without an API identity) */
 export const API_TARGET_REFUSALS = Object.freeze({
     MALFORMED: "fixture_api_target_malformed",
     SHARED: "fixture_api_target_shared_refused",
@@ -228,6 +252,62 @@ export function verifyConnectionTarget(authorityIdentity, { url, clientEnv } = {
     return { ok: true, identity: own.identity };
 }
 
+/* ── the API identity (platform 4b55fc0b fixture-target-contract.mjs, INC-94E9-02) ───────────────── */
+
+/**
+ * The identity of an API origin for one environment: scheme `http`, host as written (lower-case; `localhost` and
+ * `127.0.0.1` differ), port explicit, no path / query / fragment / credentials; digest over
+ * `{ schema, environment_id, scheme, host, port }` (canonical JSON).
+ * @returns {{ ok: true, identity: { schema: string, environment_id: string, scheme: string, host: string, port: number, digest: string } } | { ok: false, code: string }}
+ */
+export function apiIdentityOf(origin, environmentId) {
+    const R = API_IDENTITY_REFUSALS;
+    const raw = String(origin || "").trim();
+    if (!raw) return { ok: false, code: R.ABSENT };
+    if (!TARGET_KEY_RE.test(String(environmentId || ""))) return { ok: false, code: R.MALFORMED };
+    let u;
+    try {
+        u = new URL(raw);
+    } catch {
+        return { ok: false, code: R.MALFORMED };
+    }
+    if (u.protocol !== "http:" || !u.port || u.username || u.password || u.search || u.hash || raw.includes("#") || raw.includes("?") || !["", "/"].includes(u.pathname)) return { ok: false, code: R.MALFORMED };
+    const port = Number(u.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, code: R.MALFORMED };
+    const body = { schema: API_IDENTITY_SCHEMA, environment_id: String(environmentId), scheme: "http", host: u.hostname.toLowerCase(), port };
+    return { ok: true, identity: { ...body, digest: sha256(canonicalJson(body)) } };
+}
+
+/**
+ * The executor's issue rule (stated for the vectors): the owned environment's assigned API port, on 127.0.0.1, never the shared stack.
+ * @returns {ReturnType<typeof apiIdentityOf>}
+ */
+export function issuableApiIdentity(apiPort, environmentId) {
+    const R = API_IDENTITY_REFUSALS;
+    if (!Number.isInteger(apiPort)) return { ok: false, code: R.ABSENT };
+    if (apiPort === SHARED_CERT_API_PORT) return { ok: false, code: R.SHARED };
+    return apiIdentityOf(`http://127.0.0.1:${apiPort}`, environmentId);
+}
+
+/**
+ * The gate's check on the EXACT origin handed to the clients. The digest is computed here, never supplied.
+ * Product strictness: the record's own fields must recompute to its digest (an edited port beside a kept digest
+ * is not an identity).
+ * @returns {{ ok: true, identity: { schema: string, environment_id: string, scheme: string, host: string, port: number, digest: string } } | { ok: false, code: string }}
+ */
+export function verifyApiIdentity(authorityApi, origin) {
+    const R = API_IDENTITY_REFUSALS;
+    if (!authorityApi || authorityApi.schema !== API_IDENTITY_SCHEMA || !SHA64_RE.test(String(authorityApi.digest || ""))) return { ok: false, code: R.ABSENT };
+    const { digest: _d, ...fields } = authorityApi;
+    if (sha256(canonicalJson(fields)) !== authorityApi.digest) return { ok: false, code: R.MALFORMED };
+    const own = apiIdentityOf(origin, authorityApi.environment_id);
+    if (!own.ok) return own;
+    if (own.identity.host !== "127.0.0.1") return { ok: false, code: R.NOT_LOOPBACK };
+    if (own.identity.port === SHARED_CERT_API_PORT) return { ok: false, code: R.SHARED };
+    if (own.identity.digest !== authorityApi.digest) return { ok: false, code: R.MISMATCH };
+    return { ok: true, identity: own.identity };
+}
+
 /* ── target hold (toolkit fixture-target-contract.mjs) ──────────────────────────────────────── */
 
 export function targetHoldRecordDigest(rec) {
@@ -323,17 +403,21 @@ export function verifyApiTarget(raw) {
  * @typedef {{ id: string, key: string, source: string }} RegisteredFixtureOrg
  * @typedef {{
  *   request_id: string, qa_run_id: string, environment_id: string, candidate_sha: string, expires_at: string,
- *   org_id: string, org_key: string, database_identity_digest: string, hold_revision: number
+ *   org_id: string, org_key: string, database_identity_digest: string, hold_revision: number,
+ *   api_identity_digest?: string, api_origin?: string
  * }} VerifiedFixtureAuthority
+ * @typedef {{ url?: string, clientEnv?: Readonly<Record<string, string | undefined>>, apiOrigin?: string }} FixtureConnection
  * @typedef {{ ok: true, authority: VerifiedFixtureAuthority } | { ok: false, code: string, fields?: string[] }} FixtureAuthorityVerdict
  */
 
 /**
  * Steps 1–10. `program` and `org` are what the caller IS (code); `storeRoot`, `readHead` and `readScriptBody`
  * default to the trusted resolutions above and are parameters for tests only — never values of `env`.
+ * `connection` is the configuration the client will be handed (default: `DATABASE_URL`, `env`, `SUPABASE_URL`);
+ * `requireApi` makes an absent `api_identity` a refusal.
  *
  * @param {Readonly<Record<string, string | undefined>>} env
- * @param {{ program: FixtureProgram, org: RegisteredFixtureOrg, storeRoot?: string | null, nowMs?: number,
+ * @param {{ program: FixtureProgram, org: RegisteredFixtureOrg, connection?: FixtureConnection, requireApi?: boolean, storeRoot?: string | null, nowMs?: number,
  *   readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null,
  *   readScriptBody?: () => string | null }} opts
  * @returns {FixtureAuthorityVerdict}
@@ -341,6 +425,8 @@ export function verifyApiTarget(raw) {
 export function verifyIsolatedFixtureAuthorityV2(env, {
     program,
     org,
+    connection = { url: env.DATABASE_URL, clientEnv: env, apiOrigin: env.SUPABASE_URL },
+    requireApi = false,
     storeRoot = trustedGatewayStoreRoot(),
     nowMs = Date.now(),
     readFile = (p) => readFileSync(p, "utf8"),
@@ -418,16 +504,27 @@ export function verifyIsolatedFixtureAuthorityV2(env, {
 
     /* Which database, from the configuration this child holds. */
     if (a.database_identity?.environment_id !== a.environment_id) return { ok: false, code: R.MISMATCH, fields: ["database_identity"] };
-    const id = verifyConnectionTarget(a.database_identity, { url: env.DATABASE_URL, clientEnv: env });
+    const conn = connection && typeof connection === "object" ? connection : {};
+    const id = verifyConnectionTarget(a.database_identity, { url: conn.url, clientEnv: conn.clientEnv });
     if (!id.ok) return id;
+
+    /* Which API: the exact origin handed to the clients, when the record names one or the caller requires one. */
+    let api = null;
+    if (a.api_identity !== undefined || requireApi) {
+        if (a.api_identity?.environment_id !== a.environment_id) return { ok: false, code: API_IDENTITY_REFUSALS.ABSENT };
+        api = verifyApiIdentity(a.api_identity, conn.apiOrigin);
+        if (!api.ok) return api;
+    }
 
     /* The target is clear, from the record the disposition names, re-read now. */
     const hold = verifyTargetHoldDisposition(a.target_hold_disposition, { storeRoot, targetKey: a.environment_id, requestId: a.request_id, readFile });
     if (!hold.ok) return hold;
 
-    /* The PostgREST origin (a guard: the v2 identity names the Postgres target, not this origin). */
-    const api = verifyApiTarget(env.SUPABASE_URL);
-    if (!api.ok) return api;
+    /* No API identity in the record, none required: the earlier PostgREST shape guard (not authority). */
+    if (!api) {
+        const guard = verifyApiTarget(conn.apiOrigin);
+        if (!guard.ok) return guard;
+    }
 
     return {
         ok: true,
@@ -435,8 +532,40 @@ export function verifyIsolatedFixtureAuthorityV2(env, {
             request_id: a.request_id, qa_run_id: a.qa_run_id, environment_id: a.environment_id, candidate_sha: a.candidate_sha,
             expires_at: a.expires_at, org_id: fo.id, org_key: fo.key, database_identity_digest: id.identity.digest,
             hold_revision: a.target_hold_disposition.record.revision,
+            ...(api?.ok ? { api_identity_digest: api.identity.digest, api_origin: `http://${api.identity.host}:${api.identity.port}` } : {}),
         },
     };
+}
+
+/**
+ * One frozen copy of the configuration a client is about to be handed (platform runAttestedConnection): `url` and
+ * `apiOrigin` as strings, `clientEnv` a frozen shallow copy. The caller attests THIS and hands THIS to `connect`.
+ * @param {FixtureConnection} connection
+ * @returns {Readonly<{ url: string, clientEnv: Readonly<Record<string, string | undefined>>, apiOrigin?: string }>}
+ */
+export function freezeConnection({ url, clientEnv, apiOrigin } = {}) {
+    return Object.freeze({
+        url: String(url ?? ""),
+        clientEnv: /** @type {Readonly<Record<string, string | undefined>>} */ (clientEnv && typeof clientEnv === "object" ? Object.freeze({ ...clientEnv }) : clientEnv),
+        ...(apiOrigin !== undefined ? { apiOrigin: String(apiOrigin ?? "") } : {}),
+    });
+}
+
+/**
+ * The gate with no window after it: `attest(frozen)` is the full check on one frozen configuration; `connect` is
+ * called only on success, with exactly that copy. → the refusal (connect never called) or `{ ...verdict, result }`.
+ * @template T
+ * @template {{ ok: boolean }} V
+ * @param {FixtureConnection & { attest: (c: ReturnType<typeof freezeConnection>) => V, connect: (c: ReturnType<typeof freezeConnection>) => T | Promise<T> }} input
+ * @returns {Promise<V | (V & { result: T })>}
+ */
+export async function runAttestedConnection({ url, clientEnv, apiOrigin, attest, connect }) {
+    if (typeof connect !== "function" || typeof attest !== "function") throw new TypeError("runAttestedConnection: attest and connect are required");
+    const frozen = freezeConnection({ url, clientEnv, apiOrigin });
+    const verdict = attest(frozen);
+    if (!verdict.ok) return verdict;
+    const result = await connect(frozen);
+    return { ...verdict, result };
 }
 
 /* ── the Enrollment program (registry entry `enrollment_isolated_tests`, toolkit eeaa6dac6860) ── */

@@ -10,9 +10,11 @@
  *     isolatedFixtureAuthorityV2.mjs, program FINANCIALS_HISTORICAL_DRAFT_PROGRAM: in-flight request, exact
  *     record bytes, expiry, this operation / script / candidate, the persona organization the executor's
  *     QA-run ledger binds and the record names, the database connection identity, the clear target hold
- *     and the API origin in the database's environment block), then the binding
- *     (financialsIsolatedBinding.mjs). A v1 record is refused — no v1 fallback. Any refusal exits 2 before
- *     any client exists or the credential is used — no connection is attempted;
+ *     and the record's API identity = SUPABASE_URL), then the binding (financialsIsolatedBinding.mjs). A v1
+ *     record, or one without `api_identity`, is refused — no fallback. Immediately before the client, the exact
+ *     configuration it is handed (DATABASE_URL, this environment, the attested API origin) is attested again
+ *     (runAttestedFinancialsConnection) and the client is built from that frozen copy. Any refusal exits 2
+ *     before any client exists or the credential is used — no connection is attempted;
  *   · the fixture acts ONLY in that verified organization, passed to the core. There is no default
  *     organization and no seed-org fallback;
  *   · the service credential is read from the executor-built environment straight into the client
@@ -27,7 +29,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-import { FINANCIALS_HISTORICAL_DRAFT_PROGRAM, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
+import { FINANCIALS_HISTORICAL_DRAFT_PROGRAM, runAttestedFinancialsConnection, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
 import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBinding.mjs";
 import {
     censusHistoricalDraft,
@@ -70,14 +72,25 @@ export async function main(
     out(`binding ${describeBinding(judged.binding)}`);
     let result: FixtureOutcome;
     try {
-        /* The VERIFIED origin, never a second read of SUPABASE_URL. */
-        const db = createClient(auth.authority.api_url, String(env.SUPABASE_SERVICE_ROLE_KEY), {
-            auth: { persistSession: false, autoRefreshToken: false },
+        /* The gate, immediately before the client: the ATTESTED origin, frozen, never a second read of SUPABASE_URL. */
+        const gated = await runAttestedFinancialsConnection(env, {
+            ...authority, program: FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation,
+            url: env.DATABASE_URL, clientEnv: env, apiOrigin: auth.authority.api_url,
+            connect: (c) => {
+                const db = createClient(String(c.apiOrigin), String(c.clientEnv.SUPABASE_SERVICE_ROLE_KEY), {
+                    auth: { persistSession: false, autoRefreshToken: false },
+                });
+                return operation === "ensure" ? ensureHistoricalDraft(db, org)
+                    : operation === "verify" ? verifyHistoricalDraft(db, org)
+                    : operation === "count" ? censusHistoricalDraft(db, org)
+                    : resetHistoricalDraft(db, org);
+            },
         });
-        result = operation === "ensure" ? await ensureHistoricalDraft(db, org)
-            : operation === "verify" ? await verifyHistoricalDraft(db, org)
-            : operation === "count" ? await censusHistoricalDraft(db, org)
-            : await resetHistoricalDraft(db, org);
+        if (!gated.ok || !("result" in gated)) {
+            out(`✗ refused before any IO: ${gated.code}${gated.fields ? ` fields=${gated.fields.join(",")}` : ""}`);
+            return 2;
+        }
+        result = gated.result;
     } catch (e) {
         /* A code, never the message: backend and process text can carry row values or credentials. */
         out(`✗ ${operation} failed: ${e instanceof FixtureError ? e.diagnostic : "unexpected_error"}`);

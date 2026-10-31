@@ -19,9 +19,11 @@
  *
  * With `CATALOG_LIVE_ISOLATED=1` the suite re-verifies the executor's v2 operation authority itself
  * (financialsFixtureAuthority.mjs, program `financials_isolated_tests`, operation `run`) before any
- * client exists, and takes its target and organization from that verdict: `CERT_SUPABASE_URL` and
- * `CERT_FIXTURE_ORG_ID` must equal the verified ones, or it throws. A refusal is a failure, never a
- * skip. Without the flag it skips, and the runner reports a skip as NOT a pass.
+ * client exists, and takes its target and organization from that verdict: `CERT_SUPABASE_URL` must BE the
+ * record's API identity and `CERT_FIXTURE_ORG_ID` the verified org, or it throws. Immediately before
+ * `createClient`, the exact configuration (DATABASE_URL, this environment, that origin) is attested again
+ * and the client is built from the frozen copy. A refusal is a failure, never a skip. Without the flag it
+ * skips, and the runner reports a skip as NOT a pass.
  *
  * ── WHAT IT LEAVES, MEASURED ──
  *
@@ -49,7 +51,7 @@ import { previewTemplateCharge, writeTemplateDraftCharge } from "@/lib/financial
 import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
 import { ensureAccountingPeriodCovers } from "./certEnvironment";
-import { FINANCIALS_ISOLATED_PROGRAM, verifyFinancialsFixtureAuthority } from "../../../scripts/qa/financialsFixtureAuthority.mjs";
+import { FINANCIALS_ISOLATED_PROGRAM, runAttestedFinancialsConnection, verifyFinancialsFixtureAuthority } from "../../../scripts/qa/financialsFixtureAuthority.mjs";
 import { CATALOG_PROOF_FILE_NAME, CATALOG_PROOF_SCHEMA, OWNED_TABLES } from "../../../scripts/qa/financialsIsolatedProof.mjs";
 
 /** The shared local stack's API port — never an isolated environment. */
@@ -58,9 +60,12 @@ const SHARED_CERT_PORT = "54421";
 function isolatedEnv(): { url: string; serviceKey: string; orgId: string; proofFile: string | null } | null {
     if (process.env.CATALOG_LIVE_ISOLATED !== "1") return null;
     /* Authority v2 before anything else: no client, no credential use, for an unverified execution. */
-    const auth = verifyFinancialsFixtureAuthority(process.env, { program: FINANCIALS_ISOLATED_PROGRAM, operation: "run" });
-    if (!auth.ok) throw new Error(`catalog live suite refuses: ${auth.code}`);
     const url = (process.env.CERT_SUPABASE_URL ?? "").trim();
+    const auth = verifyFinancialsFixtureAuthority(process.env, {
+        program: FINANCIALS_ISOLATED_PROGRAM, operation: "run",
+        connection: { url: process.env.DATABASE_URL, clientEnv: process.env, apiOrigin: url },
+    });
+    if (!auth.ok) throw new Error(`catalog live suite refuses: ${auth.code}`);
     /* The organization and target are the executor's verified ones, never a constant here. */
     const orgId = (process.env.CERT_FIXTURE_ORG_ID ?? "").trim();
     if (url !== auth.authority.api_url || orgId !== auth.authority.org_id) throw new Error("catalog live suite refuses: target_or_org_not_the_verified_one");
@@ -160,7 +165,14 @@ describeLive("catalog Add Charge — live, isolated", () => {
     let accountingPeriodCreated = false;
 
     beforeAll(async () => {
-        db = createClient(env!.url, env!.serviceKey, { auth: { persistSession: false } });
+        /* The gate, immediately before the client: this exact configuration, frozen and attested. */
+        const gated = await runAttestedFinancialsConnection(process.env, {
+            program: FINANCIALS_ISOLATED_PROGRAM, operation: "run",
+            url: process.env.DATABASE_URL, clientEnv: process.env, apiOrigin: env!.url,
+            connect: (c) => createClient(String(c.apiOrigin), env!.serviceKey, { auth: { persistSession: false } }),
+        });
+        if (!gated.ok || !("result" in gated)) throw new Error(`catalog live suite refuses: ${gated.code}`);
+        db = gated.result;
         /* Before the first write: a fresh run owns nothing. */
         ownedBefore = await countOwned(db);
         const seed = async (table: string, row: Record<string, unknown>) => {

@@ -179,7 +179,7 @@ describe("test:qa:financials-isolated", () => {
             const code = await isolatedMain({ env, argv: [], out: (l: string) => out.push(l), authority: s.options() });
             expect(code).toBe(2);
             expect(spawned.calls).toBe(0);
-            expect(out.join("\n")).toMatch(/refused before any process: fixture_api_target_shared_refused/);
+            expect(out.join("\n")).toMatch(/refused before any process: api_identity_shared_target_refused/);
             expect(out.join("\n")).toContain("tests passed=0 failed=0");
             expect(out.join("\n")).not.toContain(SECRET);
         } finally {

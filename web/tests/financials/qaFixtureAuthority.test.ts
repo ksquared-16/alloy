@@ -49,8 +49,9 @@ describe("the contract is the toolkit's, restated and pinned", () => {
             EXPIRED: "fixture_authority_expired", NOT_YET: "fixture_authority_not_yet_valid", MISMATCH: "fixture_authority_mismatch",
             ORG_UNBOUND: "fixture_authority_org_unbound", ORG_NOT_REGISTERED: "fixture_authority_org_not_registered",
             PERSONA_ORG: "fixture_authority_persona_org_unverified", PROGRAM: "fixture_authority_program_unregistered",
-            API_ENVIRONMENT: "fixture_api_target_not_the_bound_environment",
         });
+        /* The port-block guard is gone: the API is the record's api_identity (platform 4b55fc0b), not a block rule. */
+        expect(A).not.toHaveProperty("API_ENVIRONMENT");
     });
 
     it("the program's own npm script and pinned body are what package.json declares, at the registered digest", () => {
@@ -100,6 +101,7 @@ describe("live executor authority admits; nothing else does", () => {
                 candidate_sha: "c".repeat(40), expires_at: s.rec.expires_at, org_id: FINANCIALS_FIXTURE_ORG.id, org_key: "certification_seed", org_source: "seed_manifest",
                 database_identity_digest: (s.rec.database_identity as { digest: string }).digest, hold_revision: 1,
                 api_url: "http://127.0.0.1:56102",
+                api_identity_digest: (s.rec.api_identity as { digest: string }).digest,
                 program_pins_digest: (s.rec.program_pins as { digest: string }).digest,
             },
         });
