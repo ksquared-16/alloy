@@ -105,13 +105,14 @@ export async function resolvePublicTourCalendar(
     const l = loc as Record<string, unknown>;
     if (l.is_active === false || l.archived_at) return { ok: false, code: "LOCATION_UNAVAILABLE" };
 
-    // A location with no active tour schedule has nothing to publish.
+    // A location with no active tour schedule OF ITS OWN has nothing to publish (legacy
+    // organization-wide rules no longer offer new times — see computeAvailableTourSlots).
     const { count, error: ruleErr } = await supabase
         .from("tour_availability_rules")
         .select("id", { count: "exact", head: true })
         .eq("org_id", v.orgId)
         .eq("is_active", true)
-        .or(`location_id.is.null,location_id.eq.${locationId}`);
+        .eq("location_id", locationId);
     if (ruleErr || !count) return { ok: false, code: "LOCATION_UNAVAILABLE" };
 
     const timezone = await resolveTourLocationTimezone(supabase, v.orgId, locationId);

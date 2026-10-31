@@ -16,10 +16,39 @@ import { loadOperatingCalendarForInstants } from "@/lib/operatingCalendar/operat
  * (`assertSlotAvailableForWrite`, the public book/reschedule revalidation) see the same
  * exclusions. Bookings are counted before the filter and are never touched by it: a
  * closure hides times, it does not release or cancel what was booked.
+ *
+ * ## Location-specific rules (Tours feedback 2026-10-29)
+ *
+ * New availability comes from the location's OWN rules only. A legacy organization-wide rule
+ * (`location_id` null) stays stored and is no longer shown in Tours configuration, so it no
+ * longer offers new times anywhere: a location with no schedule of its own offers nothing until
+ * one is configured. Bookings already made under such a rule are untouched — they still count
+ * against capacity here, and cancel / complete / no-show / reminders read the booking, not rules.
+ *
+ * `ruleAuthority` is server-controlled and never derived from request input. Its only other
+ * value, `legacy_pending_confirmation`, is passed by `confirmTourBooking` alone, to approve an
+ * existing pending booking at its unchanged time when that time came from a legacy rule.
  */
+export type TourSlotRuleAuthority = "location" | "legacy_pending_confirmation";
+
+/** The rules that may generate slots at `locationId` under `authority`. */
+export function tourRulesForLocation<R extends { location_id?: string | null }>(
+    rules: R[],
+    locationId: string,
+    authority: TourSlotRuleAuthority = "location"
+): R[] {
+    const target = String(locationId ?? "").trim();
+    return rules.filter((r) => {
+        const own = r.location_id != null ? String(r.location_id).trim() : "";
+        if (!own) return authority === "legacy_pending_confirmation";
+        return own === target;
+    });
+}
+
 export async function computeAvailableTourSlots(
     supabase: SupabaseClient,
-    params: ComputeAvailableTourSlotsParams
+    params: ComputeAvailableTourSlotsParams,
+    ruleAuthority: TourSlotRuleAuthority = "location"
 ): Promise<AvailableTourSlot[]> {
     const orgId = String(params.orgId).trim();
     const locationId = String(params.locationId).trim();
@@ -45,10 +74,7 @@ export async function computeAvailableTourSlots(
     }
 
     const rules = (rulesRaw ?? []) as unknown as TourAvailabilityRuleRow[];
-    const rulesForLocation = rules.filter((r) => {
-        if (r.location_id == null || String(r.location_id).trim() === "") return true;
-        return String(r.location_id) === locationId;
-    });
+    const rulesForLocation = tourRulesForLocation(rules, locationId, ruleAuthority);
 
     const blockingKeys = [...TOUR_BOOKING_BLOCKING_STATUS_KEYS];
     const { data: bookingsRaw, error: bErr } = await supabase

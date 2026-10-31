@@ -167,12 +167,13 @@ describe("P1-A — Tours surface information architecture", () => {
         expect(code).toContain("<TourShareSection");
     });
 
-    it("never offers Edit or Delete on an inherited organization-wide schedule", () => {
-        const inherited = code.slice(code.indexOf('data-testid="tours-inherited-schedules"'));
-        const card = inherited.slice(0, inherited.indexOf("</section>"));
-        expect(card).toContain("<ScheduleCard");
-        expect(card).not.toMatch(/onEdit=|onDelete=|onToggle=/);
-        expect(card).toContain("TOUR_ORGANIZATION_DEFAULTS_HREF");
+    it("presents only the location's own schedules — no organization-wide section, notice or copy control (Tours feedback 2026-10-29)", () => {
+        expect(code).not.toContain("tours-inherited-schedules");
+        expect(code).not.toContain("AvailabilityOwnership");
+        expect(code).not.toContain("Copy to this location");
+        expect(code).not.toContain("TOUR_ORGANIZATION_DEFAULTS_HREF");
+        expect(code).not.toMatch(/Organization-wide/);
+        expect(code).toContain("isLocationOwnRule(rule, target)");
     });
 
     it("gives organization-wide schedules a real route, served by the existing surface (no second authority)", () => {
@@ -202,7 +203,7 @@ describe("P1-B — configurable tour CTA", () => {
     it("is validated as one line of plain text, max 40, and survives a stored round trip", () => {
         expect(validatePublicBrandInput({ tour_cta_label: "  Book   a visit " })).toEqual({
             ok: true,
-            values: { display_name: null, accent_color: null, logo_url: null, tour_cta_label: "Book a visit" },
+            values: { display_name: null, accent_color: null, logo_url: null, tour_cta_label: "Book a visit", tour_cta_text_color: null },
         });
         expect(validatePublicBrandInput({ tour_cta_label: "<b>Hi</b>" })).toMatchObject({ ok: false });
         expect(validatePublicBrandInput({ tour_cta_label: "x".repeat(41) })).toMatchObject({ ok: false });

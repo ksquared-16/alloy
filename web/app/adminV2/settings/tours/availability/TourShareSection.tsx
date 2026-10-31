@@ -5,10 +5,12 @@ import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { brandButtonColors, type EffectivePublicBrand } from "@/lib/branding/publicBrand";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { brandCtaButtonColors, PUBLIC_BRAND_PLATFORM_ACCENT, PUBLIC_TOUR_CTA_DEFAULT, type EffectivePublicBrand } from "@/lib/branding/publicBrand";
 import {
     buildTourCalendarIframeSnippet,
     buildTourCtaButtonSnippet,
+    tourCalendarAttachOptions,
     type TourCalendarShareLink,
 } from "@/lib/tours/publicCalendar/tourCalendarShare";
 
@@ -20,6 +22,10 @@ type LinksResponse = { links: TourCalendarShareLink[]; can_publish: boolean };
  *
  * Publishing is the existing link PATCH (`tour_calendar`) — the server still requires a
  * location-specific lead-capture intake link and `tours.configure`; nothing here widens that.
+ *
+ * "Attach a form" (Tours feedback 2026-10-29) presents that choice as which FORM follows the tour
+ * (step 1 the calendar, step 2 the form): one option per form, published on its newest eligible link
+ * (`tourCalendarAttachOptions`). Forms themselves are made in Processing → Studios → Forms.
  */
 export default function TourShareSection({
     scopeLocationId,
@@ -35,6 +41,7 @@ export default function TourShareSection({
     const [err, setErr] = useState<string | null>(null);
     const [busyLink, setBusyLink] = useState<string | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [chosenFormId, setChosenFormId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!scopeLocationId) return;
@@ -103,16 +110,17 @@ export default function TourShareSection({
     };
 
     const published = data?.links.filter((l) => l.calendarPublished && l.usable) ?? [];
-    const candidates = data?.links.filter((l) => !(l.calendarPublished && l.usable)) ?? [];
-    const pair = brandButtonColors(brand?.accentColor ?? "#00A283");
-    const cta = brand?.tourCtaLabel ?? "Schedule a Tour";
+    const { attachable, blocked } = tourCalendarAttachOptions(data?.links ?? []);
+    const chosen = attachable.find((f) => f.formId === chosenFormId) ?? (attachable.length === 1 ? attachable[0] : null);
+    const pair = brandCtaButtonColors(brand?.accentColor ?? PUBLIC_BRAND_PLATFORM_ACCENT, brand?.tourCtaTextColor);
+    const cta = brand?.tourCtaLabel ?? PUBLIC_TOUR_CTA_DEFAULT;
 
     return (
         <section className="space-y-4" data-testid="tours-share-section" aria-label="Preview and share">
             {err ? <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p> : null}
             {!hasSchedules ?
                 <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                    {scopeLabel} has no active tour schedule, so its calendar shows as unavailable to families until one is added under Availability.
+                    {scopeLabel} has no active tour schedule of its own. Add one under Availability so families can choose a time here.
                 </p>
             :   null}
             {data == null && !err ?
@@ -125,7 +133,7 @@ export default function TourShareSection({
                         <div>
                             <p className="text-sm font-semibold text-alloy-midnight">
                                 Tour calendar is live
-                                <span className="ml-2 rounded bg-alloy-pine/15 px-1.5 text-[11px] font-semibold text-alloy-pine">Published</span>
+                                <span className="ml-2 rounded bg-alloy-bend-pine/[0.14] px-1.5 text-[11px] font-semibold text-alloy-bend-pine">Published</span>
                             </p>
                             <p className="config-typo-sublabel">
                                 Step 2 is the form “{link.formTitle}”{distinctLabel(link) ? ` (${distinctLabel(link)})` : ""}.
@@ -210,46 +218,98 @@ export default function TourShareSection({
             ))}
 
             {data && published.length === 0 ?
-                <div className="rounded-lg border border-dashed border-alloy-forge/20 p-3 text-sm" data-testid="tours-share-unpublished">
+                <div className="rounded-lg border border-dashed border-alloy-bend-pine/30 p-3 text-sm" data-testid="tours-share-unpublished">
                     <p className="font-medium text-alloy-midnight/85">{scopeLabel}&apos;s tour calendar is not published.</p>
                     <p className="config-typo-sublabel mt-1">
-                        The calendar is step 1; step 2 is an inquiry form. Publish it on one of {scopeLabel}&apos;s inquiry form links below.
+                        Families choose a tour time first (step 1), then complete the form you attach (step 2). Attach a form below to publish the calendar.
                     </p>
                 </div>
             :   null}
 
-            {data && candidates.length > 0 ?
-                <ul className="space-y-2" data-testid="tours-share-candidates">
-                    {candidates.map((link) => {
-                        const blocker =
-                            !link.usable ? (link.unusableReason === "expired" ? "This link has expired." : "This link is turned off.")
-                            : !link.leadCapture ? "This form is not an inquiry (lead-capture) form, so it can't follow a tour booking."
-                            : null;
-                        return (
-                            <li key={link.linkId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm">
-                                <div className="min-w-0">
-                                    <p className="font-medium text-alloy-midnight">
-                                        {link.formTitle}
-                                        {distinctLabel(link) ? <span className="text-alloy-midnight/55"> · {distinctLabel(link)}</span> : null}
-                                    </p>
-                                    {blocker ? <p className="text-[11px] text-alloy-midnight/55">{blocker}</p> : null}
-                                </div>
-                                {data.can_publish && !blocker ?
-                                    <ConfigurationPrimaryButton disabled={busyLink != null} onClick={() => void setPublished(link, true)} data-testid="tours-share-publish">
-                                        {busyLink === link.linkId ? "Publishing…" : "Publish tour calendar here"}
-                                    </ConfigurationPrimaryButton>
-                                :   null}
-                            </li>
-                        );
-                    })}
-                </ul>
+            {data && data.links.length > 0 ?
+                <section className="space-y-3 rounded-lg border border-alloy-stone/15 bg-white p-3" data-testid="tours-share-attach" aria-label="Attach a form">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                            <p className="text-sm font-semibold text-alloy-midnight">{published.length ? "Attach another form" : "Attach a form"}</p>
+                            <p className="config-typo-sublabel">
+                                Step 1 is the tour calendar; step 2 is the inquiry form you choose here, from {scopeLabel}&apos;s inquiry form links.
+                            </p>
+                        </div>
+                        <FormsStudioLink />
+                    </div>
+                    {attachable.length ?
+                        <fieldset className="space-y-1.5" data-testid="tours-share-candidates">
+                            <legend className="sr-only">Form families complete after choosing a tour</legend>
+                            {attachable.map((form) => (
+                                <label
+                                    key={form.formId}
+                                    className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 ${chosen?.formId === form.formId ? "border-alloy-bend-pine bg-alloy-bend-pine/[0.08]" : "border-alloy-stone/20"}`}
+                                    data-testid="tours-share-attach-option"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="tours-share-attach-form"
+                                        className="mt-1 accent-alloy-bend-pine"
+                                        checked={chosen?.formId === form.formId}
+                                        disabled={!data.can_publish || busyLink != null}
+                                        onChange={() => setChosenFormId(form.formId)}
+                                    />
+                                    <span className="min-w-0">
+                                        <span className="block font-medium text-alloy-midnight">
+                                            {form.formTitle}
+                                            {distinctLabel(form.link) ? <span className="text-alloy-midnight/55"> · {distinctLabel(form.link)}</span> : null}
+                                        </span>
+                                        <span className="block text-[11px] text-alloy-midnight/55">
+                                            {form.link.createdAt ? `Link created ${formatLinkDate(form.link.createdAt)}` : "Location inquiry link"}
+                                            {form.otherLinks.length ?
+                                                ` · ${form.otherLinks.length} older link${form.otherLinks.length === 1 ? "" : "s"} for this form here; the newest is used`
+                                            :   ""}
+                                        </span>
+                                    </span>
+                                </label>
+                            ))}
+                            {data.can_publish ?
+                                <ConfigurationPrimaryButton
+                                    disabled={busyLink != null || !chosen}
+                                    onClick={() => chosen && void setPublished(chosen.link, true)}
+                                    data-testid="tours-share-publish"
+                                >
+                                    {busyLink && chosen && busyLink === chosen.link.linkId ? "Attaching…" : "Attach form and publish calendar"}
+                                </ConfigurationPrimaryButton>
+                            :   null}
+                        </fieldset>
+                    :   <p className="text-xs text-alloy-midnight/70" data-testid="tours-share-attach-none">
+                            None of {scopeLabel}&apos;s form links can follow a tour booking yet — a calendar needs an active inquiry (lead-capture) form link for this location.
+                        </p>
+                    }
+                    {blocked.length ?
+                        <details className="text-xs" data-testid="tours-share-blocked">
+                            <summary className="cursor-pointer text-alloy-midnight/60">
+                                {blocked.length} link{blocked.length === 1 ? "" : "s"} can&apos;t follow a tour
+                            </summary>
+                            <ul className="mt-1 space-y-1">
+                                {blocked.map((link) => (
+                                    <li key={link.linkId} className="text-alloy-midnight/65">
+                                        <span className="font-medium text-alloy-midnight/80">{link.formTitle}</span>
+                                        {link.createdAt ? ` (created ${formatLinkDate(link.createdAt)})` : ""} —{" "}
+                                        {!link.usable ? (link.unusableReason === "expired" ? "this link has expired." : "this link is turned off.")
+                                        :   "this form is not an inquiry (lead-capture) form."}
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    :   null}
+                </section>
             :   null}
 
             {data && data.links.length === 0 ?
-                <p className="text-xs text-alloy-midnight/70" data-testid="tours-share-no-links">
-                    {scopeLabel} has no location-specific inquiry form link yet. In Forms Studio, open your inquiry form, choose{" "}
-                    <strong>Distribution › Share by location</strong>, create the link for {scopeLabel}, then come back here to publish the calendar on it.
-                </p>
+                <div className="space-y-2 text-xs text-alloy-midnight/70" data-testid="tours-share-no-links">
+                    <p>
+                        {scopeLabel} has no location-specific inquiry form link yet. In Forms Studio, open your inquiry form, choose{" "}
+                        <strong>Distribution › Share by location</strong>, create the link for {scopeLabel}, then come back here to attach it.
+                    </p>
+                    <FormsStudioLink />
+                </div>
             :   null}
             {data && !data.can_publish ?
                 <p className="text-[11px] text-alloy-midnight/50">Publishing a tour calendar also needs form authoring access.</p>
@@ -296,6 +356,25 @@ function ShareRow({
             </div>
         </div>
     );
+}
+
+/** Processing → Studios → Forms is a workspace modal, not a route. */
+function FormsStudioLink() {
+    return (
+        <button
+            type="button"
+            className="text-xs font-semibold text-alloy-bend-pine underline"
+            onClick={() => dispatchAdminV2OpenProcessingModal({ mode: "studio", studioTab: "forms" })}
+            data-testid="tours-share-forms-studio"
+        >
+            Open Processing → Studios → Forms
+        </button>
+    );
+}
+
+function formatLinkDate(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 /** A link's own name, unless it only repeats its form's title. */
