@@ -35,7 +35,9 @@ vi.mock("@supabase/supabase-js", async (orig) => ({
 import {
     FINANCIALS_HISTORICAL_DRAFT_PROGRAM,
     FINANCIALS_ISOLATED_PROGRAM,
+    FINANCIALS_REQUIRED_ARTIFACTS,
     FIXTURE_AUTHORITY_REFUSALS as A,
+    programPinsDigest,
     QA_PERSONA_ORGS,
     apiInBoundEnvironment,
     certenvBlockOf,
@@ -52,7 +54,7 @@ import {
     verifyTargetHoldDisposition,
 } from "../../scripts/qa/isolatedFixtureAuthorityV2.mjs";
 import { judgeLiveSuiteAuthority } from "../harness/liveSuiteAuthority.mjs";
-import { SYNTHETIC_DB_URL, SYNTHETIC_ENVIRONMENT, syntheticExecutorStore, syntheticHoldRecord } from "../harness/syntheticFixtureAuthority";
+import { SYNTHETIC_DB_URL, SYNTHETIC_ENVIRONMENT, SYNTHETIC_HEAD, syntheticExecutorStore, syntheticHoldRecord, syntheticProgramPins } from "../harness/syntheticFixtureAuthority";
 
 const H = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
 const I = FINANCIALS_ISOLATED_PROGRAM;
@@ -347,5 +349,85 @@ describe("the target hold, re-read from the store the verifier locates", () => {
         const base = make();
         const other = make({ record: { target_hold_disposition: { ...(base.rec.target_hold_disposition as object), request_id: "req-fin-other-0001" } } });
         await refusedEverywhere(other, other.env(), "target_hold_disposition_invalid");
+    });
+});
+
+describe("program pins (the non-SQL v2 variant): this candidate, this script, these exact artifacts", () => {
+    const pins = (program: typeof I | typeof H, over: Record<string, unknown> = {}, redigest = true) => {
+        const p = syntheticProgramPins(program, SYNTHETIC_HEAD, over);
+        if (redigest) p.digest = programPinsDigest(p as never);
+        return p;
+    };
+    const withPins = (p: unknown, program: typeof I | typeof H = I) =>
+        make({ program, operation: program === H ? "ensure" : "run", record: { program_pins: p } });
+
+    it("a record without program pins (an SQL-variant or pre-adoption record) → refused", async () => {
+        const s = withPins(undefined);
+        await refusedEverywhere(s, s.env(), A.PINS_ABSENT);
+    });
+
+    it.each([
+        ["the SQL variant", { variant: "sql" }],
+        ["a program variant that also names SQL", { sql: { path: "web/x.sql", sha256: "a".repeat(64) } }],
+        ["no artifacts", { artifacts: [] }],
+        ["33 artifacts", { artifacts: Array.from({ length: 33 }, (_, i) => ({ role: "program", path: `web/f${i}.ts`, sha256: "a".repeat(64) })) }],
+        ["a traversal path", { artifacts: [{ role: "entry", path: "web/../../etc/passwd", sha256: "a".repeat(64) }] }],
+        ["an absolute path", { artifacts: [{ role: "entry", path: "/etc/passwd", sha256: "a".repeat(64) }] }],
+        ["a duplicate path", { artifacts: [{ role: "entry", path: "web/a.ts", sha256: "a".repeat(64) }, { role: "program", path: "web/a.ts", sha256: "b".repeat(64) }] }],
+    ])("%s → invalid", async (_l, over) => {
+        const s = withPins(pins(I, over));
+        await refusedEverywhere(s, s.env(), A.PINS_INVALID);
+    });
+
+    it("a digest that does not recompute (an edited artifact list) → digest mismatch", async () => {
+        const p = pins(I);
+        (p.artifacts as Array<{ sha256: string }>)[0].sha256 = "f".repeat(64);
+        const s = withPins(p);
+        await refusedEverywhere(s, s.env(), A.PINS_DIGEST);
+    });
+
+    it("pins for another candidate → candidate mismatch", async () => {
+        const s = withPins(pins(I, { candidate_sha: "d".repeat(40) }));
+        await refusedEverywhere(s, s.env(), A.PINS_CANDIDATE);
+    });
+
+    it("pins for another script body → script mismatch", async () => {
+        const s = withPins(pins(I, { script_sha256: sha("node scripts/qa/somethingElse.mjs") }));
+        await refusedEverywhere(s, s.env(), A.PINS_SCRIPT);
+    });
+
+    it("pins that omit a required artifact (the authority verifier) → required artifact absent", async () => {
+        const p = pins(I);
+        p.artifacts = (p.artifacts as Array<{ path: string }>).filter((x) => x.path !== "web/scripts/qa/isolatedFixtureAuthorityV2.mjs");
+        p.digest = programPinsDigest(p as never);
+        const s = withPins(p);
+        expect(verify(s.env(), s.options())).toMatchObject({ ok: false, code: A.PINS_REQUIRED, fields: ["web/scripts/qa/isolatedFixtureAuthorityV2.mjs"] });
+        await refusedEverywhere(s, s.env(), A.PINS_REQUIRED);
+    });
+
+    it("the isolated program's pins do not satisfy the historical program", async () => {
+        const s = make({ program: H, operation: "ensure", record: { program_pins: pins(H, { script_sha256: sha(I.script_body) }) } });
+        await refusedEverywhere(s, s.env(), A.PINS_SCRIPT, H);
+    });
+
+    it("an artifact whose bytes here differ from its pin (code changed after pinning) → artifact mismatch, by path", () => {
+        const s = make();
+        const v = verify(s.env(), s.options({ readArtifact: (rel: string) => (rel.endsWith("catalogAddCharge.live.test.ts") ? "edited" : readFileSync(join(process.cwd(), "..", rel))) }));
+        expect(v).toEqual({ ok: false, code: A.PINS_ARTIFACT, fields: ["web/tests/financials/live/catalogAddCharge.live.test.ts"] });
+    });
+
+    it("an artifact absent here → artifact mismatch", () => {
+        const s = make();
+        const v = verify(s.env(), s.options({ readArtifact: (rel: string) => { if (rel.endsWith("vitest.config.ts")) throw new Error("ENOENT"); return readFileSync(join(process.cwd(), "..", rel)); } }));
+        expect(v).toMatchObject({ ok: false, code: A.PINS_ARTIFACT, fields: ["web/vitest.config.ts"] });
+    });
+
+    it("the required artifact lists name each program's entry and both verifier files", () => {
+        for (const [fixture, list] of Object.entries(FINANCIALS_REQUIRED_ARTIFACTS)) {
+            const roles = list.map((a) => `${a.role}:${a.path}`);
+            expect(roles, fixture).toContain("authority_verifier:web/scripts/qa/financialsFixtureAuthority.mjs");
+            expect(roles, fixture).toContain("authority_verifier:web/scripts/qa/isolatedFixtureAuthorityV2.mjs");
+            expect(list.filter((a) => a.role === "entry"), fixture).toHaveLength(1);
+        }
     });
 });

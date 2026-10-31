@@ -23,6 +23,12 @@
  *     the Postgres target only, so without this a sibling environment's API beside this environment's database
  *     would pass. The authoritative fix is an API identity in the v2 record — a platform request, not claimed.
  *
+ * PROGRAM PINS. Financials runs TypeScript service calls, not a SQL artifact, so it adopts the platform's explicit
+ * non-SQL `program` pin variant (draft contract ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT.md, objective
+ * OPWORK_C86B7CC3C436_SPRINT_94E98241AD37 — not installed): the record's `program_pins` must name this candidate, this
+ * script body and every required artifact (FINANCIALS_REQUIRED_ARTIFACTS), its digest must recompute, and each
+ * artifact's bytes in this checkout must equal its pin. A record without program pins is refused.
+ *
  * FAIL CLOSED. A v1 record — which is what the installed toolkit issues to both Financials entries today, because
  * neither is registered `authority_contract: "v2"` — is refused (`fixture_authority_org_unbound`). There is no v1
  * fallback. Execution resumes only when the platform registers and installs a compatible v2 contract for them.
@@ -35,17 +41,24 @@
  * ledger together) is tampering with Vacilando state and is not claimed. Refusals name codes and field names,
  * never a value.
  */
+import { createHash } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
     FIXTURE_AUTHORITY_REFUSALS as SHARED_REFUSALS,
     FIXTURE_AUTHORITY_SCHEMA_V2,
+    canonicalJson,
     readOwnHead,
     readOwnScriptBody as readScriptBodyFor,
+    sha256,
     trustedGatewayStoreRoot,
     verifyIsolatedFixtureAuthorityV2,
 } from "./isolatedFixtureAuthorityV2.mjs";
+
+/** The repository root (artifact paths are repository-relative, as the executor's `git show <sha>:<path>`). */
+const REPO = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 export { readOwnHead, trustedGatewayStoreRoot };
 
@@ -60,6 +73,40 @@ export const FIXTURE_AUTHORITY_REFUSALS = Object.freeze({
     PROGRAM: "fixture_authority_program_unregistered",
     /* Financials-only guard: the API origin is not in the bound database's environment port block. */
     API_ENVIRONMENT: "fixture_api_target_not_the_bound_environment",
+    /* Program pins (platform draft ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT, objective 94E98241AD37). */
+    PINS_ABSENT: "fixture_program_pins_absent",
+    PINS_INVALID: "fixture_program_pins_invalid",
+    PINS_DIGEST: "fixture_program_pins_digest_mismatch",
+    PINS_CANDIDATE: "fixture_program_pins_candidate_mismatch",
+    PINS_SCRIPT: "fixture_program_pins_script_mismatch",
+    PINS_REQUIRED: "fixture_program_pins_required_artifact_absent",
+    PINS_ARTIFACT: "fixture_program_pins_artifact_mismatch",
+});
+
+/**
+ * The artifacts each program's pins must name (repository-relative), by role. The executor proves each against the
+ * bytes committed at the candidate; this child re-proves each against the bytes it is running from. A pin set that
+ * omits one of these does not describe this program.
+ */
+export const FINANCIALS_REQUIRED_ARTIFACTS = Object.freeze({
+    financials_isolated_tests: Object.freeze([
+        Object.freeze({ role: "entry", path: "web/scripts/qa/financialsIsolatedTests.mjs" }),
+        Object.freeze({ role: "authority_verifier", path: "web/scripts/qa/financialsFixtureAuthority.mjs" }),
+        Object.freeze({ role: "authority_verifier", path: "web/scripts/qa/isolatedFixtureAuthorityV2.mjs" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/financialsIsolatedBinding.mjs" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/financialsIsolatedProof.mjs" }),
+        Object.freeze({ role: "program", path: "web/tests/financials/live/catalogAddCharge.live.test.ts" }),
+        Object.freeze({ role: "program", path: "web/tests/financials/live/certEnvironment.ts" }),
+        Object.freeze({ role: "program", path: "web/tests/harness/liveSuiteAuthority.mjs" }),
+        Object.freeze({ role: "program", path: "web/vitest.config.ts" }),
+    ]),
+    financials_historical_draft: Object.freeze([
+        Object.freeze({ role: "entry", path: "web/scripts/qa/financialsHistoricalDraftFixture.ts" }),
+        Object.freeze({ role: "authority_verifier", path: "web/scripts/qa/financialsFixtureAuthority.mjs" }),
+        Object.freeze({ role: "authority_verifier", path: "web/scripts/qa/isolatedFixtureAuthorityV2.mjs" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/financialsHistoricalDraftFixtureCore.ts" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/financialsIsolatedBinding.mjs" }),
+    ]),
 });
 
 /** What a program is. Restated from the toolkit registry (`lib/certification-fixture.mjs`, eeaa6dac6860). */
@@ -162,9 +209,66 @@ function personaOrgFromLedger(env, { storeRoot, readFile }) {
     return { id, key, source: "persona" };
 }
 
+const PIN_PATH_RE = /^[A-Za-z0-9_][A-Za-z0-9_.\/-]{0,200}$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+const HEX40 = /^[0-9a-f]{40}$/;
+
+/** The program pins' digest: sha256 of canonical JSON of `{ variant, candidate_sha, script_sha256, artifacts }`. */
+export function programPinsDigest(p) {
+    return sha256(canonicalJson({ variant: p.variant, candidate_sha: p.candidate_sha, script_sha256: p.script_sha256, artifacts: p.artifacts }));
+}
+
+/**
+ * The record's `program_pins`, re-read from the SAME bytes the shared verifier accepted (the in-flight request's
+ * recorded sha256), then judged: explicit `program` variant, no SQL, 1–32 well-formed unique artifacts, the digest
+ * recomputed, candidate = `ALLOY_QA_CANDIDATE_SHA` = this checkout's HEAD, script digest = this program's own body,
+ * every required artifact named, and every named artifact's bytes here equal to its pin.
+ */
+function verifyProgramPins(env, P, { storeRoot, readFile, realpath, readHead, readScriptBody, readArtifact }) {
+    const R = FIXTURE_AUTHORITY_REFUSALS;
+    let pins;
+    try {
+        const real = realpath(String(env.ALLOY_QA_AUTHORITY_FILE));
+        const text = readFile(real);
+        const a = JSON.parse(text);
+        const req = JSON.parse(readFile(join(storeRoot, "vacilando", "isolated-fixture", "requests", `${a.request_id}.json`)));
+        if (req?.authority?.sha256 !== sha256(text)) return { ok: false, code: R.ALTERED };
+        pins = a.program_pins;
+    } catch {
+        return { ok: false, code: R.ALTERED };
+    }
+    if (pins == null) return { ok: false, code: R.PINS_ABSENT };
+    const arts = pins?.artifacts;
+    const shapeOk = typeof pins === "object" && !Array.isArray(pins) && pins.variant === "program" && !("sql" in pins)
+        && HEX40.test(String(pins.candidate_sha || "")) && HEX64.test(String(pins.script_sha256 || "")) && HEX64.test(String(pins.digest || ""))
+        && Array.isArray(arts) && arts.length >= 1 && arts.length <= 32
+        && arts.every((x) => x && typeof x.role === "string" && PIN_PATH_RE.test(String(x.path || "")) && !String(x.path).split("/").includes("..") && HEX64.test(String(x.sha256 || "")))
+        && new Set(arts.map((x) => x.path)).size === arts.length;
+    if (!shapeOk) return { ok: false, code: R.PINS_INVALID };
+    if (programPinsDigest(pins) !== pins.digest) return { ok: false, code: R.PINS_DIGEST };
+    if (pins.candidate_sha !== env.ALLOY_QA_CANDIDATE_SHA || pins.candidate_sha !== readHead()) return { ok: false, code: R.PINS_CANDIDATE };
+    const body = readScriptBody();
+    if (body !== P.script_body || pins.script_sha256 !== sha256(body)) return { ok: false, code: R.PINS_SCRIPT };
+    const named = new Map(arts.map((x) => [x.path, x]));
+    const missing = FINANCIALS_REQUIRED_ARTIFACTS[P.fixture].filter((r) => named.get(r.path)?.role !== r.role).map((r) => r.path);
+    if (missing.length) return { ok: false, code: R.PINS_REQUIRED, fields: missing };
+    const drifted = arts.filter((x) => {
+        let bytes;
+        try {
+            bytes = readArtifact(x.path);
+        } catch {
+            return true;
+        }
+        /* The bytes, not a decoded string: the executor pins `git show <candidate>:<path>` output. */
+        return createHash("sha256").update(bytes).digest("hex") !== x.sha256;
+    }).map((x) => x.path);
+    if (drifted.length) return { ok: false, code: R.PINS_ARTIFACT, fields: drifted };
+    return { ok: true, digest: pins.digest };
+}
+
 /**
  * @typedef {import("./isolatedFixtureAuthorityV2.mjs").VerifiedFixtureAuthority & {
- *   fixture: string, operation: string, npm_script: string, org_source: string, api_url: string
+ *   fixture: string, operation: string, npm_script: string, org_source: string, api_url: string, program_pins_digest: string
  * }} FinancialsFixtureAuthority
  * @typedef {{ ok: true, authority: FinancialsFixtureAuthority, code?: undefined, fields?: undefined } | { ok: false, code: string, fields?: string[], authority?: undefined }} FinancialsAuthorityVerdict
  */
@@ -177,7 +281,7 @@ function personaOrgFromLedger(env, { storeRoot, readFile }) {
  * to the trusted resolutions and are parameters for tests only.
  *
  * @param {Record<string, string | undefined>} [env]
- * @param {{ program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation?: string, storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null }} [opts]
+ * @param {{ program?: typeof FINANCIALS_ISOLATED_PROGRAM | typeof FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation?: string, storeRoot?: string | null, nowMs?: number, readFile?: (p: string) => string, realpath?: (p: string) => string, readHead?: () => string | null, readScriptBody?: () => string | null, readArtifact?: (repoRelativePath: string) => string | Buffer }} [opts]
  * @returns {FinancialsAuthorityVerdict}
  */
 export function verifyFinancialsFixtureAuthority(env = {}, {
@@ -189,6 +293,7 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
     realpath = (p) => realpathSync(p),
     readHead = () => readOwnHead(),
     readScriptBody = () => readOwnScriptBody({ program }),
+    readArtifact = (rel) => readFileSync(join(REPO, rel)),
 } = {}) {
     const R = FIXTURE_AUTHORITY_REFUSALS;
     const P = program;
@@ -212,6 +317,8 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
         return v;
     }
     if (!apiInBoundEnvironment(env.SUPABASE_URL, env.DATABASE_URL)) return { ok: false, code: R.API_ENVIRONMENT };
+    const pins = verifyProgramPins(env, P, { storeRoot, readFile, realpath, readHead, readScriptBody, readArtifact });
+    if (!pins.ok) return pins;
     return {
         ok: true,
         authority: {
@@ -222,6 +329,7 @@ export function verifyFinancialsFixtureAuthority(env = {}, {
             org_source: org.source,
             /* The verified PostgREST origin: the one value a caller may hand its client. */
             api_url: new URL(String(env.SUPABASE_URL)).origin,
+            program_pins_digest: pins.digest,
         },
     };
 }

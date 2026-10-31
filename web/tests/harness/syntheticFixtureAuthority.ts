@@ -8,16 +8,19 @@
  * database URL are synthetic strings; nothing listens on those ports and nothing connects to them.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
     FINANCIALS_FIXTURE_ORG,
     FINANCIALS_HISTORICAL_DRAFT_PROGRAM,
     FINANCIALS_ISOLATED_PROGRAM,
+    FINANCIALS_REQUIRED_ARTIFACTS,
     FIXTURE_AUTHORITY_SCHEMA,
     QA_PERSONA_ORGS,
+    programPinsDigest,
 } from "../../scripts/qa/financialsFixtureAuthority.mjs";
 import { databaseIdentityOf, targetHoldRecordDigest } from "../../scripts/qa/isolatedFixtureAuthorityV2.mjs";
 
@@ -35,6 +38,21 @@ export const SYNTHETIC_PERSONA_ORG = QA_PERSONA_ORGS.qa_shared;
 export const SYNTHETIC_ENVIRONMENT = "certenv-0123456789";
 export const SYNTHETIC_API_URL = "http://127.0.0.1:56102";
 export const SYNTHETIC_DB_URL = "postgresql://postgres:SYNTHETIC-DB-SENTINEL@127.0.0.1:56101/postgres";
+
+/** The repository root: program pin paths are repository-relative. */
+export const REPO_ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+
+/**
+ * The `program_pins` the platform's executor would issue for `program` at `candidate` (draft contract
+ * ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT.md): every required artifact, hashed from the bytes in this checkout.
+ */
+export function syntheticProgramPins(program: Program, candidate: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+    const artifacts = FINANCIALS_REQUIRED_ARTIFACTS[program.fixture as keyof typeof FINANCIALS_REQUIRED_ARTIFACTS].map((a) => ({
+        role: a.role, path: a.path, sha256: createHash("sha256").update(readFileSync(join(REPO_ROOT, a.path))).digest("hex"),
+    }));
+    const body = { variant: "program", candidate_sha: candidate, script_sha256: sha(program.script_body), artifacts, ...over };
+    return { ...body, digest: programPinsDigest(body) };
+}
 
 /** A clear (or `over`-edited) target-hold record, hash-chained as the toolkit writes it. */
 export function syntheticHoldRecord(environmentId: string = SYNTHETIC_ENVIRONMENT, over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -88,6 +106,7 @@ export function syntheticExecutorStore({ now = Date.now(), requestId = "req-fin-
             request_id: requestId,
             evaluated_at: new Date(now - 1000).toISOString(),
         },
+        program_pins: syntheticProgramPins(program, head),
         ...record,
     };
     const text = `${JSON.stringify(rec, null, 2)}\n`;

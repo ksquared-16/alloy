@@ -100,6 +100,7 @@ describe("live executor authority admits; nothing else does", () => {
                 candidate_sha: "c".repeat(40), expires_at: s.rec.expires_at, org_id: FINANCIALS_FIXTURE_ORG.id, org_key: "certification_seed", org_source: "seed_manifest",
                 database_identity_digest: (s.rec.database_identity as { digest: string }).digest, hold_revision: 1,
                 api_url: "http://127.0.0.1:56102",
+                program_pins_digest: (s.rec.program_pins as { digest: string }).digest,
             },
         });
         const j = judgeLiveSuiteAuthority({ env: s.env(), authority: s.options() });
