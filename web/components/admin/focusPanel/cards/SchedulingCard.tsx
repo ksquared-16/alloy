@@ -638,6 +638,10 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                 if (siteLocationId) params.set("site_location_id", siteLocationId);
             } else {
                 params.set("customer_member_id", subject.id);
+                // The site this child's projection was composed at. Without it the route falls back to
+                // the case's own site — and a case with none (an "All locations" family) answered 400,
+                // so a child resolved from its own live assignment lost its rows on the first reload.
+                if (siteLocationId) params.set("site_location_id", siteLocationId);
                 if (opportunityId) params.set("opportunity_id", opportunityId);
             }
             const r = await schedApi(`?${params.toString()}`);
