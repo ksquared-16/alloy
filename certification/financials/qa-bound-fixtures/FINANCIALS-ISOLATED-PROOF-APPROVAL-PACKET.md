@@ -1,207 +1,138 @@
-# Financials isolated proof — approval packet v1 (prepared, NOT approved, NOT executed)
+# Financials isolated proof — approval packet v2 (prepared, NOT approved, NOT executed)
 
 Sprint `OPWORK_B77B3CBB5840_SPRINT_386D603E60C7` · lane `lane_b77b3cbb5840` · installed toolkit `20261031-eeaa6dac6860`
-(source `eeaa6dac68600dee8862962decd42b60169523b9`, Gateway runtime `eeaa6dac6860`). Prepared 2026-10-31 from metadata
-and source only. No database connection, credential read, test, live suite, resource, access change, cleanup,
-publication or merge was done to prepare it. **No target is authorized by this file.**
+(Gateway runtime `eeaa6dac6860`). Revised 2026-10-31. **v1 of this packet is preserved at `4c1b85bdf93f`.** Its claim
+that "v1 is execution-ready" was rejected and is withdrawn: v1 compatibility is not exact connection identity or
+target-hold authority.
+
+No database connection, credential read, live suite, environment, resource, access change, cleanup, hold change,
+publication or merge was done to prepare this packet. **No target is authorized by this file.**
 
 ## 0. Decision
 
-**Product code: READY under the installed contract.** No local code change is required to execute the registered
-operations: the registry issues authority v1 to both Financials fixtures, and the product verifier is v1.
+| | State |
+|---|---|
+| Product code | **v2 adopted locally, tested synthetically.** Authority v2 only, with no v1 fallback, plus non-SQL program pins and proof instrumentation. Code commit `184c50a276e31f815c73ff3cbe44e33a2e8c0b7a`. |
+| Execution under the installed toolkit | **Refuses by design.** `eeaa6dac` issues Financials v1 records, and the child refuses them (`fixture_authority_org_unbound`). |
+| Blocking dependency | **Platform** (`OPWORK_C86B7CC3C436_SPRINT_94E98241AD37`, `lane_c86b7cc3c436`): the program pin variant, plus both Financials entries registered v2 with the pins in `FINANCIALS-V2-PROGRAM-PINS-HANDOFF.json`, released and installed. This is not a user decision and not this lane's code. |
+| User decisions after that | The approval bundle in §4. **None is approved; none is filed.** No active grant exists, and that is not authority. |
+| Shared alloy-cert hold | Unchanged. It is not a stop on an isolated certenv. The child refuses shared targets (DB 54422, API 54421) by construction. |
+| Legacy incident | Census `gar_7518908144d8d3` / `tha_4d389b4074b7b0` and its disposition are complete and preserved. They are separate from product completion. |
 
-**Execution: NOT READY.** Four governed environment approvals are required, and none exists (§3). Three proof
-items are **not ready**, and executing this packet does not prove them (§7).
-
-The shared alloy-cert hold stays as set. It stops shared-stack live suites, and Financials refuses that stack by
-construction (§2). It is not a stop on this isolated proof.
-
-The legacy alloy-cert census and disposition (`gar_7518908144d8d3` / `tha_4d389b4074b7b0`, receipt in
-`incidents/2026-10-30-alloy-cert-live-suites/`) are complete and preserved. They are not a prerequisite here.
-
-## 1. Owner and candidate
+## 1. Candidate and pins
 
 | | |
 |---|---|
-| Financials owner | `lane_b77b3cbb5840` — the only lane named Financials in `lanes/lanes.json` (ACTIVE); one worktree `/Users/vacilando/Code/alloy-worktrees/financials` |
-| Final code candidate (preserved) | `061e164b558cfa0755c41275b38886c549298ba6` |
-| Code identity | `web/` tree `c6d5b037bc14…`, `supabase/` tree `c72b74ca103d…`, byte-identical at `77c0d0e7a6ff…`, `061e164b5`, `fc5d5ed95` and the commit adding this file |
-| Execution candidate `C` | worktree HEAD at execution. The executor refuses unless HEAD is exactly `C` and the tracked tree is clean. `C` is the commit that adds this file (documentation-only), unless a later documentation-only commit lands first; then re-check `git diff --quiet 77c0d0e7a C -- web supabase`. Moving HEAD back to `061e164b5` would need a branch rewrite or a detached HEAD, and neither is used. |
-| Base | merge-base `origin/staging` `4272e85dc8fb…`. `origin/staging` is now `fd30322a8dc6…`, 18 commits ahead. **Neither the candidate nor those 18 commits change `supabase/`**, so a certenv built on today's tip has the candidate's migrations and seed. |
-| Script digests (unchanged, re-measured) | `test:qa:financials-isolated` `78453bfc…c169` · `dev:qa:financials-historical-draft-fixture` `07f838cf…e87e8` |
-| Dependencies | `web/node_modules` present; the lockfile is unchanged vs merge-base (a preview requires its lockfile to be byte-identical to the worktree's) |
+| Final code commit | `184c50a276e31f815c73ff3cbe44e33a2e8c0b7a` |
+| Execution candidate `C` | the commit that adds this revision (documentation-only; named in the run report). Artifacts are byte-identical at both. Any later product commit is a new candidate: re-measure and re-register. |
+| Preserved | `061e164b5` (released checkpoint `ick_c475e4049cd6`, unchanged), `4c1b85bdf` (packet v1), `fc5d5ed95` (census) |
+| Base | merge-base `origin/staging` `4272e85dc8fb`. No `supabase/` change in the candidate or on staging since, so the schema baseline is unchanged. |
+| Script digests (unchanged) | `test:qa:financials-isolated` `78453bfc…c169` · `dev:qa:financials-historical-draft-fixture` `07f838cf…e87e8` |
+| Changed program artifacts | All in the handoff JSON: entry, both verifier files, binding, proof, live suite, `certEnvironment`, `vitest.config`, live-suite guard, historical core. `isolatedFixtureAuthorityV2.mjs` `bf6e405f…3876` is byte-identical to Enrollment `80eb7446656f`. |
+| Slices | `financials-authority-v2-fail-closed` `1b8d6e2b1754`, `catalog-live-proof-and-command-coverage` `954a715f989a`, `financials-program-pins-child` `184c50a276e3`; each `COMPLETE_COMMITTED_NOT_PROMOTED` |
 
-## 2. Installed contract vs stale packet claims
+## 2. What the child now requires before credential use, client, import or spawn
 
-| Claim (source) | Installed `eeaa6dac` | Status |
-|---|---|---|
-| H1 `financials_isolated_tests.run` `mutating:false` (FIXTURE-PACKET §2) | `run: { args: [], mutating: true }` (QAFX-FIN-MUT-01) | **repaired**, stale |
-| H2 `count` not registered | `count: { args:["--count"], mutating:false, census:true }` (QAFX-FIN-CENSUS-01) | **repaired**, stale |
-| H3 no org / preview passed | historical: `fixture_org: PERSONA_ORG`, `preview: true`; child env carries `ALLOY_CERT_FIXTURE_ORG_ID/_SOURCE`, `ALLOY_QA_PREVIEW_ORIGIN`, `ALLOY_QA_SESSION_ORIGIN/_SHA256`; isolated tests: `SEED_ORG` proven from the certenv's recorded seed manifest | **repaired** (product side in `77c0d0e7a`), stale |
-| H4 no verifiable authority; proof packet: "installed `b3c80db2` has no `verifyFixtureAuthority`" | v1 authority record + in-flight request provenance issued per execution | **repaired**, stale |
-| H5 no census reaches alloy-cert | shared census contract; executed once | **repaired and consumed**, stale |
-| Proof packet A741 pins at `bab9c927` | `qa-plan-registry` and `qa-run-ledger` unchanged. `isolated-fixture-execution` (`11d727d3…`), `certification-fixture` (`8c79a87e…`) and `qa-isolated-suite-target` (`9a496732…`) changed. Diff `bab9c92..eeaa6dac`: the v1 check was refactored into `verifyAuthorityCore` with identical v1 steps and refusals; v2 was added behind `authority_contract: "v2"`; the registry only added entries; the suite list only added `surfaces`. | **pin table stale; v1 contract unchanged** — re-pin, no code change |
+All four callers verify first: the isolated runner, the historical entry, the vitest live-suite guard and the live
+suite itself. The checks are the shared Enrollment verifier (byte-identical), plus Financials' org rule, an
+API-block guard and program pins:
 
-**Actual incompatibilities: none for execution under v1.** The product binding agrees with the installed values:
-port band 56100–56299, `QA_ORGS` ids `qa_shared`/`qa_secondary`, org sources `seed_manifest`/`persona`,
-schema `vacilando.isolated_fixture_authority.v1`, and store root `<passwd home>/.local/state/alloy-dev/gateway`.
+1. v2 record only, executor-issued (real path in the authority directory), with a live in-flight request naming its
+   bytes. The record must be inside its window and match the env and the program on request, fixture, operation, run,
+   environment, candidate, binding, npm script, script body digest and HEAD.
+2. **Organization.**
+   - Isolated tests: exactly `certification_seed` / `seed_manifest`.
+   - Historical: the org the executor's QA-run ledger binds to the persona, never the seed org.
+3. **Database:** `DATABASE_URL` with the child's whole environment as the client's must equal the record's identity.
+   Inherited `PG*` and target-overriding URL parameters refuse; the target must be loopback and never 54422.
+4. **Target hold:** re-read from the trusted store. It must be clear, at the same revision and hash, for this request.
+5. **API:** `http://127.0.0.1:<port>`, never 54421, and in the **same certenv port block** as the database. This is
+   a guard, not identity; the identity is requested as FIN-V2-REQ-2.
+6. **Program pins:** explicit `program` variant, no SQL, a digest that recomputes, this candidate and script, every
+   required artifact present, and every artifact's bytes in the checkout equal to its pin.
 
-The product binding refuses shared alloy-cert: API 54421 and DB 54422 are outside the band.
+Clients receive only the verified API origin and org.
 
-### v2 alignment — minimal and exact
+## 3. Proof instrumentation (authored; never run or imported here)
 
-- **Now: none, and adopting v2 now would break execution.** The executor issues v2 only to entries registered
-  `authority_contract: "v2"`; Financials entries are v1. A v2-only product child refuses every v1 record
-  (`fixture_authority_org_unbound`). That is Enrollment's current state at `80eb7446656f`, where the registry also
-  issues it v1.
-- **The v1 org gap is already closed product-side for Financials.**
-  - Isolated tests accept only the registry seed org.
-  - The historical draft accepts only the org the executor's own QA-run ledger binds to the persona, never the
-    seed org.
-- **The v1 gaps that remain** (stated, accepted under v1):
-  - no database-identity binding of `DATABASE_URL`/`SUPABASE_URL` to *this* certenv beyond loopback and band;
-  - no target-hold disposition.
-- **To move later** (platform first, then product). Not authorized, not started:
-  1. The platform registers both Financials entries `authority_contract: "v2"` with pins. Today's pin model
-     requires `pins.sql.{path,sha256}` (`pin_unregistered` otherwise). Financials fixtures run TypeScript service
-     calls and have no SQL artifact, so **the v2 pin model needs a no-SQL variant**. That is a platform contract
-     change.
-  2. The product reuses Enrollment's generic `verifyIsolatedFixtureAuthorityV2` from
-     `web/scripts/qa/isolatedFixtureAuthorityV2.mjs` (introduced in `80eb7446656f`, **not on `origin/staging`**)
-     with two Financials program descriptors. It replaces only the v1 core in `financialsFixtureAuthority.mjs`
-     and keeps the persona-ledger check. No second framework. It depends on Enrollment's merge.
+`catalogAddCharge.live` (9 pinned cases, `tests passed=9 failed=0` required):
 
-## 3. Lane/host dependencies — the approvals this packet requests
+- **Picker:** offerable / blocked / unsupported / absent, by the shared rule.
+- **Single Add:** preview, write and post agree, with exactly one journal entry, on the Catalog's GL account.
+- **Refusals:** unmapped GL, orphan GL, recurring item and other site are each refused at preview and at write, and
+  nothing is written.
+- **Identity:** same-name items are two charges at two prices, and the template stays a template.
+- **Operator command:** `charge.add` for two children through `executeMultiChildAdd`. Each child gets one catalog
+  one-time fee (3100), posted at the org's own business date and journaled once. A retry converges.
+- **Bulk refusal:** an other-site item is refused for both children, with nothing written.
 
-Each step is a governed action under this lane's run, approved per action in Needs You. **No current grant
-exists:** every lane grant in `governed-grants.json` is consumed or expired (latest expiry 2026-10-15). The lane
-has no QA run, no certenv and no preview target.
+**Proof report.** The suite writes the report; the runner judges it with `financialsIsolatedProof.mjs`, and an absent
+or invalid report is NOT a pass:
 
-| # | Governed action | Inputs (exact) | Allocation (never chosen by the lane) | Irreversible? |
+- 14 owned tables counted **by exact identity** (fixed per-run ids `ca7a<4hex>-…` or its own two agreements, in the
+  bound org): **all 0 before** the first write;
+- **after** its own cleanup: customers 1, locations 2, persons 2, members 2, agreements 2, policies 2, GL accounts 3,
+  mapping 1, revenue categories 3, products 0, template 0, drafts 0, **non-draft charges 3, journal entries 3**;
+- **retained:** 3 × `posted_charge=<uuid> journal_entry=<uuid>`, measured;
+- whether an accounting period had to be created for 2026-11-05 or the business date (org-level; retained).
+
+**Cleanup scope:** drafts on its own two agreements, its own 7 products and its own template, each deleted by id in the
+bound org. There is no name match, no org-wide delete and no raw SQL. Posted charges and journal entries are immutable
+and stay until the environment is retired.
+
+**Historical draft fixture** (unchanged rules, v2 authority):
+- 12 fixed-id rows plus 1 template draft in the persona org;
+- `count` before and after;
+- `reset` ≤ 50 fixture-owned rows; it refuses on any ledger row;
+- identity by template id, never by name.
+
+## 4. The smallest approval bundle — AFTER the platform installs §0's dependency
+
+Each step is a governed action that needs per-action operator approval. Nothing here is filed.
+
+| # | Action | Exact inputs | Bound | Needed for |
 |---|---|---|---|---|
-| A1 | `environment.build_certification_baseline` | `repository: ksquared-16/alloy`, `baseBranch: staging`, `expectedBaseSha: <origin/staging tip at filing>` (must equal the tip or the action refuses `base_sha` drift) | next free 10-port block in 56100–56299 (6 of 20 in use: 56100–56150); default lease, renewable via `environment.renew_certification_lease` | creates a resource |
-| A2 | `product.register_candidate_preview_target` | `worktree: /Users/vacilando/Code/alloy-worktrees/financials`, `reason` | a free port in 4410–4419 (4410–4413 held) | registration; releasable via `product.release_candidate_preview_target` |
-| A3 | `product.activate_candidate_preview` | `target: <A2 key>`, `candidateSha: C`, `environmentId: <A1 id>`, `databaseMode: isolated` (Mode 2), `reason` | runs **one production build** (8192 MiB heap floor) of `C` from `git archive`; the worktree is untouched | retire via `product.retire_candidate_preview` |
-| A4 | `environment.qa_run_open` | `plan: bp_v2`, `target: <A1 id>`, `expectedRepository: ksquared-16/alloy`, `expectedBaseSha: <A1 base>`, `expectedMigrationHead: <A1 head>` (lease ≤ 12 h, default 4) | creates QA orgs, identities and actor in the certenv (`ensureLocalStructure`, local only); binds personas; mints a verified session for `admin` | closed by `environment.qa_run_close` |
-| R1 | `environment.qa_run_close` | `qaRunId` | — | removes access, signs out, deletes session files |
-| R2 | `product.retire_candidate_preview` | `target`, `reason` | — | |
-| R3 | `environment.retire_certification_environment` | `environmentId: <A1 id>` | — | **irreversible**: destroys the env and the retained posted charge (§5) |
+| A1 | `environment.build_certification_baseline` | `repository: ksquared-16/alloy`, `baseBranch: staging`, `expectedBaseSha: <origin/staging tip at filing>` | 1 env, next free 10-port block in 56100–56299, default lease | both |
+| H1 | `environment.record_target_hold_state` | `targetKey: <A1 id>`, `state: clear`, `ownerId: <approving operator>`, `evidenceRef: <A1 receipt>`, `expectedRevision: 0` | first record of that one certenv; never alloy-cert | both (v2 issuance refuses without a clear record) |
+| A4 | `environment.qa_run_open` | `plan: bp_v2`, `target: <A1 id>`, `expectedRepository`, `expectedBaseSha`, `expectedMigrationHead` (from A1) | lease ≤ 12 h (default 4); persona `admin` (qa_shared, session) | both |
+| A2 | `product.register_candidate_preview_target` | `worktree: /Users/vacilando/Code/alloy-worktrees/financials`, `reason` | one port in 4410–4419 | historical + browser only |
+| A3 | `product.activate_candidate_preview` | `target: <A2>`, `candidateSha: C`, `environmentId: <A1>`, `databaseMode: isolated`, `reason` | one production build of `C` | historical + browser only |
 
-**Plan choice (operator decision, not an access request).** No Financials QA plan is registered. `bp_v2` is the
-only registered plan whose session-bearing personas are finance-capable `qa_shared` members (`admin`,
-`director`).
+**Phase 1 (isolated tests only): A1 → H1 → A4**, then
+`vac certify-fixture financials_isolated_tests run … --candidate C --script-sha256 78453bfc…` (one request id).
 
-This packet proposes `bp_v2` persona `admin` for both fixtures. The isolated-tests binding needs a bound persona
-but does not act as it. Local certenvs are exempt from the hosted plan gates.
+**Phase 2 (historical draft + persona browser proof): add A2 → A3**, then historical `count` → `ensure` → `verify`, then
+the browser proof as `admin` at the preview's loopback origin (the draft at 7500 under its template, distinct from the
+9900 Catalog item), then `reset` → `count` = 0 (fresh).
 
-A Financials-owned plan would be a platform registry change; it is **not ready** and not required.
+**Teardown (separate approvals):**
+- `environment.qa_run_close`;
+- `product.retire_candidate_preview` / `release_candidate_preview_target`;
+- **`environment.retire_certification_environment` (irreversible).** It destroys the retained 3 posted charges and
+  3 journal entries with the environment. It is filed only after the evidence is recorded and is its own decision.
 
-Credentials are env-only, built per child by the executor (`fixtureChildEnv`): `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, anon key, `DATABASE_URL`, and the QA binding. Nothing is inherited, nothing is
-printed (secret suppressor + receipt scrub), and the lane never reads them.
+`bp_v2` is a Business Processes plan reused for its finance-capable `qa_shared` personas. No Financials plan exists,
+so the plan is a user decision. A Financials-owned plan would be a platform registry change.
 
-## 4. Operations — exact sequence after A1–A4
+## 5. Validation evidence (local, synthetic)
 
-```bash
-V=/Users/vacilando/.local/share/alloy/toolkit/current/bin/vac
-L=lane_b77b3cbb5840; Q=<A4 qar_…>; C=<HEAD sha40>; PERSONA=admin
-HD=07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8
-IT=78453bfcd3d60c0757d800c64f42577265fc27ff458d48e03cc610b818f1c169
-B="--lane $L --qa-run $Q --persona $PERSONA --candidate $C --json"
-$V certify-fixture financials_historical_draft count  $B --script-sha256 $HD --request-id fin-v1-hd-count-before
-$V certify-fixture financials_historical_draft ensure $B --script-sha256 $HD --request-id fin-v1-hd-ensure
-$V certify-fixture financials_historical_draft verify $B --script-sha256 $HD --request-id fin-v1-hd-verify
-#   → persona browser proof here (§6), while the draft exists
-$V certify-fixture financials_isolated_tests   run    $B --script-sha256 $IT --request-id fin-v1-it-run
-$V certify-fixture financials_historical_draft reset  $B --script-sha256 $HD --request-id fin-v1-hd-reset
-$V certify-fixture financials_historical_draft count  $B --script-sha256 $HD --request-id fin-v1-hd-count-after
-```
-
-Each request id is used once; a reused id replays the old receipt and is never fresh.
-
-### Synthetic scope and canonical calls
-
-| Program | Org | Namespace / identities | Writes | Canonical service calls |
-|---|---|---|---|---|
-| historical draft | `qa_shared` `4acc9386-…d142` (persona, ledger-verified; seed org refused) | `financials-cert.alloy.invalid`; 12 fixed ids `fc0d0000-0000-4000-8000-…`: customer, site, person, member, agreement, 2 policies, GL account, mapping, revenue category, same-name Catalog product (9900), template `fincert_hist_registration` (7500) | 12 configuration rows (PostgREST inserts with an ownership key) + **1 draft** at service date 2026-03-16; never posts | `writeTemplateDraftCharge` (draft); verify reads back |
-| isolated tests | seed `00000000-…0001` (proven from the certenv's recorded seed at its base) | per-run prefix `ca7a<4 hex>-0000-4000-8000-…`, labels `Catalog live … <run>` | 1 customer, 2 sites, 1 person, 1 member, 1 agreement, 2 policies, 3 GL accounts, 1 mapping, 3 revenue categories, 6 products, 1 template, an accounting period if none covers 2026-11-05; drafts; **1 posted charge (4200) + its journal entry** | `loadCatalogChargeOptions`, `previewTemplateCharge`, `writeTemplateDraftCharge`, `postChildcareCharge`, `resolveGlAccountForMappingKey` |
-
-**No raw SQL posting.** No SQL artifact is executed; posting happens only through `postChildcareCharge`.
-
-**Outbound, Stripe, payments and refunds are absent.**
-- No payment, refund, allocation or Stripe call in either program.
-- A grep of `childcareChargeService.ts`, `chargeLifecycleService.ts` and `catalogChargeOffer.ts` finds no
-  `stripe`, `fetch(`, email, notify, webhook or outbox call. Transitive imports are not proven.
-- The child env carries no Stripe or Resend key.
-
-### Add Charge agreement proven by `run` (7 cases, `tests passed=7 failed=0` required)
-
-1. **Picker rule** (`loadCatalogChargeOptions`): one-time fees are offerable (×2 same-name). Unmapped and orphan
-   GL are `blocked`; annual cadence is `unsupported`; an other-site item is absent.
-2. **Command agreement:**
-   - preview intent = write (amount 4200, mapping key);
-   - the draft carries `source: commercial_catalog` and the Catalog GL account;
-   - an idempotent re-write returns `unchanged`;
-   - post, then journal once;
-   - the GL resolves to the Catalog's account.
-3. **Unsupported types and missing mappings** (4 cases): unmapped GL, orphan GL, recurring item and other site
-   are each refused on preview *and* write, with the charge count unchanged.
-4. **Historical/same-name identity:** two same-name Catalog items are two charges at 5300 and 4200. The
-   same-name template stays a template (1100, `charge_template_id` set, no `catalog_item`).
-
-The historical program adds: the draft is edited under its template (7500), not the same-name Catalog item
-(9900), with exactly one draft.
-
-## 5. Reset scope vs environment deletion (separate)
-
-- **Fixture reset** (`financials_historical_draft reset`):
-  - acts on fixture-owned rows only, matched by id + ownership key in the persona org;
-  - at most 50 rows (`reset_limit`);
-  - refuses with `removed=0` on any posted/void charge, payment, journal, closed period, foreign CASCADE
-    dependent or foreign sibling;
-  - pass = `reset namespace=financials-cert.alloy.invalid removed=<n>`, then a **fresh** `census count=0`
-    measured after it.
-- **Isolated suite** `afterAll`: removes drafts, products and the template. **Retained by design:** the posted
-  charge and its journal entry (immutable by `enforce_childcare_charge_immutability`), plus the suite's
-  configuration rows.
-- **Environment deletion** (R3): the only removal of retained ledger rows. Irreversible, separately approved,
-  filed only after the evidence below is recorded.
-
-## 6. Evidence that counts
-
-| Step | Pass |
+| Check | Result |
 |---|---|
-| count-before | fresh `census count=0` |
-| ensure / verify | `ok`, every ✓, one draft at 7500 under the template |
-| run | `ok`, `tests passed=7 failed=0`, `✓ catalogAddCharge.live#1…#7 passed`; any skip, pending or zero-pass is a failure |
-| reset / count-after | as §5; `censusIsFresh` against the same run, environment and candidate, measured after the reset |
-| every receipt | `secret_suppression.withheld=false`, `credentials_exposed=false`, binding digest, evidence binding `qar:certenv:base12:migration_head:admin:financials` |
-| persona browser proof | Agent-driven with the run's verified `admin` session, at the preview's **loopback origin** serving `C` against the same certenv, between verify and reset: the fixture household's charges show the historical draft at 7500 under the template label, distinct from the 9900 Catalog item. Screenshots are bound to `qa_run_id`, preview key and `C`. |
+| Focused-safe list (broker), live suites excluded by the guard | 46 files / 1015 tests passed at slice 2; re-run on the final candidate is recorded in the run report |
+| Authority suites after program pins (4 files + contract) | 272 passed |
+| `typecheck`, `typecheck:tests` (broker) | passed on the code-final commit |
+| eslint (changed files) | no new problems (the 5 `no-explicit-any` are pre-existing at `d12aaa0b99`) |
+| Planted: API-block guard removed | 3 tests failed; restored byte-identical |
+| Planted: persona org trusted from env | 8 tests failed; restored byte-identical |
+| `vacilando-suite --tier=1 --targeted` | not applicable to this repository: the installed artifact has no `tests/deterministic` |
+| Production build | the `061e164b5` full receipt (build/typecheck/test green) is pinned to the old `web/` tree and does not cover this tree. The app graph (`web/app`, `web/lib`) is unchanged since `061e`. One build on `C` is recorded in the run report if run. |
 
-## 7. Not ready (labelled, no access invented)
+## 6. Remaining engineering (no vague asks)
 
-1. **The posted test charge's identity is not in the receipt.** The runner prints only ordinals; the per-run
-   `ca7a<4hex>` prefix is never output. The retention claim rests on test #2's assertion. Naming the retained
-   charge needs a product change: one structured `✓ retained posted charge prefix=ca7a<4hex>` line. Not made.
-2. **The operator Add command and multi-child/bulk Add are not exercised live.** `run` calls the services
-   directly, not the `charge.add` action. Multi-child Add is by design a loop over the same single-charge
-   writers, can POST when no review boundary applies, keys idempotency per charge, and has no rollback (it
-   reports per child). The bulk picker route (`bulk-charge-targets`) uses the same `loadCatalogChargeOptions`.
-   Coverage is unit only: `catalogBulkAndDraftIdentity.test.ts`, `catalogManualAddCharge.test.ts`,
-   `unifiedAddTarget.test.ts`. A live command/bulk case needs a new pinned case and a new script digest. Not
-   made.
-3. **No scripted persona browser driver.** The browser proof in §6 is a procedure, not a registered fixture
-   operation.
-4. **No census for the isolated suite's own rows** (`run` has no census operation). Its before/after evidence
-   is the tests line plus §5 retention.
-5. **v2:** see §2. Platform no-SQL pin variant, plus Enrollment's verifier on staging.
-
-## 8. Remaining engineering, in order
-
-1. Operator: approve or decline A1–A4 and the `bp_v2`/`admin` plan choice. Each is per action; this packet files
-   none of them.
-2. Lane, after approval: §4 at `C`, then §6 evidence, then R1/R2, then R3 as its own approval.
-3. Optional product slices (each changes `C` and therefore the pins): §7.1 retained-charge line, §7.2 live
-   command/bulk case.
-4. Platform: re-pin the proof packet's A741 table to `eeaa6dac` (three hashes above); the §2 v2 no-SQL pin model.
-5. Promotion of the candidate: checkpoint, Director release, one PR, CI, merge. Not started.
+1. **Platform (FIN-V2-REQ-1):** register both entries v2 / program with the handoff's artifacts at `C`, then release
+   and install.
+2. **Platform (FIN-V2-REQ-2):** add an API identity to the v2 record. The product will then replace the block guard
+   with an exact origin match (one product slice; changes `C`).
+3. **Product, after any later commit:** re-measure the artifact hashes and hand them over again.
+4. **Promotion of this candidate** (checkpoint, release, PR, merge) has not started. `061e164b5`'s released
+   checkpoint is separate and untouched.
