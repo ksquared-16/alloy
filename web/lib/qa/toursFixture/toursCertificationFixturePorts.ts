@@ -1,7 +1,9 @@
 /**
  * The real ports of the Tours certification fixture: the isolated QA database (service role, loopback
  * only — the guard refuses anything else before this is built) and the candidate preview's own Forms
- * routes, called as the bound QA persona.
+ * routes, called as the bound QA persona. Both are the executor's binding: the organization and site come from
+ * `ToursFixtureWorld` (persona org `qa_shared`, site `qa_north`), the preview origin and Cookie header from the
+ * digest-bound session (`PreviewSession`) — never a constant, never a URL from the session file.
  *
  * Product owners reused, never re-implemented:
  *   - tour rules: `createTourSchedule` / `deleteTourSchedule` (the schedule writer; org-wide scope = the
@@ -14,7 +16,6 @@
  * test) and the synthetic household (the same rows the canonical lead seed writes). None carries a token.
  */
 
-import { readFileSync } from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
@@ -23,22 +24,20 @@ import { TOUR_SCHEDULE_METADATA_KEY } from "@/lib/tours/schedules/tourWeeklySche
 import {
     LEGACY_RULE,
     TOURS_FIXTURE_EMAIL,
-    TOURS_FIXTURE_LOCATION_ID,
     TOURS_FIXTURE_MARKER,
     TOURS_FIXTURE_MARKER_KEY,
     TOURS_FIXTURE_NAMESPACE,
-    TOURS_FIXTURE_ORG_ID,
     TOURS_FIXTURE_ROLE_KEY,
-    isLoopbackHttp,
     type FixtureForm,
     type LocationLinkRow,
     type MarkerBooking,
     type MarkerFamily,
     type MarkerRule,
+    type PreviewSession,
     type ToursFixturePorts,
+    type ToursFixtureWorld,
 } from "@/lib/qa/toursFixture/toursCertificationFixture";
 
-const ORG = TOURS_FIXTURE_ORG_ID;
 const MARK = { [TOURS_FIXTURE_MARKER_KEY]: TOURS_FIXTURE_MARKER };
 const MARKER_FILTER = `metadata->>${TOURS_FIXTURE_MARKER_KEY}`;
 
@@ -48,28 +47,16 @@ function must<T>(r: { data: T | null; error: { message: string } | null }): T {
     return r.data as T;
 }
 
-/** The preview origin and Cookie header from the executor-provided QA storage state (loopback only). */
-export function previewSessionFrom(path: string | undefined): { origin: string; cookie: string } | null {
-    if (!path) return null;
-    try {
-        const state = JSON.parse(readFileSync(path, "utf8")) as { cookies?: { name: string; value: string; domain?: string }[]; origins?: { origin?: string }[] };
-        const origin = state.origins?.map((o) => o.origin).find((o) => isLoopbackHttp(o));
-        if (!origin) return null;
-        const host = new URL(origin).hostname;
-        const cookies = (state.cookies ?? []).filter((c) => !c.domain || c.domain.replace(/^\./, "") === host);
-        if (!cookies.length) return null;
-        return { origin, cookie: cookies.map((c) => `${c.name}=${c.value}`).join("; ") };
-    } catch {
-        return null;
-    }
-}
-
-export function createToursFixturePorts(env: Readonly<Record<string, string | undefined>>): ToursFixturePorts {
+export function createToursFixturePorts(
+    env: Readonly<Record<string, string | undefined>>,
+    bound: { world: ToursFixtureWorld; session: PreviewSession },
+): ToursFixturePorts {
     const db: SupabaseClient = createClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-    const session = previewSessionFrom(env.ALLOY_QA_SESSION_FILE);
+    const ORG = bound.world.orgId;
+    const LOCATION = bound.world.locationId;
+    const session = bound.session;
 
     async function preview(path: string, init: { method: string; body: unknown }): Promise<Record<string, unknown>> {
-        if (!session) throw new Error("preview_session_unavailable");
         const res = await fetch(`${session.origin}${path}`, {
             method: init.method,
             headers: { "content-type": "application/json", cookie: session.cookie },
@@ -93,7 +80,7 @@ export function createToursFixturePorts(env: Readonly<Record<string, string | un
     return {
         async orgAndLocationExist() {
             const org = must(await db.from("orgs").select("id").eq("id", ORG).maybeSingle());
-            const loc = must(await db.from("locations").select("id").eq("id", TOURS_FIXTURE_LOCATION_ID).eq("org_id", ORG).maybeSingle());
+            const loc = must(await db.from("locations").select("id").eq("id", LOCATION).eq("org_id", ORG).maybeSingle());
             return Boolean(org && loc);
         },
         async countActiveProviderBindings() {
@@ -118,7 +105,7 @@ export function createToursFixturePorts(env: Readonly<Record<string, string | un
             return (rows as Record<string, unknown>[]).map(toRule);
         },
         async findLocationRules() {
-            const rows = must(await db.from("tour_availability_rules").select("id, location_id, day_of_week, start_time, end_time, metadata").eq("org_id", ORG).eq("location_id", TOURS_FIXTURE_LOCATION_ID).eq("is_active", true));
+            const rows = must(await db.from("tour_availability_rules").select("id, location_id, day_of_week, start_time, end_time, metadata").eq("org_id", ORG).eq("location_id", LOCATION).eq("is_active", true));
             return (rows as Record<string, unknown>[]).map(toRule);
         },
         async createLegacyRule() {
@@ -174,9 +161,10 @@ export function createToursFixturePorts(env: Readonly<Record<string, string | un
                 membershipIds = [m.id];
             }
             if (!opportunityId) {
-                const v = must(await db.from("verticals").select("id").eq("org_id", ORG).limit(1).maybeSingle()) as { id: string } | null;
+                // `verticals` is platform-wide (no org_id): the active childcare vertical, as lib/dev/seedChildcareDemo resolves it.
+                const v = must(await db.from("verticals").select("id").eq("slug", "childcare").eq("is_active", true).maybeSingle()) as { id: string } | null;
                 if (!v) throw new Error("vertical");
-                const o = must(await db.from("opportunities").insert({ org_id: ORG, vertical_id: v.id, name: "Tourqa Legacy (fixture)", source: "tours_certification_fixture", status_key: NEW_LEAD_STATUS_KEY, customer_id: customerId, primary_person_id: personId, primary_contact_id: null, location_id: TOURS_FIXTURE_LOCATION_ID, metadata: { ...MARK } }).select("id").single()) as { id: string };
+                const o = must(await db.from("opportunities").insert({ org_id: ORG, vertical_id: v.id, name: "Tourqa Legacy (fixture)", source: "tours_certification_fixture", status_key: NEW_LEAD_STATUS_KEY, customer_id: customerId, primary_person_id: personId, primary_contact_id: null, location_id: LOCATION, metadata: { ...MARK } }).select("id").single()) as { id: string };
                 opportunityId = o.id;
             }
             return { personId, customerId, opportunityId, membershipIds };
@@ -199,7 +187,7 @@ export function createToursFixturePorts(env: Readonly<Record<string, string | un
             must(await db.from("tour_bookings").insert({
                 org_id: ORG,
                 opportunity_id: input.opportunityId,
-                location_id: TOURS_FIXTURE_LOCATION_ID,
+                location_id: LOCATION,
                 primary_person_id: input.personId,
                 primary_contact_id: null,
                 requested_by_user_id: null,
@@ -235,7 +223,7 @@ export function createToursFixturePorts(env: Readonly<Record<string, string | un
         async createLink({ formId, key }) {
             const data = await preview(`/api/admin/forms/${formId}/public-links`, {
                 method: "POST",
-                body: { location_id: TOURS_FIXTURE_LOCATION_ID, label: `Tours cert ${key}`, metadata: { ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key } },
+                body: { location_id: LOCATION, label: `Tours cert ${key}`, metadata: { ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key } },
             });
             const id = typeof data.id === "string" ? data.id : "";
             if (!id) throw new Error("link");

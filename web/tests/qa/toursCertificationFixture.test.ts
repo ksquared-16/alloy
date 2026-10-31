@@ -3,7 +3,9 @@
  * preview, no network. Proves the runner's contract with the installed toolkit (argv, output lines, namespace,
  * reset bound), its guards, its ownership, idempotency and partial-failure recovery, the fail-closed outbound
  * contract, secret-free output, and that the fixture's data yields the G-T2 and G-T5 semantics through the
- * product's own functions. Integrated proof on an isolated QA run is NOT claimed here.
+ * product's own functions, and its consumption of the installed executor's A741 binding (persona org, trusted
+ * preview origin, digest-bound session, authority consistency) with negative controls for each — no seed-org
+ * fallback. Integrated proof on an isolated QA run is NOT claimed here.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,30 +13,56 @@ import { describe, expect, it } from "vitest";
 
 import {
     LINK_PLAN,
+    FIXTURE_AUTHORITY_SCHEMA,
+    TOURS_BINDING_ENV_KEYS,
     TOURS_FIXTURE_FORM_TITLES,
-    TOURS_FIXTURE_LOCATION_ID,
     TOURS_FIXTURE_MARKER,
     TOURS_FIXTURE_MARKER_KEY,
     TOURS_FIXTURE_NAMESPACE,
     TOURS_FIXTURE_RESET_LIMIT,
+    TOURS_FIXTURE_PERSONA_ORG,
     TOURS_FIXTURE_ROLE_KEY,
+    TOURS_FIXTURE_SITE,
     LEGACY_RULE,
+    bindingFromEnv,
     guardToursFixture,
     makeSink,
     nextLegacySlot,
     runToursFixture,
+    sessionFromStorageState,
+    sha256Hex,
     type LocationLinkRow,
     type MarkerBooking,
     type MarkerFamily,
     type MarkerRule,
+    type PreviewSession,
+    type ToursFixtureOperation,
     type ToursFixturePorts,
+    type ToursFixtureWorld,
 } from "@/lib/qa/toursFixture/toursCertificationFixture";
-import { previewSessionFrom } from "@/lib/qa/toursFixture/toursCertificationFixturePorts";
 import { buildLocationSpecificLinkMetadata } from "@/lib/forms/locationSpecificPublicLinkMetadata";
 import { expandTourScheduleToRuleValues } from "@/lib/tours/schedules/tourWeeklySchedule";
 
 const root = resolve(__dirname, "../..");
-const ENV = {
+const LOCATION = TOURS_FIXTURE_SITE.id;
+const SEED_ORG_ID = "00000000-0000-4000-8000-000000000001";
+const NOW = new Date("2026-10-30T18:00:00Z");
+
+/* ── the installed executor's A741 binding, as fixtureChildEnv / runIsolatedFixture build it ── */
+const PREVIEW_ORIGIN = "http://127.0.0.1:3101";
+const AUTHORITY_FILE = "/state/isolated-fixtures/authority/tfx-req-1.0123456789abcdef.json";
+const SESSION_FILE = "/state/qa/sessions/qar_4246ac22ece0/admin.json";
+const CANDIDATE = "4edb2ab3f26b096ae876ab611841d8cda1cc08ac";
+const BINDING_DIGEST = "b".repeat(64);
+const SESSION_TEXT = JSON.stringify({
+    cookies: [
+        { name: "sb-alloy-local-auth", value: "cookie-SENTINEL", domain: "127.0.0.1" },
+        { name: "foreign", value: "foreign-SENTINEL", domain: "evil.example" },
+    ],
+    // A URL in the session file is never used: requests go to the executor's preview origin.
+    origins: [{ origin: "http://127.0.0.1:9" }],
+});
+const BASE_ENV = {
     ALLOY_CERT_FIXTURE: "tours_certification",
     ALLOY_CERT_NAMESPACE: TOURS_FIXTURE_NAMESPACE,
     ALLOY_QA_RUN_ID: "qar_4246ac22ece0",
@@ -43,10 +71,39 @@ const ENV = {
     SUPABASE_SERVICE_ROLE_KEY: "service-key-SENTINEL-never-printed",
     PATH: "/usr/bin",
 };
+function authorityText(op: ToursFixtureOperation, over: Record<string, unknown> = {}): string {
+    return `${JSON.stringify({
+        schema: FIXTURE_AUTHORITY_SCHEMA, request_id: "tfx-req-1", fixture: "tours_certification", operation: op, suite: "tours",
+        npm_script: "dev:qa:tours-fixture", script_sha256: "6d58a56a52afc71eab3fb274c8bb5c88fe197001f5880dfe9bdf705e0825f996",
+        candidate_sha: CANDIDATE, qa_run_id: "qar_4246ac22ece0", environment_id: "certenv-3669337690", binding_digest: BINDING_DIGEST,
+        mutating: op !== "count", nonce: "n".repeat(32), issued_at: "2026-10-30T17:59:00.000Z", expires_at: "2026-10-30T19:00:00.000Z", ...over,
+    }, null, 2)}\n`;
+}
+function boundEnv(op: ToursFixtureOperation, authority = authorityText(op)): Record<string, string | undefined> {
+    return {
+        ...BASE_ENV,
+        ALLOY_QA_PERSONA: "admin",
+        ALLOY_QA_SESSION_FILE: SESSION_FILE,
+        ALLOY_CERT_FIXTURE_ORG_ID: TOURS_FIXTURE_PERSONA_ORG.id,
+        ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona",
+        ALLOY_QA_PREVIEW_ORIGIN: PREVIEW_ORIGIN,
+        ALLOY_QA_SESSION_ORIGIN: PREVIEW_ORIGIN,
+        ALLOY_QA_SESSION_SHA256: sha256Hex(SESSION_TEXT),
+        ALLOY_QA_CANDIDATE_SHA: CANDIDATE,
+        ALLOY_QA_REQUEST_ID: "tfx-req-1",
+        ALLOY_QA_BINDING_DIGEST: BINDING_DIGEST,
+        ALLOY_QA_BINDING_EXPIRES_AT: "2026-10-30T19:00:00.000Z",
+        ALLOY_QA_AUTHORITY_FILE: AUTHORITY_FILE,
+        ALLOY_QA_AUTHORITY_SHA256: sha256Hex(authority),
+    };
+}
+const ENV = boundEnv("ensure");
+type Files = Record<string, string | null>;
+const filesFor = (op: ToursFixtureOperation, over: Files = {}): Files => ({ [AUTHORITY_FILE]: authorityText(op), [SESSION_FILE]: SESSION_TEXT, ...over });
+
 const MARK = { [TOURS_FIXTURE_MARKER_KEY]: TOURS_FIXTURE_MARKER };
 const FORM_A = "f-aaaa";
 const FORM_B = "f-bbbb";
-const NOW = new Date("2026-10-30T18:00:00Z");
 
 /** In-memory stand-in for the isolated database and the preview's Forms routes. */
 function world(opts: { bindings?: number; outboundDelta?: number; failCreateLinkAt?: number; extraMarkerRows?: number; namespaceOutbound?: number; ownLocationRuleCovering?: boolean; forms?: "ok" | "missing" } = {}) {
@@ -62,7 +119,7 @@ function world(opts: { bindings?: number; outboundDelta?: number; failCreateLink
         calls: [] as string[],
         linkCreates: 0,
     };
-    for (let i = 0; i < (opts.extraMarkerRows ?? 0); i++) state.bookings.push({ id: id("bk"), location_id: TOURS_FIXTURE_LOCATION_ID, status_key: "pending_approval", start_at: NOW.toISOString(), end_at: NOW.toISOString() });
+    for (let i = 0; i < (opts.extraMarkerRows ?? 0); i++) state.bookings.push({ id: id("bk"), location_id: LOCATION, status_key: "pending_approval", start_at: NOW.toISOString(), end_at: NOW.toISOString() });
     const ports: ToursFixturePorts = {
         orgAndLocationExist: async () => true,
         countActiveProviderBindings: async () => opts.bindings ?? 0,
@@ -70,7 +127,7 @@ function world(opts: { bindings?: number; outboundDelta?: number; failCreateLink
         countNamespaceOutboundRows: async () => opts.namespaceOutbound ?? 0,
         findMarkerRules: async () => state.rules.filter((r) => r.marker),
         findLocationRules: async () =>
-            opts.ownLocationRuleCovering ? [{ id: "own", location_id: TOURS_FIXTURE_LOCATION_ID, day_of_week: 4, start_time: "12:00:00", end_time: "15:00:00", schedule_id: "s-own" }] : [],
+            opts.ownLocationRuleCovering ? [{ id: "own", location_id: LOCATION, day_of_week: 4, start_time: "12:00:00", end_time: "15:00:00", schedule_id: "s-own" }] : [],
         createLegacyRule: async () => {
             state.calls.push("createLegacyRule");
             // The real writer's own expansion — the legacy shape is the product's, location_id NULL.
@@ -105,7 +162,7 @@ function world(opts: { bindings?: number; outboundDelta?: number; failCreateLink
         findMarkerBookings: async () => [...state.bookings],
         insertLegacyPendingBooking: async (b) => {
             state.calls.push("insertLegacyPendingBooking");
-            state.bookings.push({ id: id("bk"), location_id: TOURS_FIXTURE_LOCATION_ID, status_key: "pending_approval", start_at: b.startAt, end_at: b.endAt });
+            state.bookings.push({ id: id("bk"), location_id: LOCATION, status_key: "pending_approval", start_at: b.startAt, end_at: b.endAt });
         },
         deleteBookings: async (ids) => {
             const before = state.bookings.length;
@@ -120,7 +177,7 @@ function world(opts: { bindings?: number; outboundDelta?: number; failCreateLink
             if (opts.failCreateLinkAt && state.linkCreates === opts.failCreateLinkAt) throw new Error("preview_500 secret-token-SENTINEL");
             clock += 60_000;
             // What the product route stores: location metadata, the form's lead-capture intent, the caller's marker.
-            const metadata = { ...buildLocationSpecificLinkMetadata({ formName: formId, locationId: TOURS_FIXTURE_LOCATION_ID, locationName: "Lakeside" }), lead_capture: true, ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key };
+            const metadata = { ...buildLocationSpecificLinkMetadata({ formName: formId, locationId: LOCATION, locationName: "QA North" }), lead_capture: true, ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key };
             const row = { id: id("link"), form_definition_id: formId, is_active: true, expires_at: null, allowed_embed_origins: null, metadata, created_at: new Date(clock).toISOString() };
             state.links.push(row);
             return row.id;
@@ -134,10 +191,23 @@ function world(opts: { bindings?: number; outboundDelta?: number; failCreateLink
     return { state, ports };
 }
 
-async function run(op: string, w: ReturnType<typeof world>, env: Record<string, string | undefined> = ENV) {
+async function run(op: string, w: ReturnType<typeof world>, opts: { env?: Record<string, string | undefined>; files?: Files } = {}) {
+    const operation = op.slice(2) as ToursFixtureOperation;
     const lines: string[] = [];
-    const code = await runToursFixture({ argv: [op], env, ports: () => w.ports, write: (l) => lines.push(l), now: NOW });
-    return { code, lines };
+    const bound: { world: ToursFixtureWorld; session: PreviewSession }[] = [];
+    const files = opts.files ?? filesFor(operation);
+    const code = await runToursFixture({
+        argv: [op],
+        env: opts.env ?? boundEnv(operation),
+        ports: (b) => {
+            bound.push(b);
+            return w.ports;
+        },
+        readFile: (path) => files[path] ?? null,
+        write: (l) => lines.push(l),
+        now: NOW,
+    });
+    return { code, lines, bound };
 }
 const census = (lines: string[]) => Number(/census count=(\d+)/.exec(lines.join("\n"))?.[1] ?? NaN);
 const resetLine = (lines: string[]) => /reset namespace=(\S+) removed=(\d+)/.exec(lines.join("\n"));
@@ -178,7 +248,7 @@ describe("guards refuse before any port is built", () => {
         it(`refuses ${name}`, async () => {
             let built = false;
             const lines: string[] = [];
-            const exit = await runToursFixture({ argv: ["--ensure"], env, ports: () => { built = true; return world().ports; }, write: (l) => lines.push(l) });
+            const exit = await runToursFixture({ argv: ["--ensure"], env, ports: () => { built = true; return world().ports; }, readFile: (p) => filesFor("ensure")[p] ?? null, write: (l) => lines.push(l), now: NOW });
             expect(exit).toBe(2);
             expect(built).toBe(false);
             expect(lines).toEqual([`✗ refused_${code}`]);
@@ -349,13 +419,20 @@ describe("product owners are reused, never re-implemented", () => {
         expect(ports).toMatch(/createTourSchedule\(db, \{ orgId: ORG, locationId: null \}/);
         expect(ports).toMatch(/deleteTourSchedule\(db, \{ orgId: ORG, locationId: null \}/);
     });
+    it("the opportunity's vertical is the platform childcare vertical — verticals carry no org_id", () => {
+        expect(ports).toContain('from("verticals").select("id").eq("slug", "childcare").eq("is_active", true)');
+        expect(ports).not.toMatch(/from\("verticals"\)[^\n]*org_id/);
+    });
     it("every delete re-asserts ownership (marker, or both marked ends of the membership)", () => {
         const deletes = ports.split("\n").filter((l) => l.includes(".delete()"));
         expect(deletes.length).toBeGreaterThan(0);
         for (const l of deletes) expect(l, l).toMatch(/MARKER_FILTER|eq\("customer_id", f\.customerId\)\.eq\("person_id", f\.personId\)/);
     });
-    it("the preview session is loopback-only", () => {
-        expect(previewSessionFrom(undefined)).toBeNull();
+    it("the ports take the organization, site and preview session from the binding — no constant, no session-file URL", () => {
+        expect(ports).toContain("const ORG = bound.world.orgId;");
+        expect(ports).toContain("const LOCATION = bound.world.locationId;");
+        expect(ports).not.toMatch(/00000000-0000-4000-8000-0000000000(01|11)/);
+        expect(ports).not.toMatch(/readFileSync|ALLOY_QA_SESSION_FILE|\.origins\b/);
     });
 });
 
@@ -387,12 +464,109 @@ describe("G-T2 / G-T5 semantics from the fixture's own data", () => {
         }
     });
 
-    it("missing seed forms refuse ensure before any link is minted", async () => {
+    it("missing forms in the persona org refuse ensure before any link is minted", async () => {
         const w = world({ forms: "missing" });
         const r = await run("--ensure", w);
         expect(r.code).toBe(1);
         expect(r.lines).toContain("✗ forms_missing");
         expect(w.state.linkCreates).toBe(0);
         expect(TOURS_FIXTURE_FORM_TITLES).toHaveLength(2);
+    });
+});
+
+describe("the installed executor's binding (A741: persona org, trusted preview, session digest, authority)", () => {
+    it("binds the persona org qa_shared and its registered site qa_north, and calls the preview origin with the session origin's cookies only", async () => {
+        const r = await run("--ensure", world());
+        expect(r.code, r.lines.join("\n")).toBe(0);
+        expect(r.lines[0]).toBe("✓ binding a741 org=persona_qa_shared site=qa_north preview=loopback session=digest_bound authority=consistent");
+        expect(r.bound).toHaveLength(1);
+        expect(r.bound[0]!.world).toEqual({ orgId: "4acc9386-c485-486f-aa1f-05d83499d142", locationId: "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7" });
+        expect(r.bound[0]!.session).toEqual({ origin: PREVIEW_ORIGIN, cookie: "sb-alloy-local-auth=cookie-SENTINEL" });
+        expect(r.lines.join("\n")).not.toContain("SENTINEL");
+    });
+
+    it("count is accepted only with a non-mutating authority record; ensure and reset only with a mutating one", async () => {
+        for (const op of ["ensure", "count", "reset"] as const) expect((await run(`--${op}`, world())).bound).toHaveLength(1);
+        const forged = authorityText("count", { mutating: true });
+        const r = await run("--count", world(), { env: boundEnv("count", forged), files: filesFor("count", { [AUTHORITY_FILE]: forged }) });
+        expect(r).toMatchObject({ code: 2, lines: ["✗ refused_authority_mismatch"], bound: [] });
+        const ensureAsCount = authorityText("count");
+        const e = await run("--ensure", world(), { env: boundEnv("ensure", ensureAsCount), files: filesFor("ensure", { [AUTHORITY_FILE]: ensureAsCount }) });
+        expect(e).toMatchObject({ code: 2, lines: ["✗ refused_authority_mismatch"], bound: [] });
+    });
+
+    const env = boundEnv("ensure");
+    const without = (k: string) => ({ ...env, [k]: undefined });
+    const refusals: [string, Record<string, string | undefined>, Files, string][] = [
+        ["the pre-A741 environment (no binding at all)", { ...BASE_ENV, ALLOY_QA_SESSION_FILE: SESSION_FILE }, filesFor("ensure"), "executor_binding_absent"],
+        ["a partial binding (no preview origin)", without("ALLOY_QA_PREVIEW_ORIGIN"), filesFor("ensure"), "binding_incomplete"],
+        ["a partial binding (no authority record)", without("ALLOY_QA_AUTHORITY_FILE"), filesFor("ensure"), "binding_incomplete"],
+        ["a partial binding (no fixture org)", without("ALLOY_CERT_FIXTURE_ORG_ID"), filesFor("ensure"), "binding_incomplete"],
+        ["a binding with no persona session file", without("ALLOY_QA_SESSION_FILE"), filesFor("ensure"), "persona_session_missing"],
+        ["the certification seed org (no seed fallback)", { ...env, ALLOY_CERT_FIXTURE_ORG_ID: SEED_ORG_ID }, filesFor("ensure"), "fixture_org_mismatch"],
+        ["the seed org declared as seed_manifest", { ...env, ALLOY_CERT_FIXTURE_ORG_ID: SEED_ORG_ID, ALLOY_CERT_FIXTURE_ORG_SOURCE: "seed_manifest" }, filesFor("ensure"), "fixture_org_not_persona_bound"],
+        ["the cross-org QA tenant", { ...env, ALLOY_CERT_FIXTURE_ORG_ID: "ad53fee2-2570-460f-9300-f0e106c473b6" }, filesFor("ensure"), "fixture_org_mismatch"],
+        ["the Firefly operating tenant", { ...env, ALLOY_CERT_FIXTURE_ORG_ID: "93667019-bd28-49b5-a688-acc9bb1e0a19" }, filesFor("ensure"), "fixture_org_mismatch"],
+        ["a hosted preview origin", { ...env, ALLOY_QA_PREVIEW_ORIGIN: "https://alloy-staging.vercel.app" }, filesFor("ensure"), "preview_origin_not_loopback"],
+        ["a preview origin with a path", { ...env, ALLOY_QA_PREVIEW_ORIGIN: `${PREVIEW_ORIGIN}/api` }, filesFor("ensure"), "preview_origin_not_loopback"],
+        ["a malformed candidate", { ...env, ALLOY_QA_CANDIDATE_SHA: "4edb2ab3f" }, filesFor("ensure"), "binding_malformed"],
+        ["an expired binding", { ...env, ALLOY_QA_BINDING_EXPIRES_AT: "2026-10-30T17:00:00.000Z" }, filesFor("ensure"), "binding_expired"],
+        ["an unreadable authority record", env, filesFor("ensure", { [AUTHORITY_FILE]: null }), "authority_unreadable"],
+        ["an altered authority record", env, filesFor("ensure", { [AUTHORITY_FILE]: authorityText("ensure").replace("tours", "toursx") }), "authority_altered"],
+        ["a session file that does not hash to the bound digest", env, filesFor("ensure", { [SESSION_FILE]: SESSION_TEXT.replace("cookie-SENTINEL", "swapped") }), "session_digest_mismatch"],
+    ];
+    for (const [name, e, files, code] of refusals) {
+        it(`refuses ${name} before any port is built`, async () => {
+            const w = world();
+            const r = await run("--ensure", w, { env: e, files });
+            expect(r).toMatchObject({ code: 2, lines: [`✗ refused_${code}`], bound: [] });
+            expect(w.state.calls).toEqual([]);
+        });
+    }
+
+    it("authority record fields are checked against the env: another run, environment, candidate, request or program is refused", async () => {
+        for (const over of [{ qa_run_id: "qar_other000000" }, { environment_id: "certenv-0000000000" }, { candidate_sha: "c".repeat(40) }, { request_id: "tfx-other" }, { npm_script: "dev:qa:financials-historical-draft-fixture" }, { fixture: "analytics_permission_matrix" }, { schema: "other.v1" }]) {
+            const text = authorityText("ensure", over);
+            const r = await run("--ensure", world(), { env: boundEnv("ensure", text), files: filesFor("ensure", { [AUTHORITY_FILE]: text }) });
+            expect(r.code).toBe(2);
+            expect(r.lines[0]).toMatch(/^✗ refused_authority_(mismatch|schema)$/);
+            expect(r.bound).toEqual([]);
+        }
+    });
+
+    it("an authority record outside its validity window is refused", async () => {
+        const late = authorityText("ensure", { expires_at: "2026-10-30T17:30:00.000Z" });
+        expect((await run("--ensure", world(), { env: boundEnv("ensure", late), files: filesFor("ensure", { [AUTHORITY_FILE]: late }) })).lines).toEqual(["✗ refused_authority_expired"]);
+        const early = authorityText("ensure", { issued_at: "2026-10-30T18:30:00.000Z" });
+        expect((await run("--ensure", world(), { env: boundEnv("ensure", early), files: filesFor("ensure", { [AUTHORITY_FILE]: early }) })).lines).toEqual(["✗ refused_authority_not_yet_valid"]);
+    });
+
+    it("a session with no cookie for the session origin is refused (cookies of another host are never sent)", async () => {
+        const foreignOnly = JSON.stringify({ cookies: [{ name: "x", value: "y", domain: "evil.example" }] });
+        const e = { ...boundEnv("ensure"), ALLOY_QA_SESSION_SHA256: sha256Hex(foreignOnly) };
+        const r = await run("--ensure", world(), { env: e, files: filesFor("ensure", { [SESSION_FILE]: foreignOnly }) });
+        expect(r).toMatchObject({ code: 2, lines: ["✗ refused_persona_session_unreadable"], bound: [] });
+    });
+
+    it("sessionFromStorageState never returns a URL from the session file", () => {
+        const b = { previewOrigin: PREVIEW_ORIGIN, sessionOrigin: "https://cert.tailnet.example" };
+        const text = JSON.stringify({ cookies: [{ name: "a", value: "1", domain: ".cert.tailnet.example" }], origins: [{ origin: "http://127.0.0.1:9" }] });
+        expect(sessionFromStorageState(text, b)).toEqual({ origin: PREVIEW_ORIGIN, cookie: "a=1" });
+        expect(sessionFromStorageState(null, b)).toBeNull();
+        expect(sessionFromStorageState("not json", b)).toBeNull();
+    });
+
+    it("every binding key the runner reads is one the installed executor sets", () => {
+        // fixtureChildEnv + runIsolatedFixture, installed toolkit 66f2d0dab2c7 (lib/isolated-fixture-execution.mjs);
+        // ALLOY_QA_SESSION_FILE is required too, but predates A741 and so does not select the binding.
+        const installed = ["ALLOY_CERT_FIXTURE_ORG_ID", "ALLOY_CERT_FIXTURE_ORG_SOURCE", "ALLOY_QA_PREVIEW_ORIGIN", "ALLOY_QA_SESSION_ORIGIN", "ALLOY_QA_SESSION_SHA256", "ALLOY_QA_CANDIDATE_SHA", "ALLOY_QA_REQUEST_ID", "ALLOY_QA_BINDING_DIGEST", "ALLOY_QA_BINDING_EXPIRES_AT", "ALLOY_QA_AUTHORITY_FILE", "ALLOY_QA_AUTHORITY_SHA256"];
+        expect([...TOURS_BINDING_ENV_KEYS].sort()).toEqual([...installed].sort());
+        expect(bindingFromEnv(ENV, NOW.getTime())).toMatchObject({ ok: true, binding: { world: { orgId: TOURS_FIXTURE_PERSONA_ORG.id, locationId: LOCATION } } });
+    });
+
+    it("no runner file names the certification seed org or Lakeside", () => {
+        for (const f of ["lib/qa/toursFixture/toursCertificationFixture.ts", "lib/qa/toursFixture/toursCertificationFixturePorts.ts", "scripts/qaToursFixture.ts"]) {
+            expect(readFileSync(resolve(root, f), "utf8"), f).not.toMatch(/00000000-0000-4000-8000-0000000000(01|11)/);
+        }
     });
 });
