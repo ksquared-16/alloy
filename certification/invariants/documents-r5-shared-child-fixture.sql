@@ -25,7 +25,7 @@ BEGIN
   INSERT INTO public.opportunities (id, org_id, work_unit_id, name, title)
   VALUES ('aa000000-0000-4000-8000-000000000111'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'aa000000-0000-4000-8000-000000000101'::uuid, 'inv opp1', 'inv opp1')
   ON CONFLICT (id) DO NOTHING;
-  INSERT INTO public.customers (id, org_id, name, status) VALUES
+  INSERT INTO public.customers (id, org_id, name, status_key) VALUES
     ('ab000000-0000-4000-8000-000000000401'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'inv D4 household', 'active'),
     ('c5000000-0000-4000-8000-0000000000c1'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'inv unrelated household', 'active')
   ON CONFLICT (id) DO NOTHING;
@@ -102,7 +102,7 @@ BEGIN
     delete from public.customers
      where org_id = '4acc9386-c485-486f-aa1f-05d83499d142'::uuid
        and id in ('ac000000-0000-4000-8000-000000000501'::uuid);
-    insert into public.customers (id, org_id, name, status, metadata)
+    insert into public.customers (id, org_id, name, status_key, metadata)
     values ('ac000000-0000-4000-8000-000000000501'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'QA R5 Shared-Child Household', 'active',
             jsonb_build_object('qa_run_id', 'qar_00000000c5e0', 'fixture_family', 'documents_r5_shared_child', 'fixture_key', 'household', 'external_source', 'alloy_qa_fixture'));
     insert into public.customer_members (id, org_id, customer_id, display_name, first_name, last_name, relationship, is_active, metadata)
@@ -248,7 +248,7 @@ END $$;
 -- CASE 5 — a fixture id in ANOTHER organization is refused (the reset never reaches it: every delete names the org).
 DO $$
 BEGIN
-  INSERT INTO public.customers (id, org_id, name, status)
+  INSERT INTO public.customers (id, org_id, name, status_key)
   VALUES ('ac000000-0000-4000-8000-000000000501'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid, 'inv foreign', 'active');
   IF NOT (exists (select 1 from public.customers x where x.id in ('ac000000-0000-4000-8000-000000000501'::uuid) and x.org_id <> '4acc9386-c485-486f-aa1f-05d83499d142'::uuid)
     or exists (select 1 from public.customer_members x where x.id in ('ac000000-0000-4000-8000-000000000521'::uuid, 'ac000000-0000-4000-8000-000000000522'::uuid) and x.org_id <> '4acc9386-c485-486f-aa1f-05d83499d142'::uuid)
