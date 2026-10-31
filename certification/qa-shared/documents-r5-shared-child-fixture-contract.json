@@ -10,7 +10,7 @@
  "files": {
   "ensure_fixture": {
    "path": "certification/fixtures/qa-documents-shared-child-ensure.sql",
-   "sha256": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4"
+   "sha256": "5942fb82d66f4c73f0c75cd0187fbf78142ef6e0e121ffc37e1d1cb475fc6fb5"
   },
   "reset_fixture": {
    "path": "certification/fixtures/qa-documents-shared-child-reset.sql",
@@ -26,7 +26,7 @@
   },
   "invariant": {
    "path": "certification/invariants/documents-r5-shared-child-fixture.sql",
-   "sha256": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac"
+   "sha256": "9f6350bb3f9a17580ce782347ef4341dba2ae733fb40a341e1137799b2c34dcb"
   }
  },
  "registrations": [
@@ -53,7 +53,7 @@
     "SYNTHETIC_ONLY": "1"
    },
    "fixture_path": "certification/fixtures/qa-documents-shared-child-ensure.sql",
-   "fixture_sha256": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+   "fixture_sha256": "5942fb82d66f4c73f0c75cd0187fbf78142ef6e0e121ffc37e1d1cb475fc6fb5",
    "result_shape": [
     "seeded",
     "failed"
@@ -179,5 +179,23 @@
    ]
   }
  },
- "hosted_sequence": "see certification/documents-v1/R2-R5-PROOF-SUPPORT.md §Hosted action packet"
+ "hosted_sequence": "see certification/documents-v1/R2-R5-PROOF-SUPPORT.md §Hosted action packet",
+ "revisions": [
+  {
+   "date": "2026-10-31",
+   "objective": "OPWORK_AA660DC9554D_SPRINT_12706A6E51FA",
+   "change": "customers.status -> customers.status_key ('active') in the ensure fixture and its rollback invariant (3 inserts); the column was dropped by 20260625140100_canonical_drop_legacy_status_columns.sql, matching the canonical household writer web/lib/bookingPersonCustomerResolve.ts",
+   "failure_evidence": "gar_bbbdf3ca3762f2 (qar_b1cc8a9bbe81): reconciliation_failed, column \"status\" of relation \"customers\" does not exist; rolled back (ON_ERROR_STOP + begin/commit); shared-child reset gar_72c647f133fde9 residue 0",
+   "superseded_pins": {
+    "certification/fixtures/qa-documents-shared-child-ensure.sql": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+    "certification/invariants/documents-r5-shared-child-fixture.sql": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac"
+   },
+   "unchanged": [
+    "certification/fixtures/qa-documents-shared-child-reset.sql afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
+    "web/scripts/qaDocumentsSharedChildFixture.mjs 38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
+    "certification/qa-shared/documents-r5-shared-child-residue-census.sql 87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd"
+   ],
+   "proof": "static/synthetic only: web/tests/certification/qaFixtureMigratedSchema.test.ts checks every fixture insert and filter against the migration-derived schema. NOT executed against a real database."
+  }
+ ]
 }

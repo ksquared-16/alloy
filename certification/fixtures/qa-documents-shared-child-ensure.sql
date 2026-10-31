@@ -170,7 +170,7 @@ delete from public.customers
  where org_id = :'org'::uuid
    and id in (:'household'::uuid);
 
-insert into public.customers (id, org_id, name, status, metadata)
+insert into public.customers (id, org_id, name, status_key, metadata)
 values (:'household'::uuid, :'org'::uuid, 'QA R5 Shared-Child Household', 'active',
         jsonb_build_object('qa_run_id', :'qa_run_id', 'fixture_family', :'family', 'fixture_key', 'household', 'external_source', 'alloy_qa_fixture'));
 
