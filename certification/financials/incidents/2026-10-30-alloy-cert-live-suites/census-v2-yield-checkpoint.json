@@ -1,0 +1,15 @@
+{
+  "objective": "Single operator-approved count-only incident census financials_alloy_cert_incident_20261030_v2 on shared local alloy-cert (127.0.0.1:54422) via governed database.read_census",
+  "completed": [
+    "Verified query file sha256 dd5dd815… and installed contract pin (executed SQL 31ce283d…, owner lane_b77b3cbb5840, 27 statements) on toolkit eeaa6dac6860",
+    "Verified installed connection gate: final-config identity 127.0.0.1:54422/postgres, compose project alloy-cert probe, READ ONLY … ROLLBACK, attestation required",
+    "Verified Gateway runtime eeaa6dac6860; only prior request gar_ed727e30c6854a failed with no DB contact; nothing pending",
+    "Filed gar_7518908144d8d3 (awaiting_operator)"
+  ],
+  "candidate_sha": "061e164b558cfa0755c41275b38886c549298ba6",
+  "next_action": "On approval+completion: record counts, attestation, rollback evidence only and prepare incident disposition; on failure: record code, no identical refile",
+  "files": ["certification/financials/incidents/2026-10-30-alloy-cert-live-suites/census-v2-wait-checkpoint-gar_7518908144d8d3.json"],
+  "evidence_required": "gar_7518908144d8d3 result with counts, shared_cert_census_connection attestation, transaction read_only_rollback",
+  "notes": "Counts cannot prove whether historical deletions occurred. Attestation is config + compose label, not cryptographic server auth.",
+  "risk": "Financials LIVE HOLD and shared alloy-cert hold remain for all lanes"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "financials.alloy_cert_incident_census_preflight_stop.v1",
+  "run_id": "erun2_da0d4c8405f6235c",
+  "recovered_from": "erun2_cfb974565fc309af (CANCELLED operator_cancel; recovery by Vacilando, no seat action taken)",
+  "lane_id": "lane_b77b3cbb5840",
+  "toolkit": "15ae08e6422e",
+  "candidate": "061e164b558cfa0755c41275b38886c549298ba6",
+  "census_id": "financials_alloy_cert_incident_20261030_v2",
+  "preflight_passed": {
+    "file_sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421 (matches; unchanged since f4f4585c)",
+    "installed_registration": "shared-cert-census-contract.mjs pins file sha dd5dd815… and executed_sql_sha256 31ce283d…, owner lane_b77b3cbb5840, 27 statements",
+    "dispatch_fix": "fulfillDatabaseCensusForMission forwards censusBinding (databaseTarget/censusId/targetBinding/expectedQueryHash/requestLaneId); DEFAULT_TARGET no longer substituted",
+    "prior_requests": "only gar_ed727e30c6854a (failed, executed=false, no DB contact); no read_census request for this census or lane since; no trusted-host census action minted"
+  },
+  "decision": "STOPPED_BEFORE_DB_ACCESS — no governed request filed",
+  "contract_gap": {
+    "requirement": "actual database-connection identity bound independently to shared-local alloy-cert before any DB access; URL, label, loopback port, provenance or record alone are not proof",
+    "installed_behaviour": "for the certification class the only target proof is string parsing of the credential URL: host in {127.0.0.1,localhost,::1,0.0.0.0} and port == 54422 (lib/trusted-host-database-target.mjs assertTargetMatchesEnvironment, certification branch; lib/trusted-host-database-target.sh expect_local branch). The project-ref proof (G3-B S1) applies only to deployed targets. lib/trusted-host-run-sql.sh then pipes BEGIN TRANSACTION READ ONLY; <sql>; COMMIT; straight to psql with no post-connect identity check.",
+    "absent": "no registered alloy-cert identity fingerprint (e.g. pg_control_system().system_identifier or equivalent stack attestation) recorded by the alloy-stack owner, and no executor step comparing the live connection against it before the census statements; grep of the installed lib/bin finds no such facility",
+    "also_noted": "the transaction ends with COMMIT, not ROLLBACK; harmless under READ ONLY but differs from the approved 'read only transaction with rollback' wording",
+    "owner_of_fix": "shared-cert census contract owner (OPWORK_25AD3858DE4D_SPRINT_A741F0C6D2E9) with the alloy-stack/environment-identity owner"
+  },
+  "executed": false,
+  "database_contact": "none",
+  "counts": null,
+  "live_hold": "Financials LIVE HOLD remains",
+  "disposition_packet": "not prepared — conditional on a completed census"
+}

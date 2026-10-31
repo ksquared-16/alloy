@@ -1,0 +1,19 @@
+{
+  "schema": "financials.alloy_cert_incident_census_wait.v1",
+  "run_id": "erun2_88e78dcc85a97799",
+  "lane_id": "lane_b77b3cbb5840",
+  "request_id": "gar_7518908144d8d3",
+  "action_key": "database.read_census",
+  "census_id": "financials_alloy_cert_incident_20261030_v2",
+  "status_at_yield": "awaiting_operator (policy_default_requires_operator)",
+  "preflight": {
+    "file_sha256": "dd5dd815e55de1483774b27d0303c4fd58294b4aacc100a03b2d3c39bacea421 (matches)",
+    "installed_contract": "toolkit eeaa6dac6860 shared-cert-census-contract.mjs pins file dd5dd815…, executed_sql 31ce283d…, owner lane_b77b3cbb5840, 27 statements",
+    "connection_gate": "shared-cert-census-connection.mjs: final psql config identity == 127.0.0.1:54422/postgres as postgres (env -i, PG* not inherited), docker compose project publishing 54422 == alloy-cert, BEGIN TRANSACTION READ ONLY … ROLLBACK, ON_ERROR_STOP; executor refuses success without a valid attestation",
+    "gateway_runtime": "eeaa6dac6860 (health endpoint)",
+    "prior_requests": "only gar_ed727e30c6854a (failed, executed=false); no pending or successful census; no trusted-host census action minted",
+    "boundary": "config + compose-label attestation; not cryptographic server authentication"
+  },
+  "on_resume": "if complete: record counts, attestation and rollback evidence only, prepare disposition; if failed: record the failure code, do not refile identically",
+  "live_hold": "Financials LIVE HOLD and shared alloy-cert hold remain"
+}

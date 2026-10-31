@@ -1,0 +1,24 @@
+{
+  "action_key": "database.read_census",
+  "target": "alloy_cert",
+  "title": "Read-only incident census v2 of shared local alloy-cert (counts only)",
+  "purpose": "Execute the single operator-approved (Kelly, transcript: 'Approved.') count-only incident census financials_alloy_cert_incident_20261030_v2 for incident req_1793375528498836_49075 against the shared local alloy-cert stack (127.0.0.1:54422) through the A741 hash-pinned contract vacilando.shared_cert_count_census.v1. 27 fixed-ID/direct-dependency COUNT queries in one READ ONLY transaction; no writes, no cleanup, no fixture execution. Counts cannot establish historical deletion.",
+  "artifact_refs": ["certification/financials/incidents/2026-10-30-alloy-cert-live-suites/alloy-cert-incident-census.v2.sql"],
+  "requested_mode": "read_only",
+  "reason_worker_cannot_execute": "The shared alloy-cert database is reachable for this census only through the trusted-host database.read_census executor under the registered hash-pinned contract; the provider seat must not open a direct database connection.",
+  "continuation_intent": "Record the counts and ownership metadata, then prepare the isolated-product proof/disposition packet without executing it; Financials LIVE HOLD stays.",
+  "inputs": {
+    "censusId": "financials_alloy_cert_incident_20261030_v2",
+    "queryArtifactPath": "certification/financials/incidents/2026-10-30-alloy-cert-live-suites/alloy-cert-incident-census.v2.sql",
+    "expectedQueryHash": "31ce283d585498b6fd4cbd9aede2c33dbba32c584d7a79da28e53e45a8e4ab45",
+    "artifactRoot": "/Users/vacilando/Code/alloy-worktrees/financials",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/financials",
+    "databaseTarget": "alloy_cert",
+    "targetBinding": {
+      "target_id": "alloy-cert@127.0.0.1:54422",
+      "target_class": "shared_local_certification",
+      "census_id": "financials_alloy_cert_incident_20261030_v2"
+    },
+    "requestLaneId": "lane_b77b3cbb5840"
+  }
+}
