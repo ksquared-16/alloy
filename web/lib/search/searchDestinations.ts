@@ -150,23 +150,38 @@ function resolveMembershipDestinations(
     subject: SearchSubject,
     host: { type: string; id: string } | null,
 ): SearchDestination[] {
-    if (!host) return [];
     const memberships = context.operational_memberships ?? [];
     if (!memberships.length) return [];
 
-    return memberships.map((membership) => ({
+    return memberships.flatMap((membership) => {
+        // A projection membership names its own durable host; every other membership is hosted by the
+        // subject's case. Neither is guessed: no host type and id, no destination.
+        const hostType = (membership.host_entity_type ?? "").trim() || host?.type || "";
+        const hostId = (membership.host_entity_id ?? "").trim() || host?.id || "";
+        if (!hostType || !hostId) return [];
+        return [{
         // Keyed on the VIEW, so two cohorts of one process are two distinct operator intents and
         // neither dedupes the other away.
         key: `work_view:${context.key}:${membership.work_view_id}`,
         label: membership.label,
         target: "focus_panel" as const,
-        // A child is focused as an ITEM inside the Children card — the ASPECT the runtime already
-        // deep-links. A family subject is worked on Current Work, as it always was.
-        card_key: subject.kind === "child" ? SEARCH_CARD_KEYS.children : SEARCH_CARD_KEYS.currentWork,
+        /*
+         * THE PROCESS, NOT THE CHILD CARD — for every subject.
+         *
+         * Choosing "Enrollment — Waitlist" under a child is choosing the PROCESS. It used to focus the
+         * Children card with the child as its item, so the operator asked for the child's enrollment
+         * work and was shown the child. The panel already scopes to the child through
+         * `operational_member_id` (the participation row), so the process card composes for exactly
+         * this child; the card key is the canonical process card, which the panel resolves to its
+         * successor. The durable child still rides as the aspect ITEM — the process card does not
+         * consume it, and it keeps host, member and item three distinct identities. "Open Lennon" —
+         * the subject destination — is still how the child card is reached.
+         */
+        card_key: processFocusCardKey(context),
         item_id: subject.kind === "child" ? subject.id : null,
         context_key: context.key,
-        host_entity_type: host.type,
-        host_entity_id: membership.host_entity_id ?? host.id,
+        host_entity_type: hostType,
+        host_entity_id: hostId,
         host_work_unit_key: membership.host_work_unit_key,
         // The lens to COMMIT. The runtime swaps it on the host unit's surface — the live shape is
         // `/workspace/work-unit/new-leads?work_view_id=new_work_view_4`.
@@ -175,7 +190,22 @@ function resolveMembershipDestinations(
         // is a participation while the host is the case, and sending the host as the subject is what
         // the runtime refused as `subject_unavailable`.
         operational_member_id: membership.operational_member_id,
-    }));
+        }];
+    });
+}
+
+/**
+ * The card a process destination focuses.
+ *
+ * A staged process is worked on the process card. A domain projection opens the subject's durable
+ * record the way its domain declares (`durableRecordEntryFor`): Assignments on the Assignments card,
+ * Billing with Financials leading — so the destination asks for that same card rather than a process
+ * card the durable record does not compose.
+ */
+function processFocusCardKey(context: SearchContext): SearchDestination["card_key"] {
+    if (context.projection_domain === "assignments") return SEARCH_CARD_KEYS.assignment;
+    if (context.projection_domain === "billing") return SEARCH_CARD_KEYS.financials;
+    return SEARCH_CARD_KEYS.currentWork;
 }
 
 function resolveHost(
@@ -345,6 +375,12 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      */
     process: (context, subject, host, allContexts) => {
         if (!host) return null;
+        // More than one case, and nothing proves which: the generic destination would have to pick
+        // one by order. The subject's own record still opens and lists every participation.
+        if (context.participation_ambiguous) return null;
+        // A projection process has no stage and no case to guess a host from: only a proven row is
+        // a destination, and those were offered above.
+        if (context.projection_domain) return null;
         return {
             key: `process:${context.key}`,
             label: context.label,

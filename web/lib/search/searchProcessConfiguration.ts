@@ -35,6 +35,11 @@ import {
     type LifecycleBuilderStageRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import {
+    isDomainProjectionModel,
+    resolveProcessModel,
+    type ProcessProjectionDomain,
+} from "@/lib/lifecycle/processModelV1";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 
 /** One configured Business Process, reduced to what Search needs. */
@@ -63,6 +68,11 @@ export type SearchConfiguredProcess = {
      * order, as the runtime resolves.
      */
     stages: LifecycleBuilderStageRecord[];
+    /**
+     * The process's projection domain when it is a `domain_projection` process (Billing, Assignments),
+     * read through the canonical model reader. Null for a staged lifecycle process.
+     */
+    projection_domain?: ProcessProjectionDomain | null;
 };
 
 export type SearchProcessConfiguration = {
@@ -173,6 +183,7 @@ async function readSearchProcessConfiguration(
                 operator_has_access: hasAccess,
                 work_views: activeProcessKey && key === activeProcessKey ? activeProcessWorkViews : [],
                 stages,
+                projection_domain: projectionDomainOf(process),
             });
         }
     }
@@ -223,4 +234,9 @@ export function humanizeKey(key: string): string {
     const cleaned = key.replace(/[_-]+/g, " ").trim();
     if (!cleaned) return key;
     return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function projectionDomainOf(process: Parameters<typeof resolveProcessModel>[0]): ProcessProjectionDomain | null {
+    const model = resolveProcessModel(process);
+    return isDomainProjectionModel(model) ? model.domain : null;
 }

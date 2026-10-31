@@ -34,7 +34,10 @@ import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/Opportu
 import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
 import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import {
+    dispatchOperatorFocusSelection,
+    operatorFocusSelectionFromDestination,
+} from "@/lib/runtime/focus/operatorFocusSelection";
 import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
 import DurableRecordFinancialsLead from "@/components/presentation/durableRecord/DurableRecordFinancialsLead";
@@ -387,28 +390,16 @@ export default function DurableRecordSurface({
             : [];
     const hasRelatedWork = state.relatedWork.length > 0 || inPlaceOperational.length > 0;
 
-    /** Commit one `Go to`. The payload mapping is the SAME one GlobalSearchBox performs. */
+    /** Commit one `Go to`, through the ONE destination → selection mapping GlobalSearchBox uses. */
     const goTo = (destination: SearchDestination) => {
-        const hostType = (destination.host_entity_type ?? "").trim();
-        const hostId = (destination.host_entity_id ?? "").trim();
-        if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
+        const selection = operatorFocusSelectionFromDestination(destination);
+        if (!selection) return;
         // Leave FIRST — the record overlay and the Operations workspace both close before the
         // movement commits, so the operator's click is acknowledged immediately and the kernel's
         // listener lands attention on an unobstructed surface.
         onRequestClose?.();
         dispatchAdminV2CloseWorkspaceModals();
-        dispatchOperatorFocusSelection({
-            entity_type: hostType,
-            entity_id: hostId,
-            host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
-            host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
-            operational_member_id: (destination.operational_member_id ?? "").trim() || null,
-            card_focus: {
-                card_key: destination.card_key,
-                item_id: destination.item_id ?? null,
-                context_key: destination.context_key ?? null,
-            },
-        });
+        dispatchOperatorFocusSelection(selection);
     };
 
     return (
