@@ -68,21 +68,21 @@ export const LIVE_AUTHORITY_REFUSALS = Object.freeze({
  * @returns {{ admit: "none", code: string, detail: string } | { admit: "pinned", files: string[], authority: string, detail: string }}
  */
 export function judgeLiveSuiteAuthority({ env = process.env, authority = undefined } = {}) {
-    const isolated = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv: [] });
-    if (!isolated.ok) {
-        return {
-            admit: "none",
-            code: LIVE_AUTHORITY_REFUSALS.NONE,
-            detail: `no governed isolated binding (${isolated.code}); shared-stack live suites are never admitted by the runner`,
-        };
-    }
-    /* The program is the isolated tests, always: a caller option cannot name another. */
+    /* The program is the isolated tests, always: a caller option cannot name another. Authority v2 first. */
     const op = verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_ISOLATED_PROGRAM, operation: "run" });
     if (!op.ok) {
         return {
             admit: "none",
             code: LIVE_AUTHORITY_REFUSALS.NONE,
             detail: `no live executor authority (${op.code}); shared-stack live suites are never admitted by the runner`,
+        };
+    }
+    const isolated = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv: [] });
+    if (!isolated.ok) {
+        return {
+            admit: "none",
+            code: LIVE_AUTHORITY_REFUSALS.NONE,
+            detail: `no governed isolated binding (${isolated.code}); shared-stack live suites are never admitted by the runner`,
         };
     }
     return {

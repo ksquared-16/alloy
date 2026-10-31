@@ -6,11 +6,13 @@
  * namespace `financials-cert.alloy.invalid`, reset_limit 50. The rule lives in
  * financialsHistoricalDraftFixtureCore.ts; this file is the boundary:
  *
- *   · the binding is judged first (financialsIsolatedBinding.mjs), then the executor's live operation
- *     authority (financialsFixtureAuthority.mjs, program FINANCIALS_HISTORICAL_DRAFT_PROGRAM: in-flight
- *     request, exact record bytes, expiry, this operation / script / candidate / target), and the
- *     persona organization the executor's QA-run ledger binds. Any refusal exits 2 before any client
- *     exists or the credential is read — no connection is attempted;
+ *   · the executor's v2 operation authority is judged FIRST (financialsFixtureAuthority.mjs over the shared
+ *     isolatedFixtureAuthorityV2.mjs, program FINANCIALS_HISTORICAL_DRAFT_PROGRAM: in-flight request, exact
+ *     record bytes, expiry, this operation / script / candidate, the persona organization the executor's
+ *     QA-run ledger binds and the record names, the database connection identity, the clear target hold
+ *     and the API origin in the database's environment block), then the binding
+ *     (financialsIsolatedBinding.mjs). A v1 record is refused — no v1 fallback. Any refusal exits 2 before
+ *     any client exists or the credential is used — no connection is attempted;
  *   · the fixture acts ONLY in that verified organization, passed to the core. There is no default
  *     organization and no seed-org fallback;
  *   · the service credential is read from the executor-built environment straight into the client
@@ -19,8 +21,9 @@
  *     or process message;
  *   · exit 0 ok · 1 failed · 2 refused before IO · 3 identity conflict for the operator.
  *
- * `--count` (`census count=<n>`) is registered by A741 (`count: { args: ["--count"], mutating: false,
- * census: true }`); the installed toolkit refuses it until A741 is installed.
+ * `--count` (`census count=<n>`) is registered (`count: { args: ["--count"], mutating: false, census: true }`,
+ * toolkit eeaa6dac6860). The installed toolkit issues this entry a v1 authority, which this program refuses
+ * until the platform registers and installs it as authority v2.
  */
 import { createClient } from "@supabase/supabase-js";
 
@@ -48,23 +51,27 @@ export async function main(
     authority: AuthorityOptions = {},
 ): Promise<number> {
     const operation = OPERATIONS[argv[0] as keyof typeof OPERATIONS];
-    const judged = operation
-        ? readIsolatedBinding({ env, fixture: "financials_historical_draft", operation, argv })
-        : { ok: false as const, code: "argv_not_the_registered_vector", detail: "exactly one of --ensure, --verify, --reset" };
-    if (!judged.ok) {
-        out(`✗ refused before any IO: ${judged.code} — ${judged.detail}`);
+    if (!operation) {
+        out("✗ refused before any IO: argv_not_the_registered_vector — exactly one of --ensure, --verify, --reset, --count");
         return 2;
     }
+    /* Authority v2 FIRST: nothing below — binding, credential, client — runs for an unverified execution. */
     const auth = verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation });
     if (!auth.ok || !auth.authority) {
         out(`✗ refused before any IO: ${auth.code}${auth.fields ? ` fields=${auth.fields.join(",")}` : ""}`);
+        return 2;
+    }
+    const judged = readIsolatedBinding({ env, fixture: "financials_historical_draft", operation, argv });
+    if (!judged.ok) {
+        out(`✗ refused before any IO: ${judged.code} — ${judged.detail}`);
         return 2;
     }
     const org = auth.authority.org_id;
     out(`binding ${describeBinding(judged.binding)}`);
     let result: FixtureOutcome;
     try {
-        const db = createClient(String(env.SUPABASE_URL), String(env.SUPABASE_SERVICE_ROLE_KEY), {
+        /* The VERIFIED origin, never a second read of SUPABASE_URL. */
+        const db = createClient(auth.authority.api_url, String(env.SUPABASE_SERVICE_ROLE_KEY), {
             auth: { persistSession: false, autoRefreshToken: false },
         });
         result = operation === "ensure" ? await ensureHistoricalDraft(db, org)

@@ -42,6 +42,7 @@ import {
     readIsolatedBinding,
 } from "../../scripts/qa/financialsIsolatedBinding.mjs";
 import { main as historicalMain } from "../../scripts/qa/financialsHistoricalDraftFixture";
+import { CATALOG_PROOF_SCHEMA, OWNED_AFTER_EXPECTED, OWNED_TABLES } from "../../scripts/qa/financialsIsolatedProof.mjs";
 import {
     BUSINESS_DATE,
     censusHistoricalDraft,
@@ -170,19 +171,32 @@ describe("test:qa:financials-isolated", () => {
         expect(FINANCIALS_ISOLATED_SUITE).toEqual(["tests/financials/live/catalogAddCharge.live.test.ts"]);
     });
 
-    it("refuses an absent target before any process starts, and prints no credential", async () => {
-        const out: string[] = [];
-        const code = await isolatedMain({ env: boundEnv("financials_isolated_tests", "run", { SUPABASE_URL: "http://127.0.0.1:54421", NEXT_PUBLIC_SUPABASE_URL: undefined }), argv: [], out: (l: string) => out.push(l) });
-        expect(code).toBe(2);
-        expect(spawned.calls).toBe(0);
-        expect(out.join("\n")).toMatch(/refused before any IO: supabase_target_forbidden/);
-        expect(out.join("\n")).toContain("tests passed=0 failed=0");
-        expect(out.join("\n")).not.toContain(SECRET);
+    it("refuses the shared stack's API under a genuine v2 authority before any process starts, and prints no credential", async () => {
+        const s = syntheticExecutorStore();
+        try {
+            const out: string[] = [];
+            const env = { ...s.env({ SUPABASE_URL: "http://127.0.0.1:54421", NEXT_PUBLIC_SUPABASE_URL: undefined }), SUPABASE_SERVICE_ROLE_KEY: SECRET };
+            const code = await isolatedMain({ env, argv: [], out: (l: string) => out.push(l), authority: s.options() });
+            expect(code).toBe(2);
+            expect(spawned.calls).toBe(0);
+            expect(out.join("\n")).toMatch(/refused before any process: fixture_api_target_shared_refused/);
+            expect(out.join("\n")).toContain("tests passed=0 failed=0");
+            expect(out.join("\n")).not.toContain(SECRET);
+        } finally {
+            s.cleanup();
+        }
     });
 
-    it("hands the suite the bound target and the bound seed org under the suite's own isolated-env names", () => {
-        const env = suiteChildEnv(boundEnv("financials_isolated_tests", "run", { ALLOY_CERT_FIXTURE_ORG_ID: "00000000-0000-4000-8000-000000000001" }));
-        expect(env).toMatchObject({ CATALOG_LIVE_ISOLATED: "1", CERT_SUPABASE_URL: "http://127.0.0.1:56102", CERT_SERVICE_ROLE_KEY: SECRET, CERT_FIXTURE_ORG_ID: "00000000-0000-4000-8000-000000000001" });
+    it("hands the suite the VERIFIED target and org under the suite's own isolated-env names, and its proof file", () => {
+        const env = suiteChildEnv(
+            boundEnv("financials_isolated_tests", "run", { SUPABASE_URL: "http://127.0.0.1:56109", ALLOY_CERT_FIXTURE_ORG_ID: "ffffffff-0000-4000-8000-000000000001" }),
+            { api_url: "http://127.0.0.1:56102", org_id: "00000000-0000-4000-8000-000000000001" },
+            "/tmp/fin-isolated-x/proof.json",
+        );
+        expect(env).toMatchObject({
+            CATALOG_LIVE_ISOLATED: "1", CERT_SUPABASE_URL: "http://127.0.0.1:56102", CERT_SERVICE_ROLE_KEY: SECRET,
+            CERT_FIXTURE_ORG_ID: "00000000-0000-4000-8000-000000000001", FIN_ISOLATED_PROOF_FILE: "/tmp/fin-isolated-x/proof.json",
+        });
     });
 
     it("a complete binding WITHOUT the executor's live authority is refused before any process starts", async () => {
@@ -510,10 +524,6 @@ describe("dev:qa:financials-historical-draft-fixture — executor authority and 
     });
 
     it.each([
-        ["the seed org asserted as seed_manifest (the isolated-tests contract)", { ALLOY_CERT_FIXTURE_ORG_ID: SEED, ALLOY_CERT_FIXTURE_ORG_SOURCE: "seed_manifest" }, {}, {}],
-        ["the seed org asserted as persona", { ALLOY_CERT_FIXTURE_ORG_ID: SEED }, {}, {}],
-        ["no org at all", { ALLOY_CERT_FIXTURE_ORG_ID: undefined, ALLOY_CERT_FIXTURE_ORG_SOURCE: undefined }, {}, {}],
-        ["the secondary QA org while the ledger binds QA Shared", { ALLOY_CERT_FIXTURE_ORG_ID: "ad53fee2-2570-460f-9300-f0e106c473b6" }, {}, {}],
         ["a persona the run did not bind", { ALLOY_QA_PERSONA: "no_finance_operator" }, {}, {}],
         ["a persona with an unregistered org key", {}, {}, { org_key: "firefly" }],
         ["a run that is not OPEN", {}, { state: "CLOSED" }, {}],
@@ -523,6 +533,20 @@ describe("dev:qa:financials-historical-draft-fixture — executor authority and 
         const s = store();
         s.writeRun(runOver, personaOver);
         refusedBeforeClient(await entry(s, "ensure", envOver), AUTH.PERSONA_ORG);
+    });
+
+    it.each([
+        ["the seed org asserted as seed_manifest (the isolated-tests contract)", { ALLOY_CERT_FIXTURE_ORG_ID: SEED, ALLOY_CERT_FIXTURE_ORG_SOURCE: "seed_manifest" }],
+        ["the seed org asserted as persona", { ALLOY_CERT_FIXTURE_ORG_ID: SEED }],
+        ["no org at all", { ALLOY_CERT_FIXTURE_ORG_ID: undefined, ALLOY_CERT_FIXTURE_ORG_SOURCE: undefined }],
+        ["the secondary QA org while the record and ledger bind QA Shared", { ALLOY_CERT_FIXTURE_ORG_ID: "ad53fee2-2570-460f-9300-f0e106c473b6" }],
+    ])("org: the environment asserting %s against the v2 record → refused before any client", async (_l, envOver) => {
+        refusedBeforeClient(await entry(store(), "ensure", envOver), AUTH.MISMATCH);
+    });
+
+    it("org: a v2 record naming the seed org (env echoing it) → refused before any client — the seed org is never a persona org", async () => {
+        const s = store("ensure", { fixture_org: { id: SEED, key: "certification_seed", source: "persona" } });
+        refusedBeforeClient(await entry(s, "ensure", { ALLOY_CERT_FIXTURE_ORG_ID: SEED }), AUTH.PERSONA_ORG);
     });
 
     it("org: no QA-run ledger in the trusted store → refused before any client", async () => {
@@ -887,18 +911,64 @@ describe("no report or process text reaches the isolated runner's output", () =>
         expectSafeContract(out, { tests: true });
     });
 
-    it("a fully passing pinned report and exit 0 is the only proof, and parses as the executor reads it", async () => {
+    const passingReport = { testResults: [{ name: pinned, status: "passed", assertionResults: [{ status: "passed", fullName: SENTINEL }, { status: "passed" }] }] };
+    const runWith = (proof: unknown) => async (files: string[], e: unknown, reportPath: string) => {
+        await writeReport(passingReport)(files, e, reportPath);
+        const { writeFileSync } = await import("node:fs");
+        const proofFile = String((e as Record<string, string>).FIN_ISOLATED_PROOF_FILE);
+        if (proof !== undefined) writeFileSync(proofFile, typeof proof === "string" ? proof : JSON.stringify(proof));
+        return { code: 0 };
+    };
+
+    it("a fully passing pinned report, a complete proof report and exit 0 is the only proof, and parses as the executor reads it", async () => {
         const out: string[] = [];
-        const code = await isolatedMain({
-            env: env(), argv: [], out: (l: string) => out.push(l),
-            run: async (files: string[], e: unknown, reportPath: string) => {
-                await writeReport({ testResults: [{ name: pinned, status: "passed", assertionResults: [{ status: "passed", fullName: SENTINEL }, { status: "passed" }] }] })(files, e, reportPath);
-                return { code: 0 };
-            },
-        });
+        const code = await isolatedMain({ env: env(), argv: [], out: (l: string) => out.push(l), run: runWith(syntheticCatalogProof()) });
         expect(code).toBe(0);
-        expect(out.filter((l) => l.startsWith("✓") || l.startsWith("✗"))).toEqual(["✓ catalogAddCharge.live#1 passed", "✓ catalogAddCharge.live#2 passed"]);
+        expect(out.filter((l) => l.startsWith("✓") || l.startsWith("✗"))).toEqual([
+            "✓ catalogAddCharge.live#1 passed",
+            "✓ catalogAddCharge.live#2 passed",
+            "✓ proof run_prefix=ca7a0b1c owned_before=0 tables=14",
+            "✓ proof owned_after exact tables=14 nondraft=3 journal=3 drafts=0",
+            ...SYNTHETIC_RETAINED.map((r) => `✓ retained posted_charge=${r.charge_id} journal_entry=${r.journal_entry_id}`),
+            "✓ proof accounting_period created=false",
+        ]);
         expect(GRAMMAR.tests.exec(out[out.length - 1])?.slice(1)).toEqual(["2", "0"]);
         expectSafeContract(out, { tests: true });
     });
+
+    it.each([
+        ["absent", undefined, "proof_report_absent"],
+        ["unparseable", "{not json", "proof_report_absent"],
+        ["a foreign schema", { ...syntheticCatalogProof(), schema: "other" }, "proof_report_invalid"],
+        ["a value outside the contract", { ...syntheticCatalogProof(), retained: [{ charge_id: SENTINEL, journal_entry_id: SENTINEL }] }, "proof_report_invalid"],
+        ["owned rows present before the run", syntheticCatalogProof({ before: { charges_nondraft: 1 } }), "proof_owned_before_not_empty"],
+        ["a broad delete (fewer retained config rows)", syntheticCatalogProof({ after: { customers: 0 } }), "proof_owned_after_mismatch"],
+        ["a deleted posted charge", syntheticCatalogProof({ after: { charges_nondraft: 2 } }), "proof_owned_after_mismatch"],
+        ["a leftover draft", syntheticCatalogProof({ after: { charges_draft: 1 } }), "proof_owned_after_mismatch"],
+        ["a missing journal pair", syntheticCatalogProof({ retained: SYNTHETIC_RETAINED.slice(0, 2) }), "proof_retained_mismatch"],
+    ])("a passing suite whose proof report is %s is NOT a pass", async (_l, proof, problem) => {
+        const out: string[] = [];
+        const code = await isolatedMain({ env: env(), argv: [], out: (l: string) => out.push(l), run: runWith(proof) });
+        expect(code).toBe(1);
+        expect(out).toContain(`✗ ${problem}`);
+        expectSafeContract(out, { tests: true });
+    });
 });
+
+/* ── a synthetic proof report, shaped as the catalog live suite writes it ───────────────────── */
+
+const SYNTHETIC_RETAINED = [1, 2, 3].map((i) => ({
+    charge_id: `ca7a0b1c-0000-4000-8000-00000000c00${i}`,
+    journal_entry_id: `ca7a0b1c-0000-4000-8000-00000000e00${i}`,
+}));
+
+function syntheticCatalogProof({ before = {}, after = {}, retained = SYNTHETIC_RETAINED }: { before?: Record<string, number>; after?: Record<string, number>; retained?: Array<{ charge_id: string; journal_entry_id: string }> } = {}) {
+    return {
+        schema: CATALOG_PROOF_SCHEMA,
+        run_prefix: "ca7a0b1c",
+        owned_before: { ...Object.fromEntries(OWNED_TABLES.map((t) => [t, 0])), ...before },
+        owned_after: { ...OWNED_AFTER_EXPECTED, ...after },
+        retained,
+        accounting_period_created: false,
+    };
+}

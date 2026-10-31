@@ -6,18 +6,23 @@
  * It is not a new suite. It runs the existing live suites listed in FINANCIALS_ISOLATED_SUITE, which
  * already refuse every shared or hosted target, and only hands them the binding the executor built:
  *
- *   1. judge the binding (financialsIsolatedBinding.mjs) and the executor's operation authority
- *      (financialsFixtureAuthority.mjs: the live in-flight request in the trusted Gateway store names
- *      this exact record, request, operation, candidate and pinned script) — refused before any
- *      process starts, exit 2;
- *   2. run exactly the pinned files with the bound target mapped onto the suite's own isolated-env
- *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL`, `CERT_SERVICE_ROLE_KEY`, and the bound
- *      seed organization as `CERT_FIXTURE_ORG_ID`) — in the
- *      child's environment only, never on a command line, never printed;
+ *   1. the executor's v2 operation authority FIRST (financialsFixtureAuthority.mjs over the shared
+ *      isolatedFixtureAuthorityV2.mjs: live in-flight request, record, operation, candidate, pinned script,
+ *      seed org, the database connection identity of DATABASE_URL with this environment as the client's,
+ *      the target hold re-read clear, and the API origin in the database's environment block), then the
+ *      binding (financialsIsolatedBinding.mjs) — refused before any credential is used or process starts,
+ *      exit 2. A v1 record is refused: there is no v1 fallback;
+ *   2. run exactly the pinned files with the VERIFIED target mapped onto the suite's own isolated-env
+ *      contract (`CATALOG_LIVE_ISOLATED=1`, `CERT_SUPABASE_URL` = the verified API origin,
+ *      `CERT_SERVICE_ROLE_KEY`, `CERT_FIXTURE_ORG_ID` = the verified org, `FIN_ISOLATED_PROOF_FILE` in this
+ *      runner's private temp dir) — in the child's environment only, never on a command line, never printed;
  *   3. read vitest's JSON report and decide proof here, not by exit code alone: a skipped, pending or
  *      todo test, a pinned file that reported nothing, or zero passes is NOT a pass. The suites
  *      `describe.skip` themselves when their target is missing, so a silent skip is exactly the
- *      failure this has to catch.
+ *      failure this has to catch;
+ *   4. read the suite's proof report (financialsIsolatedProof.mjs): exact owned counts before and after,
+ *      and the retained posted charges with their journal entries. An absent or malformed report is NOT a
+ *      pass.
  *
  * Output follows the executor's line contract: `✓ <id> passed` / `✗ <id> failed|not_run` and one
  * `tests passed=<n> failed=<n>`, where `<id>` is an approved identifier (`<file stem>#<ordinal>`),
@@ -33,6 +38,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { FINANCIALS_ISOLATED_PROGRAM, verifyFinancialsFixtureAuthority } from "./financialsFixtureAuthority.mjs";
 import { describeBinding, readIsolatedBinding } from "./financialsIsolatedBinding.mjs";
+import { CATALOG_PROOF_FILE_NAME, judgeCatalogProof } from "./financialsIsolatedProof.mjs";
 
 const WEB = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -117,17 +123,22 @@ export function summarizeVitestReport(report, files = FINANCIALS_ISOLATED_SUITE,
 }
 
 /**
- * The suite child's environment: the executor's own, plus the suite's isolated-env names. The fixture
- * organization is the executor's bound one (verified to be the certification seed org), never a constant
- * of the suite's.
+ * The suite child's environment: the executor's own, plus the suite's isolated-env names. The target and the
+ * organization are the VERIFIED ones from the authority verdict, never a second read of the environment and
+ * never a constant of the suite's. The suite re-verifies the same authority before its client exists.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {{ api_url: string, org_id: string }} verified
+ * @param {string} proofFile
  */
-export function suiteChildEnv(env) {
+export function suiteChildEnv(env, verified, proofFile) {
     return {
         ...env,
         CATALOG_LIVE_ISOLATED: "1",
-        CERT_SUPABASE_URL: env.SUPABASE_URL,
+        CERT_SUPABASE_URL: verified.api_url,
         CERT_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
-        CERT_FIXTURE_ORG_ID: env.ALLOY_CERT_FIXTURE_ORG_ID,
+        CERT_FIXTURE_ORG_ID: verified.org_id,
+        FIN_ISOLATED_PROOF_FILE: proofFile,
     };
 }
 
@@ -152,38 +163,42 @@ function runVitest(files, env, reportPath) {
  * @returns {Promise<number>}
  */
 export async function main({ env = process.env, argv = process.argv.slice(2), out = console.log, run = runVitest, authority = undefined } = {}) {
-    const judged = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv });
-    if (!judged.ok) {
-        out(`✗ refused before any IO: ${judged.code} — ${judged.detail}`);
-        out("tests passed=0 failed=0");
-        return 2;
-    }
     const auth = verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_ISOLATED_PROGRAM, operation: "run" });
     if (!auth.ok) {
         out(`✗ refused before any process: ${auth.code}${auth.fields ? ` fields=${auth.fields.join(",")}` : ""}`);
         out("tests passed=0 failed=0");
         return 2;
     }
-    out(`authority request=${auth.authority.request_id} candidate=${auth.authority.candidate_sha.slice(0, 12)}`);
+    const judged = readIsolatedBinding({ env, fixture: "financials_isolated_tests", operation: "run", argv });
+    if (!judged.ok) {
+        out(`✗ refused before any IO: ${judged.code} — ${judged.detail}`);
+        out("tests passed=0 failed=0");
+        return 2;
+    }
+    out(`authority v2 request=${auth.authority.request_id} candidate=${auth.authority.candidate_sha.slice(0, 12)} database=${auth.authority.database_identity_digest.slice(0, 12)} hold_revision=${auth.authority.hold_revision}`);
     out(`binding ${describeBinding(judged.binding)}`);
     let dir = null;
     try {
         dir = mkdtempSync(join(tmpdir(), "fin-isolated-"));
         const reportPath = join(dir, "report.json");
-        const result = await run([...FINANCIALS_ISOLATED_SUITE], suiteChildEnv(env), reportPath);
-        let report = null;
-        try {
-            report = JSON.parse(readFileSync(reportPath, "utf8"));
-        } catch {
-            report = null;
-        }
-        const s = summarizeVitestReport(report);
+        const proofPath = join(dir, CATALOG_PROOF_FILE_NAME);
+        const result = await run([...FINANCIALS_ISOLATED_SUITE], suiteChildEnv(env, auth.authority, proofPath), reportPath);
+        const readJson = (p) => {
+            try {
+                return JSON.parse(readFileSync(p, "utf8"));
+            } catch {
+                return null;
+            }
+        };
+        const s = summarizeVitestReport(readJson(reportPath));
+        const proof = judgeCatalogProof(readJson(proofPath));
         for (const c of s.checks) out(`${c.ok ? "✓" : "✗"} ${c.check}`);
-        for (const p of s.problems) out(`✗ ${p}`);
+        for (const c of proof.checks) out(`${c.ok ? "✓" : "✗"} ${c.check}`);
+        for (const p of [...s.problems, ...proof.problems]) out(`✗ ${p}`);
         const exit = Number.isInteger(result?.code) ? result.code : null;
         if (exit !== 0) out(`✗ ${ISOLATED_PROBLEMS.EXIT} code=${exit ?? "none"}`);
         out(`tests passed=${s.passed} failed=${s.failed}`);
-        return s.ok && exit === 0 ? 0 : 1;
+        return s.ok && proof.ok && exit === 0 ? 0 : 1;
     } catch {
         out(`✗ ${ISOLATED_PROBLEMS.RUNNER}`);
         out("tests passed=0 failed=0");

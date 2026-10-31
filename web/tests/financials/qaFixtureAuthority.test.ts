@@ -41,12 +41,15 @@ afterEach(() => {
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 describe("the contract is the toolkit's, restated and pinned", () => {
-    it("schema and refusal codes equal the toolkit's verifyFixtureAuthority (A741 bab9c927)", () => {
-        expect(FIXTURE_AUTHORITY_SCHEMA).toBe("vacilando.isolated_fixture_authority.v1");
+    it("schema and refusal codes are the toolkit's v2 contract (eeaa6dac6860), through the shared verifier", () => {
+        expect(FIXTURE_AUTHORITY_SCHEMA).toBe("vacilando.isolated_fixture_authority.v2");
         expect(A).toMatchObject({
             ABSENT: "fixture_authority_absent", UNTRUSTED_ROOT: "fixture_authority_store_root_untrusted", ORIGIN: "fixture_authority_not_executor_issued",
             PROVENANCE: "fixture_authority_no_live_request", ALTERED: "fixture_authority_altered", SCHEMA: "fixture_authority_schema",
             EXPIRED: "fixture_authority_expired", NOT_YET: "fixture_authority_not_yet_valid", MISMATCH: "fixture_authority_mismatch",
+            ORG_UNBOUND: "fixture_authority_org_unbound", ORG_NOT_REGISTERED: "fixture_authority_org_not_registered",
+            PERSONA_ORG: "fixture_authority_persona_org_unverified", PROGRAM: "fixture_authority_program_unregistered",
+            API_ENVIRONMENT: "fixture_api_target_not_the_bound_environment",
         });
     });
 
@@ -58,7 +61,7 @@ describe("the contract is the toolkit's, restated and pinned", () => {
     });
 
     it("the only organization is the certification seed org — not QA Shared, not Firefly", () => {
-        expect(FINANCIALS_FIXTURE_ORG).toEqual({ id: "00000000-0000-4000-8000-000000000001", source: "seed_manifest" });
+        expect(FINANCIALS_FIXTURE_ORG).toEqual({ id: "00000000-0000-4000-8000-000000000001", key: "certification_seed", source: "seed_manifest" });
     });
 });
 
@@ -93,7 +96,10 @@ describe("live executor authority admits; nothing else does", () => {
             ok: true,
             authority: {
                 request_id: "req-fin-auth-0001", fixture: "financials_isolated_tests", operation: "run", npm_script: "test:qa:financials-isolated",
-                candidate_sha: "c".repeat(40), expires_at: s.rec.expires_at, org_id: FINANCIALS_FIXTURE_ORG.id,
+                qa_run_id: s.rec.qa_run_id, environment_id: s.rec.environment_id,
+                candidate_sha: "c".repeat(40), expires_at: s.rec.expires_at, org_id: FINANCIALS_FIXTURE_ORG.id, org_key: "certification_seed", org_source: "seed_manifest",
+                database_identity_digest: (s.rec.database_identity as { digest: string }).digest, hold_revision: 1,
+                api_url: "http://127.0.0.1:56102",
             },
         });
         const j = judgeLiveSuiteAuthority({ env: s.env(), authority: s.options() });
@@ -240,9 +246,17 @@ describe("live executor authority admits; nothing else does", () => {
         ["the QA Shared persona org", { ALLOY_CERT_FIXTURE_ORG_ID: "4acc9386-c485-486f-aa1f-05d83499d142" }],
         ["a persona-sourced org", { ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }],
         ["no bound org (a shared-stack fallback)", { ALLOY_CERT_FIXTURE_ORG_ID: undefined, ALLOY_CERT_FIXTURE_ORG_SOURCE: undefined }],
-    ])("the fixture org must be the bound seed org: %s → refused", (_l, envOver) => {
+    ])("the environment's org must be the record's: %s → refused", (_l, envOver) => {
         const s = make();
-        expect(verify(s.env(envOver), s.options()).code).toBe(A.ORG);
+        expect(verify(s.env(envOver), s.options())).toEqual({ ok: false, code: A.MISMATCH, fields: ["fixture_org"] });
+    });
+
+    it.each([
+        ["QA Shared", { id: "4acc9386-c485-486f-aa1f-05d83499d142", key: "qa_shared", source: "persona" }],
+        ["the seed id under another key", { id: "00000000-0000-4000-8000-000000000001", key: "firefly", source: "seed_manifest" }],
+    ])("an executor record naming an org other than the registered seed org (%s), echoed by the env → refused", (_l, org) => {
+        const s = make({ record: { fixture_org: org } });
+        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: org.id, ALLOY_CERT_FIXTURE_ORG_SOURCE: org.source }), s.options()).code).toBe(A.ORG_NOT_REGISTERED);
     });
 
     it("no refusal carries a value from the record or the environment", () => {
@@ -298,13 +312,20 @@ describe("one verifier, an explicit program descriptor per registered fixture", 
     it("the historical program verifies its persona org from the executor's QA-run ledger", () => {
         const s = make({ program: H, operation: "reset" });
         expect(verify(s.env(), s.options({ program: H, operation: "reset" }))).toMatchObject({ ok: true, authority: { fixture: "financials_historical_draft", operation: "reset", org_id: QA_PERSONA_ORGS.qa_shared } });
+        /* The ledger moves to QA Secondary: a record still naming QA Shared no longer agrees with it. */
         s.writeRun({}, { org_key: "qa_secondary" });
         expect(verify(s.env(), s.options({ program: H, operation: "reset" })).code).toBe(A.PERSONA_ORG);
-        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_secondary }), s.options({ program: H, operation: "reset" }))).toMatchObject({ ok: true, authority: { org_id: QA_PERSONA_ORGS.qa_secondary } });
+        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_secondary }), s.options({ program: H, operation: "reset" }))).toEqual({ ok: false, code: A.MISMATCH, fields: ["fixture_org"] });
+        /* A record the executor issued for QA Secondary, with the ledger binding it, is accepted. */
+        const sec = make({ program: H, operation: "reset", record: { fixture_org: { id: QA_PERSONA_ORGS.qa_secondary, key: "qa_secondary", source: "persona" } } });
+        sec.writeRun({}, { org_key: "qa_secondary" });
+        expect(verify(sec.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_secondary }), sec.options({ program: H, operation: "reset" }))).toMatchObject({ ok: true, authority: { org_id: QA_PERSONA_ORGS.qa_secondary, org_key: "qa_secondary" } });
     });
 
     it("the isolated program's seed-manifest org rule is unchanged: a persona org refuses it", () => {
         const s = make();
-        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_shared, ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }), s.options()).code).toBe(A.ORG);
+        expect(verify(s.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_shared, ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }), s.options()).code).toBe(A.MISMATCH);
+        const persona = make({ record: { fixture_org: { id: QA_PERSONA_ORGS.qa_shared, key: "qa_shared", source: "persona" } } });
+        expect(verify(persona.env({ ALLOY_CERT_FIXTURE_ORG_ID: QA_PERSONA_ORGS.qa_shared, ALLOY_CERT_FIXTURE_ORG_SOURCE: "persona" }), persona.options()).code).toBe(A.ORG_NOT_REGISTERED);
     });
 });
