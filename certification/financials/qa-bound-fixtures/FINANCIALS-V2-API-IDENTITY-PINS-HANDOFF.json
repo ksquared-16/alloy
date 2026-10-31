@@ -1,0 +1,248 @@
+{
+  "schema": "financials.v2_program_pins_handoff.v2",
+  "for": {
+    "objective": "OPWORK_C86B7CC3C436_SPRINT_94E98241AD37",
+    "platform_lane": "lane_c86b7cc3c436",
+    "platform_owner": "94E98241AD37",
+    "answers": "/tmp/94e9-api-handoff/94E9-FINANCIALS-V2-API-IDENTITY-HANDOFF.json sha256 9c889db3e455ba626b7cb3c9b6f3da1080c5abb574491022de29ee3f97d87c5a (coordination.platform_product_handoff.v1, next_from_product)"
+  },
+  "from": {
+    "product_lane": "lane_b77b3cbb5840",
+    "objective": "OPWORK_B77B3CBB5840_SPRINT_386D603E60C7",
+    "repository": "ksquared-16/alloy",
+    "branch": "sprint/opwork_b77b3cbb5840_sprint_386d603e60c7"
+  },
+  "status": "product_api_identity_adopted_locally_not_promoted",
+  "platform_provenance_verified": {
+    "candidate": "4b55fc0b732231300b240f007859f7b378f2a804",
+    "tree": "1e3eac224b1687d5409ed8db7fc423a67fde36e5 (git rev-parse 4b55fc0b^{tree} in /Users/vacilando/Code/vacilando)",
+    "branch": "sprint/opwork_c86b7cc3c436_sprint_94e98241ad37",
+    "checkpoint": "ick_9731e872c49e (as handed; locally certified, NOT installed — not re-certified by the product)",
+    "artifacts_equal_git_objects_at_candidate": {
+      "docs/architecture/ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT.md": "686a4d2c2b46ea1f4fc94167655882b558b8fcf3ed0d57d2d52d5d8416043f6d",
+      "tests/deterministic/fixtures/isolated-fixture-program-pins.financials-descriptor.json": "0a3fd71d90a3c16bd4daa530146463059fcfaccba971e7ceb11a2d59ea0e1a15",
+      "tests/deterministic/fixtures/isolated-fixture-authority-v2.vectors.json": "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28"
+    },
+    "restated_from": "lib/fixture-target-contract.mjs apiIdentityOf/issuableApiIdentity/verifyApiIdentity; lib/isolated-fixture-execution.mjs verifyV2 api step, attestFixtureConnection/runAttestedConnection (apiOrigin, requireApi) — restated, not imported; no platform branch copied"
+  },
+  "candidate": {
+    "code_commit": "064629131ffafaa021836e38932234751d578379",
+    "candidate_sha": "THE COMMIT THAT ADDS THIS FILE (a documentation-only child of the code commit, which also appends an addendum to the approval packet; named in the lane's run report). Every artifact below is byte-identical at both. Any later product commit is a new candidate: re-measure, never reuse.",
+    "slice": "financials-api-identity-child COMPLETE_COMMITTED_NOT_PROMOTED at 064629131ffa"
+  },
+  "shared_vectors": {
+    "path": "web/tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json",
+    "sha256": "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28",
+    "equals": "platform 4b55fc0b tests/deterministic/fixtures/isolated-fixture-authority-v2.vectors.json (api_identity appended to eeaa6dac's c028b885…)",
+    "reproduced_by": "web/tests/financials/qaFinancialsAuthorityV2.test.ts — 'reproduces the platform's api_identity vectors' (issued, not_issuable, all 12 origins) and the earlier connection-target / hold vectors"
+  },
+  "shared_verifier": {
+    "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+    "sha256": "e25649c240871e5fb8f771c75e201b80d51b7d86db35a5f8c08e3e58b3b27fab",
+    "note": "no longer byte-identical to Enrollment 80eb7446 (bf6e405f…): it adds the API identity. Backward compatible — a record without api_identity, for a caller without requireApi, is judged exactly as before."
+  },
+  "fixtures": {
+    "financials_isolated_tests": {
+      "retained_registration_expected": {
+        "suite": "financials",
+        "npm_script": "test:qa:financials-isolated",
+        "reserved_namespace": "financials-cert.alloy.invalid",
+        "fixture_org_source": "seed_manifest",
+        "fixture_org": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "key": "certification_seed"
+        },
+        "preview": false,
+        "operations": {
+          "run": {
+            "args": [],
+            "mutating": true
+          }
+        },
+        "authority_contract": "v2",
+        "api_identity": "required"
+      },
+      "product_supplies": {
+        "variant": "program",
+        "candidate_sha": "<the commit that adds this file — see candidate>",
+        "script_body": "node scripts/qa/financialsIsolatedTests.mjs",
+        "script_sha256": "78453bfcd3d60c0757d800c64f42577265fc27ff458d48e03cc610b818f1c169",
+        "artifacts": [
+          {
+            "role": "entry",
+            "path": "web/scripts/qa/financialsIsolatedTests.mjs",
+            "sha256": "aa3069f6c3907aad842654c0465f6b66866392eabb43b5ed0a81090613e4c3bd"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/financialsFixtureAuthority.mjs",
+            "sha256": "d2de670b07791c4847f19dfbc6d2cffeb815162cf405c281b7aab6aa87367509"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+            "sha256": "e25649c240871e5fb8f771c75e201b80d51b7d86db35a5f8c08e3e58b3b27fab"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedBinding.mjs",
+            "sha256": "79576b2371f31446d984a07c470ce5f4eec154f3f37014d1d0184ad8c91cff9b"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedProof.mjs",
+            "sha256": "b00cd9f5f99f69057e84644b2aa53219ca922fb05fddbb8b01b2861f28c7bbe3"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/financials/live/catalogAddCharge.live.test.ts",
+            "sha256": "9d17b0ba433b96680dfc3c25ad0482546be06e2cd31a34c834787d8ccef3062c"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/financials/live/certEnvironment.ts",
+            "sha256": "af354b4780c730354e6002e518fe42b52f96e930030a2b41c5e496d289bb73ec"
+          },
+          {
+            "role": "program",
+            "path": "web/tests/harness/liveSuiteAuthority.mjs",
+            "sha256": "f29d9f0e392087d409d5a6fb56c8ec9a122c12843bc994f6b403c5b7cd7f603a"
+          },
+          {
+            "role": "program",
+            "path": "web/vitest.config.ts",
+            "sha256": "f367f1154a9d88a6ffa04fecd375d37c3173fb33934e832200c89b6b058cd140"
+          }
+        ],
+        "artifact_order": "as listed (the digest is over the array in this order)",
+        "changed_since_377b458": [
+          "web/scripts/qa/financialsIsolatedTests.mjs",
+          "web/scripts/qa/financialsFixtureAuthority.mjs",
+          "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+          "web/tests/financials/live/catalogAddCharge.live.test.ts"
+        ]
+      }
+    },
+    "financials_historical_draft": {
+      "retained_registration_expected": {
+        "suite": "financials",
+        "npm_script": "dev:qa:financials-historical-draft-fixture",
+        "reserved_namespace": "financials-cert.alloy.invalid",
+        "fixture_org_source": "persona",
+        "preview": true,
+        "reset_limit": 50,
+        "operations": {
+          "ensure": {
+            "args": [
+              "--ensure"
+            ],
+            "mutating": true
+          },
+          "verify": {
+            "args": [
+              "--verify"
+            ],
+            "mutating": false
+          },
+          "reset": {
+            "args": [
+              "--reset"
+            ],
+            "mutating": true,
+            "reset": true
+          },
+          "count": {
+            "args": [
+              "--count"
+            ],
+            "mutating": false,
+            "census": true
+          }
+        },
+        "authority_contract": "v2",
+        "api_identity": "required"
+      },
+      "product_supplies": {
+        "variant": "program",
+        "candidate_sha": "<the commit that adds this file — see candidate>",
+        "script_body": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+        "script_sha256": "07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8",
+        "artifacts": [
+          {
+            "role": "entry",
+            "path": "web/scripts/qa/financialsHistoricalDraftFixture.ts",
+            "sha256": "b769b0370c2f260f3a0e6340be1f529e295c76f298324ac31f3b1124442b4b6a"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/financialsFixtureAuthority.mjs",
+            "sha256": "d2de670b07791c4847f19dfbc6d2cffeb815162cf405c281b7aab6aa87367509"
+          },
+          {
+            "role": "authority_verifier",
+            "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+            "sha256": "e25649c240871e5fb8f771c75e201b80d51b7d86db35a5f8c08e3e58b3b27fab"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsHistoricalDraftFixtureCore.ts",
+            "sha256": "b40cc9739216759a9af9e1dacbd2f126df49315154cd665f2f107864beeeca57"
+          },
+          {
+            "role": "program",
+            "path": "web/scripts/qa/financialsIsolatedBinding.mjs",
+            "sha256": "79576b2371f31446d984a07c470ce5f4eec154f3f37014d1d0184ad8c91cff9b"
+          }
+        ],
+        "artifact_order": "as listed (the digest is over the array in this order)",
+        "changed_since_377b458": [
+          "web/scripts/qa/financialsHistoricalDraftFixture.ts",
+          "web/scripts/qa/financialsFixtureAuthority.mjs",
+          "web/scripts/qa/isolatedFixtureAuthorityV2.mjs"
+        ]
+      }
+    }
+  },
+  "program_pins_digest": "sha256(canonicalJson({variant:'program', candidate_sha, script_sha256, artifacts})) with candidate_sha = the candidate; the lane's run report states both computed digests",
+  "what_the_product_child_checks_now": [
+    "everything in v1 of this handoff (authority v2 only; store root; live in-flight provenance; window; binding; program/candidate/script; org; database connection identity; clear hold; program pins)",
+    "requireApi: true always — authority.api_identity present (schema vacilando.api_identity.v1, 64-hex digest), environment_id = the record's environment_id = ALLOY_QA_ENVIRONMENT_ID; else api_identity_absent",
+    "the record identity's own fields recompute to its digest (product strictness); else api_identity_malformed",
+    "the exact origin handed to the clients: http://127.0.0.1:<port>[/] only (malformed / not_loopback / shared_target_refused 54421), digest computed here = record digest; else api_identity_mismatch — another port in the block, the DB port, another certenv, 54321",
+    "the same-port-block guard (fixture_api_target_not_the_bound_environment) is removed; the binding module's certenv band check (56100–56299) is unchanged and remains a shape refusal, not identity",
+    "immediately before every client: runAttestedFinancialsConnection freezes { url, clientEnv, apiOrigin }, re-runs the whole check on that copy (request still in_flight, hold re-read clear, same revision), and hands connect only the frozen copy — runner: before the vitest child (child DATABASE_URL, child env, CERT_SUPABASE_URL); historical entry: before createClient; live suite: at import (connection with CERT_SUPABASE_URL) and before createClient",
+    "the verdict carries api_url (the identity's origin) and api_identity_digest"
+  ],
+  "negative_controls_synthetic": [
+    "swapped API port within the block (56103), DB port as API (56101), sibling certenv (56112), default stack (54321), shared API (54421), localhost, hosted https, path+query, credentials, implicit port, no SUPABASE_URL",
+    "record: no api_identity, another environment's, port edited with digest kept, re-issued for another port, naming the shared API",
+    "gate (connect never called): swapped origin, another certenv, shared, absent origin, PGPORT in client env, another DB; hold held / changed / unavailable / missing and request completed since the first check",
+    "post-check rewrite: caller's clientEnv mutated inside connect does not reach the frozen copy; frozen apiOrigin and clientEnv are immutable",
+    "runner: hold changes between its first check and its spawn → exit 2, nothing started; historical: hold unreadable at the gate → exit 2, no client",
+    "planted removals (reverted): no digest compare 10 fail; runner ignores gate 1; historical ignores gate 1; no record-field recompute 2; shared ignores requireApi 1; Financials requireApi false AND digest backstop removed 2; requireApi false alone stays green (the digest backstop catches it — stated)"
+  ],
+  "old_pins_377b458": "deliberately NOT to be registered: candidate 377b458876cc / code 184c50a276e3 predate the API identity, and five artifact hashes changed (see changed_since_377b458). Preserved as evidence in FINANCIALS-V2-PROGRAM-PINS-HANDOFF.json (v1 of this handoff).",
+  "requests_to_the_platform": [
+    {
+      "id": "FIN-V2-REQ-1b",
+      "what": "Register both entries authority_contract v2, api_identity required, pins variant program with exactly the artifacts above and candidate_sha = the commit that adds this file (replacing awaiting_product_adoption). The product does not register pins itself.",
+      "why": "Until then every Financials request refuses isolated_fixture_pins_awaiting_product, by design."
+    },
+    {
+      "id": "FIN-V2-REQ-3",
+      "what": "Unchanged: keep issuing ALLOY_QA_AUTHORITY_SHA256, DATABASE_URL and SUPABASE_URL (= the api_identity origin); keep program_pins and api_identity inside the authority record.",
+      "why": "The child's checks depend on them."
+    }
+  ],
+  "not_done": [
+    "no database, environment, credential, fixture, live execution or cleanup",
+    "no publication, install, merge, push, PR or hold change",
+    "no pin registration (platform-owned)",
+    "platform checkpoint ick_9731e872c49e not re-certified here"
+  ],
+  "not_claimed": [
+    "nothing authenticates the issuer cryptographically (same OS user)",
+    "pins prove the started bytes, not transitive imports",
+    "the frozen copy binds what this program hands its client; it cannot stop a different same-user process"
+  ]
+}

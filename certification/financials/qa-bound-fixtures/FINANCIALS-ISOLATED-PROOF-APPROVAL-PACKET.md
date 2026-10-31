@@ -136,3 +136,19 @@ so the plan is a user decision. A Financials-owned plan would be a platform regi
 3. **Product, after any later commit:** re-measure the artifact hashes and hand them over again.
 4. **Promotion of this candidate** (checkpoint, release, PR, merge) has not started. `061e164b5`'s released
    checkpoint is separate and untouched.
+
+## Addendum — 2026-10-31: platform API identity adopted (supersedes §-items noted)
+
+The platform closed FIN-V2-REQ-2 with `vacilando.api_identity.v1` (candidate `4b55fc0b732231300b240f007859f7b378f2a804`,
+tree `1e3eac224b16`, checkpoint `ick_9731e872c49e` — locally certified, not installed). The product adopted it in
+code commit `064629131ffafaa021836e38932234751d578379` (slice `financials-api-identity-child`,
+`COMPLETE_COMMITTED_NOT_PROMOTED`):
+
+- Child check 5 above (API in the same certenv port block) is **superseded**: the block guard is removed; the
+  record's `api_identity` is required and the exact origin handed to every client must be it.
+- Every client is attested immediately before it exists on the exact frozen configuration
+  (`runAttestedFinancialsConnection`).
+- The pins in this packet and in `FINANCIALS-V2-PROGRAM-PINS-HANDOFF.json` (`377b458` / `184c50a`) are **deliberately
+  unregistered evidence**. The pins to register are in `FINANCIALS-V2-API-IDENTITY-PINS-HANDOFF.json`; the candidate
+  is the commit that adds it.
+- Approvals A1–A4 / H1 and the irreversible-retirement decision are unchanged. No new product policy decision.
