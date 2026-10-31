@@ -13,11 +13,11 @@
  "A_shared_child_fixture": {
   "contract": "certification/qa-shared/documents-r5-shared-child-fixture-contract.json (exact registry entries)",
   "files": {
-   "certification/fixtures/qa-documents-shared-child-ensure.sql": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+   "certification/fixtures/qa-documents-shared-child-ensure.sql": "5942fb82d66f4c73f0c75cd0187fbf78142ef6e0e121ffc37e1d1cb475fc6fb5",
    "certification/fixtures/qa-documents-shared-child-reset.sql": "afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
    "web/scripts/qaDocumentsSharedChildFixture.mjs": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
    "certification/qa-shared/documents-r5-shared-child-residue-census.sql": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd",
-   "certification/invariants/documents-r5-shared-child-fixture.sql": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac"
+   "certification/invariants/documents-r5-shared-child-fixture.sql": "9f6350bb3f9a17580ce782347ef4341dba2ae733fb40a341e1137799b2c34dcb"
   },
   "registry": [
    "lib/reconciliation-registry.mjs: qa_documents_shared_child_ensure (runner dev:qa:documents-shared-child-ensure) and qa_documents_shared_child_reset (dev:qa:documents-shared-child-reset); frozen ORG_ID QA Shared; environments [staging]; apply_env DRY_RUN=0 CERT_FIXTURE_APPLY=1 SYNTHETIC_ONLY=1; result_shape seeded|failed / reset|failed",
@@ -101,11 +101,11 @@
   "staging_commit": "8ef45da545ecbec854224ba0c12d0d6a5de44ce8",
   "verified_by": "git show 8ef45da5:<path> | sha256 (lane run erun2_73a8af45220a9267)",
   "pins_on_staging": {
-   "certification/fixtures/qa-documents-shared-child-ensure.sql": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+   "certification/fixtures/qa-documents-shared-child-ensure.sql": "5942fb82d66f4c73f0c75cd0187fbf78142ef6e0e121ffc37e1d1cb475fc6fb5",
    "certification/fixtures/qa-documents-shared-child-reset.sql": "afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
    "web/scripts/qaDocumentsSharedChildFixture.mjs": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
    "certification/qa-shared/documents-r5-shared-child-residue-census.sql": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd",
-   "certification/invariants/documents-r5-shared-child-fixture.sql": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac",
+   "certification/invariants/documents-r5-shared-child-fixture.sql": "9f6350bb3f9a17580ce782347ef4341dba2ae733fb40a341e1137799b2c34dcb",
    "certification/qa-shared/documents-r5-shared-child-fixture-contract.json": "dd1de1e297db7de1fe5e4be51c6d9a102ff3095dcc3c5f2b882f3aecdda7a9d1",
    "certification/qa-shared/documents-zero-residue-census.sql (registered, unchanged)": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
    "docs/platform/governance/authorization-qa-personas.md (Revision 3, the installed pin)": "e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e"
@@ -141,5 +141,23 @@
    "note": "until then the driver records every R2-authoring case FAIL 'not run' — R2 cannot certify"
   }
  },
- "publication_hold": "2026-10-30: the combined publication dispatch for the Revision 4 follow-up was rejected before delivery; Dot resolves approval provenance separately. The Documents lane prepares the local candidate only."
+ "publication_hold": "2026-10-30: the combined publication dispatch for the Revision 4 follow-up was rejected before delivery; Dot resolves approval provenance separately. The Documents lane prepares the local candidate only.",
+ "revisions": [
+  {
+   "date": "2026-10-31",
+   "objective": "OPWORK_AA660DC9554D_SPRINT_12706A6E51FA",
+   "change": "customers.status -> customers.status_key ('active') in the ensure fixture and its rollback invariant (3 inserts); the column was dropped by 20260625140100_canonical_drop_legacy_status_columns.sql, matching the canonical household writer web/lib/bookingPersonCustomerResolve.ts",
+   "failure_evidence": "gar_bbbdf3ca3762f2 (qar_b1cc8a9bbe81): reconciliation_failed, column \"status\" of relation \"customers\" does not exist; rolled back (ON_ERROR_STOP + begin/commit); shared-child reset gar_72c647f133fde9 residue 0",
+   "superseded_pins": {
+    "certification/fixtures/qa-documents-shared-child-ensure.sql": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+    "certification/invariants/documents-r5-shared-child-fixture.sql": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac"
+   },
+   "unchanged": [
+    "certification/fixtures/qa-documents-shared-child-reset.sql afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
+    "web/scripts/qaDocumentsSharedChildFixture.mjs 38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
+    "certification/qa-shared/documents-r5-shared-child-residue-census.sql 87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd"
+   ],
+   "proof": "static/synthetic only: web/tests/certification/qaFixtureMigratedSchema.test.ts checks every fixture insert and filter against the migration-derived schema. NOT executed against a real database."
+  }
+ ]
 }
