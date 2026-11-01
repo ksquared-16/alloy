@@ -41,7 +41,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { findInquiryChildRow } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
-import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import { derivePersonStaffCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import { derivePersonFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import type {
     OperationalEmploymentPerson,
@@ -212,7 +212,7 @@ describe("a child on a family CASE is not treated as a record's subject", () => 
     });
 });
 
-describe("Employment is already canonical, and Operations renders that one", () => {
+describe("Staff (the person-grain Employment presentation) is canonical, and Operations renders that one", () => {
     it("the host renders the person-grain producer the durable panel composes", () => {
         // Typed against the REAL contracts, not a lookalike: a cast fixture would keep passing
         // after the signal shape moved, which is the unfalsifiable-fixture trap.
@@ -250,12 +250,17 @@ describe("Employment is already canonical, and Operations renders that one", () 
             hasEmployment: true,
         };
 
-        const fromPanel = derivePersonFocusPanelCards({ employment }).get("employment");
-        const fromHostProducer = derivePersonEmploymentCard(employment);
+        // Staff SUPERSEDES Employment at person grain: `employment` no longer declares the grain, so
+        // the panel composes exactly one of the two — `staff` — and the host must render that one.
+        const panel = derivePersonFocusPanelCards({ employment });
+        expect(panel.has("employment")).toBe(false);
+        const fromPanel = panel.get("staff");
+        const fromHostProducer = derivePersonStaffCard(employment);
+        expect(fromPanel).toBeDefined();
         expect(fromPanel).toEqual(fromHostProducer);
 
         const host = code("components/presentation/durableRecord/DurableRecordContextualCard.tsx");
-        expect(host).toContain("derivePersonEmploymentCard(subject.person.employment)");
+        expect(host).toContain("derivePersonStaffCard(subject.person.employment)");
         // Read-only on both hosts. This slice renders the existing card; it does not widen it.
         expect(host).not.toContain("mutation={employmentMutation}");
     });

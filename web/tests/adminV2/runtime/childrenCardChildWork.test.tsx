@@ -43,6 +43,20 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 beforeEach(() => {
     vi.clearAllMocks();
+    /*
+     * The card's own background prefetches (option sets, the location hierarchy) issue RELATIVE
+     * `/api/admin/…` fetches. jsdom has no origin to resolve them against, so each rejected with
+     * ERR_INVALID_URL after the test had already passed — 26 unhandled rejections that failed the
+     * file's exit code without failing an assertion. None of them is under test here; answer each
+     * with an empty, well-formed "nothing configured" response.
+     */
+    vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify({ ok: true, items: [], locations: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+        })),
+    );
     hookState.value = { status: "idle" };
     host = document.createElement("div");
     document.body.appendChild(host);
@@ -51,6 +65,7 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root?.unmount());
     host?.remove();
+    vi.unstubAllGlobals();
 });
 
 function demo(truthExtra: Record<string, unknown> = {}) {

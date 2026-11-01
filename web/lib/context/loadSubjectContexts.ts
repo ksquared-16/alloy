@@ -37,6 +37,7 @@ import {
     buildSubjectHouseholdContext,
     buildSubjectIdentityContext,
     buildSubjectProcessContexts,
+    childFamilyFallbackCaseIds,
     buildSubjectCompensationContext,
     buildSubjectScheduleContext,
     type SubjectProcessRow,
@@ -47,6 +48,7 @@ import { buildPersonEmploymentComposition } from "@/lib/employment/buildPersonEm
 import { CHILD_ENROLLMENT_AGREEMENT_OPERATIONAL_STATUSES } from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
 import { loadSearchProcessConfiguration } from "@/lib/search/searchProcessConfiguration";
+import { loadProjectionSubjectContexts } from "@/lib/context/projectionSubjectContexts";
 import {
     fetchHostWorkUnitKeys,
     fetchStageWorkViewTargets,
@@ -83,6 +85,13 @@ export type LoadSubjectContextsInput = {
      * Otherwise it is ignored and the context is decided exactly as without it. It never invents one.
      */
     scheduleSiteId?: string | null;
+    /**
+     * Domain-projection membership (Billing, Assignments) for a CHILD. Its cohorts are read with the
+     * caller's own identity — the domain's capability gate (Billing's `fin.read`) is decided on it —
+     * and the child's own household is the only family a household-grain projection may match.
+     * Absent: no projection context is read, exactly as before.
+     */
+    projection?: { userId: string | null; householdId: string | null } | null;
 };
 
 export async function loadSubjectContexts(
@@ -143,7 +152,16 @@ export async function loadSubjectContexts(
     // not raw columns — so a family subject needs the materialized row or its membership evaluates
     // to "not a member" for a family that plainly is one. A child needs nothing but its own stage,
     // so this is skipped entirely on the child path.
-    const needsFamilyRows = subject.grain === "person" && opportunityIds.length > 0;
+    //
+    // A child pays only for the family-grain fallback: its case's row, where its process has no child
+    // grain at its stage.
+    const familyRowIds =
+        subject.grain === "person"
+            ? opportunityIds
+            : subject.grain === "child"
+              ? childFamilyFallbackCaseIds({ processRows, processConfig, opportunityIdByContextId })
+              : [];
+    const needsFamilyRows = familyRowIds.length > 0;
 
     const [hostWorkUnitKeys, stageWorkViewTargets, familyMembershipRows, employment] =
         await Promise.all([
@@ -154,7 +172,7 @@ export async function loadSubjectContexts(
                 ? fetchStageWorkViewTargets(supabase, orgId, stageWorkViewInputs)
                 : Promise.resolve(new Map<string, string>()),
             needsFamilyRows
-                ? loadFamilyMembershipRows({ supabase, orgId, opportunityIds })
+                ? loadFamilyMembershipRows({ supabase, orgId, opportunityIds: familyRowIds })
                 : Promise.resolve(new Map<string, Record<string, unknown>>()),
             // Employment is a PERSON standing. A child's linked person is not read for it: a child
             // does not work here, and asking would eventually answer yes for a person row shared
@@ -182,6 +200,20 @@ export async function loadSubjectContexts(
         locationId: null,
         opportunityIdByContextId,
     });
+
+    // Billing / Assignments: the subject's rows in the registered projections, read through the one
+    // cohort reader. Enrichment — a failure costs these contexts, never the record.
+    if (subject.grain === "child" && input.projection) {
+        const projectionContexts = await loadProjectionSubjectContexts({
+            supabase,
+            orgId,
+            userId: input.projection.userId,
+            dimensions: input.dimensions,
+            processConfig,
+            subject: { memberId: subjectId, householdId: input.projection.householdId },
+        }).catch(() => []);
+        contexts.push(...projectionContexts);
+    }
 
     const scheduleLocationId = scheduleRow?.site_location_id ?? locationId ?? null;
     const schedule = buildSubjectScheduleContext(

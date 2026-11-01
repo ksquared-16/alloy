@@ -19,7 +19,10 @@ import type {
     SubjectOperationalMembershipRef,
 } from "@/lib/context/subjectContextTypes";
 import { stageWorkViewCacheKey } from "@/lib/workUnits/hostWorkUnitResolver";
-import { resolveOperationalMemberships } from "@/lib/search/searchOperationalMemberships";
+import {
+    processOffersChildGrainAt,
+    resolveOperationalMemberships,
+} from "@/lib/search/searchOperationalMemberships";
 import {
     resolveProcessDetail,
     type SearchProcessConfiguration,
@@ -97,6 +100,7 @@ export function buildSubjectProcessContexts(
     const contexts: SubjectContext[] = [];
     let locationId = input.locationId;
     const seenProcessKeys = new Set<string>();
+    const casesByProcess = participationCasesByProcess(input);
 
     for (const sk of input.subjectKeys) {
         for (const row of input.processBySubject.get(sk) ?? []) {
@@ -138,6 +142,32 @@ export function buildSubjectProcessContexts(
                   }))
                 : null;
 
+            /*
+             * ONE CASE, OR NO ANSWER. A child participating in this process in two cases has two
+             * truthful family answers, and the row this loop happened to read first is not a reason to
+             * prefer one. Ambiguity is stated, never resolved by order.
+             */
+            const ambiguous = (casesByProcess.get(row.process_key)?.size ?? 0) > 1;
+
+            /*
+             * FAMILY-GRAIN FALLBACK — only where the process has no child grain for this child.
+             *
+             * A process that works this stage at the case (the Enrolling lens is authored case-grain)
+             * cannot select the child, and offering nothing would leave the operator no way into the
+             * process from the child. The child's OWN case answers instead, evaluated by the same
+             * family predicates every family subject is — never the first family, never another
+             * process. Where a child lens does cover the stage, its verdict stands.
+             */
+            const familyFallback =
+                input.grain === "child" &&
+                configured &&
+                hostOpportunityId &&
+                !ambiguous &&
+                !(memberships ?? []).length &&
+                !processOffersChildGrainAt(configured, row.stage_key)
+                    ? resolveFamilyFallbackMemberships(input, configured, hostOpportunityId)
+                    : null;
+
             contexts.push({
                 kind: "process",
                 key: row.process_key,
@@ -165,12 +195,86 @@ export function buildSubjectProcessContexts(
                 // configured surface variant must never be resolved against one.
                 stage_key: row.stage_key,
                 state: row.state,
-                operational_memberships: memberships,
+                operational_memberships: ambiguous ? [] : familyFallback?.length ? familyFallback : memberships,
+                ...(ambiguous ? { participation_ambiguous: true } : {}),
             });
         }
     }
 
     return { contexts, locationId };
+}
+
+/** The opportunity a participation row is hosted by — the same mapping the builder applies. */
+function hostOpportunityOf(
+    row: SubjectProcessRow,
+    opportunityIdByContextId?: ReadonlyMap<string, string>,
+): string | null {
+    const contextId = (row.context_id ?? "").trim() || null;
+    return contextId ? opportunityIdByContextId?.get(contextId) ?? contextId : null;
+}
+
+/** process_key → the distinct cases this subject participates in it through. */
+function participationCasesByProcess(input: BuildProcessContextsInput): Map<string, Set<string>> {
+    const out = new Map<string, Set<string>>();
+    for (const sk of input.subjectKeys) {
+        for (const row of input.processBySubject.get(sk) ?? []) {
+            const host = hostOpportunityOf(row, input.opportunityIdByContextId);
+            if (!host) continue;
+            const set = out.get(row.process_key) ?? new Set<string>();
+            set.add(host);
+            out.set(row.process_key, set);
+        }
+    }
+    return out;
+}
+
+/**
+ * The child's own case, evaluated at FAMILY grain.
+ *
+ * No materialized case row (another organization's case never loads; a read failure loads nothing)
+ * means no membership is claimed — the same "unproven is not true" rule the family path applies.
+ */
+function resolveFamilyFallbackMemberships(
+    input: BuildProcessContextsInput,
+    configured: Parameters<typeof resolveOperationalMemberships>[0]["process"],
+    hostOpportunityId: string,
+): SubjectOperationalMembershipRef[] {
+    const caseRow = input.familyMembershipRows.get(hostOpportunityId) ?? null;
+    if (!caseRow) return [];
+    const caseStage = typeof caseRow.stage_key === "string" ? caseRow.stage_key : null;
+    return resolveOperationalMemberships({
+        process: configured,
+        subject: { grain: "family", stageKey: caseStage, row: caseRow, memberRowId: hostOpportunityId },
+    }).map((m) => ({
+        work_view_id: m.workViewId,
+        label: m.workViewLabel,
+        row_grain: m.rowGrain,
+        host_work_unit_key: input.hostWorkUnitKeys.get(hostOpportunityId) ?? null,
+        host_entity_id: hostOpportunityId,
+        operational_member_id: m.operationalMemberId,
+    }));
+}
+
+/**
+ * The cases whose materialized rows a CHILD's family-grain fallback will read.
+ *
+ * Both loaders call this so neither pays for rows the builder will not use: only a child
+ * participation in a process with no child grain at its stage, hosted by exactly one case.
+ */
+export function childFamilyFallbackCaseIds(params: {
+    processRows: readonly SubjectProcessRow[];
+    processConfig: SearchProcessConfiguration;
+    opportunityIdByContextId?: ReadonlyMap<string, string>;
+}): string[] {
+    const out = new Set<string>();
+    for (const row of params.processRows) {
+        const configured = params.processConfig.byKey.get(row.process_key);
+        if (!configured || !configured.operator_has_access) continue;
+        if (processOffersChildGrainAt(configured, row.stage_key)) continue;
+        const host = hostOpportunityOf(row, params.opportunityIdByContextId);
+        if (host) out.add(host);
+    }
+    return [...out];
 }
 
 /**

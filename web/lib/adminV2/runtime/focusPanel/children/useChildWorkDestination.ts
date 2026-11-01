@@ -47,7 +47,7 @@ export function useChildWorkDestination(customerMemberId: string | null): ChildW
                 const json = (await res.json().catch(() => null)) as { ok?: boolean; relatedWork?: FocusDestinationLike[] } | null;
                 const destinations = json?.ok ? json.relatedWork ?? [] : [];
                 for (const destination of destinations) {
-                    if (!(destination.operational_member_id ?? "").trim()) continue;
+                    if (!isChildGrainWorkDestination(destination)) continue;
                     const selection = operatorFocusSelectionFromDestination(destination);
                     if (selection) {
                         value = { status: "ready", selection };
@@ -67,4 +67,20 @@ export function useChildWorkDestination(customerMemberId: string | null): ChildW
     const memberId = (customerMemberId ?? "").trim();
     if (!memberId) return { status: "idle" };
     return state.memberId === memberId ? state.value : { status: "loading" };
+}
+
+/**
+ * Is this related-work entry the CHILD's own row, not the family's?
+ *
+ * Related work now also carries family-grain answers — a child's own case where its process has no
+ * child grain, and its household's Billing row. Those are real destinations on the record's `Go to`,
+ * but this action promises the child's work, and a family row would land the operator on the family
+ * the Children card is already showing. A family row is recognisable by its own identity: the case is
+ * both host and member, or the projection row is the household's.
+ */
+export function isChildGrainWorkDestination(destination: FocusDestinationLike): boolean {
+    const member = (destination.operational_member_id ?? "").trim();
+    if (!member) return false;
+    if (member.startsWith("household:")) return false;
+    return member !== (destination.host_entity_id ?? "").trim();
 }
