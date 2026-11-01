@@ -285,8 +285,10 @@ describe("live executor authority admits; nothing else does", () => {
 describe("one verifier, an explicit program descriptor per registered fixture", () => {
     const H = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
 
-    it("the historical descriptor is the A741 registration; the persona orgs are A741 QA_ORGS", () => {
-        expect(H).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", npm_script: "dev:qa:financials-historical-draft-fixture", org_binding: "persona", operations: ["ensure", "verify", "reset", "count"] });
+    it("the historical descriptor is the A741 registration plus ui-verify; the persona orgs are A741 QA_ORGS", () => {
+        /* ui-verify (read-only, rendered) is registered beside A741's four operations by the toolkit candidate that
+           composes this handoff (lib/certification-fixture.mjs financials_historical_draft, FINANCIALS-REUSABLE-QA-SETUP-CONTRACT). */
+        expect(H).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", npm_script: "dev:qa:financials-historical-draft-fixture", org_binding: "persona", operations: ["ensure", "verify", "reset", "count", "ui-verify"] });
         expect(pkg.scripts["dev:qa:financials-historical-draft-fixture"]).toBe(H.script_body);
         expect(readOwnScriptBody({ program: H })).toBe(H.script_body);
         expect(sha(H.script_body)).toBe("07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8");

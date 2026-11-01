@@ -23,9 +23,13 @@
  *     or process message;
  *   · exit 0 ok · 1 failed · 2 refused before IO · 3 identity conflict for the operator.
  *
- * `--count` (`census count=<n>`) is registered (`count: { args: ["--count"], mutating: false, census: true }`,
- * toolkit eeaa6dac6860). The installed toolkit issues this entry a v1 authority, which this program refuses
- * until the platform registers and installs it as authority v2.
+ * `--count` (`census count=<n>`) is registered (`count: { args: ["--count"], mutating: false, census: true }`).
+ *
+ * `--ui-verify` (READ-ONLY, rendered): after the same authority, binding and attested domain read of the one draft,
+ * the shared workflow verifier (`qaWorkflowVerifier.mjs`) renders the fixture child's Financials record as the bound
+ * persona on the bound candidate preview, through the Financials adapter (`financialsHistoricalDraftUi.ts`). It needs
+ * the platform to register `ui-verify: { args: ["--ui-verify"], mutating: false }` for this fixture and to pass
+ * `ALLOY_QA_IDENTITY_EMAIL` (FINANCIALS-REUSABLE-QA-SETUP-CONTRACT); until then the executor never runs it.
  */
 import { createClient } from "@supabase/supabase-js";
 
@@ -37,24 +41,35 @@ import {
     FixtureError,
     NAMESPACE,
     resetHistoricalDraft,
+    readHistoricalDraftUiSubject,
     verifyHistoricalDraft,
     type FixtureOutcome,
 } from "./financialsHistoricalDraftFixtureCore";
+import { FINANCIALS_HISTORICAL_DRAFT_UI_ADAPTER } from "./financialsHistoricalDraftUi";
+import { readWorkflowBinding, runWorkflowVerification, workflowVerificationLines } from "./qaWorkflowVerifier.mjs";
+import { createPlaywrightWorkflowDriver } from "./qaWorkflowVerifierPlaywright.mjs";
 
-const OPERATIONS = { "--ensure": "ensure", "--verify": "verify", "--reset": "reset", "--count": "count" } as const;
+const OPERATIONS = { "--ensure": "ensure", "--verify": "verify", "--reset": "reset", "--count": "count", "--ui-verify": "ui-verify" } as const;
 
 /** Verifier options other than the program and operation (tests pass a synthetic store root); never from `env`. */
 type AuthorityOptions = Omit<NonNullable<Parameters<typeof verifyFinancialsFixtureAuthority>[1]>, "program" | "operation">;
+/** The rendered step's driver and clock; tests inject a fake driver — never a real browser. */
+export type UiOptions = {
+    driver?: Parameters<typeof runWorkflowVerification>[0]["driver"];
+    readFile?: (p: string) => Buffer | string;
+    nowMs?: () => number;
+};
 
 export async function main(
     env: NodeJS.ProcessEnv = process.env,
     argv: string[] = process.argv.slice(2),
     out: (line: string) => void = console.log,
     authority: AuthorityOptions = {},
+    ui: UiOptions = {},
 ): Promise<number> {
     const operation = OPERATIONS[argv[0] as keyof typeof OPERATIONS];
     if (!operation) {
-        out("✗ refused before any IO: argv_not_the_registered_vector — exactly one of --ensure, --verify, --reset, --count");
+        out("✗ refused before any IO: argv_not_the_registered_vector — exactly one of --ensure, --verify, --reset, --count, --ui-verify");
         return 2;
     }
     /* Authority v2 FIRST: nothing below — binding, credential, client — runs for an unverified execution. */
@@ -70,6 +85,7 @@ export async function main(
     }
     const org = auth.authority.org_id;
     out(`binding ${describeBinding(judged.binding)}`);
+    if (operation === "ui-verify") return uiVerify(env, auth.authority, out, authority, ui);
     let result: FixtureOutcome;
     try {
         /* The gate, immediately before the client: the ATTESTED origin, frozen, never a second read of SUPABASE_URL. */
@@ -103,6 +119,57 @@ export async function main(
     for (const c of result.checks) out(`${c.ok ? "✓" : "✗"} ${c.check}`);
     for (const line of result.lines.filter(last)) out(line);
     return result.exitCode;
+}
+
+/**
+ * `--ui-verify`: the rendered binding is judged before any client or browser; the draft id comes from an attested
+ * read-only domain read; the browser opens only after the authority is attested once more.
+ */
+async function uiVerify(
+    env: NodeJS.ProcessEnv,
+    verified: NonNullable<ReturnType<typeof verifyFinancialsFixtureAuthority>["authority"]>,
+    out: (line: string) => void,
+    authority: AuthorityOptions,
+    ui: UiOptions,
+): Promise<number> {
+    const now = ui.nowMs ?? (() => Date.now());
+    const bound = readWorkflowBinding(env, verified, { nowMs: now(), ...(ui.readFile ? { readFile: ui.readFile } : {}) });
+    if (!bound.ok) {
+        out(`✗ refused before any IO: ${bound.code}`);
+        return 2;
+    }
+    let subject: Awaited<ReturnType<typeof readHistoricalDraftUiSubject>>;
+    try {
+        const gated = await runAttestedFinancialsConnection(env, {
+            ...authority, program: FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation: "ui-verify",
+            url: env.DATABASE_URL, clientEnv: env, apiOrigin: verified.api_url,
+            connect: (c) => readHistoricalDraftUiSubject(createClient(String(c.apiOrigin), String(c.clientEnv.SUPABASE_SERVICE_ROLE_KEY), {
+                auth: { persistSession: false, autoRefreshToken: false },
+            }), verified.org_id),
+        });
+        if (!gated.ok || !("result" in gated)) {
+            out(`✗ refused before any IO: ${gated.code}${gated.fields ? ` fields=${gated.fields.join(",")}` : ""}`);
+            return 2;
+        }
+        subject = gated.result;
+    } catch (e) {
+        out(`✗ ui-verify failed: ${e instanceof FixtureError ? e.diagnostic : "unexpected_error"}`);
+        return 1;
+    }
+    if (!subject.ok) {
+        for (const c of subject.outcome.checks) out(`${c.ok ? "✓" : "✗"} ${c.check}`);
+        return 1;
+    }
+    const result = await runWorkflowVerification({
+        adapter: FINANCIALS_HISTORICAL_DRAFT_UI_ADAPTER,
+        binding: bound.binding,
+        driver: ui.driver ?? createPlaywrightWorkflowDriver(),
+        attest: () => verifyFinancialsFixtureAuthority(env, { ...authority, program: FINANCIALS_HISTORICAL_DRAFT_PROGRAM, operation: "ui-verify" }),
+        context: { draftChargeId: subject.draftChargeId },
+        nowMs: now,
+    });
+    for (const line of workflowVerificationLines(result)) out(line);
+    return result.refusal ? 2 : result.ok ? 0 : 1;
 }
 
 if (process.argv[1] && /financialsHistoricalDraftFixture\.ts$/.test(process.argv[1])) {

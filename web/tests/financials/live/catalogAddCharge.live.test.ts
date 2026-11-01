@@ -145,6 +145,18 @@ async function countOwned(db: SupabaseClient): Promise<Record<string, number>> {
     return counts;
 }
 
+/**
+ * The run's own customer's commercial periods, by exact identity (its customer id, in the bound org). Never deleted:
+ * posted charges are bound to them; they are retained with the environment and reported for the proof.
+ */
+async function measureBillingPeriods(db: SupabaseClient): Promise<Array<{ id: string; period_key: string; status: string }>> {
+    const { data, error } = await db.from("financial_billing_periods").select("id, period_key, status").eq("org_id", ORG).eq("customer_id", CUSTOMER);
+    if (error) throw new Error("billing_period_census_failed table=financial_billing_periods");
+    return (data ?? [])
+        .map((p: { id: string; period_key: string; status: string }) => ({ id: String(p.id), period_key: String(p.period_key), status: String(p.status) }))
+        .sort((a, b) => a.period_key.localeCompare(b.period_key));
+}
+
 /** The posted charges this run leaves, each with its one journal entry (measured, not remembered). */
 async function measureRetained(db: SupabaseClient): Promise<Array<{ charge_id: string; journal_entry_id: string }>> {
     const { data: posted, error } = await db.from("charges").select("id").eq("org_id", ORG).in("billable_source_id", AGREEMENTS).neq("status", "draft");
@@ -162,6 +174,7 @@ async function measureRetained(db: SupabaseClient): Promise<Array<{ charge_id: s
 describeLive("catalog Add Charge — live, isolated", () => {
     let db: SupabaseClient;
     let ownedBefore: Record<string, number> | null = null;
+    let billingPeriodsBefore: number | null = null;
     let accountingPeriodCreated = false;
 
     beforeAll(async () => {
@@ -175,6 +188,7 @@ describeLive("catalog Add Charge — live, isolated", () => {
         db = gated.result;
         /* Before the first write: a fresh run owns nothing. */
         ownedBefore = await countOwned(db);
+        billingPeriodsBefore = (await measureBillingPeriods(db)).length;
         const seed = async (table: string, row: Record<string, unknown>) => {
             const { error } = await db.from(table).upsert(row);
             expect(error, `seeding ${table}: ${error?.message ?? ""}`).toBeNull();
@@ -241,13 +255,14 @@ describeLive("catalog Add Charge — live, isolated", () => {
         await db.from("charges").delete().eq("org_id", ORG).in("billable_source_id", AGREEMENTS).eq("status", "draft");
         await db.from("commercial_products").delete().eq("org_id", ORG).in("id", Object.values(PRODUCT));
         await db.from("financial_charge_templates").delete().eq("org_id", ORG).eq("id", TEMPLATE);
-        if (!env?.proofFile || !ownedBefore) return;
+        if (!env?.proofFile || !ownedBefore || billingPeriodsBefore === null) return;
         const report = {
             schema: CATALOG_PROOF_SCHEMA,
             run_prefix: P.slice(0, 8),
             owned_before: ownedBefore,
             owned_after: await countOwned(db),
             retained: await measureRetained(db),
+            billing_periods: { before: billingPeriodsBefore, after: await measureBillingPeriods(db) },
             accounting_period_created: accountingPeriodCreated,
         };
         writeFileSync(env.proofFile, `${JSON.stringify(report)}\n`, { mode: 0o600 });

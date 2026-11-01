@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { FINANCIALS_ISOLATED_SUITE } from "../../scripts/qa/financialsIsolatedTests.mjs";
-import { CATALOG_PROOF_SCHEMA, OWNED_AFTER_EXPECTED, OWNED_TABLES, judgeCatalogProof } from "../../scripts/qa/financialsIsolatedProof.mjs";
+import { CATALOG_PROOF_SCHEMA, OWNED_AFTER_EXPECTED, OWNED_TABLES, RETAINED_BILLING_PERIODS, judgeCatalogProof } from "../../scripts/qa/financialsIsolatedProof.mjs";
 
 const src = readFileSync(join(process.cwd(), FINANCIALS_ISOLATED_SUITE[0]), "utf8");
 
@@ -61,8 +61,18 @@ describe("the live suite, as written", () => {
 
 describe("the proof contract", () => {
     it("retains exactly the posted charges and their journal entries, and removes drafts, products and the template", () => {
-        expect(CATALOG_PROOF_SCHEMA).toBe("financials.catalog_live_proof.v1");
+        expect(CATALOG_PROOF_SCHEMA).toBe("financials.catalog_live_proof.v2");
         expect(OWNED_AFTER_EXPECTED).toMatchObject({ charges_nondraft: 3, financial_journal_entries: 3, charges_draft: 0, commercial_products: 0, financial_charge_templates: 0 });
+    });
+
+    it("reports the run customer's commercial periods: measured before the first write and after cleanup, never deleted", () => {
+        expect(RETAINED_BILLING_PERIODS).toEqual({ min: 2, max: 4, status: "open" });
+        const census = src.slice(src.indexOf("async function measureBillingPeriods"), src.indexOf("/** The posted charges this run leaves"));
+        expect(census).toContain('.from("financial_billing_periods").select("id, period_key, status").eq("org_id", ORG).eq("customer_id", CUSTOMER)');
+        expect(src.indexOf("billingPeriodsBefore = (await measureBillingPeriods(db)).length")).toBeGreaterThan(src.indexOf("ownedBefore = await countOwned(db)"));
+        expect(src.indexOf("billingPeriodsBefore = (await measureBillingPeriods(db)).length")).toBeLessThan(src.indexOf('await seed("customers"'));
+        expect(src).toContain("billing_periods: { before: billingPeriodsBefore, after: await measureBillingPeriods(db) }");
+        expect(src).not.toMatch(/from\("financial_billing_periods"\)\.(delete|insert|upsert|update)\(/);
     });
 
     it("is judged whole: a value outside the contract is never echoed", () => {

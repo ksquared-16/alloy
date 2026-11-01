@@ -109,6 +109,10 @@ export const FINANCIALS_REQUIRED_ARTIFACTS = Object.freeze({
         Object.freeze({ role: "authority_verifier", path: "web/scripts/qa/isolatedFixtureAuthorityV2.mjs" }),
         Object.freeze({ role: "program", path: "web/scripts/qa/financialsHistoricalDraftFixtureCore.ts" }),
         Object.freeze({ role: "program", path: "web/scripts/qa/financialsIsolatedBinding.mjs" }),
+        /* `--ui-verify`: the shared rendered verifier, its driver and the Financials adapter. */
+        Object.freeze({ role: "program", path: "web/scripts/qa/qaWorkflowVerifier.mjs" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/qaWorkflowVerifierPlaywright.mjs" }),
+        Object.freeze({ role: "program", path: "web/scripts/qa/financialsHistoricalDraftUi.ts" }),
     ]),
 });
 
@@ -125,7 +129,7 @@ export const FINANCIALS_ISOLATED_PROGRAM = Object.freeze({
 
 export const FINANCIALS_HISTORICAL_DRAFT_PROGRAM = Object.freeze({
     fixture: "financials_historical_draft",
-    operations: Object.freeze(["ensure", "verify", "reset", "count"]),
+    operations: Object.freeze(["ensure", "verify", "reset", "count", "ui-verify"]),
     suite: "financials",
     npm_script: "dev:qa:financials-historical-draft-fixture",
     script_body: "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",

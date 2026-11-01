@@ -30,8 +30,9 @@ export const FINANCIALS_QA_FIXTURES = Object.freeze({
             ensure: Object.freeze(["--ensure"]),
             verify: Object.freeze(["--verify"]),
             reset: Object.freeze(["--reset"]),
-            /* Prepared for registration; the executor refuses it until the toolkit registry lists it. */
             count: Object.freeze(["--count"]),
+            /* Rendered, read-only (FINANCIALS-REUSABLE-QA-SETUP-CONTRACT); the executor refuses it until the registry lists it. */
+            "ui-verify": Object.freeze(["--ui-verify"]),
         }),
     }),
 });

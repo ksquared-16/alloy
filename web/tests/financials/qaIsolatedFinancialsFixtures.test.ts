@@ -42,6 +42,7 @@ import {
     readIsolatedBinding,
 } from "../../scripts/qa/financialsIsolatedBinding.mjs";
 import { main as historicalMain } from "../../scripts/qa/financialsHistoricalDraftFixture";
+import { HISTORICAL_DRAFT_UI_ROUTE as FINANCIALS_HISTORICAL_DRAFT_UI_ROUTE } from "../../scripts/qa/financialsHistoricalDraftUi";
 import { CATALOG_PROOF_SCHEMA, OWNED_AFTER_EXPECTED, OWNED_TABLES } from "../../scripts/qa/financialsIsolatedProof.mjs";
 import {
     BUSINESS_DATE,
@@ -478,10 +479,10 @@ describe("dev:qa:financials-historical-draft-fixture — executor authority and 
         expect(r.out.join("\n")).not.toContain(SEED);
     };
 
-    it("is registered as A741 names it: script, body digest, persona-bound, four operations", () => {
+    it("is registered as A741 names it: script, body digest, persona-bound, four operations plus the read-only ui-verify", () => {
         expect(pkg.scripts[P.npm_script as keyof typeof pkg.scripts]).toBe(P.script_body);
         expect(createHash("sha256").update(P.script_body).digest("hex")).toBe("07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8");
-        expect(P).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", org_binding: "persona", operations: ["ensure", "verify", "reset", "count"] });
+        expect(P).toMatchObject({ fixture: "financials_historical_draft", suite: "financials", org_binding: "persona", operations: ["ensure", "verify", "reset", "count", "ui-verify"] });
     });
 
     it("a FORGED environment (complete binding, persona org asserted, no authority record) never reaches a client", async () => {
@@ -930,6 +931,7 @@ describe("no report or process text reaches the isolated runner's output", () =>
             "✓ proof run_prefix=ca7a0b1c owned_before=0 tables=14",
             "✓ proof owned_after exact tables=14 nondraft=3 journal=3 drafts=0",
             ...SYNTHETIC_RETAINED.map((r) => `✓ retained posted_charge=${r.charge_id} journal_entry=${r.journal_entry_id}`),
+            ...SYNTHETIC_PERIODS.map((p) => `✓ retained billing_period=${p.id} key=${p.period_key} status=open`),
             "✓ proof accounting_period created=false",
         ]);
         expect(GRAMMAR.tests.exec(out[out.length - 1])?.slice(1)).toEqual(["2", "0"]);
@@ -946,6 +948,13 @@ describe("no report or process text reaches the isolated runner's output", () =>
         ["a deleted posted charge", syntheticCatalogProof({ after: { charges_nondraft: 2 } }), "proof_owned_after_mismatch"],
         ["a leftover draft", syntheticCatalogProof({ after: { charges_draft: 1 } }), "proof_owned_after_mismatch"],
         ["a missing journal pair", syntheticCatalogProof({ retained: SYNTHETIC_RETAINED.slice(0, 2) }), "proof_retained_mismatch"],
+        ["missing its billing-period census", { ...syntheticCatalogProof(), billing_periods: undefined }, "proof_billing_periods_census_incomplete"],
+        ["a billing-period census with a malformed row", syntheticCatalogProof({ periods: { before: 0, after: [{ id: SENTINEL, period_key: "2026-11", status: "open" }] } }), "proof_billing_periods_census_incomplete"],
+        ["a billing-period census with a duplicated key", syntheticCatalogProof({ periods: { before: 0, after: [SYNTHETIC_PERIODS[0], { ...SYNTHETIC_PERIODS[1], period_key: SYNTHETIC_PERIODS[0].period_key }] } }), "proof_billing_periods_census_incomplete"],
+        ["billing periods present before the run", syntheticCatalogProof({ periods: { before: 1, after: SYNTHETIC_PERIODS } }), "proof_billing_periods_before_not_empty"],
+        ["fewer billing periods than any placement makes", syntheticCatalogProof({ periods: { before: 0, after: SYNTHETIC_PERIODS.slice(0, 1) } }), "proof_billing_periods_out_of_bounds"],
+        ["more billing periods than two placements make", syntheticCatalogProof({ periods: { before: 0, after: [1, 2, 3, 4, 5].map((i) => ({ id: `ca7a0b1c-0000-4000-8000-00000000f00${i}`, period_key: `2027-0${i}`, status: "open" })) } }), "proof_billing_periods_out_of_bounds"],
+        ["a retained billing period that is not open", syntheticCatalogProof({ periods: { before: 0, after: [SYNTHETIC_PERIODS[0], { ...SYNTHETIC_PERIODS[1], status: "closed" }] } }), "proof_billing_periods_not_open"],
     ])("a passing suite whose proof report is %s is NOT a pass", async (_l, proof, problem) => {
         const out: string[] = [];
         const code = await isolatedMain({ env: env(), argv: [], out: (l: string) => out.push(l), run: runWith(proof) });
@@ -962,13 +971,152 @@ const SYNTHETIC_RETAINED = [1, 2, 3].map((i) => ({
     journal_entry_id: `ca7a0b1c-0000-4000-8000-00000000e00${i}`,
 }));
 
-function syntheticCatalogProof({ before = {}, after = {}, retained = SYNTHETIC_RETAINED }: { before?: Record<string, number>; after?: Record<string, number>; retained?: Array<{ charge_id: string; journal_entry_id: string }> } = {}) {
+const SYNTHETIC_PERIODS = [
+    { id: "ca7a0b1c-0000-4000-8000-00000000f001", period_key: "2026-11", status: "open" },
+    { id: "ca7a0b1c-0000-4000-8000-00000000f002", period_key: "2026-12", status: "open" },
+];
+
+function syntheticCatalogProof({ before = {}, after = {}, retained = SYNTHETIC_RETAINED, periods = { before: 0, after: SYNTHETIC_PERIODS } }: { before?: Record<string, number>; after?: Record<string, number>; retained?: Array<{ charge_id: string; journal_entry_id: string }>; periods?: { before: number; after: Array<{ id: string; period_key: string; status: string }> } } = {}) {
     return {
         schema: CATALOG_PROOF_SCHEMA,
         run_prefix: "ca7a0b1c",
         owned_before: { ...Object.fromEntries(OWNED_TABLES.map((t) => [t, 0])), ...before },
         owned_after: { ...OWNED_AFTER_EXPECTED, ...after },
         retained,
+        billing_periods: periods,
         accounting_period_created: false,
     };
 }
+
+/* ── --ui-verify: the rendered read-only proof, through the real entry, with a FAKE driver ───────────────── */
+
+describe("dev:qa:financials-historical-draft-fixture --ui-verify (fake driver: local logic only, not a rendered proof)", () => {
+    const P = FINANCIALS_HISTORICAL_DRAFT_PROGRAM;
+    const live: Array<ReturnType<typeof syntheticExecutorStore>> = [];
+    afterEach(() => { while (live.length) live.pop()!.cleanup(); });
+    const SESSION_BYTES = '{"cookies":[{"name":"sb","value":"' + SENTINEL + '"}]}';
+    const SESSION_FILE = "/synthetic/qa-runs/qar_0123456789ab/finance_admin/storage-state.json";
+    const NOW = Date.now();
+    const uiEnv = (over: Record<string, string | undefined> = {}) => ({
+        ALLOY_QA_PREVIEW_ORIGIN: "http://127.0.0.1:4413",
+        ALLOY_QA_SESSION_ORIGIN: "http://127.0.0.1:4413",
+        ALLOY_QA_SESSION_FILE: SESSION_FILE,
+        ALLOY_QA_SESSION_SHA256: createHash("sha256").update(SESSION_BYTES).digest("hex"),
+        ALLOY_QA_IDENTITY_EMAIL: "qa-pool-01@example.com",
+        ALLOY_QA_BINDING_EXPIRES_AT: new Date(NOW + 300_000).toISOString(),
+        ...over,
+    });
+    type Visit = { finalUrl?: string; identity?: string | null; requests?: Array<{ method: string; url: string }>; snapshot?: Record<string, unknown> };
+    function driver(page: (rows: Array<Record<string, unknown>>) => Visit) {
+        const seen = { opened: 0, visits: [] as string[] };
+        return {
+            seen,
+            open: async () => {
+                seen.opened += 1;
+                return {
+                    visit: async (path: string) => { seen.visits.push(path); return { finalUrl: `http://127.0.0.1:4413${path}`, identity: "qa-pool-01@example.com", requests: [{ method: "GET", url: `http://127.0.0.1:4413${path}` }], ...page([]) }; },
+                    close: async () => {},
+                };
+            },
+        };
+    }
+    /* The in-memory mock mints "charges-<n>" ids; Postgres mints UUIDs. Give the ensured draft one, re-pointing its dependents. */
+    const DRAFT_UUID = "7a1b2c3d-0000-4000-8000-00000000d001";
+    async function ensureWithUuid(rows: Record<string, Array<Record<string, unknown>>>, db: unknown) {
+        await ensureHistoricalDraft(db as never, ORG);
+        const old = String(fixtureDrafts(rows)[0].id);
+        for (const table of Object.values(rows)) for (const r of table) for (const [k, v] of Object.entries(r)) if (v === old && (k === "id" || k === "charge_id")) r[k] = DRAFT_UUID;
+        return DRAFT_UUID;
+    }
+    async function uiVerify(envOver: Record<string, string | undefined>, d: ReturnType<typeof driver>, { ensured = true, record = {} as Record<string, unknown>, nowMs = () => NOW } = {}) {
+        const { store: rows, db } = setup();
+        if (ensured) await ensureWithUuid(rows, db);
+        const before = JSON.stringify(rows);
+        clients.impl = () => db;
+        const s = syntheticExecutorStore({ program: P, operation: "ui-verify", record: { mutating: false, ...record } });
+        live.push(s);
+        const out: string[] = [];
+        const code = await historicalMain({ ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET, ...uiEnv(), ...envOver } as never, ["--ui-verify"], (l) => out.push(l), s.options(), { driver: d as never, readFile: () => SESSION_BYTES, nowMs });
+        return { code, out, rows, before, draft: fixtureDrafts(rows)[0], s };
+    }
+    const ledger = (id: string, amount: string, state: string) => ({ attrs: { "data-financials-ledger-row": id }, text: "", parts: { amount: `$${amount}`, state } });
+    const noLeak = (out: string[]) => {
+        const all = out.join("\n");
+        expect(all).not.toContain(SECRET);
+        expect(all).not.toContain(SESSION_FILE);
+        expect(all).not.toContain("storage-state");
+    };
+
+    it("PASSES on the bound preview as the bound persona: one route, GET only, the draft at its template price; writes nothing", async () => {
+        const d = driver(() => ({ snapshot: { ledger_rows: [ledger(DRAFT_UUID, (TEMPLATE_AMOUNT_CENTS / 100).toFixed(2), "scheduled")] } }));
+        const r = await uiVerify({}, d);
+        expect(String(r.draft.id)).toBe(DRAFT_UUID);
+        expect(r.out.filter((l) => l.startsWith("✗"))).toEqual([]);
+        expect(r.code).toBe(0);
+        expect(r.out.at(-1)).toBe("ui verification adapter=financials_historical_draft ok=true");
+        expect(d.seen.opened).toBe(1);
+        expect(d.seen.visits).toEqual([FINANCIALS_HISTORICAL_DRAFT_UI_ROUTE]);
+        expect(JSON.stringify(r.rows)).toBe(r.before);
+        noLeak(r.out);
+    });
+
+    it.each([
+        ["a preview outside the candidate range", { ALLOY_QA_PREVIEW_ORIGIN: "http://127.0.0.1:3011" }, "workflow_preview_origin_refused"],
+        ["no persona identity from the platform", { ALLOY_QA_IDENTITY_EMAIL: undefined }, "workflow_identity_unbound"],
+        ["a session file that is not the bound bytes", { ALLOY_QA_SESSION_SHA256: "0".repeat(64) }, "workflow_session_digest_mismatch"],
+        ["an expired binding", { ALLOY_QA_BINDING_EXPIRES_AT: new Date(NOW - 1).toISOString() }, "workflow_binding_expired"],
+    ])("%s → refused before any client or browser", async (_l, over, code) => {
+        const d = driver(() => ({}));
+        const r = await uiVerify(over, d);
+        expect(r.code).toBe(2);
+        expect(r.out.at(-1)).toBe(`✗ refused before any IO: ${code}`);
+        expect([clients.created, d.seen.opened]).toEqual([0, 0]);
+        noLeak(r.out);
+    });
+
+    it("the authority itself is judged first: a forged record never reaches the binding, client or browser", async () => {
+        const d = driver(() => ({}));
+        const r = await uiVerify({ ALLOY_QA_AUTHORITY_SHA256: "0".repeat(64) }, d);
+        expect(r.code).toBe(2);
+        expect(r.out[0]).toMatch(/^✗ refused before any IO: /);
+        expect([clients.created, d.seen.opened]).toEqual([0, 0]);
+    });
+
+    it("no historical draft in the store → the domain read fails; the browser never opens", async () => {
+        const d = driver(() => ({}));
+        const r = await uiVerify({}, d, { ensured: false });
+        expect(r.code).toBe(1);
+        expect(r.out.some((l) => /^✗ ui subject: exactly one historical draft under the fixture template \(found 0\)$/.test(l))).toBe(true);
+        expect(d.seen.opened).toBe(0);
+    });
+
+    it.each([
+        ["the hazard: the Catalog price rendered on the draft", (id: string) => ({ snapshot: { ledger_rows: [ledger(id, (CATALOG_AMOUNT_CENTS / 100).toFixed(2), "scheduled")] } }), "workflow_assertion_failed"],
+        ["another signed-in identity", (id: string) => ({ identity: "someone@example.com", snapshot: { ledger_rows: [ledger(id, (TEMPLATE_AMOUNT_CENTS / 100).toFixed(2), "scheduled")] } }), "workflow_wrong_identity"],
+        ["an attempted write while rendering", (id: string) => ({ requests: [{ method: "POST", url: "http://127.0.0.1:4413/api/financials/charges" }], snapshot: { ledger_rows: [ledger(id, (TEMPLATE_AMOUNT_CENTS / 100).toFixed(2), "scheduled")] } }), "workflow_hidden_mutation_attempted"],
+        ["an attempted outbound request", (id: string) => ({ requests: [{ method: "GET", url: "https://api.resend.com/emails" }], snapshot: { ledger_rows: [ledger(id, (TEMPLATE_AMOUNT_CENTS / 100).toFixed(2), "scheduled")] } }), "workflow_outbound_request_attempted"],
+        ["a redirect to login", () => ({ finalUrl: "http://127.0.0.1:4413/login" }), "workflow_session_not_signed_in"],
+    ])("%s → FAILS (exit 1), still writes nothing", async (_l, page, failure) => {
+        const d = driver(() => page(DRAFT_UUID));
+        const r = await uiVerify({}, d);
+        expect(r.code).toBe(1);
+        expect(r.out.at(-1)).toMatch(new RegExp(`^ui verification adapter=financials_historical_draft ok=false failures=.*${failure}`));
+        expect(JSON.stringify(r.rows)).toBe(r.before);
+        noLeak(r.out);
+    });
+
+    it("a hold that turns HELD after the domain read refuses the re-attestation: the browser never opens", async () => {
+        const d = driver(() => ({}));
+        const { store: rows, db } = setup();
+        await ensureWithUuid(rows, db);
+        const s = syntheticExecutorStore({ program: P, operation: "ui-verify", record: { mutating: false } });
+        live.push(s);
+        clients.impl = () => { s.writeHold(null); return db; };
+        const out: string[] = [];
+        const code = await historicalMain({ ...s.env(), SUPABASE_SERVICE_ROLE_KEY: SECRET, ...uiEnv() } as never, ["--ui-verify"], (l) => out.push(l), s.options(), { driver: d as never, readFile: () => SESSION_BYTES, nowMs: () => NOW });
+        expect(code).toBe(2);
+        expect(out.at(-2)).toBe("✗ ui financials_historical_draft refused: workflow_attestation_refused");
+        expect(d.seen.opened).toBe(0);
+        expect(rows.charges.length).toBeGreaterThan(0);
+    });
+});

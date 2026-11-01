@@ -297,6 +297,22 @@ async function fixtureDrafts(db: SupabaseClient, org: string): Promise<Row[]> {
     return rows(db, "charges", (q) => q.eq("org_id", org).eq("billable_source_id", IDS.agreement).eq("status", "draft"));
 }
 
+/**
+ * READ-ONLY: the one historical draft the rendered verification looks for (`--ui-verify`). Exactly one draft on the
+ * fixture agreement, under the fixture template, or a failure the runner reports — never a guess.
+ */
+export async function readHistoricalDraftUiSubject(
+    db: SupabaseClient,
+    fixtureOrg: string,
+): Promise<{ ok: true; draftChargeId: string } | { ok: false; outcome: FixtureOutcome }> {
+    const org = boundOrg(fixtureOrg);
+    const drafts = (await fixtureDrafts(db, org)).filter((d) => d.charge_template_id === IDS.template);
+    if (drafts.length !== 1 || !UUID_RE.test(String(drafts[0].id))) {
+        return { ok: false, outcome: fail(`ui subject: exactly one historical draft under the fixture template (found ${drafts.length})`) };
+    }
+    return { ok: true, draftChargeId: String(drafts[0].id).toLowerCase() };
+}
+
 export async function ensureHistoricalDraft(db: SupabaseClient, fixtureOrg: string): Promise<FixtureOutcome> {
     const org = boundOrg(fixtureOrg);
     if (!(await byId(db, "orgs", org))) return fail(`${FIXTURE_CODES.ORG_ABSENT} org=${org}`);
