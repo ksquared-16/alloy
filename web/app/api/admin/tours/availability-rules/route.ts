@@ -33,8 +33,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     let q = supabase.from("tour_availability_rules").select("*").eq("org_id", ctx.orgId).order("created_at", { ascending: true });
-    // Include org-wide rules (null location_id) alongside site-specific rules — matches slot computation.
-    if (locationId) q = q.or(`location_id.eq.${locationId},location_id.is.null`);
+    // The location's own rules — the same set slot computation uses (legacy organization-wide rules
+    // no longer offer times at a location). Without location_id, every rule of the org (unchanged).
+    if (locationId) q = q.eq("location_id", locationId);
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ rules: data ?? [] });

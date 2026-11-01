@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const DEFAULT_DURATION_MINUTES = 60;
 
 /**
- * Default slot duration for manual admin bookings — first active rule for location, else org-wide rule.
+ * Default slot duration for manual admin bookings — the location's first active rule, else the
+ * platform default. Legacy organization-wide rules are not location configuration and are ignored.
  */
 export async function resolveTourLocationSlotDurationMinutes(
     supabase: SupabaseClient,
@@ -19,6 +20,7 @@ export async function resolveTourLocationSlotDurationMinutes(
         .select("location_id, slot_duration_minutes, created_at")
         .eq("org_id", oid)
         .eq("is_active", true)
+        .eq("location_id", lid)
         .order("created_at", { ascending: true });
 
     if (error) {
@@ -26,13 +28,11 @@ export async function resolveTourLocationSlotDurationMinutes(
     }
 
     const rows = (data ?? []) as { location_id?: string | null; slot_duration_minutes?: number | null }[];
-    let orgWide: number | null = null;
     for (const row of rows) {
         const mins = Number(row.slot_duration_minutes);
         if (!Number.isFinite(mins) || mins <= 0) continue;
         const rowLoc = row.location_id != null ? String(row.location_id).trim() : "";
         if (rowLoc === lid) return Math.floor(mins);
-        if (!rowLoc && orgWide == null) orgWide = Math.floor(mins);
     }
-    return orgWide ?? DEFAULT_DURATION_MINUTES;
+    return DEFAULT_DURATION_MINUTES;
 }

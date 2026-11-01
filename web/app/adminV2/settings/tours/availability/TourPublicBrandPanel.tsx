@@ -6,7 +6,9 @@ import {
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
+    BRAND_TEXT_CONTRAST_MIN,
     brandButtonColors,
+    brandCtaButtonColors,
     contrastRatio,
     normalizeBrandColor,
     normalizeTourCtaLabel,
@@ -39,11 +41,11 @@ type BrandResponse = {
 const SOURCE_LABEL: Record<PublicBrandSource, string> = {
     form: "set on the published form",
     location: "set for this location",
-    organization: "inherited from the organization",
+    organization: "school default",
     platform: "Alloy default",
 };
 
-const EMPTY: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null, tour_cta_label: null };
+const EMPTY: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null };
 
 const TREATMENT_NOTE: Record<ReturnType<typeof brandButtonColors>["treatment"], string> = {
     brand_light_text: "Buttons use your colour with white text.",
@@ -104,8 +106,10 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
     );
     const formWins = BRAND_KEYS.filter((k) => sourceKey(preview, k) === "form");
     const pair = brandButtonColors(preview.accentColor);
+    // The website booking button: the same pair, with the school's chosen text colour where it reads.
+    const ctaPair = brandCtaButtonColors(preview.accentColor, preview.tourCtaTextColor);
     const inherited = scopeLocationId ? data.organization : null;
-    const anySet = Boolean(draft.display_name || draft.accent_color || draft.logo_url || draft.tour_cta_label);
+    const anySet = Boolean(draft.display_name || draft.accent_color || draft.logo_url || draft.tour_cta_label || draft.tour_cta_text_color);
 
     const save = async () => {
         setBusy(true);
@@ -138,7 +142,7 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
             <input
                 className="config-runtime-input mt-1"
                 value={draft[key] ?? ""}
-                placeholder={inherited?.[key] ? `Inherited: ${inherited[key]}` : placeholder}
+                placeholder={inherited?.[key] ? `Default: ${inherited[key]}` : placeholder}
                 maxLength={extra?.maxLength}
                 disabled={!editable}
                 onChange={(e) => {
@@ -164,7 +168,7 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
         <section className="space-y-4" aria-label="Booking experience" data-testid="tours-public-brand">
             <p className="config-typo-sublabel">
                 {scopeLocationId
-                    ? `How ${scopeLabel} appears on its tour booking page. Leave a field empty to use the organization's.`
+                    ? `How ${scopeLabel} appears on its tour booking page. Leave a field empty to use the default shown.`
                     : "The default for every location's tour booking page (and forms that don't set their own brand)."}
             </p>
             {err ? <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">{err}</p> : null}
@@ -206,10 +210,39 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
                             maxLength: PUBLIC_TOUR_CTA_MAX,
                             hint: "Used on your website button and as the booking page's heading.",
                         })}
+                        <div className="flex items-end gap-2">
+                            <div className="min-w-0 flex-1">
+                                {field("tour_cta_text_color", "Button text colour (hex)", "Automatic", {
+                                    hint: "Leave empty to let Alloy pick a readable colour.",
+                                })}
+                            </div>
+                            <input
+                                type="color"
+                                aria-label="Pick button text colour"
+                                className="mb-9 h-9 w-11 cursor-pointer rounded border border-alloy-stone/30 bg-white p-0.5"
+                                value={(normalizeBrandColor(draft.tour_cta_text_color ?? "") ?? ctaPair.ink).toLowerCase()}
+                                disabled={!editable}
+                                onChange={(e) => {
+                                    setSaved(false);
+                                    setDraft((d) => ({ ...d, tour_cta_text_color: e.target.value.toUpperCase() }));
+                                }}
+                                data-testid="tours-brand-cta-text-picker"
+                            />
+                        </div>
+                        <p
+                            className={`text-[11px] ${ctaPair.treatment === "chosen_text_below_contrast" ? "text-amber-900" : "text-alloy-midnight/60"}`}
+                            data-testid="tours-brand-cta-contrast-note"
+                        >
+                            {ctaPair.treatment === "chosen_text_below_contrast" ?
+                                `That text colour is too hard to read on your button (under ${BRAND_TEXT_CONTRAST_MIN}:1), so the button keeps Alloy's readable text colour.`
+                            : ctaPair.treatment === "chosen_text" ?
+                                `Your text colour is used on the button (${contrastRatio(ctaPair.fill, ctaPair.ink).toFixed(1)}:1).`
+                            :   "Text colour is chosen automatically for contrast."}
+                        </p>
                     </fieldset>
                 </div>
 
-                <BookingPagePreview brand={preview} pair={pair} scopeLabel={scopeLabel} />
+                <BookingPagePreview brand={preview} pair={pair} ctaPair={ctaPair} scopeLabel={scopeLabel} />
             </div>
 
             {editable ? (
@@ -219,7 +252,7 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
                     </ConfigurationPrimaryButton>
                     {scopeLocationId && anySet ? (
                         <ConfigurationSecondaryButton disabled={busy} onClick={() => setDraft(EMPTY)}>
-                            Use the organization&apos;s settings
+                            Clear {scopeLabel}&apos;s settings
                         </ConfigurationSecondaryButton>
                     ) : null}
                     {saved ? <span className="self-center text-xs text-alloy-midnight/60">Saved</span> : null}
@@ -237,10 +270,12 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
 function BookingPagePreview({
     brand,
     pair,
+    ctaPair,
     scopeLabel,
 }: {
     brand: EffectivePublicBrand;
     pair: ReturnType<typeof brandButtonColors>;
+    ctaPair: ReturnType<typeof brandCtaButtonColors>;
     scopeLabel: string;
 }) {
     return (
@@ -287,7 +322,7 @@ function BookingPagePreview({
             <p className="text-[11px] text-alloy-midnight/50">Website button:</p>
             <span
                 className="inline-block rounded-[10px] px-6 py-3 text-base font-semibold"
-                style={{ background: pair.fill, color: pair.ink }}
+                style={{ background: ctaPair.fill, color: ctaPair.ink }}
                 data-testid="tours-brand-preview-cta"
             >
                 {brand.tourCtaLabel}
@@ -303,21 +338,24 @@ function cleaned(v: PublicBrandValues): PublicBrandValues {
         accent_color: normalizeBrandColor(v.accent_color ?? ""),
         logo_url: v.logo_url && /^https:\/\//i.test(v.logo_url.trim()) ? v.logo_url.trim() : null,
         tour_cta_label: normalizeTourCtaLabel(v.tour_cta_label ?? ""),
+        tour_cta_text_color: normalizeBrandColor(v.tour_cta_text_color ?? ""),
     };
 }
 
-const BRAND_KEYS: (keyof PublicBrandValues)[] = ["display_name", "logo_url", "accent_color", "tour_cta_label"];
+const BRAND_KEYS: (keyof PublicBrandValues)[] = ["display_name", "logo_url", "accent_color", "tour_cta_label", "tour_cta_text_color"];
 const FIELD_NOUN: Record<keyof PublicBrandValues, string> = {
     display_name: "school name",
     logo_url: "logo",
     accent_color: "brand colour",
     tour_cta_label: "button text",
+    tour_cta_text_color: "button text colour",
 };
 
 function sourceKey(brand: EffectivePublicBrand, key: keyof PublicBrandValues): PublicBrandSource {
     return key === "display_name" ? brand.sources.displayName
         : key === "accent_color" ? brand.sources.accentColor
         : key === "logo_url" ? brand.sources.logoUrl
+        : key === "tour_cta_text_color" ? brand.sources.tourCtaTextColor
         : brand.sources.tourCtaLabel;
 }
 
@@ -354,10 +392,12 @@ function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues, for
         key === "display_name" ? brand.displayName
         : key === "accent_color" ? brand.accentColor
         : key === "logo_url" ? brand.logoUrl
+        : key === "tour_cta_text_color" ? brand.tourCtaTextColor
         : brand.tourCtaLabel;
     if (source === "platform") {
         if (key === "accent_color") return `${PUBLIC_BRAND_PLATFORM_ACCENT} (Alloy default)`;
         if (key === "tour_cta_label") return `“${PUBLIC_TOUR_CTA_DEFAULT}” (Alloy default)`;
+        if (key === "tour_cta_text_color") return "automatic (Alloy default)";
         return "none (Alloy default)";
     }
     const label = source === "form" && formTitle ? `set on the published form “${formTitle}”` : SOURCE_LABEL[source];

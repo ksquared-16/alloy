@@ -100,6 +100,7 @@
     "dev:layout:verify-child-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --verify-only",
     "dev:qa:reconcile-orphaned-stage-work": "tsx --tsconfig tsconfig.json scripts/qaReconcileOrphanedStageWork.ts",
     "dev:qa:ensure-shared-tenant": "tsx --tsconfig tsconfig.json scripts/ensureSharedQaTenant.ts",
+    "dev:qa:tours-fixture": "tsx --tsconfig tsconfig.json scripts/qaToursFixture.ts",
     "dev:qa:authz-fixture-ensure": "node scripts/qaAuthzFixtureEnsure.mjs",
     "dev:qa:authz-fixture-reset": "node scripts/qaAuthzFixtureReset.mjs",
     "dev:qa:surfaces-room-uses-fixture-ensure": "node scripts/qaSurfacesRoomUsesFixtureEnsure.mjs",
