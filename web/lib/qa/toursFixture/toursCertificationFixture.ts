@@ -17,9 +17,12 @@
  *         writer; one person / household / opportunity at the fixture site (email @tours-cert.alloy.invalid,
  *         no phone); one PENDING booking in that rule's interval — legacy data, written directly because the
  *         product booking writer (correctly) refuses a new booking a location's own rules do not offer.
- *   G-T5  four links at the fixture site on two lead-capture forms, minted ONLY through the product route
- *         (POST /api/admin/forms/[formId]/public-links, as the QA persona): form A twice (older, newer),
- *         form B once, and one more form-A link withdrawn through the product PATCH (the "blocked" row).
+ *   G-T5  exactly TWO run-owned lead-capture forms in the persona org, authored and published through the product
+ *         Forms routes (toursFixtureForms.ts), and four links on them at the fixture site, minted ONLY through the
+ *         product route (POST /api/admin/forms/[formId]/public-links, as the QA persona): form A twice (older,
+ *         newer), form B once, and one more form-A link withdrawn through the product PATCH (the "blocked" row).
+ *         Forms, versions and links carry the QA run (`metadata.qa_run`); no form is ever looked up by title or
+ *         borrowed from a seed.
  *
  * `--count` measures the marker rows AND re-derives both gaps through the product's own pure functions
  * (`tourRulesForLocation`, `projectTourCalendarShareLinks`, `tourCalendarAttachOptions`), so a census that
@@ -39,9 +42,13 @@
  *   - ALLOY_QA_PREVIEW_ORIGIN (loopback) — where every Forms route call goes; ALLOY_QA_SESSION_ORIGIN — whose
  *     cookies are read; ALLOY_QA_SESSION_SHA256 — the session file must hash to it. No URL is ever taken from the
  *     session file.
- *   - ALLOY_QA_AUTHORITY_FILE / _SHA256 — the record of exactly this execution. Checked here for CONSISTENCY only
- *     (digest, fields, the operation's `mutating`, validity window). Live provenance against the executor's
- *     request store is the toolkit's `verifyFixtureAuthority`; this runner does not claim it.
+ *   - ALLOY_QA_AUTHORITY_FILE / _SHA256 — the record of exactly this execution, verified as AUTHORITY v2 by
+ *     scripts/qa/toursFixtureAuthority.mjs over the shared isolatedFixtureAuthorityV2.mjs (the `verify` / `attest`
+ *     seams below): live provenance in the executor's own store, window, exact binding, program / candidate / script,
+ *     the persona org `qa_shared`, the database connection identity, the API identity (required), the target hold,
+ *     and the program pins (required) — all before the service key, the session file or any client is touched.
+ *     The org, the QA run and the API origin the fixture uses are the VERIFIED record's. A v1 record (what the
+ *     installed toolkit still issues `tours_certification`) carries no org and is refused: there is no v1 fallback.
  * The whole binding is required: a partial one is refused, never completed from elsewhere.
  *
  * Output is secret-free by construction: only stable keys and counts are printed, never ids, tokens,
@@ -56,6 +63,13 @@ import { createHash } from "node:crypto";
 import { QA_ORGS, QA_STRUCTURE, isForbiddenQaOrgId } from "@/lib/qa/sharedQaRegistry";
 import { projectTourCalendarShareLinks, tourCalendarAttachOptions, type TourCalendarShareLinkRow } from "@/lib/tours/publicCalendar/tourCalendarShare";
 import { tourRulesForLocation } from "@/lib/tours/availability/computeAvailableTourSlots";
+import {
+    ensureFixtureForms,
+    judgeFixtureForms,
+    retainedFormsOf,
+    runOf,
+    type ToursFormPorts,
+} from "@/lib/qa/toursFixture/toursFixtureForms";
 
 export const TOURS_FIXTURE = "tours_certification";
 export const TOURS_FIXTURE_NAMESPACE = "tours-cert.alloy.invalid";
@@ -72,11 +86,8 @@ export const TOURS_FIXTURE_PERSONA_ORG = QA_ORGS.qa_shared;
 /** The fixture site: that org's registered site, created in an isolated run by the QA run's own local structure ensure. */
 export const TOURS_FIXTURE_SITE = QA_STRUCTURE.sites.qa_north;
 
-/** Where the fixture acts. Comes only from a whole, consistent executor binding (`bindingFromEnv`). */
-export type ToursFixtureWorld = { orgId: string; locationId: string };
-
-/** The two lead-capture forms G-T5 needs, by exact title in the fixture org. */
-export const TOURS_FIXTURE_FORM_TITLES = ["Northwind Tour Inquiry", "QA V2 Inquiry"] as const;
+/** Where the fixture acts: org and site from the executor binding (`bindingFromEnv`), the run from the verified authority. */
+export type ToursFixtureWorld = { orgId: string; locationId: string; runId: string };
 
 export const TOURS_FIXTURE_EMAIL = `legacy.pending@${TOURS_FIXTURE_NAMESPACE}`;
 export const LEGACY_RULE = {
@@ -104,7 +115,7 @@ export type MarkerFamily = { personId: string | null; customerId: string | null;
 export type FixtureForm = { id: string; title: string };
 export type LocationLinkRow = TourCalendarShareLinkRow;
 
-export interface ToursFixturePorts {
+export interface ToursFixturePorts extends ToursFormPorts {
     orgAndLocationExist(): Promise<boolean>;
     countActiveProviderBindings(): Promise<number>;
     countOutboundRows(): Promise<{ messages: number; scheduled: number }>;
@@ -126,10 +137,9 @@ export interface ToursFixturePorts {
     insertLegacyPendingBooking(input: { opportunityId: string; personId: string; startAt: string; endAt: string }): Promise<void>;
     deleteBookings(ids: string[]): Promise<number>;
 
-    resolveForms(titles: readonly string[]): Promise<FixtureForm[] | { refused: string }>;
     /** All link rows at the fixture location (any owner), for the product projection. */
     listLocationLinks(): Promise<LocationLinkRow[]>;
-    /** Through the product route only. Returns the new link's id, nothing else. */
+    /** Through the product route only, marked with the role and the run. Returns the new link's id, nothing else. */
     createLink(input: { formId: string; key: string }): Promise<string>;
     /** Through the product PATCH route only. */
     withdrawLink(input: { formId: string; linkId: string }): Promise<void>;
@@ -151,7 +161,6 @@ export function guardToursFixture(argv: readonly string[], env: Readonly<Record<
     if (!/^qar_[a-z0-9]{8,}$/i.test(env.ALLOY_QA_RUN_ID ?? "")) return { ok: false, code: "qa_run_required" };
     if (!/^certenv-[0-9a-f]{6,}$/i.test(env.ALLOY_QA_ENVIRONMENT_ID ?? "")) return { ok: false, code: "isolated_environment_required" };
     if (!isLoopbackHttp(env.SUPABASE_URL)) return { ok: false, code: "isolated_database_required" };
-    if (!env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, code: "service_key_missing" };
     if (Object.keys(env).some((k) => PROVIDER_ENV.test(k))) return { ok: false, code: "outbound_provider_env_present" };
     return { ok: true, operation };
 }
@@ -166,9 +175,6 @@ export function isLoopbackHttp(raw: string | undefined): boolean {
 }
 
 /* ── the executor's binding (A741: QAFX-ORG-01 / QAFX-PREVIEW-01 / QAFX-AUTH-01) ───────────────── */
-
-/** The authority record schema the installed executor writes (lib/isolated-fixture-execution.mjs). */
-export const FIXTURE_AUTHORITY_SCHEMA = "vacilando.isolated_fixture_authority.v1";
 
 const BINDING_REQUIRED = [
     "ALLOY_CERT_FIXTURE_ORG_ID",
@@ -191,7 +197,7 @@ const SHA1_RE = /^[0-9a-f]{40}$/;
 const REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{2,120}$/;
 
 export type ToursFixtureBinding = {
-    world: ToursFixtureWorld;
+    world: Omit<ToursFixtureWorld, "runId">;
     previewOrigin: string;
     sessionOrigin: string;
     sessionFile: string;
@@ -262,44 +268,18 @@ export function bindingFromEnv(env: Readonly<Record<string, string | undefined>>
 }
 
 /**
- * Consistency of the executor's authority record with this env, this program and THIS operation — not live
- * provenance (the toolkit's verifyFixtureAuthority). `count` must be recorded non-mutating; ensure/reset mutating.
+ * The v2 authority verdict, as scripts/qa/toursFixtureAuthority.mjs returns it (the fields this runner uses). The
+ * runner never reads the record itself: `verify` and `attest` are that module, injected.
  */
-export function checkAuthorityRecord(
-    text: string | null,
-    env: Readonly<Record<string, string | undefined>>,
-    binding: ToursFixtureBinding,
-    operation: ToursFixtureOperation,
-    nowMs: number,
-): { ok: true } | { ok: false; code: string } {
-    if (text === null) return { ok: false, code: "authority_unreadable" };
-    if (sha256Hex(text) !== binding.authoritySha256) return { ok: false, code: "authority_altered" };
-    let a: Record<string, unknown>;
-    try {
-        a = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-        return { ok: false, code: "authority_altered" };
-    }
-    if (a?.schema !== FIXTURE_AUTHORITY_SCHEMA) return { ok: false, code: "authority_schema" };
-    const expect: [string, unknown][] = [
-        ["request_id", binding.requestId],
-        ["fixture", TOURS_FIXTURE],
-        ["operation", operation],
-        ["npm_script", TOURS_FIXTURE_NPM_SCRIPT],
-        ["qa_run_id", env.ALLOY_QA_RUN_ID],
-        ["environment_id", env.ALLOY_QA_ENVIRONMENT_ID],
-        ["candidate_sha", binding.candidateSha],
-        ["binding_digest", binding.bindingDigest],
-        ["mutating", operation !== "count"],
-    ];
-    if (expect.some(([k, v]) => v === undefined || a[k] !== v)) return { ok: false, code: "authority_mismatch" };
-    const issued = Date.parse(String(a.issued_at ?? ""));
-    const expires = Date.parse(String(a.expires_at ?? ""));
-    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return { ok: false, code: "authority_schema" };
-    if (issued > nowMs) return { ok: false, code: "authority_not_yet_valid" };
-    if (expires <= nowMs) return { ok: false, code: "authority_expired" };
-    return { ok: true };
-}
+export type ToursAuthorityVerdict =
+    | { ok: true; authority: { org_id: string; org_key: string; qa_run_id: string; environment_id: string; request_id: string; candidate_sha: string; api_url: string; api_identity_digest: string; program_pins_digest: string } }
+    | { ok: false; code: string; fields?: string[] };
+
+/** The exact configuration a client is handed: what `attest` froze and re-verified, and nothing else. */
+export type AttestedConnection = Readonly<{ url: string; clientEnv: Readonly<Record<string, string | undefined>>; apiOrigin?: string }>;
+
+/** What the ports are built from: the verified API origin and the service key from the attested copy only. */
+export type ToursClientConfig = { apiUrl: string; serviceKey: string };
 
 export type PreviewSession = { origin: string; cookie: string };
 
@@ -391,6 +371,8 @@ function covers(rule: MarkerRule, booking: MarkerBooking): boolean {
 
 const markerOf = (row: { metadata?: Record<string, unknown> | null }) => row.metadata?.[TOURS_FIXTURE_MARKER_KEY] === TOURS_FIXTURE_MARKER;
 const roleOf = (row: { metadata?: Record<string, unknown> | null }) => String(row.metadata?.[TOURS_FIXTURE_ROLE_KEY] ?? "");
+/** A fixture link of THIS QA run. A marked link of another run (or of the pre-run-key fixture) is not this run's evidence. */
+const thisRun = (world: Pick<ToursFixtureWorld, "runId">) => (row: { metadata?: Record<string, unknown> | null }) => markerOf(row) && runOf(row.metadata) === world.runId;
 
 export type ToursFixtureState = {
     rules: MarkerRule[];
@@ -420,13 +402,15 @@ export function verifyToursFixtureShape(state: ToursFixtureState, world: ToursFi
     check("g_t2_no_own_location_rule_covers_booking", Boolean(booking) && !state.locationRules.some((r) => covers(r, booking!)));
     check("g_t2_family_present", Boolean(state.family.personId && state.family.customerId && state.family.opportunityId));
 
-    // G-T5 — the picker, as Preview & Share computes it, over the fixture's own links at the location.
-    const own = state.links.filter(markerOf);
+    // G-T5 — the picker, as Preview & Share computes it, over THIS run's links at the location, on its two own forms.
+    check("g_t5_two_run_owned_forms", state.forms.length === 2);
+    const own = state.links.filter(thisRun(world));
     const titles = Object.fromEntries(state.forms.map((f) => [f.id, f.title]));
     const projected = projectTourCalendarShareLinks(own, { locationId: world.locationId, baseUrl: "", formTitles: titles });
     const { attachable, blocked } = tourCalendarAttachOptions(projected);
     const role = new Map(own.map((r) => [r.id, roleOf(r)]));
     check("g_t5_four_fixture_links", own.length === LINK_PLAN.length);
+    check("g_t5_links_only_on_run_owned_forms", own.every((l) => state.forms.some((f) => f.id === l.form_definition_id)));
     check("g_t5_two_forms_attachable", attachable.length === 2);
     const a = attachable.find((f) => f.formId === state.forms[0]?.id);
     check("g_t5_form_a_offered_once_on_newest_link", Boolean(a) && role.get(a!.link.linkId) === "A_new" && a!.otherLinks.length === 1 && role.get(a!.otherLinks[0]!.linkId) === "A_old");
@@ -434,13 +418,16 @@ export function verifyToursFixtureShape(state: ToursFixtureState, world: ToursFi
     check("g_t5_form_b_offered", Boolean(b) && role.get(b!.link.linkId) === "B" && b!.otherLinks.length === 0);
     check("g_t5_withdrawn_link_blocked", blocked.some((l) => role.get(l.linkId) === "A_withdrawn" && l.unusableReason === "inactive"));
     check("g_t5_no_calendar_published_by_fixture", projected.every((l) => !l.calendarPublished));
+    // What the operator's picker shows is ALL links at the location: no other run's fixture link may still be live.
+    check("g_t5_no_other_run_fixture_link_active", !state.links.some((l) => markerOf(l) && l.is_active && !thisRun(world)(l)));
     return { passed, failed };
 }
 
 /**
  * Marker rows that are LIVE fixture state. A withdrawn link is revoked and is not counted here — but it is
  * still a physical row (the product has no link deletion), reported separately by `retainedRevokedLinksOf`,
- * so a census of 0 never reads as "no fixture rows remain".
+ * so a census of 0 never reads as "no fixture rows remain". The run's forms and their published versions are
+ * retained configuration and are never in the census either (`retained_fixture_forms=` / `_form_versions=`).
  */
 export function retainedRevokedLinksOf(links: readonly LocationLinkRow[]): number {
     return links.filter((l) => markerOf(l) && !l.is_active).length;
@@ -476,6 +463,15 @@ async function preconditions(p: ToursFixturePorts, out: Sink): Promise<boolean> 
     return true;
 }
 
+/** Every fixture-marked form and version (any run), for the retained-configuration report. */
+async function reportRetainedForms(p: ToursFixturePorts, out: Sink): Promise<void> {
+    const rows = await p.findFixtureFormRows([]);
+    const versions = rows.length ? await p.listFormVersions(rows.map((r) => r.id)) : [];
+    const kept = retainedFormsOf(rows, versions);
+    out.ok(`retained_fixture_forms=${kept.forms}`);
+    out.ok(`retained_fixture_form_versions=${kept.versions}`);
+}
+
 export async function ensureToursFixture(p: ToursFixturePorts, out: Sink, now: Date, world: ToursFixtureWorld): Promise<number> {
     if (!(await preconditions(p, out))) return 1;
     // Fail-closed outbound contract, measured before the first write.
@@ -486,11 +482,31 @@ export async function ensureToursFixture(p: ToursFixturePorts, out: Sink, now: D
     out.ok("outbound_no_active_provider_binding");
     const baseline = await p.countOutboundRows();
 
-    const forms = await p.resolveForms(TOURS_FIXTURE_FORM_TITLES);
-    if (!Array.isArray(forms)) {
-        out.fail(`forms_${forms.refused}`);
+    // The link state decides, BEFORE any write, whether this run can still build G-T5:
+    //   · another run's (or the pre-run-key fixture's) link still live at the location → reset that first;
+    //   · one of THIS run's offered links already revoked → this run was reset; its links cannot be revived
+    //     (the product has no link deletion), so a fresh fixture needs a new QA run.
+    const marked = (await p.listLocationLinks()).filter(markerOf);
+    if (marked.some((l) => l.is_active && !thisRun(world)(l))) {
+        out.fail("other_run_fixture_links_active_reset_first");
         return 1;
     }
+    const offered = new Set<string>(LINK_PLAN.filter((x) => !x.withdraw).map((x) => x.key));
+    if (marked.some((l) => thisRun(world)(l) && offered.has(roleOf(l)) && !l.is_active)) {
+        out.fail("run_links_revoked_new_qa_run_required");
+        return 1;
+    }
+
+    const ensured = await ensureFixtureForms(p, world);
+    if (!ensured.ok) {
+        out.fail(`forms_${ensured.code}`);
+        return 1;
+    }
+    const forms: FixtureForm[] = ensured.forms.map((f) => ({ id: f.id, title: f.title }));
+    out.ok(`forms_owned_this_run=${forms.length}`);
+    out.ok(`forms_created_this_ensure=${ensured.createdForms}`);
+    out.ok(`form_versions_created_this_ensure=${ensured.createdVersions}`);
+    out.ok(`form_versions_published_this_ensure=${ensured.publishedVersions}`);
 
     // Each piece is found-or-created on its own, so a run that failed half-way completes on the next one.
     if ((await p.findMarkerRules()).length === 0) await p.createLegacyRule();
@@ -506,7 +522,7 @@ export async function ensureToursFixture(p: ToursFixturePorts, out: Sink, now: D
     }
     out.ok("legacy_pending_booking_ensured");
 
-    const existing = (await p.listLocationLinks()).filter(markerOf);
+    const existing = (await p.listLocationLinks()).filter(thisRun(world));
     for (const planned of LINK_PLAN) {
         const form = forms[planned.form]!;
         let row = existing.find((r) => roleOf(r) === planned.key);
@@ -531,15 +547,24 @@ export async function ensureToursFixture(p: ToursFixturePorts, out: Sink, now: D
     for (const c of v.failed) out.fail(c);
     out.raw(`census count=${censusOf(state)}`);
     out.ok(`retained_revoked_links=${retainedRevokedLinksOf(state.links)}`);
+    await reportRetainedForms(p, out);
     return v.failed.length || out.failed() ? 1 : 0;
 }
 
 export async function countToursFixture(p: ToursFixturePorts, out: Sink, world: ToursFixtureWorld): Promise<number> {
     if (!(await preconditions(p, out))) return 1;
-    const forms = await p.resolveForms(TOURS_FIXTURE_FORM_TITLES);
-    const state = await readState(p, Array.isArray(forms) ? forms : []);
+    const judged = await judgeFixtureForms(p, world);
+    const forms: FixtureForm[] = judged.ok ? judged.forms.filter((f): f is NonNullable<typeof f> => f !== null).map((f) => ({ id: f.id, title: f.title })) : [];
+    const state = await readState(p, forms);
     out.raw(`census count=${censusOf(state)}`);
     out.ok(`retained_revoked_links=${retainedRevokedLinksOf(state.links)}`);
+    await reportRetainedForms(p, out);
+    if (!judged.ok) {
+        // Ownership is never presumed: a squatted or foreign key is a failure even for a read-only count.
+        out.fail(`forms_${judged.code}`);
+        return 1;
+    }
+    out.ok(`forms_owned_this_run=${forms.length}`);
     if (censusOf(state) === 0) {
         out.ok("fixture_absent");
         return 0;
@@ -551,7 +576,8 @@ export async function countToursFixture(p: ToursFixturePorts, out: Sink, world: 
 }
 
 export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promise<number> {
-    // `removed` is PHYSICAL deletions only. Withdrawn links stay as revoked rows and are reported on their own.
+    // `removed` is PHYSICAL deletions only. Withdrawn links stay as revoked rows and are reported on their own;
+    // the run's forms and published versions are retained configuration (no deletion exists), reported on their own.
     let removed = 0;
     let revoked = 0;
     const report = () => out.raw(`reset namespace=${TOURS_FIXTURE_NAMESPACE} removed=${removed}`);
@@ -593,6 +619,7 @@ export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promis
     }
     out.ok(`links_revoked_this_reset=${revoked}`);
     out.ok(`retained_revoked_links=${retainedRevokedLinksOf(links) + revoked}`);
+    await reportRetainedForms(p, out);
     report();
     return removed <= TOURS_FIXTURE_RESET_LIMIT ? 0 : 1;
 }
@@ -600,8 +627,15 @@ export async function resetToursFixture(p: ToursFixturePorts, out: Sink): Promis
 export async function runToursFixture(input: {
     argv: readonly string[];
     env: Readonly<Record<string, string | undefined>>;
-    ports: (bound: { world: ToursFixtureWorld; session: PreviewSession }) => ToursFixturePorts;
-    /** Reads the executor-named authority record and session file; null when unreadable. */
+    /** The v2 authority check (toursFixtureAuthority.mjs `verifyToursFixtureAuthorityV2`) for this operation. */
+    verify: (operation: ToursFixtureOperation) => ToursAuthorityVerdict;
+    /**
+     * The gate immediately before the client (`runAttestedToursConnection`): freezes `{ DATABASE_URL, env, apiOrigin }`,
+     * re-runs the whole check on that copy, and only then calls `connect` with exactly that copy.
+     */
+    attest: <T>(operation: ToursFixtureOperation, apiOrigin: string, connect: (c: AttestedConnection) => T) => Promise<ToursAuthorityVerdict | { ok: true; authority: unknown; result: T }>;
+    ports: (bound: { world: ToursFixtureWorld; session: PreviewSession; client: ToursClientConfig }) => ToursFixturePorts;
+    /** Reads the executor-named session file; null when unreadable. */
     readFile: (path: string) => string | null;
     write: (line: string) => void;
     now?: Date;
@@ -617,23 +651,36 @@ export async function runToursFixture(input: {
     const bound = bindingFromEnv(input.env, now.getTime());
     if (!bound.ok) return refuse(bound.code);
     const binding = bound.binding;
-    const authority = checkAuthorityRecord(input.readFile(binding.authorityFile), input.env, binding, guard.operation, now.getTime());
-    if (!authority.ok) return refuse(authority.code);
+    // AUTHORITY v2 — before the service key, the session file or any client.
+    const verdict = input.verify(guard.operation);
+    if (!verdict.ok) return refuse(verdict.code);
+    const auth = verdict.authority;
+    // The verified record, the A741 binding and this program agree on where it acts (the shared check proves the
+    // record's org equals the env's copy and the registered org; this is the binding's own expectation of both).
+    if (auth.org_id !== binding.world.orgId || auth.org_key !== TOURS_FIXTURE_PERSONA_ORG.key) return refuse("authority_org_mismatch");
+    if (auth.qa_run_id !== input.env.ALLOY_QA_RUN_ID || auth.environment_id !== input.env.ALLOY_QA_ENVIRONMENT_ID || auth.request_id !== binding.requestId || auth.candidate_sha !== binding.candidateSha) return refuse("authority_binding_mismatch");
+    if (!input.env.SUPABASE_SERVICE_ROLE_KEY) return refuse("service_key_missing");
     const sessionText = input.readFile(binding.sessionFile);
     if (sessionText !== null && sha256Hex(sessionText) !== binding.sessionSha256) return refuse("session_digest_mismatch");
     const session = sessionFromStorageState(sessionText, binding);
     if (!session) return refuse("persona_session_unreadable");
-    out.ok("binding a741 org=persona_qa_shared site=qa_north preview=loopback session=digest_bound authority=consistent");
+    const world: ToursFixtureWorld = { ...binding.world, runId: auth.qa_run_id };
+    out.ok("binding a741 org=persona_qa_shared site=qa_north preview=loopback session=digest_bound authority=v2 api=identity_bound pins=verified");
     let ports: ToursFixturePorts;
     try {
-        ports = input.ports({ world: binding.world, session });
+        const gated = await input.attest(guard.operation, auth.api_url, (c) =>
+            input.ports({ world, session, client: { apiUrl: String(c.apiOrigin ?? ""), serviceKey: String(c.clientEnv?.SUPABASE_SERVICE_ROLE_KEY ?? "") } }),
+        );
+        if (!gated.ok) return refuse(gated.code);
+        if (!("result" in gated)) return refuse("ports_unavailable");
+        ports = gated.result;
     } catch {
         out.fail("refused_ports_unavailable");
         return 2;
     }
     try {
-        if (guard.operation === "ensure") return await ensureToursFixture(ports, out, now, binding.world);
-        if (guard.operation === "count") return await countToursFixture(ports, out, binding.world);
+        if (guard.operation === "ensure") return await ensureToursFixture(ports, out, now, world);
+        if (guard.operation === "count") return await countToursFixture(ports, out, world);
         return await resetToursFixture(ports, out);
     } catch {
         // Never the error text: it can carry a URL, a key fragment or a row.

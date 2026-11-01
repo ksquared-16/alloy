@@ -1,13 +1,18 @@
 /**
- * The real ports of the Tours certification fixture: the isolated QA database (service role, loopback
- * only — the guard refuses anything else before this is built) and the candidate preview's own Forms
- * routes, called as the bound QA persona. Both are the executor's binding: the organization and site come from
- * `ToursFixtureWorld` (persona org `qa_shared`, site `qa_north`), the preview origin and Cookie header from the
- * digest-bound session (`PreviewSession`) — never a constant, never a URL from the session file.
+ * The real ports of the Tours certification fixture: the isolated QA database (service role) and the candidate
+ * preview's own Forms routes, called as the bound QA persona. Everything comes from what was verified, never from a
+ * second read of the environment: the Supabase API origin and service key are the copy `runAttestedToursConnection`
+ * froze and re-verified (`ToursClientConfig` — the origin is the authority's `api_identity`); the organization, site
+ * and QA run are `ToursFixtureWorld` (persona org `qa_shared`, site `qa_north`, the verified `qa_run_id`); the preview
+ * origin and Cookie header are the digest-bound session (`PreviewSession`) — never a constant, never a URL from the
+ * session file.
  *
  * Product owners reused, never re-implemented:
  *   - tour rules: `createTourSchedule` / `deleteTourSchedule` (the schedule writer; org-wide scope = the
  *     legacy shape, `location_id` NULL);
+ *   - the run's two forms: POST /api/admin/forms, POST …/[formId]/versions and POST …/versions/[versionId]/publish
+ *     on the preview (key allocation, schema validation, the publish gates and the publisher stay the routes');
+ *     this file keeps only the new ids (toursFixtureForms.ts owns the ownership rules);
  *   - form links: POST /api/admin/forms/[formId]/public-links and PATCH …/[linkId] on the preview. Token
  *     generation, hashing, location metadata and lead-capture rules stay the route's; this file keeps only
  *     the new link's id and discards the rest of the response (it carries the plaintext token).
@@ -28,15 +33,16 @@ import {
     TOURS_FIXTURE_MARKER_KEY,
     TOURS_FIXTURE_NAMESPACE,
     TOURS_FIXTURE_ROLE_KEY,
-    type FixtureForm,
     type LocationLinkRow,
     type MarkerBooking,
     type MarkerFamily,
     type MarkerRule,
     type PreviewSession,
+    type ToursClientConfig,
     type ToursFixturePorts,
     type ToursFixtureWorld,
 } from "@/lib/qa/toursFixture/toursCertificationFixture";
+import { TOURS_FIXTURE_RUN_KEY, type FixtureFormRow, type FixtureFormVersionRow } from "@/lib/qa/toursFixture/toursFixtureForms";
 
 const MARK = { [TOURS_FIXTURE_MARKER_KEY]: TOURS_FIXTURE_MARKER };
 const MARKER_FILTER = `metadata->>${TOURS_FIXTURE_MARKER_KEY}`;
@@ -47,13 +53,12 @@ function must<T>(r: { data: T | null; error: { message: string } | null }): T {
     return r.data as T;
 }
 
-export function createToursFixturePorts(
-    env: Readonly<Record<string, string | undefined>>,
-    bound: { world: ToursFixtureWorld; session: PreviewSession },
-): ToursFixturePorts {
-    const db: SupabaseClient = createClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+export function createToursFixturePorts(client: ToursClientConfig, bound: { world: ToursFixtureWorld; session: PreviewSession }): ToursFixturePorts {
+    if (!client.apiUrl || !client.serviceKey) throw new Error("client");
+    const db: SupabaseClient = createClient(client.apiUrl, client.serviceKey, { auth: { persistSession: false } });
     const ORG = bound.world.orgId;
     const LOCATION = bound.world.locationId;
+    const RUN = bound.world.runId;
     const session = bound.session;
 
     async function preview(path: string, init: { method: string; body: unknown }): Promise<Record<string, unknown>> {
@@ -206,15 +211,40 @@ export function createToursFixturePorts(
             return (rows as unknown[]).length;
         },
 
-        async resolveForms(titles) {
-            const rows = must(await db.from("form_definitions").select("id, name, is_active").eq("org_id", ORG).in("name", [...titles])) as { id: string; name: string; is_active?: boolean }[];
-            const out: FixtureForm[] = [];
-            for (const title of titles) {
-                const hits = rows.filter((r) => r.name === title && r.is_active !== false);
-                if (hits.length !== 1) return { refused: hits.length ? "ambiguous" : "missing" };
-                out.push({ id: hits[0]!.id, title });
-            }
-            return out;
+        async findFixtureFormRows(keys) {
+            const cols = "id, org_id, key, name, is_active, metadata";
+            const byKey = keys.length ? (must(await db.from("form_definitions").select(cols).eq("org_id", ORG).in("key", [...keys])) as FixtureFormRow[]) : [];
+            const byMarker = must(await db.from("form_definitions").select(cols).eq("org_id", ORG).eq(MARKER_FILTER, TOURS_FIXTURE_MARKER)) as FixtureFormRow[];
+            return [...new Map([...byKey, ...byMarker].map((r) => [r.id, r])).values()];
+        },
+        async countFormKeysOutsideOrg(keys) {
+            const r = await db.from("form_definitions").select("id", { count: "exact", head: true }).in("key", [...keys]).neq("org_id", ORG);
+            if (r.error || r.count === null) throw new Error("db");
+            return r.count;
+        },
+        async findFormOrg(formId) {
+            const row = must(await db.from("form_definitions").select("org_id").eq("id", formId).maybeSingle()) as { org_id: string } | null;
+            return row?.org_id ?? null;
+        },
+        async listFormVersions(formIds) {
+            if (!formIds.length) return [];
+            // Not org-filtered on purpose: a version of these definitions in another org is a refusal, not invisible.
+            return must(await db.from("form_definition_versions").select("id, org_id, form_definition_id, status, metadata").in("form_definition_id", [...formIds])) as FixtureFormVersionRow[];
+        },
+        async createForm({ key, name, metadata }) {
+            const data = await preview("/api/admin/forms", { method: "POST", body: { key, name, kind: "center", is_active: true, metadata } });
+            const id = typeof data.id === "string" ? data.id : "";
+            if (!id) throw new Error("form");
+            return id;
+        },
+        async createDraftVersion({ formId, schema, metadata }) {
+            const data = await preview(`/api/admin/forms/${formId}/versions`, { method: "POST", body: { schema_json: schema, metadata } });
+            const id = typeof data.id === "string" ? data.id : "";
+            if (!id) throw new Error("form_version");
+            return id;
+        },
+        async publishVersion({ formId, versionId }) {
+            await preview(`/api/admin/forms/${formId}/versions/${versionId}/publish`, { method: "POST", body: {} });
         },
         async listLocationLinks() {
             const rows = must(await db.from("form_public_links").select("id, form_definition_id, is_active, expires_at, allowed_embed_origins, metadata, created_at").eq("org_id", ORG));
@@ -223,7 +253,7 @@ export function createToursFixturePorts(
         async createLink({ formId, key }) {
             const data = await preview(`/api/admin/forms/${formId}/public-links`, {
                 method: "POST",
-                body: { location_id: LOCATION, label: `Tours cert ${key}`, metadata: { ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key } },
+                body: { location_id: LOCATION, label: `Tours cert ${key}`, metadata: { ...MARK, [TOURS_FIXTURE_ROLE_KEY]: key, [TOURS_FIXTURE_RUN_KEY]: RUN } },
             });
             const id = typeof data.id === "string" ? data.id : "";
             if (!id) throw new Error("link");
