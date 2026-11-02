@@ -867,8 +867,9 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         registeredActionKey: "charge.add",
         implementationStatus: "production",
         reason:
-            "Creates a DRAFT charge from a configured Charge Template. Amount, dates and GL mapping "
-            + "are resolved by the template, never by the caller; an enrollment agreement is required.",
+            "Creates a charge from a configured one-time Catalog fee (or a Charge Template). Dates and GL "
+            + "mapping are resolved by the item, never by the caller; the amount is the item's price unless a "
+            + "caller holding fin.adjust overrides it for that one charge, with a recorded reason.",
     }),
     def({
         capabilityKey: "charge.post",

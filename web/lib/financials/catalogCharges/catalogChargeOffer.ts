@@ -381,6 +381,12 @@ export function catalogChargeDefinition(args: {
     product: CommercialProductDef;
     account: CatalogChargeAccount | null;
     asOf: string;
+    /**
+     * An authorized per-charge amount (`catalogAmountOverride.ts`), already validated by the command.
+     * It prices THIS definition only; the Catalog item keeps its price, and `catalogChargeSnapshot`
+     * still records that price on the charge.
+     */
+    amountCents?: number | null;
 }): ChargeTemplateRow {
     const { product } = args;
     return {
@@ -394,7 +400,7 @@ export function catalogChargeDefinition(args: {
         trigger_type: "manual",
         trigger_key: null,
         amount_strategy: "fixed",
-        amount_cents: product.amountCents,
+        amount_cents: args.amountCents ?? product.amountCents,
         currency_code: (args.account?.currency || "USD").trim() || "USD",
         occurs_on_strategy: "now",
         billable_on_strategy: "billing_policy",

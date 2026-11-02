@@ -55,6 +55,11 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { humanDay } from "@/lib/financials/dates/humanDates";
+import {
+    CATALOG_AMOUNT_OVERRIDE_PERMISSION,
+    parseCatalogAmountOverride,
+    type CatalogAmountOverride,
+} from "@/lib/financials/catalogCharges/catalogAmountOverride";
 
 /**
  * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
@@ -395,6 +400,8 @@ async function executeMultiChildAdd(args: {
                  * price nobody quoted.
                  */
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
+                /* An override is per child too: each child's charge is priced, and records it, the same. */
+                catalogAmountOverride: amountOverrideOf(payload),
                 today,
                 actorUserId: ctx.userId ?? null,
             });
@@ -533,6 +540,12 @@ async function refuseIllegalSubjectGrain(
     };
 }
 
+/** The validated per-charge amount on a payload, or null — `validatePayload` already refused a bad one. */
+function amountOverrideOf(payload: Record<string, unknown> | null | undefined): CatalogAmountOverride | null {
+    const parsed = parseCatalogAmountOverride(payload?.amount_override);
+    return parsed.ok ? parsed.override : null;
+}
+
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
@@ -575,11 +588,26 @@ const addCharge: RegisteredAction = {
                 ],
             };
         }
+        /*
+         * A PER-CHARGE AMOUNT is a catalog charge's, and only in the shape `catalogAmountOverride`
+         * reads — a malformed, fractional, negative or zero amount is refused here, never coerced.
+         */
+        if (src.amount_override != null && !t(src.catalog_product_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "amount_override_unsupported", message: "Only a Catalog charge's amount can be changed here.", field: "amount_override" }],
+            };
+        }
+        const override = parseCatalogAmountOverride(src.amount_override);
+        if (!override.ok) return { ok: false, blockers: [{ code: override.code, message: override.message, field: override.field }] };
         return { ok: true, value: src };
     },
 
     async resolveEligibility({ supabase, ctx, payload, invocation }) {
         const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
+        const overriding = payload?.amount_override != null;
+        const mayOverride = !overriding
+            || (await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CATALOG_AMOUNT_OVERRIDE_PERMISSION));
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
@@ -587,11 +615,14 @@ const addCharge: RegisteredAction = {
             t(payload?.customer_id) || null,
         );
         return {
-            eligible: allowed && subject.ok,
+            eligible: allowed && mayOverride && subject.ok,
             blockers: [
                 ...(allowed
                     ? []
                     : [{ code: "charge_permission_required", message: `Creating a charge requires ${CHARGE_WRITE_PERMISSION}.` }]),
+                ...(mayOverride
+                    ? []
+                    : [{ code: "amount_override_permission_required", message: `Changing a charge's amount from the Catalog price requires ${CATALOG_AMOUNT_OVERRIDE_PERMISSION}.` }]),
                 ...(subject.ok ? [] : [{ code: subject.code, message: subject.message }]),
             ],
             availableTransitions: [],
@@ -629,9 +660,10 @@ const addCharge: RegisteredAction = {
                     servicePeriodStart: t(payload?.service_period_start) || null,
                     unitAmountCents:
                         payload?.amount_cents == null ? null : Number(payload.amount_cents),
+                    catalogAmountOverride: amountOverrideOf(payload),
                     today,
                 });
-            const { intent, label } = await previewFor(subject);
+            const { intent, label, catalogPriceCents: previewCatalogPrice } = await previewFor(subject);
             if (!intent.eligible) {
                 const reason = intent.reason ?? "This charge cannot be created right now.";
                 return { summary: reason, changes: [], blocked: { reason } };
@@ -693,10 +725,22 @@ const addCharge: RegisteredAction = {
                     currency: intent.currencyCode || "USD",
                 });
 
+            /* THE PRICE, SAID BOTH WAYS when it is not the Catalog's — default, override, and why. */
+            const override = amountOverrideOf(payload);
+            const catalogPriceCents = previewCatalogPrice;
+            const overrideLines =
+                override && catalogPriceCents != null && override.amountCents !== catalogPriceCents
+                    ? [
+                          `Catalog price · ${money(catalogPriceCents)}`,
+                          `Amount override · ${money(override.amountCents)}${multi ? " per child" : ""}`,
+                          `Override reason · ${override.reason}`,
+                      ]
+                    : [];
             const changes = [
                 multi
                     ? `Applies to · ${labels.length ? labels.join(", ") : `${selected.length} children`}`
                     : `Applies to · ${childLabel}`,
+                ...overrideLines,
                 multi && intent.amountCents != null ? `${money(intent.amountCents)} per child` : null,
                 multi ? `${selected.length} children selected` : null,
                 multi && totalCents != null ? `Total to create · ${money(totalCents)}` : null,
@@ -733,6 +777,18 @@ const addCharge: RegisteredAction = {
         const correlationId = randomUUID();
         if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
             return denied(correlationId, "Creating a charge", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
+        /* Re-judged here, not only at eligibility: a direct call must not reach the writer with a price. */
+        const parsedOverride = parseCatalogAmountOverride(payload?.amount_override);
+        if (!parsedOverride.ok) return { ok: false, correlationId, status: 400, error: parsedOverride.message };
+        if (parsedOverride.override && !t(payload?.catalog_product_id)) {
+            return { ok: false, correlationId, status: 400, error: "Only a Catalog charge's amount can be changed here." };
+        }
+        if (
+            parsedOverride.override
+            && !(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CATALOG_AMOUNT_OVERRIDE_PERMISSION))
+        ) {
+            return denied(correlationId, "Changing a charge's amount from the Catalog price", CATALOG_AMOUNT_OVERRIDE_PERMISSION, "amount_override_permission_required");
         }
 
         /*
@@ -813,6 +869,7 @@ const addCharge: RegisteredAction = {
                 operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
+                catalogAmountOverride: amountOverrideOf(payload),
                 today: t(payload.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
                 actorUserId: ctx.userId ?? null,
             });

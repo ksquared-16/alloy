@@ -54,6 +54,10 @@ import {
     readCatalogChargeConfig,
     type CatalogChargeAccount,
 } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import {
+    catalogAmountOverrideRecord,
+    type CatalogAmountOverride,
+} from "@/lib/financials/catalogCharges/catalogAmountOverride";
 import type { CommercialProductDef } from "@/lib/commercial/execution/commercialExport";
 
 const TABLE = "charges";
@@ -128,6 +132,14 @@ export type SimulateArgs = {
      * Authoritative over the template's `amount_strategy`; see `ChargeResolutionContext`.
      */
     acceptedAmountCents?: number | null;
+    /**
+     * AN AUTHORIZED PER-CHARGE AMOUNT for a catalog item (`catalogAmountOverride.ts`), validated and
+     * permission-checked by the command before it reaches here. Honoured only with `catalogProductId`:
+     * it prices this charge and is recorded on it (`metadata.amount_override`, beside the Catalog price
+     * in `metadata.catalog_item`). An amount equal to the Catalog price is no override. Absent, the
+     * Catalog price is the price, exactly as before.
+     */
+    catalogAmountOverride?: CatalogAmountOverride | null;
     today: string;
 };
 
@@ -139,6 +151,8 @@ export type ChargePreviewResult = {
     label: string;
     /** Advisory: what a draft write WOULD do. Preview writes nothing. */
     wouldWrite: DraftWriteIntent;
+    /** A catalog charge's Catalog price (cents), so a surface can show it beside an override; null otherwise. */
+    catalogPriceCents: number | null;
     existing: { id: string; status: string } | null;
 };
 
@@ -152,7 +166,7 @@ async function loadCatalogDefinition(
     supabase: SupabaseClient,
     orgId: string,
     productId: string,
-    args: { today: string; locationId: string | null },
+    args: { today: string; locationId: string | null; overrideCents?: number | null },
 ): Promise<{
     template: ChargeTemplateRow;
     catalog: { product: CommercialProductDef; account: CatalogChargeAccount | null };
@@ -164,7 +178,7 @@ async function loadCatalogDefinition(
     const evaluation = evaluateCatalogCharge(product, config, { asOf: args.today, locationIds: [args.locationId] });
     const account = evaluation.status === "offerable" ? evaluation.account : null;
     return {
-        template: catalogChargeDefinition({ orgId, product, account, asOf: args.today }),
+        template: catalogChargeDefinition({ orgId, product, account, asOf: args.today, amountCents: args.overrideCents ?? null }),
         catalog: { product, account },
         refusal: evaluation.status === "offerable" ? null : evaluation.reason,
     };
@@ -350,6 +364,8 @@ type ResolutionContext = {
     template: ChargeTemplateRow;
     /** The catalog item this charge is made from, when it is one; null for a template charge. */
     catalog: { product: CommercialProductDef; account: CatalogChargeAccount | null } | null;
+    /** The authorized per-charge amount that priced this catalog charge, when one did. */
+    amountOverride: CatalogAmountOverride | null;
     policies: readonly FinancialPolicyRow[];
     existing: ChargeLifecycleRow | null;
     /** The scope the chain narrowed by (the subject's, completed by the household the period resolved). */
@@ -382,12 +398,15 @@ async function resolveTemplateCharge(
               billableSourceId: source.id,
           })
         : EMPTY_FINANCIAL_POLICY_SCOPE;
+    const override = catalogProductId ? args.catalogAmountOverride ?? null : null;
     const loaded = catalogProductId
-        ? await loadCatalogDefinition(supabase, orgId, catalogProductId, { today: args.today, locationId: scope.locationId })
+        ? await loadCatalogDefinition(supabase, orgId, catalogProductId, { today: args.today, locationId: scope.locationId, overrideCents: override?.amountCents ?? null })
         : { template: await loadTemplate(supabase, orgId, args.templateId), catalog: null, refusal: null };
     const template = loaded.template;
     const scopeKey = source?.id ? scopeKeyFor(source, args.subjectCustomerMemberId) : "org";
-    const intent = loaded.refusal
+    /* The override that actually applies: one equal to the Catalog price changes nothing. */
+    const appliedOverride = override && loaded.catalog && override.amountCents !== loaded.catalog.product.amountCents ? override : null;
+    let intent = loaded.refusal
         ? ineligibleChargeIntent(template, loaded.refusal, `tpl:${template.template_key}:pending:${scopeKey}`)
         : resolveChargeFromTemplate(template, {
         today: args.today,
@@ -413,6 +432,27 @@ async function resolveTemplateCharge(
     let existing: ChargeLifecycleRow | null = null;
     if (intent.eligible && source) {
         existing = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
+    }
+
+    /*
+     * ── AN OVERRIDE BELONGS TO ONE CHARGE, SO IT NEVER REPRICES ANOTHER ──────────────────────
+     *
+     * The resolution key has no amount in it: the same item, payer, subject and day is one charge,
+     * and a re-run recalculates its draft. That convergence must not become a way to reprice a draft
+     * someone already priced by hand — or to quietly put an overridden draft back to the Catalog
+     * price. So when either the request or the existing draft carries an override and their amounts
+     * differ, this refuses and says which charge already stands.
+     */
+    if (loaded.catalog && existing && existing.status === "draft" && intent.eligible && existing.amount_cents !== intent.amountCents) {
+        const priorOverride = (existing.metadata as Record<string, unknown> | null)?.amount_override;
+        if (appliedOverride || priorOverride) {
+            const money = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: intent.currencyCode || "USD" });
+            intent = ineligibleChargeIntent(
+                template,
+                `A draft of this charge for the same date already exists at ${money(Number(existing.amount_cents))}. Change or cancel that draft instead of adding it again at ${money(Number(intent.amountCents))}.`,
+                intent.resolutionKey,
+            );
+        }
     }
 
     /*
@@ -486,8 +526,14 @@ async function resolveTemplateCharge(
     }
 
     return {
-        result: { intent, label: template.label, wouldWrite, existing: existing ? { id: existing.id, status: existing.status } : null },
-        ctx: { template, catalog: loaded.catalog, policies, existing, chainScope, invoiceLocationId },
+        result: {
+            intent,
+            label: template.label,
+            wouldWrite,
+            existing: existing ? { id: existing.id, status: existing.status } : null,
+            catalogPriceCents: loaded.catalog ? loaded.catalog.product.amountCents : null,
+        },
+        ctx: { template, catalog: loaded.catalog, amountOverride: appliedOverride, policies, existing, chainScope, invoiceLocationId },
     };
 }
 
@@ -582,6 +628,17 @@ export async function writeTemplateDraftCharge(
         lifecycle_status: intent.lifecycleStatus,
         source: catalog ? "commercial_catalog" : "charge_template",
         ...(catalog ? { catalog_item: catalogChargeSnapshot(catalog.product, catalog.account) } : {}),
+        /* Who changed the amount from the Catalog price, to what, and why — on the charge itself. */
+        ...(catalog && ctx.amountOverride
+            ? {
+                  amount_override: catalogAmountOverrideRecord({
+                      catalogAmountCents: catalog.product.amountCents,
+                      override: ctx.amountOverride,
+                      actorUserId: args.actorUserId ?? null,
+                      at: new Date().toISOString(),
+                  }),
+              }
+            : {}),
         ...(subjectOf(args) ? { subject_customer_member_id: subjectOf(args) } : {}),
         /* How every date on this charge was reached, so it can be explained without re-resolving. */
         ...(chain ? { charge_dates: chargeDateProvenance(chain) } : {}),
