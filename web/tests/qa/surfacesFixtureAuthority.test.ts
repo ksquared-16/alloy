@@ -34,12 +34,14 @@ const WEB = join(__dirname, "../..");
 const read = (rel: string) => readFileSync(join(WEB, rel), "utf8");
 const FIREFLY = "93667019-bd28-49b5-a688-acc9bb1e0a19";
 
-/** The shared verifier's git blob: sprint/opwork_b77b3cbb5840_sprint_386d603e60c7 at 064629131 (the API identity, a
- *  superset of 1b8d6e2b1's 20f04ade… that this suite first pinned), the bytes the toolkit registry pins for every v2
- *  program (sha256 e25649c2…). Surfaces passes its connection lazily, so nothing below changed. */
+/**
+ * The shared verifier's git blob after staging f2df7f3c was integrated with the API-identity v2 verifier
+ * (INC-94E9-02; Enrollment bcc40a7a2 / Tours 37922cf3, the bytes every installed program pin names, e25649c2…).
+ * It was 20f04ade… (c028b885… vectors) at ab05b96b; the vectors keep those sections unchanged and append api_identity.
+ */
 const SHARED_VERIFIER_BLOB = "a0eb9d467a2ff34d9e8329a9e40f28ddb8b9ff13";
 const VECTORS_PATH = "tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json";
-const VECTORS_SHA256 = "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28"; // api_identity section appended; earlier sections unchanged
+const VECTORS_SHA256 = "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28";
 /** Installed toolkit eeaa6dac6860 lib/certification-fixture.mjs: the registered surfaces_room_uses_* pins. */
 const INSTALLED = {
     candidate: "47332abe2d47581b3e9c81ee809b28d4881316da",

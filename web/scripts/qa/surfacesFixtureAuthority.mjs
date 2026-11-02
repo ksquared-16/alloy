@@ -144,11 +144,12 @@ export function verifySurfacesFixtureAuthority(env = {}, {
         return text;
     };
     const seams = { storeRoot, nowMs, readFile: tap, ...(realpath ? { realpath } : {}), ...(readHead ? { readHead } : {}), ...(readScriptBody ? { readScriptBody } : {}) };
-    /* The shared module's DEFAULT connection reads DATABASE_URL and SUPABASE_URL when it is called, before step 1.
-       The same values, read only when step 8/10 asks for them, keep "refused before the authority is proven, the
-       database URL is never read". */
+    /*
+     * Nothing is read before the authority is proven. The v2 verifier's default connection evaluates
+     * DATABASE_URL / SUPABASE_URL at call entry; these getters defer both to the step that uses them.
+     */
     const connection = { get url() { return env.DATABASE_URL; }, get clientEnv() { return env; }, get apiOrigin() { return env.SUPABASE_URL; } };
-    const shared = verifyIsolatedFixtureAuthorityV2(env, { ...seams, connection, program: p, org: SURFACES_REGISTERED_FIXTURE_ORG });
+    const shared = verifyIsolatedFixtureAuthorityV2(env, { ...seams, program: p, org: SURFACES_REGISTERED_FIXTURE_ORG, connection });
     if (!shared.ok) return shared;
     const a = shared.authority;
 
