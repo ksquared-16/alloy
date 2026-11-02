@@ -298,3 +298,73 @@ describe("validateAdapter — the caller names no route", () => {
         expect(f.seen.opened).toBe(0);
     });
 });
+
+describe("foreign-request and capture diagnostics — origin + class and counts only, and only on failure", () => {
+    const visit = (requests: Array<{ method: string; url: string }>, snapshot: Record<string, unknown> = ONE_ROW.snapshot) =>
+        run({ driver: fakeDriver([{ requests, snapshot }]).driver as never });
+    const lines = (r: { checks: { check: string }[] }) => r.checks.map((c) => c.check);
+    const SECRET_Q = `?access_token=${TOKEN}&apikey=${TOKEN}`;
+
+    it.each([
+        ["a loopback port outside the binding", `http://127.0.0.1:54421/rest/v1/charges${SECRET_Q}`, "http://127.0.0.1:54421", "loopback_other_port"],
+        ["a websocket to a loopback port outside the binding", "ws://127.0.0.1:54421/realtime/v1/websocket", "http://127.0.0.1:54421", "loopback_other_port"],
+        ["the session's own tailnet host on another port", `https://synthetic.example.ts.net:3000/api/x${SECRET_Q}`, "https://synthetic.example.ts.net:3000", "session_host_other_port"],
+        ["the session host on the default port", "https://synthetic.example.ts.net/x", "https://synthetic.example.ts.net", "session_host_other_port"],
+        ["another tailnet host", "https://other-box.example.ts.net:4413/x", "https://other-box.example.ts.net:4413", "tailnet_other_host"],
+        ["a private-network address", "http://192.168.1.5:8080/x", "http://192.168.1.5:8080", "private_network"],
+        ["a third party (path and query withheld)", `https://fonts.googleapis.com/css2?family=Poppins${SECRET_Q}`, "https://fonts.googleapis.com", "third_party"],
+        ["userinfo in a third-party URL", `https://user:${TOKEN}@cdn.example.org/a.js`, "https://cdn.example.org", "third_party"],
+    ])("%s → one line naming only its origin and class", async (_l, url, origin, cls) => {
+        const r = await visit([{ method: "GET", url: `${TAILNET}/records/child/abc/financials` }, { method: "GET", url }]);
+        expect(r.ok).toBe(false);
+        expect(r.failures).toContain(F.OUTBOUND);
+        expect(lines(r)).toContain(`ui synthetic_flow route=one foreign origin=${origin} class=${cls} count=1`);
+        const text = workflowVerificationLines(r).join("\n");
+        expect(text).not.toContain(TOKEN);
+        expect(text).not.toMatch(/\/rest\/v1|\/css2|\/api\/x|access_token|apikey|user:/);
+    });
+
+    it("non-http schemes and unparseable URLs are named by class only", async () => {
+        const r = await visit([{ method: "GET", url: "chrome-extension://abcdef/x.js" }, { method: "GET", url: "::not a url::" }]);
+        expect(lines(r)).toEqual(expect.arrayContaining(["ui synthetic_flow route=one foreign origin=chrome-extension: class=non_http_scheme count=1", "ui synthetic_flow route=one foreign origin=unparseable class=unparseable count=1"]));
+    });
+
+    it("repeated and many origins: one counted line per origin, at most three, then a bounded remainder", async () => {
+        const reqs = ["a", "a", "b", "c", "d", "e"].map((h) => ({ method: "GET", url: `https://${h}.example.org/x` }));
+        const r = await visit(reqs);
+        const diag = lines(r).filter((l) => l.includes(" foreign origin") || l.includes("origins_more"));
+        expect(diag).toEqual([
+            "ui synthetic_flow route=one foreign origin=https://a.example.org class=third_party count=2",
+            "ui synthetic_flow route=one foreign origin=https://b.example.org class=third_party count=1",
+            "ui synthetic_flow route=one foreign origin=https://c.example.org class=third_party count=1",
+            "ui synthetic_flow route=one foreign origins_more=2",
+        ]);
+        expect(lines(r)).toContain("ui synthetic_flow route=one requests=6 writes=0 foreign=6");
+    });
+
+    it("the production binding's four origins (loopback preview, tailnet session, loopback and tailnet API) are never flagged", async () => {
+        const b = bind().binding!;
+        expect([...b.allowedOrigins].sort()).toEqual([API, PREVIEW, TAILNET, "https://synthetic.example.ts.net:56102"].sort());
+        const r = await visit([PREVIEW, TAILNET, API, "https://synthetic.example.ts.net:56102", "wss://synthetic.example.ts.net:56102"].map((o) => ({ method: "GET", url: `${o}/x` })));
+        expect(r.ok).toBe(true);
+        expect(lines(r).some((l) => l.includes("foreign origin"))).toBe(false);
+    });
+
+    it("a write is a MUTATION, never a foreign-origin line; a clean render prints no diagnostic", async () => {
+        const w = await visit([{ method: "POST", url: `${API}/rest/v1/charges` }]);
+        expect(w.failures).toEqual([F.MUTATION]);
+        expect(lines(w).some((l) => l.includes("foreign origin"))).toBe(false);
+        const ok = await visit([{ method: "GET", url: `${TAILNET}/x` }]);
+        expect(lines(ok)).toEqual(["ui synthetic_flow route=one rendered at its own path", `ui synthetic_flow route=one signed in as persona=${PERSONA}`, "ui synthetic_flow route=one requests=1 writes=0 foreign=0", "ui synthetic one row"]);
+    });
+
+    it("on a failed assertion: how much each capture rendered (count or absent), never its content", async () => {
+        const none = await visit([{ method: "GET", url: `${TAILNET}/x` }], { rows: [] });
+        expect(lines(none)).toContain("ui synthetic_flow route=one captured rows=0");
+        const absent = await visit([{ method: "GET", url: `${TAILNET}/x` }], {});
+        expect(lines(absent)).toContain("ui synthetic_flow route=one captured rows=absent");
+        const two = await visit([{ method: "GET", url: `${TAILNET}/x` }], { rows: [{ attrs: {}, text: `secret-${TOKEN}`, parts: {} }, { attrs: {}, text: "b", parts: {} }] });
+        expect(lines(two)).toContain("ui synthetic_flow route=one captured rows=2");
+        expect(workflowVerificationLines(two).join("\n")).not.toContain(TOKEN);
+    });
+});

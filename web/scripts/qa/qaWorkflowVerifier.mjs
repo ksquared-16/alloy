@@ -183,6 +183,32 @@ export function judgeRequest(binding, method, url) {
 }
 
 /**
+ * DIAGNOSTICS FOR A FOREIGN REQUEST — the one thing a failed verdict could not say. Only the request's ORIGIN
+ * (scheme, host, port: never userinfo, path, query or fragment) and a fixed class leave this function, and only for a
+ * request the policy already refused. It changes no verdict.
+ */
+const PRIVATE_V4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/;
+export function foreignOriginOf(binding, url) {
+    let u;
+    try {
+        u = new URL(String(url));
+    } catch {
+        return { origin: "unparseable", class: "unparseable" };
+    }
+    const proto = u.protocol === "ws:" ? "http:" : u.protocol === "wss:" ? "https:" : u.protocol;
+    if (!["http:", "https:"].includes(proto)) return { origin: `${u.protocol}`, class: "non_http_scheme" };
+    const origin = `${proto}//${u.host}`.toLowerCase();
+    const host = u.hostname.toLowerCase();
+    const session = (() => { try { return new URL(binding.sessionOrigin).hostname.toLowerCase(); } catch { return null; } })();
+    const cls = ["127.0.0.1", "localhost", "[::1]", "::1"].includes(host) ? "loopback_other_port"
+        : session && host === session ? "session_host_other_port"
+            : TAILNET_HOST.test(host) ? "tailnet_other_host"
+                : PRIVATE_V4.test(host) ? "private_network"
+                    : "third_party";
+    return { origin, class: cls };
+}
+
+/**
  * An adapter: `{ key, routes: [{ id, path }], capture: [{ name, selector, attrs?, parts? }], reveal?: string[],
  * assert(routeId, snapshot, context) → { ok, check }[] }`. Frozen shape; any other field refuses.
  */
@@ -262,6 +288,18 @@ export async function runWorkflowVerification({ adapter, binding, driver, attest
                 const writes = bad.filter((v) => v.failure === WORKFLOW_FAILURES.MUTATION).length;
                 const foreign = bad.filter((v) => v.failure === WORKFLOW_FAILURES.OUTBOUND).length;
                 checks.push({ ok: bad.length === 0, check: `ui ${adapter.key} route=${route.id} requests=${requests.length} writes=${writes} foreign=${foreign}` });
+                /* Which origins were refused (origin + class only), at most three, so a failure names its cause. */
+                if (foreign) {
+                    const seen = new Map();
+                    for (const r of requests) {
+                        if (judgeRequest(binding, r?.method, r?.url).failure !== WORKFLOW_FAILURES.OUTBOUND) continue;
+                        const f = foreignOriginOf(binding, r?.url);
+                        const k = `${f.origin} class=${f.class}`;
+                        seen.set(k, (seen.get(k) || 0) + 1);
+                    }
+                    for (const [k, n] of [...seen].slice(0, 3)) checks.push({ ok: false, check: `ui ${adapter.key} route=${route.id} foreign origin=${k} count=${n}` });
+                    if (seen.size > 3) checks.push({ ok: false, check: `ui ${adapter.key} route=${route.id} foreign origins_more=${seen.size - 3}` });
+                }
             }
             let asserted;
             try {
@@ -274,6 +312,14 @@ export async function runWorkflowVerification({ adapter, binding, driver, attest
                 if (c?.ok !== true) failures.add(WORKFLOW_FAILURES.ASSERTION);
             }
             if (!Array.isArray(asserted) || !asserted.length) failures.add(WORKFLOW_FAILURES.ASSERTION);
+            /* On a failed assertion, how much the page actually rendered for each capture: counts, never content. */
+            if (!Array.isArray(asserted) || !asserted.length || asserted.some((c) => c?.ok !== true)) {
+                const snap = page.snapshot && typeof page.snapshot === "object" ? page.snapshot : {};
+                for (const c of adapter.capture || []) {
+                    const v = snap[c.name];
+                    checks.push({ ok: false, check: `ui ${adapter.key} route=${route.id} captured ${c.name}=${Array.isArray(v) ? v.length : "absent"}` });
+                }
+            }
         }
     } catch {
         failures.add(WORKFLOW_FAILURES.DRIVER);
