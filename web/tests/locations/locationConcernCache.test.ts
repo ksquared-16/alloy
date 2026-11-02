@@ -57,26 +57,37 @@ describe("Location concern caches", () => {
         expect(peekLocationOwnedSetup(orgId, locationId)).not.toBeNull();
     });
 
-    it("D-T6: a location's tour rules include the organization-wide rules that generate its slots", async () => {
-        vi.stubGlobal(
-            "fetch",
-            vi.fn(async () =>
-                new Response(
-                    JSON.stringify({
-                        rules: [
-                            { id: "org-wide", location_id: null, is_active: true },
-                            { id: "elsewhere", location_id: "site-other", is_active: true },
-                        ],
-                    }),
-                    { status: 200, headers: { "Content-Type": "application/json" } },
-                ),
-            ),
-        );
-        const { snapshot } = await loadLocationTourRules(orgId, locationId);
-        expect(snapshot.rules.map((r) => r.id)).toEqual(["org-wide"]);
-        // Inherited availability is availability: the location is configured for tours.
-        const setup = await loadLocationOwnedSetup(orgId, locationId, { force: true });
-        expect(setup.snapshot.toursConfigured).toBe(true);
+    /*
+     * D-T6, as decided. The S3 contract (e637db1f1) inherited organization-wide rules into every location; the
+     * user-authorized Tours feedback of 2026-10-29 20:09 UTC (sprint OPWORK_2CEA84351D90_SPRINT_EB9A9359C92B,
+     * slice tours-feedback-location-only 4c816888b) made Tours location-specific, and aa1cf6b05 states it for this
+     * cache: "the location concern cache return[s] own rules only". Legacy organization-wide rules stay stored;
+     * they neither appear here nor make a location configured.
+     */
+    it("D-T6: a location's tour rules are its own; legacy organization-wide rules neither appear nor configure it", async () => {
+        const rulesResponse = (rules: unknown[]) => vi.fn(async () =>
+            new Response(JSON.stringify({ rules }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+        vi.stubGlobal("fetch", rulesResponse([
+            { id: "org-wide", location_id: null, is_active: true },
+            { id: "elsewhere", location_id: "site-other", is_active: true },
+        ]));
+        const legacyOnly = await loadLocationTourRules(orgId, locationId);
+        expect(legacyOnly.snapshot.rules.map((r) => r.id)).toEqual([]);
+        // No schedule of its own: the location is not configured for tours, whatever the organization holds.
+        const legacySetup = await loadLocationOwnedSetup(orgId, locationId, { force: true });
+        expect(legacySetup.snapshot.toursConfigured).toBe(false);
+
+        resetLocationConcernCachesForTests();
+        vi.stubGlobal("fetch", rulesResponse([
+            { id: "org-wide", location_id: null, is_active: true },
+            { id: "own", location_id: locationId, is_active: true },
+            { id: "elsewhere", location_id: "site-other", is_active: true },
+        ]));
+        const own = await loadLocationTourRules(orgId, locationId);
+        expect(own.snapshot.rules.map((r) => r.id)).toEqual(["own"]);
+        const ownSetup = await loadLocationOwnedSetup(orgId, locationId, { force: true });
+        expect(ownSetup.snapshot.toursConfigured).toBe(true);
     });
 
     it("caches access members and publishes Continuity invalidation", async () => {

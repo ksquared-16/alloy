@@ -166,8 +166,6 @@ async function fetchTourRulesNetwork(
     if (!response.ok) {
         throw new Error(json.error ?? "Tour availability could not be loaded.");
     }
-    // Organization-wide rules (null location) generate slots here too (D-T6): they are part of this
-    // location's tour availability, shown as inherited, never hidden.
     // The location's own rules only — Tours is location-specific (legacy organization-wide rules stay stored, unshown).
     const rules = (json.rules ?? []).filter((rule) => rule.location_id === locationId);
     return {
