@@ -427,7 +427,9 @@ async function cascadeRefusal(db: SupabaseClient, draftIds: string[]): Promise<s
     for (const d of CASCADE_DEPENDENTS) {
         const parents = d.parent === "draft" ? draftIds : [IDS[d.parent]];
         if (!parents.length) continue;
-        const found = await rows(db, d.table, (q) => q.in(d.column, parents), "id");
+        /* Project the foreign-key column itself: it exists on every dependent by definition, while `id` does not —
+         * join tables such as customer_tags and location_tags have none, and selecting it fails the read (42703). */
+        const found = await rows(db, d.table, (q) => q.in(d.column, parents), d.column);
         if (found.length) return `${found.length} ${d.table} row(s) depend on the fixture by ${d.column} (ON DELETE CASCADE)`;
     }
     /* Foreign siblings: rows under the household the fixture does not own would cascade with it. */
