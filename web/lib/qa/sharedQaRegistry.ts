@@ -96,6 +96,44 @@ export const QA_STRUCTURE = Object.freeze({
 /** Fixture UUID namespace for Documents authz vendor SQL (hex-only). */
 export const QA_AUTHZ_FIXTURE_UUID_PREFIX = "aa000000-";
 
+/**
+ * Surfaces c4 run-owned room-Uses fixture (OPWORK_FAACCA6079AD_SPRINT_6E76007E732B).
+ *
+ * TWO rows in QA Shared, both in their own `ac000000-` namespace: one child assignment category and
+ * one classroom under the permanent QA North site whose configured `space_uses` names it. Existing
+ * rooms are never touched (Room N/S 584637 carry no ownership marker). Firefly is never a target —
+ * a Firefly room was proposed and WITHDRAWN (it is `FORBIDDEN_QA_ORG_IDS`). Hosted execution is
+ * separately approved and registered by the platform owner; this module never writes.
+ */
+export const QA_SURFACES_FIXTURE_UUID_PREFIX = "ac000000-";
+export const QA_SURFACES_ROOM_USES_FIXTURE = Object.freeze({
+  org: "qa_shared",
+  site: "qa_north",
+  site_id: "21c9be10-f6e9-4048-ab4c-939ddbe0f0b7",
+  category_id: "ac000000-0000-4000-8000-000000000301",
+  category_key: "qa_surfaces_room_use",
+  room_id: "ac000000-0000-4000-8000-000000000311",
+  marker: "surfaces_c4_room_uses",
+  paths: Object.freeze({
+    ensure: "certification/fixtures/qa-surfaces-room-uses-ensure.sql",
+    reset: "certification/fixtures/qa-surfaces-room-uses-reset.sql",
+    census: "certification/qa-shared/surfaces-room-uses-census.sql",
+    /** The isolated executor census program (`census count=<n>`), distinct from the read_census query above. */
+    fixture_census: "certification/fixtures/qa-surfaces-room-uses-census.sql",
+  }),
+  /** npm scripts the registered reconciliation runs (`npm run --silent <runner>` in web/). */
+  runners: Object.freeze({
+    ensure: "dev:qa:surfaces-room-uses-fixture-ensure",
+    reset: "dev:qa:surfaces-room-uses-fixture-reset",
+    census: "dev:qa:surfaces-room-uses-fixture-census",
+  }),
+  sha256: Object.freeze({
+    ensure: "95a4906215c04c121c3cbf4bd2ae281e0d06f3365d155fe0ad72f8cca476c139",
+    reset: "7fc6f68a588024c946717589050666e6e91fe20c8b71fcce2469d9ef6bb2c349",
+    census: "6d35ea1c8668a7e923f2b534285b607b03707cfc1941e773e061e86e1ff91a80",
+  }),
+} as const);
+
 export const QA_AUTHZ_VENDOR_IDS = Object.freeze({
   v1: "aa000000-0000-4000-8000-000000000001",
   v2: "aa000000-0000-4000-8000-000000000002",

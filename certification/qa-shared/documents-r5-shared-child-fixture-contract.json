@@ -1,0 +1,183 @@
+{
+ "schema": "alloy.documents_r5.shared_child_fixture_contract.v1",
+ "status": "REVIEWED FIXTURE CONTRACT FOR THE REGISTRATION OWNER (HostCapacity / Vacilando shared QA registry). Prepared 2026-10-30 by lane_aa660dc9554d, run erun2_0e90d18602014572, objective OPWORK_AA660DC9554D_SPRINT_C4FDA4F0FE93. Local authoring and tests only: nothing registered, provisioned, applied or run against any database. The Documents lane changed no Vacilando file, registry, pin or profile.",
+ "to_owner": "HostCapacity (shared QA runner / registry framework, PR451): lib/reconciliation-registry.mjs, lib/qa-plan-registry.mjs, lib/hosted-fixture-safety.mjs",
+ "why": "R5 shared-child preservation is unproven on hosted: no product route attaches a second lead to an existing household (measured on qar_8fb0e1ffabcf; R1-R2-R5-HOSTED-CERTIFICATION.md). Proven locally only (web/tests/admin/opportunity/leadDeletionChildOnlySubmissions.test.ts).",
+ "precondition": {
+  "rule": "pin the bytes on staging, never lane HEAD: these files must merge to staging through the normal Director-released promotion first",
+  "re_verify_after_merge": "recompute every sha256 below at the merge commit; any difference means re-pin from the merged bytes, not from this file"
+ },
+ "files": {
+  "ensure_fixture": {
+   "path": "certification/fixtures/qa-documents-shared-child-ensure.sql",
+   "sha256": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4"
+  },
+  "reset_fixture": {
+   "path": "certification/fixtures/qa-documents-shared-child-reset.sql",
+   "sha256": "afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5"
+  },
+  "runner": {
+   "path": "web/scripts/qaDocumentsSharedChildFixture.mjs",
+   "sha256": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16"
+  },
+  "census": {
+   "path": "certification/qa-shared/documents-r5-shared-child-residue-census.sql",
+   "sha256": "87d96cdd67eba0e2fe095170437dd49dccb7cf2ce5384397792d8cedb287adfd"
+  },
+  "invariant": {
+   "path": "certification/invariants/documents-r5-shared-child-fixture.sql",
+   "sha256": "dbc14d0e270de9a7d32aa4132404cd14e94b1e9b01d6949b772c61be883df0ac"
+  }
+ },
+ "registrations": [
+  {
+   "file": "lib/reconciliation-registry.mjs",
+   "key": "qa_documents_shared_child_ensure",
+   "description": "Seed the Documents R5 shared-child subject fixture (ac000000- household, two children, two leads on it, one child on both) in the frozen QA Shared org for the open QA run.",
+   "runner": "dev:qa:documents-shared-child-ensure",
+   "environments": [
+    "staging"
+   ],
+   "runner_path": "web/scripts/qaDocumentsSharedChildFixture.mjs",
+   "runner_sha256": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
+   "supportsDryRun": false,
+   "frozen_context": {
+    "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+   },
+   "fixture_safety": "qa_documents_shared_child (proposed; see fixture_safety_profile)",
+   "qa_plan": "authz_q1",
+   "purpose": "documents_r5_shared_child",
+   "apply_env": {
+    "DRY_RUN": "0",
+    "CERT_FIXTURE_APPLY": "1",
+    "SYNTHETIC_ONLY": "1"
+   },
+   "fixture_path": "certification/fixtures/qa-documents-shared-child-ensure.sql",
+   "fixture_sha256": "e4613956f0a106e1576a87a4c0671747be11979d96b15cae10582cf612e376e4",
+   "result_shape": [
+    "seeded",
+    "failed"
+   ]
+  },
+  {
+   "file": "lib/reconciliation-registry.mjs",
+   "key": "qa_documents_shared_child_reset",
+   "description": "Remove whatever is left of the Documents R5 shared-child subject fixture (exact ac000000- ids) in the frozen QA Shared org; asserts the namespace empty in the same transaction.",
+   "runner": "dev:qa:documents-shared-child-reset",
+   "environments": [
+    "staging"
+   ],
+   "runner_path": "web/scripts/qaDocumentsSharedChildFixture.mjs",
+   "runner_sha256": "38064833fe901542dbda768a4c0797f7bcadfd67e17d7f6e89266a3a77e6dd16",
+   "supportsDryRun": false,
+   "frozen_context": {
+    "ORG_ID": "4acc9386-c485-486f-aa1f-05d83499d142"
+   },
+   "fixture_safety": "qa_documents_shared_child (proposed; see fixture_safety_profile)",
+   "qa_plan": "authz_q1",
+   "purpose": "documents_r5_shared_child",
+   "apply_env": {
+    "DRY_RUN": "0",
+    "CERT_FIXTURE_APPLY": "1",
+    "SYNTHETIC_ONLY": "1"
+   },
+   "fixture_path": "certification/fixtures/qa-documents-shared-child-reset.sql",
+   "fixture_sha256": "afcf43d977a6e8bcd72984afa8b7ba288fedaf9bfe46ca1c06ea15e1954166e5",
+   "result_shape": [
+    "reset",
+    "failed"
+   ]
+  },
+  {
+   "file": "lib/qa-plan-registry.mjs",
+   "plan": "authz_q1",
+   "change": "fixture_reconciliations += { documents_shared_child_ensure: 'qa_documents_shared_child_ensure', documents_shared_child_reset: 'qa_documents_shared_child_reset' }",
+   "residue": "until a re-pinned registered census carries the r5sc_* checks, ZERO_RESIDUE for this fixture is the supplementary census below (read from a NEW execution run; dedupe is run-scoped). Folding the six checks into documents-zero-residue-census.sql is a census re-pin decision for the owner; the historical 7957a51a binding stays immutable either way."
+  }
+ ],
+ "fixture_safety_profile": {
+  "proposed_key": "qa_documents_shared_child",
+  "shape": {
+   "idPrefix": "ac000000-",
+   "ownership": {},
+   "requireReplicaWindow": false
+  },
+  "why_not_synthetic": "the ensure INSERTs, so the synthetic profile (DELETE is the only write) refuses it by design; the reset alone also passes a synthetic-style profile with scopeVars = the nine id variables (measured below)",
+  "measured_with_installed_toolkit": {
+   "toolkit": "20261030-3bedabeea2a6",
+   "method": "lib/hosted-fixture-safety.mjs auditHostedFixture + hostedFixtureVerdict, read-only, on the files above",
+   "ensure": {
+    "qa_authz_vendors": "ok (5/5 deletes fixture-scoped)",
+    "proposed plain": "ok",
+    "proposed synthetic": "refused: writes other than run-scoped DELETE: insert (expected)"
+   },
+   "reset": {
+    "qa_authz_vendors": "ok (5/5)",
+    "proposed plain": "ok",
+    "proposed synthetic": "ok"
+   }
+  },
+  "observation_for_owner": "destructiveStatements() captures the table of `delete from public.<t>` as `public`, so a profile's ownership map can never match a schema-qualified DELETE. Not a problem for these profiles (ownership {}), but any ownership-bearing profile is blind to qualified statements. Reported, not changed."
+ },
+ "fixture": {
+  "org": "QA Shared 4acc9386-c485-486f-aa1f-05d83499d142 only (literal guard outside dollar quotes); QA Secondary and every other org refused by the runner and the SQL",
+  "namespace": "ac000000-0000-4000-8000-0000000005xx, reserved to this fixture; disjoint from authz_q1 aa000000- (whose ensure/reset delete every aa000000- opportunity / work unit) and D4 household ab000000- (whose ensure/reset delete every ab000000- customer / member)",
+  "rows": {
+   "household H": "ac000000-0000-4000-8000-000000000501 (customers)",
+   "child SHARED": "ac000000-0000-4000-8000-000000000521 (customer_members, relationship child, on H)",
+   "child ONLY_A": "ac000000-0000-4000-8000-000000000522 (customer_members, relationship child, on H)",
+   "work unit": "ac000000-0000-4000-8000-000000000531 under the PERMANENT QA D1 department 0704e72c-… (never created or deleted)",
+   "lead A": "ac000000-0000-4000-8000-000000000541 (opportunities, customer H)",
+   "lead B": "ac000000-0000-4000-8000-000000000542 (opportunities, customer H)",
+   "participations": "…551 A→SHARED, …552 A→ONLY_A, …553 B→SHARED (opportunity_customer_members)"
+  },
+  "marker": "metadata: qa_run_id, fixture_family = documents_r5_shared_child, fixture_key, external_source = alloy_qa_fixture",
+  "deletes": "five per file, each `where org_id = :'org' and id in (<exact \\set ids>)`; no prefix delete; no delete of documents, storage, Forms rows, person_health_facts, mutation_events, workflow_events, process_instances, departments or orgs",
+  "transaction": "one BEGIN/COMMIT; every guard before it; psql ON_ERROR_STOP, so a refusal or a failure part-way leaves the database unchanged",
+  "refusals_both": [
+   "org not QA Shared",
+   "qa_run_id missing / not qar_<12 hex>",
+   "a fixture id exists in another org",
+   "an ac000000- row without this fixture's family marker",
+   "a document on a fixture subject (leave through the audited document delete)",
+   "a form submission naming a fixture subject (leave through the product lead deletion or qa_documents_forms_residue_reset)",
+   "an Enrollment journey on a fixture child / participation"
+  ],
+  "refusals_ensure_only": [
+   "the permanent QA D1 department is missing",
+   "the rows belong to ANOTHER QA run (reset first: one live tenant at a time)"
+  ],
+  "idempotency": "ensure: delete-by-id then insert, safe to repeat within its run; reset: any subset of rows (none, after lead A, after both leads, never-started) is cleaned the same way; a second reset removes nothing and succeeds",
+  "zero_residue": "reset asserts, inside its transaction, that no ac000000- row remains in customers / customer_members / work_units / opportunities / opportunity_customer_members in ANY org, and raises (rolling back) otherwise; the runner refuses a result with residue != 0. The supplementary census measures the same plus submissions and documents naming a fixture subject.",
+  "recovery": "the reset is not limited to the open run's rows (a run that never reached its reset would otherwise strand them); it returns removed_run_ids so the governed result records whose rows it took",
+  "retained_by_design": "audit history of the product lead deletions (mutation_events / workflow_events); never written by the fixture",
+  "runner_gates_before_any_connection": [
+   "mode ensure|reset",
+   "CERT_FIXTURE_APPLY=1 and DRY_RUN=0",
+   "SYNTHETIC_ONLY=1",
+   "production project ref refused; any project ref other than staging refused",
+   "FIXTURE_SHA256 pin must match the bytes when set",
+   "ORG_ID QA Shared only (Firefly and QA Secondary refused)",
+   "QA_RUN_ID qar_<12 hex>",
+   "trusted DATABASE_URL / DIRECT_DATABASE_URL only"
+  ]
+ },
+ "proof": {
+  "local_tests": {
+   "web/tests/certification/qaDocumentsSharedChildFixture.test.ts": "30/30 via vac run test: invariant binding (every DML and guard, substituted), ownership (org AND exact ids, no prefix, no preserved table), one transaction, QA-Shared and run guards outside dollar quotes, no psql escape hatch, namespace disjointness against authz_q1 and D4 fixtures, census read-only + coverage, 14 runner refusals before any connection, npm scripts",
+   "certification/documents-v1/test_r4_r2r5_matrix.py": "14/14 (python3 -I -B): driver ids bound to the ensure \\set values; R5 matrix fails when lead deletion takes the shared child"
+  },
+  "rollback_invariant": {
+   "path": "certification/invariants/documents-r5-shared-child-fixture.sql",
+   "state": "PREPARED, NOT RUN — needs database.run_rollback_invariant_test on an isolated certenv (governed; no live database was used here)",
+   "cases": [
+    "1 clean state: no ensure guard fires",
+    "2 ensure twice: 9 rows, SHARED on two leads, both leads on H in QA D1, record numbers assigned, unrelated aa000000-/ab000000-/ordinary rows untouched",
+    "3 each refusal guard true on the state it refuses (other run, bound submission, foreign namespace row) and false again after",
+    "4 partial product teardown of lead A, then reset twice: zero residue, idempotent, unrelated rows untouched",
+    "5 a fixture id in another org: guard fires, and no reset delete reaches it"
+   ]
+  }
+ },
+ "hosted_sequence": "see certification/documents-v1/R2-R5-PROOF-SUPPORT.md §Hosted action packet"
+}

@@ -200,6 +200,11 @@ export function durableRecordContextOptions(
             continue;
         }
 
+        // A domain-projection process (Billing, Assignments) is NAVIGATION ONLY: its `Go to` opens the
+        // projection's Work View. It has no published stage composition to select inside the record,
+        // and an option addressed by one would resolve against nothing.
+        if (context.projection_domain) continue;
+
         const memberships = context.operational_memberships ?? [];
         if (memberships.length > 0) {
             // One option per COHORT. Two cohorts of one process are two operator intents, and the

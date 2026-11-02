@@ -248,6 +248,7 @@ export async function GET(request: NextRequest) {
             grain: "child",
             id: subjectId,
             personId: composed.subject.personId,
+            projection: { userId: ctx.userId ?? null, householdId: composed.subject.householdId ?? null },
             // A child has no employment and therefore no compensation. Passed
             // explicitly as false rather than omitted, so the field is never a
             // question of what a default happened to be.
@@ -338,6 +339,8 @@ async function contextOptionsFor(input: {
     /** Resolved from the caller's capabilities, never assumed. */
     canReadCompensation: boolean;
     scheduleSiteId?: string | null;
+    /** A child's Billing / Assignments membership is read as THIS caller, for its own household. */
+    projection?: { userId: string | null; householdId: string | null } | null;
 }) {
     try {
         const contexts = await loadSubjectContexts({
@@ -347,6 +350,7 @@ async function contextOptionsFor(input: {
             subject: { grain: input.grain, id: input.id, personId: input.personId },
             canReadCompensation: input.canReadCompensation,
             scheduleSiteId: input.scheduleSiteId ?? null,
+            projection: input.projection ?? null,
         });
         // Two projections of ONE enumeration: what may be SELECTED on the record, and where related
         // work may NAVIGATE. Both read the same `SubjectContext[]`, so they cannot disagree about

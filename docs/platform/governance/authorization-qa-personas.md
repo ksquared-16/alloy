@@ -1,14 +1,18 @@
 ---
 owner: platform
 status: proposed
-last_reviewed: 2026-10-28
+last_reviewed: 2026-10-30
 supersedes: []
 ---
 
 # Authorization QA: governed hosted personas and fixtures
 
-**Status: proposed. Revision 3 (2026-10-28), awaiting Director approval.** Revision 2 (sha256 `a1ad543a…eff162`,
-Alloy PR #1566) is the contract the installed Vacilando `authz_q1` plan pins. Revision 3 adds three restricted personas,
+**Status: proposed. Revision 4 (2026-10-30).** Revision 4 adds exactly one restricted persona (`scoped_author`), one pooled
+identity (`qa-pool-09`) and corrects one Revision 3 matrix row; it changes no existing persona, grant, scope or refusal (§12).
+The persona and its identity were approved by the operator on 2026-10-30 for provisioning after this contract is registered.
+Revision 3 (sha256 `e6d619f2…3b03b6e`, Alloy PR #1616) is the contract the installed Vacilando `authz_q1` plan pins
+until the registry is re-pinned to these bytes. Revision 2 (sha256 `a1ad543a…eff162`,
+Alloy PR #1566) was the previous pin. Revision 3 adds three restricted personas,
 three pooled identities and the Forms residue obligations; it changes no existing persona, grant, scope or refusal (§11).
 Revision 1 (sha256 `734a502f…c51f9`) is superseded. Revision 2 adopts the approved **shared QA operating model**
 (Shared QA Tenant Architecture V1, installed toolkit `95f887719db0`). It does not change a single authorization
@@ -58,12 +62,13 @@ The registry is the toolkit's `authz_q1` plan. It is frozen and code-reviewed. I
 | OCR-authorized operator | `ocr` | QA Shared | pooled | `qa_ocr` | `portal.access`, `documents.read`, `processing.operate` | all |
 | department-restricted operator | `scoped_ops` | QA Shared | pooled | `qa_scoped_ops` | `portal.access`, `documents.read`, `processing.operate`, `crm.customers.read` | department **restricted to D1**; site all |
 | department-restricted Forms operator | `scoped_forms` | QA Shared | pooled | `qa_scoped_forms` | `portal.access`, `documents.read`, `crm.customers.read`, `forms.submissions`, `forms.submissions.confirm` | department **restricted to D1**; site all |
+| department-restricted Forms author (Revision 4) | `scoped_author` | QA Shared | pooled (`qa-pool-09`) | `qa_scoped_author` | `portal.access`, `documents.read`, `crm.customers.read`, `forms.author` | department **restricted to D1**; site all |
 | Medical viewer | `health_viewer` | QA Shared | pooled | `qa_health_viewer` | `portal.access`, `documents.read`, `health.view` | all |
 | first-decision document reviewer | `doc_writer` | QA Shared | pooled | `qa_doc_writer` | `portal.access`, `documents.read`, `documents.write` | all |
 
-**Identities.** Ten reusable managed identities:
+**Identities.** Eleven reusable managed identities:
 - **Two dedicated organization administrators.** `qa-shared-actor@example.com` and `qa-secondary-admin@example.com` hold `admin` permanently in exactly their own org. Each is the explicit actor of every audited access change in that org, so the W-18 delegation ceiling bounds the toolkit exactly as it bounds a human administrator.
-- **Eight pooled identities.** `qa-pool-01` … `qa-pool-08@example.com`, all in QA Shared (`06`–`08` added by Revision 3 for the three restricted personas). They hold **nothing** between runs. A run leases one per pooled persona, exclusively, for the run's life.
+- **Nine pooled identities.** `qa-pool-01` … `qa-pool-09@example.com`, all in QA Shared (`06`–`08` added by Revision 3 for the three restricted personas; `09` added by Revision 4 for `scoped_author`, and only for it). They hold **nothing** between runs. A run leases one per pooled persona, exclusively, for the run's life.
 
 Every identity belongs to exactly one organization, forever, because a second membership resolves to no access at all (`resolveAdminAccessCore`, W-22). No Person record is created; each identity carries a display name.
 
@@ -92,7 +97,8 @@ boundary through Alloy's own gates; nothing here is a parallel permission model.
 
 | Persona | Must succeed (positive) | Must be refused (negative) | Gate that decides |
 |---|---|---|---|
-| `scoped_forms` | Forms actions on a QA **D1** subject: create a submission, submit, generate the document, manual-link, confirm-linkage, mint a packet link, POS compose; read and list D1 submissions | the same actions on a QA **D2** opportunity or an out-of-scope child-only subject → **404, naming nothing**; out-of-scope list filters → `200 []`; form authoring (`forms.author` absent) → 403; medical answers withheld (`health.view` absent) | `requireFormsCapability` (`lib/access/formsAuthority.ts`) **then** the subject-scope filter — so the 404 is a scope refusal, not a capability one (`scoped_ops` cannot show this: it has no `forms.*`) |
+| `scoped_forms` | Forms actions on a QA **D1** subject: create a submission, submit, generate the document, manual-link, confirm-linkage, mint a packet link; read and list D1 submissions | the same actions on a QA **D2** opportunity or an out-of-scope child-only subject → **404, naming nothing**; a write whose **destination** is out of scope (manual-link onto D2; a packet link whose metadata or enrollment selection names a D2 / out-of-scope subject) → **404, nothing written**; out-of-scope list filters → `200 []`; form authoring, POS compose and the composer roster (`forms.author` absent) → 403 — a capability refusal, never counted as scope proof; medical answers withheld (`health.view` absent) | `requireFormsCapability` (`lib/access/formsAuthority.ts`) **then** the subject-scope filter — so the 404 is a scope refusal, not a capability one (`scoped_ops` cannot show this: it has no `forms.*`) |
+| `scoped_author` | as a D1 author: the composer roster of a D1 lead (its own household's children and recipients); POS compose anchored on the D1 lead with its own child and recipient; a form public link launched from the D1 lead and a subject-less intake link; editing a subject-less link | the roster of a D2 lead or an out-of-scope child; compose anchored on D2, or on D1 naming another household's child (alone or anywhere in the list) or recipient; a link whose metadata names a D2 prefill source or another household's child; editing a link that names a D2 subject, or re-pointing one at it → **404, naming nothing, nothing written** | `requireFormsCapability(forms.author)` **then** `formsDestinationInActorScope` (`lib/forms/formsDestinationScope.ts`): every named subject in scope, every child / recipient in the in-scope lead's own household |
 | `health_viewer` | medical answers present on a Forms submission; medical documents and requirements readable | `health_fact.verify_immunization` and every other Medical mutation (`health.manage` absent) → 403; a document review (`documents.write` absent) → 403 | the health action registry (`health.manage`) and the review route (`documents.write`) — today every `health.view` holder also has `health.manage` |
 | `doc_writer` | the FIRST review decision on a pending version (accept, or reject with a reason); validity dates on the current version; a renewal upload | re-review or reopen of a decided version → **403 `REREVIEW_NOT_AUTHORIZED`** with `required_permission: processing.documents.manage`, the version unchanged; a medical-class document (`health.view` absent) is not reviewable | `app/api/admin/documents/[id]/review/route.ts` (D7) — today every `documents.write` holder also has `processing.documents.manage` |
 
@@ -150,7 +156,7 @@ Product-API fixtures exercise the real upload path. Synthetic data only; custome
 **Retained by design, reported as data and never as residue:**
 - immutable audit history: `mutation_events` written by the audited access functions, and the D1a `workflow_events` audit rows (`document_link_issued`, `document_delete_authorized`, `document_uploaded`);
 - the two permanent organizations and their structure;
-- the seven identities, with no active temporary access;
+- the permanent and pooled identities (eleven under Revision 4), with no active temporary access;
 - the actors' permanent `admin` memberships;
 - emptied, inactive `qa_*` role definitions;
 - ended health facts on deleted QA children (`person_health_facts` refuses DELETE; ending is the product's only disposal).
@@ -210,3 +216,25 @@ has no override flag. Hosted fixtures exist only as governed reconciliations.
 4. The zero-residue census adds five Forms / health checks and reports ended health facts on deleted children as retained data (§6). The 15 existing questions are unchanged.
 5. **Unchanged:** every Revision 2 persona, grant, scope and refusal requirement; QA Shared / QA Secondary; the lifecycle.
 6. **Pin drift recorded.** Staging carries this file as `c3707ff7…`, not the pinned `a1ad543a…`. The difference is one paragraph that commit `154f6bcbc` (an Access fix) added to §3 after Revision 2 was approved: `remove_member_access_audited` also deletes `user_access_profiles`. Revision 3 includes that paragraph. The toolkit pin moves to the merged Revision 3 bytes.
+
+## 12. Revision 4 changes (from Revision 3)
+
+1. One restricted persona, `scoped_author`, with custom role `qa_scoped_author` and exactly `portal.access`, `documents.read`,
+   `crm.customers.read` and `forms.author`, restricted to department **D1** of QA Shared (sites all). §3a states what it must
+   be allowed and refused. Revision 3 dropped `forms.author` from `scoped_forms` because authoring was not subject-scoped;
+   Alloy `e1c511967` showed that POS compose, the composer roster and form public-link mint / edit do name subjects (an
+   anchor, children, recipients, a prefill source) and now scopes them. Proving that boundary needs a department-restricted
+   persona that holds `forms.author`; `scoped_forms` stays without it, so its refusal there remains a capability control.
+2. One pooled identity, `qa-pool-09@example.com`, used only for `scoped_author`. Like every pooled identity it holds nothing
+   between runs: a run leases it, grants exactly the row above through the audited functions, and `qa_run_close` signs it
+   out and removes its membership and access profile (`remove_member_access_audited`).
+3. **Correction.** Revision 3 §3a listed "POS compose" as a `scoped_forms` positive case. `scoped_forms` holds no
+   `forms.author` and POS compose is `forms.author`, so that case could never pass; it now sits with `scoped_author`, and
+   `scoped_forms`' row names its compose / roster refusal as capability, not scope. The write-destination refusals the same
+   fix added for `forms.submissions` routes (manual-link target, packet-link metadata and enrollment selection) are added to
+   `scoped_forms`' negative column.
+4. **Unchanged:** every Revision 3 persona, grant, scope and refusal requirement other than the correction in 3; QA Shared /
+   QA Secondary; fixtures, lifecycle and the zero-residue census. The R5 shared-child fixture
+   (`certification/qa-shared/documents-r5-shared-child-fixture-contract.json`) is registered separately.
+5. **Pin.** The toolkit pin moves from Revision 3 (`e6d619f2…`) to the merged Revision 4 bytes; until then `scoped_author`
+   does not exist and no `qa-pool-09` access may be granted.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsReadScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope } from "@/lib/forms/formsDestinationScope";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -121,9 +122,17 @@ export async function POST(request: NextRequest) {
         const id = typeof a.entity_id === "string" ? a.entity_id : "";
         if (!isLaunchEntityType(t) || !UUID_RE.test(id)) return jsonError("anchor.entity_type/entity_id invalid", 400);
         const resolved = await resolveAnchorContext(supabase, ctx.orgId, t, id);
-        // R2: packets are composed only for an anchor inside the caller's department/site scope (its opportunity when known).
+        // R2: packets are composed only for an anchor inside the caller's department/site scope (its opportunity when known),
+        // and only for children and recipients of that anchor's own household roster — every one of them, not just the anchor.
         const anchorSubject = resolved.opportunity_id ? { opportunity_id: resolved.opportunity_id } : namedSubject(t, id);
-        if (!anchorSubject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), anchorSubject))) return jsonError("Not found", 404);
+        if (!anchorSubject) return jsonError("Not found", 404);
+        const destinationOk = await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), {
+            subjects: [anchorSubject],
+            childIds,
+            recipientIds,
+            rosterOpportunityId: resolved.opportunity_id,
+        });
+        if (!destinationOk) return jsonError("Not found", 404);
         anchor = { entity_type: t, entity_id: id, opportunity_id: resolved.opportunity_id, customer_id: resolved.customer_id };
     } else {
         if (childIds.length > 0 || recipientIds.length > 0) return jsonError("anchor is required when selecting children/recipients", 400);

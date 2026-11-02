@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { filterLinksInActorScope, formsReadScope, formsSubjectInActorScope, namedSubject } from "@/lib/forms/formSubmissionScope";
+import { formsDestinationInActorScope, linkMetadataDestination } from "@/lib/forms/formsDestinationScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
@@ -217,6 +218,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         clientMetadata.default_work_unit_id = workUnitId;
     }
 
+    // R2: subjects named by the caller's OWN metadata are destinations too — the public prefill and the submission's
+    // subject are derived from them (`source_entity_*`, opportunity, selected child, recipient). Without a launch they
+    // must be in scope on their own; with one, they are checked in the launch branch against its roster.
+    const launchGiven = body.launch_from_entity !== undefined && body.launch_from_entity !== null;
+    if (!launchGiven && !(await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), linkMetadataDestination(clientMetadata)))) {
+        return jsonError("Not found", 404);
+    }
+
     const formRow = form as { key: string; metadata?: Record<string, unknown> };
     const metadata = await mergePublicLinkMetadataForCreate(supabase, {
         orgId: ctx.orgId,
@@ -235,6 +244,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // R2: a link prefilled from a record only for a record inside the caller's department/site scope.
         const launchSubject = namedSubject(parsedLaunch.entityType, entityId);
         if (!launchSubject || !(await formsSubjectInActorScope(supabase, ctx.orgId, await formsReadScope(), launchSubject))) return jsonError("Not found", 404);
+        if (!(await formsDestinationInActorScope(supabase, ctx.orgId, await formsReadScope(), linkMetadataDestination(clientMetadata, launchSubject)))) {
+            return jsonError("Not found", 404);
+        }
 
         const mint = await mintExistingRecordFormLinkForAdmin({
             supabase,

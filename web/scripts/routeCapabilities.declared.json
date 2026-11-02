@@ -4261,7 +4261,10 @@
     },
     "app/api/admin/pos/packets/roster/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "R2 (Documents V1 Forms subject scope). The household roster (children with dates of birth, parent recipients) is read only by the Packet Composer, whose compose route is forms.author; it was admitted by an admin session alone. The anchor is also scoped to the caller's department/site (404 out of scope), the same rule compose applies."
       }
     },
     "app/api/admin/pos/packets/route.ts": {

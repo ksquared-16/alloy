@@ -1,0 +1,50 @@
+{
+ "schema": "alloy.documents_r2.scoped_author_persona_proposal.v1",
+ "status": "LOCAL PROPOSAL — persona-contract Revision 4 delta, NOT applied. Prepared 2026-10-30 by lane_aa660dc9554d (run erun2_ab8cf4a1e3fdac9f, objective OPWORK_AA660DC9554D_SPRINT_C4FDA4F0FE93). No grant, role, identity, credential, session or hosted persona was created; the toolkit registry was not edited.",
+ "why_a_separate_file": "docs/platform/governance/authorization-qa-personas.md (Revision 3) is pinned by the installed authz_q1 plan (contract sha256 e6d619f2796c099b8a57592e6a556e58150537a3175388f48eb250e133c03b6e). Editing it in place would break that pin for every run until re-pinned. Revision 3 and the R4 receipts on qar_bc811ffc7da1 stay exactly as certified; this delta becomes Revision 4 only when the contract owner (Director approval) and the registry owner (HostCapacity) adopt it together.",
+ "to_owners": {
+  "contract": "persona contract owner, docs/platform/governance/authorization-qa-personas.md (Director-approved revisions)",
+  "registry": "HostCapacity: lib/qa-plan-registry.mjs authz_q1 (custom_roles, personas, pool identities, contract pin)"
+ },
+ "revision_3_defect_corrected": "Revision 3 §3a lists 'POS compose' and 'mint a packet link' as scoped_forms POSITIVE cases, but scoped_forms holds no forms.author and POS compose is gated on forms.author (app/api/admin/pos/packets/compose/route.ts, routeCapabilities.declared.json). That row can never pass and a refusal there would be capability (403), not scope. Packet-link minting (forms.submissions) stays with scoped_forms; every forms.author surface moves to scoped_author.",
+ "persona": {
+  "persona_key": "scoped_author",
+  "label": "department-restricted Forms author",
+  "org": "qa_shared (4acc9386-c485-486f-aa1f-05d83499d142)",
+  "custom_role": "qa_scoped_author",
+  "grants": ["portal.access", "documents.read", "crm.customers.read", "forms.author"],
+  "scope": {"department": "restricted to QA D1 (0704e72c-f73d-44b2-87d9-89924e222464)", "site": "all"},
+  "identity": "qa-pool-09@example.com (new pooled identity; holds nothing between runs, leased for one run)",
+  "why_these_grants": "the smallest set that reaches every forms.author destination gate: POS compose, the composer roster, form public-link mint and PATCH. No forms.submissions (packet-link mint and submission writes are scoped_forms' boundary), no health.view (medical withholding stays measured by scoped_forms), no documents.write.",
+  "catalog": "every key already exists in permission_definitions (forms.author is the declared capability of the compose, roster, preview, requirements and public-link routes)",
+  "reserved_refusals": "unchanged §3 rules: qa_ role prefix, no owner/admin/ops/manager, one membership, no key outside this row"
+ },
+ "matrix_3a_row": {
+  "must_succeed": [
+   "GET /api/admin/pos/packets/roster for the in-scope QA D1 lead: its own household's children and recipients",
+   "POST /api/admin/pos/packets/compose anchored on the D1 lead with its own child and recipient (201; the packet is run-keyed qa_<run>_)",
+   "POST /api/admin/forms/[form]/public-links launched from the D1 lead (201) and a subject-less intake link (201)",
+   "PATCH /api/admin/forms/[form]/public-links/[link] on a subject-less link (200)"
+  ],
+  "must_be_refused_404_names_nothing": [
+   "roster of the QA D2 lead, of an out-of-scope child",
+   "compose anchored on the D2 lead",
+   "compose on the D1 lead naming another household's child (alone, or second in the list)",
+   "compose on the D1 lead naming another household's recipient",
+   "public-link mint whose metadata names the D2 lead as existing-record prefill source",
+   "public-link mint launched from the D1 lead whose metadata selects another household's child (array, not only the first)",
+   "PATCH of a link that names the D2 lead",
+   "PATCH re-pointing a subject-less link's metadata at the D2 lead"
+  ],
+  "capability_controls_403": ["scoped_forms (no forms.author) on compose and roster — recorded as capability, never counted as scope proof"],
+  "gate_that_decides": "requireFormsCapability(FORMS_AUTHOR), then formsDestinationInActorScope (lib/forms/formsDestinationScope.ts, commit e1c511967)",
+  "local_proof": "web/tests/forms/formsWriteDestinationScope.test.ts (39/39; 21 fail without e1c511967); certification/documents-v1/test_r4_r2r5_matrix.py R2-authoring section"
+ },
+ "registry_delta_for_hostcapacity": {
+  "custom_roles": {"qa_scoped_author": {"label": "QA scoped Forms author", "grants": ["portal.access", "documents.read", "crm.customers.read", "forms.author"]}},
+  "personas": {"scoped_author": {"org": "qa_shared", "roles": ["qa_scoped_author"], "scope": "department restricted to QA D1 (same shape as scoped_forms)", "session": true}},
+  "pool": "qa_pool_09",
+  "contract_pin": "re-pin to the Revision 4 bytes after the contract owner merges them; until then authz_q1 stays on e6d619f2 and scoped_author does not exist"
+ },
+ "until_adopted": "the hosted R2-authoring section cannot run. The driver records each of its cases as FAIL 'persona session missing — not run'; R2 is not certified while any case is not run."
+}

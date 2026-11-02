@@ -165,6 +165,32 @@ export function resolveOperationalMemberships(params: {
 }
 
 /**
+ * Does this process offer a CHILD grain at the child's current position?
+ *
+ * True when any visible, resolvable child-grain lens of the process holds the child's stage (a
+ * stage-independent child lens holds every live participation, so it always answers true). This is
+ * the question that decides whether a child's process destination may fall back to the family grain:
+ * only when the process has NO child grain for where the child is does the child's own case answer
+ * for them. When a child lens covers the stage and still refuses the child, that refusal stands —
+ * substituting the family would present a family row as the child.
+ *
+ * Access is not an exception: a process the operator cannot reach offers nothing at any grain.
+ */
+export function processOffersChildGrainAt(
+    process: SearchConfiguredProcess,
+    stageKey: string | null,
+): boolean {
+    if (!process.operator_has_access) return false;
+    for (const view of process.work_views) {
+        if (view.visible_in_runtime === false) continue;
+        const grain = resolveLensRowGrain(view, process.stages);
+        if (!grain.ok || grain.grain !== "child") continue;
+        if (childMatchesLens({ stageKey }, view, { stageKeysForView: lensStageKeys })) return true;
+    }
+    return false;
+}
+
+/**
  * A child's membership was already decided by the provider, and not by an opportunity predicate — a
  * child row carries none of the fields those predicates read. So the question asked here is the one
  * the provider answered: is the child's effective stage in the lens's stage set (and a
