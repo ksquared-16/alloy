@@ -122,6 +122,12 @@ export type SubjectOperationalMembershipRef = {
     /** The record whose Focus Panel hosts the subject inside that view. */
     host_entity_id: string | null;
     /**
+     * The host's own entity type, when the membership states it. A domain-projection view hosts the
+     * DURABLE subject (`customer_members` / `customers`), not a case, so the case host a process
+     * context would supply is the wrong type for it. Absent: the subject's case host, as before.
+     */
+    host_entity_type?: string | null;
+    /**
      * THE WORK VIEW ROW IDENTITY — what the runtime selects on, and what its membership guard matches.
      *
      *   child grain    `process_instances.id`   the PARTICIPATION
@@ -204,6 +210,18 @@ export type SubjectContext = {
      * complete answer: the subject still exposes its entity contexts.
      */
     operational_memberships?: SubjectOperationalMembershipRef[] | null;
+    /**
+     * The subject participates in this process through MORE THAN ONE case. No case is chosen for
+     * them: destinations that would have to pick one are withheld rather than ordered into existence.
+     */
+    participation_ambiguous?: boolean;
+    /**
+     * Set on a DOMAIN-PROJECTION process context (Billing, Assignments). Such a process has no
+     * participations and no stages: the context exists only because a registered projection's cohort
+     * holds this subject, and it is navigation only — never a generic process destination and never a
+     * composition to select inside the record.
+     */
+    projection_domain?: "assignments" | "billing" | null;
     /**
      * THE SITE this context is operationally scoped to — `schedule` / `placement` only.
      *

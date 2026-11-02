@@ -1,0 +1,81 @@
+{
+ "schema": "alloy.documents.hosted_fixture_safety_qualified_delete_finding.v1",
+ "status": "FINDING + PROPOSED FIX ONLY — for HostCapacity (owner of lib/hosted-fixture-safety.mjs). Not implemented, not installed; the Documents lane edited no toolkit file. Measured 2026-10-30 against the installed toolkit (current -> b3c80db2e9aa) with a throwaway copy under /tmp for the proposed fix.",
+ "component": "lib/hosted-fixture-safety.mjs destructiveStatements() and auditSynthetic() preserved-table regex",
+ "defect": [
+  "destructiveStatements() matches `delete\\s+from\\s+([a-z_][a-z0-9_]*)`: for `delete from public.t` it captures the SCHEMA (`public`) as the table, so every ownership rule (profile.ownership, e.g. financial_subsidy_claims→program_id) is blind to schema-qualified DELETEs: `subsidy[].present` reads false and the rule passes vacuously.",
+  "a QUOTED qualified DELETE (`delete from \"public\".\"t\" …`) is not matched at all: it is invisible to org-wide detection, to fixture scoping and to the synthetic run-scope rule.",
+  "the synthetic profile's preserved-table regex `(?:public\\.)?${t}\\b` misses `\"public\".\"t\"` for the same reason."
+ ],
+ "reproduction": {
+  "how": "node <repro.mjs> (imports the installed module read-only; no database, no fixture executed)",
+  "script": "const lib = await import(\"/Users/vacilando/.local/share/alloy/toolkit/current/lib/hosted-fixture-safety.mjs\");\nconst profile = { idPrefix: \"fd000000-\", ownership: { financial_subsidy_claims: \"program_id\" }, requireReplicaWindow: false };\nconst cases = {\n  unqualified_scoped: \"delete from financial_subsidy_claims where org_id = :'org' and program_id = :'program';\",\n  qualified_scoped: \"delete from public.financial_subsidy_claims where org_id = :'org' and program_id = :'program';\",\n  qualified_org_wide: \"delete from public.financial_subsidy_claims where org_id = :'org';\",\n  quoted_qualified_org_wide: 'delete from \"public\".\"financial_subsidy_claims\" where org_id = :\\'org\\';',\n};\nfor (const [k, sql] of Object.entries(cases)) {\n  const stmts = lib.destructiveStatements(sql).map((d) => d.table);\n  const rep = lib.auditHostedFixture(sql, profile);\n  const v = lib.hostedFixtureVerdict(rep, profile);\n  console.log(JSON.stringify({ case: k, tables: stmts, subsidy_present: rep.subsidy[0].present, org_wide: rep.org_wide, ok: v.ok, failures: v.failures }));\n}\n// proposed regex, measured on the same inputs (not installed anywhere)\nconst proposed = (sql) => [...String(sql).matchAll(/delete\\s+from\\s+(?:only\\s+)?(?:\"?[a-z_][a-z0-9_]*\"?\\s*\\.\\s*)?\"?([a-z_][a-z0-9_]*)\"?[\\s\\S]*?;/gi)].map((m) => m[1]);\nfor (const [k, sql] of Object.entries(cases)) console.log(JSON.stringify({ case: k, proposed_tables: proposed(sql) }));\n",
+  "installed_results": [
+   {
+    "case": "delete from financial_subsidy_claims where org_id = :'org' and program_id = :'program';",
+    "tables": [
+     "financial_subsidy_claims"
+    ],
+    "ownership_rule_applied": true,
+    "verdict_ok": true
+   },
+   {
+    "case": "delete from public.financial_subsidy_claims where org_id = :'org' and program_id = :'program';",
+    "tables": [
+     "public"
+    ],
+    "ownership_rule_applied": false,
+    "verdict_ok": true
+   },
+   {
+    "case": "delete from public.financial_subsidy_claims where org_id = :'org';",
+    "tables": [
+     "public"
+    ],
+    "verdict_ok": false,
+    "failures": [
+     "org-wide delete: public",
+     "a delete is not fixture-scoped"
+    ],
+    "note": "caught, but the ownership rule (program_id) is not"
+   },
+   {
+    "case": "delete from \"public\".\"financial_subsidy_claims\" where org_id = :'org';",
+    "tables": [],
+    "verdict_ok": true,
+    "note": "ORG-WIDE DELETE PASSES"
+   },
+   {
+    "case": "qa_documents_forms_synthetic: one legitimate run-scoped delete + delete from \"public\".\"person_health_facts\" where org_id = :'org' and id = any(:'prior_form_ids'::uuid[]);",
+    "verdict_ok": true,
+    "note": "PRESERVED TABLE WRITE PASSES"
+   },
+   {
+    "case": "qa_documents_forms_synthetic: one legitimate run-scoped delete + delete from \"public\".\"form_submissions\" where org_id = :'org';",
+    "verdict_ok": true,
+    "note": "ORG-ONLY DELETE PASSES"
+   }
+  ]
+ },
+ "severity": "the automated content guard can be satisfied by quoting identifiers; a fixture still needs registry pinning of exact bytes and review, so this is a defence-in-depth gap, not an exploit by itself. No currently registered fixture uses quoted or qualified deletes on an owned table (measured below).",
+ "proposed_fix": {
+  "diff": "--- lib/hosted-fixture-safety.mjs (installed 20261030 / b3c80db2e9aa)\t2026-10-30 06:04:14\n+++ lib/hosted-fixture-safety.mjs (proposed)\t2026-10-30 07:09:53\n@@ -47,8 +47,8 @@\n \n /** Split a `\\set`-style psql fixture into its destructive statements. */\n export function destructiveStatements(sql) {\n-  return [...String(sql).matchAll(/delete\\s+from\\s+([a-z_][a-z0-9_]*)[\\s\\S]*?;/gi)]\n-    .map((m) => ({ table: m[1], text: m[0].replace(/\\s+/g, \" \").trim() }));\n+  return [...String(sql).matchAll(/delete\\s+from\\s+(?:only\\s+)?(?:\"?([a-z_][a-z0-9_]*)\"?\\s*\\.\\s*)?\"?([a-z_][a-z0-9_]*)\"?[\\s\\S]*?;/gi)]\n+    .map((m) => ({ table: m[2].toLowerCase(), schema: m[1] ? m[1].toLowerCase() : null, text: m[0].replace(/\\s+/g, \" \").trim() }));\n }\n \n /**\n@@ -154,7 +154,7 @@\n   const otherWrites = [...code.matchAll(/\\b(insert\\s+into|update\\s+(?:only\\s+)?[a-z_][a-z0-9_.]*\\s+(?:as\\s+)?(?:[a-z_][a-z0-9_]*\\s+)?set|truncate|merge\\s+into|copy\\s+[a-z_(]|alter\\s+table|drop\\s+table)\\b/gi)].map((m) => m[1].toLowerCase().replace(/\\s+/g, \" \").split(\" \")[0]);\n   const deletes = destructiveStatements(code);\n   const unscoped = deletes.filter((d) => !d.text.includes(\":'org'\") || !rule.scopeVars.some((v) => d.text.includes(`:'${v}'`)));\n-  const preservedWrites = rule.preservedTables.filter((t) => new RegExp(String.raw`\\b(delete\\s+from|insert\\s+into|update|truncate)\\s+(?:only\\s+)?(?:public\\.)?${t}\\b`, \"i\").test(code));\n+  const preservedWrites = rule.preservedTables.filter((t) => new RegExp(String.raw`\\b(delete\\s+from|insert\\s+into|update|truncate)\\s+(?:only\\s+)?(?:\"?public\"?\\s*\\.\\s*)?\"?${t}\"?(?![a-z0-9_])`, \"i\").test(code));\n   return {\n     transactions: { begins, commits },\n     non_delete_writes: [...new Set(otherWrites)],\n",
+  "rule": "match an optional ONLY, an optional (optionally quoted) schema qualifier and an optionally quoted table; report the bare table (lower-cased) and the schema separately; the preserved-table regex accepts the same shapes and ends on a non-identifier character instead of \\b (\\b fails after a closing quote)"
+ },
+ "proposed_fix_measured_on_copy": {
+  "bypass_cases": "all six cases above now resolve the real table; the four bypass/blind cases fail with the right reasons (org-wide delete; not constrained through program_id; writes retained data: person_health_facts; delete not scoped by org AND run)",
+  "registered_fixture_regression": {
+   "financials-demo-tenant.sql / financials_demo_tenant": "ok → ok",
+   "qa-documents-forms-residue-reset.sql / qa_documents_forms_synthetic": "ok → ok",
+   "qa-authz-subjects-ensure.sql, qa-authz-subjects-reset.sql, qa-authz-vendors-ensure.sql, qa-authz-vendors-reset.sql / qa_authz_vendors": "ok → ok",
+   "qa-documents-shared-child-ensure.sql, -reset.sql (proposed) / qa_authz_vendors and the proposed ac000000- profile": "ok → ok"
+  },
+  "impact": "no registered fixture changes verdict; ownership rules start applying to schema-qualified statements (financials_demo_tenant's qualified deletes, if any, are now held to program_id/agency_id — it still passes); a quoted or qualified write that dodged the guard is now refused. Callers that read `.table` get the bare table name; a new `.schema` field is additive.",
+  "tests_to_add_owner_side": [
+   "qualified and quoted qualified DELETE resolve the table",
+   "ownership rule applies to a qualified DELETE",
+   "synthetic profile refuses a quoted preserved-table delete and a quoted org-only delete alongside a legitimate one",
+   "every registered fixture keeps its verdict"
+  ]
+ }
+}
