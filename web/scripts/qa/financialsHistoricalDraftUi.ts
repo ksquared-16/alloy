@@ -6,9 +6,15 @@
  *
  * Narrow by construction: one route built by the product's own durable-record address builder from the fixture's
  * fixed child id; DOM read only through the ledger's stable data attributes (`FinancialsLedger.tsx`); the only
- * interaction is opening collapsed period disclosures (the draft is dated 2026-03-16, so its period may render
- * collapsed). The draft's charge id comes from the domain read (`readHistoricalDraftUiSubject`), never from a
- * caller.
+ * interaction is two read-only disclosures, in order: the card's own `Details` drill-down, then collapsed period
+ * disclosures (the draft is dated 2026-03-16, so its period may render collapsed). The draft's charge id comes from
+ * the domain read (`readHistoricalDraftUiSubject`), never from a caller.
+ *
+ * Why `Details` first: the record route mounts the Financials card in its compact placement (no lead card, no
+ * `detailsAreTheSurface`), and the ledger — every `[data-financials-ledger-row]` — is rendered only by the Details
+ * surface (`FinancialsCard` → `FinancialsDetailCard` → `FinancialsLedger`). Without opening it the capture is empty
+ * whatever the account holds. The other captures are never asserted: on a failure the verifier reports their counts,
+ * which say which stage of that path the page reached.
  */
 import { durableRecordHref } from "@/lib/runtime/focus/durableRecordRoute";
 
@@ -24,6 +30,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DRAFT_STATES = new Set(["scheduled", "attention", "legacy"]);
 
 export const HISTORICAL_DRAFT_UI_ROUTE = durableRecordHref("child", IDS.member, "financials");
+/**
+ * The card's `Details →` drill-down, in each placement that offers it: the approved summary's control in both its
+ * compact and standard presentations (`operationalCards/FinancialsCard`, `data-financials-nav="details"`) and the
+ * focus-panel card's own fallback (`data-financials-details`). A disabled one is a read already in flight.
+ */
+export const FINANCIALS_DETAILS_REVEAL = '[data-financials-nav="details"]:not([disabled]), [data-financials-details="true"]';
+/** A collapsed ledger period (`FinancialsLedgerPeriod`). */
+export const FINANCIALS_PERIOD_REVEAL = '[data-financials-period-toggle][aria-expanded="false"]';
 
 export const FINANCIALS_HISTORICAL_DRAFT_UI_ADAPTER = Object.freeze({
     key: "financials_historical_draft",
@@ -38,9 +52,19 @@ export const FINANCIALS_HISTORICAL_DRAFT_UI_ADAPTER = Object.freeze({
                 state: Object.freeze({ selector: "[data-charge-state]", attr: "data-charge-state" }),
             }),
         }),
+        /* Diagnostic stages, never asserted: card mounted → Details offered → Details surface → periods. */
+        Object.freeze({ name: "financials_cards", selector: "[data-financials-card]", attrs: Object.freeze(["data-financials-overlay"]) }),
+        Object.freeze({ name: "details_actions", selector: FINANCIALS_DETAILS_REVEAL }),
+        Object.freeze({ name: "details_surfaces", selector: '[data-financials-overlay="detail"]' }),
+        Object.freeze({ name: "period_toggles", selector: "[data-financials-period-toggle]", attrs: Object.freeze(["aria-expanded"]) }),
+        Object.freeze({ name: "financials_unavailable", selector: "[data-financials-unavailable]" }),
     ]),
-    /* Disclosure only: a collapsed period's rows are not in the DOM until it is opened. */
-    reveal: Object.freeze(['[data-financials-period-toggle][aria-expanded="false"]']),
+    /*
+     * Disclosure only, in order: open the card's Details (a read — the verifier's GET-only policy holds it to that),
+     * then each collapsed period, whose rows are not in the DOM until it is opened. The driver waits for the page to
+     * go network-quiet between the two, because the periods arrive with the Details read.
+     */
+    reveal: Object.freeze([FINANCIALS_DETAILS_REVEAL, FINANCIALS_PERIOD_REVEAL]),
     assert(routeId: string, snapshot: Record<string, LedgerRowCapture[] | undefined>, context: HistoricalDraftUiContext): Check[] {
         const rows = Array.isArray(snapshot.ledger_rows) ? snapshot.ledger_rows : [];
         const id = String(context?.draftChargeId || "");

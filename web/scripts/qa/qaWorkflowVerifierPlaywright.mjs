@@ -8,7 +8,10 @@
  *     issue requests the route handler never sees);
  *   · EVERY request (page, fetch, XHR, websocket upgrade, subresource) passes `policy.judge` — a refused one is
  *     aborted and still logged, so an attempted write or foreign request fails the verification;
- *   · the only interaction is clicking the adapter's REVEAL selectors (disclosure toggles);
+ *   · the only interaction is clicking the adapter's REVEAL selectors (disclosure toggles), in order; after each
+ *     selector that clicked anything the page must go network-quiet before the next selector is read, because a
+ *     reveal can fetch what the next one opens (Playwright's `networkidle` load state is reached once per
+ *     navigation, so waiting on it again after a click returned at once);
  *   · the snapshot is only the adapter's capture specs: attribute values and trimmed text of named parts.
  *
  * Identity is the application's own answer (`userEmail` in the server payload, then the session claim) — the same
@@ -30,8 +33,39 @@ export function identityFromHtml(html) {
     return null;
 }
 
-/** @param {{ loadPlaywright?: () => Promise<{ chromium: any }>, timeoutMs?: number }} [opts] */
-export function createPlaywrightWorkflowDriver({ loadPlaywright = () => import("@playwright/test"), timeoutMs = 60_000 } = {}) {
+export const REVEAL_QUIET_MS = 500;
+
+/**
+ * In-flight request accounting for one page: `settled(timeoutMs)` resolves once nothing has been in flight for
+ * `quietMs`, and rejects at the bound (a page that never settles is a driver failure, not a pass).
+ */
+export function trackNetworkQuiet(page, { quietMs = REVEAL_QUIET_MS, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+    let inflight = 0;
+    let changedAt = now();
+    const begin = () => {
+        inflight += 1;
+        changedAt = now();
+    };
+    const end = () => {
+        inflight = Math.max(0, inflight - 1);
+        changedAt = now();
+    };
+    page.on("request", begin);
+    page.on("requestfinished", end);
+    page.on("requestfailed", end);
+    return {
+        async settled(timeoutMs) {
+            const deadline = now() + timeoutMs;
+            while (!(inflight === 0 && now() - changedAt >= quietMs)) {
+                if (now() >= deadline) throw new Error("reveal: page did not go network-quiet");
+                await sleep(Math.min(50, quietMs));
+            }
+        },
+    };
+}
+
+/** @param {{ loadPlaywright?: () => Promise<{ chromium: any }>, timeoutMs?: number, quietMs?: number }} [opts] */
+export function createPlaywrightWorkflowDriver({ loadPlaywright = () => import("@playwright/test"), timeoutMs = 60_000, quietMs = REVEAL_QUIET_MS } = {}) {
     return {
         kind: "playwright",
         async open(policy) {
@@ -59,11 +93,13 @@ export function createPlaywrightWorkflowDriver({ loadPlaywright = () => import("
                     log = [];
                     const page = await context.newPage();
                     try {
+                        const network = trackNetworkQuiet(page, { quietMs });
                         await page.goto(new URL(path, policy.baseOrigin).href, { waitUntil: "networkidle", timeout: timeoutMs });
                         for (const selector of policy.reveal) {
-                            for (const handle of await page.$$(selector)) await handle.click({ timeout: timeoutMs });
+                            const handles = await page.$$(selector);
+                            for (const handle of handles) await handle.click({ timeout: timeoutMs });
+                            if (handles.length) await network.settled(timeoutMs);
                         }
-                        if (policy.reveal.length) await page.waitForLoadState("networkidle", { timeout: timeoutMs });
                         const snapshot = {};
                         for (const spec of policy.capture) {
                             snapshot[spec.name] = await page.$$eval(spec.selector, (els, s) => els.map((el) => ({

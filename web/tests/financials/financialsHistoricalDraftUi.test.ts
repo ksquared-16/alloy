@@ -24,7 +24,10 @@ describe("financials_historical_draft UI adapter", () => {
         expect(validateAdapter(A)).toEqual({ ok: true });
         expect(A.routes).toEqual([{ id: "child_financials", path: durableRecordHref("child", IDS.member, "financials") }]);
         expect(HISTORICAL_DRAFT_UI_ROUTE.startsWith("/")).toBe(true);
-        expect(A.reveal).toEqual(['[data-financials-period-toggle][aria-expanded="false"]']);
+        // Details first (the ledger exists only on the Details surface), then the collapsed periods it renders.
+        expect(A.reveal).toEqual(['[data-financials-nav="details"]:not([disabled]), [data-financials-details="true"]', '[data-financials-period-toggle][aria-expanded="false"]']);
+        // The capture that is judged is still exactly the ledger rows; the rest are diagnostic counts.
+        expect(A.capture.map((c) => c.name)).toEqual(["ledger_rows", "financials_cards", "details_actions", "details_surfaces", "period_toggles", "financials_unavailable"]);
     });
 
     it("passes when the draft row renders once, at the template price, still a draft, and the Catalog price is no charge", () => {
