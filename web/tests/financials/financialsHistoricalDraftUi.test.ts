@@ -20,9 +20,10 @@ const judge = (rows: unknown[] | undefined, ctx: { draftChargeId: string } = { d
 const failed = (checks: Array<{ ok: boolean; check: string }>) => checks.filter((c) => !c.ok).map((c) => c.check);
 
 describe("financials_historical_draft UI adapter", () => {
-    it("is a valid adapter with ONE fixed route: the product's own durable-record address for the fixture child", () => {
+    it("is a valid adapter with ONE fixed route: the product's own durable-record address for the fixture household's Financials lead", () => {
         expect(validateAdapter(A)).toEqual({ ok: true });
-        expect(A.routes).toEqual([{ id: "child_financials", path: durableRecordHref("child", IDS.member, "financials") }]);
+        // The household's record, not the child's: a child record composes no Financials (financialsUiSurfaceDiagnosis).
+        expect(A.routes).toEqual([{ id: "child_financials", path: durableRecordHref("household", IDS.customer, "financials") }]);
         expect(HISTORICAL_DRAFT_UI_ROUTE.startsWith("/")).toBe(true);
         // Details first (the ledger exists only on the Details surface), then the collapsed periods it renders.
         expect(A.reveal).toEqual(['[data-financials-nav="details"]:not([disabled]), [data-financials-details="true"]', '[data-financials-period-toggle][aria-expanded="false"]']);

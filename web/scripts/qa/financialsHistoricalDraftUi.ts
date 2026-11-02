@@ -1,17 +1,23 @@
 /**
  * THE FINANCIALS ADAPTER for the shared QA workflow verifier (`qaWorkflowVerifier.mjs`): what an operator must SEE
- * for the historical-draft hazard to be fixed — on the fixture child's durable record, Financials card, the one
- * historical draft (the template's 7500) is a draft row of its own, and the same-name Catalog item's 9900 never
- * became a charge.
+ * for the historical-draft hazard to be fixed — on the fixture household's account (the child's account: Financials is
+ * the household's), the one historical draft (the template's 7500) is a draft row of its own, and the same-name Catalog
+ * item's 9900 never became a charge.
  *
  * Narrow by construction: one route built by the product's own durable-record address builder from the fixture's
- * fixed child id; DOM read only through the ledger's stable data attributes (`FinancialsLedger.tsx`); the only
+ * fixed household id; DOM read only through the ledger's stable data attributes (`FinancialsLedger.tsx`); the only
  * interaction is two read-only disclosures, in order: the card's own `Details` drill-down, then collapsed period
  * disclosures (the draft is dated 2026-03-16, so its period may render collapsed). The draft's charge id comes from
  * the domain read (`readHistoricalDraftUiSubject`), never from a caller.
  *
- * Why `Details` first: the record route mounts the Financials card in its compact placement (no lead card, no
- * `detailsAreTheSurface`), and the ledger — every `[data-financials-ledger-row]` — is rendered only by the Details
+ * WHY THE HOUSEHOLD RECORD, NOT THE CHILD'S. A durable child record composes only the Children card
+ * (`deriveChildFocusPanelCards`) and mounts no Financials at all — the governed run of f13d7915 (qar_1d07b1e6ddba)
+ * rendered that record, signed in, and captured financials_cards=0. Financials reaches a durable record only as the
+ * household's Financials LEAD (the surface Billing opens); `?card=financials` on a household record addresses that
+ * lead (`durableRecordLeadCardFor`).
+ *
+ * Why `Details` first: the lead mounts the Financials card in its compact placement (no `detailsAreTheSurface`), and
+ * the ledger — every `[data-financials-ledger-row]` — is rendered only by the Details
  * surface (`FinancialsCard` → `FinancialsDetailCard` → `FinancialsLedger`). Without opening it the capture is empty
  * whatever the account holds. The other captures are never asserted: on a failure the verifier reports their counts,
  * which say which stage of that path the page reached.
@@ -29,7 +35,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Charge states the ledger renders for a charge that is still a draft (`financialsChargeStateFor`). */
 const DRAFT_STATES = new Set(["scheduled", "attention", "legacy"]);
 
-export const HISTORICAL_DRAFT_UI_ROUTE = durableRecordHref("child", IDS.member, "financials");
+export const HISTORICAL_DRAFT_UI_ROUTE = durableRecordHref("household", IDS.customer, "financials");
 /**
  * The card's `Details →` drill-down, in each placement that offers it: the approved summary's control in both its
  * compact and standard presentations (`operationalCards/FinancialsCard`, `data-financials-nav="details"`) and the

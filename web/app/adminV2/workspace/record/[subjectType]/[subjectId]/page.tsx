@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import DurableRecordSurface from "@/components/presentation/durableRecord/DurableRecordSurface";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { isDurableSubjectType } from "@/lib/runtime/focus/durableRecordRoute";
+import { durableRecordLeadCardFor, isDurableSubjectType } from "@/lib/runtime/focus/durableRecordRoute";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +36,14 @@ export default async function DurableRecordPage({ params, searchParams }: PagePr
         notFound();
     }
 
+    const cardKey = one(sp.card);
     return (
         <div className="flex min-h-0 flex-1 flex-col" data-durable-record-page={subjectType}>
             <DurableRecordSurface
                 subjectType={subjectType}
                 subjectId={subjectId.trim()}
-                cardKey={one(sp.card)}
+                cardKey={cardKey}
+                leadCard={durableRecordLeadCardFor(subjectType, cardKey)}
             />
         </div>
     );
