@@ -81,6 +81,8 @@ import {
 
 import FinancialsChargeDetail, { type ChargeDetailFacts, type ChargeDetailSeed } from "@/app/adminV2/financials/FinancialsChargeDetail";
 import { resolveDraftEditIdentity } from "@/lib/financials/catalogCharges/draftEditIdentity";
+import { CATALOG_AMOUNT_OVERRIDE_PERMISSION, centsFromAmountInput } from "@/lib/financials/catalogCharges/catalogAmountOverride";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -789,6 +791,37 @@ export default function FinancialsCard({
     const [chargeAmount, setChargeAmount] = useState("");
     const [chargeNote, setChargeNote] = useState("");
     const [chargeEventDate, setChargeEventDate] = useState("");
+    /*
+     * ── THIS CHARGE'S AMOUNT, WHEN IT IS NOT THE CATALOG PRICE ────────────────────────────────
+     *
+     * Offered only to a user whose grants include the adjustment authority (shell grants decide what
+     * to OFFER; `charge.add` authorizes). On, `chargeAmount` holds the typed amount — so the preview,
+     * the per-child total and the discount lookup all price what will be charged — and the payload
+     * carries `amount_override` with the reason. Off, the Catalog price is the price.
+     */
+    const adminAuth = useAdminAuthOptional();
+    const canOverrideAmount = Boolean(adminAuth?.permissionKeys?.includes(CATALOG_AMOUNT_OVERRIDE_PERMISSION));
+    const [overrideOn, setOverrideOn] = useState(false);
+    const [overrideReason, setOverrideReason] = useState("");
+    const overrideCents = overrideOn ? centsFromAmountInput(chargeAmount) : null;
+    const overrideError = !overrideOn
+        ? null
+        : overrideCents == null
+            ? "Enter the amount in dollars and cents, like 30.00."
+            : overrideCents === 0
+                ? "A charge cannot be $0.00. To forgive this fee, add it and then waive or adjust it."
+                : overrideReason.trim().length < 3
+                    ? "Say why this charge differs from the Catalog price."
+                    : null;
+    /* What preview AND commit send — the same question, so the preview prices what is committed. */
+    const amountOverrideFields = (source: "catalog" | "template") =>
+        overrideOn && source === "catalog"
+            ? { amount_override: { amount_cents: overrideCents, reason: overrideReason.trim() } }
+            : {};
+    const resetAmountOverride = () => {
+        setOverrideOn(false);
+        setOverrideReason("");
+    };
     const [pending, setPending] = useState<{
         templateId: string;
         /*
@@ -2697,6 +2730,7 @@ export default function FinancialsCard({
                              */
                             ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                             ...(chargeNote ? { note: chargeNote } : {}),
+                            ...amountOverrideFields(source),
                         },
                     }),
                 });
@@ -2726,7 +2760,8 @@ export default function FinancialsCard({
                 setRunning(false);
             }
         },
-        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- amountOverrideFields reads exactly these
+        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm, overrideOn, overrideCents, overrideReason],
     );
 
     /*
@@ -3058,6 +3093,8 @@ export default function FinancialsCard({
                         // The same service date the preview was asked about — preview equals commit.
                         ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),
+                        // The same amount and reason the preview priced.
+                        ...amountOverrideFields(pending.source),
                     },
                 }),
             });
@@ -3169,6 +3206,7 @@ export default function FinancialsCard({
                 resetChargeDecisions();
                 resetStack();
                 setChargeAmount("");
+                resetAmountOverride();
                 setChargeNote("");
                 setChargeEventDate("");
                 setCommandNotice(
@@ -3228,6 +3266,7 @@ export default function FinancialsCard({
             // own message, so the operator can correct the charge rather than re-open and retype it.
             resetStack();
             setChargeAmount("");
+            resetAmountOverride();
             setChargeNote("");
             setChargeEventDate("");
         } catch {
@@ -3254,6 +3293,10 @@ export default function FinancialsCard({
         pending,
         resetChargeDecisions,
         running,
+        /* The override the commit sends must be the one on screen, not the one at first render. */
+        overrideOn,
+        overrideCents,
+        overrideReason,
     ]);
 
     /**
@@ -3546,6 +3589,18 @@ export default function FinancialsCard({
         void preview(first, pool.find((t) => t.id === first)?.label ?? pending?.label ?? "", source);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
     }, [overlay, subjectFilter, chargeEventDate]);
+
+    /* An override re-previews once the operator pauses, so the preview is the server's answer for it. */
+    const overridePreviewKey = overrideOn ? `${overrideCents ?? "?"}|${overrideReason.trim()}` : "off";
+    const overridePreviewSeen = useRef(overridePreviewKey);
+    useEffect(() => {
+        if (overridePreviewSeen.current === overridePreviewKey) return;
+        overridePreviewSeen.current = overridePreviewKey;
+        if (overlay !== "add_charge" || !pending?.templateId || pending.source !== "catalog") return;
+        const timer = setTimeout(() => void preview(pending.templateId, pending.label, "catalog"), 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the override alone
+    }, [overridePreviewKey]);
 
     /** The row as the read model knows it — the callback carries identity, not attribution. */
     const rowForCharge = useCallback(
@@ -6289,6 +6344,10 @@ export default function FinancialsCard({
             ?? offerableForSomeone.find((tpl) => tpl.key === pending?.templateId)
             ?? offerableForSomeone[0]
             ?? null;
+        /* The chosen Catalog item's own price (cents), the default an amount override departs from. */
+        const selectedCatalogCents = selected
+            ? vm.chargeTemplates.find((tpl) => tpl.id === selected.key)?.amountCents ?? null
+            : null;
         /*
          * The subjects the chosen item may not be charged to. They stay listed and cannot be added —
          * one already selected can still be removed — so the selection never reaches a refusal.
@@ -6403,6 +6462,11 @@ export default function FinancialsCard({
                                     if (first) setSubjectFilter(first);
                                 } else if (subjectFilter !== "all" && !categoryPermitsChildGrain(cat)) {
                                     setSubjectFilter("all");
+                                }
+                                /* Another item has another price: an override never carries across. */
+                                if (overrideOn) {
+                                    resetAmountOverride();
+                                    setChargeAmount("");
                                 }
                                 void preview(id, tpl?.label ?? "", pending?.source ?? "catalog");
                             },
@@ -6528,6 +6592,22 @@ export default function FinancialsCard({
                             onSelectSubject: setSubjectFilter,
                             amount: chargeAmount,
                             onAmount: setChargeAmount,
+                            amountOverride:
+                                canOverrideAmount && pending?.source !== "template" && selectedCatalogCents != null && selectedCatalogCents > 0
+                                    ? {
+                                          active: overrideOn,
+                                          catalogAmountCents: selectedCatalogCents,
+                                          amountCents: overrideCents,
+                                          reason: overrideReason,
+                                          onReason: setOverrideReason,
+                                          error: overrideError,
+                                          onToggle: (on: boolean) => {
+                                              setOverrideOn(on);
+                                              setOverrideReason("");
+                                              setChargeAmount(on ? (selectedCatalogCents / 100).toFixed(2) : "");
+                                          },
+                                      }
+                                    : null,
                             note: chargeNote,
                             onNote: setChargeNote,
                             eventDate: chargeEventDate,

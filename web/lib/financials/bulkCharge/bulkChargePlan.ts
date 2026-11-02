@@ -27,7 +27,9 @@
  *
  * Like Add Charge on an account, Bulk charge offers the organisation's Catalog through the shared
  * `catalogChargeOptions` rule and sends `catalog_product_id`: one-time fees at their configured
- * amount, to their configured account. Nothing here prices anything — the amount is the catalog's.
+ * amount, to their configured account. Nothing here prices anything — the amount is the catalog's,
+ * unless an authorized operator names an override AND the recipients that receive it; each of those
+ * requests carries it to the server, which judges it per charge.
  */
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { householdChargeSubjectKey } from "@/lib/financials/catalogCharges/chargeSubjectSite";
@@ -56,7 +58,54 @@ export type BulkChargeInput = {
      * target is left to its preview.
      */
     unavailableForSubjects?: Readonly<Record<string, string>>;
+    /**
+     * AN AUTHORIZED AMOUNT OVERRIDE, and EXACTLY which recipients receive it (`overrideCustomerIds`,
+     * households by `customerId`). Every other recipient is charged the Catalog price. A recipient
+     * named here sends `amount_override` on its own request, so the server judges permission, amount
+     * and reason per charge; in child grain it applies to each selected child of that household.
+     */
+    amountOverride?: { amountCents: number; reason: string } | null;
+    overrideCustomerIds?: ReadonlyArray<string>;
 };
+
+/** Whether THIS recipient receives the override — named explicitly, never inferred. */
+export function targetReceivesOverride(target: BulkTarget, input: BulkChargeInput): boolean {
+    return Boolean(input.amountOverride) && (input.overrideCustomerIds ?? []).includes(target.customerId);
+}
+
+/** The amount (cents) each charge of this recipient is created at: its override, or the Catalog price. */
+export function bulkAmountFor(target: BulkTarget, input: BulkChargeInput, catalogAmountCents: number | null): number | null {
+    return targetReceivesOverride(target, input) ? input.amountOverride!.amountCents : catalogAmountCents;
+}
+
+/**
+ * The run's money, per recipient: the total, and how many recipients and charges are overridden —
+ * so the confirmation can say which part of the total is not the Catalog price.
+ */
+export function bulkAmountSummary(
+    targets: readonly BulkTarget[],
+    grain: BulkGrain,
+    input: BulkChargeInput,
+    catalogAmountCents: number | null,
+): { totalCents: number | null; overriddenRecipients: number; overriddenCharges: number; catalogCharges: number } {
+    let total = 0;
+    let overriddenRecipients = 0;
+    let overriddenCharges = 0;
+    let catalogCharges = 0;
+    for (const t of targets) {
+        const n = obligationsFor(t, grain);
+        const amount = bulkAmountFor(t, input, catalogAmountCents);
+        if (amount == null) return { totalCents: null, overriddenRecipients, overriddenCharges, catalogCharges };
+        total += amount * n;
+        if (targetReceivesOverride(t, input)) {
+            overriddenRecipients += 1;
+            overriddenCharges += n;
+        } else {
+            catalogCharges += n;
+        }
+    }
+    return { totalCents: total, overriddenRecipients, overriddenCharges, catalogCharges };
+}
 
 /** Can this charge type be billed at this grain? The category decides; the operator never overrides it. */
 export function bulkGrainIsLegal(category: string, grain: BulkGrain): boolean {
@@ -92,6 +141,9 @@ export function chargeAddRequest(target: BulkTarget, input: BulkChargeInput, mod
                   : { customer_member_ids: childIds, child_labels: target.children.map((c) => c.name) }),
             event_date: input.serviceDate,
             service_date: input.serviceDate,
+            ...(targetReceivesOverride(target, input)
+                ? { amount_override: { amount_cents: input.amountOverride!.amountCents, reason: input.amountOverride!.reason } }
+                : {}),
         },
     };
 }
