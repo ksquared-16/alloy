@@ -38,6 +38,11 @@ export const REVEAL_QUIET_MS = 500;
 /**
  * In-flight request accounting for one page: `settled(timeoutMs)` resolves once nothing has been in flight for
  * `quietMs`, and rejects at the bound (a page that never settles is a driver failure, not a pass).
+ *
+ * The quiet window is measured from the LATER of the last request change and the call itself. Measured from the
+ * last change alone, the quiet left over from navigation satisfied it at once, so a fetch an effect or timer starts
+ * just after the click was never waited for. This is a bounded window, not a guarantee: a request that starts more
+ * than `quietMs` after the reveal is not covered.
  */
 export function trackNetworkQuiet(page, { quietMs = REVEAL_QUIET_MS, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
     let inflight = 0;
@@ -55,8 +60,9 @@ export function trackNetworkQuiet(page, { quietMs = REVEAL_QUIET_MS, now = () =>
     page.on("requestfailed", end);
     return {
         async settled(timeoutMs) {
-            const deadline = now() + timeoutMs;
-            while (!(inflight === 0 && now() - changedAt >= quietMs)) {
+            const startedAt = now();
+            const deadline = startedAt + timeoutMs;
+            while (!(inflight === 0 && now() - Math.max(changedAt, startedAt) >= quietMs)) {
                 if (now() >= deadline) throw new Error("reveal: page did not go network-quiet");
                 await sleep(Math.min(50, quietMs));
             }
