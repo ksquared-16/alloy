@@ -144,7 +144,12 @@ export function verifySurfacesFixtureAuthority(env = {}, {
         return text;
     };
     const seams = { storeRoot, nowMs, readFile: tap, ...(realpath ? { realpath } : {}), ...(readHead ? { readHead } : {}), ...(readScriptBody ? { readScriptBody } : {}) };
-    const shared = verifyIsolatedFixtureAuthorityV2(env, { ...seams, program: p, org: SURFACES_REGISTERED_FIXTURE_ORG });
+    /*
+     * Nothing is read before the authority is proven. The v2 verifier's default connection evaluates
+     * DATABASE_URL / SUPABASE_URL at call entry; these getters defer both to the step that uses them.
+     */
+    const connection = { get url() { return env.DATABASE_URL; }, get clientEnv() { return env; }, get apiOrigin() { return env.SUPABASE_URL; } };
+    const shared = verifyIsolatedFixtureAuthorityV2(env, { ...seams, program: p, org: SURFACES_REGISTERED_FIXTURE_ORG, connection });
     if (!shared.ok) return shared;
     const a = shared.authority;
 
