@@ -307,7 +307,7 @@ describeLive("catalog Add Charge — live, isolated", () => {
 
     it.each([
         [PRODUCT.unmapped, /not mapped to a GL account/],
-        [PRODUCT.orphan, /No posting mapping uses GL account/],
+        [PRODUCT.orphan, /is not set up for posting yet/],
         [PRODUCT.annual, /recurring Catalog item/],
         [PRODUCT.otherSite, /different location/],
     ])("refuses %s on preview and write, writing nothing", async (id, reason) => {

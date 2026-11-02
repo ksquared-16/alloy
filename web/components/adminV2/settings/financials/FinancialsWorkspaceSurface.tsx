@@ -204,6 +204,13 @@ export default function FinancialsWorkspaceSurface({
                             initialSetup={catalogSetup}
                             initialItemId={catalogItemId}
                             onCategoriesChanged={setCategories}
+                            onRevenueCategorySaved={(row) =>
+                                setRevenueCategories((current) =>
+                                    current.some((existing) => existing.id === row.id)
+                                        ? current.map((existing) => (existing.id === row.id ? row : existing))
+                                        : [...current, row],
+                                )
+                            }
                             onProductCreated={(product) =>
                                 setProducts((current) =>
                                     current.some((row) => row.id === product.id) ? current : [...current, product],

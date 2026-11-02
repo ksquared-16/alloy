@@ -39,6 +39,7 @@ import { readProducts, readRevenueCategories } from "@/lib/commercial/execution/
 import { frequencyLabel } from "@/lib/commercial/commercialProducts";
 import { resolveGlAccountForMappingKey, type ResolvedGlAccount } from "@/lib/financials/accounting/resolveGlMapping";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { catalogGlMappingKey } from "@/lib/financials/catalogCharges/catalogGlCodes";
 import type { ChargeTemplateRow } from "@/lib/financials/chargeTemplates/chargeTemplateTypes";
 import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
@@ -88,9 +89,16 @@ function money(cents: number): string {
     return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-/** The posting mapping keys whose canonical resolution IS this account, deterministically ordered. */
+/**
+ * The posting mapping keys whose canonical resolution IS this account, deterministically ordered —
+ * the account's own derived key (`catalogGlSelection.ts`, established when its GL Code is saved)
+ * first, then any charge-category key an operator pointed at the same account.
+ */
 function mappingKeysForAccount(accountId: string, config: CatalogChargeConfig): string[] {
-    const keys = [...new Set(config.mappings.filter((m) => m.is_active !== false).map((m) => m.key))].sort();
+    const own = catalogGlMappingKey(accountId);
+    const keys = [...new Set(config.mappings.filter((m) => m.is_active !== false).map((m) => m.key))]
+        .sort()
+        .sort((a, b) => Number(b === own) - Number(a === own));
     return keys.filter(
         (key) =>
             resolveGlAccountForMappingKey(key, config.mappings as GlAccountMappingRow[], config.accounts as GlAccountRow[])?.id
@@ -107,7 +115,7 @@ export function resolveCatalogChargeAccount(
         return {
             ok: false,
             code: "catalog_revenue_category_missing",
-            reason: "No revenue category is set on this catalog item, so it has no account to post to. Set one in Organization › Financials › Catalog.",
+            reason: "No GL Code is set on this catalog item, so it has no account to post to. Choose one in Organization › Financials › Catalog.",
         };
     }
     const category = config.revenueCategories.find((rc) => rc.id === product.revenueCategoryId);
@@ -139,7 +147,7 @@ export function resolveCatalogChargeAccount(
         return {
             ok: false,
             code: "catalog_posting_mapping_missing",
-            reason: `No posting mapping uses GL account ${account.code} · ${account.name}, so a charge cannot be recorded against it. Add one in Organization › Financials › GL Codes.`,
+            reason: `GL account ${account.code} · ${account.name} is not set up for posting yet. Open this item in Organization › Financials › Catalog and save its GL Code to set it up.`,
         };
     }
     return {

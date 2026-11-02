@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialProduct, CommercialType } from "@/lib/commercial/commercialProducts";
 import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
+import { ensureCatalogGlSelection } from "@/lib/financials/catalogCharges/catalogGlSelection";
 import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 const SELECT_COLS =
@@ -80,6 +81,18 @@ export async function POST(request: NextRequest) {
         ? (body.behavior as Record<string, unknown>) : {};
 
     const supabase = createAdminClient();
+    /* A GL Code chosen from the org's accounts: its revenue category and posting mapping are
+       referenced or established first, so a selection that cannot be charged is explained before
+       the item exists (catalogGlSelection.ts). */
+    let glRevenueCategory: Record<string, unknown> | null = null;
+    let revenueCategoryId = body.revenue_category_id != null ? String(body.revenue_category_id).trim() || null : null;
+    const glAccountId = typeof body.gl_account_id === "string" ? body.gl_account_id.trim() : "";
+    if (glAccountId) {
+        const gl = await ensureCatalogGlSelection(supabase, { orgId: ctx.orgId, glAccountId, actorUserId: ctx.userId });
+        if (!gl.ok) return NextResponse.json({ error: gl.error, field: "gl_account_id" }, { status: gl.status });
+        revenueCategoryId = gl.revenueCategoryId;
+        glRevenueCategory = gl.revenueCategory;
+    }
     const { data, error } = await supabase
         .from("commercial_products")
         .insert({
@@ -93,7 +106,7 @@ export async function POST(request: NextRequest) {
             amount_cents: Math.round(amount_cents),
             cadence_key: body.cadence_key != null ? String(body.cadence_key).trim() || null : null,
             revenue_category: body.revenue_category != null ? String(body.revenue_category).trim() || null : null,
-            revenue_category_id: body.revenue_category_id != null ? String(body.revenue_category_id).trim() || null : null,
+            revenue_category_id: revenueCategoryId,
             effective_start: body.effective_start != null ? String(body.effective_start).trim() || null : null,
             effective_end: body.effective_end != null ? String(body.effective_end).trim() || null : null,
             behavior,
@@ -109,5 +122,5 @@ export async function POST(request: NextRequest) {
             { status: error.code === "23505" ? 409 : 400 },
         );
     }
-    return NextResponse.json({ product: mapRow(data as Record<string, unknown>) }, { status: 201 });
+    return NextResponse.json({ product: mapRow(data as Record<string, unknown>), ...(glRevenueCategory ? { revenue_category: glRevenueCategory } : {}) }, { status: 201 });
 }

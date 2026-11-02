@@ -291,7 +291,7 @@ describe("the command — preview and write agree with each other and with the r
 
     it.each([
         ["p-unmapped", /not mapped to a GL account/],
-        ["p-orphan", /No posting mapping uses GL account 4020/],
+        ["p-orphan", /GL account 4020 · .+ is not set up for posting yet/],
         ["p-deposit", /held money/],
         ["p-annual", /recurring Catalog item/],
         ["p-future", /not in effect/],

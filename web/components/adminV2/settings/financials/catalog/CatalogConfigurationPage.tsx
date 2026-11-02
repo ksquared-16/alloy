@@ -51,7 +51,8 @@ import {
     type LocationApplicabilityMode,
     type LocationOption,
 } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
-import { GlCodeSelect } from "@/components/adminV2/settings/configurationRuntime/GlCodeSelect";
+import { CatalogGlCodeSelect, useCatalogGlAccounts } from "./CatalogGlCodeSelect";
+import { catalogGlAccountLabel, type CatalogGlAccountCandidate } from "@/lib/financials/catalogCharges/catalogGlCodes";
 import {
     locationApplicabilityFromMetadata,
     readLocationPrices,
@@ -111,6 +112,7 @@ export default function CatalogConfigurationPage({
     onProductUpdated,
     onCategoryCreated,
     onCategoriesChanged,
+    onRevenueCategorySaved,
 }: {
     products: CommercialProduct[];
     categories: CommercialCategory[];
@@ -125,6 +127,8 @@ export default function CatalogConfigurationPage({
     onProductUpdated?: (product: CommercialProduct) => void;
     onCategoryCreated?: (category: CommercialCategory) => void;
     onCategoriesChanged?: (categories: CommercialCategory[]) => void;
+    /** The revenue category a GL Code save referenced or created, so the item shows its GL Code at once. */
+    onRevenueCategorySaved?: (revenueCategory: CommercialRevenueCategory) => void;
 }) {
     const setup = normalizeCatalogSetupSection(initialSetup);
 
@@ -156,6 +160,7 @@ export default function CatalogConfigurationPage({
                 onProductCreated={onProductCreated}
                 onProductUpdated={onProductUpdated}
                 onCategoryCreated={onCategoryCreated}
+                onRevenueCategorySaved={onRevenueCategorySaved}
             />
         </div>
     );
@@ -173,6 +178,7 @@ function CatalogItemsWorkspace({
     onProductCreated,
     onProductUpdated,
     onCategoryCreated,
+    onRevenueCategorySaved,
 }: {
     products: CommercialProduct[];
     categories: CommercialCategory[];
@@ -185,6 +191,7 @@ function CatalogItemsWorkspace({
     onProductCreated?: (product: CommercialProduct) => void;
     onProductUpdated?: (product: CommercialProduct) => void;
     onCategoryCreated?: (category: CommercialCategory) => void;
+    onRevenueCategorySaved?: (revenueCategory: CommercialRevenueCategory) => void;
 }) {
     const [selectedId, setSelectedId] = useState<string | null>(initialItemId ?? null);
     const [tab, setTab] = useState<CatalogTab>("overview");
@@ -192,6 +199,7 @@ function CatalogItemsWorkspace({
     const [dialog, setDialog] = useState<"create" | "edit" | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const glAccounts = useCatalogGlAccounts();
 
     useEffect(() => {
         if (initialItemId) setSelectedId(initialItemId);
@@ -214,7 +222,12 @@ function CatalogItemsWorkspace({
     const revenueCategory = selected?.revenue_category_id
         ? revenueCategories.find((row) => row.id === selected.revenue_category_id) ?? null
         : null;
-    const revenueLabel = revenueCategory?.label ?? "Not set";
+    /* The saved GL Code, shown as the account itself (`code · name`); the category label only when
+       the account cannot be read. */
+    const savedGlAccount = revenueCategory?.mapped_gl_account_id
+        ? glAccounts.accounts.find((a) => a.id === revenueCategory.mapped_gl_account_id) ?? null
+        : null;
+    const revenueLabel = savedGlAccount ? catalogGlAccountLabel(savedGlAccount) : revenueCategory?.label ?? "Not set";
     const programLabel = selected?.program_key
         ? programs.find((row) => row.key === selected.program_key)?.label ?? selected.program_key
         : "All programs";
@@ -433,8 +446,8 @@ function CatalogItemsWorkspace({
                                                     <dd className="mt-0.5">{formatAmount(selected.amount_cents)}</dd>
                                                 </div>
                                                 <div>
-                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">Revenue GL</dt>
-                                                    <dd className="mt-0.5">
+                                                    <dt className="text-[11px] font-medium text-alloy-midnight/40">GL Code</dt>
+                                                    <dd className="mt-0.5" data-catalog-item-gl-code={savedGlAccount?.code ?? ""}>
                                                         {revenueCategory?.mapped_gl_account_id ?
                                                             <Link
                                                                 href={organizationFinancialsChapterHref("accounting", {
@@ -529,9 +542,12 @@ function CatalogItemsWorkspace({
                     categories={categories}
                     programs={programs}
                     cadences={cadences}
+                    revenueCategories={revenueCategories}
+                    glAccounts={glAccounts}
                     onCategoryCreated={onCategoryCreated}
                     onClose={() => setDialog(null)}
-                    onSaved={(product) => {
+                    onSaved={(product, revenueCategory) => {
+                        if (revenueCategory) onRevenueCategorySaved?.(revenueCategory);
                         if (dialog === "create") {
                             onProductCreated?.(product);
                             setSelectedId(product.id);
@@ -699,6 +715,8 @@ function CatalogItemDialog({
     categories,
     programs,
     cadences: _cadences,
+    revenueCategories,
+    glAccounts,
     onCategoryCreated,
     onClose,
     onSaved,
@@ -709,9 +727,11 @@ function CatalogItemDialog({
     categories: CommercialCategory[];
     programs: { key: string; label: string }[];
     cadences: BillingCadence[];
+    revenueCategories: CommercialRevenueCategory[];
+    glAccounts: { accounts: CatalogGlAccountCandidate[]; loading: boolean; error: string | null; reload: () => void };
     onCategoryCreated?: (category: CommercialCategory) => void;
     onClose: () => void;
-    onSaved: (product: CommercialProduct) => void;
+    onSaved: (product: CommercialProduct, revenueCategory?: CommercialRevenueCategory) => void;
 }) {
     const initialApplicability = useMemo(
         () =>
@@ -755,7 +775,18 @@ function CatalogItemDialog({
         }
         return out;
     });
-    const [revenueCategoryId, setRevenueCategoryId] = useState<string | null>(product?.revenue_category_id ?? null);
+    /* The GL Code is the ACCOUNT (`code · name`); the item keeps its revenue-category link, which the
+       server references or establishes from the chosen account. Sent only when the user picked or
+       cleared one, so an item whose legacy category names no account is not silently unlinked. */
+    const initialGlAccountId = product?.revenue_category_id
+        ? revenueCategories.find((row) => row.id === product.revenue_category_id)?.mapped_gl_account_id ?? null
+        : null;
+    const [glAccountId, setGlAccountIdState] = useState<string | null>(initialGlAccountId);
+    const [glTouched, setGlTouched] = useState(false);
+    const setGlAccountId = (next: string | null) => {
+        setGlAccountIdState(next);
+        setGlTouched(true);
+    };
     const [busy, setBusy] = useState(false);
     const [creatingCategory, setCreatingCategory] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -863,7 +894,7 @@ function CatalogItemDialog({
                 category_id: categoryId || null,
                 amount_cents: cents,
                 cadence_key,
-                revenue_category_id: revenueCategoryId || null,
+                ...(glAccountId ? { gl_account_id: glAccountId } : glTouched ? { gl_account_id: "" } : {}),
                 location_id: null,
                 program_key: progKey || null,
                 effective_start: effectiveStart || null,
@@ -878,9 +909,9 @@ function CatalogItemDialog({
                     credentials: "include",
                     body: JSON.stringify(body),
                 });
-                const json = (await res.json()) as { product?: CommercialProduct; error?: string };
+                const json = (await res.json()) as { product?: CommercialProduct; revenue_category?: CommercialRevenueCategory; error?: string };
                 if (!res.ok || !json.product) throw new Error(json.error || "Could not update catalog item.");
-                onSaved(json.product);
+                onSaved(json.product, json.revenue_category);
             } else {
                 const res = await fetch("/api/admin/commercial/products", {
                     method: "POST",
@@ -888,9 +919,9 @@ function CatalogItemDialog({
                     credentials: "include",
                     body: JSON.stringify(body),
                 });
-                const json = (await res.json()) as { product?: CommercialProduct; error?: string };
+                const json = (await res.json()) as { product?: CommercialProduct; revenue_category?: CommercialRevenueCategory; error?: string };
                 if (!res.ok || !json.product) throw new Error(json.error || "Could not create catalog item.");
-                onSaved(json.product);
+                onSaved(json.product, json.revenue_category);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Save failed.");
@@ -1169,7 +1200,14 @@ function CatalogItemDialog({
                             :   null}
                         </div>
                     : step === 3 ?
-                        <GlCodeSelect value={revenueCategoryId} onChange={setRevenueCategoryId} testId="catalog-dialog-gl-code" />
+                        <CatalogGlCodeSelect
+                            value={glAccountId}
+                            onChange={setGlAccountId}
+                            accounts={glAccounts.accounts}
+                            loading={glAccounts.loading}
+                            error={glAccounts.error}
+                            onRefresh={glAccounts.reload}
+                        />
                     :   <div className="space-y-3 text-sm text-alloy-midnight/75">
                             <p>
                                 <span className="font-semibold text-alloy-midnight">Name:</span> {name.trim()}
@@ -1193,6 +1231,13 @@ function CatalogItemDialog({
                             <p>
                                 <span className="font-semibold text-alloy-midnight">Organization price:</span>{" "}
                                 {formatAmount(parseAmountToCents(orgAmount) ?? 0)}
+                            </p>
+                            <p data-catalog-review-gl-code="true">
+                                <span className="font-semibold text-alloy-midnight">GL Code:</span>{" "}
+                                {(() => {
+                                    const account = glAccounts.accounts.find((a) => a.id === glAccountId);
+                                    return account ? catalogGlAccountLabel(account) : "Not set";
+                                })()}
                             </p>
                         </div>
                     }
