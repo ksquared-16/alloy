@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
-import { loadCatalogChargeOptions } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { loadCatalogChargeOptionsForSubjects } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { chargeSitesByChild, householdChargeSubjectKey } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -24,8 +25,11 @@ export const dynamic = "force-dynamic";
  * `catalog` is the organisation's Catalog judged by the SAME rule the card's Add Charge and the
  * `charge.add` command use (`catalogChargeOptions`): one-time fees offerable, other types listed with
  * the flow that bills them, missing accounting blocked — on the ORGANISATION's business date (also
- * returned, so the surface defaults its service date to it rather than the browser's UTC day), over
- * the sites these households attend. Each target's own preview still judges its own subjects.
+ * returned, so the surface defaults its service date to it rather than the browser's UTC day). Each
+ * household and each child is judged at the one site ITS charge is for — the household at none, a
+ * child at the site of the agreement `charge.add` writes against (`chargeSitesByChild`) — and
+ * `unavailableForSubjects` names the targets an item would be refused for, so the surface refuses a
+ * row before sending it, with the command's reason. Each target's own preview still judges it.
  */
 export async function GET(request: NextRequest) {
     const gate = await loadAdminRouteGate();
@@ -68,12 +72,38 @@ export async function GET(request: NextRequest) {
                 children.set(String(m.customer_id), list);
             }
         }
-        const businessDate = await fetchOrgBusinessDate(supabase, ctx.orgId);
-        const locationIds: Array<string | null> = [
-            null,
-            ...new Set(cohort.subjects.flatMap((s) => s.siteLocationIds ?? [])),
+        /*
+         * Every child's agreements NEWEST FIRST, read by member as `charge.add` reads them, so each
+         * child's site is the one its charge would be for.
+         */
+        const childIds = [...children.values()].flat().map((c) => c.customerMemberId);
+        const agreements: Array<Record<string, unknown>> = [];
+        for (let i = 0; i < childIds.length; i += 200) {
+            const { data, error } = await supabase
+                .from("child_enrollment_agreements")
+                .select("id, customer_member_id, status, site_location_id, created_at")
+                .eq("org_id", ctx.orgId)
+                .in("customer_member_id", childIds.slice(i, i + 200))
+                .order("created_at", { ascending: false });
+            if (error) throw new Error(error.message);
+            agreements.push(...((data ?? []) as Array<Record<string, unknown>>));
+        }
+        const text = (v: unknown) => (v == null ? "" : String(v).trim());
+        const sites = chargeSitesByChild(
+            agreements.map((r) => ({
+                id: text(r.id),
+                customer_member_id: text(r.customer_member_id),
+                status: text(r.status),
+                site_location_id: text(r.site_location_id) || null,
+            })),
+            childIds,
+        );
+        const subjects = [
+            ...customerIds.map((id) => ({ key: householdChargeSubjectKey(id), locationId: null })),
+            ...childIds.map((id) => ({ key: id, locationId: sites.get(id) ?? null })),
         ];
-        const catalog = await loadCatalogChargeOptions(supabase, ctx.orgId, { asOf: businessDate, locationIds }).then(
+        const businessDate = await fetchOrgBusinessDate(supabase, ctx.orgId);
+        const catalog = await loadCatalogChargeOptionsForSubjects(supabase, ctx.orgId, { asOf: businessDate, subjects }).then(
             (options) => ({ ok: true as const, options }),
             (e: unknown) => ({ ok: false as const, options: [], error: e instanceof Error ? e.message : String(e) }),
         );

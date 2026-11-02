@@ -30,6 +30,7 @@
  * amount, to their configured account. Nothing here prices anything — the amount is the catalog's.
  */
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
+import { householdChargeSubjectKey } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 
 export const BULK_CHARGE_ACTION_KEY = "charge.add" as const;
 
@@ -49,6 +50,12 @@ export type BulkChargeInput = {
     grain: BulkGrain;
     /** YYYY-MM-DD — the service date every charge resolves its date chain from. */
     serviceDate: string;
+    /**
+     * The catalog item's `unavailableForSubjects`: the households (`householdChargeSubjectKey`) and
+     * children it is offered at another site than their charge is for. Optional — absent, every
+     * target is left to its preview.
+     */
+    unavailableForSubjects?: Readonly<Record<string, string>>;
 };
 
 /** Can this charge type be billed at this grain? The category decides; the operator never overrides it. */
@@ -138,6 +145,13 @@ export function refusalBeforeSending(target: BulkTarget, input: BulkChargeInput)
             : "This charge type is billed to the household, not per child.";
     }
     if (input.grain === "child" && target.children.length === 0) return "No child selected in this household.";
+    /* The command judges every subject at its own site and refuses the target if any is refused. */
+    const refused = input.unavailableForSubjects ?? {};
+    if (input.grain === "household") return refused[householdChargeSubjectKey(target.customerId)] ?? null;
+    for (const child of target.children) {
+        const reason = refused[child.customerMemberId];
+        if (reason) return `${child.name}: ${reason}`;
+    }
     return null;
 }
 

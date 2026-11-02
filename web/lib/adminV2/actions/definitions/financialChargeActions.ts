@@ -50,6 +50,7 @@ import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 import { chargeDateChainPreviewLines } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
+import { selectBillableAgreement } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -290,12 +291,12 @@ async function resolveChargeSubject(
         const rows = (data ?? []) as Array<{ id: string; status: string }>;
         if (rows.length > 0) {
             // An active agreement is the billable source; otherwise the most recent one still owns
-            // history. Unchanged — an enrolled child's attribution does not move.
-            const active = rows.find((r) => t(r.status) === "active");
+            // history. Unchanged — an enrolled child's attribution does not move. The picker takes
+            // the same agreement through the same rule, so it judges the site this charge is for.
             return {
                 ok: true,
                 kind: "enrollment_agreement",
-                agreementId: (active ?? rows[0]!).id,
+                agreementId: selectBillableAgreement(rows)!.id,
                 customerMemberId,
             };
         }
@@ -1222,4 +1223,4 @@ export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge
  * subject resolution against a database. Those two have their own coverage; this exposes the
  * orchestration between them and nothing else.
  */
-export const __testables = { executeMultiChildAdd, childIdsFrom };
+export const __testables = { executeMultiChildAdd, childIdsFrom, resolveChargeSubject };

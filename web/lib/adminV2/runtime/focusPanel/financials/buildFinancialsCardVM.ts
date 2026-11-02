@@ -63,9 +63,10 @@ import { positionFactsFromBundle, readAccountFactBundle, type AccountFactBundle 
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
-    catalogChargeOptions,
+    catalogChargeOptionsForSubjects,
     readCatalogChargeConfig,
 } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import { chargeSitesByChild, HOUSEHOLD_CHARGE_SUBJECT } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import { loadGlConfigBundle } from "@/lib/financials/gl/glConfigService";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import { shapeAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
@@ -434,6 +435,12 @@ export type FinancialsChargeTemplateOption = {
      */
     availability: "offerable" | "unsupported" | "blocked";
     unavailableReason: string | null;
+    /**
+     * The `Applies to` subjects (`HOUSEHOLD_CHARGE_SUBJECT` or a child's member id) this catalog item
+     * may not be charged to, each with the command's reason — it is offered at another site than that
+     * subject's charge is for. Absent for template options.
+     */
+    unavailableForSubjects?: Record<string, string>;
     /** The account the charge will post to, as `code · name` — the catalog item's own, never a default. */
     accountLabel: string | null;
 };
@@ -1421,16 +1428,19 @@ async function buildFinancialsCardVMInner(
         (err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : "catalog read failed" }),
     );
     /*
-     * THE SITES THIS ACCOUNT'S CHARGES CAN BE FOR — `site_location_id`, the column
-     * `resolveFinancialPolicyScope` reads for the command. Keyed by the household (or the child, when
-     * only a child is in scope) so it goes out in this first wave; the fact bundle does not carry it.
+     * THE SITE EACH CHILD'S CHARGE IS FOR — `site_location_id`, the column
+     * `resolveFinancialPolicyScope` reads for the command, on the agreement `charge.add` writes the
+     * child's charge against (`selectBillableAgreement`: active, else the most recent). Newest first,
+     * the command's own order. Keyed by the household (or the child, when only a child is in scope) so
+     * it goes out in this first wave; the fact bundle does not carry it.
      */
     const agreementSitesP = Promise.resolve(
         supabase
             .from("child_enrollment_agreements")
-            .select("id, site_location_id")
+            .select("id, customer_member_id, status, site_location_id, created_at")
             .eq("org_id", args.orgId)
-            .eq(customerId ? "customer_id" : "customer_member_id", customerId ?? memberId ?? ""),
+            .eq(customerId ? "customer_id" : "customer_member_id", customerId ?? memberId ?? "")
+            .order("created_at", { ascending: false }),
     ).then(
         (r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>>, error: r.error?.message ?? null }),
         (err: unknown) => ({ data: [] as Array<Record<string, unknown>>, error: err instanceof Error ? err.message : "site read failed" }),
@@ -2370,10 +2380,12 @@ async function buildFinancialsCardVMInner(
      * ── ADD CHARGE OFFERS THE CATALOG, JUDGED BY THE COMMAND'S OWN RULE ──────────────────────────
      *
      * `evaluateCatalogCharge` is what `charge.add` runs on preview and on write. It is given the same
-     * business date and the sites this account's charges can be for — the household (no site) and
-     * each agreement's site — so an item listed here is one the command accepts for at least one
-     * subject, at the price shown. Out-of-scope items (inactive, not in effect today, another
-     * location's) are not listed; unsupported and blocked ones are listed and cannot be chosen.
+     * business date and each `Applies to` subject at the one site that subject's charge is for — the
+     * household at none, each child at the site of the agreement the command would write against — so
+     * an item listed here is one the command accepts for at least one subject, at the price shown, and
+     * `unavailableForSubjects` names the subjects it would refuse. Out-of-scope items (inactive, not in
+     * effect today, no subject's location) are not listed; unsupported and blocked ones are listed and
+     * cannot be chosen.
      *
      * `templateResult` is still read: it is what labels charges made from templates before this.
      */
@@ -2384,11 +2396,21 @@ async function buildFinancialsCardVMInner(
         vm.unavailable.push({ fact: "catalog", reason: `The catalog could not be read (${why}).` });
         vm.chargeTemplates = [];
     } else {
-        const locationIds: Array<string | null> = [
-            null,
-            ...agreementSites.data.map((r) => t(r.site_location_id)).filter(Boolean),
+        const childIds = vm.subjects.map((sub) => sub.customerMemberId);
+        const sites = chargeSitesByChild(
+            agreementSites.data.map((r) => ({
+                id: t(r.id),
+                customer_member_id: t(r.customer_member_id),
+                status: t(r.status),
+                site_location_id: t(r.site_location_id) || null,
+            })),
+            childIds,
+        );
+        const subjects = [
+            { key: HOUSEHOLD_CHARGE_SUBJECT, locationId: null },
+            ...childIds.map((id) => ({ key: id, locationId: sites.get(id) ?? null })),
         ];
-        vm.chargeTemplates = catalogChargeOptions(catalog.config, { asOf: today, locationIds }, reviewPolicyForService(null));
+        vm.chargeTemplates = catalogChargeOptionsForSubjects(catalog.config, { asOf: today, subjects }, reviewPolicyForService(null));
     }
     vm.draftTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
         .filter((row) => {

@@ -36,7 +36,7 @@ import {
     type BulkRowState,
     type BulkTarget,
 } from "@/lib/financials/bulkCharge/bulkChargePlan";
-import type { CatalogChargeOption } from "@/lib/financials/catalogCharges/catalogChargeOffer";
+import type { CatalogChargeSubjectOption } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
@@ -69,7 +69,7 @@ export default function FinancialsBulkAddCharge({
     /** Re-read committed truth after the run. */
     onCommitted: () => Promise<void> | void;
 }) {
-    const [options, setOptions] = useState<CatalogChargeOption[]>([]);
+    const [options, setOptions] = useState<CatalogChargeSubjectOption[]>([]);
     const [households, setHouseholds] = useState<Household[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [productId, setProductId] = useState("");
@@ -90,7 +90,7 @@ export default function FinancialsBulkAddCharge({
                 const site = siteLocationId ? `?site_location_id=${encodeURIComponent(siteLocationId)}` : "";
                 const h = await fetch(`/api/admin/financials/bulk-charge-targets${site}`, { credentials: "include" }).then((r) => r.json());
                 if (!live) return;
-                const catalog = (h.catalog ?? null) as { ok: boolean; options?: CatalogChargeOption[]; error?: string } | null;
+                const catalog = (h.catalog ?? null) as { ok: boolean; options?: CatalogChargeSubjectOption[]; error?: string } | null;
                 setOptions(catalog?.options ?? []);
                 if (typeof h.businessDate === "string") setServiceDate((current) => current || h.businessDate);
                 setHouseholds((h.households ?? []) as Household[]);
@@ -138,7 +138,13 @@ export default function FinancialsBulkAddCharge({
     const input = useMemo(
         () =>
             template && serviceDate
-                ? { catalogProductId: template.id, category: template.categoryKey, grain, serviceDate }
+                ? {
+                      catalogProductId: template.id,
+                      category: template.categoryKey,
+                      grain,
+                      serviceDate,
+                      unavailableForSubjects: template.unavailableForSubjects,
+                  }
                 : null,
         [template, serviceDate, grain],
     );

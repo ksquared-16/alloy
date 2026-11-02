@@ -29,6 +29,7 @@ import {
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import { operatorRefusal } from "@/lib/financials/commands/operatorRefusal";
 import { chargeDisplayLabel } from "@/lib/financials/chargeCategories";
+import { catalogChargeRefusalFor, HOUSEHOLD_CHARGE_SUBJECT } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
@@ -2533,6 +2534,21 @@ export default function FinancialsCard({
     );
 
     /*
+     * ── WHO THIS CHARGE IS FOR, AS THE COMMAND WILL READ IT ──────────────────────────────────────
+     *
+     * The same values the payload sends: the selected children, or — naming no child — the household.
+     * A catalog item is judged for each of them at the site THAT subject's charge is for
+     * (`unavailableForSubjects`), so the picker refuses exactly what the preview and the write refuse.
+     */
+    const chargeSubjects = useMemo(
+        () =>
+            selectedChildIds.length > 0
+                ? selectedChildIds.map((id, i) => ({ key: id, label: selectedChildLabels[i] ?? null }))
+                : [{ key: HOUSEHOLD_CHARGE_SUBJECT, label: "Household" }],
+        [selectedChildIds, selectedChildLabels],
+    );
+
+    /*
      * ── A MOUNTED CONTROL IS NEVER SILENTLY INERT ───────────────────────────────────────────────
      *
      * This returned `undefined` with nothing to settle, and the Details header rendered
@@ -2774,7 +2790,7 @@ export default function FinancialsCard({
         if (overlay !== "add_charge" || !customerId) return;
         const pool = pending?.source === "template" ? vm?.draftTemplates ?? [] : vm?.chargeTemplates ?? [];
         const template = pool.find((tpl) => tpl.id === pending?.templateId)
-            ?? (vm?.chargeTemplates ?? []).find((tpl) => tpl.availability === "offerable");
+            ?? (vm?.chargeTemplates ?? []).find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null);
         const categoryKey = template?.categoryKey ?? "";
         /* A household charge names no child, and a child's discounts are not the account's. */
         const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
@@ -2824,7 +2840,7 @@ export default function FinancialsCard({
          * eligibility, and a selection that was valid a keystroke ago must not survive into a
          * charge it cannot reduce.
          */
-    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates]);
+    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates, chargeSubjects]);
 
     /*
      * ── WHICH DISCOUNT THIS CHARGE WILL GET, AND WHAT IT IS WORTH ────────────────────────────
@@ -3522,7 +3538,7 @@ export default function FinancialsCard({
         if (overlay !== "add_charge" || !vm) return;
         /* Only an item the command accepts is opened on; unsupported and blocked ones are shown, never chosen. */
         const first = pending?.templateId
-            ?? vm.chargeTemplates.find((tpl) => tpl.availability === "offerable")?.id
+            ?? vm.chargeTemplates.find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null)?.id
             ?? null;
         if (!first) return;
         const source = pending?.source ?? "catalog";
@@ -6251,10 +6267,36 @@ export default function FinancialsCard({
             pending?.source === "template"
                 ? vm.draftTemplates.filter((tpl) => tpl.id === pending.templateId)
                 : vm.chargeTemplates
-        ).map((tpl) => adaptChargeTemplateOption(tpl, currency));
+        ).map((tpl) => {
+            const option = adaptChargeTemplateOption(tpl, currency);
+            /* A catalog item the command would refuse for THIS selection is shown with that reason. */
+            if (pending?.source === "template" || tpl.availability !== "offerable") return option;
+            return { ...option, unavailableReason: catalogChargeRefusalFor(tpl, chargeSubjects) };
+        });
         const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
+        /*
+         * An item chargeable in itself but not to THIS selection still opens the command, shown with
+         * its reason, so `Applies to` stays reachable — otherwise a child no item applies to would
+         * leave the operator no way to choose the household or a sibling it does apply to.
+         */
+        const offerableForSomeone =
+            pending?.source === "template"
+                ? []
+                : templates.filter((_, i) => vm.chargeTemplates[i]?.availability === "offerable");
         const selected =
-            offerableTemplates.find((tpl) => tpl.key === pending?.templateId) ?? offerableTemplates[0] ?? null;
+            offerableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? offerableTemplates[0]
+            ?? offerableForSomeone.find((tpl) => tpl.key === pending?.templateId)
+            ?? offerableForSomeone[0]
+            ?? null;
+        /*
+         * The subjects the chosen item may not be charged to. They stay listed and cannot be added —
+         * one already selected can still be removed — so the selection never reaches a refusal.
+         */
+        const selectedCatalog =
+            pending?.source === "template" ? null : vm.chargeTemplates.find((tpl) => tpl.id === (selected?.key ?? ""));
+        const refusedFor = (key: string) =>
+            Boolean(selectedCatalog?.unavailableForSubjects?.[key]);
         const subjectLabel =
             subjectFilter === "all" ?
                 "Household"
@@ -6428,6 +6470,8 @@ export default function FinancialsCard({
                                 selected && categoryPermitsChildGrain(selected.categoryKey ?? "") && vm.subjects.length > 0
                                     ? {
                                           householdOffered: categoryPermitsHouseholdGrain(selected.categoryKey ?? ""),
+                                          householdDisabled:
+                                              subjectFilter !== "all" && refusedFor(HOUSEHOLD_CHARGE_SUBJECT),
                                           householdSelected: subjectFilter === "all",
                                           onSelectHousehold: () => {
                                               setSubjectFilter("all");
@@ -6436,6 +6480,9 @@ export default function FinancialsCard({
                                           children: vm.subjects.map((sub) => ({
                                               id: sub.customerMemberId,
                                               label: sub.displayName,
+                                              disabled:
+                                                  refusedFor(sub.customerMemberId)
+                                                  && !(subjectFilter !== "all" && selectedChildIds.includes(sub.customerMemberId)),
                                           })),
                                           selectedChildIds: subjectFilter === "all" ? [] : selectedChildIds,
                                           onToggleChild: (id: string) => {

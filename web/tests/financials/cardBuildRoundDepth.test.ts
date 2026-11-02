@@ -175,12 +175,15 @@ describe("the card build waits on as few round trips as its data actually requir
          * The chain's tables must no longer be read directly by the card. ONE exception, and only in
          * this shape: Add Charge's catalog options need the site each agreement attends
          * (`site_location_id`, the column the command's own scope resolver reads), which the bundle
-         * does not carry. That read is keyed by the household and asks for the site and nothing else
-         * — it walks no chain — so it is allowed in this wave and pinned to exactly those columns.
+         * does not carry. That read is keyed by the household and asks only for what picks each
+         * child's billable agreement the way `charge.add` does (member, status, newest first) and the
+         * site it attends — it walks no chain — so it is allowed in this wave and pinned to exactly
+         * those columns.
          */
         const agreementSelects = lastSelects.filter((s) => s.table === "child_enrollment_agreements");
         for (const s of agreementSelects) {
-            expect(s.columns, "the only direct agreement read is the catalog's site scope").toBe("id, site_location_id");
+            expect(s.columns, "the only direct agreement read is the catalog's site scope")
+                .toBe("id, customer_member_id, status, site_location_id, created_at");
         }
         for (const table of [
             "charges", "payment_allocations",

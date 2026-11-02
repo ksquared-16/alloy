@@ -133,9 +133,15 @@ export default function AddChargeCommand({
          */
         unifiedTarget?: {
             householdOffered: boolean;
+            /**
+             * Listed but not choosable: the chosen catalog item is offered at another site than this
+             * subject's charge is for, so the command would refuse it. A selected subject is never
+             * disabled — it can always be removed.
+             */
+            householdDisabled?: boolean;
             householdSelected: boolean;
             onSelectHousehold: () => void;
-            children: Array<{ id: string; label: string }>;
+            children: Array<{ id: string; label: string; disabled?: boolean }>;
             selectedChildIds: string[];
             onToggleChild: (id: string) => void;
             perChildLabel: string | null;
@@ -361,9 +367,13 @@ export default function AddChargeCommand({
                         }
                         options={[
                             ...(controls.unifiedTarget.householdOffered
-                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true }]
+                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true, disabled: controls.unifiedTarget.householdDisabled === true }]
                                 : []),
-                            ...controls.unifiedTarget.children.map((c) => ({ value: c.id, label: c.label })),
+                            ...controls.unifiedTarget.children.map((c) => ({
+                                value: c.id,
+                                label: c.label,
+                                disabled: c.disabled === true,
+                            })),
                         ]}
                         onChange={(next) => {
                             const target = controls.unifiedTarget!;

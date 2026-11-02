@@ -75,8 +75,9 @@ export type CatalogChargeContext = {
     asOf: string;
     /**
      * The sites the charge could be FOR. The server passes the one site its billable source attends
-     * (`resolveFinancialPolicyScope` — null for a household source); the picker passes every site
-     * the account's subjects attend, so it offers what the command would accept for at least one.
+     * (`resolveFinancialPolicyScope` — null for a household source). A union of several sites answers
+     * "chargeable for at least one of them"; the pickers judge each subject at its own site through
+     * `catalogChargeOptionsForSubjects`, so they refuse what the command refuses.
      */
     locationIds: ReadonlyArray<string | null>;
 };
@@ -300,6 +301,62 @@ export function catalogChargeOptions(
             unavailableReason: e.status === "offerable" ? null : e.reason,
             accountLabel: e.status === "offerable" ? `${e.account.code} · ${e.account.name}` : null,
         }));
+}
+
+/** One subject a surface can charge, and the site its charge is for (null: none — the household). */
+export type CatalogChargeSubjectSite = { key: string; locationId: string | null };
+
+/**
+ * A catalog option as a surface that knows its SUBJECTS lists it.
+ *
+ * `unavailableForSubjects` names each subject the item may not be charged to, with the command's own
+ * reason — the item is offered at another site than that subject's charge is for. A subject not named
+ * takes the item's `availability` unchanged.
+ */
+export type CatalogChargeSubjectOption = CatalogChargeOption & {
+    unavailableForSubjects: Record<string, string>;
+};
+
+/**
+ * THE OPTIONS, JUDGED PER SUBJECT — each subject at the one site its charge is for.
+ *
+ * `catalogChargeOptions` over a union of sites answers "chargeable for SOMEONE here"; the command
+ * answers for ONE subject at a time (`resolveFinancialPolicyScope`). Listing from the union and then
+ * judging every subject at its own site gives the surface both: the item is listed when some subject
+ * may be charged it, and the subjects that may not are named, so the surface can refuse exactly what
+ * the preview and the write would refuse. Location is the only subject-dependent part of the rule;
+ * everything else is decided once, by the same `evaluateCatalogCharge`.
+ */
+export function catalogChargeOptionsForSubjects(
+    config: CatalogChargeConfig,
+    ctx: { asOf: string; subjects: readonly CatalogChargeSubjectSite[] },
+    reviewRequired: boolean,
+): CatalogChargeSubjectOption[] {
+    const locationIds = [...new Set(ctx.subjects.map((s) => s.locationId))];
+    const products = new Map(config.products.map((p) => [p.id, p]));
+    return catalogChargeOptions(config, { asOf: ctx.asOf, locationIds }, reviewRequired).map((option) => {
+        const product = products.get(option.id)!;
+        const unavailableForSubjects: Record<string, string> = {};
+        for (const subject of ctx.subjects) {
+            const e = evaluateCatalogCharge(product, config, { asOf: ctx.asOf, locationIds: [subject.locationId] });
+            if (e.status === "out_of_scope") unavailableForSubjects[subject.key] = e.reason;
+        }
+        return { ...option, unavailableForSubjects };
+    });
+}
+
+/** `loadCatalogChargeOptions`, judged per subject (`catalogChargeOptionsForSubjects`). */
+export async function loadCatalogChargeOptionsForSubjects(
+    supabase: SupabaseClient,
+    orgId: string,
+    ctx: { asOf: string; subjects: readonly CatalogChargeSubjectSite[] },
+): Promise<CatalogChargeSubjectOption[]> {
+    const [config, policies] = await Promise.all([
+        readCatalogChargeConfig(supabase, orgId, ctx.asOf),
+        listFinancialPolicies(supabase, orgId),
+    ]);
+    const review = resolveFinancialPolicy(policies, "posting_review", {}, ctx.asOf);
+    return catalogChargeOptionsForSubjects(config, ctx, review.resolved ? review.policy.value.required === true : false);
 }
 
 /**
