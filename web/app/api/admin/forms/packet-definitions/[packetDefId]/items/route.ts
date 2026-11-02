@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { derivedPacketMutationRefusal } from "@/lib/forms/packets/derivedPacketReadOnly";
 
 type StepBody = {
     form_definition_id: string;
@@ -65,6 +66,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const supabase = createAdminClient();
 
+    const { data: pkt, error: pErr } = await supabase
+        .from("form_packet_definitions")
+        .select("id, metadata")
+        .eq("org_id", ctx.orgId)
+        .eq("id", packetDefId)
+        .maybeSingle();
+    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    if (!pkt) return jsonError("Not found", 404);
+    // FI-12: a requirement-derived packet's steps ARE its stage's Form requirements; editing them here
+    // would only make the next Enrollment launch refuse `packet_drift`.
+    const derived = derivedPacketMutationRefusal((pkt as { metadata?: unknown }).metadata);
+    if (derived) {
+        return NextResponse.json(
+            { error: derived.message, code: derived.code, owner: derived.owner, edit_href: derived.edit_href },
+            { status: derived.status }
+        );
+    }
+
     const { count: sessCount, error: cErr } = await supabase
         .from("form_packet_sessions")
         .select("id", { count: "exact", head: true })
@@ -77,15 +96,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             409
         );
     }
-
-    const { data: pkt, error: pErr } = await supabase
-        .from("form_packet_definitions")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .eq("id", packetDefId)
-        .maybeSingle();
-    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
-    if (!pkt) return jsonError("Not found", 404);
 
     const { error: delErr } = await supabase
         .from("form_packet_items")

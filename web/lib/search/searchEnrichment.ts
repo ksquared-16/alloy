@@ -31,6 +31,7 @@ import {
 import {
     buildSubjectProcessContexts,
     buildSubjectScheduleContext,
+    childFamilyFallbackCaseIds,
     type SubjectProcessRow,
 } from "@/lib/context/buildSubjectContexts";
 import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
@@ -168,15 +169,28 @@ export async function enrichSearchCandidates(args: {
             .flatMap((c) => [c.id, c.person_id])
             .filter((id): id is string => Boolean(id)),
     );
-    const familyMembershipOpportunityIds = uniq(
-        processRows
+    // A CHILD needs its case's row only where its process has no child grain at its stage — the
+    // family-grain fallback. Every other child membership still costs nothing.
+    const childGrainSubjectIds = new Set(
+        candidates
+            .filter((c) => c.kind === "child")
+            .flatMap((c) => [c.id, c.person_id])
+            .filter((id): id is string => Boolean(id)),
+    );
+    const familyMembershipOpportunityIds = uniq([
+        ...processRows
             .filter(
                 (r) =>
                     familyGrainSubjectIds.has(r.subject_id) &&
                     (r.context_type ?? "").trim() === "opportunity",
             )
             .map((r) => r.context_id),
-    );
+        ...childFamilyFallbackCaseIds({
+            processRows: processRows.filter((r) => childGrainSubjectIds.has(r.subject_id)),
+            processConfig,
+            opportunityIdByContextId,
+        }),
+    ]);
 
     const [hostWorkUnitKeys, householdCases, stageWorkViewTargets, familyMembershipRows] = await Promise.all([
         hostOpportunityIds.length
@@ -272,6 +286,9 @@ export async function enrichSearchCandidates(args: {
             stageWorkViewTargets,
             familyMembershipRows,
             locationId,
+            // The same participation → case widening the record host applies; without it a journey
+            // anchored to its participation named no case, and its child had no family fallback.
+            opportunityIdByContextId,
         });
         contexts.push(...built.contexts);
         locationId = built.locationId;

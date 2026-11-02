@@ -21,6 +21,7 @@ export const OPERATOR_FOCUS_CARDS: {
     tour: FocusPanelCardKey;
     documents: FocusPanelCardKey;
     employment: FocusPanelCardKey;
+    financials: FocusPanelCardKey;
 } = {
     children: "children",
     household: "household",
@@ -41,4 +42,6 @@ export const OPERATOR_FOCUS_CARDS: {
      * standing here", which is the employment answer, not the family's enrollment work.
      */
     employment: "employment",
+    // The card a Billing projection's household record leads with (`durableRecordEntryFor.leadCard`).
+    financials: "financials",
 };

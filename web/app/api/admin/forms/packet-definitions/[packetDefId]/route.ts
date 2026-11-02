@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { derivedPacketMutationRefusal } from "@/lib/forms/packets/derivedPacketReadOnly";
 
 /** GET /api/admin/forms/packet-definitions/[packetDefId] — definition + ordered steps. */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ packetDefId: string }> }) {
@@ -101,6 +102,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (Object.keys(patch).length === 0) return jsonError("No valid fields to update", 400);
 
     const supabase = createAdminClient();
+    // A requirement-derived packet is owned by its Business Process stage (FI-12): read the STORED
+    // row, so a request cannot rename it, deactivate it or strip its marker.
+    const { data: current, error: curErr } = await supabase
+        .from("form_packet_definitions")
+        .select("id, metadata")
+        .eq("org_id", ctx.orgId)
+        .eq("id", packetDefId)
+        .maybeSingle();
+    if (curErr) return NextResponse.json({ error: curErr.message }, { status: 500 });
+    if (!current) return jsonError("Not found", 404);
+    const derived = derivedPacketMutationRefusal((current as { metadata?: unknown }).metadata);
+    if (derived) {
+        return NextResponse.json(
+            { error: derived.message, code: derived.code, owner: derived.owner, edit_href: derived.edit_href },
+            { status: derived.status }
+        );
+    }
+
     const { data, error } = await supabase
         .from("form_packet_definitions")
         .update(patch)

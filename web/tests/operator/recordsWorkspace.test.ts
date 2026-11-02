@@ -44,6 +44,8 @@ describe("the durable population lives beside the operating day, with no People 
     it("Roster declares the operating day AND its people, in that order", () => {
         expect(ROSTER_SECTION_TABS.map((t) => t.key)).toEqual([
             "roster",
+            // Calendar sits beside Roster: the same operating day, asked when and where (833e1bf7c).
+            "calendar",
             "attendance",
             "staff",
             "children",

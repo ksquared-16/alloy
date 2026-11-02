@@ -8,6 +8,7 @@
 import {
   FORBIDDEN_QA_ORG_IDS,
   QA_AUTHZ_FIXTURE_UUID_PREFIX,
+  QA_SURFACES_FIXTURE_UUID_PREFIX,
   QA_HOSTED_PROJECT_REF,
   QA_ORGS,
   QA_PRODUCTION_PROJECT_REF,
@@ -87,6 +88,7 @@ export function auditQaAuthzFixtureSql(sql: string): { ok: boolean; failures: st
     const text = m[0].replace(/\s+/g, " ");
     const scoped =
       text.includes(QA_AUTHZ_FIXTURE_UUID_PREFIX) ||
+      text.includes(QA_SURFACES_FIXTURE_UUID_PREFIX) ||
       /qa_run_id/i.test(text) ||
       /external_source/i.test(text) ||
       /:'vendor_/i.test(text);
