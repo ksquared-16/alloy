@@ -552,5 +552,124 @@
         }
       }
     ]
+  },
+  "api_identity": {
+    "note": "INC-94E9-02. verifyApiIdentity(authority.api_identity, <exact origin handed to the clients>). The authority's api_identity is issued from the owned environment record's assigned api.port (issuableApiIdentity); a port-block rule is not identity.",
+    "issued": {
+      "schema": "vacilando.api_identity.v1",
+      "environment_id": "certenv-synthetic01",
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 56999,
+      "digest": "d743c76e72ee37b42528ebad779443b13fc3da36a844a6800383506da72009f9"
+    },
+    "not_issuable": [
+      {
+        "api_port": 54421,
+        "refusal": "api_identity_shared_target_refused"
+      },
+      {
+        "api_port": null,
+        "refusal": "api_identity_absent"
+      }
+    ],
+    "vectors": [
+      {
+        "origin": "http://127.0.0.1:56999",
+        "note": "exact owned API",
+        "expected": {
+          "ok": true,
+          "digest": "d743c76e72ee37b42528ebad779443b13fc3da36a844a6800383506da72009f9"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:56999/",
+        "note": "trailing slash only",
+        "expected": {
+          "ok": true,
+          "digest": "d743c76e72ee37b42528ebad779443b13fc3da36a844a6800383506da72009f9"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:56998",
+        "note": "another port inside the same certenv block",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_mismatch"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:56109",
+        "note": "another certenv's API",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_mismatch"
+        }
+      },
+      {
+        "origin": "http://localhost:56999",
+        "note": "localhost is not 127.0.0.1",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_not_loopback"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:54421",
+        "note": "the shared alloy-cert API",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_shared_target_refused"
+        }
+      },
+      {
+        "origin": "https://127.0.0.1:56999",
+        "note": "another scheme",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_malformed"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:56999/rest/v1",
+        "note": "a path (hand clients the base origin)",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_malformed"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1:56999?apikey=x",
+        "note": "a query",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_malformed"
+        }
+      },
+      {
+        "origin": "http://u:p@127.0.0.1:56999",
+        "note": "credentials in the origin",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_malformed"
+        }
+      },
+      {
+        "origin": "http://127.0.0.1",
+        "note": "implicit port",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_malformed"
+        }
+      },
+      {
+        "origin": "",
+        "note": "no origin",
+        "expected": {
+          "ok": false,
+          "code": "api_identity_absent"
+        }
+      }
+    ]
   }
 }

@@ -39,9 +39,31 @@ export type PublicBrandValues = {
      * website button snippet. Organization and location layers only; a form never sets it.
      */
     tour_cta_label?: string | null;
+    /**
+     * The text colour on the school's website booking button (Tours feedback 2026-10-29). Organization
+     * and location layers only. Honoured only where it holds 4.5:1 on the button — otherwise the
+     * derived pair is used (`brandCtaButtonColors`). Unset = derived, as before.
+     */
+    tour_cta_text_color?: string | null;
+    /**
+     * Whose colours a TOUR uses (Tours review 2026-11-02). Organization and location layers only.
+     * Absent or "location" = the school's own brand (location → organization → platform); the attached
+     * form's brand never restyles the tour. "form" = the explicit opt-in: the published form's own brand
+     * leads, as a form opened on its own link always does. Never inferred from the form.
+     */
+    tour_brand_source?: TourBrandSource | null;
 };
 
-export const EMPTY_PUBLIC_BRAND: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null, tour_cta_label: null };
+export type TourBrandSource = "location" | "form";
+
+export const EMPTY_PUBLIC_BRAND: PublicBrandValues = {
+    display_name: null,
+    accent_color: null,
+    logo_url: null,
+    tour_cta_label: null,
+    tour_cta_text_color: null,
+    tour_brand_source: null,
+};
 
 /** The platform's tour call to action when no school has written its own (Director, P1-B). */
 export const PUBLIC_TOUR_CTA_DEFAULT = "Schedule a Tour";
@@ -54,11 +76,14 @@ export type EffectivePublicBrand = {
     accentColor: string;
     logoUrl: string | null;
     tourCtaLabel: string;
+    /** The authored booking-button text colour, or null when the derived ink applies. */
+    tourCtaTextColor: string | null;
     sources: {
         displayName: PublicBrandSource;
         accentColor: PublicBrandSource;
         logoUrl: PublicBrandSource;
         tourCtaLabel: PublicBrandSource;
+        tourCtaTextColor: PublicBrandSource;
     };
 };
 
@@ -108,23 +133,33 @@ export function readPublicBrandValues(metadata: unknown): PublicBrandValues {
         accent_color: normalizeBrandColor(o.accent_color),
         logo_url: normalizeBrandLogoUrl(o.logo_url),
         tour_cta_label: normalizeTourCtaLabel(o.tour_cta_label),
+        tour_cta_text_color: normalizeBrandColor(o.tour_cta_text_color),
+        tour_brand_source: normalizeTourBrandSource(o.tour_brand_source),
     };
+}
+
+export function normalizeTourBrandSource(raw: unknown): TourBrandSource | null {
+    return raw === "form" || raw === "location" ? raw : null;
 }
 
 /** Server validation for a brand write. `null` / empty = inherit. A malformed value is refused, not dropped. */
 export function validatePublicBrandInput(input: unknown): { ok: true; values: PublicBrandValues } | { ok: false; error: string } {
     if (input == null || typeof input !== "object" || Array.isArray(input)) return { ok: false, error: "Invalid brand payload" };
     const o = input as Record<string, unknown>;
-    const unknown = Object.keys(o).find((k) => !["display_name", "accent_color", "logo_url", "tour_cta_label"].includes(k));
+    const unknown = Object.keys(o).find((k) => !["display_name", "accent_color", "logo_url", "tour_cta_label", "tour_cta_text_color", "tour_brand_source"].includes(k));
     if (unknown) return { ok: false, error: `Unsupported brand field: ${unknown}` };
     const blank = (v: unknown) => v === undefined || v === null || (typeof v === "string" && !v.trim());
     const accent = blank(o.accent_color) ? null : normalizeBrandColor(o.accent_color);
     if (!blank(o.accent_color) && !accent) return { ok: false, error: "Colour must be a hex value like #1F6FEB" };
+    const ctaText = blank(o.tour_cta_text_color) ? null : normalizeBrandColor(o.tour_cta_text_color);
+    if (!blank(o.tour_cta_text_color) && !ctaText) return { ok: false, error: "Button text colour must be a hex value like #FFFFFF" };
     const logo = blank(o.logo_url) ? null : normalizeBrandLogoUrl(o.logo_url);
     if (!blank(o.logo_url) && !logo) return { ok: false, error: "Logo must be an https:// image address" };
     if (!blank(o.display_name) && typeof o.display_name !== "string") return { ok: false, error: "Display name must be text" };
     const cta = blank(o.tour_cta_label) ? null : normalizeTourCtaLabel(o.tour_cta_label);
     if (!blank(o.tour_cta_label) && !cta) return { ok: false, error: "Button text must be plain text" };
+    const tourBrandSource = blank(o.tour_brand_source) ? null : normalizeTourBrandSource(o.tour_brand_source);
+    if (!blank(o.tour_brand_source) && !tourBrandSource) return { ok: false, error: "Tour colours must come from \"location\" or \"form\"" };
     if (typeof o.tour_cta_label === "string" && o.tour_cta_label.replace(/\s+/g, " ").trim().length > PUBLIC_TOUR_CTA_MAX) {
         return { ok: false, error: `Button text is limited to ${PUBLIC_TOUR_CTA_MAX} characters` };
     }
@@ -135,6 +170,8 @@ export function validatePublicBrandInput(input: unknown): { ok: true; values: Pu
             accent_color: accent,
             logo_url: logo,
             tour_cta_label: cta,
+            tour_cta_text_color: ctaText,
+            tour_brand_source: tourBrandSource,
         },
     };
 }
@@ -156,6 +193,8 @@ export function formBrandLayer(formBrand: unknown): PublicBrandValues | null {
         // Forms historically accepted http(s); kept for compatibility on the form layer only.
         logo_url: normalizeBrandLogoUrl(o.logo_url, { allowHttp: true }),
         tour_cta_label: null,
+        tour_cta_text_color: null,
+        tour_brand_source: null,
     };
 }
 
@@ -195,13 +234,45 @@ export function resolveEffectivePublicBrand(layers: {
     const [accent, accentSource] = pick("accent_color");
     const [logo, logoSource] = pick("logo_url");
     const [cta, ctaSource] = pick("tour_cta_label");
+    const [ctaText, ctaTextSource] = pick("tour_cta_text_color");
     return {
         displayName,
         accentColor: accent ?? PUBLIC_BRAND_PLATFORM_ACCENT,
         logoUrl: logo,
         tourCtaLabel: cta ?? PUBLIC_TOUR_CTA_DEFAULT,
-        sources: { displayName: nameSource, accentColor: accentSource, logoUrl: logoSource, tourCtaLabel: ctaSource },
+        tourCtaTextColor: ctaText,
+        sources: {
+            displayName: nameSource,
+            accentColor: accentSource,
+            logoUrl: logoSource,
+            tourCtaLabel: ctaSource,
+            tourCtaTextColor: ctaTextSource,
+        },
     };
+}
+
+/**
+ * Does a TOUR take the attached form's brand? Only when the school explicitly chose it: the location's
+ * own choice, else the organization's. Absent everywhere = no — Tours use the school's brand.
+ */
+export function tourBrandUsesForm(layers: { location?: PublicBrandValues | null; organization?: PublicBrandValues | null }): boolean {
+    return (layers.location?.tour_brand_source ?? layers.organization?.tour_brand_source ?? null) === "form";
+}
+
+/**
+ * The brand a tour shows — hosted calendar, the form step inside it, the website button and the admin
+ * preview all resolve through here, so they cannot disagree. Location → organization → platform; the
+ * attached form's published brand leads only under the explicit `tour_brand_source: "form"`. Neither
+ * configuration is rewritten: the form keeps its own brand for its own link.
+ */
+export function resolveTourPublicBrand(layers: {
+    form?: PublicBrandValues | null;
+    location?: PublicBrandValues | null;
+    organization?: PublicBrandValues | null;
+}): EffectivePublicBrand {
+    return resolveEffectivePublicBrand(
+        tourBrandUsesForm(layers) ? layers : { location: layers.location, organization: layers.organization }
+    );
 }
 
 // ── Contrast ─────────────────────────────────────────────────────────────────────────────────────
@@ -308,4 +379,26 @@ export function brandButtonColors(accent: string): BrandButtonColors {
         if (contrastRatio(brand, ink) >= BRAND_TEXT_CONTRAST_MIN) return { fill: brand, ink, treatment: "brand_dark_text" };
     }
     return { fill: brand, ink: brandOnAccent(brand), treatment: "brand_dark_text" };
+}
+
+export type BrandCtaButtonColors = {
+    fill: string;
+    ink: string;
+    treatment: BrandButtonColors["treatment"] | "chosen_text" | "chosen_text_below_contrast";
+};
+
+/**
+ * The website booking button (Tours feedback 2026-10-29): the brand pair, with the school's chosen
+ * text colour when it has one. The AA floor still holds — the chosen colour is used on the brand
+ * itself if it reads at 4.5:1, else on the derived fill if it reads there, else it is set aside for
+ * the derived pair (`chosen_text_below_contrast`, so the operator preview can say why).
+ */
+export function brandCtaButtonColors(accent: string, textColor: string | null | undefined): BrandCtaButtonColors {
+    const derived = brandButtonColors(accent);
+    const chosen = normalizeBrandColor(textColor);
+    if (!chosen) return derived;
+    const brand = normalizeBrandColor(accent) ?? PUBLIC_BRAND_PLATFORM_ACCENT;
+    if (contrastRatio(brand, chosen) >= BRAND_TEXT_CONTRAST_MIN) return { fill: brand, ink: chosen, treatment: "chosen_text" };
+    if (contrastRatio(derived.fill, chosen) >= BRAND_TEXT_CONTRAST_MIN) return { fill: derived.fill, ink: chosen, treatment: "chosen_text" };
+    return { ...derived, treatment: "chosen_text_below_contrast" };
 }

@@ -14,17 +14,22 @@ type TabItem<K extends string = string> = { key: K; label: string };
 
 /**
  * Horizontal entity tabs for AdminV2 Settings (matches JobDrawerV2TabBar / workspace record nav).
+ *
+ * `tone="secondary"` paints the active tab in the brand secondary (Bend Pine) — the Organization ›
+ * Locations accent — for surfaces embedded there (Tours). Default stays the brand primary.
  */
 export default function SettingsEntityTabBar<K extends string>({
     tabs,
     activeKey,
     onSelect,
     "aria-label": ariaLabel = "Field entity",
+    tone = "primary",
 }: {
     tabs: TabItem<K>[];
     activeKey: K;
     onSelect: (key: K) => void;
     "aria-label"?: string;
+    tone?: "primary" | "secondary";
 }) {
     return (
         <div
@@ -47,7 +52,7 @@ export default function SettingsEntityTabBar<K extends string>({
                             isOn
                                 ? {
                                       backgroundColor: neutral.surface,
-                                      color: brand.primary,
+                                      color: tone === "secondary" ? brand.secondary : brand.primary,
                                       boxShadow: derived.cardShadow,
                                   }
                                 : { color: derived.textSecondary }

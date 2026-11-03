@@ -34,10 +34,13 @@ function inScope<Q extends { eq: any; is: any }>(query: Q, scope: TourScheduleSc
     return scope.locationId ? query.eq("location_id", scope.locationId) : query.is("location_id", null);
 }
 
-/** Active rules that contribute slots alongside this scope (its own + organization-wide). */
+/**
+ * Active rules that contribute slots alongside this scope — the location's own (legacy
+ * organization-wide rules no longer offer times at a location, so they are never an overlap there).
+ */
 async function loadContributingRules(supabase: SupabaseClient, scope: TourScheduleScope): Promise<TourRuleForAuthoring[]> {
     let q = supabase.from("tour_availability_rules").select(RULE_COLUMNS).eq("org_id", scope.orgId).eq("is_active", true);
-    q = scope.locationId ? q.or(`location_id.eq.${scope.locationId},location_id.is.null`) : q.is("location_id", null);
+    q = inScope(q, scope);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
     return (data ?? []) as unknown as TourRuleForAuthoring[];

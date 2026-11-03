@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
     ConfigurationPrimaryButton,
@@ -13,8 +12,8 @@ import {
     duplicateTourScheduleDraft,
     findRepeatedTourSchedules,
     groupTourRulesIntoSchedules,
+    isLocationOwnRule,
     tourScheduleGroupToDraft,
-    TOUR_ORGANIZATION_DEFAULTS_HREF,
     TOUR_WEEKDAY_DISPLAY_ORDER,
     TOUR_WEEKDAY_LABELS,
     TOUR_WEEKDAY_SHORT,
@@ -52,15 +51,15 @@ const SECTIONS: { key: ToursSection; label: string }[] = [
  *
  *   - Availability — weekly schedules. Each schedule is shown ONCE, with its weekdays and all of its
  *     windows. (The old "Week at a glance" list repeated every rule per weekday beneath the same
- *     schedules, so one Monday window read as two entries.) Organization-wide schedules a location
- *     inherits are listed separately, read-only, with a link to where they are edited.
+ *     schedules, so one Monday window read as two entries.)
  *   - Booking experience — the school's public identity: name, colour, logo, button text.
  *   - Preview & Share — the hosted calendar, its iframe and a website button (location scope).
  *
- * Inheritance is ADDITIVE, as the slot engine has always worked: an organization-wide schedule offers
- * tours at every location, and a location's own schedules add to it. A location cannot hide an
- * organization-wide schedule; it is changed (or removed) at organization scope only, and the server
- * refuses a location-scoped edit of it.
+ * Location-specific (Tours feedback 2026-10-29): this surface shows and edits only the schedules
+ * that belong to the location in scope. Organization-wide rules (`location_id` null) are neither
+ * listed, edited nor copied here, and nothing here deletes or rewrites them. They no longer offer new
+ * times either (`computeAvailableTourSlots`): a location offers what is configured here, and nothing
+ * until it is. Bookings made under them are untouched.
  *
  * Every time is a wall-clock time in the schedule's own zone, said on a 12-hour clock.
  */
@@ -79,7 +78,7 @@ export default function TourAvailabilitySettingsClient({
 }) {
     const [section, setSection] = useState<ToursSection>("availability");
     const [locations, setLocations] = useState<LocationOpt[]>([]);
-    /** "" = organization-wide scope. */
+    /** "" = no location chosen yet (standalone page); Tours is configured per location. */
     const [scope, setScope] = useState(locationId ?? "");
     const peeked = embedded && orgId && locationId ? peekLocationTourRules(orgId, locationId) : null;
     const [rules, setRules] = useState<RuleRow[]>(() => peeked?.rules ?? []);
@@ -89,7 +88,7 @@ export default function TourAvailabilitySettingsClient({
     const [notice, setNotice] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [editor, setEditor] = useState<
-        | { mode: "create"; draft: TourScheduleDraft | null; fromInherited?: string }
+        | { mode: "create"; draft: TourScheduleDraft | null }
         | { mode: "edit"; group: TourScheduleGroup }
         | null
     >(null);
@@ -126,21 +125,21 @@ export default function TourAvailabilitySettingsClient({
         }
         setErr(null);
         try {
+            const target = scope.trim();
             let nextRules: RuleRow[];
-            if (embedded && orgId && locationId) {
+            if (!target) {
+                nextRules = [];
+            } else if (embedded && orgId && locationId) {
                 const { snapshot } = await loadLocationTourRules(orgId, locationId, { force: hadRules });
                 nextRules = snapshot.rules;
             } else {
-                const qs = scope.trim() ? `?location_id=${encodeURIComponent(scope.trim())}` : "";
-                const res = await fetch(`/api/admin/tours/availability-rules${qs}`, { credentials: "include" });
+                const res = await fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(target)}`, { credentials: "include" });
                 const j = (await res.json()) as { rules?: RuleRow[]; error?: string };
                 if (!res.ok) throw new Error(j.error ?? res.statusText);
-                // A location sees its own rules and the organization-wide rules it inherits; the
-                // organization scope sees organization-wide rules.
-                nextRules = (j.rules ?? []).filter((rule) =>
-                    scope.trim() ? rule.location_id === scope.trim() || rule.location_id == null : rule.location_id == null
-                );
+                nextRules = j.rules ?? [];
             }
+            // Only this location's own rules — the set the slot engine offers new times from.
+            nextRules = nextRules.filter((rule) => isLocationOwnRule(rule, target));
             if (requestSeq !== requestSeqRef.current) return;
             setRules(nextRules);
             hasRulesRef.current = nextRules.length > 0;
@@ -177,13 +176,13 @@ export default function TourAvailabilitySettingsClient({
     }, [loadRules]);
 
     const groups = useMemo(() => groupTourRulesIntoSchedules(rules, scopeLocationId), [rules, scopeLocationId]);
-    const localGroups = groups.filter((g) => !g.inherited);
-    const inheritedGroups = groups.filter((g) => g.inherited);
     const repeats = useMemo(() => findRepeatedTourSchedules(groups), [groups]);
 
+    // Invalidate the shared location cache BEFORE reloading: a location's first schedule otherwise
+    // reloaded the cached empty snapshot, hid the new schedule and told Share "no active schedule".
     const committed = async (message?: string) => {
-        await loadRules();
         await onMutationCommitted?.();
+        await loadRules();
         setNotice(message ?? null);
     };
 
@@ -204,6 +203,36 @@ export default function TourAvailabilitySettingsClient({
                 throw new Error("Tour availability save was not confirmed by the authoritative response.");
             }
             await committed();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Activate / deactivate a named schedule in place: the same schedule, days, times and settings,
+     * only its status flips (the schedule PUT reconciles the existing rows — nothing is duplicated).
+     */
+    const toggleSchedule = async (g: TourScheduleGroup) => {
+        if (!g.scheduleId) return;
+        const next = !g.is_active;
+        if (g.mixedSettings && !confirm(`Some days of "${g.name}" have different settings. ${next ? "Activating" : "Deactivating"} it applies the first day's settings to every day. Continue?`)) return;
+        setSaving(true);
+        try {
+            const draft = { ...tourScheduleGroupToDraft(g), is_active: next };
+            const res = await fetch(`/api/admin/tours/schedules/${encodeURIComponent(g.scheduleId)}`, {
+                method: "PUT",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ location_id: scopeLocationId, schedule: draft }),
+            });
+            const j = (await res.json().catch(() => ({}))) as { schedule_id?: string; rules?: { is_active?: boolean }[]; error?: string };
+            if (!res.ok) throw new Error(j.error ?? res.statusText);
+            if (j.schedule_id !== g.scheduleId || (j.rules?.length ?? 0) !== draft.days.length * draft.windows.length || j.rules!.some((r) => r.is_active !== next)) {
+                throw new Error("Tour schedule status was not confirmed by the authoritative response.");
+            }
+            await committed(next ? `"${g.name}" is active — families can book its times.` : `"${g.name}" is inactive — its times are hidden from families.`);
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -237,7 +266,7 @@ export default function TourAvailabilitySettingsClient({
                 <header>
                     <h1 className="text-lg font-semibold text-alloy-midnight">Tours</h1>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
-                        Organization-wide schedules offer tours at every location. Choose a location to see what it adds and how families book.
+                        Tours are set up per location. Choose a location to set its schedules, booking experience and calendar.
                     </p>
                 </header>
             :   null}
@@ -255,7 +284,9 @@ export default function TourAvailabilitySettingsClient({
                         }}
                         data-testid="tours-scope"
                     >
-                        <option value="">Organization-wide (all locations)</option>
+                        <option value="" disabled>
+                            Choose a location
+                        </option>
                         {locations.map((l) => (
                             <option key={l.id} value={l.id}>
                                 {l.label ?? l.id.slice(0, 8)}
@@ -265,13 +296,17 @@ export default function TourAvailabilitySettingsClient({
                 </label>
             :   null}
 
-            <SettingsEntityTabBar tabs={SECTIONS} activeKey={section} onSelect={setSection} aria-label="Tours configuration" />
+            <SettingsEntityTabBar tabs={SECTIONS} activeKey={section} onSelect={setSection} aria-label="Tours configuration" tone="secondary" />
 
             {err ?
                 <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>
             :   null}
 
-            {section === "booking" ?
+            {!scopeLocationId ?
+                <p className="rounded-lg border border-dashed border-alloy-bend-pine/30 px-3 py-3 text-sm text-alloy-midnight/75" data-testid="tours-choose-location">
+                    Choose a location above to configure its tours.
+                </p>
+            : section === "booking" ?
                 <TourPublicBrandPanel key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} />
             : section === "share" ?
                 <TourShareSection key={scopeLocationId ?? "org"} scopeLocationId={scopeLocationId} scopeLabel={scopeLabel} hasSchedules={groups.some((g) => g.is_active)} />
@@ -281,14 +316,6 @@ export default function TourAvailabilitySettingsClient({
                             {notice}
                         </p>
                     :   null}
-
-                    <AvailabilityOwnership
-                        scopeLocationId={scopeLocationId}
-                        scopeLabel={scopeLabel}
-                        localCount={localGroups.length}
-                        inheritedCount={inheritedGroups.length}
-                        embedded={embedded}
-                    />
 
                     {loading && !refreshing && rules.length === 0 ?
                         <div className="rounded-xl border border-dashed border-alloy-forge/15 p-4" data-testid="tours-availability-pending" aria-busy="true">
@@ -311,14 +338,9 @@ export default function TourAvailabilitySettingsClient({
 
                     {!loading || rules.length > 0 ?
                         <section aria-label="Schedules" className="space-y-2" data-testid="tours-local-schedules">
-                            <h2 className="config-typo-field-label">
-                                {scopeLocationId ? `Schedules set for ${scopeLabel}` : "Organization-wide schedules"}
-                            </h2>
-                            {localGroups.length === 0 && scopeLocationId && rules.length > 0 ?
-                                <p className="config-typo-sublabel">None — {scopeLabel} uses only the organization-wide schedules below.</p>
-                            :   null}
+                            <h2 className="config-typo-field-label">Schedules for {scopeLabel}</h2>
                             <ul className="space-y-2">
-                                {localGroups.map((g) => (
+                                {groups.map((g) => (
                                     <ScheduleCard
                                         key={g.key}
                                         group={g}
@@ -334,7 +356,7 @@ export default function TourAvailabilitySettingsClient({
                                             setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
                                         }}
                                         onDelete={() => void removeGroup(g)}
-                                        onToggle={g.scheduleId ? null : () => void toggleRule(g.rules[0]!)}
+                                        onToggle={g.scheduleId ? () => void toggleSchedule(g) : () => void toggleRule(g.rules[0]!)}
                                     >
                                         {editingRule && g.rules[0]?.id === editingRule.id ?
                                             <TourWindowForm
@@ -367,7 +389,6 @@ export default function TourAvailabilitySettingsClient({
                                     scopeLocationId={scopeLocationId}
                                     scheduleId={null}
                                     initial={editor.draft}
-                                    inheritedSource={editor.fromInherited ?? null}
                                     onSaved={async (overlaps) => {
                                         setEditor(null);
                                         await committed(overlapNotice(overlaps));
@@ -383,86 +404,13 @@ export default function TourAvailabilitySettingsClient({
                                     }}
                                     data-testid="locations-tour-add-window"
                                 >
-                                    {scopeLocationId ? `Add a schedule for ${scopeLabel}` : "Add organization-wide schedule"}
+                                    {`Add a schedule for ${scopeLabel}`}
                                 </ConfigurationPrimaryButton>
                             }
                         </section>
                     :   null}
 
-                    {inheritedGroups.length > 0 ?
-                        <section aria-label="Organization-wide schedules" className="space-y-2" data-testid="tours-inherited-schedules">
-                            <h2 className="config-typo-field-label">Organization-wide schedules (also offered here)</h2>
-                            <p className="config-typo-sublabel">
-                                Managed by the organization, so they can&apos;t be edited from {scopeLabel}.{" "}
-                                {embedded ?
-                                    <Link href={TOUR_ORGANIZATION_DEFAULTS_HREF} className="font-semibold text-alloy-bend-pine underline" data-testid="tours-org-defaults-link">
-                                        Edit organization-wide schedules
-                                    </Link>
-                                :   null}
-                            </p>
-                            <ul className="space-y-2">
-                                {inheritedGroups.map((g) => (
-                                    <ScheduleCard
-                                        key={g.key}
-                                        group={g}
-                                        disabled={busy}
-                                        repeats={repeats.get(g.key) ?? null}
-                                        duplicateLabel="Copy to this location"
-                                        onDuplicate={() => {
-                                            setNotice(null);
-                                            setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g), fromInherited: g.name });
-                                        }}
-                                    />
-                                ))}
-                            </ul>
-                        </section>
-                    :   null}
                 </div>
-            }
-        </div>
-    );
-}
-
-/** Who owns the times shown here, and where the rest are configured. */
-function AvailabilityOwnership({
-    scopeLocationId,
-    scopeLabel,
-    localCount,
-    inheritedCount,
-    embedded,
-}: {
-    scopeLocationId: string | null;
-    scopeLabel: string;
-    localCount: number;
-    inheritedCount: number;
-    embedded: boolean;
-}) {
-    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-    return (
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs leading-5 text-alloy-midnight/80" data-testid="tours-availability-ownership">
-            {scopeLocationId ?
-                <>
-                    <p>
-                        Families booking at <strong>{scopeLabel}</strong> see the times from{" "}
-                        <strong>{plural(localCount, "schedule", "schedules")} set here</strong> plus{" "}
-                        <strong>{plural(inheritedCount, "organization-wide schedule", "organization-wide schedules")}</strong>. Each time is
-                        offered once, even if two schedules cover it, and bookings at that time share its capacity.
-                    </p>
-                    <p className="mt-1">
-                        Organization-wide schedules apply at every location and are changed in{" "}
-                        {embedded ?
-                            <Link href={TOUR_ORGANIZATION_DEFAULTS_HREF} className="font-semibold underline">
-                                Organization › Tours
-                            </Link>
-                        :   <strong>Organization-wide (all locations)</strong>}
-                        . To give {scopeLabel} different times only, add a schedule here; to stop offering an organization-wide time here,
-                        it has to change for every location.
-                    </p>
-                </>
-            :   <p>
-                    These schedules offer tours at <strong>every location</strong>. A location can add its own schedules on top of them in
-                    Organization › Locations › Tours, but cannot switch these off.
-                </p>
             }
         </div>
     );
@@ -502,7 +450,7 @@ function ScheduleCard({
 }: {
     group: TourScheduleGroup;
     disabled: boolean;
-    /** Another visible schedule with the same days and times (e.g. a copy of an organization-wide one). */
+    /** Another schedule at this location with the same days and times. */
     repeats: string | null;
     duplicateLabel?: string;
     onEdit?: () => void;
@@ -515,21 +463,29 @@ function ScheduleCard({
         <li
             className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 text-sm"
             data-testid={group.scheduleId ? `tours-schedule-${group.scheduleId}` : `locations-tour-rule-${group.rules[0]?.id}`}
-            data-tour-schedule-scope={group.inherited ? "inherited" : "local"}
+            data-tour-schedule-scope="local"
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 space-y-1.5">
                     <div className="font-semibold text-alloy-midnight">
                         {group.name}
-                        {group.inherited ?
-                            <span className="ml-2 rounded bg-sky-100 px-1.5 text-[11px] font-semibold text-sky-800">Organization-wide</span>
-                        :   null}
+                        {/* Status (are its times offered?) and approval (who confirms a request?) are separate. */}
+                        {group.is_active ?
+                            <span className="ml-2 rounded bg-alloy-bend-pine/[0.14] px-1.5 text-[11px] font-semibold text-alloy-bend-pine" data-testid="tours-schedule-status" data-status="active">
+                                Active
+                            </span>
+                        :   <span className="ml-2 rounded bg-alloy-stone/25 px-1.5 text-[11px] font-semibold text-alloy-midnight/65" data-testid="tours-schedule-status" data-status="inactive">
+                                Inactive — hidden from families
+                            </span>
+                        }
                         {group.approval_required ?
-                            <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">needs approval</span>
-                        :   <span className="ml-2 rounded bg-alloy-pine/15 px-1.5 text-[11px] font-semibold text-alloy-pine">auto-confirm</span>}
-                        {!group.is_active ?
-                            <span className="ml-2 text-xs text-alloy-midnight/45">inactive</span>
-                        :   null}
+                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900" data-testid="tours-schedule-approval">
+                                Staff approve bookings
+                            </span>
+                        :   <span className="ml-1.5 rounded bg-alloy-stone/15 px-1.5 text-[11px] font-semibold text-alloy-midnight/65" data-testid="tours-schedule-approval">
+                                Bookings auto-confirm
+                            </span>
+                        }
                     </div>
                     <div className="flex flex-wrap gap-1" aria-label={`Days: ${describeDays(group.days)}`} data-testid="tours-schedule-days">
                         {TOUR_WEEKDAY_DISPLAY_ORDER.map((d) => {
@@ -540,7 +496,7 @@ function ScheduleCard({
                                     title={TOUR_WEEKDAY_LABELS[d]}
                                     data-tour-day={on ? "on" : "off"}
                                     className={`inline-flex h-6 w-9 items-center justify-center rounded text-[11px] font-semibold ${
-                                        on ? "bg-alloy-midnight text-white" : "bg-alloy-stone/25 text-alloy-midnight/35"
+                                        on ? "bg-alloy-bend-pine text-white" : "bg-alloy-stone/25 text-alloy-midnight/35"
                                     }`}
                                 >
                                     {TOUR_WEEKDAY_SHORT[d]}
@@ -573,7 +529,7 @@ function ScheduleCard({
                         {duplicateLabel}
                     </ConfigurationSecondaryButton>
                     {onToggle ?
-                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle}>
+                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle} data-testid="tours-schedule-toggle-active">
                             {group.is_active ? "Deactivate" : "Activate"}
                         </ConfigurationSecondaryButton>
                     :   null}
@@ -622,15 +578,12 @@ function ScheduleEditor({
     scopeLocationId,
     scheduleId,
     initial,
-    inheritedSource = null,
     onSaved,
     onCancel,
 }: {
     scopeLocationId: string | null;
     scheduleId: string | null;
     initial: TourScheduleDraft | null;
-    /** Copying an organization-wide schedule: the original keeps applying here. */
-    inheritedSource?: string | null;
     onSaved: (overlaps: TourScheduleOverlap[]) => Promise<void>;
     onCancel: () => void;
 }) {
@@ -697,16 +650,10 @@ function ScheduleEditor({
     };
 
     return (
-        <div className="mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="tours-schedule-editor">
+        <div className="mt-3 max-w-2xl rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="tours-schedule-editor">
             <div className="text-xs font-semibold text-alloy-midnight/75">
                 {scheduleId ? "Edit weekly schedule" : initial ? "New schedule (copied settings — no bookings are copied)" : "New weekly schedule"}
             </div>
-            {inheritedSource ?
-                <p className="mt-1 text-[11px] text-amber-900" data-testid="tours-schedule-copy-inherited-note">
-                    “{inheritedSource}” keeps applying here — it is organization-wide. Change the days or times so this copy adds
-                    something; identical times are offered once either way.
-                </p>
-            :   null}
             {msg ?
                 <p className="mt-1 text-xs text-red-700">{msg}</p>
             :   null}
@@ -727,7 +674,7 @@ function ScheduleEditor({
                                     aria-pressed={on}
                                     onClick={() => set("days", on ? draft.days.filter((x) => x !== d) : [...draft.days, d].sort((a, b) => a - b))}
                                     className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                                        on ? "border-alloy-midnight bg-alloy-midnight text-white" : "border-alloy-stone/40 bg-white text-alloy-midnight"
+                                        on ? "border-alloy-bend-pine bg-alloy-bend-pine text-white" : "border-alloy-stone/40 bg-white text-alloy-midnight"
                                     }`}
                                     data-testid={`tours-schedule-day-${d}`}
                                 >
@@ -741,24 +688,36 @@ function ScheduleEditor({
                     <legend>Times each day</legend>
                     <ul className="mt-1 space-y-1.5">
                         {draft.windows.map((w, i) => (
-                            <li key={i} className="flex flex-wrap items-center gap-2">
-                                <input
-                                    type="time"
-                                    className="config-runtime-input w-32"
-                                    value={wallTimeToInputValue(w.start_time)}
-                                    aria-label={`Window ${i + 1} start`}
-                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, start_time: `${e.target.value}:00` } : x)))}
-                                    data-testid={`tours-schedule-window-start-${i}`}
-                                />
-                                <span>to</span>
-                                <input
-                                    type="time"
-                                    className="config-runtime-input w-32"
-                                    value={wallTimeToInputValue(w.end_time)}
-                                    aria-label={`Window ${i + 1} end`}
-                                    onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, end_time: `${e.target.value}:00` } : x)))}
-                                    data-testid={`tours-schedule-window-end-${i}`}
-                                />
+                            <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid={`tours-schedule-window-${i}`}>
+                                {/* `.config-runtime-input` is width:100% and un-layered, so it beats a
+                                    Tailwind width utility on the input itself. Each input fills a fixed
+                                    8rem box instead — the narrowest width at which a time field shows
+                                    "11:00 AM" and its picker without clipping. Start and end sit side by
+                                    side wherever two boxes fit; in a narrower panel (a phone) the end
+                                    wraps under the start rather than being cut off. */}
+                                <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid={`tours-schedule-window-times-${i}`}>
+                                    <span className="block w-32 shrink-0">
+                                        <input
+                                            type="time"
+                                            className="config-runtime-input"
+                                            value={wallTimeToInputValue(w.start_time)}
+                                            aria-label={`Window ${i + 1} start`}
+                                            onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, start_time: `${e.target.value}:00` } : x)))}
+                                            data-testid={`tours-schedule-window-start-${i}`}
+                                        />
+                                    </span>
+                                    <span>to</span>
+                                    <span className="block w-32 shrink-0">
+                                        <input
+                                            type="time"
+                                            className="config-runtime-input"
+                                            value={wallTimeToInputValue(w.end_time)}
+                                            aria-label={`Window ${i + 1} end`}
+                                            onChange={(e) => set("windows", draft.windows.map((x, j) => (j === i ? { ...x, end_time: `${e.target.value}:00` } : x)))}
+                                            data-testid={`tours-schedule-window-end-${i}`}
+                                        />
+                                    </span>
+                                </div>
                                 <span className="text-alloy-midnight/55">{formatTourWallTimeRange(w.start_time, w.end_time)}</span>
                                 {draft.windows.length > 1 ?
                                     <button type="button" className="text-red-700 underline" onClick={() => set("windows", draft.windows.filter((_, j) => j !== i))}>
@@ -811,16 +770,36 @@ function ScheduleEditor({
                     Families per time
                     <input type="number" min={1} className="config-runtime-input mt-1" value={draft.max_bookings_per_slot} onChange={(e) => set("max_bookings_per_slot", Number(e.target.value))} data-testid="locations-tour-max-bookings" />
                 </label>
-                <div className="space-y-1 text-xs">
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={draft.approval_required} onChange={(e) => set("approval_required", e.target.checked)} data-testid="locations-tour-approval" />
-                        Staff approve each booking
+                <fieldset className="space-y-1 text-xs sm:col-span-2" data-testid="tours-schedule-status-choice">
+                    <legend className="font-medium text-alloy-midnight/80">Status</legend>
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-schedule-status" className="mt-0.5" checked={draft.is_active} onChange={() => set("is_active", true)} data-testid="locations-tour-active" />
+                        <span>
+                            Active <span className="text-alloy-midnight/55">— families can book these times as soon as you save</span>
+                        </span>
                     </label>
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={draft.is_active} onChange={(e) => set("is_active", e.target.checked)} data-testid="locations-tour-active" />
-                        Active
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-schedule-status" className="mt-0.5" checked={!draft.is_active} onChange={() => set("is_active", false)} data-testid="locations-tour-inactive" />
+                        <span>
+                            Inactive (draft) <span className="text-alloy-midnight/55">— saved, but families can&apos;t see or book these times</span>
+                        </span>
                     </label>
-                </div>
+                    {!draft.is_active ?
+                        <p className="text-[11px] text-amber-900" data-testid="tours-schedule-inactive-warning">
+                            This schedule will be saved inactive: its times stay hidden until you activate it.
+                        </p>
+                    :   null}
+                </fieldset>
+                <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                    <input type="checkbox" className="mt-0.5" checked={draft.approval_required} onChange={(e) => set("approval_required", e.target.checked)} data-testid="locations-tour-approval" />
+                    <span>
+                        Bookings require approval
+                        <span className="block text-[11px] text-alloy-midnight/55">
+                            Families still see and request these times; staff approve each booking afterward. It doesn&apos;t hide times or
+                            deactivate the schedule.
+                        </span>
+                    </span>
+                </label>
                 <p className="text-[11px] text-alloy-midnight/60 sm:col-span-2" data-testid="tours-schedule-preview">
                     {perDay.length ?
                         `Each selected day offers ${perDay.length} tour ${perDay.length === 1 ? "time" : "times"}: ${perDay.join(", ")} — ${perDay.length * draft.days.length} a week.`
@@ -900,7 +879,7 @@ function TourWindowForm({
     };
 
     return (
-        <div className="mt-3 rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="locations-tour-edit-form">
+        <div className="mt-3 max-w-2xl rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3" data-testid="locations-tour-edit-form">
             <div className="text-xs font-semibold text-alloy-midnight/75">Edit tour window</div>
             {msg ?
                 <p className="mt-1 text-xs text-red-700">{msg}</p>
@@ -940,16 +919,30 @@ function TourWindowForm({
                     Families per time
                     <input type="number" min={1} className="config-runtime-input mt-1" value={max_bookings_per_slot} onChange={(e) => setMax(Number(e.target.value))} data-testid="locations-tour-max-bookings" />
                 </label>
-                <div className="space-y-1 text-xs">
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={approval_required} onChange={(e) => setAppr(e.target.checked)} data-testid="locations-tour-approval" />
-                        Staff approve each booking
+                <fieldset className="space-y-1 text-xs sm:col-span-2">
+                    <legend className="font-medium text-alloy-midnight/80">Status</legend>
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-window-status" className="mt-0.5" checked={is_active} onChange={() => setIsActive(true)} data-testid="locations-tour-active" />
+                        <span>
+                            Active <span className="text-alloy-midnight/55">— families can book this window</span>
+                        </span>
                     </label>
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={is_active} onChange={(e) => setIsActive(e.target.checked)} data-testid="locations-tour-active" />
-                        Active tour window
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-window-status" className="mt-0.5" checked={!is_active} onChange={() => setIsActive(false)} data-testid="locations-tour-inactive" />
+                        <span>
+                            Inactive <span className="text-alloy-midnight/55">— saved, but hidden from families</span>
+                        </span>
                     </label>
-                </div>
+                </fieldset>
+                <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                    <input type="checkbox" className="mt-0.5" checked={approval_required} onChange={(e) => setAppr(e.target.checked)} data-testid="locations-tour-approval" />
+                    <span>
+                        Bookings require approval
+                        <span className="block text-[11px] text-alloy-midnight/55">
+                            Families still see and request these times; staff approve each booking afterward.
+                        </span>
+                    </span>
+                </label>
             </div>
             <div className="mt-3 flex gap-2">
                 <ConfigurationPrimaryButton disabled={disabled || submitting} onClick={() => void submit()} data-testid="locations-tour-save">

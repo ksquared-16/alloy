@@ -34,10 +34,14 @@ const WEB = join(__dirname, "../..");
 const read = (rel: string) => readFileSync(join(WEB, rel), "utf8");
 const FIREFLY = "93667019-bd28-49b5-a688-acc9bb1e0a19";
 
-/** The shared verifier's git blob on sprint/opwork_2cea84351d90_sprint_a0442b8fac97 (80eb74466) and sprint/opwork_b77b3cbb5840_sprint_386d603e60c7 (1b8d6e2b1). */
-const SHARED_VERIFIER_BLOB = "20f04adeb14be4667e4415cccd25e19fadf71881";
+/**
+ * The shared verifier's git blob after staging f2df7f3c was integrated with the API-identity v2 verifier
+ * (INC-94E9-02; Enrollment bcc40a7a2 / Tours 37922cf3, the bytes every installed program pin names, e25649c2…).
+ * It was 20f04ade… (c028b885… vectors) at ab05b96b; the vectors keep those sections unchanged and append api_identity.
+ */
+const SHARED_VERIFIER_BLOB = "a0eb9d467a2ff34d9e8329a9e40f28ddb8b9ff13";
 const VECTORS_PATH = "tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json";
-const VECTORS_SHA256 = "c028b885672509e5f28e30b12f0cf3f2128bba92d45999002daad6894cb94d4c";
+const VECTORS_SHA256 = "5f7a6c9d683546fdf18635b63befdd2424d29f4936d6fcf320c86e710fe25b28";
 /** Installed toolkit eeaa6dac6860 lib/certification-fixture.mjs: the registered surfaces_room_uses_* pins. */
 const INSTALLED = {
     candidate: "47332abe2d47581b3e9c81ee809b28d4881316da",

@@ -25,6 +25,7 @@ export type TourCalendarShareLinkRow = {
     expires_at: string | null;
     allowed_embed_origins: string[] | null;
     metadata: Record<string, unknown> | null;
+    created_at?: string | null;
 };
 
 export type TourCalendarShareLink = {
@@ -44,7 +45,65 @@ export type TourCalendarShareLink = {
     /** Absolute hosted URL, or null when the environment has no public origin configured. */
     calendarUrl: string | null;
     allowedEmbedOrigins: string[];
+    /** When the link was created — what tells two links of one form apart. */
+    createdAt: string | null;
+    /**
+     * Whether a family opening the published calendar can book (`measureTourCalendarReadiness`, the
+     * public page's own checks). Null when the calendar is not published or was not measured.
+     */
+    readiness?: TourCalendarReadiness | null;
 };
+
+/** Why a published calendar is not bookable — the public resolver's codes, plus the one it folds away. */
+export type TourCalendarReadinessCode =
+    | "NOT_FOUND"
+    | "NOT_PUBLISHED"
+    | "LOCATION_UNAVAILABLE"
+    | "INACTIVE"
+    | "EXPIRED"
+    | "NO_PUBLISHED_VERSION"
+    | "ORIGIN_FORBIDDEN"
+    | "NO_ACTIVE_SCHEDULE";
+
+export type TourCalendarReadiness = {
+    /** bookable: anyone with the link · restricted: only from the named websites · not_bookable: no one. */
+    state: "bookable" | "restricted" | "not_bookable";
+    code: TourCalendarReadinessCode | null;
+    restrictedToOrigins: string[];
+};
+
+/**
+ * What the Share screen says about a published calendar. "Live" is said only when the public page
+ * would actually serve it; saved configuration alone is "Published — not bookable yet".
+ */
+export function describeTourCalendarReadiness(r: TourCalendarReadiness | null | undefined): {
+    tone: "live" | "limited" | "blocked";
+    title: string;
+    detail: string;
+} {
+    if (!r) return { tone: "blocked", title: "Published — not checked", detail: "Its booking page could not be checked. Reload to try again." };
+    if (r.state === "bookable") {
+        return { tone: "live", title: "Tour calendar is live", detail: "Families who open this link can choose a time and request a tour." };
+    }
+    if (r.state === "restricted") {
+        return {
+            tone: "limited",
+            title: "Live on your website only",
+            detail: `It opens only when linked or framed from ${r.restrictedToOrigins.join(", ")}. Opening the address directly — or from this screen — shows “not available”.`,
+        };
+    }
+    const why: Record<TourCalendarReadinessCode, string> = {
+        NO_ACTIVE_SCHEDULE: "This location has no active tour schedule. Activate one under Availability — families then see its times.",
+        LOCATION_UNAVAILABLE: "This location is inactive or archived.",
+        NO_PUBLISHED_VERSION: "The attached form has no published version. Publish it in Forms Studio.",
+        NOT_PUBLISHED: "This link can't carry a tour calendar (it must be a location inquiry link that opens a new inquiry).",
+        INACTIVE: "This form link is turned off.",
+        EXPIRED: "This form link has expired.",
+        NOT_FOUND: "This link has no shareable address. Create a new location link in Forms Studio.",
+        ORIGIN_FORBIDDEN: "The booking page refuses visits from where it was checked.",
+    };
+    return { tone: "blocked", title: "Published — not bookable yet", detail: why[r.code ?? "NOT_FOUND"] };
+}
 
 /** A location's intake links, as share rows. Links for other locations are never returned. */
 export function projectTourCalendarShareLinks(
@@ -74,11 +133,55 @@ export function projectTourCalendarShareLinks(
             calendarPath,
             calendarUrl: calendarPath && opts.baseUrl ? `${opts.baseUrl.replace(/\/+$/, "")}${calendarPath}` : null,
             allowedEmbedOrigins: Array.isArray(row.allowed_embed_origins) ? row.allowed_embed_origins.filter(Boolean) : [],
+            createdAt: typeof row.created_at === "string" ? row.created_at : null,
         });
     }
     // Published first, then usable lead-capture links, then the rest.
     const rank = (l: TourCalendarShareLink) => (l.calendarPublished && l.usable ? 0 : l.usable && l.leadCapture ? 1 : 2);
     return out.sort((a, b) => rank(a) - rank(b) || a.formTitle.localeCompare(b.formTitle));
+}
+
+/** One form a location's tour calendar can open into, and the link that attaching it publishes on. */
+export type TourCalendarAttachableForm = {
+    formId: string;
+    formTitle: string;
+    /** The newest usable lead-capture link for this form at this location. */
+    link: TourCalendarShareLink;
+    /** Further usable links for the same form here — the same form, so they are not offered separately. */
+    otherLinks: TourCalendarShareLink[];
+};
+
+export type TourCalendarAttachOptions = {
+    attachable: TourCalendarAttachableForm[];
+    /** Links that cannot carry a calendar (turned off, expired, not lead-capture), for the explanation. */
+    blocked: TourCalendarShareLink[];
+};
+
+/**
+ * "Attach a form" (Tours feedback 2026-10-29): the operator chooses WHICH FORM follows the tour, not
+ * which of its links — a location often holds several links for one form, and as rows they were
+ * indistinguishable. Attaching is still publishing the calendar on one existing link (the guarded
+ * link PATCH); this only decides which link that is. Links already carrying the calendar are excluded.
+ */
+export function tourCalendarAttachOptions(links: TourCalendarShareLink[]): TourCalendarAttachOptions {
+    const byForm = new Map<string, TourCalendarShareLink[]>();
+    const blocked: TourCalendarShareLink[] = [];
+    for (const link of links) {
+        if (link.calendarPublished && link.usable) continue;
+        if (!link.usable || !link.leadCapture) {
+            blocked.push(link);
+            continue;
+        }
+        byForm.set(link.formId, [...(byForm.get(link.formId) ?? []), link]);
+    }
+    const newestFirst = (a: TourCalendarShareLink, b: TourCalendarShareLink) =>
+        (b.createdAt ? Date.parse(b.createdAt) : 0) - (a.createdAt ? Date.parse(a.createdAt) : 0);
+    const attachable = [...byForm.values()].map((group) => {
+        const [link, ...otherLinks] = [...group].sort(newestFirst);
+        return { formId: link!.formId, formTitle: link!.formTitle, link: link!, otherLinks };
+    });
+    attachable.sort((a, b) => a.formTitle.localeCompare(b.formTitle));
+    return { attachable, blocked };
 }
 
 function escapeAttr(value: string): string {

@@ -221,7 +221,7 @@ describeLive("S3 weekly tour schedules — live certification database", () => {
         expect(slotsB.find((s) => s.startAt === "2027-01-11T16:30:00.000Z")?.remainingCapacity).toBe(3);
     });
 
-    it("organization-wide schedules contribute at a location and cannot be edited from it", async () => {
+    it("a legacy organization-wide schedule offers nothing at a location and cannot be edited from it", async () => {
         const orgWide = await createTourSchedule(
             db,
             { orgId, locationId: null },
@@ -229,8 +229,10 @@ describeLive("S3 weekly tour schedules — live certification database", () => {
         );
         expect(orgWide.ok).toBe(true);
         if (!orgWide.ok) return;
+        // Availability is location-only (aa1cf6b05, sprint EB9A9359C92B): locB's own
+        // schedule is the weekday copy, so the org-wide Sunday adds no times there.
         const sunday = localDays(await slotsAt(locB))["2027-01-17"];
-        expect(sunday).toEqual(["9:00 AM", "9:30 AM"]);
+        expect(sunday).toBeUndefined();
 
         const before = await rulesAt(null);
         const editFromLocation = await updateTourSchedule(db, { orgId, locationId: locB }, orgWide.scheduleId, { ...WEEKDAY_TOURS, name: "Hijack" });
