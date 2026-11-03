@@ -144,7 +144,12 @@ export function isFilingIntent(intent: string | null | undefined, hasProposal: b
     return intent === "store_document" || intent === "process_information";
 }
 
-export const DOCUMENT_SOURCE_KINDS: readonly string[] = ["document", "upload", "recreated_document"];
+/**
+ * The Processing source kinds whose primary source IS a document to be filed. D10 (user-approved 2026-10-30) adds
+ * `email_attachment`: its `source_id` is the `documents` row WS11 stores for the attachment, so an email-attachment case
+ * is loaded, proposed and filed by exactly the same path — `commitDocumentFiling` under `processingFilingKey`.
+ */
+export const DOCUMENT_SOURCE_KINDS: readonly string[] = ["document", "upload", "recreated_document", "email_attachment"];
 
 /** The deterministic idempotency key a case files its document under. A retry of the same case replays. */
 export function processingFilingKey(caseId: string, documentId: string): string {

@@ -48,6 +48,8 @@ export interface OpenNonFormProcessingCaseArgs {
     sourceId: string;
     /** Optional classification hint persisted on the case (nullable; no inference here). */
     caseType?: string | null;
+    /** Refuse the non-atomic fallback (see `openProcessingCaseFromSource`). */
+    requireAtomic?: boolean;
 }
 
 /**
@@ -75,6 +77,7 @@ export async function openNonFormProcessingCaseFromSource(
         sourceKind: args.sourceKind,
         sourceId: args.sourceId,
         caseType: args.caseType ?? null,
+        requireAtomic: args.requireAtomic,
     });
 }
 

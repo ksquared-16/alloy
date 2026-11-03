@@ -165,6 +165,10 @@ There is no second room model and no second site model anywhere in this API.
 | What is their standing schedule? | `GET /api/v1/schedule-assignments` |
 | Who is expected on a given day? | `GET /api/v1/schedule-days` |
 | Who works here? | `GET /api/v1/staff` |
+| How are documents filed? | `GET /api/v1/document-categories` |
+| Which documents are filed for this child, family or parent? | `GET /api/v1/documents` |
+| What is this one document? | `GET /api/v1/documents/{id}` |
+| Let me download it now | `GET /api/v1/documents/{id}/download-link` |
 | What attendance has been recorded? | `GET /api/v1/attendance-events` |
 | Record that something happened | `POST /api/v1/attendance-events` |
 

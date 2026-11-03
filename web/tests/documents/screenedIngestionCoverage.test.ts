@@ -39,6 +39,8 @@ const SCREENED: Record<string, string> = {
     "lib/vendors/publicVendorApplication.ts": "app/api/vendor-application/route.ts",
     // D2: a replacement version. Only a CLEAN file is stored.
     "app/api/admin/documents/[id]/versions/route.ts": "app/api/admin/documents/[id]/versions/route.ts",
+    // D10: the WS11 adapter stores what the inbound-attachment pipeline screened (its only caller).
+    "lib/documents/inbound/ws11AttachmentStorage.ts": "lib/documents/inbound/inboundAttachmentFiling.ts",
 };
 /** Server-generated writers: the bytes are produced by the platform, not received. */
 const GENERATED = new Set(["lib/forms/pdf/createGeneratedPdfForSubmission.ts", "lib/forms/pdf/persistSignedEnrollmentArtifact.ts"]);
@@ -64,6 +66,16 @@ describe("every storage upload is screened or platform-generated", () => {
         const src = files.find((f) => f.rel === "lib/vendors/publicVendorApplication.ts")!.src;
         expect(src).toContain("input.proof_of_insurance.status");
         expect(src).toContain("input.drivers_license.status");
+    });
+
+    it("the WS11 adapter stores the pipeline's screening status, and the pipeline screens before it stores", () => {
+        const adapter = files.find((f) => f.rel === "lib/documents/inbound/ws11AttachmentStorage.ts")!.src;
+        expect(adapter).toMatch(/async store\(\{[^}]*\bstatus\b[^}]*\bscreening\b[^}]*\}\)/);
+        expect(adapter).toMatch(/\n\s+status,\n/);
+        expect(adapter).not.toMatch(/status:\s*"/);
+        const pipeline = files.find((f) => f.rel === "lib/documents/inbound/inboundAttachmentFiling.ts")!.src;
+        expect(pipeline.indexOf("decideIngestion(")).toBeLessThan(pipeline.indexOf(".store("));
+        expect(pipeline).toContain("status: screened.status");
     });
 });
 
