@@ -3,8 +3,8 @@
 /**
  * NEW BULK CHARGE — apply one charge to many accounts (W7-F021).
  *
- * Choose a charge type, the amount (configured, or entered for a manually priced type) and a service
- * date; choose the households — and, for a child-grained type, the children — it applies to; preview;
+ * Choose a catalog fee (its configured amount is the amount) and a service date; choose the
+ * households — and, for a child-grained type, the children — it applies to; preview;
  * confirm. Every selected household receives its own canonical charge through the registered
  * `charge.add`, exactly as Add Charge on that account would create it. See `bulkChargePlan.ts` for why
  * that orchestration is safe (per-charge database idempotency, no shared obligation, posting by the
@@ -13,6 +13,10 @@
  * The preview is the same action in `preview` mode for every target, so the date chain an operator
  * reads — billing period, invoice date, due date, posting — is the canonical resolver's, per account.
  * A refused row is shown refused before anything is written, and stays visible after the run.
+ *
+ * The options are the organisation's Catalog, judged server-side by the same `catalogChargeOptions`
+ * rule the account card uses: one-time fees chargeable; other catalog types listed, disabled, with the
+ * flow that bills them; missing accounting blocked. No charge template is offered.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,8 +24,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { CATALOG_AMOUNT_OVERRIDE_PERMISSION, centsFromAmountInput } from "@/lib/financials/catalogCharges/catalogAmountOverride";
 import {
+    bulkAmountFor,
+    bulkAmountSummary,
+    bulkPreviewOutcome,
     chargeAddRequest,
+    targetReceivesOverride,
     legalBulkGrains,
     obligationsFor,
     refusalBeforeSending,
@@ -31,26 +41,11 @@ import {
     type BulkRowState,
     type BulkTarget,
 } from "@/lib/financials/bulkCharge/bulkChargePlan";
+import type { CatalogChargeSubjectOption } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
-type TemplateRow = {
-    id: string;
-    label: string;
-    charge_category: string;
-    amount_strategy: string;
-    amount_cents: number | null;
-    currency_code: string | null;
-    is_active: boolean | null;
-    effective_start: string | null;
-    effective_end: string | null;
-};
-
 type Household = { customerId: string; householdName: string; children: Array<{ customerMemberId: string; name: string }> };
-
-function today(): string {
-    return new Date().toISOString().slice(0, 10);
-}
 
 async function execute(body: unknown): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
     const res = await fetch("/api/admin/actions/execute", {
@@ -79,12 +74,14 @@ export default function FinancialsBulkAddCharge({
     /** Re-read committed truth after the run. */
     onCommitted: () => Promise<void> | void;
 }) {
-    const [templates, setTemplates] = useState<TemplateRow[]>([]);
+    const [options, setOptions] = useState<CatalogChargeSubjectOption[]>([]);
+    /* "Nothing chargeable" is an answer only once the catalog has been read. */
+    const [catalogRead, setCatalogRead] = useState(false);
     const [households, setHouseholds] = useState<Household[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [templateId, setTemplateId] = useState("");
-    const [amount, setAmount] = useState("");
-    const [serviceDate, setServiceDate] = useState(today);
+    const [productId, setProductId] = useState("");
+    /* The ORGANISATION's business date, from the server — never the browser's UTC day. */
+    const [serviceDate, setServiceDate] = useState("");
     const [chosenGrain, setGrain] = useState<BulkGrain>("child");
     const [query, setQuery] = useState("");
     /* customerId → selected child ids (household grain uses the key alone). */
@@ -92,32 +89,33 @@ export default function FinancialsBulkAddCharge({
     const [states, setStates] = useState<Record<string, BulkRowState>>({});
     const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
     const [ran, setRan] = useState(false);
+    /*
+     * ── AN AMOUNT OVERRIDE, AND WHO RECEIVES IT ───────────────────────────────────────────────
+     *
+     * Offered to a user whose grants include the adjustment authority; `charge.add` authorizes each
+     * request. One amount and reason; the recipients that receive it are ticked one by one, so the
+     * preview and the confirmation can say exactly who is charged what. Unticked: the Catalog price.
+     */
+    const adminAuth = useAdminAuthOptional();
+    const canOverride = Boolean(adminAuth?.permissionKeys?.includes(CATALOG_AMOUNT_OVERRIDE_PERMISSION));
+    const [overrideAmount, setOverrideAmount] = useState("");
+    const [overrideReason, setOverrideReason] = useState("");
+    const [overrideIds, setOverrideIds] = useState<string[]>([]);
 
     useEffect(() => {
         let live = true;
         void (async () => {
             try {
                 const site = siteLocationId ? `?site_location_id=${encodeURIComponent(siteLocationId)}` : "";
-                const [t, h] = await Promise.all([
-                    fetch("/api/admin/financial/charge-templates", { credentials: "include" }).then((r) => r.json()),
-                    fetch(`/api/admin/financials/bulk-charge-targets${site}`, { credentials: "include" }).then((r) => r.json()),
-                ]);
+                const h = await fetch(`/api/admin/financials/bulk-charge-targets${site}`, { credentials: "include" }).then((r) => r.json());
                 if (!live) return;
-                const day = today();
-                setTemplates(
-                    ((t.templates ?? []) as TemplateRow[])
-                        .filter(
-                            (row) =>
-                                row.is_active !== false
-                                && (!row.effective_start || row.effective_start <= day)
-                                && (!row.effective_end || row.effective_end >= day)
-                                /* Tuition is generated from accepted terms — Tuition billing — never bulk-added. */
-                                && row.charge_category !== "tuition",
-                        )
-                        .sort((a, b) => a.label.localeCompare(b.label)),
-                );
+                const catalog = (h.catalog ?? null) as { ok: boolean; options?: CatalogChargeSubjectOption[]; error?: string } | null;
+                setOptions(catalog?.options ?? []);
+                setCatalogRead(Boolean(catalog?.ok));
+                if (typeof h.businessDate === "string") setServiceDate((current) => current || h.businessDate);
                 setHouseholds((h.households ?? []) as Household[]);
                 if (h.ok === false) setLoadError(h.error ?? "Accounts could not be read.");
+                else if (catalog && catalog.ok === false) setLoadError(`The catalog could not be read (${catalog.error ?? "unknown"}).`);
             } catch (e) {
                 if (live) setLoadError(e instanceof Error ? e.message : "Bulk charge could not load.");
             }
@@ -127,13 +125,27 @@ export default function FinancialsBulkAddCharge({
         };
     }, [siteLocationId]);
 
-    const template = templates.find((t) => t.id === templateId) ?? null;
-    const grains = useMemo(() => (template ? legalBulkGrains(template.charge_category) : []), [template]);
+    /*
+     * Only a chargeable item is offered, by name and price. Unsupported and blocked Catalog items are
+     * Catalog configuration, not choices — the server's rule still refuses them if asked.
+     */
+    const chargeable = options.filter((o) => o.availability === "offerable");
+    const template = chargeable.find((o) => o.id === productId) ?? null;
+    const grains = useMemo(() => (template ? legalBulkGrains(template.categoryKey) : []), [template]);
     /* The grain is DERIVED: the operator's choice when the charge type permits it, else what it permits. */
     const grain: BulkGrain = grains.length && !grains.includes(chosenGrain) ? grains[0]! : chosenGrain;
-    const manual = template?.amount_strategy === "manual";
-    const amountCents = manual ? Math.round(Number(amount) * 100) : null;
-    const configured = template && !manual ? template.amount_cents : null;
+    const configured = template?.amountCents ?? null;
+    const overrideCents = overrideAmount.trim() ? centsFromAmountInput(overrideAmount) : null;
+    const overrideInUse = canOverride && overrideIds.some((id) => selected[id] !== undefined);
+    const overrideError = !overrideInUse
+        ? null
+        : overrideCents == null
+            ? "Enter the override amount in dollars and cents, like 30.00."
+            : overrideCents === 0
+                ? "A charge cannot be $0.00. To forgive a fee, add it and then waive or adjust it."
+                : overrideReason.trim().length < 3
+                    ? "Say why these recipients are charged differently from the Catalog price."
+                    : null;
 
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -161,18 +173,24 @@ export default function FinancialsBulkAddCharge({
         () =>
             template && serviceDate
                 ? {
-                      templateId: template.id,
-                      category: template.charge_category,
+                      catalogProductId: template.id,
+                      category: template.categoryKey,
                       grain,
                       serviceDate,
-                      amountCents: manual && Number.isFinite(amountCents) && (amountCents ?? 0) > 0 ? amountCents : null,
+                      unavailableForSubjects: template.unavailableForSubjects,
+                      ...(overrideInUse && overrideCents != null && overrideCents > 0
+                          ? {
+                                amountOverride: { amountCents: overrideCents, reason: overrideReason.trim() },
+                                overrideCustomerIds: overrideIds.filter((id) => selected[id] !== undefined),
+                            }
+                          : {}),
                   }
                 : null,
-        [template, serviceDate, grain, manual, amountCents],
+        [template, serviceDate, grain, overrideInUse, overrideCents, overrideReason, overrideIds, selected],
     );
-    const ready = Boolean(input) && targets.length > 0 && (!manual || (input?.amountCents ?? 0) > 0);
+    const ready = Boolean(input) && targets.length > 0 && !overrideError;
     const tally = tallyBulk(targets, grain, states);
-    const unitCents = manual ? input?.amountCents ?? null : configured;
+    const unitCents = configured;
     const previewed = targets.length > 0 && targets.every((t) => states[t.customerId] && states[t.customerId]!.state !== "pending");
     const sendable = targets.filter((t) => states[t.customerId]?.state === "previewed");
 
@@ -216,24 +234,7 @@ export default function FinancialsBulkAddCharge({
                 next[t.customerId] = { state: "refused", reason: refusal };
                 return;
             }
-            const r = await execute(chargeAddRequest(t, input, "preview"));
-            const result = (r.data?.execution_result ?? {}) as {
-                eligibility?: { eligible?: boolean; blockers?: Array<{ message?: string }> };
-                preview?: { summary?: string; changes?: string[] };
-            };
-            if (!r.ok) next[t.customerId] = { state: "refused", reason: r.error ?? "Refused." };
-            else if (result.eligibility && result.eligibility.eligible === false) {
-                next[t.customerId] = {
-                    state: "refused",
-                    reason: result.eligibility.blockers?.map((b) => b.message).filter(Boolean).join(" ") || "Not eligible.",
-                };
-            } else {
-                next[t.customerId] = {
-                    state: "previewed",
-                    summary: result.preview?.summary ?? "",
-                    changes: result.preview?.changes ?? [],
-                };
-            }
+            next[t.customerId] = bulkPreviewOutcome(await execute(chargeAddRequest(t, input, "preview")));
             setStates({ ...next });
         });
         setStates({ ...next });
@@ -294,6 +295,17 @@ export default function FinancialsBulkAddCharge({
             : [];
 
     const obligationsToCreate = sendable.reduce((n, t) => n + obligationsFor(t, grain), 0);
+    /* The money per recipient: overridden recipients at the override, everyone else at the Catalog price. */
+    const money = input ? bulkAmountSummary(sendable, grain, input, unitCents) : null;
+    const totalLabel = money?.totalCents != null ? ` · ${moneyExact(money.totalCents, template?.currencyCode ?? "USD")}` : "";
+    const resetOverrideRun = () => {
+        setStates({});
+        setRan(false);
+    };
+    const toggleOverride = (customerId: string) => {
+        resetOverrideRun();
+        setOverrideIds((prev) => (prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]));
+    };
 
     return (
         <div className="space-y-3" data-financials-bulk-charge="true">
@@ -306,39 +318,70 @@ export default function FinancialsBulkAddCharge({
                     <AlloySelect
                         aria-label="Charge type"
                         testId="bulk-charge-template"
-                        value={templateId}
-                        placeholder="Choose a charge type…"
-                        options={templates.map((t) => ({ value: t.id, label: t.label }))}
+                        value={productId}
+                        placeholder={catalogRead && chargeable.length === 0 ? "No chargeable catalog fees" : "Choose a catalog fee…"}
+                        disabled={catalogRead && chargeable.length === 0}
+                        options={chargeable.map((o) => ({
+                            value: o.id,
+                            label: o.amountCents != null ? `${o.label} · ${moneyExact(o.amountCents, o.currencyCode)}` : o.label,
+                        }))}
                         onChange={(next) => {
-                            setTemplateId(next);
+                            setProductId(next);
                             setStates({});
                             setRan(false);
+                            /* Another item has another price: an override never carries across. */
+                            setOverrideAmount("");
+                            setOverrideReason("");
+                            setOverrideIds([]);
                         }}
                     />
+                    {template?.accountLabel ? (
+                        <span className="text-[11px] text-alloy-midnight/50">Posts to {template.accountLabel}</span>
+                    ) : null}
+                    {catalogRead && chargeable.length === 0 ? (
+                        <span className="text-[11px] text-alloy-midnight/55" data-financials-bulk-charge-empty="true">
+                            Add a one-time item with a GL Code in Organization › Financials › Catalog.
+                        </span>
+                    ) : null}
                 </label>
                 <label className="flex flex-col gap-1">
                     <span className="text-xs text-alloy-midnight/60">Amount</span>
-                    {manual ? (
-                        <input
-                            inputMode="decimal"
-                            value={amount}
-                            onChange={(e) => {
-                                setAmount(e.target.value.replace(/[^0-9.]/g, ""));
-                                setStates({});
-                            }}
-                            placeholder="0.00"
-                            data-financials-bulk-charge-amount="manual"
-                            className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-xs"
-                        />
-                    ) : (
-                        <span className="py-1 text-sm text-alloy-midnight" data-financials-bulk-charge-amount="configured">
-                            {template
-                                ? configured != null
-                                    ? `${moneyExact(configured, template.currency_code ?? "USD")} · configured`
-                                    : "From each child's rate"
-                                : "—"}
+                    <span className="py-1 text-sm text-alloy-midnight" data-financials-bulk-charge-amount="configured">
+                        {template && configured != null ? `${moneyExact(configured, template.currencyCode)} · configured in Catalog` : "—"}
+                    </span>
+                    {canOverride && template && configured != null ? (
+                        <span className="flex flex-col gap-1" data-financials-bulk-charge-override="true">
+                            <span className="text-[11px] text-alloy-midnight/55">
+                                Override for chosen recipients (optional) — tick “Override” on each one. Everyone else pays the Catalog price.
+                            </span>
+                            <input
+                                value={overrideAmount}
+                                onChange={(e) => {
+                                    setOverrideAmount(e.target.value);
+                                    resetOverrideRun();
+                                }}
+                                inputMode="decimal"
+                                placeholder="Override amount, e.g. 30.00"
+                                aria-label="Override amount"
+                                data-financials-bulk-charge-override-amount="true"
+                                className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-xs"
+                            />
+                            <input
+                                value={overrideReason}
+                                onChange={(e) => {
+                                    setOverrideReason(e.target.value);
+                                    resetOverrideRun();
+                                }}
+                                placeholder="Reason (required for an override)"
+                                aria-label="Override reason"
+                                data-financials-bulk-charge-override-reason="true"
+                                className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-xs"
+                            />
+                            {overrideError ? (
+                                <span className="text-[11px] text-alloy-ember" role="alert" data-financials-bulk-charge-override-error="true">{overrideError}</span>
+                            ) : null}
                         </span>
-                    )}
+                    ) : null}
                 </label>
                 <label className="flex flex-col gap-1">
                     <span className="text-xs text-alloy-midnight/60">Service date</span>
@@ -372,7 +415,7 @@ export default function FinancialsBulkAddCharge({
                             ))}
                             {grains.length === 1 ? (
                                 <span className="self-center text-[11px] text-alloy-midnight/50">
-                                    {chargeCategoryLabel(template.charge_category)} is billed {grains[0] === "child" ? "per child" : "to the household"}
+                                    {chargeCategoryLabel(template.categoryKey)} is billed {grains[0] === "child" ? "per child" : "to the household"}
                                 </span>
                             ) : null}
                         </span>
@@ -417,6 +460,33 @@ export default function FinancialsBulkAddCharge({
                                 <label className="flex items-center gap-2">
                                     <input type="checkbox" checked={on} onChange={() => toggleHousehold(h)} aria-label={`Select ${h.householdName}`} />
                                     <span className="min-w-0 flex-1 truncate text-alloy-midnight">{h.householdName}</span>
+                                    {on && canOverride && template ? (
+                                        <span className="flex shrink-0 items-center gap-1 text-[11px] text-alloy-midnight/70">
+                                            <input
+                                                type="checkbox"
+                                                checked={overrideIds.includes(h.customerId)}
+                                                onChange={() => toggleOverride(h.customerId)}
+                                                aria-label={`Override amount for ${h.householdName}`}
+                                                data-financials-bulk-charge-override-target={h.customerId}
+                                            />
+                                            Override
+                                        </span>
+                                    ) : null}
+                                    {on && template && input ? (() => {
+                                        const target = targets.find((x) => x.customerId === h.customerId);
+                                        const cents = target ? bulkAmountFor(target, input, configured) : null;
+                                        const overridden = Boolean(target && targetReceivesOverride(target, input));
+                                        return cents != null ? (
+                                            <span
+                                                className={`shrink-0 text-[11px] ${overridden ? "font-semibold text-alloy-midnight" : "text-alloy-midnight/55"}`}
+                                                data-financials-bulk-charge-row-amount={overridden ? "override" : "catalog"}
+                                            >
+                                                {overridden ? "Override " : "Catalog "}
+                                                {moneyExact(cents, template.currencyCode)}
+                                                {grain === "child" && target && target.children.length > 1 ? " each" : ""}
+                                            </span>
+                                        ) : null;
+                                    })() : null}
                                     {state ? (
                                         <span
                                             className={`shrink-0 truncate text-[11px] ${state.state === "refused" || state.state === "failed" ? "text-alloy-ember" : "text-alloy-midnight/60"}`}
@@ -462,9 +532,16 @@ export default function FinancialsBulkAddCharge({
                     <p className="text-alloy-midnight" data-financials-bulk-charge-tally="true">
                         <span className="font-semibold">{sendable.length}</span> account{sendable.length === 1 ? "" : "s"} ·{" "}
                         {obligationsToCreate} charge{obligationsToCreate === 1 ? "" : "s"}
-                        {unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currency_code ?? "USD")}` : ""}
+                        {totalLabel}
                         {tally.refused ? ` · ${tally.refused} refused` : ""}
                     </p>
+                    {money && money.overriddenRecipients > 0 && input?.amountOverride ? (
+                        <p className="mt-1 text-[11px] text-alloy-midnight" data-financials-bulk-charge-override-tally="true">
+                            {`${money.overriddenRecipients} account${money.overriddenRecipients === 1 ? "" : "s"} (${money.overriddenCharges} charge${money.overriddenCharges === 1 ? "" : "s"}) at the override ${moneyExact(input.amountOverride.amountCents, template?.currencyCode ?? "USD")}`}
+                            {` · ${money.catalogCharges} charge${money.catalogCharges === 1 ? "" : "s"} at the Catalog price${unitCents != null ? ` ${moneyExact(unitCents, template?.currencyCode ?? "USD")}` : ""}`}
+                            {` · Reason: ${input.amountOverride.reason}. The Catalog item does not change.`}
+                        </p>
+                    ) : null}
                     {chain.length ? (
                         <ul className="mt-1 text-[11px] text-alloy-midnight/60" data-financials-bulk-charge-date-chain="true">
                             <li className="font-medium text-alloy-midnight/70">Dates for {firstTarget?.householdName}</li>
@@ -508,9 +585,7 @@ export default function FinancialsBulkAddCharge({
                     >
                         {busy === "execute"
                             ? "Creating…"
-                            : `Create ${obligationsToCreate} charge${obligationsToCreate === 1 ? "" : "s"}${
-                                  unitCents != null ? ` · ${moneyExact(unitCents * obligationsToCreate, template?.currency_code ?? "USD")}` : ""
-                              }`}
+                            : `Create ${obligationsToCreate} charge${obligationsToCreate === 1 ? "" : "s"}${totalLabel}`}
                     </button>
                 ) : null}
             </div>

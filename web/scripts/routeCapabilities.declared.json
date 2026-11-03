@@ -2812,6 +2812,14 @@
         "reason": "Makes this organization's existing Periodic Billing schedule due now so the ordinary clock picks it up sooner. It runs nothing and creates nothing \u2014 no handler call, no occurrence, no charge \u2014 and refuses when no schedule exists, because evaluation is not activation."
       }
     },
+    "app/api/admin/financials/annual-catalog-billing/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Who a Required annual Catalog fee would charge and when, and whether a charge of it already exists in that period. A preview: every query is a select, there is no write path for annual Catalog fees, and it returns active:false."
+      }
+    },
     "app/api/admin/financials/periodic-billing-status/route.ts": {
       "GET": {
         "status": "declared",

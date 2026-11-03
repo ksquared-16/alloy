@@ -92,3 +92,13 @@ export function durableRecordHref(
     const query = params.toString();
     return query ? `${base}?${query}` : base;
 }
+
+/**
+ * The lead card a record ADDRESS asks for: `?card=financials` on a HOUSEHOLD record opens it on the Financials lead,
+ * the account surface Billing already opens over this record (`DomainProjectionFocusContext` sets the same lead).
+ * A household record composes no Financials card of its own, so without this a cold load of that address landed on a
+ * record with no Financials at all. Every other subject and card is unchanged: a child's record has no account lead.
+ */
+export function durableRecordLeadCardFor(subjectType: string, cardKey: string | null | undefined): "financials" | null {
+    return subjectType.trim().toLowerCase() === "household" && (cardKey ?? "").trim() === "financials" ? "financials" : null;
+}

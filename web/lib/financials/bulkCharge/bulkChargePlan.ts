@@ -19,10 +19,20 @@
  *     charge in a future period stays a draft and posts when its period begins.
  *
  * Preview runs the same action in `preview` mode for every target first. A row the domain refuses
- * (grain, an account it cannot bill) is shown refused before anything is written, and the operator
- * confirms knowing the count, the total and what is left out.
+ * (grain, an account it cannot bill, a catalog item that does not apply to a child's site) is shown
+ * refused before anything is written, and the operator confirms knowing the count, the total and
+ * what is left out.
+ *
+ * ── WHAT IS CHARGED IS A CATALOG ITEM ──
+ *
+ * Like Add Charge on an account, Bulk charge offers the organisation's Catalog through the shared
+ * `catalogChargeOptions` rule and sends `catalog_product_id`: one-time fees at their configured
+ * amount, to their configured account. Nothing here prices anything — the amount is the catalog's,
+ * unless an authorized operator names an override AND the recipients that receive it; each of those
+ * requests carries it to the server, which judges it per charge.
  */
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
+import { householdChargeSubjectKey } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 
 export const BULK_CHARGE_ACTION_KEY = "charge.add" as const;
 
@@ -36,14 +46,66 @@ export type BulkTarget = {
 };
 
 export type BulkChargeInput = {
-    templateId: string;
+    /** The catalog item (`commercial_products.id`) every target is charged. */
+    catalogProductId: string;
     category: string;
     grain: BulkGrain;
     /** YYYY-MM-DD — the service date every charge resolves its date chain from. */
     serviceDate: string;
-    /** Sent only for a manually priced charge type; a configured amount is the template's. */
-    amountCents: number | null;
+    /**
+     * The catalog item's `unavailableForSubjects`: the households (`householdChargeSubjectKey`) and
+     * children it is offered at another site than their charge is for. Optional — absent, every
+     * target is left to its preview.
+     */
+    unavailableForSubjects?: Readonly<Record<string, string>>;
+    /**
+     * AN AUTHORIZED AMOUNT OVERRIDE, and EXACTLY which recipients receive it (`overrideCustomerIds`,
+     * households by `customerId`). Every other recipient is charged the Catalog price. A recipient
+     * named here sends `amount_override` on its own request, so the server judges permission, amount
+     * and reason per charge; in child grain it applies to each selected child of that household.
+     */
+    amountOverride?: { amountCents: number; reason: string } | null;
+    overrideCustomerIds?: ReadonlyArray<string>;
 };
+
+/** Whether THIS recipient receives the override — named explicitly, never inferred. */
+export function targetReceivesOverride(target: BulkTarget, input: BulkChargeInput): boolean {
+    return Boolean(input.amountOverride) && (input.overrideCustomerIds ?? []).includes(target.customerId);
+}
+
+/** The amount (cents) each charge of this recipient is created at: its override, or the Catalog price. */
+export function bulkAmountFor(target: BulkTarget, input: BulkChargeInput, catalogAmountCents: number | null): number | null {
+    return targetReceivesOverride(target, input) ? input.amountOverride!.amountCents : catalogAmountCents;
+}
+
+/**
+ * The run's money, per recipient: the total, and how many recipients and charges are overridden —
+ * so the confirmation can say which part of the total is not the Catalog price.
+ */
+export function bulkAmountSummary(
+    targets: readonly BulkTarget[],
+    grain: BulkGrain,
+    input: BulkChargeInput,
+    catalogAmountCents: number | null,
+): { totalCents: number | null; overriddenRecipients: number; overriddenCharges: number; catalogCharges: number } {
+    let total = 0;
+    let overriddenRecipients = 0;
+    let overriddenCharges = 0;
+    let catalogCharges = 0;
+    for (const t of targets) {
+        const n = obligationsFor(t, grain);
+        const amount = bulkAmountFor(t, input, catalogAmountCents);
+        if (amount == null) return { totalCents: null, overriddenRecipients, overriddenCharges, catalogCharges };
+        total += amount * n;
+        if (targetReceivesOverride(t, input)) {
+            overriddenRecipients += 1;
+            overriddenCharges += n;
+        } else {
+            catalogCharges += n;
+        }
+    }
+    return { totalCents: total, overriddenRecipients, overriddenCharges, catalogCharges };
+}
 
 /** Can this charge type be billed at this grain? The category decides; the operator never overrides it. */
 export function bulkGrainIsLegal(category: string, grain: BulkGrain): boolean {
@@ -71,7 +133,7 @@ export function chargeAddRequest(target: BulkTarget, input: BulkChargeInput, mod
         ...(mode === "execute" ? { confirmation: { confirmed: true } } : {}),
         payload: {
             customer_id: target.customerId,
-            template_id: input.templateId,
+            catalog_product_id: input.catalogProductId,
             ...(input.grain === "household"
                 ? { subject_grain: "household" }
                 : childIds.length === 1
@@ -79,7 +141,9 @@ export function chargeAddRequest(target: BulkTarget, input: BulkChargeInput, mod
                   : { customer_member_ids: childIds, child_labels: target.children.map((c) => c.name) }),
             event_date: input.serviceDate,
             service_date: input.serviceDate,
-            ...(input.amountCents != null ? { amount_cents: input.amountCents } : {}),
+            ...(targetReceivesOverride(target, input)
+                ? { amount_override: { amount_cents: input.amountOverride!.amountCents, reason: input.amountOverride!.reason } }
+                : {}),
         },
     };
 }
@@ -96,6 +160,35 @@ export type BulkRowState =
     | { state: "created"; chargeIds: string[]; note: string }
     | { state: "failed"; reason: string };
 
+/**
+ * WHAT ONE TARGET'S PREVIEW SAID — read from `charge.add`'s own answer.
+ *
+ * Refused when the request failed, when eligibility said no, or when the preview itself carries the
+ * domain's refusal (`blocked`) — a catalog item that does not apply to this household's site, for
+ * example. Only an unrefused preview is `previewed`, and only previewed rows are ever sent.
+ */
+export function bulkPreviewOutcome(response: {
+    ok: boolean;
+    error?: string;
+    data?: Record<string, unknown>;
+}): BulkRowState {
+    if (!response.ok) return { state: "refused", reason: response.error ?? "Refused." };
+    const result = (response.data?.execution_result ?? {}) as {
+        eligibility?: { eligible?: boolean; blockers?: Array<{ message?: string }> };
+        preview?: { summary?: string; changes?: string[]; blocked?: { reason?: string } | null };
+    };
+    if (result.eligibility && result.eligibility.eligible === false) {
+        return {
+            state: "refused",
+            reason: result.eligibility.blockers?.map((b) => b.message).filter(Boolean).join(" ") || "Not eligible.",
+        };
+    }
+    if (result.preview?.blocked) {
+        return { state: "refused", reason: result.preview.blocked.reason || result.preview.summary || "Refused." };
+    }
+    return { state: "previewed", summary: result.preview?.summary ?? "", changes: result.preview?.changes ?? [] };
+}
+
 /** A target the plan can never send: the wrong grain, or a child grain with no child chosen. */
 export function refusalBeforeSending(target: BulkTarget, input: BulkChargeInput): string | null {
     if (!bulkGrainIsLegal(input.category, input.grain)) {
@@ -104,6 +197,13 @@ export function refusalBeforeSending(target: BulkTarget, input: BulkChargeInput)
             : "This charge type is billed to the household, not per child.";
     }
     if (input.grain === "child" && target.children.length === 0) return "No child selected in this household.";
+    /* The command judges every subject at its own site and refuses the target if any is refused. */
+    const refused = input.unavailableForSubjects ?? {};
+    if (input.grain === "household") return refused[householdChargeSubjectKey(target.customerId)] ?? null;
+    for (const child of target.children) {
+        const reason = refused[child.customerMemberId];
+        if (reason) return `${child.name}: ${reason}`;
+    }
     return null;
 }
 

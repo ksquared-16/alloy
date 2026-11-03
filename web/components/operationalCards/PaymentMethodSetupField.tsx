@@ -16,7 +16,10 @@
  * would put the stored method on one merchant and defeat the whole handle model — so the absence of
  * that option is the point, not an omission.
  */
-import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
+// `/pure`: Stripe.js is fetched only when `loadStripe` runs, i.e. when this field mounts. The default entry
+// injects the script at IMPORT, so every route that merely imports Financials contacted Stripe.
+import { loadStripe } from "@stripe/stripe-js/pure";
+import type { Stripe, StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
 import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
 import {

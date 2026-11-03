@@ -50,10 +50,16 @@ import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 import { chargeDateChainPreviewLines } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
+import { selectBillableAgreement } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { humanDay } from "@/lib/financials/dates/humanDates";
+import {
+    CATALOG_AMOUNT_OVERRIDE_PERMISSION,
+    parseCatalogAmountOverride,
+    type CatalogAmountOverride,
+} from "@/lib/financials/catalogCharges/catalogAmountOverride";
 
 /**
  * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
@@ -290,12 +296,12 @@ async function resolveChargeSubject(
         const rows = (data ?? []) as Array<{ id: string; status: string }>;
         if (rows.length > 0) {
             // An active agreement is the billable source; otherwise the most recent one still owns
-            // history. Unchanged — an enrolled child's attribution does not move.
-            const active = rows.find((r) => t(r.status) === "active");
+            // history. Unchanged — an enrolled child's attribution does not move. The picker takes
+            // the same agreement through the same rule, so it judges the site this charge is for.
             return {
                 ok: true,
                 kind: "enrollment_agreement",
-                agreementId: (active ?? rows[0]!).id,
+                agreementId: selectBillableAgreement(rows)!.id,
                 customerMemberId,
             };
         }
@@ -382,6 +388,7 @@ async function executeMultiChildAdd(args: {
         try {
             const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,
@@ -393,6 +400,8 @@ async function executeMultiChildAdd(args: {
                  * price nobody quoted.
                  */
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
+                /* An override is per child too: each child's charge is priced, and records it, the same. */
+                catalogAmountOverride: amountOverrideOf(payload),
                 today,
                 actorUserId: ctx.userId ?? null,
             });
@@ -531,10 +540,16 @@ async function refuseIllegalSubjectGrain(
     };
 }
 
+/** The validated per-charge amount on a payload, or null — `validatePayload` already refused a bad one. */
+function amountOverrideOf(payload: Record<string, unknown> | null | undefined): CatalogAmountOverride | null {
+    const parsed = parseCatalogAmountOverride(payload?.amount_override);
+    return parsed.ok ? parsed.override : null;
+}
+
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
-    description: "Create a charge for a child from a configured charge template.",
+    description: "Create a charge for a child from a configured one-time catalog fee (or, for existing callers, a charge template).",
     supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
@@ -544,23 +559,55 @@ const addCharge: RegisteredAction = {
 
     validatePayload(payload) {
         const src = payload ?? {};
-        if (!t(src.template_id)) {
+        /*
+         * ONE SOURCE, NAMED. Manual Add Charge sends `catalog_product_id` (Organization › Financials ›
+         * Catalog); generated and legacy callers still send `template_id`. Both at once would leave
+         * the writer to pick one silently, so it is refused rather than guessed.
+         */
+        if (t(src.template_id) && t(src.catalog_product_id)) {
+            return {
+                ok: false,
+                blockers: [
+                    {
+                        code: "ambiguous_charge_source",
+                        message: "Choose one charge type — a catalog item or a charge template, not both.",
+                        field: "catalog_product_id",
+                    },
+                ],
+            };
+        }
+        if (!t(src.template_id) && !t(src.catalog_product_id)) {
             return {
                 ok: false,
                 blockers: [
                     {
                         code: "missing_charge_template",
                         message: "Choose a charge type.",
-                        field: "template_id",
+                        field: "catalog_product_id",
                     },
                 ],
             };
         }
+        /*
+         * A PER-CHARGE AMOUNT is a catalog charge's, and only in the shape `catalogAmountOverride`
+         * reads — a malformed, fractional, negative or zero amount is refused here, never coerced.
+         */
+        if (src.amount_override != null && !t(src.catalog_product_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "amount_override_unsupported", message: "Only a Catalog charge's amount can be changed here.", field: "amount_override" }],
+            };
+        }
+        const override = parseCatalogAmountOverride(src.amount_override);
+        if (!override.ok) return { ok: false, blockers: [{ code: override.code, message: override.message, field: override.field }] };
         return { ok: true, value: src };
     },
 
     async resolveEligibility({ supabase, ctx, payload, invocation }) {
         const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
+        const overriding = payload?.amount_override != null;
+        const mayOverride = !overriding
+            || (await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CATALOG_AMOUNT_OVERRIDE_PERMISSION));
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
@@ -568,11 +615,14 @@ const addCharge: RegisteredAction = {
             t(payload?.customer_id) || null,
         );
         return {
-            eligible: allowed && subject.ok,
+            eligible: allowed && mayOverride && subject.ok,
             blockers: [
                 ...(allowed
                     ? []
                     : [{ code: "charge_permission_required", message: `Creating a charge requires ${CHARGE_WRITE_PERMISSION}.` }]),
+                ...(mayOverride
+                    ? []
+                    : [{ code: "amount_override_permission_required", message: `Changing a charge's amount from the Catalog price requires ${CATALOG_AMOUNT_OVERRIDE_PERMISSION}.` }]),
                 ...(subject.ok ? [] : [{ code: subject.code, message: subject.message }]),
             ],
             availableTransitions: [],
@@ -598,18 +648,53 @@ const addCharge: RegisteredAction = {
         );
         if (!subject.ok) return { summary: subject.message, changes: [] };
         try {
-            const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
-                templateId: t(payload?.template_id),
-                ...billableSourceForSubject(subject),
-                eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
-                operatorServiceDate: t(payload?.service_date) || null,
-                servicePeriodStart: t(payload?.service_period_start) || null,
-                unitAmountCents:
-                    payload?.amount_cents == null ? null : Number(payload.amount_cents),
-                today: t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
-            });
+            const catalogProductId = t(payload?.catalog_product_id) || null;
+            const today = t(payload?.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId));
+            const previewFor = (s: Extract<ChargeSubject, { ok: true }>) =>
+                previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
+                    templateId: t(payload?.template_id),
+                    catalogProductId,
+                    ...billableSourceForSubject(s),
+                    eventDate: t(payload?.event_date) || t(payload?.service_date) || null,
+                    operatorServiceDate: t(payload?.service_date) || null,
+                    servicePeriodStart: t(payload?.service_period_start) || null,
+                    unitAmountCents:
+                        payload?.amount_cents == null ? null : Number(payload.amount_cents),
+                    catalogAmountOverride: amountOverrideOf(payload),
+                    today,
+                });
+            const { intent, label, catalogPriceCents: previewCatalogPrice } = await previewFor(subject);
             if (!intent.eligible) {
-                return { summary: intent.reason ?? "This charge cannot be created right now.", changes: [] };
+                const reason = intent.reason ?? "This charge cannot be created right now.";
+                return { summary: reason, changes: [], blocked: { reason } };
+            }
+            /*
+             * ── A CATALOG ITEM IS JUDGED FOR EVERY CHILD, NOT ONLY THE FIRST ─────────────────
+             *
+             * Whether a catalog item applies depends on the site each child's own agreement attends,
+             * so a selection can be fine for one child and refused for the next. The write judges
+             * each child; the preview has to say the same thing before anything is confirmed, or a
+             * multi-child (and therefore every bulk) Add would preview clean and half-refuse at commit.
+             */
+            if (catalogProductId && selected.length > 1) {
+                const labelsByIndex = Array.isArray(payload?.child_labels)
+                    ? (payload.child_labels as unknown[]).map((v) => t(v))
+                    : [];
+                for (let i = 1; i < selected.length; i++) {
+                    const other = await resolveChargeSubject(
+                        supabase as SupabaseClient, ctx.orgId, selected[i]!, t(payload?.customer_id) || null,
+                    );
+                    const who = labelsByIndex[i] || "one of the selected children";
+                    if (!other.ok) {
+                        const reason = `${who}: ${other.message}`;
+                        return { summary: reason, changes: [], blocked: { reason } };
+                    }
+                    const r = await previewFor(other);
+                    if (!r.intent.eligible) {
+                        const reason = `${who}: ${r.intent.reason ?? "This charge cannot be created right now."}`;
+                        return { summary: reason, changes: [], blocked: { reason } };
+                    }
+                }
             }
             const amount =
                 intent.amountCents == null
@@ -640,10 +725,22 @@ const addCharge: RegisteredAction = {
                     currency: intent.currencyCode || "USD",
                 });
 
+            /* THE PRICE, SAID BOTH WAYS when it is not the Catalog's — default, override, and why. */
+            const override = amountOverrideOf(payload);
+            const catalogPriceCents = previewCatalogPrice;
+            const overrideLines =
+                override && catalogPriceCents != null && override.amountCents !== catalogPriceCents
+                    ? [
+                          `Catalog price · ${money(catalogPriceCents)}`,
+                          `Amount override · ${money(override.amountCents)}${multi ? " per child" : ""}`,
+                          `Override reason · ${override.reason}`,
+                      ]
+                    : [];
             const changes = [
                 multi
                     ? `Applies to · ${labels.length ? labels.join(", ") : `${selected.length} children`}`
                     : `Applies to · ${childLabel}`,
+                ...overrideLines,
                 multi && intent.amountCents != null ? `${money(intent.amountCents)} per child` : null,
                 multi ? `${selected.length} children selected` : null,
                 multi && totalCents != null ? `Total to create · ${money(totalCents)}` : null,
@@ -665,7 +762,9 @@ const addCharge: RegisteredAction = {
                       ]),
                 intent.periodIssue ? `Billing period · ${intent.periodIssue.message}` : null,
             ].filter((v): v is string => Boolean(v));
-            return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
+            /* A catalog charge is named by its catalog item; a template charge keeps its historical summary. */
+            const what = catalogProductId ? label : intent.templateKey;
+            return { summary: `${what} ${amount}${multi ? " per child" : ""}`, changes };
         } catch (err) {
             return {
                 summary: err instanceof Error ? err.message : "This charge cannot be previewed.",
@@ -678,6 +777,18 @@ const addCharge: RegisteredAction = {
         const correlationId = randomUUID();
         if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
             return denied(correlationId, "Creating a charge", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
+        /* Re-judged here, not only at eligibility: a direct call must not reach the writer with a price. */
+        const parsedOverride = parseCatalogAmountOverride(payload?.amount_override);
+        if (!parsedOverride.ok) return { ok: false, correlationId, status: 400, error: parsedOverride.message };
+        if (parsedOverride.override && !t(payload?.catalog_product_id)) {
+            return { ok: false, correlationId, status: 400, error: "Only a Catalog charge's amount can be changed here." };
+        }
+        if (
+            parsedOverride.override
+            && !(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CATALOG_AMOUNT_OVERRIDE_PERMISSION))
+        ) {
+            return denied(correlationId, "Changing a charge's amount from the Catalog price", CATALOG_AMOUNT_OVERRIDE_PERMISSION, "amount_override_permission_required");
         }
 
         /*
@@ -752,11 +863,13 @@ const addCharge: RegisteredAction = {
             const subject = subjects[0]!.subject;
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
+                catalogProductId: t(payload.catalog_product_id) || null,
                 ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || t(payload.service_date) || null,
                 operatorServiceDate: t(payload.service_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
+                catalogAmountOverride: amountOverrideOf(payload),
                 today: t(payload.today) || (await todayYmd(supabase as SupabaseClient, ctx.orgId)),
                 actorUserId: ctx.userId ?? null,
             });
@@ -1167,4 +1280,4 @@ export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge
  * subject resolution against a database. Those two have their own coverage; this exposes the
  * orchestration between them and nothing else.
  */
-export const __testables = { executeMultiChildAdd, childIdsFrom };
+export const __testables = { executeMultiChildAdd, childIdsFrom, resolveChargeSubject };

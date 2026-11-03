@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialProduct, CommercialType } from "@/lib/commercial/commercialProducts";
 import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
+import { ensureCatalogGlSelection } from "@/lib/financials/catalogCharges/catalogGlSelection";
 import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 const SELECT_COLS =
@@ -69,9 +70,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         patch.metadata = body.metadata;
     }
 
+    const supabase = createAdminClient();
+    /* A GL Code chosen from the org's accounts (catalogGlSelection.ts): referenced or established
+       before the item changes, or refused with what is missing. An empty selection clears it. */
+    let glRevenueCategory: Record<string, unknown> | null = null;
+    if (body.gl_account_id !== undefined) {
+        const glAccountId = typeof body.gl_account_id === "string" ? body.gl_account_id.trim() : "";
+        if (!glAccountId) {
+            patch.revenue_category_id = null;
+        } else {
+            const { data: current, error: currentError } = await supabase
+                .from("commercial_products").select("id, revenue_category_id").eq("id", id).eq("org_id", ctx.orgId).maybeSingle();
+            if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 });
+            if (!current) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+            const gl = await ensureCatalogGlSelection(supabase, {
+                orgId: ctx.orgId,
+                glAccountId,
+                currentRevenueCategoryId: (current as { revenue_category_id?: string | null }).revenue_category_id ?? null,
+                actorUserId: ctx.userId,
+            });
+            if (!gl.ok) return NextResponse.json({ error: gl.error, field: "gl_account_id" }, { status: gl.status });
+            patch.revenue_category_id = gl.revenueCategoryId;
+            glRevenueCategory = gl.revenueCategory;
+        }
+    }
+
     if (Object.keys(patch).length <= 1) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
-    const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("commercial_products").update(patch).eq("id", id).eq("org_id", ctx.orgId).select(SELECT_COLS).maybeSingle();
 
@@ -82,7 +107,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         );
     }
     if (!data) return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    return NextResponse.json({ product: mapRow(data as Record<string, unknown>) });
+    return NextResponse.json({ product: mapRow(data as Record<string, unknown>), ...(glRevenueCategory ? { revenue_category: glRevenueCategory } : {}) });
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

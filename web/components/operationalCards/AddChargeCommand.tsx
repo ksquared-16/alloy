@@ -85,7 +85,13 @@ export default function AddChargeCommand({
     controls,
     modeSlot,
     editing = false,
+    selectionRefusal = null,
 }: {
+    /**
+     * Why the chosen item cannot be charged to the CURRENT Applies-to selection, or null. Said once,
+     * beside the selection that changes it — never as a suffix on every choice.
+     */
+    selectionRefusal?: string | null;
     /** W7-F016: editing a draft — the same command, re-titled; saving replaces the draft. */
     editing?: boolean;
     specimen: AddChargeSpecimen;
@@ -133,9 +139,15 @@ export default function AddChargeCommand({
          */
         unifiedTarget?: {
             householdOffered: boolean;
+            /**
+             * Listed but not choosable: the chosen catalog item is offered at another site than this
+             * subject's charge is for, so the command would refuse it. A selected subject is never
+             * disabled — it can always be removed.
+             */
+            householdDisabled?: boolean;
             householdSelected: boolean;
             onSelectHousehold: () => void;
-            children: Array<{ id: string; label: string }>;
+            children: Array<{ id: string; label: string; disabled?: boolean }>;
             selectedChildIds: string[];
             onToggleChild: (id: string) => void;
             perChildLabel: string | null;
@@ -149,6 +161,25 @@ export default function AddChargeCommand({
         };
         amount: string;
         onAmount: (value: string) => void;
+        /**
+         * ── THIS CHARGE'S AMOUNT, AUTHORIZED TO DEPART FROM THE CATALOG PRICE ───────────────────
+         *
+         * Present only for a Catalog item and a user the shell says may adjust (the server decides).
+         * Off, the Catalog price is shown locked, with "Change amount". On, `amount`/`onAmount` edit
+         * the amount, a reason is required, and the card states the Catalog price, this charge's
+         * amount and the difference — for this one charge; the Catalog item does not change.
+         */
+        amountOverride?: {
+            active: boolean;
+            catalogAmountCents: number;
+            /** The typed amount in cents, or null when it is not a valid amount. */
+            amountCents: number | null;
+            reason: string;
+            onReason: (value: string) => void;
+            /** Why the override cannot be submitted yet, or null. */
+            error: string | null;
+            onToggle: (on: boolean) => void;
+        } | null;
         note: string;
         onNote: (value: string) => void;
         /**
@@ -284,8 +315,16 @@ export default function AddChargeCommand({
                         aria-label="Charge type"
                         allowEmpty={false}
                         value={controls.selectedTemplateId ?? ""}
-                        /* LABELS, never internal keys. The catalog owns the wording. */
-                        options={templates.map((opt) => ({ value: opt.key, label: opt.label }))}
+                        /*
+                         * LABELS, never internal keys — the item's name and price, nothing else. The
+                         * host passes only items this operator can add here; one it could not would
+                         * still be refused by the server, so it is disabled rather than explained.
+                         */
+                        options={templates.map((opt) => ({
+                            value: opt.key,
+                            label: opt.amount ? `${opt.label} · ${opt.amount}` : opt.label,
+                            disabled: Boolean(opt.unavailableReason),
+                        }))}
                         onChange={(next) => controls.onSelectTemplate(next)}
                     />
                 ) : (
@@ -296,9 +335,9 @@ export default function AddChargeCommand({
                         </svg>
                     </span>
                 )}
-                <span className="alloy-os-addcharge__optioncount">
-                    {templates.length} configured types
-                </span>
+                {t.accountLabel ? (
+                    <span className="alloy-os-addcharge__optioncount">Posts to {t.accountLabel}</span>
+                ) : null}
             </Field>
             {/*
               * THE CONFIG STRIP IS GONE, and the semantics it described are untouched.
@@ -346,9 +385,13 @@ export default function AddChargeCommand({
                         }
                         options={[
                             ...(controls.unifiedTarget.householdOffered
-                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true }]
+                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true, disabled: controls.unifiedTarget.householdDisabled === true }]
                                 : []),
-                            ...controls.unifiedTarget.children.map((c) => ({ value: c.id, label: c.label })),
+                            ...controls.unifiedTarget.children.map((c) => ({
+                                value: c.id,
+                                label: c.label,
+                                disabled: c.disabled === true,
+                            })),
                         ]}
                         onChange={(next) => {
                             const target = controls.unifiedTarget!;
@@ -407,6 +450,11 @@ export default function AddChargeCommand({
                     )}
                 </Field>
             )}
+            {selectionRefusal ? (
+                <p className="alloy-os-addcharge__draftnote" data-addcharge-selection-refusal role="status">
+                    {selectionRefusal}
+                </p>
+            ) : null}
             {controls?.chargeResponsibility ? (
                 <div className="alloy-os-addcharge__responsibility" data-addcharge-charge-responsibility="section">
                     {/* WHO OWES, then a quiet way to change it for this charge only. */}
@@ -513,8 +561,18 @@ export default function AddChargeCommand({
 
             {/* Amount and note side by side — the two values an operator types. */}
             <div className="alloy-os-addcharge__pair" data-addcharge-amount-note="true">
-                <Field label="Amount" required={!amountLocked}>
-                    {controls && !amountLocked ? (
+                <Field label="Amount" required={!amountLocked || Boolean(controls?.amountOverride?.active)}>
+                    {controls?.amountOverride?.active ? (
+                        <input
+                            className="alloy-os-addcharge__input"
+                            data-addcharge-override-amount
+                            inputMode="decimal"
+                            aria-label="Amount for this charge"
+                            value={controls.amount}
+                            placeholder="0.00"
+                            onChange={(e) => controls.onAmount(e.target.value)}
+                        />
+                    ) : controls && !amountLocked ? (
                         <input
                             className="alloy-os-addcharge__input"
                             data-addcharge-amount
@@ -526,6 +584,9 @@ export default function AddChargeCommand({
                     ) : (
                         <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
                     )}
+                    {controls?.amountOverride ? (
+                        <AmountOverrideNote override={controls.amountOverride} />
+                    ) : null}
 
                 </Field>
                 <Field label="Note" required={t.requiresNote}>
@@ -881,6 +942,8 @@ export default function AddChargeCommand({
                     primary
                     disabled={
                         resolvesToNothing
+                        || Boolean(selectionRefusal)
+                        || Boolean(controls?.amountOverride?.active && controls.amountOverride.error)
                         || (controls?.unifiedTarget
                             ? !controls.unifiedTarget.householdSelected
                               && controls.unifiedTarget.selectedChildIds.length === 0
@@ -942,6 +1005,46 @@ function DateCell({
                 {required ? <span className="alloy-os-addcharge__req">required</span> : null}
             </span>
             <span className="alloy-os-addcharge__field-value">{children}</span>
+        </div>
+    );
+}
+
+const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+/** Catalog price → this charge's amount, the difference, and the reason — or the way to change it. */
+function AmountOverrideNote({ override }: { override: NonNullable<NonNullable<Parameters<typeof AddChargeCommand>[0]["controls"]>["amountOverride"]> }) {
+    if (!override.active) {
+        return (
+            <p className="alloy-os-addcharge__draftnote" data-addcharge-override="off">
+                Catalog price{" "}
+                <button type="button" className="alloy-os-addcharge__link" data-addcharge-override-toggle="on" onClick={() => override.onToggle(true)}>
+                    Change amount
+                </button>
+            </p>
+        );
+    }
+    const diff = override.amountCents == null ? null : override.amountCents - override.catalogAmountCents;
+    return (
+        <div data-addcharge-override="on">
+            <p className="alloy-os-addcharge__draftnote" data-addcharge-override-summary>
+                {`Catalog price ${usd(override.catalogAmountCents)} → this charge ${override.amountCents == null ? "—" : usd(override.amountCents)}`}
+                {diff != null && diff !== 0 ? ` (${diff > 0 ? "+" : "−"}${usd(Math.abs(diff))})` : ""}
+                {" · this charge only; the Catalog item is unchanged. "}
+                <button type="button" className="alloy-os-addcharge__link" data-addcharge-override-toggle="off" onClick={() => override.onToggle(false)}>
+                    Use Catalog price
+                </button>
+            </p>
+            <input
+                className="alloy-os-addcharge__input"
+                data-addcharge-override-reason
+                aria-label="Reason for changing the amount"
+                value={override.reason}
+                placeholder="Reason for the different amount (required)"
+                onChange={(e) => override.onReason(e.target.value)}
+            />
+            {override.error ? (
+                <p className="alloy-os-addcharge__draftnote" data-addcharge-override-error role="alert">{override.error}</p>
+            ) : null}
         </div>
     );
 }

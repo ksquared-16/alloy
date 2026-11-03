@@ -1,0 +1,64 @@
+{
+  "trusted_host_action_id": "tha_d2776d0753932b",
+  "query_hash": "17a960471872d2af391238abca50250c09db8d5007ed7ff1bbefa138c6aee1ab",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-03T03:17:10.460Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d2776d0753932b",
+    "query_hash": "17a960471872d2af391238abca50250c09db8d5007ed7ff1bbefa138c6aee1ab",
+    "authorization_id": "grnt_207e96a1dbfd4db8",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-03T03:17:20.463Z",
+    "question_ids": [
+      "asf1"
+    ],
+    "questions": {
+      "asf1": {
+        "question_id": "asf1",
+        "row_count": null,
+        "rows": [
+          {
+            "org_name": "Firefly Early Learning",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "product_id": "41cd1f66-74e1-47a0-9c4d-eb0cfe5be771",
+            "name": "Annual Supply Fee",
+            "commercial_type": "fee",
+            "cadence_key": "annual",
+            "amount_cents": 20000,
+            "is_active": true,
+            "effective_start": "2026-07-22",
+            "effective_end": null,
+            "location_id": null,
+            "program_key": null,
+            "behavior": {
+              "required": true
+            },
+            "legacy_revenue_category_text": null,
+            "revenue_category_id": "c9ed71a2-3871-4299-ad31-9238af07b04d",
+            "revenue_category_label": "Supply Fees",
+            "revenue_category_active": true,
+            "revenue_category_gl_account_id": "e648ef67-4c7e-4a90-8c08-864d8bfe3398",
+            "gl_account_code": "4030",
+            "gl_account_name": "Supply Fees",
+            "gl_account_type": "revenue",
+            "gl_account_active": true,
+            "own_mapping_key_active": false,
+            "active_mapping_keys_to_account": [
+              "consumable_revenue"
+            ],
+            "org_one_time_items_active": 2,
+            "measured_at": "2026-11-03T03:17:19.677464+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

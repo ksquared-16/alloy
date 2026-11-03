@@ -111,6 +111,8 @@
     "dev:qa:documents-household-fixture-ensure": "node scripts/qaDocumentsHouseholdFixtureEnsure.mjs",
     "dev:qa:documents-household-fixture-reset": "node scripts/qaDocumentsHouseholdFixtureReset.mjs",
     "dev:qa:documents-forms-residue-reset": "node scripts/qaDocumentsFormsResidueReset.mjs",
+    "dev:qa:financials-historical-draft-fixture": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+    "test:qa:financials-isolated": "node scripts/qa/financialsIsolatedTests.mjs",
     "dev:qa:documents-shared-child-ensure": "node scripts/qaDocumentsSharedChildFixture.mjs ensure",
     "dev:qa:documents-shared-child-reset": "node scripts/qaDocumentsSharedChildFixture.mjs reset",
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",

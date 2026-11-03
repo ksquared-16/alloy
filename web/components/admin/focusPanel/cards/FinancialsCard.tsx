@@ -29,6 +29,7 @@ import {
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import { operatorRefusal } from "@/lib/financials/commands/operatorRefusal";
 import { chargeDisplayLabel } from "@/lib/financials/chargeCategories";
+import { catalogChargeRefusalFor, HOUSEHOLD_CHARGE_SUBJECT } from "@/lib/financials/catalogCharges/chargeSubjectSite";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
@@ -51,6 +52,7 @@ import {
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
+    addChargeTypeChoices,
     adaptFinancialsVmToFinancialsCard,
     adaptFinancialsVmToLedgerPeriods,
     hydratingFinancialsEvidence,
@@ -79,6 +81,9 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
 import FinancialsChargeDetail, { type ChargeDetailFacts, type ChargeDetailSeed } from "@/app/adminV2/financials/FinancialsChargeDetail";
+import { resolveDraftEditIdentity } from "@/lib/financials/catalogCharges/draftEditIdentity";
+import { CATALOG_AMOUNT_OVERRIDE_PERMISSION, centsFromAmountInput } from "@/lib/financials/catalogCharges/catalogAmountOverride";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -787,8 +792,45 @@ export default function FinancialsCard({
     const [chargeAmount, setChargeAmount] = useState("");
     const [chargeNote, setChargeNote] = useState("");
     const [chargeEventDate, setChargeEventDate] = useState("");
+    /*
+     * ── THIS CHARGE'S AMOUNT, WHEN IT IS NOT THE CATALOG PRICE ────────────────────────────────
+     *
+     * Offered only to a user whose grants include the adjustment authority (shell grants decide what
+     * to OFFER; `charge.add` authorizes). On, `chargeAmount` holds the typed amount — so the preview,
+     * the per-child total and the discount lookup all price what will be charged — and the payload
+     * carries `amount_override` with the reason. Off, the Catalog price is the price.
+     */
+    const adminAuth = useAdminAuthOptional();
+    const canOverrideAmount = Boolean(adminAuth?.permissionKeys?.includes(CATALOG_AMOUNT_OVERRIDE_PERMISSION));
+    const [overrideOn, setOverrideOn] = useState(false);
+    const [overrideReason, setOverrideReason] = useState("");
+    const overrideCents = overrideOn ? centsFromAmountInput(chargeAmount) : null;
+    const overrideError = !overrideOn
+        ? null
+        : overrideCents == null
+            ? "Enter the amount in dollars and cents, like 30.00."
+            : overrideCents === 0
+                ? "A charge cannot be $0.00. To forgive this fee, add it and then waive or adjust it."
+                : overrideReason.trim().length < 3
+                    ? "Say why this charge differs from the Catalog price."
+                    : null;
+    /* What preview AND commit send — the same question, so the preview prices what is committed. */
+    const amountOverrideFields = (source: "catalog" | "template") =>
+        overrideOn && source === "catalog"
+            ? { amount_override: { amount_cents: overrideCents, reason: overrideReason.trim() } }
+            : {};
+    const resetAmountOverride = () => {
+        setOverrideOn(false);
+        setOverrideReason("");
+    };
     const [pending, setPending] = useState<{
         templateId: string;
+        /*
+         * WHICH AUTHORITY `templateId` NAMES. New charges are always `catalog`. `template` exists only
+         * while an existing template draft is being edited: it keeps that draft's template identity,
+         * and is sent as `template_id`, exactly as the draft was written.
+         */
+        source: "catalog" | "template";
         label: string;
         summary: string;
         changes: string[];
@@ -2526,6 +2568,21 @@ export default function FinancialsCard({
     );
 
     /*
+     * ── WHO THIS CHARGE IS FOR, AS THE COMMAND WILL READ IT ──────────────────────────────────────
+     *
+     * The same values the payload sends: the selected children, or — naming no child — the household.
+     * A catalog item is judged for each of them at the site THAT subject's charge is for
+     * (`unavailableForSubjects`), so the picker refuses exactly what the preview and the write refuse.
+     */
+    const chargeSubjects = useMemo(
+        () =>
+            selectedChildIds.length > 0
+                ? selectedChildIds.map((id, i) => ({ key: id, label: selectedChildLabels[i] ?? null }))
+                : [{ key: HOUSEHOLD_CHARGE_SUBJECT, label: "Household" }],
+        [selectedChildIds, selectedChildLabels],
+    );
+
+    /*
      * ── A MOUNTED CONTROL IS NEVER SILENTLY INERT ───────────────────────────────────────────────
      *
      * This returned `undefined` with nothing to settle, and the Details header rendered
@@ -2615,7 +2672,7 @@ export default function FinancialsCard({
      * the commit that follows it.
      */
     const preview = useCallback(
-        async (templateId: string, label: string) => {
+        async (templateId: string, label: string, source: "catalog" | "template" = "catalog") => {
             if (running) return;
             if (!chargeInvocation) {
                 // An absent target is an answer the operator is owed, not a reason to do nothing.
@@ -2644,7 +2701,11 @@ export default function FinancialsCard({
                             // The household, so a pre-enrolment family has a billable subject when
                             // no child agreement exists. The resolver still prefers an agreement.
                             customer_id: customerId,
-                            template_id: templateId,
+                            /*
+                             * Manual Add Charge offers the Catalog: the option id IS the catalog item.
+                             * Only an edit of an existing template draft names its template instead.
+                             */
+                            ...(source === "template" ? { template_id: templateId } : { catalog_product_id: templateId }),
                             child_label: chargeInvocation.customerMemberId
                                 ? vm?.subjects.find(
                                       (s) => s.customerMemberId === chargeInvocation.customerMemberId,
@@ -2670,13 +2731,14 @@ export default function FinancialsCard({
                              */
                             ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                             ...(chargeNote ? { note: chargeNote } : {}),
+                            ...amountOverrideFields(source),
                         },
                     }),
                 });
                 const json = (await res.json()) as {
                     ok?: boolean;
                     error?: string | { message?: string };
-                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[]; blocked?: { reason?: string } | null } } };
                 };
                 const p = json?.data?.execution_result?.preview;
                 if (!json?.ok || !p) {
@@ -2684,8 +2746,11 @@ export default function FinancialsCard({
                     setCommandError(err || "This charge cannot be previewed.");
                     return;
                 }
+                /* The domain refused what was previewed: say so as the refusal it is, not as a summary. */
+                if (p.blocked?.reason) setCommandError(p.blocked.reason);
                 setPending({
                     templateId,
+                    source,
                     label,
                     summary: p.summary ?? "",
                     changes: Array.isArray(p.changes) ? p.changes : [],
@@ -2696,7 +2761,8 @@ export default function FinancialsCard({
                 setRunning(false);
             }
         },
-        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- amountOverrideFields reads exactly these
+        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm, overrideOn, overrideCents, overrideReason],
     );
 
     /*
@@ -2758,8 +2824,9 @@ export default function FinancialsCard({
 
     useEffect(() => {
         if (overlay !== "add_charge" || !customerId) return;
-        const template = (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === pending?.templateId)
-            ?? (vm?.chargeTemplates ?? [])[0];
+        const pool = pending?.source === "template" ? vm?.draftTemplates ?? [] : vm?.chargeTemplates ?? [];
+        const template = pool.find((tpl) => tpl.id === pending?.templateId)
+            ?? (vm?.chargeTemplates ?? []).find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null);
         const categoryKey = template?.categoryKey ?? "";
         /* A household charge names no child, and a child's discounts are not the account's. */
         const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
@@ -2809,7 +2876,7 @@ export default function FinancialsCard({
          * eligibility, and a selection that was valid a keystroke ago must not survive into a
          * charge it cannot reduce.
          */
-    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates]);
+    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates, chargeSubjects]);
 
     /*
      * ── WHICH DISCOUNT THIS CHARGE WILL GET, AND WHAT IT IS WORTH ────────────────────────────
@@ -3015,7 +3082,10 @@ export default function FinancialsCard({
                         // Same subject inputs the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
-                        template_id: pending.templateId,
+                        /* The same source the preview resolved — preview equals commit. */
+                        ...(pending.source === "template"
+                            ? { template_id: pending.templateId }
+                            : { catalog_product_id: pending.templateId }),
                         // The same selection the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         ...(selectedChildIds.length > 1
@@ -3024,6 +3094,8 @@ export default function FinancialsCard({
                         // The same service date the preview was asked about — preview equals commit.
                         ...(chargeEventDate ? { event_date: chargeEventDate, service_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),
+                        // The same amount and reason the preview priced.
+                        ...amountOverrideFields(pending.source),
                     },
                 }),
             });
@@ -3135,6 +3207,7 @@ export default function FinancialsCard({
                 resetChargeDecisions();
                 resetStack();
                 setChargeAmount("");
+                resetAmountOverride();
                 setChargeNote("");
                 setChargeEventDate("");
                 setCommandNotice(
@@ -3194,6 +3267,7 @@ export default function FinancialsCard({
             // own message, so the operator can correct the charge rather than re-open and retype it.
             resetStack();
             setChargeAmount("");
+            resetAmountOverride();
             setChargeNote("");
             setChargeEventDate("");
         } catch {
@@ -3220,6 +3294,10 @@ export default function FinancialsCard({
         pending,
         resetChargeDecisions,
         running,
+        /* The override the commit sends must be the one on screen, not the one at first render. */
+        overrideOn,
+        overrideCents,
+        overrideReason,
     ]);
 
     /**
@@ -3502,11 +3580,28 @@ export default function FinancialsCard({
      */
     useEffect(() => {
         if (overlay !== "add_charge" || !vm) return;
-        const first = pending?.templateId ?? vm.chargeTemplates[0]?.id ?? null;
+        /* Only an item the command accepts is opened on; unsupported and blocked ones are shown, never chosen. */
+        const first = pending?.templateId
+            ?? vm.chargeTemplates.find((tpl) => catalogChargeRefusalFor(tpl, chargeSubjects) === null)?.id
+            ?? null;
         if (!first) return;
-        void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
+        const source = pending?.source ?? "catalog";
+        const pool = source === "template" ? vm.draftTemplates : vm.chargeTemplates;
+        void preview(first, pool.find((t) => t.id === first)?.label ?? pending?.label ?? "", source);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
     }, [overlay, subjectFilter, chargeEventDate]);
+
+    /* An override re-previews once the operator pauses, so the preview is the server's answer for it. */
+    const overridePreviewKey = overrideOn ? `${overrideCents ?? "?"}|${overrideReason.trim()}` : "off";
+    const overridePreviewSeen = useRef(overridePreviewKey);
+    useEffect(() => {
+        if (overridePreviewSeen.current === overridePreviewKey) return;
+        overridePreviewSeen.current = overridePreviewKey;
+        if (overlay !== "add_charge" || !pending?.templateId || pending.source !== "catalog") return;
+        const timer = setTimeout(() => void preview(pending.templateId, pending.label, "catalog"), 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the override alone
+    }, [overridePreviewKey]);
 
     /** The row as the read model knows it — the callback carries identity, not attribution. */
     const rowForCharge = useCallback(
@@ -5385,10 +5480,19 @@ export default function FinancialsCard({
          * under; if that version has since been superseded (W7-F017 moved Materials onto the
          * organisation's timing), the edit is made under the version in force now.
          */
-        const current =
-            (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === facts.chargeTemplateId)
-            ?? (vm?.chargeTemplates ?? []).find((tpl) => tpl.label === facts.label)
-            ?? null;
+        /*
+         * ── A DRAFT IS EDITED UNDER ITS OWN IDENTITY, NEVER ITS NAME ──────────────────────────
+         *
+         * A template draft stays a template draft: its template by id, else the version of the same
+         * `template_key` in force now — the lineage it was written under. A catalog draft is its
+         * catalog item by id. Nothing matches by label: a catalog item and a template can share a
+         * name, and converting a historical draft into a same-name catalog product would change what
+         * the charge is without anyone deciding it.
+         */
+        const current = resolveDraftEditIdentity(facts, {
+            draftTemplates: vm?.draftTemplates ?? [],
+            catalogOptions: vm?.chargeTemplates ?? [],
+        });
         if (!current) {
             setDraftActionError("This charge type is no longer offered, so the draft cannot be edited. Cancel it and add a new charge.");
             return;
@@ -5400,7 +5504,7 @@ export default function FinancialsCard({
         setChargeEventDate(facts.serviceDate ?? "");
         setChargeAmount(facts.amountCents > 0 ? (facts.amountCents / 100).toFixed(2) : "");
         setSubjectFilter(facts.customerMemberId ?? "all");
-        setPending({ templateId: current.id, label: current.label, summary: "", changes: [] });
+        setPending({ templateId: current.id, source: current.source, label: current.label, summary: "", changes: [] });
         push({ kind: "add_charge" });
     };
 
@@ -6211,9 +6315,62 @@ export default function FinancialsCard({
         }
 
     if (overlay === "add_charge" && vm && reconciliation) {
-        const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
+        /*
+         * Editing a template draft offers exactly that draft's template — its identity is not the
+         * operator's to change in an edit. Every other Add offers the catalog.
+         */
+        const templates = (
+            pending?.source === "template"
+                ? vm.draftTemplates.filter((tpl) => tpl.id === pending.templateId)
+                : vm.chargeTemplates
+        ).map((tpl) => {
+            const option = adaptChargeTemplateOption(tpl, currency);
+            /* A catalog item the command would refuse for THIS selection is shown with that reason. */
+            if (pending?.source === "template" || tpl.availability !== "offerable") return option;
+            return { ...option, unavailableReason: catalogChargeRefusalFor(tpl, chargeSubjects) };
+        });
+        const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
+        /*
+         * ── THE CHOICES ARE WHAT THIS OPERATOR CAN ADD HERE, AND NOTHING ELSE ─────────────────
+         *
+         * Charge type listed the whole Catalog: unsupported and blocked items sat in the select,
+         * disabled, each with a sentence of why — a list mostly of things nobody could choose. It
+         * now lists only items the command accepts for at least one subject on this account, by
+         * name. An item that does not apply to the CURRENT selection is still choosable — and still
+         * opens the command — because changing `Applies to` makes it addable (otherwise a child no
+         * item applies to would leave no way to choose the household or a sibling it does apply to);
+         * the refused subjects are disabled there. What the Catalog holds that cannot be charged
+         * here is Catalog configuration, and the server's eligibility rule — the one this list is
+         * read from — still refuses it if asked.
+         */
+        const choosableTemplates = addChargeTypeChoices(
+            templates,
+            vm.chargeTemplates.map((tpl) => tpl.availability),
+            pending?.source === "template",
+        );
         const selected =
-            templates.find((tpl) => tpl.key === pending?.templateId) ?? templates[0] ?? null;
+            offerableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? choosableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? offerableTemplates[0]
+            ?? choosableTemplates[0]
+            ?? null;
+        /* The chosen item's refusal for THIS selection, said once and briefly beside Applies to. */
+        const selectedRefusal =
+            selected && pending?.source !== "template"
+                ? templates.find((tpl) => tpl.key === selected.key)?.unavailableReason ?? null
+                : null;
+        /* The chosen Catalog item's own price (cents), the default an amount override departs from. */
+        const selectedCatalogCents = selected
+            ? vm.chargeTemplates.find((tpl) => tpl.id === selected.key)?.amountCents ?? null
+            : null;
+        /*
+         * The subjects the chosen item may not be charged to. They stay listed and cannot be added —
+         * one already selected can still be removed — so the selection never reaches a refusal.
+         */
+        const selectedCatalog =
+            pending?.source === "template" ? null : vm.chargeTemplates.find((tpl) => tpl.id === (selected?.key ?? ""));
+        const refusedFor = (key: string) =>
+            Boolean(selectedCatalog?.unavailableForSubjects?.[key]);
         const subjectLabel =
             subjectFilter === "all" ?
                 "Household"
@@ -6284,7 +6441,8 @@ export default function FinancialsCard({
                     <AddChargeCommand
                         editing={Boolean(replacingDraftId)}
                         modeSlot={entryModes}
-                        templates={templates}
+                        templates={choosableTemplates}
+                        selectionRefusal={selectedRefusal}
                         specimen={adaptAddChargeSpecimen({
                             template: selected,
                             subjectLabel,
@@ -6305,7 +6463,7 @@ export default function FinancialsCard({
                         controls={{
                             selectedTemplateId: selected.key,
                             onSelectTemplate: (id) => {
-                                const tpl = templates.find((x) => x.key === id);
+                                const tpl = choosableTemplates.find((x) => x.key === id);
                                 /*
                                  * A CHANGE OF TYPE CAN INVALIDATE THE SUBJECT. Switching to a
                                  * child-grained type while the command is anchored on the
@@ -6321,7 +6479,12 @@ export default function FinancialsCard({
                                 } else if (subjectFilter !== "all" && !categoryPermitsChildGrain(cat)) {
                                     setSubjectFilter("all");
                                 }
-                                void preview(id, tpl?.label ?? "");
+                                /* Another item has another price: an override never carries across. */
+                                if (overrideOn) {
+                                    resetAmountOverride();
+                                    setChargeAmount("");
+                                }
+                                void preview(id, tpl?.label ?? "", pending?.source ?? "catalog");
                             },
                             /*
                              * ── ALSO BILL THESE CHILDREN ─────────────────────────────────────
@@ -6387,6 +6550,8 @@ export default function FinancialsCard({
                                 selected && categoryPermitsChildGrain(selected.categoryKey ?? "") && vm.subjects.length > 0
                                     ? {
                                           householdOffered: categoryPermitsHouseholdGrain(selected.categoryKey ?? ""),
+                                          householdDisabled:
+                                              subjectFilter !== "all" && refusedFor(HOUSEHOLD_CHARGE_SUBJECT),
                                           householdSelected: subjectFilter === "all",
                                           onSelectHousehold: () => {
                                               setSubjectFilter("all");
@@ -6395,6 +6560,9 @@ export default function FinancialsCard({
                                           children: vm.subjects.map((sub) => ({
                                               id: sub.customerMemberId,
                                               label: sub.displayName,
+                                              disabled:
+                                                  refusedFor(sub.customerMemberId)
+                                                  && !(subjectFilter !== "all" && selectedChildIds.includes(sub.customerMemberId)),
                                           })),
                                           selectedChildIds: subjectFilter === "all" ? [] : selectedChildIds,
                                           onToggleChild: (id: string) => {
@@ -6440,6 +6608,22 @@ export default function FinancialsCard({
                             onSelectSubject: setSubjectFilter,
                             amount: chargeAmount,
                             onAmount: setChargeAmount,
+                            amountOverride:
+                                canOverrideAmount && pending?.source !== "template" && selectedCatalogCents != null && selectedCatalogCents > 0
+                                    ? {
+                                          active: overrideOn,
+                                          catalogAmountCents: selectedCatalogCents,
+                                          amountCents: overrideCents,
+                                          reason: overrideReason,
+                                          onReason: setOverrideReason,
+                                          error: overrideError,
+                                          onToggle: (on: boolean) => {
+                                              setOverrideOn(on);
+                                              setOverrideReason("");
+                                              setChargeAmount(on ? (selectedCatalogCents / 100).toFixed(2) : "");
+                                          },
+                                      }
+                                    : null,
                             note: chargeNote,
                             onNote: setChargeNote,
                             eventDate: chargeEventDate,
@@ -6559,8 +6743,15 @@ export default function FinancialsCard({
                         }}
                     />
                 ) : (
-                    // A configured catalog with nothing in it is a configuration state, not an error.
-                    <p className="alloy-os-financials__empty">No charge types are configured.</p>
+                    /*
+                     * A catalog with nothing chargeable here is a configuration state, not an error.
+                     * One line says what to do; the items that cannot be charged are not listed
+                     * here — they are configuration, changed in the Catalog.
+                     */
+                    <div className="alloy-os-financials__empty" data-financials-catalog-empty="true">
+                        <p>No charges can be added to this account yet.</p>
+                        <p>Add a one-time item with a GL Code in Organization › Financials › Catalog.</p>
+                    </div>
                 )}
             </div>
         );
@@ -7884,7 +8075,7 @@ export default function FinancialsCard({
                                 {vm.unavailableReason}
                             </span>
                         ) : null}
-                        {vm.chargeTemplates.length > 0 ? (
+                        {vm.chargeTemplates.some((tpl) => tpl.availability === "offerable") ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <button
@@ -7897,10 +8088,12 @@ export default function FinancialsCard({
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
-                                    {vm.chargeTemplates.map((tpl) => (
+                                    {/* Only what can be charged here — an item Add charge refuses is not a menu entry. */}
+                                    {vm.chargeTemplates.filter((tpl) => tpl.availability === "offerable").map((tpl) => (
                                         <DropdownMenuItem
                                             key={tpl.id}
                                             data-financials-charge-template={tpl.id}
+                                            data-financials-charge-availability={tpl.availability}
                                             onSelect={() => void preview(tpl.id, tpl.label)}
                                         >
                                             {/* The tenant's own label. Never `template_key`. */}

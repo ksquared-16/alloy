@@ -1,0 +1,155 @@
+{
+  "trusted_host_action_id": "tha_29abee8add05d7",
+  "query_hash": "b41f503ca0a378527b3e895a4127ed8fd6c3e88ff96f4286342ef4cb514511b7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T14:42:03.373Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_29abee8add05d7",
+    "query_hash": "b41f503ca0a378527b3e895a4127ed8fd6c3e88ff96f4286342ef4cb514511b7",
+    "authorization_id": "grnt_3937988404d64bec",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T14:42:09.431Z",
+    "question_ids": [
+      "fn",
+      "tg",
+      "tr",
+      "lg"
+    ],
+    "questions": {
+      "fn": {
+        "question_id": "fn",
+        "row_count": null,
+        "rows": [
+          {
+            "name": "money_capable_capability_keys",
+            "present": true,
+            "def_md5": "1b147f0a605885188e5616b7ceb4c466",
+            "owner": "postgres",
+            "security_definer": false,
+            "volatility": "i",
+            "config": null,
+            "acl": "{=X/postgres,postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+          },
+          {
+            "name": "user_has_active_person_link",
+            "present": true,
+            "def_md5": "e80db784d71b270ac34c9684ea41f5fe",
+            "owner": "postgres",
+            "security_definer": true,
+            "volatility": "s",
+            "config": [
+              "search_path=public, pg_temp"
+            ],
+            "acl": "{=X/postgres,postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+          },
+          {
+            "name": "assert_assignment_delegation_ceiling",
+            "present": true,
+            "def_md5": "0ffa9342f00269ef68dbfb2d06e797e3",
+            "owner": "postgres",
+            "security_definer": true,
+            "volatility": "v",
+            "config": [
+              "search_path=public, pg_temp"
+            ],
+            "acl": "{postgres=X/postgres,service_role=X/postgres}"
+          },
+          {
+            "name": "enforce_money_capable_role_grant_person_links",
+            "present": true,
+            "def_md5": "18cba3e4a022964b758333dd3cc77a59",
+            "owner": "postgres",
+            "security_definer": true,
+            "volatility": "v",
+            "config": [
+              "search_path=public, pg_temp"
+            ],
+            "acl": "{=X/postgres,postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+          },
+          {
+            "name": "revoke_user_person_link",
+            "present": true,
+            "def_md5": "473c076c2902ed1e4ea6312b56fb012e",
+            "owner": "postgres",
+            "security_definer": false,
+            "volatility": "v",
+            "config": [
+              "search_path=public, pg_temp"
+            ],
+            "acl": "{postgres=X/postgres,service_role=X/postgres}"
+          },
+          {
+            "name": "replace_user_person_link",
+            "present": true,
+            "def_md5": "9ea54093576f6fa9a365f621721ab86d",
+            "owner": "postgres",
+            "security_definer": false,
+            "volatility": "v",
+            "config": [
+              "search_path=public, pg_temp"
+            ],
+            "acl": "{postgres=X/postgres,service_role=X/postgres}"
+          }
+        ]
+      },
+      "tg": {
+        "question_id": "tg",
+        "row_count": null,
+        "rows": [
+          {
+            "name": "trg_enforce_money_capable_role_grant_person_links",
+            "instances": 1,
+            "relations": [
+              "role_permission_grants"
+            ],
+            "enabled": [
+              "O"
+            ],
+            "function": [
+              "enforce_money_capable_role_grant_person_links()"
+            ],
+            "def_md5": [
+              "2b759134044236010dce6ffe08a2c59e"
+            ],
+            "def": [
+              "CREATE TRIGGER trg_enforce_money_capable_role_grant_person_links BEFORE INSERT OR UPDATE OF allowed, permission_key ON public.role_permission_grants FOR EACH ROW EXECUTE FUNCTION enforce_money_capable_role_grant_person_links()"
+            ]
+          }
+        ]
+      },
+      "tr": {
+        "question_id": "tr",
+        "row_count": null,
+        "rows": [
+          {
+            "triggers": [
+              "trg_enforce_money_capable_role_grant_person_links",
+              "trg_role_permission_grants_updated_at"
+            ],
+            "user_roles_triggers": null
+          }
+        ]
+      },
+      "lg": {
+        "question_id": "lg",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20261122140000",
+            "in_ledger": true,
+            "ledger_name": "money_capable_grant_requires_person_link",
+            "head": "20261122140000"
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "schema": "financials.v2_program_pins_handoff.v1",
+  "for": {
+    "objective": "OPWORK_C86B7CC3C436_SPRINT_94E98241AD37",
+    "platform_lane": "lane_c86b7cc3c436",
+    "platform_descriptor": "tests/deterministic/fixtures/isolated-fixture-program-pins.financials-descriptor.json (vacilando.isolated_fixture_program_descriptor.v1, read 2026-10-31 from the platform worktree; uncommitted there, not installed)",
+    "platform_contract": "docs/architecture/ISOLATED-FIXTURE-PROGRAM-PINS-CONTRACT.md (same status)"
+  },
+  "from": {
+    "product_lane": "lane_b77b3cbb5840",
+    "objective": "OPWORK_B77B3CBB5840_SPRINT_386D603E60C7",
+    "repository": "ksquared-16/alloy",
+    "branch": "sprint/opwork_b77b3cbb5840_sprint_386d603e60c7"
+  },
+  "status": "product_v2_adopted_locally_not_promoted",
+  "installed_contract_today": "toolkit 20261031-eeaa6dac6860 registers both Financials entries authority v1; v2 pins require pins.sql. This product child refuses v1 (fixture_authority_org_unbound), so every Financials execution refuses until the platform installs the program variant and these pins.",
+  "candidate": {
+    "code_commit": "184c50a276e31f815c73ff3cbe44e33a2e8c0b7a",
+    "candidate_sha": "THE COMMIT THAT ADDS THIS FILE (a documentation-only child of the code commit; named in the lane's run report). Every artifact below is byte-identical at both. Any later product commit is a new candidate: re-measure, never reuse.",
+    "web_and_supabase_unchanged_since_code_commit": true
+  },
+  "shared_verifier": {
+    "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs",
+    "sha256": "bf6e405fcaf3a158842ed33732c0e5af8bae4119c3404f7f50e94aa0933e3876",
+    "git_blob": "20f04adeb14be4667e4415cccd25e19fadf71881",
+    "provenance": "byte-identical from Enrollment commit 80eb7446656f89f0c43da01105836e4d1c64aa56 (not on origin/staging)",
+    "vectors": { "path": "web/tests/qa/fixtures/isolated-fixture-authority-v2.vectors.json", "sha256": "c028b885672509e5f28e30b12f0cf3f2128bba92d45999002daad6894cb94d4c", "equals": "vacilando eeaa6dac tests/deterministic/fixtures/isolated-fixture-authority-v2.vectors.json" }
+  },
+  "fixtures": {
+    "financials_isolated_tests": {
+      "retained_registration_expected": { "suite": "financials", "npm_script": "test:qa:financials-isolated", "reserved_namespace": "financials-cert.alloy.invalid", "fixture_org_source": "seed_manifest", "fixture_org": { "id": "00000000-0000-4000-8000-000000000001", "key": "certification_seed" }, "preview": false, "operations": { "run": { "args": [], "mutating": true } } },
+      "product_supplies": {
+        "variant": "program",
+        "script_body": "node scripts/qa/financialsIsolatedTests.mjs",
+        "script_sha256": "78453bfcd3d60c0757d800c64f42577265fc27ff458d48e03cc610b818f1c169",
+        "artifacts": [
+          { "role": "entry", "path": "web/scripts/qa/financialsIsolatedTests.mjs", "sha256": "22ea8db01c945fa0a8bcc9d8c12126e48e00e00da6977447c37f27e07dd53fbb" },
+          { "role": "authority_verifier", "path": "web/scripts/qa/financialsFixtureAuthority.mjs", "sha256": "f0541f2168a5953b0c73887c9eb5e99c2452c02e42f3dd8fbf09188efdc14822" },
+          { "role": "authority_verifier", "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs", "sha256": "bf6e405fcaf3a158842ed33732c0e5af8bae4119c3404f7f50e94aa0933e3876" },
+          { "role": "program", "path": "web/scripts/qa/financialsIsolatedBinding.mjs", "sha256": "79576b2371f31446d984a07c470ce5f4eec154f3f37014d1d0184ad8c91cff9b" },
+          { "role": "program", "path": "web/scripts/qa/financialsIsolatedProof.mjs", "sha256": "b00cd9f5f99f69057e84644b2aa53219ca922fb05fddbb8b01b2861f28c7bbe3" },
+          { "role": "program", "path": "web/tests/financials/live/catalogAddCharge.live.test.ts", "sha256": "85831931c31a80ba615936f549a7be1e9f31c06169fa73f9e60d83a0c20d0615" },
+          { "role": "program", "path": "web/tests/financials/live/certEnvironment.ts", "sha256": "af354b4780c730354e6002e518fe42b52f96e930030a2b41c5e496d289bb73ec" },
+          { "role": "program", "path": "web/tests/harness/liveSuiteAuthority.mjs", "sha256": "f29d9f0e392087d409d5a6fb56c8ec9a122c12843bc994f6b403c5b7cd7f603a" },
+          { "role": "program", "path": "web/vitest.config.ts", "sha256": "f367f1154a9d88a6ffa04fecd375d37c3173fb33934e832200c89b6b058cd140" }
+        ],
+        "artifact_order": "as listed (the digest is over the array in this order)"
+      }
+    },
+    "financials_historical_draft": {
+      "retained_registration_expected": { "suite": "financials", "npm_script": "dev:qa:financials-historical-draft-fixture", "reserved_namespace": "financials-cert.alloy.invalid", "fixture_org_source": "persona", "preview": true, "reset_limit": 50, "operations": { "ensure": { "args": ["--ensure"], "mutating": true }, "verify": { "args": ["--verify"], "mutating": false }, "reset": { "args": ["--reset"], "mutating": true, "reset": true }, "count": { "args": ["--count"], "mutating": false, "census": true } } },
+      "product_supplies": {
+        "variant": "program",
+        "script_body": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
+        "script_sha256": "07f838cf008e519ab1096cd4baf0d2a6fea245ad1e6f6e8eb53655f103e287e8",
+        "artifacts": [
+          { "role": "entry", "path": "web/scripts/qa/financialsHistoricalDraftFixture.ts", "sha256": "01184a5c0ca1f8d26e6fa5c76403eff78ff4b6296b942b1f56f3a3667ef117f1" },
+          { "role": "authority_verifier", "path": "web/scripts/qa/financialsFixtureAuthority.mjs", "sha256": "f0541f2168a5953b0c73887c9eb5e99c2452c02e42f3dd8fbf09188efdc14822" },
+          { "role": "authority_verifier", "path": "web/scripts/qa/isolatedFixtureAuthorityV2.mjs", "sha256": "bf6e405fcaf3a158842ed33732c0e5af8bae4119c3404f7f50e94aa0933e3876" },
+          { "role": "program", "path": "web/scripts/qa/financialsHistoricalDraftFixtureCore.ts", "sha256": "b40cc9739216759a9af9e1dacbd2f126df49315154cd665f2f107864beeeca57" },
+          { "role": "program", "path": "web/scripts/qa/financialsIsolatedBinding.mjs", "sha256": "79576b2371f31446d984a07c470ce5f4eec154f3f37014d1d0184ad8c91cff9b" }
+        ],
+        "artifact_order": "as listed"
+      }
+    }
+  },
+  "what_the_product_child_checks": [
+    "authority schema v2 only; a v1 record refuses fixture_authority_org_unbound (no fallback)",
+    "shared verifyIsolatedFixtureAuthorityV2: store root from passwd home, record inside <root>/vacilando/isolated-fixture/authority by real path, in-flight request names the file and its sha256, issued_at <= now < expires_at, request/fixture/operation/run/environment/candidate/binding digest = env, program fixture/operation/suite/npm script/script body digest/HEAD = record",
+    "fixture_org: isolated = { id 00000000-0000-4000-8000-000000000001, key certification_seed, source seed_manifest }; historical = the org the executor's QA-run ledger binds to the run's persona (OPEN, local, this environment, QA_ORGS key), never the seed org",
+    "database_identity: verifyConnectionTarget on DATABASE_URL with the child's whole env as clientEnv (PG* target keys and target-overriding URL parameters refuse; loopback; never 54422; digest equal)",
+    "target_hold_disposition: re-read <root>/vacilando/target-holds/<environment>.json; clear, same revision and record_sha256, for this request",
+    "API origin: http://127.0.0.1:<port>, never 54421 (shared check), and in the same certenv port block as DATABASE_URL (product guard)",
+    "program_pins: re-read from the request-recorded bytes; variant program, no sql, 1-32 unique repository-relative artifacts, digest = sha256(canonicalJson({variant, candidate_sha, script_sha256, artifacts})), candidate_sha = ALLOY_QA_CANDIDATE_SHA = HEAD, script_sha256 = own body, every required artifact present with its role, every artifact's bytes in the checkout = pin",
+    "callers (runner, historical entry, vitest guard, live suite) verify FIRST, before binding judgement, credential use, client, import or spawn, and hand clients the verified API origin and org"
+  ],
+  "negative_cases_the_platform_executor_should_refuse": [
+    { "case": "Financials entry registered v2 without pins.variant (absence of SQL inferred as program)", "expect": "isolated_fixture_pin_variant_invalid / pins_unregistered — never the program variant by default" },
+    { "case": "a dummy SQL artifact registered for a Financials entry", "expect": "refused by registration review; the product will not supply one" },
+    { "case": "program pins with sql present, or sql pins with artifacts present", "expect": "isolated_fixture_pin_variant_invalid" },
+    { "case": "artifacts empty, > 32, duplicate path, absolute path, '..' segment", "expect": "isolated_fixture_pin_variant_invalid" },
+    { "case": "candidate HEAD != pins.candidate_sha (including any later docs commit)", "expect": "isolated_fixture_candidate_not_pinned" },
+    { "case": "npm script body digest != pins.script_sha256", "expect": "isolated_fixture_script_drift" },
+    { "case": "an artifact absent at the candidate or with other committed bytes", "expect": "isolated_fixture_program_not_pinned" },
+    { "case": "status awaiting_product_adoption", "expect": "isolated_fixture_pins_awaiting_product" },
+    { "case": "seed program issued a persona org, or historical program issued the seed org", "expect": "refused before claim (org binding retained per entry)" },
+    { "case": "no clear target-hold record for the certenv, or a held one", "expect": "issueTargetHoldDisposition refusal before claim" },
+    { "case": "a Financials request ever issued a v1 record after v2 registration", "expect": "never: v2 entries are never issued v1" }
+  ],
+  "requests_to_the_platform": [
+    {
+      "id": "FIN-V2-REQ-1",
+      "what": "Register both entries authority_contract v2, pins variant 'program', with the artifacts above and candidate_sha = the commit that adds this file.",
+      "why": "Without it the product child refuses every execution (by design)."
+    },
+    {
+      "id": "FIN-V2-REQ-2",
+      "what": "Name the API target in the v2 record: an api_identity { environment_id, host 127.0.0.1, port = the environment's assigned api.port, digest } issued from the environment record, so the child can bind its PostgREST origin exactly, not by port block.",
+      "why": "Financials' clients connect through the Supabase API (SUPABASE_URL), not DATABASE_URL. The v2 database identity binds the Postgres target only; the product's same-block guard is a stopgap, not authority."
+    },
+    {
+      "id": "FIN-V2-REQ-3",
+      "what": "Keep issuing ALLOY_QA_AUTHORITY_SHA256 and DATABASE_URL to Financials children; keep program_pins inside the authority record (the child re-reads it from the request-recorded bytes).",
+      "why": "The child's checks depend on both."
+    }
+  ],
+  "not_claimed": [
+    "nothing authenticates the issuer cryptographically (same OS user)",
+    "pins prove the started bytes, not transitive imports",
+    "the API guard is a port-block rule from installed certification-environments.mjs (base 56100, block 10, 20 blocks), not an identity"
+  ]
+}

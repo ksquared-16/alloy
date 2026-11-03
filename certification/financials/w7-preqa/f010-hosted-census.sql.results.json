@@ -1,0 +1,282 @@
+{
+  "trusted_host_action_id": "tha_20f1f454fadb05",
+  "query_hash": "e1e949f91ee5de031b2e2c953f6d0a81efd646751fd249ce3bd1e92932fa4862",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-09T15:12:55.470Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_20f1f454fadb05",
+    "query_hash": "e1e949f91ee5de031b2e2c953f6d0a81efd646751fd249ce3bd1e92932fa4862",
+    "authorization_id": "grnt_5aa75c083f324fd8",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-09T15:13:00.938Z",
+    "question_ids": [
+      "g",
+      "p",
+      "d",
+      "o",
+      "c",
+      "x"
+    ],
+    "questions": {
+      "g": {
+        "question_id": "g",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "grantee": "authenticated",
+            "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE"
+          },
+          {
+            "table": "financial_journal_entries",
+            "grantee": "authenticated",
+            "privileges": "SELECT"
+          },
+          {
+            "table": "ledger_transactions",
+            "grantee": "authenticated",
+            "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE"
+          },
+          {
+            "table": "payment_allocations",
+            "grantee": "authenticated",
+            "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE"
+          },
+          {
+            "table": "payments",
+            "grantee": "authenticated",
+            "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE"
+          },
+          {
+            "table": "resolved_obligations",
+            "grantee": "authenticated",
+            "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE"
+          }
+        ]
+      },
+      "p": {
+        "question_id": "p",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "policy": "charges_childcare_write_rolegate",
+            "cmd": "ALL",
+            "permissive": "RESTRICTIVE",
+            "using": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))",
+            "check": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))"
+          },
+          {
+            "table": "charges",
+            "policy": "charges_insert_same_org",
+            "cmd": "INSERT",
+            "permissive": "PERMISSIVE",
+            "using": null,
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "charges",
+            "policy": "charges_update_same_org",
+            "cmd": "UPDATE",
+            "permissive": "PERMISSIVE",
+            "using": "(org_id = current_org_id())",
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "ledger_transactions",
+            "policy": "ledger_transactions_childcare_write_rolegate",
+            "cmd": "ALL",
+            "permissive": "RESTRICTIVE",
+            "using": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))",
+            "check": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))"
+          },
+          {
+            "table": "ledger_transactions",
+            "policy": "ledger_transactions_delete_same_org",
+            "cmd": "DELETE",
+            "permissive": "PERMISSIVE",
+            "using": "(org_id = current_org_id())",
+            "check": null
+          },
+          {
+            "table": "ledger_transactions",
+            "policy": "ledger_transactions_insert_same_org",
+            "cmd": "INSERT",
+            "permissive": "PERMISSIVE",
+            "using": null,
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "ledger_transactions",
+            "policy": "ledger_transactions_update_same_org",
+            "cmd": "UPDATE",
+            "permissive": "PERMISSIVE",
+            "using": "(org_id = current_org_id())",
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "payment_allocations",
+            "policy": "payment_allocations_childcare_write_rolegate",
+            "cmd": "ALL",
+            "permissive": "RESTRICTIVE",
+            "using": "((NOT (EXISTS ( SELECT 1\n   FROM payments p\n  WHERE ((p.id = payment_allocations.payment_id) AND (p.billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text])))))) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))",
+            "check": "((NOT (EXISTS ( SELECT 1\n   FROM payments p\n  WHERE ((p.id = payment_allocations.payment_id) AND (p.billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text])))))) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))"
+          },
+          {
+            "table": "payment_allocations",
+            "policy": "payment_allocations_insert_same_org",
+            "cmd": "INSERT",
+            "permissive": "PERMISSIVE",
+            "using": null,
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "payment_allocations",
+            "policy": "payment_allocations_update_same_org",
+            "cmd": "UPDATE",
+            "permissive": "PERMISSIVE",
+            "using": "(org_id = current_org_id())",
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "payments",
+            "policy": "payments_childcare_write_rolegate",
+            "cmd": "ALL",
+            "permissive": "RESTRICTIVE",
+            "using": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))",
+            "check": "((billable_source_type IS NULL) OR (billable_source_type <> ALL (ARRAY['enrollment_agreement'::text, 'customer'::text])) OR has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))"
+          },
+          {
+            "table": "payments",
+            "policy": "payments_insert_same_org",
+            "cmd": "INSERT",
+            "permissive": "PERMISSIVE",
+            "using": null,
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "payments",
+            "policy": "payments_update_same_org",
+            "cmd": "UPDATE",
+            "permissive": "PERMISSIVE",
+            "using": "(org_id = current_org_id())",
+            "check": "(org_id = current_org_id())"
+          },
+          {
+            "table": "resolved_obligations",
+            "policy": "resolved_obligations_insert_org",
+            "cmd": "INSERT",
+            "permissive": "PERMISSIVE",
+            "using": null,
+            "check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          },
+          {
+            "table": "resolved_obligations",
+            "policy": "resolved_obligations_update_org",
+            "cmd": "UPDATE",
+            "permissive": "PERMISSIVE",
+            "using": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])",
+            "check": "has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text])"
+          }
+        ]
+      },
+      "d": {
+        "question_id": "d",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "insert_posted_charge_with_journal",
+            "security_definer": false,
+            "authenticated": false,
+            "anon": false
+          },
+          {
+            "function": "post_charge_with_journal",
+            "security_definer": false,
+            "authenticated": false,
+            "anon": false
+          },
+          {
+            "function": "post_ledger_transaction",
+            "security_definer": true,
+            "authenticated": false,
+            "anon": false
+          },
+          {
+            "function": "reconcile_consumption_correction",
+            "security_definer": true,
+            "authenticated": false,
+            "anon": false
+          },
+          {
+            "function": "stamp_payment_posted_to_ledger_at",
+            "security_definer": true,
+            "authenticated": true,
+            "anon": true
+          }
+        ]
+      },
+      "o": {
+        "question_id": "o",
+        "row_count": null,
+        "rows": [
+          {
+            "org8": "93667019",
+            "created_at": "2026-04-22T22:44:08.814053+00:00",
+            "orgs_existing_at_creation": 2
+          },
+          {
+            "org8": "7803388d",
+            "created_at": "2026-01-27T18:10:28.566709+00:00",
+            "orgs_existing_at_creation": 1
+          },
+          {
+            "org8": "0bbaad43",
+            "created_at": "2026-09-12T01:13:41.07008+00:00",
+            "orgs_existing_at_creation": 3
+          }
+        ]
+      },
+      "c": {
+        "question_id": "c",
+        "row_count": null,
+        "rows": [
+          {
+            "answers": false,
+            "orgs_now": 3
+          }
+        ]
+      },
+      "x": {
+        "question_id": "x",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "created_at": "2026-08-26T19:02:57.932206+00:00",
+            "posted_at": "2026-08-26T19:09:52.708+00:00",
+            "updated_at": "2026-10-02T17:59:37.806529+00:00",
+            "metadata_lifecycle_status": "draft",
+            "orgs_existing_at_post": 2
+          },
+          {
+            "id": "fc8df980-05c9-4614-b12e-0ab1e7daa72d",
+            "created_at": "2026-08-26T19:02:57.47159+00:00",
+            "posted_at": "2026-08-26T19:09:52.909+00:00",
+            "updated_at": "2026-10-02T17:59:37.806529+00:00",
+            "metadata_lifecycle_status": "draft",
+            "orgs_existing_at_post": 2
+          }
+        ]
+      }
+    },
+    "row_count": 32
+  }
+}

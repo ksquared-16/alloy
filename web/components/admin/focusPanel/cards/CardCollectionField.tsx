@@ -10,7 +10,10 @@
  * It is deliberately small and unstyled beyond layout. A payment surface that looks like the
  * processor rather than like Financials is the thing Thread 8B is trying not to build.
  */
-import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
+// `/pure`: Stripe.js is fetched only when `loadStripe` runs, i.e. when this field mounts. The default entry
+// injects the script at IMPORT, so every route that merely imports Financials contacted Stripe.
+import { loadStripe } from "@stripe/stripe-js/pure";
+import type { Stripe, StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
 import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
 import {
