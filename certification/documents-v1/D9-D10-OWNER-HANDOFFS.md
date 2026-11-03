@@ -97,8 +97,9 @@ Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`, 2
 >
 > Documents recommends tracking this as its own objective (DEC-9). It stays listed as an open, owned item on the D9/D10 checklist and is not silently dropped.
 
-## Notice — Host Capacity: installed toolkit defect seen 2026-11-03
+## Notice — Walden / Host Capacity: `alloy-stack` stop path cannot find its ownership guard (corrected 2026-11-03)
 
-> `alloy-stack release` refused with: "certification ownership guard is missing: …/toolkit/current/bin/lib/cert-ownership.sh".
-> - Documents' lease on `alloy-cert` (session `documents-ecv2_claude_ee78ec31`) is therefore still held.
-> - It was not worked around.
+> - **Installed:** `20261103-9400e46dbb25` (source `ksquared-16/vacilando@9400e46dbb25`, installed 2026-11-03T02:43:42Z). The previous `1f3589dd4f5e` has the same defect.
+> - **Defect:** `bin/alloy-stack:189` resolves `${BASH_SOURCE[0]%/*}/lib/cert-ownership.sh`, which is `<toolkit>/bin/lib/cert-ownership.sh`. The file ships at `<toolkit>/lib/cert-ownership.sh`. Every stop path (release-as-last-holder, reap, doctor rebuild) therefore refuses.
+> - **What happened:** `alloy-stack release` (holder `documents-ecv2_claude_ee78ec31`) deleted its lease record, then refused to stop the stack.
+> - **Correction:** an earlier note said this lease was "still held". It is not. `~/.local/state/alloy/stack/leases/` is empty, and `alloy-cert` (10 containers) is up with **no lease**.
