@@ -65,7 +65,19 @@ export type CollectionDefinition<TPublic> = {
     /** Plural, lowercase, for the one error sentence a partner sees when the read fails. */
     subject: string;
     /** The SQL authority. Boundary and filters are applied inside it, never after it. */
-    rpc: string;
+    rpc?: string;
+    /**
+     * A TypeScript authority, for a resource whose canonical rules live in application code rather than one SQL
+     * function (Documents: primary owner, availability and effective sensitivity). It receives EXACTLY the arguments an
+     * `rpc` would — boundary, sites, page position and the resource's filters — after every step above has passed, and
+     * must apply the boundary itself, by delegating to the same SQL authorities the other resources use. One of `rpc` or
+     * `source` is required; the security order before it is unchanged.
+     */
+    source?: (
+        supabase: SupabaseClient,
+        args: Record<string, unknown>,
+        ctx: CollectionContext,
+    ) => Promise<{ data: CollectionRow[] | null; error: unknown }>;
     /**
      * Resource-specific parameters, including the caller's filters.
      *
@@ -216,7 +228,7 @@ export function externalCollectionRoute<TPublic>(def: CollectionDefinition<TPubl
         const extra = def.params(search, collectionCtx);
         if (!extra.ok) return fail(extra.error.code, "invalid_request", extra.error.message, ids);
 
-        const { data, error } = await supabase.rpc(def.rpc, {
+        const args = {
             p_org_id: ctx.organizationId,
             p_boundary_mode: boundaryMode,
             p_site_ids: [...sites.siteIds],
@@ -226,7 +238,12 @@ export function externalCollectionRoute<TPublic>(def: CollectionDefinition<TPubl
             p_cursor_id: cursor?.id ?? null,
             p_updated_since: watermark.since,
             ...extra.values,
-        });
+        };
+        const { data, error } = def.source
+            ? await def.source(supabase, args, collectionCtx)
+            : def.rpc
+                ? await supabase.rpc(def.rpc, args)
+                : { data: null, error: new Error("collection has no authority") };
 
         if (error) {
             return fail("internal_error", "internal_error", `${capitalize(def.subject)} could not be read.`, ids);

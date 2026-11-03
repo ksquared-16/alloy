@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_a447315b998fd3",
-  "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
+  "trusted_host_action_id": "tha_4a7300950fba64",
+  "query_hash": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-28T17:53:00.666Z",
+    "executed_at": "2026-10-31T16:37:21.510Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_a447315b998fd3",
-    "query_hash": "eb702fb6228302885bfcf16834e70fc580b2361b5bc6f974091dee7d049c4065",
-    "authorization_id": "grnt_56156994fad54745",
+    "trusted_host_action_id": "tha_4a7300950fba64",
+    "query_hash": "7957a51a60407ca03489a1ca89a854e71a2ba3564a62c14995f459e436c35c04",
+    "authorization_id": "grnt_a357fb4d236b4dd8",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-28T17:53:06.934Z",
+    "census_run_at": "2026-10-31T16:37:27.486Z",
     "question_ids": [
       "doc_zr_00",
       "doc_zr_vendors",
@@ -34,7 +34,13 @@
       "doc_zr_retained_d1a_audit",
       "doc_zr_d6_requirements",
       "doc_zr_d6_requirement_versions",
-      "doc_zr_d6_waivers"
+      "doc_zr_d6_waivers",
+      "doc_zr_forms_definitions",
+      "doc_zr_forms_definition_versions",
+      "doc_zr_forms_submissions",
+      "doc_zr_forms_links_and_packets",
+      "doc_zr_health_facts_active_on_missing_subject",
+      "doc_zr_retained_health_facts"
     ],
     "questions": {
       "doc_zr_00": {
@@ -87,7 +93,7 @@
             "artifact": "access audit history (mutation_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_shared_mutation_event_rows": 461
+            "qa_shared_mutation_event_rows": 559
           }
         ]
       },
@@ -155,7 +161,7 @@
             "artifact": "D1a document audit (workflow_events)",
             "status": "retained_by_design",
             "not_residue": true,
-            "qa_org_rows": 811
+            "qa_org_rows": 936
           }
         ]
       },
@@ -179,8 +185,57 @@
         "rows": [
           "document_requirement_waivers ~ qa_fixture_or_unresolved_subject ~ zero ~ true"
         ]
+      },
+      "doc_zr_forms_definitions": {
+        "question_id": "doc_zr_forms_definitions",
+        "row_count": null,
+        "rows": [
+          "form_definitions ~ qa_run_keys ~ zero ~ true"
+        ]
+      },
+      "doc_zr_forms_definition_versions": {
+        "question_id": "doc_zr_forms_definition_versions",
+        "row_count": null,
+        "rows": [
+          "form_definition_versions ~ qa_run_keys ~ zero ~ true"
+        ]
+      },
+      "doc_zr_forms_submissions": {
+        "question_id": "doc_zr_forms_submissions",
+        "row_count": null,
+        "rows": [
+          "form_submissions ~ qa_run_forms ~ zero ~ true"
+        ]
+      },
+      "doc_zr_forms_links_and_packets": {
+        "question_id": "doc_zr_forms_links_and_packets",
+        "row_count": null,
+        "rows": [
+          "form_public_links_form_packet_definitions_sessions ~ qa_run_keys ~ zero ~ true"
+        ]
+      },
+      "doc_zr_health_facts_active_on_missing_subject": {
+        "question_id": "doc_zr_health_facts_active_on_missing_subject",
+        "row_count": null,
+        "rows": [
+          "person_health_facts ~ active_on_missing_qa_child ~ zero ~ true"
+        ]
+      },
+      "doc_zr_retained_health_facts": {
+        "question_id": "doc_zr_retained_health_facts",
+        "row_count": null,
+        "rows": [
+          {
+            "artifact": "person_health_facts on deleted QA children (append-only)",
+            "status": "retained_by_design",
+            "not_residue": true,
+            "by_status": {
+              "ended": 4
+            }
+          }
+        ]
       }
     },
-    "row_count": 18
+    "row_count": 24
   }
 }

@@ -57,6 +57,10 @@ import {
     evaluateConversationIdentityAdmission,
     INELIGIBLE_DISPOSITION,
 } from "@/lib/communications/ingress/conversationIdentityAdmission";
+import {
+    fileInboundAttachmentsForPersistedMessage,
+    makeInboundAttachmentFilingDeps,
+} from "@/lib/documents/inbound/inboundAttachmentHook";
 
 export const EMAIL_PROVIDER = "resend";
 
@@ -76,6 +80,13 @@ export type InboundEmailIngestionDeps = {
         owner: { orgId: string; secretRef: string | null }
     ) => Promise<ResendRetrievalResult>;
     now?: () => string;
+    /**
+     * D10 — file the persisted message's attachments into Processing (Documents). Defaults to the production wiring,
+     * which holds every attachment before a byte is read: there is no attachment-content fetcher and no malware scanner
+     * yet. Called only with a message this ingestion persisted (or resolved) under its owning organization, and isolated:
+     * whatever it does or throws, the ingestion outcome is already fixed.
+     */
+    fileAttachments?: (ref: { orgId: string; messageId: string }) => Promise<unknown>;
 };
 
 export type InboundEmailIngestionOutcome =
@@ -109,6 +120,22 @@ type IngressRow = {
 };
 
 const UNIQUE_VIOLATION = "23505";
+
+/**
+ * D10 hand-off. Runs only after the message row exists under its owning organization; never throws. A redelivery
+ * hands off again, which is how a held or failed filing is retried — every step on the other side converges.
+ */
+async function handOffAttachments(deps: InboundEmailIngestionDeps, ref: { orgId: string; messageId: string }): Promise<void> {
+    try {
+        const file =
+            deps.fileAttachments ??
+            ((r: { orgId: string; messageId: string }) =>
+                fileInboundAttachmentsForPersistedMessage({ supabase: deps.supabase, filing: makeInboundAttachmentFilingDeps(deps.supabase) }, r));
+        await file(ref);
+    } catch (e) {
+        console.warn("[inbound-email] attachment filing hand-off failed", e instanceof Error ? e.message : e);
+    }
+}
 
 /**
  * Claim the provider event, or return the claim that already exists.
@@ -471,6 +498,9 @@ export async function ingestResendInboundEmail(
     const claim = await claimReceipt(deps, event);
     if (!claim) return { status: "ignored", reason: "receipt_claim_failed" };
     if (claim.row.resolved_at && claim.row.resolved_message_id) {
+        if (claim.row.resolved_org_id) {
+            await handOffAttachments(deps, { orgId: claim.row.resolved_org_id, messageId: claim.row.resolved_message_id });
+        }
         return { status: "duplicate", messageId: claim.row.resolved_message_id };
     }
 
@@ -763,6 +793,10 @@ export async function ingestResendInboundEmail(
     // surface say receiving works. Stamped after persistence so the claim can
     // never outrun the message it is claiming about.
     await stampInboundObservation(deps, orgId, ownershipCandidateAddresses(event), email.receivedAt);
+
+    // 7b — D10: attachments → Processing → filing, for this persisted, owned message. After persistence, the receipt and
+    // the receive event, so nothing it does can reach the outcome below; before step 8, which stays last.
+    if (email.attachments.length > 0) await handOffAttachments(deps, { orgId, messageId });
 
     // 8 — OBSERVE-ONLY. What the deterministic ingress eligibility gate WOULD have
     // decided about this message, recorded as evidence and acting on nothing.

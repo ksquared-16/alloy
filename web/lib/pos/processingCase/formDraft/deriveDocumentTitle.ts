@@ -1,8 +1,9 @@
 /**
  * POS-FP12 — derive a human title / display name for a document.
  *
- * Priority: a real heading from the document text → cleaned original filename →
- * humanized classification label → "Untitled form". Pure + deterministic. Never
+ * With a classification (or subject / period / received date): a type-first display name,
+ * "<classification label> — <subject> — <period>". Otherwise: a real heading from the document
+ * text → cleaned original filename → "Untitled document". Pure + deterministic. Never
  * fabricates — if there's nothing usable it falls back honestly.
  */
 
@@ -10,7 +11,10 @@ const CLASSIFICATION_LABELS: Record<string, string> = {
     subsidy_contract: "Subsidy Authorization",
     subsidy_authorization: "Subsidy Authorization",
     remittance: "Remittance",
-    immunization_record: "Child Medical Examination Report",
+    // The canonical name of this type (document_types, CLASSIFICATION_KEY_LABELS, the classifier rule). A child medical
+    // examination is a different canonical type (`physical`, "Physical examination") that this classifier never assigns;
+    // every immunization-classified document is titled with this label, so it must not name another medical type.
+    immunization_record: "Immunization Record",
     enrollment_document: "Enrollment Packet",
     enrollment_packet: "Enrollment Packet",
     employment_application: "Employment Application",

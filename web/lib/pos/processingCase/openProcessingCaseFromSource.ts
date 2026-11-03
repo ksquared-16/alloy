@@ -17,6 +17,23 @@ export interface OpenProcessingCaseResult {
     created: boolean;
 }
 
+/**
+ * The atomic open was required and is not available (no atomic port, or the database has not received
+ * `open_processing_case_with_primary_source` — PGRST202 / 42883). Thrown BEFORE any read or write of the legacy
+ * sequence: a caller that requires atomicity gets no case rather than a case that can be orphaned.
+ */
+export class AtomicProcessingOpenUnavailableError extends Error {
+    readonly code = "processing_atomic_open_unavailable" as const;
+    constructor() {
+        super("open_processing_case_with_primary_source is not available; the non-atomic sequence is refused for this caller");
+        this.name = "AtomicProcessingOpenUnavailableError";
+    }
+}
+
+export function isAtomicProcessingOpenUnavailable(e: unknown): e is AtomicProcessingOpenUnavailableError {
+    return e instanceof AtomicProcessingOpenUnavailableError;
+}
+
 export async function openProcessingCaseFromSource(
     deps: ProcessingCaseDeps,
     args: {
@@ -24,8 +41,28 @@ export async function openProcessingCaseFromSource(
         sourceKind: ProcessingCaseSourceKind;
         sourceId: string;
         caseType?: string | null;
+        /**
+         * Refuse the pre-migration fallback. Set by callers whose sources can be delivered concurrently by design (D10
+         * inbound attachments: provider redelivery), where the non-atomic sequence's orphan case is a real outcome.
+         * Existing callers keep the fallback so code deployed before the migration behaves exactly as before.
+         */
+        requireAtomic?: boolean;
     }
 ): Promise<OpenProcessingCaseResult> {
+    // The atomic path: one transaction for the case and its primary source, so a lost race leaves no orphan case.
+    if (deps.openCaseWithPrimarySource) {
+        const atomic = await deps.openCaseWithPrimarySource({
+            orgId: args.orgId,
+            sourceKind: args.sourceKind,
+            sourceId: args.sourceId,
+            caseType: args.caseType ?? null,
+        });
+        if (atomic) return atomic;
+    }
+    if (args.requireAtomic) throw new AtomicProcessingOpenUnavailableError();
+
+    // Pre-migration fallback (and pure test ports without the atomic method). Not atomic: a concurrent open can leave
+    // the losing case without a source. Kept only so code deployed before the migration behaves exactly as before.
     const existingCaseId = await deps.findCaseIdByPrimarySource({
         orgId: args.orgId,
         sourceKind: args.sourceKind,

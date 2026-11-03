@@ -25,6 +25,8 @@ const GRANTABLE = [
     "attendance.read",
     "attendance.write",
     "children.read",
+    // D9.1, user-approved 2026-10-30: read-only standard documents of visible children, households and guardians.
+    "documents.read",
     "enrollment.read",
     "enrollment.write",
     "households.read",

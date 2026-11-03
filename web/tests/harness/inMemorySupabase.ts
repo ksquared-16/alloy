@@ -38,6 +38,8 @@ export class InMemorySupabase {
     copyCalls: Array<{ bucket: string; from: string; to: string }> = [];
     /** Tables whose INSERT fails, to prove a route refuses when its audit cannot be written. */
     failInsertInto = new Set<string>();
+    /** Unique constraints to enforce on INSERT (`23505`), e.g. `{ documents: [["id"]] }`. None by default. */
+    uniqueOn: Record<string, string[][]> = {};
 
     seed(table: string, rows: Row[]): this {
         this.tables[table] = [...(this.tables[table] ?? []), ...rows.map((r) => ({ ...r }))];
@@ -55,6 +57,16 @@ export class InMemorySupabase {
 
     from(table: string): QueryBuilder {
         return new QueryBuilder(this, table);
+    }
+
+    /**
+     * No SQL function exists in memory. PostgREST answers an unknown function with `PGRST202`, so callers take the
+     * same path they take against a database that has not received the function yet. A test that needs a function
+     * assigns its own `rpc`.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async rpc(fn: string, _args?: Record<string, unknown>): Promise<{ data: unknown; error: { code?: string; message: string } | null }> {
+        return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` } };
     }
 
     get storage() {
@@ -212,6 +224,16 @@ class QueryBuilder implements PromiseLike<Result> {
                 return { data: null, error: { message: `insert into ${this.table} failed (test)` } };
             }
             const inserted = this.payload.map((r) => ({ id: newId(), ...r }));
+            for (const cols of this.db.uniqueOn[this.table] ?? []) {
+                const key = (row: Row) => JSON.stringify(cols.map((c) => row[c]));
+                const seen = new Set((this.db.tables[this.table] ?? []).map(key));
+                for (const row of inserted) {
+                    if (seen.has(key(row))) {
+                        return { data: null, error: { message: `duplicate key value violates unique constraint (${cols.join(",")})`, code: "23505" } };
+                    }
+                    seen.add(key(row));
+                }
+            }
             this.db.tables[this.table] = [...(this.db.tables[this.table] ?? []), ...inserted];
             return { data: this.returning ? inserted : null, error: null };
         }

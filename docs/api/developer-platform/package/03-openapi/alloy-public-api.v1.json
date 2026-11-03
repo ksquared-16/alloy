@@ -49,6 +49,10 @@
     {
       "name": "Staff",
       "description": "People employed by the organization, composed from person and employment."
+    },
+    {
+      "name": "Documents",
+      "description": "Read-only standard-sensitivity documents of visible children, their households and their parents or guardians (D9.1)."
     }
   ],
   "paths": {
@@ -2636,6 +2640,442 @@
           }
         }
       }
+    },
+    "/api/v1/document-categories": {
+      "get": {
+        "operationId": "listDocumentCategories",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List document categories",
+        "description": "The organization's document **folders**: its active categories, nested through `parent_key`, with the published document types filed in each. Filing in Alloy is logical \u2014 category and type \u2014 never a storage folder. Requires the `documents.read` scope.\n\n**Verification status (D9.1):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCategoryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List documents for one child, household or parent",
+        "description": "Standard-sensitivity documents whose primary owner is ONE visible subject. Requires the `documents.read` scope.\n\n**Exactly one subject filter** \u2014 `child_id`, `household_id` or `person_id` \u2014 is required (`400 subject_filter_required` otherwise): there is no organization-wide document export.\n\n**Who is visible.** A child exactly as in `GET /api/v1/children`; a household as in `GET /api/v1/households`; a person only as an active parent or guardian of a visible child. A subject you cannot see returns an empty page, never a refusal.\n\n**Never included.** Medical, identity, custody/safeguarding and restricted documents; quarantined, deleted or superseded documents; storage locations; extracted text; any related subject you cannot already see.\n\n**Verification status (D9.1):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this child."
+          },
+          {
+            "name": "household_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this household."
+          },
+          {
+            "name": "person_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this parent or guardian."
+          },
+          {
+            "name": "category_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+            },
+            "description": "Only documents filed in this category or below it."
+          },
+          {
+            "name": "type_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+            },
+            "description": "Only documents of this type."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or conflicting subject filter, or a malformed filter, cursor or token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{id}": {
+      "get": {
+        "operationId": "getDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Get one document",
+        "description": "One document, if and only if it would appear in `GET /api/v1/documents` for its own primary owner. Requires the `documents.read` scope.\n\n**Verification status (D9.1):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The document id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Document"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No document with this id is visible to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{id}/download-link": {
+      "get": {
+        "operationId": "getDocumentDownloadLink",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Get a short-lived download link",
+        "description": "A link to the current version of one visible document. Requires the `documents.read` scope.\n\nEach request issues a NEW link that expires ten minutes after issue, and each issue is recorded in Alloy's document audit \u2014 naming your application, installation and credential \u2014 before the link is created. There are no permanent URLs and no storage paths; do not store the link.\n\n**Verification status (D9.1):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The document id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DocumentDownloadLink"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No document with this id is visible to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4239,6 +4679,312 @@
           "id",
           "child_id"
         ]
+      },
+      "DocumentCategory": {
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "label",
+          "description",
+          "parent_key",
+          "sort_order",
+          "types",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The parent folder's key; null for a root."
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "label"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentCategoryPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentCategory"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "Document": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "type",
+          "category_path",
+          "subjects",
+          "current_version",
+          "review_status",
+          "valid_until",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "object",
+            "required": [
+              "key",
+              "label"
+            ],
+            "properties": {
+              "key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "category_path": {
+            "type": "array",
+            "description": "The folder path, root first.",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "label"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "subjects": {
+            "type": "array",
+            "description": "The primary owner and any related subject you can already see. Others are omitted, never named.",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "id",
+                "role"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "child",
+                    "household",
+                    "person"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "primary",
+                    "related"
+                  ]
+                }
+              }
+            }
+          },
+          "current_version": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "id",
+              "number",
+              "content_type",
+              "size_bytes",
+              "received_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "number": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "content_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "received_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          "review_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Document"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "DocumentDownloadLink": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "url",
+          "expires_at"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Expires at `expires_at`. Do not store it."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
     "responses": {
