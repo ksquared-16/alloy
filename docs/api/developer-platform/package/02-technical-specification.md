@@ -81,7 +81,7 @@ truth. There is currently **no public API for managing correlations**.
 
 ## 2. The public surface, complete
 
-Thirty-one operations across twenty-seven paths. This is the entire public API.
+Thirty-eight operations across thirty-four paths. This is the entire public API.
 
 | Method | Path | Operation | Scope required |
 | --- | --- | --- | --- |
@@ -109,25 +109,32 @@ Thirty-one operations across twenty-seven paths. This is the entire public API.
 | GET | `/api/v1/documents` | `listDocuments` | `documents.read` |
 | GET | `/api/v1/documents/{id}` | `getDocument` | `documents.read` |
 | GET | `/api/v1/documents/{id}/download-link` | `getDocumentDownloadLink` | `documents.read` |
+| GET | `/api/v1/documents/{id}/reviews` | `listDocumentReviews` | `documents.read` |
+| GET | `/api/v1/documents/{id}/history` | `listDocumentHistory` | `documents.read` |
+| GET | `/api/v1/document-requirements` | `listDocumentRequirements` | `documents.read` |
 | POST | `/api/v1/document-uploads` | `createDocumentUpload` | `documents.write` |
 | POST | `/api/v1/document-uploads/content` | `completeDocumentUpload` | `documents.write` |
 | POST | `/api/v1/document-filings` | `fileDocument` | `documents.write` |
 | POST | `/api/v1/document-subjects` | `linkDocumentSubject` | `documents.write` |
 | POST | `/api/v1/document-subjects/unlink` | `unlinkDocumentSubject` | `documents.write` |
+| POST | `/api/v1/document-reviews` | `submitDocumentReview` | `documents.review` |
+| POST | `/api/v1/document-validity` | `setDocumentValidity` | `documents.write` |
+| POST | `/api/v1/document-versions` | `replaceDocumentVersion` | `documents.write` |
+| POST | `/api/v1/document-archives` | `archiveDocument` | `documents.write` |
 | GET | `/api/v1/attendance-events` | `listAttendanceEvents` | `attendance.read` |
 | POST | `/api/v1/attendance-events` | `submitAttendanceEvents` | `attendance.write` |
 
 **One** is the unauthenticated token exchange. `GET /api/v1/context` needs a
-valid token but no scope. The remaining twenty-nine are **fourteen authenticated reads**
-and **fifteen governed domain writes**.
+valid token but no scope. The remaining thirty-six are **seventeen authenticated reads**
+and **nineteen governed domain writes**.
 
 The writes are **named operations**, not a CRUD surface: there is no `PUT`, no
 `PATCH` and no `DELETE` anywhere in this contract. Each lifecycle write says which of six
 things happened — end, cancel, supersede, void, correct or reverse — because a
 change and a mistake are different truths and a partner mirroring your data needs
 to tell them apart. See §11a. The document writes name what they do — create an upload,
-send its content, file the document, add or remove a secondary link — and none of them
-deletes anything. See §10a.
+send its content, file the document, add or remove a secondary link, review it, record its
+validity, replace it with a new version, archive it — and none of them deletes anything. See §10a.
 
 There is no public webhook resource, no self-service correlation API, and no
 public Communications or Financials contract. Alloy's internal administrative
@@ -263,7 +270,7 @@ that cannot discover what it holds cannot diagnose why anything else was refused
 so this is a capability inherent to holding a credential rather than a permission
 an operator grants. There is no `context.read` in the grant model.
 
-The fifteen grantable scopes:
+The sixteen grantable scopes:
 
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
@@ -277,8 +284,9 @@ The fifteen grantable scopes:
 | `staff.read` | Staff identity, role and employment status inside the boundary | Pay, payroll, HR, contact points |
 | `staff.contact.read` | Email and phone for visible staff | Anything `staff.read` does not already permit |
 | `attendance.read` | Read attendance facts for children inside the boundary | Authoring a fact |
-| `documents.read` | Standard documents of visible children, their households and their parents or guardians; the folder hierarchy; ten-minute audited download links | Medical, identity, custody/safeguarding or restricted documents; any upload, edit or filing; any organization-wide export |
-| `documents.write` | Upload standard documents, file them to visible children, households and parents or guardians, and add or remove their secondary links | Reading anything; approving a document; changing its owner; deleting; medical, identity, custody/safeguarding or restricted types |
+| `documents.read` | Standard documents of visible children, their households and their parents or guardians; the folder hierarchy; ten-minute audited download links; a document's reviews and history; one subject's document requirements; expiration queries for one subject | Medical, identity, custody/safeguarding or restricted documents (a requirement on such a type shows its key and state only); any upload, edit or filing; any organization-wide export |
+| `documents.write` | Upload standard documents, file them to visible children, households and parents or guardians, add or remove their secondary links, record validity dates, replace them with a new version, archive them | Reading anything; approving a document; changing its owner; deleting; medical, identity, custody/safeguarding or restricted types |
+| `documents.review` | Accept or reject the current version of a visible standard document, once | Reopening or changing a recorded decision; anything `documents.write` grants; reading anything |
 | `attendance.write` | Submit attendance facts for children inside the boundary | Reading anyone's attendance history |
 | `enrollment.write` | Start, end and void enrollments, and assign, move or cancel placements, for authorized children | Reading anything; creating children or households; schedules |
 | `schedule.write` | Set, change and cancel committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
@@ -669,7 +677,7 @@ same result; the same key used for different content is `409 idempotency_conflic
 | Operation | What it does |
 | --- | --- |
 | `POST /api/v1/document-uploads` | Declares a file — `filename`, `mime_type`, `byte_size`, `sha256` — and writes nothing. Answers an opaque `upload_id`, valid for one hour and bound to your installation and to the declared format, size and SHA-256. Too large is `413`; a format Alloy does not store is `415` |
-| `POST /api/v1/document-uploads/content?upload_id=…` | The raw file bytes, at most 4 MiB. They must match the declared size and SHA-256 (`422 checksum_mismatch`) and be the declared format (`415 CONTENT_MISMATCH`). They are screened before anything is stored (`415 SCREENING_REFUSED`). Creates one document that is not yet filed — no owner and no type — and that only your installation can file. A flagged file is stored as `quarantined` and can never be filed through the API |
+| `POST /api/v1/document-uploads/content?upload_id=…` | The raw file bytes, at most **4 MiB (4,194,304 bytes)** — the create call answers this as `max_bytes`, and a larger declaration or body is `413` with the limit in the message. They must match the declared size and SHA-256 (`422 checksum_mismatch`) and be the declared format (`415 CONTENT_MISMATCH`). They are screened before anything is stored (`415 SCREENING_REFUSED`). Creates one document that is not yet filed — no owner and no type — and that only your installation can file. A flagged file is stored as `quarantined` and can never be filed through the API |
 | `POST /api/v1/document-filings` | Files a document your installation uploaded: `document_id`, `type_key`, `primary` (`{subject_type, subject_id}` — a visible child, household or parent/guardian) and optional `contexts`. It runs the same rules Alloy staff file under: the type must be published and apply to the subject, a type that needs review refuses `422 REVIEW_REQUIRED` (a review cannot be submitted or accepted through this scope), and a subject that already holds a non-replaceable document refuses. A type whose sensitivity is not standard refuses `422 TYPE_NOT_AVAILABLE_EXTERNALLY`. A filed document becomes readable through `documents.read` exactly as any other |
 | `POST /api/v1/document-subjects` | Adds a **secondary** link from a document you can read to a visible child, household or parent/guardian |
 | `POST /api/v1/document-subjects/unlink` | Removes a secondary link. The document's owner — which decides who may see it — can never be linked, unlinked or changed through the API (`409 primary_subject_immutable`) |
@@ -678,9 +686,39 @@ same result; the same key used for different content is `409 idempotency_conflic
 cannot see and a missing id are one answer: `404 not_found`. Each write is recorded in the document audit, naming your
 application, installation and credential, before it takes effect.
 
-**Not yet available:** review, version replacement, validity dates, requirements and expiration queries, history and
-archiving (D9.3). Metadata and title edits, deletion, organization-wide queries and changing a document's owner are not
-part of the contract.
+**Unfiled uploads.** An upload you complete but do not file within 24 hours is handed to the organization's staff as
+Processing work, so it is not lost. It stays unfiled until someone files it — it satisfies no requirement and is not
+readable through `documents.read` — and you can still file it yourself afterwards. If staff file it first, your filing
+is `409 ALREADY_FILED`.
+
+**The 4 MiB limit.** Alloy staff can upload up to 10 MB; the API takes 4 MiB because the bytes pass through Alloy (and
+are screened) inside one request. A larger API limit will come through a separate upload path that keeps screening
+before storage; until it is published, send larger files to the organization another way.
+
+### 10a.2 Reviewing, dating, replacing and archiving documents (D9.3)
+
+**Verification status (D9.3, 2026-11-03):** these seven operations are implemented and proven by the route-level test
+suite against the ratified contract, but have not yet been exercised over HTTP against a running server. That sentence
+is removed when they have been.
+
+The writes take an `Idempotency-Key` header exactly as in §10a.1. Each acts on a document you can read; anything else is
+`404 not_found`.
+
+| Operation | What it does |
+| --- | --- |
+| `POST /api/v1/document-reviews` (`documents.review`) | Accepts or rejects the **current** version (`document_id`, `version_id`, `decision`, and a `reason` for a rejection). Each version is decided once through the API: reopening a review or changing a decision stays with staff and is `403 REREVIEW_NOT_AUTHORIZED`. Sending the decision the version already carries returns `200` with `replay: true`. `documents.review` is a separate grant so an installation that uploads does not also approve by default |
+| `POST /api/v1/document-validity` | Records `effective_on` and `expires_on` (YYYY-MM-DD or null) on the current version. The same dates again return `changed: false` |
+| `POST /api/v1/document-versions` | Files a completed upload of yours (`upload_document_id`) as the next version of `document_id`, with a `reason` of 10–500 characters, under the staff filing rules: the type decides whether replacement is allowed. The new version starts unreviewed |
+| `POST /api/v1/document-archives` | Archives a document (`reason` of 10–500 characters). It leaves every list, link and requirement's evidence; nothing is deleted and only staff can restore it. It returns `503 archive_unavailable` until the archive database change is applied to the environment |
+| `GET /api/v1/documents/{id}/reviews` | Every review decision and validity record, oldest first. `actor_kind` is `staff` or `application`, never a person; reasons are staff notes and are not returned |
+| `GET /api/v1/documents/{id}/history` | What happened and when — uploads, versions, filing, links, reviews, validity, system events. No reasons, notes, paths or names |
+| `GET /api/v1/document-requirements` | The live requirements of ONE visible `child_id`, `household_id` or `person_id`: state (`missing`, `pending_review`, `satisfied`, `waived`, `expired`, `blocked`), due date, validity, and the evidence documents you can read. A requirement on a medical, identity, custody or restricted type returns only its key and state (`restricted: true`). Waivers are read-only |
+
+`GET /api/v1/documents` also takes `expires_before=YYYY-MM-DD` (D9.3): documents whose current version expires strictly
+before that date, still for one subject at a time.
+
+Metadata and title edits, deletion, organization-wide queries and changing a document's owner are not part of the
+contract.
 
 ## 11. Attendance
 
@@ -928,12 +966,12 @@ therefore always safe.
 
 ## 14. Governed submission, idempotency, correlation
 
-Fifteen governed write operations exist (§2), carrying seventeen domain intents:
+Nineteen governed write operations exist (§2), carrying twenty-one domain intents:
 Attendance submission is one endpoint that accepts `original`, `correction` and
 `reversal`. This section covers that endpoint, whose shape differs from the rest,
 and the idempotency and correlation rules that apply to all of them. The nine
-service-state operations are described in §9 and §11a; the five document writes,
-which take an `Idempotency-Key` header, in §10a.1.
+service-state operations are described in §9 and §11a; the nine document writes,
+which take an `Idempotency-Key` header, in §10a.1 and §10a.2.
 
 ### Attendance is fact submission, not CRUD
 

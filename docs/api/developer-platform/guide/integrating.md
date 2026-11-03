@@ -172,6 +172,13 @@ There is no second room model and no second site model anywhere in this API.
 | I want to send a document | `POST /api/v1/document-uploads`, then its bytes to `POST /api/v1/document-uploads/content` |
 | File what I sent to this child, family or parent | `POST /api/v1/document-filings` |
 | Also link it to a sibling or the household | `POST /api/v1/document-subjects` (and `POST /api/v1/document-subjects/unlink` to remove that link) |
+| Accept or reject what was filed | `POST /api/v1/document-reviews` (its own grant, `documents.review`) |
+| When is it valid until? | `POST /api/v1/document-validity` |
+| Send a newer copy of a document | `POST /api/v1/document-versions` |
+| Take a document out of use | `POST /api/v1/document-archives` |
+| Who reviewed it, and what happened to it? | `GET /api/v1/documents/{id}/reviews`, `GET /api/v1/documents/{id}/history` |
+| What does this child, family or parent still need? | `GET /api/v1/document-requirements` |
+| What is about to expire? | `GET /api/v1/documents?child_id=…&expires_before=YYYY-MM-DD` |
 | What attendance has been recorded? | `GET /api/v1/attendance-events` |
 | Record that something happened | `POST /api/v1/attendance-events` |
 
@@ -304,7 +311,7 @@ in the same order.
 
 ## 9. Submitting facts and performing operations
 
-Fifteen write operations exist, and they come in three shapes.
+Nineteen write operations exist, and they come in three shapes.
 
 **Nine are service-state operations** — starting, ending and voiding an
 enrollment; assigning, moving and cancelling a placement; setting, changing and
@@ -315,11 +322,13 @@ conflict condition for each.
 only endpoint, and it carries three intents — `original`, `correction` and
 `reversal`. The rest of this section is about it.
 
-**Five are document writes** — create an upload, send its content, file the
-document, and add or remove a secondary link. They are the only writes that take an
-`Idempotency-Key` header; see the specification's §10a.1.
+**Nine are document writes** — create an upload, send its content, file the
+document, add or remove a secondary link, review it, record its validity, replace it
+with a new version and archive it. They are the only writes that take an
+`Idempotency-Key` header; see the specification's §10a.1 and §10a.2. A file sent
+through the API may be at most **4 MiB (4,194,304 bytes)**.
 
-All fifteen are **governed**, not CRUD. You assert an intent; Alloy decides whether
+All nineteen are **governed**, not CRUD. You assert an intent; Alloy decides whether
 it may be performed. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on
 this API.
 
@@ -418,7 +427,7 @@ which of the three you are looking at without reconstructing it. It is an
 append-only ledger: nothing is ever edited or removed, and the effective truth is
 what remains after corrections and reversals are applied.
 
-So the surface is **fifteen HTTP write operations** covering **seventeen domain intents**,
+So the surface is **nineteen HTTP write operations** covering **twenty-one domain intents**,
 because Attendance carries three through one endpoint. Counting either way is
 fine; mixing the two is what causes confusion.
 
