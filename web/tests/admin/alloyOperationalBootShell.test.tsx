@@ -22,6 +22,33 @@ describe("AlloyOperationalBootShell — first-load branded shell", () => {
         expect(html).not.toContain("Loading context");
     });
 
+    it("content mode never prints the destination's slug — an unrenamed view read 'New work view 3'", () => {
+        const html = renderToStaticMarkup(
+            <AlloyOperationalBootShell
+                variant="workspace"
+                chrome="content"
+                destination={{ workUnitSlug: "new-work-view-3", workViewId: "new_work_view_3", subjectLabel: null }}
+            />,
+        );
+        expect(html).not.toMatch(/new work view 3/i);
+        // Still carried for certification, hidden.
+        expect(html).toContain('data-destination-work-unit="new-work-view-3"');
+        expect(html).toContain('data-destination-work-view="new_work_view_3"');
+        expect(html).toContain("hidden");
+    });
+
+    it("content mode still names the SUBJECT when the gesture carried one", () => {
+        const html = renderToStaticMarkup(
+            <AlloyOperationalBootShell
+                variant="workspace"
+                chrome="content"
+                destination={{ workUnitSlug: "waitlist", subjectLabel: "Lennon Kurzman" }}
+            />,
+        );
+        expect(html).toContain("Lennon Kurzman");
+        expect(html).not.toMatch(/>Waitlist</);
+    });
+
     it("AdminV2Shell Suspense fallback uses AlloyOperationalBootShell", () => {
         const shell = read("app/adminV2/components/AdminV2Shell.tsx");
         expect(shell).toContain("AlloyOperationalBootShell");

@@ -416,7 +416,9 @@ export function tourScheduleGroupToDraft(group: TourScheduleGroup): TourSchedule
 export function duplicateTourScheduleDraft(group: TourScheduleGroup): TourScheduleDraft {
     const draft = tourScheduleGroupToDraft(group);
     const name = `Copy of ${group.name}`;
-    return { ...draft, name: name.slice(0, TOUR_SCHEDULE_NAME_MAX) };
+    // A copy is a NEW schedule: it starts Active like every new schedule, never silently inheriting the
+    // source's Inactive status (the editor shows the status; choose Inactive there to keep it hidden).
+    return { ...draft, name: name.slice(0, TOUR_SCHEDULE_NAME_MAX), is_active: true };
 }
 
 export type TourScheduleOverlap = { day: number; window: TourScheduleWindow; otherRuleId: string; otherName: string };
@@ -477,4 +479,14 @@ export function findRepeatedTourSchedules(groups: TourScheduleGroup[]): Map<stri
         }
     }
     return out;
+}
+
+/**
+ * A rule that belongs to the location in scope — never an organization-wide (`location_id` null) one.
+ * Tours configuration is location-specific (Tours feedback 2026-10-29); legacy organization-wide rules
+ * stay stored (bookings made under them are untouched) but neither offer new times nor appear here.
+ */
+export function isLocationOwnRule(rule: { location_id?: string | null }, locationId: string | null | undefined): boolean {
+    const target = String(locationId ?? "").trim();
+    return Boolean(target) && rule.location_id != null && String(rule.location_id) === target;
 }
