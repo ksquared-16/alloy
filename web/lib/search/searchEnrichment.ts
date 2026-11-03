@@ -29,11 +29,14 @@ import {
     fetchStageWorkViewTargets,
 } from "@/lib/workUnits/hostWorkUnitResolver";
 import {
+    buildHouseholdProcessContexts,
     buildSubjectProcessContexts,
     buildSubjectScheduleContext,
     childFamilyFallbackCaseIds,
     type SubjectProcessRow,
 } from "@/lib/context/buildSubjectContexts";
+import { loadHouseholdProjectionContexts } from "@/lib/context/projectionSubjectContexts";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
@@ -89,6 +92,11 @@ export async function enrichSearchCandidates(args: {
     envelope: SearchAccessEnvelope;
     processConfig: SearchProcessConfiguration;
     candidates: SearchCandidate[];
+    /**
+     * The operator, for the household-grain projections (Billing) a parent or household is offered.
+     * Billing's own capability gate reads it; absent, no projection is read and none is offered.
+     */
+    projection?: { userId: string | null; dimensions: AdminAccessScopeDimensions } | null;
 }): Promise<SearchEnrichmentResult> {
     const { supabase, orgId, envelope, processConfig, candidates } = args;
     const out: SearchEnrichmentResult = new Map();
@@ -132,6 +140,48 @@ export async function enrichSearchCandidates(args: {
             fetchPersonDobs(supabase, orgId, childPersonIds),
             fetchOrgLocationLabels(supabase, orgId),
         ]);
+
+    /*
+     * THE HOUSEHOLD'S PROCESSES, for a parent or a household. Neither participates in a process — only
+     * children do — so the household's own business processes are its children's, evaluated at the
+     * case (`buildHouseholdProcessContexts`). The children are only known once siblings land, so this
+     * is one more sequential hop, paid ONLY when a parent or household matched and has children.
+     * Billing's household cohorts are read alongside it, once for the whole candidate set.
+     */
+    const familyHouseholdIdByCandidate = new Map<string, string>();
+    for (const c of candidates) {
+        if (c.kind === "child" || c.kind === "location") continue;
+        const householdId =
+            c.kind === "household"
+                ? c.id
+                : c.household_id ?? customerPersonRows.find((r) => r.person_id === c.id)?.customer_id ?? null;
+        if (householdId) familyHouseholdIdByCandidate.set(candidateKey(c), householdId);
+    }
+    const familyHouseholdIds = new Set(familyHouseholdIdByCandidate.values());
+    const childIdsByHousehold = new Map<string, string[]>();
+    for (const r of siblingRows) {
+        if (!familyHouseholdIds.has(r.customer_id)) continue;
+        childIdsByHousehold.set(r.customer_id, [...(childIdsByHousehold.get(r.customer_id) ?? []), r.id]);
+    }
+    const allHouseholdChildIds = new Set([...childIdsByHousehold.values()].flat());
+    // A child that matched on its own was already read with the rest; only the others cost the hop.
+    const fetchedSubjectIds = new Set(processSubjectIds);
+    const householdChildIds = [...allHouseholdChildIds].filter((id) => !fetchedSubjectIds.has(id));
+    const householdProjectionsPending =
+        familyHouseholdIds.size && args.projection
+            ? loadHouseholdProjectionContexts({
+                  supabase,
+                  orgId,
+                  userId: args.projection.userId,
+                  dimensions: args.projection.dimensions,
+                  processConfig,
+                  householdIds: [...familyHouseholdIds],
+              }).catch(() => new Map<string, SearchContext[]>())
+            : Promise.resolve(new Map<string, SearchContext[]>());
+    const householdChildProcessRows = householdChildIds.length
+        ? await fetchProcessInstances(supabase, orgId, householdChildIds)
+        : [];
+    processRows.push(...householdChildProcessRows);
 
     /*
      * Each journey's Opportunity, resolved once — see `loadSubjectContexts` for the same widening.
@@ -190,6 +240,10 @@ export async function enrichSearchCandidates(args: {
             processConfig,
             opportunityIdByContextId,
         }),
+        // A parent's or household's processes are evaluated at their children's case — every one.
+        ...processRows
+            .filter((r) => allHouseholdChildIds.has(r.subject_id))
+            .map((r) => opportunityIdByContextId.get((r.context_id ?? "").trim()) ?? r.context_id),
     ]);
 
     const [hostWorkUnitKeys, householdCases, stageWorkViewTargets, familyMembershipRows] = await Promise.all([
@@ -261,6 +315,8 @@ export async function enrichSearchCandidates(args: {
         siblingsByHousehold.set(row.customer_id, list);
     }
 
+    const householdProjections = await householdProjectionsPending;
+
     // --- build enrichment per candidate ----------------------------------------
     for (const c of candidates) {
         const contexts: SearchContext[] = [];
@@ -292,6 +348,27 @@ export async function enrichSearchCandidates(args: {
         });
         contexts.push(...built.contexts);
         locationId = built.locationId;
+
+        // A parent's or household's processes are its household's: the case its children are worked
+        // in, selected as the household (Enrollment), and its own Billing row. Never restates a process
+        // the subject already holds.
+        const familyHouseholdId = familyHouseholdIdByCandidate.get(candidateKey(c)) ?? null;
+        if (familyHouseholdId) {
+            const held = new Set(contexts.map((ctx) => ctx.key));
+            const household = buildHouseholdProcessContexts({
+                childKeys: childIdsByHousehold.get(familyHouseholdId) ?? [],
+                heldProcessKeys: held,
+                processBySubject,
+                processConfig,
+                hostWorkUnitKeys,
+                stageWorkViewTargets,
+                familyMembershipRows,
+                opportunityIdByContextId,
+            });
+            for (const ctx of household) held.add(ctx.key);
+            contexts.push(...household);
+            contexts.push(...(householdProjections.get(familyHouseholdId) ?? []).filter((ctx) => !held.has(ctx.key)));
+        }
 
         // Schedule — child grain only. A household never carries a schedule.
         if (c.kind === "child") {

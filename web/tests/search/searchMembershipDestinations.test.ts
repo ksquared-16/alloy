@@ -88,7 +88,7 @@ describe("a subject's destinations are its truthful cohorts", () => {
         expect(keys(destinations)).not.toContain("process:enrollment");
     });
 
-    it("the Work View destination commits the VIEW and focuses the child as an ITEM", () => {
+    it("the Work View destination commits the VIEW and selects the child's row, no card", () => {
         // "Show me Lennon in Waitlist" — the whole chain: host, subject, Children ASPECT, item.
         const [, waitlist] = resolve(lennon, [
             enrollment([membership("waitlist", "Waitlist", "child")]),
@@ -98,8 +98,9 @@ describe("a subject's destinations are its truthful cohorts", () => {
         expect(waitlist.host_work_view_id).toBe("waitlist");
         expect(waitlist.host_work_unit_key).toBe(FAMILY_UNIT);
         expect(waitlist.host_entity_id).toBe(CASE);
-        expect(waitlist.item_id).toBe("cm-lennon");
-        expect(waitlist.card_key).toBeTruthy();
+        // The row's whole panel opens — no card is elevated over the rest.
+        expect(waitlist.item_id ?? null).toBeNull();
+        expect(waitlist.card_key ?? null).toBeNull();
     });
 
     it("OVERLAPPING memberships each become their own destination", () => {

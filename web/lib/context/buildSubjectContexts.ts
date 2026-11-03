@@ -256,6 +256,77 @@ function resolveFamilyFallbackMemberships(
 }
 
 /**
+ * The HOUSEHOLD's business processes, for a subject that has none of its own — a parent, a household.
+ *
+ * Only children participate in Enrollment, so a parent's own contexts are empty and Search could offer
+ * nothing but the parent's record and a Household card. The household IS in the process, through its
+ * children's case: each process its children participate in is that household's process, and the case
+ * is evaluated at FAMILY grain by the same family predicates `resolveFamilyFallbackMemberships` uses —
+ * the household selected as the row, never one child.
+ *
+ * `childKeys` are the household's own children (`customer_members.id`, and their person ids). Rules:
+ *
+ *   - One context per process, after the subject's own: a process the subject already holds is not
+ *     restated.
+ *   - Two cases in one process ⇒ ambiguous, stated rather than resolved by order.
+ *   - Nothing proven, nothing shown: a process whose case sits in no family cohort is omitted. A
+ *     household has no participation row to fall back to, and naming the process anyway would offer
+ *     the operator a destination with nowhere to land.
+ */
+export function buildHouseholdProcessContexts(
+    input: Omit<BuildProcessContextsInput, "grain" | "subjectKeys" | "locationId"> & {
+        childKeys: readonly string[];
+        /** Processes the subject already holds through its own participation. */
+        heldProcessKeys?: ReadonlySet<string>;
+    },
+): SubjectContext[] {
+    const casesByProcess = participationCasesByProcess({ ...input, grain: "family", subjectKeys: input.childKeys, locationId: null });
+    const contexts: SubjectContext[] = [];
+
+    for (const [processKey, cases] of casesByProcess) {
+        if (input.heldProcessKeys?.has(processKey)) continue;
+        const configured = input.processConfig.byKey.get(processKey);
+        if (!configured || !configured.operator_has_access) continue;
+
+        if (cases.size > 1) {
+            contexts.push({
+                kind: "process",
+                key: processKey,
+                label: configured.label,
+                detail: null,
+                operational_memberships: [],
+                participation_ambiguous: true,
+            });
+            continue;
+        }
+
+        const [caseId] = [...cases];
+        const memberships = resolveFamilyFallbackMemberships(
+            { ...input, grain: "family", subjectKeys: input.childKeys, locationId: null },
+            configured,
+            caseId,
+        );
+        if (!memberships.length) continue;
+
+        const caseRow = input.familyMembershipRows.get(caseId) ?? null;
+        const caseStage = typeof caseRow?.stage_key === "string" ? caseRow.stage_key : null;
+        contexts.push({
+            kind: "process",
+            key: processKey,
+            label: configured.label,
+            detail: resolveProcessDetail(configured, caseStage, null),
+            destination_entity_type: "opportunity",
+            destination_entity_id: caseId,
+            destination_work_unit_key: input.hostWorkUnitKeys.get(caseId) ?? null,
+            stage_key: caseStage,
+            state: null,
+            operational_memberships: memberships,
+        });
+    }
+    return contexts;
+}
+
+/**
  * The cases whose materialized rows a CHILD's family-grain fallback will read.
  *
  * Both loaders call this so neither pays for rows the builder will not use: only a child

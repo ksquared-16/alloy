@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
             supabase,
             orgId: ctx.orgId,
             dimensions: scopeDimensionsFromAccess(access),
+            userId: ctx.userId ?? null,
             rawQ,
             limit: Number.isFinite(limitRaw) ? limitRaw : SEARCH_DEFAULT_LIMIT,
         });
