@@ -116,4 +116,6 @@ Evidence columns:
 
 **Baseline red seen:** `tests/access/orgParameterizedRpcBoundary.test.ts` › "no later migration grants a client EXECUTE…" flags committed `20261204090000_medical_rows_require_health_permission.sql`, which this sprint does not touch. Neither that test nor `supabase/migrations` differs from the deployed base `daf87893` (`git diff` empty), so it fails identically there. It is pre-existing.
 
+**`tests/access` baseline (measured 2026-11-03):** 21 failures at `9530e9b16`, all also failing on an exported copy of the deployed base `daf87893`, which shows 22. The extra base failure (`roleKeyIntegrityAndGrantReplacement` › "anything this lane has NOT yet merged…") reads git history, which an exported copy lacks. This sprint introduces no access-lock failure. Affected suites at `9530e9b16`: `tests/documents`, `tests/communications/inbound*` and `processingCaseAtomicOpen` all green.
+
 **No production build yet.** One build happens at the integrated checkpoint.
