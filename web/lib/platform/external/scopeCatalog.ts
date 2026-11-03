@@ -184,6 +184,17 @@ export const PUBLIC_SCOPES = {
         summary: "Read contact points (email, phone) for visible staff.",
         alloyAuthority: "public.list_external_staff, contact columns gated at the source",
     },
+    "documents.read": {
+        scope: "documents.read",
+        access: "read",
+        summary: "Read standard-sensitivity documents of visible children, their households and their parents or guardians, and request short-lived download links.",
+        alloyAuthority: "lib/documents/external/externalDocumentAuthority — primary owner, availability and effective sensitivity over the children / households / relationships SQL authorities",
+        /*
+         * D9.1 (user-approved 2026-10-30). Medical, identity, custody/safeguarding and restricted documents are never
+         * returned under this scope: there is no external clearance. A download link is a read — it is audited
+         * (`document_link_issued`) before it is minted and expires in ten minutes.
+         */
+    },
     "attendance.write": {
         scope: "attendance.write",
         access: "write",
@@ -251,6 +262,18 @@ export const PUBLIC_OPERATIONS = {
         route: "/api/v1/schedule-days",
     },
     listStaff: { operationId: "listStaff", scope: "staff.read", route: "/api/v1/staff" },
+    listDocumentCategories: {
+        operationId: "listDocumentCategories",
+        scope: "documents.read",
+        route: "/api/v1/document-categories",
+    },
+    listDocuments: { operationId: "listDocuments", scope: "documents.read", route: "/api/v1/documents" },
+    getDocument: { operationId: "getDocument", scope: "documents.read", route: "/api/v1/documents/{id}" },
+    getDocumentDownloadLink: {
+        operationId: "getDocumentDownloadLink",
+        scope: "documents.read",
+        route: "/api/v1/documents/{id}/download-link",
+    },
 
     /*
      * GOVERNED OPERATIONS — named intents, never field mutation.

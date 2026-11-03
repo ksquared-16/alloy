@@ -15,8 +15,34 @@ import type {
 } from "./types";
 
 /** Build the injected deps the envelope service depends on, backed by Supabase. */
+/**
+ * The function is missing from this database (not yet migrated): PostgREST's schema-cache miss, or Postgres'
+ * undefined_function. Only these fall back; every other error is a real failure and is thrown.
+ */
+export function isMissingFunctionError(error: { code?: string | null } | null | undefined): boolean {
+    return error?.code === "PGRST202" || error?.code === "42883";
+}
+
 export function makeProcessingCaseDbDeps(supabase: SupabaseClient): ProcessingCaseDeps {
     return {
+        async openCaseWithPrimarySource({ orgId, sourceKind, sourceId, caseType }) {
+            // A client without RPC (a narrow test port) cannot reach the function: same answer as an unmigrated database.
+            if (typeof (supabase as { rpc?: unknown }).rpc !== "function") return null;
+            const { data, error } = await supabase.rpc("open_processing_case_with_primary_source", {
+                p_org_id: orgId,
+                p_source_kind: sourceKind,
+                p_source_id: sourceId,
+                p_case_type: caseType,
+            });
+            if (error) {
+                if (isMissingFunctionError(error)) return null;
+                throw new Error(error.message);
+            }
+            const row = (Array.isArray(data) ? data[0] : data) as { processing_case_id?: string; created?: boolean } | null;
+            if (!row?.processing_case_id) throw new Error("open_processing_case_with_primary_source returned no case");
+            return { processingCaseId: row.processing_case_id, created: row.created === true };
+        },
+
         async findCaseIdByPrimarySource({ orgId, sourceKind, sourceId }) {
             const { data, error } = await supabase
                 .from("processing_case_sources")

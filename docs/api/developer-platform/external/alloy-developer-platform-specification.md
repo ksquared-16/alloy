@@ -91,7 +91,7 @@ truth. There is currently **no public API for managing correlations**.
 
 ## 2. The public surface, complete
 
-Twenty-two operations across eighteen paths. This is the entire public API.
+Twenty-six operations across twenty-two paths. This is the entire public API.
 
 | Method | Path | Operation | Scope required |
 | --- | --- | --- | --- |
@@ -115,11 +115,15 @@ Twenty-two operations across eighteen paths. This is the entire public API.
 | POST | `/api/v1/schedule-assignments/cancel` | `cancelScheduleAssignment` | `schedule.write` |
 | GET | `/api/v1/schedule-days` | `listScheduleDays` | `schedule.read` |
 | GET | `/api/v1/staff` | `listStaff` | `staff.read` |
+| GET | `/api/v1/document-categories` | `listDocumentCategories` | `documents.read` |
+| GET | `/api/v1/documents` | `listDocuments` | `documents.read` |
+| GET | `/api/v1/documents/{id}` | `getDocument` | `documents.read` |
+| GET | `/api/v1/documents/{id}/download-link` | `getDocumentDownloadLink` | `documents.read` |
 | GET | `/api/v1/attendance-events` | `listAttendanceEvents` | `attendance.read` |
 | POST | `/api/v1/attendance-events` | `submitAttendanceEvents` | `attendance.write` |
 
 **One** is the unauthenticated token exchange. `GET /api/v1/context` needs a
-valid token but no scope. The remaining twenty are **ten authenticated reads**
+valid token but no scope. The remaining twenty-four are **fourteen authenticated reads**
 and **ten governed domain writes**.
 
 The writes are **named operations**, not a CRUD surface: there is no `PUT`, no
@@ -262,7 +266,7 @@ that cannot discover what it holds cannot diagnose why anything else was refused
 so this is a capability inherent to holding a credential rather than a permission
 an operator grants. There is no `context.read` in the grant model.
 
-The thirteen grantable scopes:
+The fourteen grantable scopes:
 
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
@@ -276,6 +280,7 @@ The thirteen grantable scopes:
 | `staff.read` | Staff identity, role and employment status inside the boundary | Pay, payroll, HR, contact points |
 | `staff.contact.read` | Email and phone for visible staff | Anything `staff.read` does not already permit |
 | `attendance.read` | Read attendance facts for children inside the boundary | Authoring a fact |
+| `documents.read` | Standard documents of visible children, their households and their parents or guardians; the folder hierarchy; ten-minute audited download links | Medical, identity, custody/safeguarding or restricted documents; any upload, edit or filing; any organization-wide export |
 | `attendance.write` | Submit attendance facts for children inside the boundary | Reading anyone's attendance history |
 | `enrollment.write` | Start, end and void enrollments, and assign, move or cancel placements, for authorized children | Reading anything; creating children or households; schedules |
 | `schedule.write` | Set, change and cancel committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
@@ -632,6 +637,29 @@ safeguarding, medical information, and Alloy's own internal access permissions.
 An application role is not an employment role and the two are never conflated.
 
 ---
+
+## 10a. Documents
+
+**Verification status (D9.1, 2026-10-30):** these four operations are implemented and proven by the route-level
+test suite, but have not yet been exercised over HTTP against a running server — the standard every other section of
+this document meets. That sentence is removed when they have been.
+
+| Operation | What it answers |
+| --- | --- |
+| `GET /api/v1/document-categories` | The folders: active categories (nested through `parent_key`) and the published types filed in each. Filing is logical — category and type — never a storage folder |
+| `GET /api/v1/documents` | Documents whose primary owner is ONE visible subject: `child_id`, `household_id` or `person_id` (exactly one; there is no organization-wide export). `category_key` and `type_key` narrow; paging and sync tokens behave as in every collection |
+| `GET /api/v1/documents/{id}` | One document, if and only if the list for its own primary owner would contain it |
+| `GET /api/v1/documents/{id}/download-link` | A new link to the current version, expiring ten minutes after issue, recorded in the document audit (application, installation, credential) before it is created |
+
+**Who is visible** adds no rule of its own: a child exactly as in `GET /api/v1/children`, a household as in
+`GET /api/v1/households`, and a person only as an active parent or guardian of a visible child. A document belongs to
+its primary owner; a related subject you cannot already see is omitted from `subjects`, never named.
+
+**Never returned:** medical, identity, custody/safeguarding and restricted documents (there is no external clearance);
+quarantined, deleted and superseded documents; storage locations, checksums and extracted text. Missing, foreign,
+out-of-boundary, unavailable and withheld documents are one answer: `404 not_found`.
+
+**Not yet available:** uploads, metadata edits, archiving, subject links, review, requirements and expiration queries.
 
 ## 11. Attendance
 

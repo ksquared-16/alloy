@@ -44,7 +44,8 @@ function actualRoutes(): { urlPath: string; methods: string[] }[] {
             }
             if (entry !== "route.ts") continue;
             const rel = path.relative(webRoot, path.dirname(full)).replace(/\\/g, "/");
-            const urlPath = "/" + rel.replace(/^app\//, "");
+            // A dynamic segment directory (`[id]`) is the OpenAPI path template `{id}`.
+            const urlPath = ("/" + rel.replace(/^app\//, "")).replace(/\[([^\]]+)\]/g, "{$1}");
             const source = readFileSync(full, "utf8");
             /*
              * Next.js accepts a route method as a function declaration OR as an exported const,
@@ -145,10 +146,16 @@ describe("public OpenAPI drift guard", () => {
         // The mistaken-creation audit added the two `/cancel` operations: supersession can only say
         // "this was true and then changed", never "this was never true", and the difference is
         // externally material.
+        // D9.1 (user-approved 2026-10-30, OPWORK_AA660DC9554D_SPRINT_5D62877D85D6) added the four read-only document
+        // paths: standard documents of visible children, households and parents/guardians — no write.
         expect(Object.keys(spec.paths).sort()).toEqual([
             "/api/v1/attendance-events",
             "/api/v1/children",
             "/api/v1/context",
+            "/api/v1/document-categories",
+            "/api/v1/documents",
+            "/api/v1/documents/{id}",
+            "/api/v1/documents/{id}/download-link",
             "/api/v1/enrollments",
             "/api/v1/enrollments/end",
             "/api/v1/enrollments/void",

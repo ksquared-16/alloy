@@ -63,6 +63,10 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Households",
         detail: "Read the household shell for visible children. This does not reveal siblings at locations you have not authorized.",
     },
+    "documents.read": {
+        title: "Family documents",
+        detail: "Read standard documents filed for visible children, their households and their parents or guardians, and download them through links that expire in ten minutes. Medical, identity, custody and restricted documents are never shared.",
+    },
     "relationships.read": {
         title: "Parents and guardians",
         detail: "Read visible child-adult relationships and effective pickup authority. Reasons are never shared — only the answer.",

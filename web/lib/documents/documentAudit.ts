@@ -53,7 +53,16 @@ export type DocumentAuditEvent =
 
 export type DocumentAuditInput = {
     orgId: string;
-    actorUserId: string;
+    /** The signed-in user. Null only for an application principal (`/api/v1`), which must then be named below. */
+    actorUserId: string | null;
+    /**
+     * D9: the external application that acted — installation and credential, never a user.
+     * D10: a named server process acting on received content (an inbound email attachment), never a user. The process
+     * vocabulary is closed: a new automated writer is named here, deliberately.
+     */
+    actorPrincipal?:
+        | { kind: "application"; applicationId: string; installationId: string; credentialId: string }
+        | { kind: "system"; process: "inbound_email_attachment" };
     event: DocumentAuditEvent;
     /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3/D6. */
     subject: {
@@ -68,6 +77,9 @@ export type DocumentAuditInput = {
 export type DocumentAuditResult = { ok: true; eventId: string } | { ok: false; error: string };
 
 export async function recordDocumentAudit(input: DocumentAuditInput): Promise<DocumentAuditResult> {
+    // An action is always attributable: a user, or a named application principal — never neither.
+    if (!input.actorUserId && !input.actorPrincipal) return { ok: false, error: "actor_required" };
+    if (input.actorPrincipal?.kind === "system" && input.actorPrincipal.process !== "inbound_email_attachment") return { ok: false, error: "actor_required" };
     try {
         const eventId = await emitEvent({
             org_id: input.orgId,
@@ -77,6 +89,16 @@ export async function recordDocumentAudit(input: DocumentAuditInput): Promise<Do
             payload: {
                 ...(input.detail ?? {}),
                 actor_user_id: input.actorUserId,
+                ...(input.actorPrincipal?.kind === "application"
+                    ? {
+                          actor_kind: "application",
+                          actor_application_id: input.actorPrincipal.applicationId,
+                          actor_installation_id: input.actorPrincipal.installationId,
+                          actor_credential_id: input.actorPrincipal.credentialId,
+                      }
+                    : input.actorPrincipal?.kind === "system"
+                      ? { actor_kind: "system", actor_process: input.actorPrincipal.process }
+                      : {}),
                 route: input.route,
                 audit: "documents_v1_d1a",
             },
