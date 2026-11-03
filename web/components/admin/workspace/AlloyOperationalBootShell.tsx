@@ -158,12 +158,14 @@ export function AlloyOperationalBootShell({
         const slug = destination?.workUnitSlug?.trim() || null;
         const subject = destination?.subjectLabel?.trim() || null;
         const view = destination?.workViewId?.trim() || null;
-        // A slug is a machine key the operator can still read; humanise it without claiming it is the
-        // configured label. `waitlist` → `Waitlist`, `new-leads` → `New leads`.
-        const destinationName = slug
-            ? slug.replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase())
-            : null;
-        const hasDestination = destinationName != null || subject != null;
+        /*
+         * The slug is NOT printed. It used to be humanised (`waitlist` → `Waitlist`), on the theory that
+         * a slug is a key the operator can still read — but a slug is whatever the Work View was keyed
+         * when it was created, and an unrenamed one reads `new-work-view-3` → "New work view 3" under
+         * the loader. Its configured label is not known yet, so nothing about the destination's name is
+         * honest to print. The subject, when known, is real operator vocabulary and still shows.
+         */
+        const hasDestination = slug != null || subject != null;
         return (
             <div
                 className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden bg-white"
@@ -187,24 +189,16 @@ export function AlloyOperationalBootShell({
                     </div>
                     <AlloyThinkingLabel size="lg" />
                     {/*
-                      * The destination, named. This is the whole of Phase 0: the operator waiting here
-                      * used to be told only "Thinking…", with no evidence that the surface they asked
-                      * for was the surface being prepared. Naming it costs no request and states only
-                      * what the gesture already decided.
+                      * The destination, as far as it is honestly known: the subject's name when the
+                      * gesture carried one. The work unit and view ride along as hidden markers only.
                       */}
                     {hasDestination ? (
                         <div
                             className="flex flex-col items-center gap-1"
                             data-destination-shell-detail="true"
                         >
-                            {destinationName ? (
-                                <span
-                                    className="text-[13px] font-semibold text-alloy-midnight/70"
-                                    data-destination-work-unit={slug ?? undefined}
-                                >
-                                    {destinationName}
-                                </span>
-                            ) : null}
+                            {/* Carried for certification, never printed — see `hasDestination` above. */}
+                            {slug ? <span hidden data-destination-work-unit={slug} /> : null}
                             {subject ? (
                                 <span
                                     className="text-[12px] text-alloy-muted/80"

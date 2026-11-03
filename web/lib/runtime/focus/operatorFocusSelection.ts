@@ -83,7 +83,10 @@ export function operatorFocusSelectionFromDestination(
 ): OperatorFocusSelectionDetail | null {
     const hostType = (destination.host_entity_type ?? "").trim();
     const hostId = (destination.host_entity_id ?? "").trim();
-    if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return null;
+    if (destination.target !== "focus_panel" || !hostType || !hostId) return null;
+    // No card is a real answer: a cohort destination opens the row's WHOLE panel, and a card focus
+    // would elevate one card over the rest.
+    const cardKey = (destination.card_key ?? "").trim();
     return {
         entity_type: hostType,
         entity_id: hostId,
@@ -93,10 +96,12 @@ export function operatorFocusSelectionFromDestination(
         // The Work View's own ROW identity (a participation on a child-grain lens), kept apart from
         // the host the panel composes against.
         operational_member_id: (destination.operational_member_id ?? "").trim() || null,
-        card_focus: {
-            card_key: destination.card_key,
-            item_id: destination.item_id ?? null,
-            context_key: destination.context_key ?? null,
-        },
+        card_focus: cardKey
+            ? {
+                  card_key: cardKey,
+                  item_id: destination.item_id ?? null,
+                  context_key: destination.context_key ?? null,
+              }
+            : null,
     };
 }

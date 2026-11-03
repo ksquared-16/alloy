@@ -485,6 +485,37 @@ describe("Case 2 — parent/guardian search", () => {
         const { results } = await run("jane@example.com");
         expect(results.some((r) => r.subject.id === JANE_PERSON)).toBe(true);
     });
+
+    /** Every `process_instances` subject-id set a search read, in order. */
+    async function processReadsFor(rawQ: string) {
+        const base = createMockSupabase(baseFixtures());
+        const reads: string[][] = [];
+        const supabase = {
+            from: (table: string) => {
+                const chain = (base as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
+                if (table !== "process_instances") return chain;
+                const inner = chain.in as (col: string, val: unknown) => unknown;
+                chain.in = (col: string, val: unknown) => {
+                    if (col === "subject_id") reads.push([...(val as string[])]);
+                    return inner(col, val);
+                };
+                return chain;
+            },
+        } as unknown as SupabaseClient;
+        await runSearch({ supabase, orgId: ORG, dimensions: openDim, rawQ });
+        return reads;
+    }
+
+    it("a parent's household processes are read from her children's participation", async () => {
+        // Jane participates in nothing; her household is in Enrollment through Joe and Emma.
+        const reads = await processReadsFor("Jane Smith");
+        expect(reads.flat()).toEqual(expect.arrayContaining([JOE_MEMBER, EMMA_MEMBER]));
+    });
+
+    it("a child-only search pays no household read", async () => {
+        const reads = await processReadsFor("Emma");
+        expect(reads).toHaveLength(1);
+    });
 });
 
 // ---------------------------------------------------------------------------
