@@ -11,6 +11,9 @@ Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`, 2
 > - **Name:** `processing_atomic_open_race`.
 > - **Script:** Documents owns and pins it. Two independent Postgres connections (via `web/scripts/lib/resolvePostgresClient.mjs`, as Financials and Analytics already do) call `open_processing_case_with_primary_source` concurrently on one source: at least 20 rounds of 2 callers, and 5 rounds of 5 callers.
 > - **Precondition:** the certenv is built from the staging tip (`environment.build_certification_baseline`), then migration `20261215093000` is applied with `database.apply_migration` (certenv target) from a pushed `agent/**` commit that carries it in `supabase/migrations`.
+>   - Two sessions must each see a **committed** function, so this race needs an apply. It goes to the isolated certenv, never staging.
+>   - The single-session half no longer needs one: `processing-open-case-atomic-preapply.sql` runs the migration inside the rollback.
+>   - Documents will provide the `agent/**` commit carrying the migration on request. It is not part of the staging candidate.
 >
 > **Acceptance:**
 > 1. Every round ends with exactly one case and one primary source per source. All callers get the same case id. No `processing_cases` row is left without a source.
@@ -46,6 +49,18 @@ Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`, 2
 > 5. **Close:** revoke the credentials, disconnect the installations, then run the residue census extended by the five D9 checks.
 >
 > The plan and fixture matrix are in `certification/documents-v1/D9-1-HOSTED-QA-PLAN.md`. **Do not** reuse the Gate 2 `alloy-cert-sandbox` installation (`5bdc7c1e-…`). Reply with the plan id and its release.
+>
+> **Extension for D9.2 / D9.3** (`certification/documents-v1/D9-2-3-HOSTED-QA-PLAN.md` §2):
+> - Three more applications: `d9-documents-write-cert`, `d9-documents-review-cert` and `d9-documents-write-scope-cert`.
+> - Four more installations, **each with exactly one documents scope**:
+>   - `T_W`: `qa_shared`, org-wide, `documents.write`;
+>   - `T_WB`: `qa_secondary`, `documents.write`;
+>   - `T_WL`: `qa_shared`, `locations` = `qa_north`, `documents.write`;
+>   - `T_R`: `qa_shared`, `documents.review`.
+> - Two more pinned reconciliations: `qa_d9_aged_upload_ensure` / `qa_d9_aged_upload_reset` (Documents authors the SQL).
+> - Five more residue checks (`d9w_zr_*`).
+>
+> One plan revision can carry D9.1 and D9.2 / D9.3. The write installations are created only after `documents.write` and `documents.review` are deployed.
 
 ## H3 — Communications (WS11 owner), with DB: attachment link, access rules, fetcher wiring (D10-S1 / D10-F1)
 
@@ -86,6 +101,23 @@ Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`, 2
 > **What is unknown:** the host provider, its cost and the private-network arrangement. No container host exists today (Vercel serverless only).
 >
 > Reply with review findings and the engine and host decision for the operator.
+
+## H6 — Operator (Needs You): isolated certification database and the three rollback proofs
+
+Not a lane handoff. These are governed cards Documents files, and each needs an operator approval. Payloads are under
+`.vacilando-payloads/d9d10-*.json` in the lane worktree.
+
+> 1. `repository.push`: `agent/documents` at the certified candidate. A rollback source must be published on a
+>    sanctioned certification ref. Not a PR or a merge.
+> 2. `environment.build_certification_baseline`: `ksquared-16/alloy` `staging` at `7e9b242c`, 24 h lease to
+>    `lane_aa660dc9554d`. This is the isolated database. Shared `alloy-cert` is not used.
+> 3. Three `database.run_rollback_invariant_test` cards on that certenv:
+>    - `documents-d9-application-filing.sql`;
+>    - `documents-d9-3-archive-preapply.sql`;
+>    - `processing-open-case-atomic-preapply.sql`.
+>    Each runs in a discarded transaction, so nothing is applied.
+>
+> The rollback proofs do not need H1. The race does.
 
 ## H5 — Enrollment / BP configuration owner: paperwork accountability (prep §3)
 

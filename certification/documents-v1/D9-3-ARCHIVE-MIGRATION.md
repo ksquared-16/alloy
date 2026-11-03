@@ -30,7 +30,10 @@ the requirement evaluator's `NEVER_EVIDENCE`). That is inert until a database ca
    unavailable or archived under another key. It records `metadata.archive` (key, reason, previous status, actor, audit
    event, time). Nothing is deleted.
 3. **`document_unarchive(...)`**, staff-only reversal to the previous status. It requires a user actor, and no `/api/v1`
-   route calls it. No internal route or UI calls it yet either; that is a stated gap.
+   route calls it. Staff reach it through `POST /api/admin/documents/[id]/restore` (`01141ac30`). That route needs
+   `documents.write`, read admission, scope and sensitivity, an archived document and a written reason, and it is
+   audited `document_restored` first. Staff find archived documents in the library's collapsed **Archived** section
+   (`GET /api/admin/documents/archived`).
 4. Service-role-only grants and a self-verification block.
 
 ## Proof so far
@@ -43,6 +46,13 @@ the requirement evaluator's `NEVER_EVIDENCE`). That is inert until a database ca
   `alloy-cert` stack failed before reaching it: `relation "public.document_subjects" does not exist`. The stack's ledger
   stops at `20261210090000` and has none of the Documents D2–D8 functions, so no isolated database exists yet where this
   migration (or application-as-actor filing) can be exercised. Nothing remained after the rollback.
+
+## Real-database proof without applying it
+
+`certification/invariants/documents-d9-3-archive-preapply.sql` is this migration byte for byte, then rollback-only
+assertions (locked by `web/tests/documents/preapplyInvariantParity.test.ts`). It runs inside
+`database.run_rollback_invariant_test`'s discarded transaction on a staging-tip certenv, so the SQL is exercised and
+nothing is applied. It is prepared and statically accepted by the runner's analyzer. **It has not run.**
 
 ## Apply order (when approved)
 

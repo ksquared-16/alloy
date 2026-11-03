@@ -68,6 +68,7 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | DEC-7 | Staging migration applies (atomic open, WS11, verdict store) | One governed apply per migration after its merge, each with a parity census | Each is a separate card when ready |
 | DEC-8 | Enabling real Resend attachment requests | A separate activation after hosted proof of storage, scanning and atomic open | Until then the fetcher is unwired or disabled; D10 holds |
 | DEC-9 | Paperwork accountability | Track as its own objective | Keeps this program's acceptance bounded and honest |
+| DEC-10 | 10 MB partner uploads | Keep 4 MiB for this program's acceptance, and run option A (parts through Alloy) as a follow-on slice once D9 is live (`D9-UPLOAD-LIMIT-10MB-PATH.md` §Assessment) | Until recorded, 4 MiB stays stated everywhere |
 
 ## 5. Handoffs (for the operator to paste to the owning lane)
 
@@ -83,45 +84,83 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 4. After HANDOFF-1 / -2 and DEC-6: F1 wiring (disabled), then D10-V1.
 5. Integrate on staging, one checkpoint, preview with provenance, release, one PR, CI, approved merge, migration applies, hosted proofs, acceptance.
 
-## 7. Status — 2026-11-03, run `erun2_b2876b539106263e` (objective `…AFD07879C606`, filed and approved as `gar_513e95f1682b2e`)
+## 7. Status — 2026-11-03, run `erun2_91771ceae4599d00` (objective `…AFD07879C606`)
 
-Evidence columns:
-- **L** local implementation and proof · **H** hosted · **C** certification · **D** deployment · **A** acceptance.
-- `—` = not yet. Nothing below is certified, deployed or accepted.
+**Candidate and baseline.**
+- Branch `agent/documents`.
+- The 15 registered slices (`d10-no-structural-only-release` … `d9-status-and-inventory`) are all ancestors of the candidate.
+- Current staging `7e9b242c` is integrated by merge `65f334c78`: 17 commits, no migration, one disjoint `web/package.json` hunk.
+- All lane commits are authored `Kelly` and carry the Claude co-author line. Git authorship cannot identify which agent wrote a commit; the slice records name the runs.
+- Deployed staging still serves increment 1 (`daf87893`, PR #1627). Nothing from this program is deployed.
 
-| Item | L | H | C | D | A | Next step / owner |
-|---|---|---|---|---|---|---|
-| D9-H1 hosted read proof | — (D9.1 code is deployed via #1627) | — | — | ✔ D9.1 code at `daf87893` | — | Plan `D9-1-HOSTED-QA-PLAN.md` prepared. Blocked on H2 (Host Capacity QA plan), then DEC-1 / DEC-2 cards |
-| D9-W0 write contract | Proposal `D9-WRITE-CONTRACT-PROPOSAL.md` | — | — | — | — | **Kelly ratifies** (DEC-3). Until then no write is implemented |
-| D9-W1…W7, X1, H2 | — | — | — | — | — | After DEC-3 (Documents), then H2 / DEC-1 / DEC-2 for the hosted proof |
-| D9.2 write surface (ratified Q1–Q8) | ✔ `2181bf936`…`30f71b2ee`: upload, content, filing, link/unlink, sweep, publication | — | — | — | — | Hosted proof D9-H2 (DEC-1 credential, DEC-2 hosted QA run) after deploy |
-| D9.2 unfiled-upload escalation (operator-approved 2026-11-03) | ✔ `88ebd3848`: 24 h grace → one Processing case per upload, atomic open only, audited, late filing closes the case; 13 + 2 tests | — | — | — | — | **Inert until D10-A3** applies `open_processing_case_with_primary_source` (held, never the legacy open). Hosted: a wake with an aged QA upload |
-| D9.3 lifecycle (review, validity, replacement, archive, reviews, history, requirements, expires_before) | ✔ `6b3c80f8f`, publication `aae87158f`: 18 route-level tests; 38 operations / 34 paths / 16 scopes | — | — | — | — | Hosted proof with a `documents.review` grant (DEC-1 extended) |
-| D9.3 archive migration | Recorded `880238d8e` (`pending-migrations/20261217090000_documents_d9_3_archive.sql`, `D9-3-ARCHIVE-MIGRATION.md`); SQL not exercised | — | — | — | — | **Approval to apply** (DEC-7 family). Until applied, archive answers 503 `archive_unavailable` |
-| D9 application-as-actor filing / replacement on an isolated DB | Synthetic only | — | — | — | — | **Environment not ready:** `alloy-cert` ledger max `20261210090000`, no Documents D2–D8 functions (checked 2026-11-03). Needs a governed cert rebuild or migration of the shared stack |
-| D9 10 MB upload path | Recommendation recorded (`D9-UPLOAD-LIMIT-10MB-PATH.md`); 4 MiB stated in responses and docs | — | — | — | — | Decision on option A, then implementation and a hosted 10 MB assembly proof |
-| D10-Q1 filing queue | ✔ already in increment 1 (`email_attachment` in `DOCUMENT_SOURCE_KINDS`) | — | ✔ (#1627) | ✔ | — | Verify in D10-V1 |
-| D10 never-release rule | ✔ `65f442e62`: structural-only policy removed; mutation caught | — | — | — | — | — |
-| D10-A1 single-session invariant | Invariant file prepared (increment 1) | — | — | — | — | Needs migration `20261215093000` on a certenv (`database.apply_migration`, from a pushed `agent/**` commit), then `database.run_rollback_invariant_test`. Prepared, not filed |
-| D10-A2 two-session race | — | — | — | — | — | **H1** Host Capacity fixture `processing_atomic_open_race` |
-| D10-A3 staging apply of `20261215093000` | — | — | — | — | — | After A1 + A2, merge, then a `database.apply_promoted_migration` card (DEC-7) |
-| D10-S1 WS11 link + access rules | Draft only | — | — | — | — | **H3** Communications / DB |
-| D10-S2 storage boundary | ✔ increment 1 (`ws11AttachmentStorage.ts`, stable document id) | — | ✔ (#1627) | ✔ (unwired) | — | Re-prove with H3's link and access rules on certenv |
-| D10-M1 verdict store | ✔ `fd72f0cf0`: pending migration `20261216090000`, invariant (9 cases, not run), app read / record / revoke | — | — | — | — | **H4** security review; a certenv run needs the apply; staging apply is DEC-7 |
-| D10-M2 scanner integration | ✔ `e0dfa2121`: scan step (re-hash, fail closed) and clamd INSTREAM engine; unwired | — | — | — | — | **DEC-6** engine and host (H4); enabling is separate |
-| D10-F1 Resend fetcher wiring | Adapter ✔ (increment 1), not wired | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
-| D10-V1 full path | Composed synthetic suites green (`tests/documents`: 40 files after slice 3) | — | — | — | — | After S1, M2 and A3 on certenv |
-| Revocation route (design §3) | Library ✔; admin route — | — | — | — | — | Documents, after H4 review |
-| Paperwork accountability | — | — | — | — | — | **H5** owner; DEC-9 |
+**Evidence columns:**
+- **L** local implementation and proof, **R** real-database proof (isolated certenv), **H** hosted, **C** certification checkpoint, **D** deployment, **A** acceptance.
+- `—` means not yet. Nothing below is certified, deployed or accepted unless its column says so.
 
-**Validation of `e0dfa2121`** (tree `390d54fb8733b498`, receipts in the broker):
-- `typecheck` PASSED (`req_1793674568453259_85275`);
-- `typecheck:tests` PASSED (`req_1793674589777929_91620`);
-- module imports PASSED (`req_1793674635954384_99176`);
-- prebuild guards: service-client-principal, unauthenticated-side-effects, route-capabilities, runtime-mode-audience and governed-documents, all rc=0.
+| Item | L | R | H | C | D | A | Owner, then next step |
+|---|---|---|---|---|---|---|---|
+| D9-H1 hosted read proof | ✔ D9.1 (increment 1) | — | — | ✔ #1627 | ✔ `daf87893` | — | Host Capacity **H2** (QA plan) → DEC-1 app cards → DEC-2 hosted run (`D9-1-HOSTED-QA-PLAN.md`) |
+| D9.2 write surface (Q1–Q8) | ✔ `2181bf936`…`30f71b2ee` | Invariant `documents-d9-application-filing.sql` prepared, **not run** | — | — | — | — | Documents: run on certenv (§8). Then hosted D9-H2 (`D9-2-3-HOSTED-QA-PLAN.md`) after deploy |
+| D9.2 24 h unfiled-upload handoff | ✔ `88ebd3848`, 13 + 2 tests | SQL half (one case per upload) in `processing-open-case-atomic-preapply.sql`, **not run** | — | — | — | — | **Inert until D10-A3** applies the atomic open. Hosted W-ES after that apply |
+| D9.3 lifecycle (review, validity, replacement, archive, reads) | ✔ `6b3c80f8f`, `aae87158f` | Replacement with no user in the application-filing invariant, **not run** | — | — | — | — | Hosted W-RV1…W-RQ1 with `documents.review` (§2 of the D9.2/3 plan) |
+| D9.3 archive migration `20261217090000` | Recorded `880238d8e` | `documents-d9-3-archive-preapply.sql` (migration inside the rollback), **not run** | — | — | — | — | Certenv run (§8), then **apply approval** (DEC-7). Until applied: 503 `archive_unavailable` |
+| D9.3 staff restore | ✔ `01141ac30`: archived listing, restore route, library section, 8 tests | In the archive pre-apply invariant (`document_unarchive`) | — | — | — | — | Same apply as archive. Hosted W-AR2 |
+| D9 10 MB uploads | Option A recorded (`D9-UPLOAD-LIMIT-10MB-PATH.md` §Assessment) | — | — | — | — | — | **Kelly: in or out of this program** (DEC-10). 4 MiB stays until recorded |
+| D9-N1 / N2 (no org-wide feed; no medical / identity / custody externally) | ✔ ratified, enforced | — | — | — | — | — | — |
+| D10-Q1 filing queue | ✔ increment 1 | — | — | ✔ #1627 | ✔ | — | Verify in D10-V1 |
+| D10 never-release rule | ✔ `65f442e62` | — | — | — | — | — | — |
+| D10-A1 single-session atomic open | ✔ invariant (increment 1) | `processing-open-case-atomic-preapply.sql` (no apply needed), **not run** | — | — | — | — | Documents: certenv run (§8) |
+| D10-A2 two-session race | Runner `qaProcessingAtomicOpenRace.mjs` (`ca340723e`) | — | — | — | — | — | **Host Capacity H1**: register fixture `processing_atomic_open_race`. Its precondition needs the migration applied **on the certenv** (an isolated apply, not staging) |
+| D10-A3 staging apply `20261215093000` | — | — | — | — | — | — | After A1 and A2, merge, then `database.apply_promoted_migration` (DEC-7) |
+| D10-S1 WS11 link + access rules | Draft SQL only | — | — | — | — | — | **Communications H3** |
+| D10-S2 storage boundary | ✔ increment 1 | — | — | ✔ #1627 | ✔ (unwired) | — | Re-prove with H3 on a certenv |
+| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`, invariant not run) | — | — | — | — | — | **Documents security H4** review. A pre-apply variant is possible, like archive (it needs only GRANT EXECUTE written as GRANT ALL) |
+| D10-M2 scanner integration | ✔ `e0dfa2121`, unwired | — | — | — | — | — | **DEC-6** engine and host (H4) |
+| D10-F1 Resend fetcher wiring | Adapter ✔, not wired | — | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
+| D10-V1 full inbound path | Synthetic suites green | — | — | — | — | — | After S1, M2, A3 on a certenv |
+| D10-H1 hosted inbound proof | — | — | — | — | — | — | DEC-2 + DEC-8 |
+| Paperwork accountability | — | — | — | — | — | — | **Enrollment / BP H5**, DEC-9 |
+| Certification of the integrated candidate | — | — | — | Pending this run (§9) | — | — | Documents |
 
-**Baseline red seen:** `tests/access/orgParameterizedRpcBoundary.test.ts` › "no later migration grants a client EXECUTE…" flags committed `20261204090000_medical_rows_require_health_permission.sql`, which this sprint does not touch. Neither that test nor `supabase/migrations` differs from the deployed base `daf87893` (`git diff` empty), so it fails identically there. It is pre-existing.
+## 8. Real-database proof: the supported isolated path
 
-**`tests/access` baseline (measured 2026-11-03):** 21 failures at `9530e9b16`, all also failing on an exported copy of the deployed base `daf87893`, which shows 22. The extra base failure (`roleKeyIntegrityAndGrantReplacement` › "anything this lane has NOT yet merged…") reads git history, which an exported copy lacks. This sprint introduces no access-lock failure. Affected suites at `9530e9b16`: `tests/documents`, `tests/communications/inbound*` and `processingCaseAtomicOpen` all green.
+**Tier 1 correction (2026-11-03).** The previous run reported a "toolkit packaging gap" because
+`vacilando-suite --tier=1` found no `tests/deterministic`. That suite is **Vacilando's own** Tier 1. An Alloy sprint
+checkpoint is certified differently: by the `vacilando.product_certification.v1` ledger, composed from exact-commit
+`validate-results`. Those are a full `build`, a full `typecheck` (or the build's typecheck graph) and a `test` record,
+each stable and on a clean tree (`lib/product-repository-certification.mjs`, `ALLOY_PRODUCT_CERTIFICATION`). `vac run`
+produces them. Nothing is missing from the toolkit, and no Host Capacity work is needed for it.
 
-**No production build yet.** One build happens at the integrated checkpoint.
+**The isolated database is a certenv.** It is built by `environment.build_certification_baseline` from the staging tip,
+as R3 did (`certenv-55644086aa`). The lane's earlier certenvs (`…55644086aa`, `…9c24631afd`) have expired leases at
+older bases. The shared `alloy-cert` stack is **not** used: it is 47 migrations behind and not isolated.
+
+**No migration has to be applied to prove the held ones.** The rollback runner allows `CREATE OR REPLACE FUNCTION`
+and `ALTER TABLE` inside its discarded transaction. So each pre-apply invariant carries its pending migration byte for
+byte (locked by `web/tests/documents/preapplyInvariantParity.test.ts`), then its assertions. Nothing persists, and the
+runner verifies that from an independent connection.
+
+| Invariant (sha256) | Proves | Needs |
+|---|---|---|
+| `documents-d9-application-filing.sql` (`aa5c43e4…`) | Application-as-actor filing and replacement with no user | staging-tip certenv |
+| `documents-d9-3-archive-preapply.sql` (`b4f15bbd…`) | Archive and staff restore, archived unavailable everywhere | staging-tip certenv |
+| `processing-open-case-atomic-preapply.sql` (`64c2461b…`) | D10-A1 single session; the SQL half of the 24 h handoff | staging-tip certenv |
+
+All three pass the installed toolkit's `analyzeRollbackSafety` statically. **None has run.**
+
+**Order of requests** (each its own operator approval; payloads under `.vacilando-payloads/d9d10-*.json`):
+1. `repository.push` of `agent/documents` at the certified candidate. A rollback source must be on a sanctioned
+   certification ref.
+2. `environment.build_certification_baseline` at staging `7e9b242c`, lease to this lane.
+3. Three `database.run_rollback_invariant_test` cards, one per file above, against the new certenv.
+
+**Not covered by this path:**
+- The two-session race (D10-A2, Host Capacity H1).
+- The 24 h handoff end to end through the wake (TypeScript over a live database). Its proof is hosted W-ES after the
+  atomic-open apply.
+
+## 9. Validation record for this run
+
+See the run report. The `tests/access` baseline reds are unchanged and pre-existing on plain staging `7e9b242c`.
+They include `routeCapabilityDeclaration` ("ratchets the pending backlog downward", "an unlisted pending handler still
+breaks the ratchet"): pending is 294 against a ceiling of 295 on staging itself, measured in a detached worktree.

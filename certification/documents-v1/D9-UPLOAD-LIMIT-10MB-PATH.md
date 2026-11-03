@@ -49,3 +49,33 @@ configured. The staff ceiling (`ADMIN_DOCUMENT_UPLOAD_MAX_BYTES`, 10 MiB) is not
    upload. Nothing about parts may count as a scan.
 
 Until then the API states 4 MiB, and partners send larger files to the organization another way.
+
+## Assessment: in this program or after it? (2026-11-03, run `erun2_91771ceae4599d00`)
+
+**Recommendation: keep 10 MB out of this program's acceptance, and do option A as the first follow-on slice once D9 is
+live on staging.**
+
+**The work (option A).** About one slice of code plus one hosted proof:
+- the upload id gains `parts` and the content call gains `part`;
+- a staging-prefix writer, and one `completeDocumentUpload` assembly step that runs the existing screening order on
+  the whole file;
+- the sweep extended to `api_upload_parts`;
+- seven new tests (listed above);
+- OpenAPI and partner package changes (one new operation, so the published counts change again);
+- one hosted 10 MB assembly that measures function memory and time.
+
+**Why not now:**
+1. It adds a new byte path at the same time the existing one is being proven for the first time (D9-H2). A failure in
+   hosted proof would then have two candidate causes.
+2. Its risk sits in the same place as D1c-2 (malware scanning). The verdict must bind to the *assembled* version. That
+   is easier to prove once scanning has an engine (DEC-6) than to design against an unwired one.
+3. Nothing in D9 or D10 acceptance depends on it. Partners can send larger files to the organization another way
+   today, and D10 email attachments have their own limit.
+
+**What it would cost to defer:** the published limit stays 4 MiB, and partners with 4–10 MB files (scanned multi-page
+PDFs) need the organization to upload them. The largest file stored today is 4.4 MB.
+
+**Not recommended:** option B (signed upload into a quarantine bucket). It reverses Q1, so unscreened bytes would land
+under partner control.
+
+**Decision needed:** DEC-10 (`D9-D10-COMPLETION-PLAN.md` §4). The 4 MiB limit stays until a decision is recorded.
