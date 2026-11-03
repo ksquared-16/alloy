@@ -49,6 +49,7 @@ import {
     completeDocumentUpload,
     signUploadId,
     sweepAbandonedApiUploads,
+    sweepAbandonedApiUploadsAcrossOrgs,
     uploadDocumentId,
     uploadSigningSecret,
 } from "@/lib/documents/external/externalDocumentWrites";
@@ -321,5 +322,22 @@ describe("abandoned-upload sweep", () => {
         const r = await sweepAbandonedApiUploads(fake, ORG, { nowMs: now });
         expect(r).toEqual({ ok: true, removed: [`${ORG}/api_uploads/${docA}/${h}`] });
         expect(removed).toEqual([[`${ORG}/api_uploads/${docA}/${h}`]]);
+    });
+
+    it("across orgs: only organizations with a documents.write installation, bounded, one failure never stops the rest", async () => {
+        const ORG2 = "0c000000-0000-4000-8000-0000000000b9";
+        const listed: string[] = [];
+        let containsArg: unknown = null;
+        const fake = {
+            from: (t: string) =>
+                t === "app_installations"
+                    ? { select: () => ({ contains: async (_c: string, v: unknown) => { containsArg = v; return { data: [{ org_id: ORG }, { org_id: ORG }, { org_id: ORG2 }, { org_id: "bad" }], error: null }; } }) }
+                    : { select: () => ({ eq: () => ({ in: async () => ({ data: [], error: null }) }) }) },
+            storage: { from: () => ({ list: async (p: string) => { listed.push(p); if (p.startsWith(ORG2)) throw new Error("down"); return { data: [], error: null }; }, remove: async () => ({ error: null }) }) },
+        } as unknown as SupabaseClient;
+        const r = await sweepAbandonedApiUploadsAcrossOrgs(fake);
+        expect(containsArg).toEqual(["documents.write"]);
+        expect(r).toEqual({ orgs: 2, removed: 0, failed: 1 });
+        expect(listed).toEqual([`${ORG}/api_uploads`, `${ORG2}/api_uploads`]);
     });
 });

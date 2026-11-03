@@ -407,3 +407,24 @@ export async function fileDocumentAsApplication(
         result: { document_id: r.result.document_id, filed_document_id: r.result.filed_document_id, mode: r.result.mode, doc_type: r.result.doc_type, replay: r.result.replay },
     };
 }
+
+/**
+ * The scheduled-work backstop: sweep every organization in which an installation holds `documents.write` (the only
+ * principals that can create `api_uploads` objects). Bounded per wake; one organization's failure never stops the rest.
+ */
+export async function sweepAbandonedApiUploadsAcrossOrgs(
+    supabase: SupabaseClient,
+    { maxOrgs = 25, nowMs = Date.now() }: { maxOrgs?: number; nowMs?: number } = {},
+): Promise<{ orgs: number; removed: number; failed: number }> {
+    const { data, error } = await supabase.from("app_installations").select("org_id").contains("granted_scopes", ["documents.write"]);
+    if (error) return { orgs: 0, removed: 0, failed: 1 };
+    const orgs = [...new Set(((data ?? []) as Array<{ org_id: string }>).map((r) => r.org_id))].filter((o) => UUID.test(o)).sort().slice(0, maxOrgs);
+    let removed = 0;
+    let failed = 0;
+    for (const org of orgs) {
+        const r = await sweepAbandonedApiUploads(supabase, org, { nowMs }).catch(() => ({ ok: false as const, error: "threw" }));
+        if (r.ok) removed += r.removed.length;
+        else failed += 1;
+    }
+    return { orgs: orgs.length, removed, failed };
+}

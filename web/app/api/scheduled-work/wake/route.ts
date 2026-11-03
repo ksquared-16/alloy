@@ -5,6 +5,7 @@ import { ensureScheduledWorkConsumersRegistered } from "@/lib/scheduledWork/sche
 import { runScheduledWorkWake } from "@/lib/scheduledWork/scheduledWorkRuntime";
 import { sweepPendingContactAttempts } from "@/lib/communications/contactAttemptOnProviderAcceptance";
 import { sweepUnrealizedEnrollmentFees } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
+import { sweepAbandonedApiUploadsAcrossOrgs } from "@/lib/documents/external/externalDocumentWrites";
 
 export const dynamic = "force-dynamic";
 
@@ -70,11 +71,20 @@ async function wake(): Promise<NextResponse> {
         } catch {
             enrollmentFees = null;
         }
+        // Backstop for D9.2 API uploads: an object a crash left between storage upload and row insert. Only unreferenced
+        // objects under <org>/api_uploads/ older than an hour; never a referenced object, another prefix or another org.
+        let apiUploadsSwept: Awaited<ReturnType<typeof sweepAbandonedApiUploadsAcrossOrgs>> | null = null;
+        try {
+            apiUploadsSwept = await sweepAbandonedApiUploadsAcrossOrgs(supabase);
+        } catch {
+            apiUploadsSwept = null;
+        }
         return NextResponse.json({
             ok: true,
             ...result,
             contact_attempts_associated: contactAttemptsAssociated,
             enrollment_fees: enrollmentFees,
+            api_uploads_swept: apiUploadsSwept,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : "wake failed";
