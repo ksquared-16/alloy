@@ -17,14 +17,13 @@
  * Whole cents only (the currency's precision — every amount here is integer cents of a two-decimal
  * currency); never negative; never zero — `charges.amount_cents <> 0` is a database rule, and a
  * charge forgiven is a waiver or an adjustment recorded against it, which stays the separate act it
- * already is; never above a sanity ceiling, so a mistyped or tampered amount cannot reach the
- * ledger; and never without a reason, the same three-character rule every manual adjustment has.
+ * already is; never an amount past exact integer precision (`Number.isSafeInteger` — the only
+ * technical bound: `charges.amount_cents` is a bigint with no ceiling, and no business ceiling is
+ * configured); and never without a reason, the same three-character rule every manual adjustment has.
  */
 
 export const CATALOG_AMOUNT_OVERRIDE_PERMISSION = "fin.adjust" as const;
 
-/** $1,000,000.00 — far above any configured fee; an amount past it is a typo or a tampered request. */
-export const CATALOG_AMOUNT_OVERRIDE_MAX_CENTS = 100_000_000;
 export const CATALOG_AMOUNT_OVERRIDE_REASON_MIN = 3;
 export const CATALOG_AMOUNT_OVERRIDE_REASON_MAX = 500;
 
@@ -63,8 +62,8 @@ export function parseCatalogAmountOverride(raw: unknown): CatalogAmountOverrideP
             field: "amount_override.amount_cents",
         };
     }
-    if (cents > CATALOG_AMOUNT_OVERRIDE_MAX_CENTS) {
-        return { ok: false, code: "amount_override_too_large", message: "That amount is larger than any charge can be.", field: "amount_override.amount_cents" };
+    if (!Number.isSafeInteger(cents)) {
+        return { ok: false, code: "amount_override_out_of_range", message: "That amount is too large to record exactly.", field: "amount_override.amount_cents" };
     }
     const reason = typeof src.reason === "string" ? src.reason.trim() : "";
     if (reason.length < CATALOG_AMOUNT_OVERRIDE_REASON_MIN) {

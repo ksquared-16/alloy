@@ -16,7 +16,6 @@ vi.mock("@/lib/access/actorPermissionGrants", () => ({
 
 const { financialChargeActions } = await import("@/lib/adminV2/actions/definitions/financialChargeActions");
 const {
-    CATALOG_AMOUNT_OVERRIDE_MAX_CENTS,
     centsFromAmountInput,
     parseCatalogAmountOverride,
 } = await import("@/lib/financials/catalogCharges/catalogAmountOverride");
@@ -62,6 +61,10 @@ beforeEach(() => {
 });
 
 describe("what an override may be — validated, never coerced", () => {
+    it("no business ceiling: a large whole-cent amount is accepted (only exact precision bounds it)", () => {
+        expect(parseCatalogAmountOverride({ amount_cents: 250_000_000, reason: "Annual facility rental" })).toMatchObject({ ok: true, override: { amountCents: 250_000_000 } });
+    });
+
     it("absent is no override; a whole-cent amount with a reason is one", () => {
         expect(parseCatalogAmountOverride(undefined)).toEqual({ ok: true, override: null });
         expect(parseCatalogAmountOverride({ amount_cents: 3000, reason: "Late registration" })).toEqual({
@@ -75,7 +78,7 @@ describe("what an override may be — validated, never coerced", () => {
         ["a fraction of a cent", { amount_cents: 2999.5, reason: "rounding" }, "amount_override_precision"],
         ["a string amount (tampered)", { amount_cents: "3000", reason: "string" }, "amount_override_invalid"],
         ["no amount", { reason: "nothing" }, "amount_override_invalid"],
-        ["an amount past the ceiling", { amount_cents: CATALOG_AMOUNT_OVERRIDE_MAX_CENTS + 1, reason: "typo" }, "amount_override_too_large"],
+        ["an amount past exact integer precision", { amount_cents: Number.MAX_SAFE_INTEGER + 3, reason: "overflow" }, "amount_override_out_of_range"],
         ["no reason", { amount_cents: 3000 }, "amount_override_reason_required"],
         ["a two-character reason", { amount_cents: 3000, reason: " ok " }, "amount_override_reason_required"],
         ["not an object", 3000, "amount_override_invalid"],
