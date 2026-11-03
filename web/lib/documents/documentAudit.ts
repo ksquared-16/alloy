@@ -53,14 +53,18 @@ export type DocumentAuditEvent =
     // D1c-2: a malware verdict recorded by the scan process, or a human revocation of one — recorded BEFORE the store
     // writes it. The payload names ids, verdict and engine labels only: never a URL, a path or content.
     | "document_malware_verdict_recorded"
-    | "document_malware_verdict_revoked";
+    | "document_malware_verdict_revoked"
+    // D9.2: an `/api/v1` upload its installation never filed, handed to Processing after the grace period (recorded
+    // BEFORE the case opens), and that case closed because the document was filed after all (recorded BEFORE it closes).
+    | "document_unfiled_upload_escalated"
+    | "document_unfiled_upload_case_resolved";
 
 /**
  * The closed vocabulary of automated writers. A new one is added here, deliberately. Naming a process grants nothing:
  * what it may do is decided by the code that uses it and by the database (e.g. only `malware_scan_worker` may record a
  * malware verdict — `record_document_malware_verdict`).
  */
-export const DOCUMENT_SYSTEM_PROCESSES = ["inbound_email_attachment", "malware_scan_worker"] as const;
+export const DOCUMENT_SYSTEM_PROCESSES = ["inbound_email_attachment", "malware_scan_worker", "api_upload_escalation"] as const;
 export type DocumentSystemProcess = (typeof DOCUMENT_SYSTEM_PROCESSES)[number];
 
 export type DocumentAuditInput = {

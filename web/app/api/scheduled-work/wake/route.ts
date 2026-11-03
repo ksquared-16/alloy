@@ -6,6 +6,8 @@ import { runScheduledWorkWake } from "@/lib/scheduledWork/scheduledWorkRuntime";
 import { sweepPendingContactAttempts } from "@/lib/communications/contactAttemptOnProviderAcceptance";
 import { sweepUnrealizedEnrollmentFees } from "@/lib/enrollment/financial/realizeEnrollmentFeesForProcessInstance";
 import { sweepAbandonedApiUploadsAcrossOrgs } from "@/lib/documents/external/externalDocumentWrites";
+import { escalateUnfiledApiUploads } from "@/lib/documents/external/unfiledApiUploadEscalation";
+import { makeProcessingCaseDbDeps } from "@/lib/pos/processingCase/processingCaseDb";
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +81,22 @@ async function wake(): Promise<NextResponse> {
         } catch {
             apiUploadsSwept = null;
         }
+        // D9.2: completed API uploads never filed within 24 hours become Processing cases (one per upload, atomic open
+        // only — held while that function is absent), and a case whose upload was filed late is closed. Counts only.
+        let apiUploadsEscalated: Omit<Awaited<ReturnType<typeof escalateUnfiledApiUploads>>, "outcomes"> | null = null;
+        try {
+            const r = await escalateUnfiledApiUploads({ supabase, processing: makeProcessingCaseDbDeps(supabase) });
+            apiUploadsEscalated = { scanned: r.scanned, opened: r.opened, existing: r.existing, repaired: r.repaired, held: r.held, skipped: r.skipped, failed: r.failed, resolved: r.resolved, truncated: r.truncated };
+        } catch {
+            apiUploadsEscalated = null;
+        }
         return NextResponse.json({
             ok: true,
             ...result,
             contact_attempts_associated: contactAttemptsAssociated,
             enrollment_fees: enrollmentFees,
             api_uploads_swept: apiUploadsSwept,
+            api_uploads_escalated: apiUploadsEscalated,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : "wake failed";

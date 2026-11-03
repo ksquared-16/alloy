@@ -29,6 +29,7 @@ import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { linkDocumentSubject, unlinkDocumentSubject } from "@/lib/documents/documentSubjects";
 import { EXTERNAL_DOCUMENT_SUBJECT_TYPES, listExternalDocuments, subjectVisibility, type ExternalDocumentSubjectType } from "@/lib/documents/external/externalDocumentAuthority";
 import { commitDocumentFilingAsApplication, type ApplicationFilingContext } from "@/lib/documents/filing/documentFiling";
+import { resolveEscalatedUploadCase } from "@/lib/documents/external/unfiledApiUploadEscalation";
 import type { OperationContext } from "@/lib/platform/external/operationRoute";
 import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
 
@@ -401,6 +402,9 @@ export async function fileDocumentAsApplication(
         const status = (FILING_STATUSES.has(r.status) ? r.status : 422) as WriteRefusal["status"];
         return refuse(status, r.code, r.message);
     }
+    // A late filing closes the Processing case escalation opened for this upload. Best-effort: the filing is committed
+    // either way, and the wake closes any case this call could not.
+    await resolveEscalatedUploadCase(supabase, ctx.organizationId, documentId).catch(() => undefined);
     return {
         ok: true,
         status: r.result.replay ? 200 : 201,

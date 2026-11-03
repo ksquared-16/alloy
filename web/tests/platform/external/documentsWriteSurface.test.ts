@@ -341,3 +341,29 @@ describe("abandoned-upload sweep", () => {
         expect(listed).toEqual([`${ORG}/api_uploads`, `${ORG2}/api_uploads`]);
     });
 });
+
+describe("late filing after escalation (unfiled uploads become Processing cases after 24 h)", () => {
+    it("the installation can still file its upload; the filing closes the escalation case, audited as the system process", async () => {
+        const docId = (await upload()).content.body.document_id as string;
+        const caseId = "ca000000-0000-4000-8000-0000000000b9";
+        db.seed("processing_cases", [{ id: caseId, org_id: ORG, status: "received", metadata: { processing_intent: "store_document", api_upload_escalation: { kind: "api_v1_unfiled_upload", document_id: docId } } }]);
+        db.seed("processing_case_sources", [{ org_id: ORG, processing_case_id: caseId, source_kind: "upload", source_id: docId, role: "primary" }]);
+
+        const filed = await json(await fileDoc(post("/api/v1/document-filings", { document_id: docId, type_key: "enrollment_document", primary: { subject_type: "child", subject_id: C_IN } }, { key: "late-file-key-1" })));
+        expect(filed).toMatchObject({ status: 201, body: { document_id: docId, replay: false } });
+        const c = db.rows("processing_cases").find((r) => r.id === caseId)!;
+        expect(c.status).toBe("completed");
+        expect((c.metadata as Record<string, any>).operational_result).toMatchObject({ kind: "document_filed", filed_document_id: docId, filed_outside_case: true });
+        expect(audits("document_unfiled_upload_case_resolved")[0]?.payload).toMatchObject({ actor_kind: "system", actor_process: "api_upload_escalation", processing_case_id: caseId, filed_through_api: true });
+        // The partner's response carries nothing about the case.
+        expect(JSON.stringify(filed.body)).not.toContain(caseId);
+    });
+
+    it("a staff filing through the case first leaves the installation's later filing as 409 ALREADY_FILED", async () => {
+        const docId = (await upload()).content.body.document_id as string;
+        const d = db.rows("documents").find((r) => r.id === docId)!;
+        d.metadata = { ...(d.metadata as object), filing: { key: `processing_case:ca000000-0000-4000-8000-0000000000b8:document:${docId}`, mode: "new_document" } };
+        const r = await json(await fileDoc(post("/api/v1/document-filings", { document_id: docId, type_key: "enrollment_document", primary: { subject_type: "child", subject_id: C_IN } }, { key: "late-file-key-2" })));
+        expect(r).toMatchObject({ status: 409, body: { error: { code: "ALREADY_FILED" } } });
+    });
+});

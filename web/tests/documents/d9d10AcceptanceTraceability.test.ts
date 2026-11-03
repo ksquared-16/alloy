@@ -114,7 +114,11 @@ describe("the gaps the document states are still gaps", () => {
             }
         };
         walk(dir);
-        const offenders = files.filter((f) => /remind|escalat/i.test(readFileSync(f, "utf8")));
+        // D9.2's unfiled-upload escalation (operator-approved 2026-11-03) hands an unfiled API upload to Processing. It is
+        // not requirement accountability, and must never become it: it may not read or write requirements.
+        const UPLOAD_ESCALATION = ["external/unfiledApiUploadEscalation.ts", "external/externalDocumentWrites.ts", "documentAudit.ts"].map((f) => resolve(dir, f));
+        for (const f of UPLOAD_ESCALATION.slice(0, 2)) expect(readFileSync(f, "utf8"), f).not.toMatch(/documents\/requirements\/|document_requirement/);
+        const offenders = files.filter((f) => !UPLOAD_ESCALATION.includes(f) && /remind|escalat/i.test(readFileSync(f, "utf8")));
         expect(offenders).toEqual([]);
         const d6 = read("supabase/migrations/20261212090000_documents_d6_requirements.sql");
         expect(d6).not.toMatch(/\b(owner|assignee|responsible)[a-z_]*\s+(uuid|text)/i);
