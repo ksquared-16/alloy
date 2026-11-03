@@ -82,3 +82,38 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 3. After DEC-1 / DEC-2: D9-H1 on the deployed base, then D9-H2 after the write surface deploys.
 4. After HANDOFF-1 / -2 and DEC-6: F1 wiring (disabled), then D10-V1.
 5. Integrate on staging, one checkpoint, preview with provenance, release, one PR, CI, approved merge, migration applies, hosted proofs, acceptance.
+
+## 7. Status — 2026-11-03, run `erun2_b2876b539106263e` (objective `…AFD07879C606`, filed and approved as `gar_513e95f1682b2e`)
+
+Evidence columns:
+- **L** local implementation and proof · **H** hosted · **C** certification · **D** deployment · **A** acceptance.
+- `—` = not yet. Nothing below is certified, deployed or accepted.
+
+| Item | L | H | C | D | A | Next step / owner |
+|---|---|---|---|---|---|---|
+| D9-H1 hosted read proof | — (D9.1 code is deployed via #1627) | — | — | ✔ D9.1 code at `daf87893` | — | Plan `D9-1-HOSTED-QA-PLAN.md` prepared. Blocked on H2 (Host Capacity QA plan), then DEC-1 / DEC-2 cards |
+| D9-W0 write contract | Proposal `D9-WRITE-CONTRACT-PROPOSAL.md` | — | — | — | — | **Kelly ratifies** (DEC-3). Until then no write is implemented |
+| D9-W1…W7, X1, H2 | — | — | — | — | — | After DEC-3 (Documents), then H2 / DEC-1 / DEC-2 for the hosted proof |
+| D10-Q1 filing queue | ✔ already in increment 1 (`email_attachment` in `DOCUMENT_SOURCE_KINDS`) | — | ✔ (#1627) | ✔ | — | Verify in D10-V1 |
+| D10 never-release rule | ✔ `65f442e62`: structural-only policy removed; mutation caught | — | — | — | — | — |
+| D10-A1 single-session invariant | Invariant file prepared (increment 1) | — | — | — | — | Needs migration `20261215093000` on a certenv (`database.apply_migration`, from a pushed `agent/**` commit), then `database.run_rollback_invariant_test`. Prepared, not filed |
+| D10-A2 two-session race | — | — | — | — | — | **H1** Host Capacity fixture `processing_atomic_open_race` |
+| D10-A3 staging apply of `20261215093000` | — | — | — | — | — | After A1 + A2, merge, then a `database.apply_promoted_migration` card (DEC-7) |
+| D10-S1 WS11 link + access rules | Draft only | — | — | — | — | **H3** Communications / DB |
+| D10-S2 storage boundary | ✔ increment 1 (`ws11AttachmentStorage.ts`, stable document id) | — | ✔ (#1627) | ✔ (unwired) | — | Re-prove with H3's link and access rules on certenv |
+| D10-M1 verdict store | ✔ `fd72f0cf0`: pending migration `20261216090000`, invariant (9 cases, not run), app read / record / revoke | — | — | — | — | **H4** security review; a certenv run needs the apply; staging apply is DEC-7 |
+| D10-M2 scanner integration | ✔ `e0dfa2121`: scan step (re-hash, fail closed) and clamd INSTREAM engine; unwired | — | — | — | — | **DEC-6** engine and host (H4); enabling is separate |
+| D10-F1 Resend fetcher wiring | Adapter ✔ (increment 1), not wired | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
+| D10-V1 full path | Composed synthetic suites green (`tests/documents`: 40 files after slice 3) | — | — | — | — | After S1, M2 and A3 on certenv |
+| Revocation route (design §3) | Library ✔; admin route — | — | — | — | — | Documents, after H4 review |
+| Paperwork accountability | — | — | — | — | — | **H5** owner; DEC-9 |
+
+**Validation of `e0dfa2121`** (tree `390d54fb8733b498`, receipts in the broker):
+- `typecheck` PASSED (`req_1793674568453259_85275`);
+- `typecheck:tests` PASSED (`req_1793674589777929_91620`);
+- module imports PASSED (`req_1793674635954384_99176`);
+- prebuild guards: service-client-principal, unauthenticated-side-effects, route-capabilities, runtime-mode-audience and governed-documents, all rc=0.
+
+**Baseline red seen:** `tests/access/orgParameterizedRpcBoundary.test.ts` › "no later migration grants a client EXECUTE…" flags committed `20261204090000_medical_rows_require_health_permission.sql`, which this sprint does not touch. Neither that test nor `supabase/migrations` differs from the deployed base `daf87893` (`git diff` empty), so it fails identically there. It is pre-existing.
+
+**No production build yet.** One build happens at the integrated checkpoint.
