@@ -57,6 +57,7 @@ export default function PublicTourJourneyClient({
     locationAddress,
     timezone,
     initialResolve,
+    formBrandOverride,
 }: {
     token: string;
     brand: ParticipantBrand | null;
@@ -66,6 +67,8 @@ export default function PublicTourJourneyClient({
     locationAddress: string | null;
     timezone: string;
     initialResolve: Record<string, unknown> | null;
+    /** The tour's brand for the form step (the school's), when it differs from the form's own. */
+    formBrandOverride?: ParticipantBrand | null;
 }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -158,7 +161,7 @@ export default function PublicTourJourneyClient({
             ) : null}
             {formOpened ? (
                 <div className={selection ? undefined : "hidden"} data-testid="public-tour-step-2" aria-hidden={!selection}>
-                    <FormEmbedClient token={token} initialResolve={initialResolve} tourRequest={tourRequest} />
+                    <FormEmbedClient token={token} initialResolve={initialResolve} tourRequest={tourRequest} brandOverride={formBrandOverride} />
                 </div>
             ) : null}
         </>

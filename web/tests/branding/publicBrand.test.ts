@@ -54,7 +54,7 @@ describe("precedence: form → location → organization → platform, per field
 
 describe("the form layer", () => {
     it("the builder's auto-saved Bend Pine on a legacy form is not an override", () => {
-        expect(formBrandLayer({ accent_color: "#00A283", brand_name: "" })).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
+        expect(formBrandLayer({ accent_color: "#00A283", brand_name: "" })).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null, tour_brand_source: null });
         // So the school's colour shows...
         expect(resolveEffectivePublicBrand({ form: formBrandLayer({ accent_color: "#00A283" }), organization: ORG }).accentColor).toBe("#1F6FEB");
         // ...and with no school brand it is Bend Pine again: no unbranded form changes.
@@ -85,9 +85,9 @@ describe("nothing unsafe reaches a public page", () => {
         const read = readPublicBrandValues({
             public_brand_v1: { display_name: "  A   B ", accent_color: "red;background:url(x)", logo_url: "javascript:alert(1)" },
         });
-        expect(read).toEqual({ display_name: "A B", accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
+        expect(read).toEqual({ display_name: "A B", accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null, tour_brand_source: null });
         expect(readPublicBrandValues({ public_brand_v1: { logo_url: "http://insecure.example.com/x.png" } }).logo_url).toBeNull();
-        expect(readPublicBrandValues(null)).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null });
+        expect(readPublicBrandValues(null)).toEqual({ display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null, tour_brand_source: null });
     });
 
     it("writes refuse malformed values instead of silently dropping them", () => {
@@ -96,7 +96,7 @@ describe("nothing unsafe reaches a public page", () => {
         expect(validatePublicBrandInput({ evil: 1 }).ok).toBe(false);
         expect(validatePublicBrandInput({ accent_color: "#abc", display_name: "", logo_url: null })).toEqual({
             ok: true,
-            values: { display_name: null, accent_color: "#AABBCC", logo_url: null, tour_cta_label: null, tour_cta_text_color: null },
+            values: { display_name: null, accent_color: "#AABBCC", logo_url: null, tour_cta_label: null, tour_cta_text_color: null, tour_brand_source: null },
         });
     });
 });

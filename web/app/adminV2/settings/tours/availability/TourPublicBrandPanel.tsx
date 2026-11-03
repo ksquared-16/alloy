@@ -16,6 +16,7 @@ import {
     PUBLIC_TOUR_CTA_DEFAULT,
     PUBLIC_TOUR_CTA_MAX,
     resolveEffectivePublicBrand,
+    resolveTourPublicBrand,
     type EffectivePublicBrand,
     type PublicBrandSource,
     type PublicBrandValues,
@@ -31,9 +32,13 @@ type PublishedForm = {
 type BrandResponse = {
     organization: PublicBrandValues;
     location: PublicBrandValues | null;
-    /** The form this location's published tour calendar opens into (its brand layer wins on that page). */
+    /** The form this location's published tour calendar opens into. */
     published_form: PublishedForm | null;
+    /** What the tour shows (`resolveTourPublicBrand`). */
     effective: EffectivePublicBrand;
+    /** What the published form shows on its OWN link (form → location → organization). */
+    published_form_brand?: EffectivePublicBrand | null;
+    tour_uses_form_brand?: boolean;
     can_edit_organization: boolean;
     can_edit_location: boolean;
 };
@@ -45,7 +50,17 @@ const SOURCE_LABEL: Record<PublicBrandSource, string> = {
     platform: "Alloy default",
 };
 
-const EMPTY: PublicBrandValues = { display_name: null, accent_color: null, logo_url: null, tour_cta_label: null, tour_cta_text_color: null };
+const EMPTY: PublicBrandValues = {
+    display_name: null,
+    accent_color: null,
+    logo_url: null,
+    tour_cta_label: null,
+    tour_cta_text_color: null,
+    tour_brand_source: null,
+};
+
+/** The brand fields this screen edits as text (the tour colour source is a choice, below). */
+type BrandKey = Exclude<keyof PublicBrandValues, "tour_brand_source">;
 
 const TREATMENT_NOTE: Record<ReturnType<typeof brandButtonColors>["treatment"], string> = {
     brand_light_text: "Buttons use your colour with white text.",
@@ -95,11 +110,19 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
 
     const editable = scopeLocationId ? data.can_edit_location : data.can_edit_organization;
     const publishedForm = scopeLocationId ? data.published_form : null;
-    const preview = resolveEffectivePublicBrand(
+    // Exactly what the tour shows (hosted page, its form step, website button): `resolveTourPublicBrand`.
+    const preview = resolveTourPublicBrand(
         scopeLocationId
             ? { form: publishedForm?.formLayer ?? null, location: cleaned(draft), organization: data.organization }
             : { organization: cleaned(draft) }
     );
+    // The attached form on its OWN link — shown for clarity, never applied to the tour unless chosen.
+    const formOwnBrand =
+        scopeLocationId && publishedForm?.formLayer
+            ? resolveEffectivePublicBrand({ form: publishedForm.formLayer, location: cleaned(draft), organization: data.organization })
+            : null;
+    const formSetsAccent = formOwnBrand?.sources.accentColor === "form";
+    const tourSource = draft.tour_brand_source ?? (scopeLocationId ? data.organization.tour_brand_source : null) ?? "location";
     // What this screen's own settings resolve to — what a form that sets no brand of its own shows.
     const withoutForm = resolveEffectivePublicBrand(
         scopeLocationId ? { location: cleaned(draft), organization: data.organization } : { organization: cleaned(draft) }
@@ -109,7 +132,9 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
     // The website booking button: the same pair, with the school's chosen text colour where it reads.
     const ctaPair = brandCtaButtonColors(preview.accentColor, preview.tourCtaTextColor);
     const inherited = scopeLocationId ? data.organization : null;
-    const anySet = Boolean(draft.display_name || draft.accent_color || draft.logo_url || draft.tour_cta_label || draft.tour_cta_text_color);
+    const anySet = Boolean(
+        draft.display_name || draft.accent_color || draft.logo_url || draft.tour_cta_label || draft.tour_cta_text_color || draft.tour_brand_source
+    );
 
     const save = async () => {
         setBusy(true);
@@ -136,7 +161,7 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
         }
     };
 
-    const field = (key: keyof PublicBrandValues, label: string, placeholder: string, extra?: { maxLength?: number; hint?: ReactNode }) => (
+    const field = (key: BrandKey, label: string, placeholder: string, extra?: { maxLength?: number; hint?: ReactNode }) => (
         <label className="block text-xs">
             {label}
             <input
@@ -153,8 +178,8 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
             />
             {sourceKey(preview, key) === "form" ?
                 <span className="mt-0.5 block text-[11px] text-amber-900" data-testid={`tours-brand-${key}-form-wins`}>
-                    Families see {sourceOf(preview, key, publishedForm?.formTitle)} — it takes precedence here. This setting
-                    gives {sourceOf(withoutForm, key)} to forms that don&apos;t set their own.
+                    Families see {sourceOf(preview, key, publishedForm?.formTitle)}, because Tour colours uses the form&apos;s
+                    branding. With this location&apos;s branding they would see {sourceOf(withoutForm, key)}.
                 </span>
             :   <span className="mt-0.5 block text-[11px] text-alloy-midnight/50" data-testid={`tours-brand-${key}-shown`}>
                     Shown to families: {sourceOf(preview, key)}
@@ -173,7 +198,7 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
             </p>
             {err ? <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">{err}</p> : null}
             {scopeLocationId ?
-                <PublishedFormNote form={publishedForm} formWins={formWins} />
+                <PublishedFormNote form={publishedForm} formWins={formWins} formAccent={formSetsAccent ? formOwnBrand!.accentColor : null} tourSource={tourSource} />
             :   null}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
@@ -203,6 +228,51 @@ export default function TourPublicBrandPanel({ scopeLocationId, scopeLabel }: { 
                         <p className="text-[11px] text-alloy-midnight/60" data-testid="tours-brand-contrast-note">
                             {TREATMENT_NOTE[pair.treatment]} Button text contrast {contrastRatio(pair.fill, pair.ink).toFixed(1)}:1 (needs 4.5:1).
                         </p>
+                    </fieldset>
+                    <fieldset className="space-y-1.5 rounded-lg border border-alloy-stone/15 bg-white p-3" data-testid="tours-brand-source">
+                        <legend className="px-1 text-xs font-semibold text-alloy-midnight/80">Tour colours</legend>
+                        <label className="flex items-start gap-2 text-xs">
+                            <input
+                                type="radio"
+                                name="tour-brand-source"
+                                className="mt-0.5"
+                                checked={tourSource === "location"}
+                                disabled={!editable}
+                                onChange={() => {
+                                    setSaved(false);
+                                    setDraft((d) => ({ ...d, tour_brand_source: "location" }));
+                                }}
+                                data-testid="tours-brand-source-location"
+                            />
+                            <span>
+                                {scopeLocationId ? "Use this location's branding" : "Use the school's branding"} (recommended)
+                                <span className="block text-[11px] text-alloy-midnight/55">
+                                    The calendar, the form step inside the tour and the website button all use the colours on this screen.
+                                    An attached form keeps its own colours for its own form link.
+                                </span>
+                            </span>
+                        </label>
+                        <label className="flex items-start gap-2 text-xs">
+                            <input
+                                type="radio"
+                                name="tour-brand-source"
+                                className="mt-0.5"
+                                checked={tourSource === "form"}
+                                disabled={!editable}
+                                onChange={() => {
+                                    setSaved(false);
+                                    setDraft((d) => ({ ...d, tour_brand_source: "form" }));
+                                }}
+                                data-testid="tours-brand-source-form"
+                            />
+                            <span>
+                                Use the attached form&apos;s own branding
+                                <span className="block text-[11px] text-alloy-midnight/55">
+                                    Where the published form sets its own colour, name or logo, the tour shows those instead. Changes to the
+                                    form reach the tour only when the form is published again.
+                                </span>
+                            </span>
+                        </label>
                     </fieldset>
                     <fieldset className="space-y-2 rounded-lg border border-alloy-stone/15 bg-white p-3">
                         <legend className="px-1 text-xs font-semibold text-alloy-midnight/80">Booking button</legend>
@@ -339,11 +409,12 @@ function cleaned(v: PublicBrandValues): PublicBrandValues {
         logo_url: v.logo_url && /^https:\/\//i.test(v.logo_url.trim()) ? v.logo_url.trim() : null,
         tour_cta_label: normalizeTourCtaLabel(v.tour_cta_label ?? ""),
         tour_cta_text_color: normalizeBrandColor(v.tour_cta_text_color ?? ""),
+        tour_brand_source: v.tour_brand_source === "form" || v.tour_brand_source === "location" ? v.tour_brand_source : null,
     };
 }
 
-const BRAND_KEYS: (keyof PublicBrandValues)[] = ["display_name", "logo_url", "accent_color", "tour_cta_label", "tour_cta_text_color"];
-const FIELD_NOUN: Record<keyof PublicBrandValues, string> = {
+const BRAND_KEYS: BrandKey[] = ["display_name", "logo_url", "accent_color", "tour_cta_label", "tour_cta_text_color"];
+const FIELD_NOUN: Record<BrandKey, string> = {
     display_name: "school name",
     logo_url: "logo",
     accent_color: "brand colour",
@@ -351,7 +422,7 @@ const FIELD_NOUN: Record<keyof PublicBrandValues, string> = {
     tour_cta_text_color: "button text colour",
 };
 
-function sourceKey(brand: EffectivePublicBrand, key: keyof PublicBrandValues): PublicBrandSource {
+function sourceKey(brand: EffectivePublicBrand, key: BrandKey): PublicBrandSource {
     return key === "display_name" ? brand.sources.displayName
         : key === "accent_color" ? brand.sources.accentColor
         : key === "logo_url" ? brand.sources.logoUrl
@@ -359,13 +430,26 @@ function sourceKey(brand: EffectivePublicBrand, key: keyof PublicBrandValues): P
         : brand.sources.tourCtaLabel;
 }
 
-/** Which form the calendar opens into, and which of its own brand settings families see instead. */
-function PublishedFormNote({ form, formWins }: { form: PublishedForm | null; formWins: (keyof PublicBrandValues)[] }) {
+/** Which form the calendar opens into, whose colours the tour uses, and why. */
+function PublishedFormNote({
+    form,
+    formWins,
+    formAccent,
+    tourSource,
+}: {
+    form: PublishedForm | null;
+    formWins: BrandKey[];
+    /** The form's own colour where it sets one (what its own link shows). */
+    formAccent: string | null;
+    tourSource: "location" | "form";
+}) {
     if (!form) {
         return (
             <p className="text-[11px] text-alloy-midnight/60" data-testid="tours-brand-published-form">
-                No tour calendar is published here yet. If the form you publish it on sets its own branding, families see the
-                form&apos;s instead of these settings.
+                No tour calendar is published here yet.{" "}
+                {tourSource === "form" ?
+                    "When you attach a form, its own branding replaces these settings on the tour, as chosen under Tour colours."
+                :   "Attaching a form later doesn't change these colours; the tour keeps this location's branding."}
             </p>
         );
     }
@@ -373,20 +457,25 @@ function PublishedFormNote({ form, formWins }: { form: PublishedForm | null; for
         <p
             className={`rounded-lg border px-3 py-2 text-xs ${formWins.length ? "border-amber-200 bg-amber-50 text-amber-950" : "border-alloy-stone/20 bg-white text-alloy-midnight/75"}`}
             data-testid="tours-brand-published-form"
+            data-tour-brand-source={tourSource}
         >
             The tour calendar opens into the form “{form.formTitle}”.{" "}
             {formWins.length ?
                 <>
-                    That form sets its own {listInWords(formWins.map((k) => FIELD_NOUN[k]))}, which families see instead of the
-                    setting below. To change that, open the form in Forms Studio › Branding and choose “Use the school&apos;s
-                    branding”, then publish it again.
+                    Under Tour colours you chose the form&apos;s own branding, so families see its{" "}
+                    {listInWords(formWins.map((k) => FIELD_NOUN[k]))} instead of the settings below.
                 </>
-            :   "It uses this location's brand, so families see the settings below."}
+            : formAccent ?
+                <>
+                    That form has its own colour ({formAccent}), used only when the form is opened on its own link. The tour —
+                    calendar, form step and website button — uses the settings below.
+                </>
+            :   "It sets no branding of its own; the tour uses the settings below."}
         </p>
     );
 }
 
-function sourceOf(brand: EffectivePublicBrand, key: keyof PublicBrandValues, formTitle?: string | null): string {
+function sourceOf(brand: EffectivePublicBrand, key: BrandKey, formTitle?: string | null): string {
     const source = sourceKey(brand, key);
     const value =
         key === "display_name" ? brand.displayName

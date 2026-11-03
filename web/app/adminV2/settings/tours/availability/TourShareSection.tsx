@@ -10,6 +10,7 @@ import { brandCtaButtonColors, PUBLIC_BRAND_PLATFORM_ACCENT, PUBLIC_TOUR_CTA_DEF
 import {
     buildTourCalendarIframeSnippet,
     buildTourCtaButtonSnippet,
+    describeTourCalendarReadiness,
     tourCalendarAttachOptions,
     type TourCalendarShareLink,
 } from "@/lib/tours/publicCalendar/tourCalendarShare";
@@ -127,13 +128,36 @@ export default function TourShareSection({
                 <div className="h-16 animate-pulse rounded-lg bg-alloy-midnight/[0.04]" aria-busy="true" />
             :   null}
 
-            {published.map((link) => (
-                <article key={link.linkId} className="space-y-3 rounded-lg border border-alloy-stone/15 bg-white p-3" data-testid="tours-share-published">
+            {published.map((link) => {
+                const ready = describeTourCalendarReadiness(link.readiness);
+                return (
+                <article
+                    key={link.linkId}
+                    className="space-y-3 rounded-lg border border-alloy-stone/15 bg-white p-3"
+                    data-testid="tours-share-published"
+                    data-tour-calendar-readiness={link.readiness?.state ?? "unmeasured"}
+                >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                            <p className="text-sm font-semibold text-alloy-midnight">
-                                Tour calendar is live
-                                <span className="ml-2 rounded bg-alloy-bend-pine/[0.14] px-1.5 text-[11px] font-semibold text-alloy-bend-pine">Published</span>
+                            <p className="text-sm font-semibold text-alloy-midnight" data-testid="tours-share-readiness-title">
+                                {ready.title}
+                                <span className="ml-2 rounded bg-alloy-stone/20 px-1.5 text-[11px] font-semibold text-alloy-midnight/70">Published</span>
+                                <span
+                                    className={`ml-1.5 rounded px-1.5 text-[11px] font-semibold ${
+                                        ready.tone === "live" ? "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                        : ready.tone === "limited" ? "bg-alloy-midnight/[0.08] text-alloy-midnight/80"
+                                        : "bg-amber-100 text-amber-900"
+                                    }`}
+                                    data-testid="tours-share-readiness-badge"
+                                >
+                                    {ready.tone === "live" ? "Bookable" : ready.tone === "limited" ? "Website only" : "Not bookable"}
+                                </span>
+                            </p>
+                            <p
+                                className={`mt-0.5 text-xs ${ready.tone === "blocked" ? "text-amber-900" : "text-alloy-midnight/70"}`}
+                                data-testid="tours-share-readiness-detail"
+                            >
+                                {ready.detail}
                             </p>
                             <p className="config-typo-sublabel">
                                 Step 2 is the form “{link.formTitle}”{distinctLabel(link) ? ` (${distinctLabel(link)})` : ""}.
@@ -147,8 +171,8 @@ export default function TourShareSection({
                                     {brandSourcePhrase(brand.sources.displayName, link.formTitle)}) in{" "}
                                     <span className="font-mono">{brand.accentColor}</span> ({brandSourcePhrase(brand.sources.accentColor, link.formTitle)}).
                                     {brand.sources.displayName === "form" || brand.sources.accentColor === "form" || brand.sources.logoUrl === "form" ?
-                                        " The form's own branding takes precedence over Booking experience."
-                                    :   null}
+                                        " Booking experience › Tour colours is set to use the form's own branding."
+                                    :   " The tour uses this location's branding (Booking experience), not the form's."}
                                 </p>
                             :   null}
                         </div>
@@ -163,7 +187,11 @@ export default function TourShareSection({
                         <>
                             <ShareRow
                                 label="Hosted booking page"
-                                hint="Send this to families or link to it from anywhere."
+                                hint={
+                                    link.allowedEmbedOrigins.length ?
+                                        `Opens only from ${link.allowedEmbedOrigins.join(", ")} — link to it from there.`
+                                    :   "Send this to families or link to it from anywhere."
+                                }
                                 value={link.calendarUrl}
                                 testId="tours-share-url"
                                 copied={copied === `${link.linkId}:url`}
@@ -215,7 +243,8 @@ export default function TourShareSection({
                         </p>
                     }
                 </article>
-            ))}
+                );
+            })}
 
             {data && published.length === 0 ?
                 <div className="rounded-lg border border-dashed border-alloy-bend-pine/30 p-3 text-sm" data-testid="tours-share-unpublished">

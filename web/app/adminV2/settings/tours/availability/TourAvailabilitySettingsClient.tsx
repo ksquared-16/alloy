@@ -178,9 +178,11 @@ export default function TourAvailabilitySettingsClient({
     const groups = useMemo(() => groupTourRulesIntoSchedules(rules, scopeLocationId), [rules, scopeLocationId]);
     const repeats = useMemo(() => findRepeatedTourSchedules(groups), [groups]);
 
+    // Invalidate the shared location cache BEFORE reloading: a location's first schedule otherwise
+    // reloaded the cached empty snapshot, hid the new schedule and told Share "no active schedule".
     const committed = async (message?: string) => {
-        await loadRules();
         await onMutationCommitted?.();
+        await loadRules();
         setNotice(message ?? null);
     };
 
@@ -201,6 +203,36 @@ export default function TourAvailabilitySettingsClient({
                 throw new Error("Tour availability save was not confirmed by the authoritative response.");
             }
             await committed();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Activate / deactivate a named schedule in place: the same schedule, days, times and settings,
+     * only its status flips (the schedule PUT reconciles the existing rows — nothing is duplicated).
+     */
+    const toggleSchedule = async (g: TourScheduleGroup) => {
+        if (!g.scheduleId) return;
+        const next = !g.is_active;
+        if (g.mixedSettings && !confirm(`Some days of "${g.name}" have different settings. ${next ? "Activating" : "Deactivating"} it applies the first day's settings to every day. Continue?`)) return;
+        setSaving(true);
+        try {
+            const draft = { ...tourScheduleGroupToDraft(g), is_active: next };
+            const res = await fetch(`/api/admin/tours/schedules/${encodeURIComponent(g.scheduleId)}`, {
+                method: "PUT",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ location_id: scopeLocationId, schedule: draft }),
+            });
+            const j = (await res.json().catch(() => ({}))) as { schedule_id?: string; rules?: { is_active?: boolean }[]; error?: string };
+            if (!res.ok) throw new Error(j.error ?? res.statusText);
+            if (j.schedule_id !== g.scheduleId || (j.rules?.length ?? 0) !== draft.days.length * draft.windows.length || j.rules!.some((r) => r.is_active !== next)) {
+                throw new Error("Tour schedule status was not confirmed by the authoritative response.");
+            }
+            await committed(next ? `"${g.name}" is active — families can book its times.` : `"${g.name}" is inactive — its times are hidden from families.`);
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -324,7 +356,7 @@ export default function TourAvailabilitySettingsClient({
                                             setEditor({ mode: "create", draft: duplicateTourScheduleDraft(g) });
                                         }}
                                         onDelete={() => void removeGroup(g)}
-                                        onToggle={g.scheduleId ? null : () => void toggleRule(g.rules[0]!)}
+                                        onToggle={g.scheduleId ? () => void toggleSchedule(g) : () => void toggleRule(g.rules[0]!)}
                                     >
                                         {editingRule && g.rules[0]?.id === editingRule.id ?
                                             <TourWindowForm
@@ -437,12 +469,23 @@ function ScheduleCard({
                 <div className="min-w-0 space-y-1.5">
                     <div className="font-semibold text-alloy-midnight">
                         {group.name}
+                        {/* Status (are its times offered?) and approval (who confirms a request?) are separate. */}
+                        {group.is_active ?
+                            <span className="ml-2 rounded bg-alloy-bend-pine/[0.14] px-1.5 text-[11px] font-semibold text-alloy-bend-pine" data-testid="tours-schedule-status" data-status="active">
+                                Active
+                            </span>
+                        :   <span className="ml-2 rounded bg-alloy-stone/25 px-1.5 text-[11px] font-semibold text-alloy-midnight/65" data-testid="tours-schedule-status" data-status="inactive">
+                                Inactive — hidden from families
+                            </span>
+                        }
                         {group.approval_required ?
-                            <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">needs approval</span>
-                        :   <span className="ml-2 rounded bg-alloy-bend-pine/[0.14] px-1.5 text-[11px] font-semibold text-alloy-bend-pine">auto-confirm</span>}
-                        {!group.is_active ?
-                            <span className="ml-2 text-xs text-alloy-midnight/45">inactive</span>
-                        :   null}
+                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900" data-testid="tours-schedule-approval">
+                                Staff approve bookings
+                            </span>
+                        :   <span className="ml-1.5 rounded bg-alloy-stone/15 px-1.5 text-[11px] font-semibold text-alloy-midnight/65" data-testid="tours-schedule-approval">
+                                Bookings auto-confirm
+                            </span>
+                        }
                     </div>
                     <div className="flex flex-wrap gap-1" aria-label={`Days: ${describeDays(group.days)}`} data-testid="tours-schedule-days">
                         {TOUR_WEEKDAY_DISPLAY_ORDER.map((d) => {
@@ -486,7 +529,7 @@ function ScheduleCard({
                         {duplicateLabel}
                     </ConfigurationSecondaryButton>
                     {onToggle ?
-                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle}>
+                        <ConfigurationSecondaryButton className="px-2 py-1" disabled={disabled} onClick={onToggle} data-testid="tours-schedule-toggle-active">
                             {group.is_active ? "Deactivate" : "Activate"}
                         </ConfigurationSecondaryButton>
                     :   null}
@@ -727,16 +770,36 @@ function ScheduleEditor({
                     Families per time
                     <input type="number" min={1} className="config-runtime-input mt-1" value={draft.max_bookings_per_slot} onChange={(e) => set("max_bookings_per_slot", Number(e.target.value))} data-testid="locations-tour-max-bookings" />
                 </label>
-                <div className="space-y-1 text-xs">
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={draft.approval_required} onChange={(e) => set("approval_required", e.target.checked)} data-testid="locations-tour-approval" />
-                        Staff approve each booking
+                <fieldset className="space-y-1 text-xs sm:col-span-2" data-testid="tours-schedule-status-choice">
+                    <legend className="font-medium text-alloy-midnight/80">Status</legend>
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-schedule-status" className="mt-0.5" checked={draft.is_active} onChange={() => set("is_active", true)} data-testid="locations-tour-active" />
+                        <span>
+                            Active <span className="text-alloy-midnight/55">— families can book these times as soon as you save</span>
+                        </span>
                     </label>
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={draft.is_active} onChange={(e) => set("is_active", e.target.checked)} data-testid="locations-tour-active" />
-                        Active
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-schedule-status" className="mt-0.5" checked={!draft.is_active} onChange={() => set("is_active", false)} data-testid="locations-tour-inactive" />
+                        <span>
+                            Inactive (draft) <span className="text-alloy-midnight/55">— saved, but families can&apos;t see or book these times</span>
+                        </span>
                     </label>
-                </div>
+                    {!draft.is_active ?
+                        <p className="text-[11px] text-amber-900" data-testid="tours-schedule-inactive-warning">
+                            This schedule will be saved inactive: its times stay hidden until you activate it.
+                        </p>
+                    :   null}
+                </fieldset>
+                <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                    <input type="checkbox" className="mt-0.5" checked={draft.approval_required} onChange={(e) => set("approval_required", e.target.checked)} data-testid="locations-tour-approval" />
+                    <span>
+                        Bookings require approval
+                        <span className="block text-[11px] text-alloy-midnight/55">
+                            Families still see and request these times; staff approve each booking afterward. It doesn&apos;t hide times or
+                            deactivate the schedule.
+                        </span>
+                    </span>
+                </label>
                 <p className="text-[11px] text-alloy-midnight/60 sm:col-span-2" data-testid="tours-schedule-preview">
                     {perDay.length ?
                         `Each selected day offers ${perDay.length} tour ${perDay.length === 1 ? "time" : "times"}: ${perDay.join(", ")} — ${perDay.length * draft.days.length} a week.`
@@ -856,16 +919,30 @@ function TourWindowForm({
                     Families per time
                     <input type="number" min={1} className="config-runtime-input mt-1" value={max_bookings_per_slot} onChange={(e) => setMax(Number(e.target.value))} data-testid="locations-tour-max-bookings" />
                 </label>
-                <div className="space-y-1 text-xs">
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={approval_required} onChange={(e) => setAppr(e.target.checked)} data-testid="locations-tour-approval" />
-                        Staff approve each booking
+                <fieldset className="space-y-1 text-xs sm:col-span-2">
+                    <legend className="font-medium text-alloy-midnight/80">Status</legend>
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-window-status" className="mt-0.5" checked={is_active} onChange={() => setIsActive(true)} data-testid="locations-tour-active" />
+                        <span>
+                            Active <span className="text-alloy-midnight/55">— families can book this window</span>
+                        </span>
                     </label>
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={is_active} onChange={(e) => setIsActive(e.target.checked)} data-testid="locations-tour-active" />
-                        Active tour window
+                    <label className="flex items-start gap-2">
+                        <input type="radio" name="tour-window-status" className="mt-0.5" checked={!is_active} onChange={() => setIsActive(false)} data-testid="locations-tour-inactive" />
+                        <span>
+                            Inactive <span className="text-alloy-midnight/55">— saved, but hidden from families</span>
+                        </span>
                     </label>
-                </div>
+                </fieldset>
+                <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                    <input type="checkbox" className="mt-0.5" checked={approval_required} onChange={(e) => setAppr(e.target.checked)} data-testid="locations-tour-approval" />
+                    <span>
+                        Bookings require approval
+                        <span className="block text-[11px] text-alloy-midnight/55">
+                            Families still see and request these times; staff approve each booking afterward.
+                        </span>
+                    </span>
+                </label>
             </div>
             <div className="mt-3 flex gap-2">
                 <ConfigurationPrimaryButton disabled={disabled || submitting} onClick={() => void submit()} data-testid="locations-tour-save">

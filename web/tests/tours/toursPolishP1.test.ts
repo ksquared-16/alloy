@@ -203,7 +203,7 @@ describe("P1-B — configurable tour CTA", () => {
     it("is validated as one line of plain text, max 40, and survives a stored round trip", () => {
         expect(validatePublicBrandInput({ tour_cta_label: "  Book   a visit " })).toEqual({
             ok: true,
-            values: { display_name: null, accent_color: null, logo_url: null, tour_cta_label: "Book a visit", tour_cta_text_color: null },
+            values: { display_name: null, accent_color: null, logo_url: null, tour_cta_label: "Book a visit", tour_cta_text_color: null, tour_brand_source: null },
         });
         expect(validatePublicBrandInput({ tour_cta_label: "<b>Hi</b>" })).toMatchObject({ ok: false });
         expect(validatePublicBrandInput({ tour_cta_label: "x".repeat(41) })).toMatchObject({ ok: false });
@@ -213,7 +213,9 @@ describe("P1-B — configurable tour CTA", () => {
 
     it("is the public calendar's heading, resolved server-side for the link's own location", () => {
         const page = read("app/tours/[token]/page.tsx");
-        expect(page).toContain("resolveLocationPublicBrand(supabase, { orgId: calendar.value.orgId, locationId: calendar.value.locationId })");
+        // The school's layers for the link's own location (location → organization → platform).
+        expect(page).toContain("loadPublicBrandLayers(supabase, { orgId: calendar.value.orgId, locationId: calendar.value.locationId })");
+        expect(page).toContain("ctaLabel = school.tourCtaLabel");
         const client = read("app/tours/[token]/PublicTourJourneyClient.tsx");
         expect(client).toContain("{ctaLabel}");
         expect(client).not.toContain(">Book a tour<");

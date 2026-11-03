@@ -416,7 +416,9 @@ export function tourScheduleGroupToDraft(group: TourScheduleGroup): TourSchedule
 export function duplicateTourScheduleDraft(group: TourScheduleGroup): TourScheduleDraft {
     const draft = tourScheduleGroupToDraft(group);
     const name = `Copy of ${group.name}`;
-    return { ...draft, name: name.slice(0, TOUR_SCHEDULE_NAME_MAX) };
+    // A copy is a NEW schedule: it starts Active like every new schedule, never silently inheriting the
+    // source's Inactive status (the editor shows the status; choose Inactive there to keep it hidden).
+    return { ...draft, name: name.slice(0, TOUR_SCHEDULE_NAME_MAX), is_active: true };
 }
 
 export type TourScheduleOverlap = { day: number; window: TourScheduleWindow; otherRuleId: string; otherName: string };

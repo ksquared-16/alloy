@@ -3,9 +3,9 @@ import { headers } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { buildPublicFormResolvePayload } from "@/lib/public/forms/buildPublicFormResolvePayload";
 import { embedOriginFromHeaders } from "@/lib/public/forms/embedOrigin";
-import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
-import { resolveLocationPublicBrand } from "@/lib/branding/loadPublicBrand";
-import { PUBLIC_TOUR_CTA_DEFAULT } from "@/lib/branding/publicBrand";
+import { participantBrandFromEffective, type ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
+import { loadPublicBrandLayers } from "@/lib/branding/loadPublicBrand";
+import { PUBLIC_TOUR_CTA_DEFAULT, resolveEffectivePublicBrand, tourBrandUsesForm } from "@/lib/branding/publicBrand";
 import {
     PUBLIC_TOUR_CALENDAR_UNAVAILABLE_MESSAGE,
     resolvePublicTourCalendar,
@@ -68,14 +68,24 @@ export default async function PublicTourPage({ params }: { params: Promise<{ tok
     } catch {
         /* the form runtime fetches on its own */
     }
-    const brand = (initialResolve?.brand ?? null) as ParticipantBrand | null;
-    // The school's own words for its tour call to action (location → organization → platform).
+    /*
+     * The TOUR's brand (`resolveTourPublicBrand`): the school's own — location → organization →
+     * platform — on the calendar AND on the form step inside the tour. The attached form's published
+     * brand leads only where the school explicitly chose `tour_brand_source: "form"`; then it is the
+     * form's resolve brand, exactly as on the form's own link. The form's configuration is not touched.
+     */
+    const formBrand = (initialResolve?.brand ?? null) as ParticipantBrand | null;
+    let brand: ParticipantBrand | null = formBrand;
     let ctaLabel = PUBLIC_TOUR_CTA_DEFAULT;
     try {
-        ctaLabel = (await resolveLocationPublicBrand(supabase, { orgId: calendar.value.orgId, locationId: calendar.value.locationId })).tourCtaLabel;
+        const layers = await loadPublicBrandLayers(supabase, { orgId: calendar.value.orgId, locationId: calendar.value.locationId });
+        const school = resolveEffectivePublicBrand(layers);
+        ctaLabel = school.tourCtaLabel;
+        if (!tourBrandUsesForm(layers)) brand = participantBrandFromEffective(school);
     } catch {
-        /* the platform default never breaks the page */
+        /* the platform defaults never break the page */
     }
+    if (initialResolve && brand !== formBrand) initialResolve = { ...initialResolve, brand };
 
     return (
         <Suspense fallback={null}>
@@ -87,6 +97,7 @@ export default async function PublicTourPage({ params }: { params: Promise<{ tok
                 locationAddress={calendar.value.locationAddress}
                 timezone={calendar.value.timezone}
                 initialResolve={initialResolve}
+                formBrandOverride={brand !== formBrand ? brand : undefined}
             />
         </Suspense>
     );

@@ -47,7 +47,63 @@ export type TourCalendarShareLink = {
     allowedEmbedOrigins: string[];
     /** When the link was created — what tells two links of one form apart. */
     createdAt: string | null;
+    /**
+     * Whether a family opening the published calendar can book (`measureTourCalendarReadiness`, the
+     * public page's own checks). Null when the calendar is not published or was not measured.
+     */
+    readiness?: TourCalendarReadiness | null;
 };
+
+/** Why a published calendar is not bookable — the public resolver's codes, plus the one it folds away. */
+export type TourCalendarReadinessCode =
+    | "NOT_FOUND"
+    | "NOT_PUBLISHED"
+    | "LOCATION_UNAVAILABLE"
+    | "INACTIVE"
+    | "EXPIRED"
+    | "NO_PUBLISHED_VERSION"
+    | "ORIGIN_FORBIDDEN"
+    | "NO_ACTIVE_SCHEDULE";
+
+export type TourCalendarReadiness = {
+    /** bookable: anyone with the link · restricted: only from the named websites · not_bookable: no one. */
+    state: "bookable" | "restricted" | "not_bookable";
+    code: TourCalendarReadinessCode | null;
+    restrictedToOrigins: string[];
+};
+
+/**
+ * What the Share screen says about a published calendar. "Live" is said only when the public page
+ * would actually serve it; saved configuration alone is "Published — not bookable yet".
+ */
+export function describeTourCalendarReadiness(r: TourCalendarReadiness | null | undefined): {
+    tone: "live" | "limited" | "blocked";
+    title: string;
+    detail: string;
+} {
+    if (!r) return { tone: "blocked", title: "Published — not checked", detail: "Its booking page could not be checked. Reload to try again." };
+    if (r.state === "bookable") {
+        return { tone: "live", title: "Tour calendar is live", detail: "Families who open this link can choose a time and request a tour." };
+    }
+    if (r.state === "restricted") {
+        return {
+            tone: "limited",
+            title: "Live on your website only",
+            detail: `It opens only when linked or framed from ${r.restrictedToOrigins.join(", ")}. Opening the address directly — or from this screen — shows “not available”.`,
+        };
+    }
+    const why: Record<TourCalendarReadinessCode, string> = {
+        NO_ACTIVE_SCHEDULE: "This location has no active tour schedule. Activate one under Availability — families then see its times.",
+        LOCATION_UNAVAILABLE: "This location is inactive or archived.",
+        NO_PUBLISHED_VERSION: "The attached form has no published version. Publish it in Forms Studio.",
+        NOT_PUBLISHED: "This link can't carry a tour calendar (it must be a location inquiry link that opens a new inquiry).",
+        INACTIVE: "This form link is turned off.",
+        EXPIRED: "This form link has expired.",
+        NOT_FOUND: "This link has no shareable address. Create a new location link in Forms Studio.",
+        ORIGIN_FORBIDDEN: "The booking page refuses visits from where it was checked.",
+    };
+    return { tone: "blocked", title: "Published — not bookable yet", detail: why[r.code ?? "NOT_FOUND"] };
+}
 
 /** A location's intake links, as share rows. Links for other locations are never returned. */
 export function projectTourCalendarShareLinks(
