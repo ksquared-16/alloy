@@ -195,6 +195,18 @@ export const PUBLIC_SCOPES = {
          * (`document_link_issued`) before it is minted and expires in ten minutes.
          */
     },
+    "documents.write": {
+        scope: "documents.write",
+        access: "write",
+        summary: "Upload standard documents, file them to visible children, households and parents or guardians, and add or remove their secondary links.",
+        alloyAuthority: "lib/documents/filing/documentFiling (commitDocumentFilingAsApplication) and lib/documents/external/externalDocumentWrites — the staff filing rules and transaction, the D9.1 visibility authorities, standard sensitivity only",
+        /*
+         * D9.2 (user-ratified 2026-11-03, Q1–Q8). A write never implies a read: an installation granted only
+         * `documents.write` gets ids and states back, never content or a link. Bytes pass through Alloy and are
+         * screened before storage (Q1); a review cannot be submitted or pre-accepted under this scope (Q3); the
+         * primary owner never changes; nothing is deleted.
+         */
+    },
     "attendance.write": {
         scope: "attendance.write",
         access: "write",
@@ -273,6 +285,23 @@ export const PUBLIC_OPERATIONS = {
         operationId: "getDocumentDownloadLink",
         scope: "documents.read",
         route: "/api/v1/documents/{id}/download-link",
+    },
+    /*
+     * D9.2 — documents are written through named intents like every other governed operation (no PUT / DELETE):
+     * an upload is created, its bytes are sent, the received document is filed, a secondary link is added or removed.
+     */
+    createDocumentUpload: { operationId: "createDocumentUpload", scope: "documents.write", route: "/api/v1/document-uploads" },
+    completeDocumentUpload: {
+        operationId: "completeDocumentUpload",
+        scope: "documents.write",
+        route: "/api/v1/document-uploads/content",
+    },
+    fileDocument: { operationId: "fileDocument", scope: "documents.write", route: "/api/v1/document-filings" },
+    linkDocumentSubject: { operationId: "linkDocumentSubject", scope: "documents.write", route: "/api/v1/document-subjects" },
+    unlinkDocumentSubject: {
+        operationId: "unlinkDocumentSubject",
+        scope: "documents.write",
+        route: "/api/v1/document-subjects/unlink",
     },
 
     /*

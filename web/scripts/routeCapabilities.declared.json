@@ -5988,6 +5988,36 @@
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Organization configuration only (active categories and published types); no subject data."
       }
     },
+    "app/api/v1/document-filings/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Delegates to commitDocumentFilingAsApplication: the staff filing rules and the document_file transaction, admitting only a document this installation received, subjects visible through the D9.1 external authorities (child, household, active parent/guardian), standard resulting sensitivity, never a pre-accepted review, requested sensitivity or processing case; every not-found is one 404. Audit names the application, installation and credential; p_actor is NULL."
+      }
+    },
+    "app/api/v1/document-subjects/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Adds a context link only, on a document the installation can read (listExternalDocuments) to a subject it can see (subjectVisibility); the primary owner is never changed (409). recordDocumentAudit document_subject_changed before the change; document_link_subject with a NULL actor."
+      }
+    },
+    "app/api/v1/document-subjects/unlink/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Removes a context link only; the owner link is refused 409 primary_subject_immutable. Same visibility and audit-first rules as linking; document_unlink_subject with a NULL actor. Nothing is deleted."
+      }
+    },
+    "app/api/v1/document-uploads/content/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Raw bytes, at most 4 MiB, refused 413 before perform when declared larger. The upload id must verify, belong to this installation and match the bytes' size and SHA-256. The admin upload's checks in its order: storable format, bytes match the format, D1c-1 structural screening before storage, recordDocumentAudit (document_upload_authorized naming application, installation and credential) before the object is written, then one unfiled documents row marked received_via this installation. The object path carries the SHA-256; an insert failure removes the object. Retries converge on the same document id."
+      }
+    },
+    "app/api/v1/document-uploads/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Writes nothing: answers an opaque upload id signed (purpose-separated HMAC over an existing platform secret) over organization, installation, declared format, size and SHA-256, expiring in one hour."
+      }
+    },
     "app/api/v1/documents/[id]/download-link/route.ts": {
       "GET": {
         "status": "none",

@@ -67,6 +67,10 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Family documents",
         detail: "Read standard documents filed for visible children, their households and their parents or guardians, and download them through links that expire in ten minutes. Medical, identity, custody and restricted documents are never shared.",
     },
+    "documents.write": {
+        title: "Send family documents",
+        detail: "Upload standard documents and file them to visible children, their households and their parents or guardians, and add or remove their secondary links. Files are screened before they are stored. Approving a document, changing who it belongs to and deleting it are never allowed, and medical, identity, custody and restricted document types cannot be filed.",
+    },
     "relationships.read": {
         title: "Parents and guardians",
         detail: "Read visible child-adult relationships and effective pickup authority. Reasons are never shared — only the answer.",

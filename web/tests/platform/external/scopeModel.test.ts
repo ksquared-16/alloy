@@ -27,6 +27,8 @@ const GRANTABLE = [
     "children.read",
     // D9.1, user-approved 2026-10-30: read-only standard documents of visible children, households and guardians.
     "documents.read",
+    // D9.2, user-ratified 2026-11-03 (Q1–Q8): upload, file and link standard documents. Separate from documents.read.
+    "documents.write",
     "enrollment.read",
     "enrollment.write",
     "households.read",
