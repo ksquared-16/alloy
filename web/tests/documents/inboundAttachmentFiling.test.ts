@@ -298,11 +298,12 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         expect(out[0]).toMatchObject({ reasons: ["attachment_not_stored"] });
     });
 
-    it("an explicit structural-only policy releases on D1c-1 alone", async () => {
+    it("structural screening alone never releases: without a scanner nothing is retrieved, stored or opened", async () => {
         const mem = memoryStorage({ "att-1": pdf() });
         const cases = memoryCases();
-        const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: UNAVAILABLE_MALWARE_SCAN, processing: cases.deps, policy: { requireMalwareScan: false } }, message());
-        expect(out[0].outcome).toBe("case_opened");
+        const deps = { storage: mem.storage, malware: UNAVAILABLE_MALWARE_SCAN, processing: cases.deps, policy: { requireMalwareScan: false } };
+        const out = await fileInboundEmailAttachments(deps as Parameters<typeof fileInboundEmailAttachments>[0], message());
+        expect(out[0]).toMatchObject({ outcome: "held", reasons: ["malware_scanning_unavailable"] });
     });
 
     it("nothing in the pipeline can send: its dependencies carry no messaging capability", () => {
