@@ -144,8 +144,9 @@ describe("PHASE 0 — the pre-commit window names the destination", () => {
 
     it("THE GATE: the shell shows no business fact — no counts, no statuses, no configured labels", () => {
         const content = SHELL.slice(SHELL.indexOf('if (chrome === "content")'), SHELL.indexOf("data-destination-work-view"));
-        // Only the slug, the subject the seed already knew, and the retained Thinking owner.
-        expect(content).toContain("destinationName");
+        // Only the subject the seed already knew, and the retained Thinking owner. The slug is NOT
+        // printed: an unrenamed Work View's slug read "New work view 3" under the loader.
+        expect(content).not.toContain("destinationName");
         expect(content).not.toMatch(/count|status|stage|Enrolling|records/i);
     });
 

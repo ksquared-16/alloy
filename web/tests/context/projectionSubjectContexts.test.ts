@@ -264,9 +264,10 @@ describe("the record's Go to — one resolver, the domain's own card", () => {
         const byKey = new Map(work.map((d) => [d.key, d]));
 
         const current = byKey.get("work_view:assignments_bp:current_assignments_view")!;
-        expect(current.card_key).toBe(SEARCH_CARD_KEYS.assignment);
+        // A Go to opens the row's whole panel; it elevates no card over the rest.
+        expect(current.card_key ?? null).toBeNull();
         const due = byKey.get("work_view:billing_bp:payments_due_view")!;
-        expect(due.card_key).toBe(SEARCH_CARD_KEYS.financials);
+        expect(due.card_key ?? null).toBeNull();
 
         const selection = operatorFocusSelectionFromDestination(due)!;
         expect(selection.host_work_view_id).toBe("payments_due_view");

@@ -2,7 +2,7 @@
 title: Work View membership and navigation
 owner: platform
 status: canonical
-last_reviewed: 2026-10-20
+last_reviewed: 2026-11-02
 supersedes: []
 ---
 
@@ -243,6 +243,19 @@ second selection contract.
 
 Consequently a destination is **not emitted** when the member identity is unresolvable. Membership can
 be true while the way to reach it is unknown, and offering it then delivers the operator to a refusal.
+
+> **A cohort destination selects the row and names no card.** A manual row click opens that row's whole
+> panel; a destination that also named a card would elevate it, which no row click does.
+
+The operational member id is the whole selection; the shared mapping
+(`web/lib/runtime/focus/operatorFocusSelection.ts`) dispatches no card focus for a destination without a
+card. Card-naming destinations (Household, Assignment, a per-process fallback with no proven cohort)
+are a different gesture and keep their card.
+
+A parent or household reaches its household's processes the same way: the row is the **case** at family
+grain (or the household's own row in a household-grain projection such as Billing), never one of its
+children. This is the participant-grain rule of § 5 applied to a subject that participates in nothing
+itself — see [Search Platform](../experience/search-platform.md#a-parent-or-household-reaches-its-households-processes).
 
 ---
 

@@ -166,19 +166,17 @@ function resolveMembershipDestinations(
         label: membership.label,
         target: "focus_panel" as const,
         /*
-         * THE PROCESS, NOT THE CHILD CARD — for every subject.
+         * THE WHOLE PANEL, NO CARD — for every subject.
          *
-         * Choosing "Enrollment — Waitlist" under a child is choosing the PROCESS. It used to focus the
-         * Children card with the child as its item, so the operator asked for the child's enrollment
-         * work and was shown the child. The panel already scopes to the child through
-         * `operational_member_id` (the participation row), so the process card composes for exactly
-         * this child; the card key is the canonical process card, which the panel resolves to its
-         * successor. The durable child still rides as the aspect ITEM — the process card does not
-         * consume it, and it keeps host, member and item three distinct identities. "Open Lennon" —
-         * the subject destination — is still how the child card is reached.
+         * Choosing "Enrollment — Waitlist" under Lennon is choosing Lennon's row in that cohort: the
+         * operator lands on the panel that row composes, every card visible, exactly as if they had
+         * clicked the row in the Waitlist view. It used to name a card (first Children, then the
+         * process card), and a named card is ELEVATED — the panel zoomed into one card and the
+         * operator had to back out to see the rest. `operational_member_id` already scopes the panel
+         * to this participant, so no card and no item is needed to say who it is about.
          */
-        card_key: processFocusCardKey(context),
-        item_id: subject.kind === "child" ? subject.id : null,
+        card_key: null,
+        item_id: null,
         context_key: context.key,
         host_entity_type: hostType,
         host_entity_id: hostId,
@@ -192,20 +190,6 @@ function resolveMembershipDestinations(
         operational_member_id: membership.operational_member_id,
         }];
     });
-}
-
-/**
- * The card a process destination focuses.
- *
- * A staged process is worked on the process card. A domain projection opens the subject's durable
- * record the way its domain declares (`durableRecordEntryFor`): Assignments on the Assignments card,
- * Billing with Financials leading — so the destination asks for that same card rather than a process
- * card the durable record does not compose.
- */
-function processFocusCardKey(context: SearchContext): SearchDestination["card_key"] {
-    if (context.projection_domain === "assignments") return SEARCH_CARD_KEYS.assignment;
-    if (context.projection_domain === "billing") return SEARCH_CARD_KEYS.financials;
-    return SEARCH_CARD_KEYS.currentWork;
 }
 
 function resolveHost(

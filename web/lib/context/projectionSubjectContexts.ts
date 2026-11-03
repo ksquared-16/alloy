@@ -164,3 +164,76 @@ export async function loadProjectionSubjectContexts(params: {
     }
     return contexts;
 }
+
+/**
+ * The HOUSEHOLD-grain projection contexts (Billing) for many households at once — Search's batch.
+ *
+ * A parent or a household has no child row in any projection, so only a process whose projections
+ * hold no child grain can name them, and only as their household's row. Each cohort is read ONCE for
+ * the whole candidate set — Search's query count stays constant however many households matched — and
+ * the same capability gate and site scope apply as on the Work View. A refused or failed cohort
+ * contributes nothing, exactly as for the record host.
+ */
+export async function loadHouseholdProjectionContexts(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    userId: string | null;
+    dimensions: AdminAccessScopeDimensions;
+    processConfig: SearchProcessConfiguration;
+    householdIds: readonly string[];
+    loadCohort?: typeof loadDomainProjectionCohort;
+}): Promise<Map<string, SubjectContext[]>> {
+    const out = new Map<string, SubjectContext[]>();
+    const householdIds = [...new Set(params.householdIds.map((id) => id.trim()).filter(Boolean))];
+    if (!householdIds.length) return out;
+    const loadCohort = params.loadCohort ?? loadDomainProjectionCohort;
+    const scope = domainProjectionScopeFromAccess(params.dimensions);
+    const cohorts = new Map<string, Promise<Set<string> | null>>();
+    const rowIdsOf = (domain: ProcessProjectionDomain, projectionKey: string) => {
+        let pending = cohorts.get(`${domain}:${projectionKey}`);
+        if (!pending) {
+            pending = loadCohort(params.supabase, { domain, projectionKey, orgId: params.orgId, userId: params.userId, scope })
+                .then((cohort) => (cohort.status === "ok" ? new Set(cohort.rows.map((r) => domainProjectionRowId(r))) : null))
+                .catch(() => null);
+            cohorts.set(`${domain}:${projectionKey}`, pending);
+        }
+        return pending;
+    };
+
+    for (const process of params.processConfig.byKey.values()) {
+        const domain = process.projection_domain ?? null;
+        if (!domain || !process.operator_has_access) continue;
+        // A child-grain process (Assignments) never substitutes the household for a child.
+        if (projectionProcessOffersChildGrain(process, domain)) continue;
+        const views = projectionViews(process, domain).filter((v) => v.subjectTypes.includes("household"));
+        if (!views.length) continue;
+        const rowSets = await Promise.all(views.map((view) => rowIdsOf(domain, view.projectionKey)));
+
+        for (const householdId of householdIds) {
+            const targetRowId = domainProjectionRowId({ subject: { type: "household", id: householdId } });
+            const memberships: SubjectOperationalMembershipRef[] = views
+                .filter((_, i) => rowSets[i]?.has(targetRowId))
+                .map((view) => ({
+                    work_view_id: view.id,
+                    label: view.label,
+                    row_grain: "family",
+                    host_work_unit_key: domainProjectionHostWorkUnitKey(process.department_id),
+                    host_entity_id: householdId,
+                    host_entity_type: HOST_ENTITY_TYPE.household,
+                    operational_member_id: targetRowId,
+                }));
+            if (!memberships.length) continue;
+            const list = out.get(householdId) ?? [];
+            list.push({
+                kind: "process",
+                key: process.key,
+                label: process.label,
+                detail: memberships.map((m) => m.label).join(" · "),
+                operational_memberships: memberships,
+                projection_domain: domain,
+            });
+            out.set(householdId, list);
+        }
+    }
+    return out;
+}
