@@ -1835,6 +1835,14 @@
         "reason": "Documents V1 / D1a (2026-10-20). Was ctx.role !== \"admin\", the compatibility projection, which refused ops (granted documents.write in every organization) and could express no custom role. The document's subject must also be inside the caller's department/site scope, with the same predicate the list and the signer use."
       }
     },
+    "app/api/admin/documents/[id]/restore/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D9.3 (2026-11-03). Staff restore of an archived document. documents.write AND documents read admission, the subject inside the actor's scope and every sensitive class cleared (else 404 / 403). Only an archived document (409 NOT_ARCHIVED); a written reason; document_restored recorded before public.document_unarchive (pending archive migration, not applied; until then 503 archive_unavailable). Returns the document to its pre-archive status; nothing else changes. No /api/v1 route reaches it."
+      }
+    },
     "app/api/admin/documents/[id]/screening/route.ts": {
       "POST": {
         "status": "declared",
@@ -1921,6 +1929,14 @@
         "capability": "documents.write",
         "helper": "requireDocumentWrite",
         "reason": "Documents V1 / D6, D7 (2026-10-27). Records the review (accepted/rejected/reopened) of a document's current version through document_review_version, appended to the version's review history. Also requires the full document access decision (organization, subject scope, sensitivity, availability), so a quarantined document cannot be reviewed; a rejection or reopen needs a reason; changing an already decided review additionally needs processing.documents.manage and a reason; audited first."
+      }
+    },
+    "app/api/admin/documents/archived/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D9.3 (2026-11-03). The archived documents of a household library, for restore. Same admission and disclosure as the library (readable anchor, primary-owner subject scope, sensitivity), over archived rows only, each with its archive record. Never lists quarantined, deleted, restricted or superseded documents."
       }
     },
     "app/api/admin/documents/library/route.ts": {

@@ -58,8 +58,10 @@ export type DocumentAuditEvent =
     // BEFORE the case opens), and that case closed because the document was filed after all (recorded BEFORE it closes).
     | "document_unfiled_upload_escalated"
     | "document_unfiled_upload_case_resolved"
-    // D9.3: a document archived (the only external removal; nothing is deleted), recorded BEFORE `document_archive`.
-    | "document_archived";
+    // D9.3: a document archived (the only external removal; nothing is deleted), recorded BEFORE `document_archive`; and
+    // its staff restore, recorded BEFORE `document_unarchive`.
+    | "document_archived"
+    | "document_restored";
 
 /**
  * The closed vocabulary of automated writers. A new one is added here, deliberately. Naming a process grants nothing:

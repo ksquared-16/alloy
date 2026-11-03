@@ -216,7 +216,7 @@ export const externalArchiveKey = (installationId: string, key: string) => `ext:
  * like quarantined or superseded, so it leaves every list, every requirement's evidence and every filing — and nothing is
  * deleted: bytes, versions, reviews and history stay. Reversible internally only.
  *
- * Needs `document_archive` (pending migration `20261216090000_documents_d9_3_archive.sql`, NOT applied). Until a
+ * Needs `document_archive` (pending migration `20261217090000_documents_d9_3_archive.sql`, NOT applied). Until a
  * database has it the operation answers 503 `archive_unavailable` after nothing but its audit attempt — never a direct
  * status write, which would leave the database's own availability checks blind to `archived`.
  */
