@@ -96,7 +96,7 @@ beforeEach(() => {
         const primary = { subject_type: args.p_primary_type, subject_id: args.p_primary_id };
         const f = { key: args.p_filing_key, mode: "new_document", doc_type: args.p_doc_type, primary, contexts: args.p_contexts, filed_by: args.p_actor };
         d.metadata = { ...(d.metadata as object), filing: f };
-        vis.documents.add(d.id);
+        vis.documents.add(String(d.id));
         return { data: { replay: false, document_id: d.id, version_id: d.current_version_id, doc_type: d.doc_type, sensitivity: d.sensitivity, filing: f }, error: null };
     };
     dbRef.current = db;
