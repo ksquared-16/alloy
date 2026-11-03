@@ -155,10 +155,10 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
     },
     {
         key: "processing_atomic_open",
-        owner: "Processing / database (supabase/migrations/20261215093000_processing_open_case_atomic.sql)",
+        owner: "Processing / database (certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql — authored, held out of supabase/migrations until its apply is approved)",
         state: "missing",
         proof: "open_processing_case_with_primary_source applied to the target database, then the single-session invariant (certification/invariants/processing-open-case-atomic.sql) and a two-session race test on an isolated database. Until then D10 holds every releasable attachment as processing_atomic_open_unavailable and writes no case or source",
-        next: "apply the migration BEFORE any D10 capability is enabled; code may deploy first (other callers keep their fallback)",
+        next: "move the migration into supabase/migrations and apply it BEFORE any D10 capability is enabled; code may deploy first (other callers keep their fallback)",
     },
 ]);
 

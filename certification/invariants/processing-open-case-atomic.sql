@@ -1,6 +1,7 @@
 -- Processing — open_processing_case_with_primary_source, rollback-only invariant. PREPARED, NOT RUN.
 -- For database.run_rollback_invariant_test against an isolated certification environment (certenv-*) AFTER
--- supabase/migrations/20261215093000_processing_open_case_atomic.sql is applied there. The executor owns the transaction
+-- the migration 20261215093000_processing_open_case_atomic.sql is applied there. Until its apply is approved it is held
+-- out of supabase/migrations, byte for byte, at certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql. The executor owns the transaction
 -- and always discards it. Any failed invariant RAISEs.
 --
 -- Covers the single-session half of the proof: create, idempotent repeat, tenancy and client reachability. The

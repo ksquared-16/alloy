@@ -330,3 +330,42 @@ The user's D10 approval covers this local integration.
 3. An HTTP / hosted proof of D9.1 with an `authz_q1`-style application principal, which then removes the spec's verification sentence.
 4. The WS11 storage and D1c-2 screening slices, then the D10 case-opening slice.
 5. The D9 write increment, after its contract is confirmed.
+
+## c4 — release preparation (2026-11-02, operator-approved)
+
+**Migration held out of the promotion.**
+- Before: `supabase/migrations/20261215093000_processing_open_case_atomic.sql`, authored, never applied.
+  - Staging ledger census `gar_21b83cce5ce413` (2026-11-02T23:12Z) has head `20261214090000` and no `20261215093000`.
+  - No governed apply of it was ever filed on any target.
+- Now: `certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql`. It moved
+  byte for byte (sha256 `f04e450c7f1ed043c65d3d9974150b793f769959f6c91ea3f4d736463d92a1cf`), with its version kept in
+  the file name.
+- Why: a governed merge ships code only. A promoted but unapplied migration would leave the staging ledger BEHIND the
+  repository and refuse later merges.
+- It returns to `supabase/migrations` unchanged once its isolated proof and its apply are approved, before any D10
+  capability is enabled.
+
+**Behaviour is unchanged.**
+- D10 still requires the atomic open.
+- With the function missing (PGRST202 / 42883) or no atomic port, every releasable attachment is HELD as
+  `processing_atomic_open_unavailable`, and no case or source is written.
+- With no clean, version-bound scanner verdict, it is held as `malware_scanning_unavailable`.
+- Structural screening alone never releases.
+- Other Processing callers keep today's opener.
+- References updated:
+  - the register entry `processing_atomic_open` in `emailAttachmentFilingDecision.ts`;
+  - the shape test in `processingCaseAtomicOpen.test.ts`, which now reads the pending path;
+  - the invariant header `certification/invariants/processing-open-case-atomic.sql`.
+
+**Evidence commit.** `f2892cd24` commits two receipts verbatim:
+- the 9E32 merge-parity census;
+- the A1EE R5 closure census.
+
+They are not D9/D10 acceptance evidence.
+
+**Affected tests.** Broker run of 99 files, 1,417 passed: every non-live test that reads `supabase/migrations` or
+the D10 register, plus the D10 behaviour suites. The 3 failures are identical on staging `530ba383` and on the
+pre-move candidate `f2892cd24`, so they are pre-existing:
+- `grantSeedEnumeration`;
+- `opportunityHeaderActionExposure`;
+- `childcareFieldCatalogDoctrine`.
