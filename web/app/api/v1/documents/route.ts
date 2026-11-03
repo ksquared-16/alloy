@@ -4,12 +4,14 @@
  *
  * Exactly one subject filter is required. There is deliberately no organization-wide document export: the same lesson
  * `GET /api/v1/children` records — publishing everything to satisfy a need for a few is a bulk PII export on day one.
- * `category_key` and `type_key` narrow further; `limit`, `cursor` and `since_token` page exactly as every collection does.
+ * `category_key` and `type_key` narrow further, and `expires_before` (D9.3) keeps documents whose current version expires
+ * strictly before that date — the expiration query, still one subject at a time (Q8: no organization-wide feed); `limit`, `cursor` and `since_token` page exactly as every collection does.
  * A subject the installation cannot see answers an empty page, never a refusal that would confirm it exists.
  */
 import { externalCollectionRoute, uuidFilter } from "@/lib/platform/external/collectionRoute";
 import { externalDocumentsSource } from "@/lib/documents/external/externalDocumentAuthority";
 import { toPublicDocument } from "@/lib/platform/external/resources/documentResources";
+import { isIsoDate } from "@/lib/documents/validity/documentValidity";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +44,14 @@ export const GET = externalCollectionRoute({
             const v = params.get(name);
             if (v !== null && !KEY_RE.test(v)) return { ok: false, error: { code: "invalid_filter", message: `${name} is not a valid key.` } };
         }
+        const expiresBefore = params.get("expires_before");
+        if (expiresBefore !== null && !isIsoDate(expiresBefore)) {
+            return { ok: false, error: { code: "invalid_filter", message: "expires_before must be a date (YYYY-MM-DD)." } };
+        }
         return {
             ok: true,
             values: {
+                p_expires_before: expiresBefore,
                 p_subject_type: given[0].type,
                 p_subject_id: given[0].id,
                 p_category_key: params.get("category_key"),

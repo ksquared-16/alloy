@@ -76,6 +76,8 @@ export type OperationDefinition<TResult> = {
      */
     bodyKind?: "json" | "bytes";
     maxBodyBytes?: number;
+    /** The partner-facing sentence for a body over `maxBodyBytes` (e.g. the documents upload limit, in MiB and bytes). */
+    tooLargeMessage?: string;
     perform: (
         body: Record<string, unknown>,
         ctx: OperationContext,
@@ -226,7 +228,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             const max = def.maxBodyBytes ?? 0;
             const declared = Number(request.headers.get("content-length") ?? "NaN");
             if (Number.isFinite(declared) && declared > max) {
-                return fail("payload_too_large", "invalid_request", `The body exceeds ${max} bytes.`, 413);
+                return fail("payload_too_large", "invalid_request", def.tooLargeMessage ?? `The body exceeds ${max} bytes.`, 413);
             }
             let bytes: Uint8Array;
             try {
@@ -234,7 +236,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             } catch {
                 return fail("invalid_request", "invalid_request", "The request body could not be read.");
             }
-            if (bytes.byteLength > max) return fail("payload_too_large", "invalid_request", `The body exceeds ${max} bytes.`, 413);
+            if (bytes.byteLength > max) return fail("payload_too_large", "invalid_request", def.tooLargeMessage ?? `The body exceeds ${max} bytes.`, 413);
             body = { bytes };
         } else {
             try {

@@ -367,3 +367,18 @@ describe("late filing after escalation (unfiled uploads become Processing cases 
         expect(r).toMatchObject({ status: 409, body: { error: { code: "ALREADY_FILED" } } });
     });
 });
+
+describe("the 4 MiB limit is explicit to the partner", () => {
+    it("creation answers max_bytes; an oversize declaration and an oversize body both name 4 MiB (4,194,304 bytes)", async () => {
+        const created = await json(await createUpload(post("/api/v1/document-uploads", declare())));
+        expect(created.body.max_bytes).toBe(4 * 1024 * 1024);
+        const declared = await json(await createUpload(post("/api/v1/document-uploads", declare(PDF, { byte_size: API_DOCUMENT_UPLOAD_MAX_BYTES + 1 }), { key: "big-key-00001" })));
+        expect(declared).toMatchObject({ status: 413, body: { error: { code: "FILE_TOO_LARGE" } } });
+        expect(declared.body.error.message).toContain("4 MiB (4,194,304 bytes)");
+        const big = new Uint8Array(API_DOCUMENT_UPLOAD_MAX_BYTES + 1);
+        const sent = await json(await sendContent(post("/api/v1/document-uploads/content", big, { bytes: true, query: `?upload_id=${encodeURIComponent(created.body.upload_id)}` })));
+        expect(sent.status).toBe(413);
+        expect(sent.body.error.message).toContain("4 MiB (4,194,304 bytes)");
+        expect(db.uploadCalls).toEqual([]);
+    });
+});

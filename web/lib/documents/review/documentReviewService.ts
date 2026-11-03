@@ -63,7 +63,8 @@ function refusal(error: { message?: string } | null | undefined): { ok: false; c
 
 export async function reviewDocumentVersion(
     supabase: SupabaseClient,
-    input: { orgId: string; documentId: string; versionId: string; decision: ReviewDecision; reason: string | null; actorUserId: string; rereview: boolean },
+    /** `actorUserId` is null only for an application principal (D9.3), whose attribution is the audit event. */
+    input: { orgId: string; documentId: string; versionId: string; decision: ReviewDecision; reason: string | null; actorUserId: string | null; rereview: boolean },
 ): Promise<ReviewWriteResult<{ event_id: string; review_status: string; previous_review_status: string | null; rereview: boolean }>> {
     const { data, error } = await supabase.rpc("document_review_version", {
         p_org_id: input.orgId,
@@ -80,7 +81,7 @@ export async function reviewDocumentVersion(
 
 export async function setDocumentVersionValidity(
     supabase: SupabaseClient,
-    input: { orgId: string; documentId: string; versionId: string; effectiveOn: string | null; expiresOn: string | null; reason: string | null; actorUserId: string },
+    input: { orgId: string; documentId: string; versionId: string; effectiveOn: string | null; expiresOn: string | null; reason: string | null; actorUserId: string | null },
 ): Promise<ReviewWriteResult<{ changed: boolean; effective_on: string | null; expires_on: string | null }>> {
     if ((input.effectiveOn && !isIsoDate(input.effectiveOn)) || (input.expiresOn && !isIsoDate(input.expiresOn))) return { ok: false, code: "BAD_DATE", status: 400 };
     if (input.effectiveOn && input.expiresOn && input.expiresOn < input.effectiveOn) return { ok: false, code: "VALIDITY_RANGE_INVERTED", status: 400 };

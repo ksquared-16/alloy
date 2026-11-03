@@ -5,7 +5,14 @@
  * (`POST /api/admin/documents/[id]/screening`). Every path that serves a document's bytes, link, text or listing honours
  * this. The access decision refuses it (DOCUMENT_RESTRICTED), the byte readers return nothing, and the lists leave it out.
  */
-export const UNAVAILABLE_DOCUMENT_STATUSES: readonly string[] = Object.freeze(["deleted", "quarantined", "restricted", "superseded"]);
+export const UNAVAILABLE_DOCUMENT_STATUSES: readonly string[] = Object.freeze(["deleted", "quarantined", "restricted", "superseded", "archived"]);
+
+/**
+ * D9.3 (Q5): archived through `document_archive` — the one non-destructive removal. Bytes, versions, reviews and history
+ * are kept; the document leaves every list, link, filing and requirement's evidence. The status exists in a database only
+ * once the pending archive migration is applied there; listing it here first is inert until then.
+ */
+export const ARCHIVED_DOCUMENT_STATUS = "archived" as const;
 
 /**
  * D5: a received document filed as the next VERSION of an existing document. Its bytes now live as that version; the

@@ -38,6 +38,8 @@ import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/p
  * route's 10 MB ceiling is not reachable there either (the largest stored object on the deployed tenant is 4.4 MB).
  */
 export const API_DOCUMENT_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+/** The limit as a partner reads it, in every refusal and in the docs. The staff upload's 10 MB is not offered here. */
+export const API_DOCUMENT_UPLOAD_LIMIT_TEXT = "4 MiB (4,194,304 bytes)";
 export const API_UPLOAD_TTL_SECONDS = 60 * 60;
 export const API_UPLOADS_SEGMENT = "api_uploads";
 const BUCKET = "org_documents";
@@ -58,7 +60,7 @@ export function writeContextFor(ctx: OperationContext): WriteContext {
         principal: { applicationId: ctx.principal.applicationId, installationId: ctx.installationId, credentialId: ctx.principal.credentialId },
     };
 }
-export type WriteRefusal = { code: string; message: string; status: 400 | 404 | 409 | 413 | 415 | 422 | 502 | 503 };
+export type WriteRefusal = { code: string; message: string; status: 400 | 403 | 404 | 409 | 413 | 415 | 422 | 502 | 503 };
 export type WriteResult<T> = { ok: true; status: 200 | 201; result: T } | { ok: false; error: WriteRefusal };
 type Audit = (input: DocumentAuditInput) => Promise<DocumentAuditResult>;
 const refuse = (status: WriteRefusal["status"], code: string, message: string): { ok: false; error: WriteRefusal } => ({ ok: false, error: { status, code, message } });
@@ -138,7 +140,7 @@ export function createDocumentUpload(
     if (!filename || filename.length > 255) return refuse(400, "invalid_request", "filename is required (at most 255 characters).");
     if (typeof size !== "number" || !Number.isInteger(size) || size < 1) return refuse(400, "invalid_request", "byte_size must be a positive integer.");
     if (!SHA256.test(sha)) return refuse(400, "invalid_request", "sha256 must be 64 lowercase hexadecimal characters.");
-    if (size > API_DOCUMENT_UPLOAD_MAX_BYTES) return refuse(413, "FILE_TOO_LARGE", `Files must be ${API_DOCUMENT_UPLOAD_MAX_BYTES} bytes or smaller.`);
+    if (size > API_DOCUMENT_UPLOAD_MAX_BYTES) return refuse(413, "FILE_TOO_LARGE", `Files sent through the API must be at most ${API_DOCUMENT_UPLOAD_LIMIT_TEXT}.`);
     const format = detectProcessingSourceFormat(filename, mime);
     if (!capabilitiesForFormat(format).store) return refuse(415, "UNSUPPORTED_FORMAT", "This file format cannot be stored.");
     const secret = uploadSigningSecret(env);
@@ -170,7 +172,7 @@ export async function completeDocumentUpload(
     const c = v.claims;
     // An upload belongs to the installation that created it; any other caller is told nothing.
     if (c.o !== ctx.organizationId || c.i !== ctx.installationId) return refuse(404, "NOT_FOUND", "Not found.");
-    if (bytes.byteLength > API_DOCUMENT_UPLOAD_MAX_BYTES) return refuse(413, "FILE_TOO_LARGE", `Files must be ${API_DOCUMENT_UPLOAD_MAX_BYTES} bytes or smaller.`);
+    if (bytes.byteLength > API_DOCUMENT_UPLOAD_MAX_BYTES) return refuse(413, "FILE_TOO_LARGE", `Files sent through the API must be at most ${API_DOCUMENT_UPLOAD_LIMIT_TEXT}.`);
     const sha = createHash("sha256").update(bytes).digest("hex");
     if (bytes.byteLength !== c.n || sha !== c.s) return refuse(422, "checksum_mismatch", "The bytes do not match the declared size and SHA-256.");
 

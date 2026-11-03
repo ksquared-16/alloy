@@ -135,6 +135,8 @@ export type ExternalDocumentFilters = {
     documentId?: string | null;
     categoryKey?: string | null;
     typeKey?: string | null;
+    /** D9.3: only documents whose current version expires strictly before this date (YYYY-MM-DD). Undated never match. */
+    expiresBefore?: string | null;
 };
 
 type Page = { limit: number; cursorSort: string | null; cursorId: string | null; updatedSince: string | null };
@@ -248,7 +250,23 @@ export async function listExternalDocuments(
             (!filters.typeKey || s.d.doc_type === filters.typeKey) &&
             (!filters.categoryKey || s.path.some((c) => c.key === filters.categoryKey)),
     );
-    const paged = applyPage(narrowed, page);
+    let dated = narrowed;
+    if (filters.expiresBefore) {
+        // Before paging, so a page is never short of matches that sit later in the order.
+        const ids = narrowed.map((x) => x.d.current_version_id).filter((v): v is string => Boolean(v));
+        const expiry = new Map<string, string | null>();
+        if (ids.length) {
+            const { data, error } = await supabase.from("document_versions").select("id, expires_on").eq("org_id", org).in("id", ids);
+            if (error) return { ok: false, error: "versions_unreadable" };
+            for (const v of (data ?? []) as Array<{ id: string; expires_on: string | null }>) expiry.set(v.id, str(v.expires_on));
+        }
+        const before = filters.expiresBefore;
+        dated = narrowed.filter((x) => {
+            const on = x.d.current_version_id ? expiry.get(x.d.current_version_id) : null;
+            return Boolean(on && on.slice(0, 10) < before);
+        });
+    }
+    const paged = applyPage(dated, page);
     if (paged.length === 0) return { ok: true, rows: [] };
 
     const versionIds = paged.map((s) => s.d.current_version_id).filter((v): v is string => Boolean(v));
@@ -334,6 +352,7 @@ export async function externalDocumentsSource(supabase: SupabaseClient, args: Re
             documentId: str(args.p_document_id),
             categoryKey: str(args.p_category_key),
             typeKey: str(args.p_type_key),
+            expiresBefore: str(args.p_expires_before),
         },
         pageOf(args),
     );

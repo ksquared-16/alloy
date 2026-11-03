@@ -187,7 +187,7 @@ export const PUBLIC_SCOPES = {
     "documents.read": {
         scope: "documents.read",
         access: "read",
-        summary: "Read standard-sensitivity documents of visible children, their households and their parents or guardians, and request short-lived download links.",
+        summary: "Read standard-sensitivity documents of visible children, their households and their parents or guardians, their review and lifecycle history and document requirements, and request short-lived download links.",
         alloyAuthority: "lib/documents/external/externalDocumentAuthority — primary owner, availability and effective sensitivity over the children / households / relationships SQL authorities",
         /*
          * D9.1 (user-approved 2026-10-30). Medical, identity, custody/safeguarding and restricted documents are never
@@ -205,6 +205,17 @@ export const PUBLIC_SCOPES = {
          * `documents.write` gets ids and states back, never content or a link. Bytes pass through Alloy and are
          * screened before storage (Q1); a review cannot be submitted or pre-accepted under this scope (Q3); the
          * primary owner never changes; nothing is deleted.
+         */
+    },
+    "documents.review": {
+        scope: "documents.review",
+        access: "write",
+        summary: "Accept or reject the current version of a visible standard document, once.",
+        alloyAuthority: "lib/documents/review/documentReviewService (reviewDocumentVersion, never a re-review) through lib/documents/external/externalDocumentLifecycle — the D9.1 visibility authorities, standard sensitivity only",
+        /*
+         * D9.3 (Q3, user-ratified 2026-11-03): separate from `documents.write`, so an installation that uploads cannot also
+         * approve its own uploads unless it was granted both. Maps internally to the FIRST decision only
+         * (`documents.write`), never to `processing.documents.manage`: reopening or changing a decision is staff work.
          */
     },
     "attendance.write": {
@@ -297,6 +308,17 @@ export const PUBLIC_OPERATIONS = {
         route: "/api/v1/document-uploads/content",
     },
     fileDocument: { operationId: "fileDocument", scope: "documents.write", route: "/api/v1/document-filings" },
+    /*
+     * D9.3 — the document lifecycle, as named intents too: a review, validity dates, a replacement version, an archive;
+     * and three reads under documents.read (reviews, history, requirements of one subject).
+     */
+    submitDocumentReview: { operationId: "submitDocumentReview", scope: "documents.review", route: "/api/v1/document-reviews" },
+    setDocumentValidity: { operationId: "setDocumentValidity", scope: "documents.write", route: "/api/v1/document-validity" },
+    replaceDocumentVersion: { operationId: "replaceDocumentVersion", scope: "documents.write", route: "/api/v1/document-versions" },
+    archiveDocument: { operationId: "archiveDocument", scope: "documents.write", route: "/api/v1/document-archives" },
+    listDocumentReviews: { operationId: "listDocumentReviews", scope: "documents.read", route: "/api/v1/documents/{id}/reviews" },
+    listDocumentHistory: { operationId: "listDocumentHistory", scope: "documents.read", route: "/api/v1/documents/{id}/history" },
+    listDocumentRequirements: { operationId: "listDocumentRequirements", scope: "documents.read", route: "/api/v1/document-requirements" },
     linkDocumentSubject: { operationId: "linkDocumentSubject", scope: "documents.write", route: "/api/v1/document-subjects" },
     unlinkDocumentSubject: {
         operationId: "unlinkDocumentSubject",
