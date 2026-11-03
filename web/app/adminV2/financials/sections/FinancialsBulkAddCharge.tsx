@@ -75,6 +75,8 @@ export default function FinancialsBulkAddCharge({
     onCommitted: () => Promise<void> | void;
 }) {
     const [options, setOptions] = useState<CatalogChargeSubjectOption[]>([]);
+    /* "Nothing chargeable" is an answer only once the catalog has been read. */
+    const [catalogRead, setCatalogRead] = useState(false);
     const [households, setHouseholds] = useState<Household[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [productId, setProductId] = useState("");
@@ -109,6 +111,7 @@ export default function FinancialsBulkAddCharge({
                 if (!live) return;
                 const catalog = (h.catalog ?? null) as { ok: boolean; options?: CatalogChargeSubjectOption[]; error?: string } | null;
                 setOptions(catalog?.options ?? []);
+                setCatalogRead(Boolean(catalog?.ok));
                 if (typeof h.businessDate === "string") setServiceDate((current) => current || h.businessDate);
                 setHouseholds((h.households ?? []) as Household[]);
                 if (h.ok === false) setLoadError(h.error ?? "Accounts could not be read.");
@@ -122,9 +125,12 @@ export default function FinancialsBulkAddCharge({
         };
     }, [siteLocationId]);
 
-    /* Only a chargeable item can be the selection; unsupported and blocked ones are listed, disabled. */
-    const template = options.find((o) => o.id === productId && o.availability === "offerable") ?? null;
-    const unavailable = options.filter((o) => o.availability !== "offerable");
+    /*
+     * Only a chargeable item is offered, by name and price. Unsupported and blocked Catalog items are
+     * Catalog configuration, not choices — the server's rule still refuses them if asked.
+     */
+    const chargeable = options.filter((o) => o.availability === "offerable");
+    const template = chargeable.find((o) => o.id === productId) ?? null;
     const grains = useMemo(() => (template ? legalBulkGrains(template.categoryKey) : []), [template]);
     /* The grain is DERIVED: the operator's choice when the charge type permits it, else what it permits. */
     const grain: BulkGrain = grains.length && !grains.includes(chosenGrain) ? grains[0]! : chosenGrain;
@@ -313,11 +319,11 @@ export default function FinancialsBulkAddCharge({
                         aria-label="Charge type"
                         testId="bulk-charge-template"
                         value={productId}
-                        placeholder="Choose a catalog fee…"
-                        options={options.map((o) => ({
+                        placeholder={catalogRead && chargeable.length === 0 ? "No chargeable catalog fees" : "Choose a catalog fee…"}
+                        disabled={catalogRead && chargeable.length === 0}
+                        options={chargeable.map((o) => ({
                             value: o.id,
-                            label: o.availability === "offerable" ? o.label : `${o.label} — not available here`,
-                            disabled: o.availability !== "offerable",
+                            label: o.amountCents != null ? `${o.label} · ${moneyExact(o.amountCents, o.currencyCode)}` : o.label,
                         }))}
                         onChange={(next) => {
                             setProductId(next);
@@ -332,15 +338,10 @@ export default function FinancialsBulkAddCharge({
                     {template?.accountLabel ? (
                         <span className="text-[11px] text-alloy-midnight/50">Posts to {template.accountLabel}</span>
                     ) : null}
-                    {unavailable.length ? (
-                        <ul className="text-[11px] text-alloy-midnight/55" data-financials-bulk-charge-unavailable="true">
-                            {unavailable.map((o) => (
-                                <li key={o.id} data-catalog-item={o.id} data-catalog-availability={o.availability}>
-                                    {o.label}
-                                    {o.amountCents != null ? ` · ${moneyExact(o.amountCents, o.currencyCode)}` : ""} — {o.unavailableReason}
-                                </li>
-                            ))}
-                        </ul>
+                    {catalogRead && chargeable.length === 0 ? (
+                        <span className="text-[11px] text-alloy-midnight/55" data-financials-bulk-charge-empty="true">
+                            Add a one-time item with a GL Code in Organization › Financials › Catalog.
+                        </span>
                     ) : null}
                 </label>
                 <label className="flex flex-col gap-1">

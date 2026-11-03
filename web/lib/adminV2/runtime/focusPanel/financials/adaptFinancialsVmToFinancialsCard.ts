@@ -948,6 +948,29 @@ export function adaptChargeTemplateOption(
 }
 
 /**
+ * ── ADD CHARGE'S CHOICES: WHAT THIS OPERATOR CAN ADD HERE, AND NOTHING ELSE ──────────────────────
+ *
+ * `options` are the command's options with `unavailableReason` already judged for the CURRENT
+ * selection; `availability` is each one's own catalog verdict, index-aligned. An item whose verdict
+ * is not `offerable` (recurring, usage-priced, deposit, add-on, no posting account…) is not a choice
+ * and is dropped. An item chargeable to some subject on this account but not the current selection
+ * stays — choosable, its reason cleared — because changing `Applies to` makes it addable; that
+ * reason is said once, beside the selection, never as a suffix on the choice. Editing a template
+ * draft offers exactly that draft's template, unchanged. The server's eligibility rule is untouched:
+ * it still refuses anything this list leaves out.
+ */
+export function addChargeTypeChoices<T extends { unavailableReason?: string | null }>(
+    options: readonly T[],
+    availability: ReadonlyArray<string | undefined>,
+    editingTemplate: boolean,
+): T[] {
+    if (editingTemplate) return [...options];
+    return options
+        .filter((_, i) => availability[i] === "offerable")
+        .map((opt): T => ({ ...opt, unavailableReason: null }));
+}
+
+/**
  * The command card's display values, from the DOMAIN's own preview.
  *
  * `previewSummary` and `previewChanges` are what `mode: "preview"` returned — the same resolver the

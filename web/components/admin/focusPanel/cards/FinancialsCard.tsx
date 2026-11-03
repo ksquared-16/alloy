@@ -52,6 +52,7 @@ import {
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
+    addChargeTypeChoices,
     adaptFinancialsVmToFinancialsCard,
     adaptFinancialsVmToLedgerPeriods,
     hydratingFinancialsEvidence,
@@ -6330,20 +6331,34 @@ export default function FinancialsCard({
         });
         const offerableTemplates = templates.filter((tpl) => !tpl.unavailableReason);
         /*
-         * An item chargeable in itself but not to THIS selection still opens the command, shown with
-         * its reason, so `Applies to` stays reachable — otherwise a child no item applies to would
-         * leave the operator no way to choose the household or a sibling it does apply to.
+         * ── THE CHOICES ARE WHAT THIS OPERATOR CAN ADD HERE, AND NOTHING ELSE ─────────────────
+         *
+         * Charge type listed the whole Catalog: unsupported and blocked items sat in the select,
+         * disabled, each with a sentence of why — a list mostly of things nobody could choose. It
+         * now lists only items the command accepts for at least one subject on this account, by
+         * name. An item that does not apply to the CURRENT selection is still choosable — and still
+         * opens the command — because changing `Applies to` makes it addable (otherwise a child no
+         * item applies to would leave no way to choose the household or a sibling it does apply to);
+         * the refused subjects are disabled there. What the Catalog holds that cannot be charged
+         * here is Catalog configuration, and the server's eligibility rule — the one this list is
+         * read from — still refuses it if asked.
          */
-        const offerableForSomeone =
-            pending?.source === "template"
-                ? []
-                : templates.filter((_, i) => vm.chargeTemplates[i]?.availability === "offerable");
+        const choosableTemplates = addChargeTypeChoices(
+            templates,
+            vm.chargeTemplates.map((tpl) => tpl.availability),
+            pending?.source === "template",
+        );
         const selected =
             offerableTemplates.find((tpl) => tpl.key === pending?.templateId)
+            ?? choosableTemplates.find((tpl) => tpl.key === pending?.templateId)
             ?? offerableTemplates[0]
-            ?? offerableForSomeone.find((tpl) => tpl.key === pending?.templateId)
-            ?? offerableForSomeone[0]
+            ?? choosableTemplates[0]
             ?? null;
+        /* The chosen item's refusal for THIS selection, said once and briefly beside Applies to. */
+        const selectedRefusal =
+            selected && pending?.source !== "template"
+                ? templates.find((tpl) => tpl.key === selected.key)?.unavailableReason ?? null
+                : null;
         /* The chosen Catalog item's own price (cents), the default an amount override departs from. */
         const selectedCatalogCents = selected
             ? vm.chargeTemplates.find((tpl) => tpl.id === selected.key)?.amountCents ?? null
@@ -6426,7 +6441,8 @@ export default function FinancialsCard({
                     <AddChargeCommand
                         editing={Boolean(replacingDraftId)}
                         modeSlot={entryModes}
-                        templates={templates}
+                        templates={choosableTemplates}
+                        selectionRefusal={selectedRefusal}
                         specimen={adaptAddChargeSpecimen({
                             template: selected,
                             subjectLabel,
@@ -6447,7 +6463,7 @@ export default function FinancialsCard({
                         controls={{
                             selectedTemplateId: selected.key,
                             onSelectTemplate: (id) => {
-                                const tpl = templates.find((x) => x.key === id);
+                                const tpl = choosableTemplates.find((x) => x.key === id);
                                 /*
                                  * A CHANGE OF TYPE CAN INVALIDATE THE SUBJECT. Switching to a
                                  * child-grained type while the command is anchored on the
@@ -6728,20 +6744,13 @@ export default function FinancialsCard({
                     />
                 ) : (
                     /*
-                     * A catalog with nothing chargeable here is a configuration state, not an error —
-                     * and the items it does have still say where they are billed instead.
+                     * A catalog with nothing chargeable here is a configuration state, not an error.
+                     * One line says what to do; the items that cannot be charged are not listed
+                     * here — they are configuration, changed in the Catalog.
                      */
                     <div className="alloy-os-financials__empty" data-financials-catalog-empty="true">
-                        <p>No one-time catalog fees can be added here.</p>
-                        {templates.length > 0 ? (
-                            <ul data-testid="addcharge-unavailable">
-                                {templates.map((tpl) => (
-                                    <li key={tpl.key} data-catalog-item={tpl.key}>
-                                        {tpl.label}{tpl.amount ? ` · ${tpl.amount}` : ""} — {tpl.unavailableReason}
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : null}
+                        <p>No charges can be added to this account yet.</p>
+                        <p>Add a one-time item with a GL Code in Organization › Financials › Catalog.</p>
                     </div>
                 )}
             </div>

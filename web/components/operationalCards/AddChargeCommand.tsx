@@ -85,7 +85,13 @@ export default function AddChargeCommand({
     controls,
     modeSlot,
     editing = false,
+    selectionRefusal = null,
 }: {
+    /**
+     * Why the chosen item cannot be charged to the CURRENT Applies-to selection, or null. Said once,
+     * beside the selection that changes it — never as a suffix on every choice.
+     */
+    selectionRefusal?: string | null;
     /** W7-F016: editing a draft — the same command, re-titled; saving replaces the draft. */
     editing?: boolean;
     specimen: AddChargeSpecimen;
@@ -309,11 +315,14 @@ export default function AddChargeCommand({
                         aria-label="Charge type"
                         allowEmpty={false}
                         value={controls.selectedTemplateId ?? ""}
-                        /* LABELS, never internal keys. The catalog owns the wording. */
-                        /* Unsupported and blocked catalog items stay listed, disabled; why is stated below. */
+                        /*
+                         * LABELS, never internal keys — the item's name and price, nothing else. The
+                         * host passes only items this operator can add here; one it could not would
+                         * still be refused by the server, so it is disabled rather than explained.
+                         */
                         options={templates.map((opt) => ({
                             value: opt.key,
-                            label: opt.unavailableReason ? `${opt.label} — not available here` : opt.label,
+                            label: opt.amount ? `${opt.label} · ${opt.amount}` : opt.label,
                             disabled: Boolean(opt.unavailableReason),
                         }))}
                         onChange={(next) => controls.onSelectTemplate(next)}
@@ -326,18 +335,8 @@ export default function AddChargeCommand({
                         </svg>
                     </span>
                 )}
-                <span className="alloy-os-addcharge__optioncount">
-                    {templates.filter((opt) => !opt.unavailableReason).length} catalog fees
-                    {t.accountLabel ? ` · posts to ${t.accountLabel}` : ""}
-                </span>
-                {templates.some((opt) => opt.unavailableReason) ? (
-                    <ul className="alloy-os-addcharge__unavailable" data-testid="addcharge-unavailable">
-                        {templates.filter((opt) => opt.unavailableReason).map((opt) => (
-                            <li key={opt.key} data-catalog-item={opt.key}>
-                                {opt.label}{opt.amount ? ` · ${opt.amount}` : ""} — {opt.unavailableReason}
-                            </li>
-                        ))}
-                    </ul>
+                {t.accountLabel ? (
+                    <span className="alloy-os-addcharge__optioncount">Posts to {t.accountLabel}</span>
                 ) : null}
             </Field>
             {/*
@@ -451,6 +450,11 @@ export default function AddChargeCommand({
                     )}
                 </Field>
             )}
+            {selectionRefusal ? (
+                <p className="alloy-os-addcharge__draftnote" data-addcharge-selection-refusal role="status">
+                    {selectionRefusal}
+                </p>
+            ) : null}
             {controls?.chargeResponsibility ? (
                 <div className="alloy-os-addcharge__responsibility" data-addcharge-charge-responsibility="section">
                     {/* WHO OWES, then a quiet way to change it for this charge only. */}
@@ -938,6 +942,7 @@ export default function AddChargeCommand({
                     primary
                     disabled={
                         resolvesToNothing
+                        || Boolean(selectionRefusal)
                         || Boolean(controls?.amountOverride?.active && controls.amountOverride.error)
                         || (controls?.unifiedTarget
                             ? !controls.unifiedTarget.householdSelected

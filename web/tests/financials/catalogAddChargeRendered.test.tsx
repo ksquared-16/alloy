@@ -6,8 +6,11 @@
  * `FinancialsBulkAddCharge` in a DOM, with the network stubbed, and reads what an operator would
  * see and what the surface would send:
  *
- *   · unsupported and blocked catalog items are listed, DISABLED, each with its reason;
- *   · only chargeable items can be chosen; the amount is the catalog's configured amount;
+ *   · Charge type lists ONLY items this operator can add here, by name and price — unsupported and
+ *     blocked catalog items are not choices and carry no explanatory text; an item refused for the
+ *     current selection only stays choosable, its reason said once beside Applies to;
+ *   · with nothing chargeable, a short actionable empty state instead of unusable options;
+ *   · the amount is the catalog's configured amount;
  *   · Bulk defaults its service date to the ORGANISATION's business date from the server;
  *   · Bulk sends `catalog_product_id` (never `template_id`, never an amount), and a household the
  *     domain refuses in preview is shown refused, with no confirm offered for it.
@@ -23,6 +26,7 @@ import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
+    addChargeTypeChoices,
 } from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
 import type { CatalogChargeOption } from "@/lib/financials/catalogCharges/catalogChargeOffer";
 
@@ -60,14 +64,14 @@ const flush = async () => {
 const optionsIn = (scope: ParentNode) => [...scope.querySelectorAll<HTMLElement>("[role=option]")];
 
 describe("Add › Charge on the account card", () => {
-    it("lists unsupported and blocked catalog items disabled, with reasons, and states the account", async () => {
-        const templates = OPTIONS.map((o) => adaptChargeTemplateOption(o, "USD"));
+    const mount = (templates: ReturnType<typeof adaptChargeTemplateOption>[], selectionRefusal: string | null = null) => {
         const selected = templates[0]!;
         const onSelect = vi.fn();
         act(() => {
             root.render(
                 <AddChargeCommand
                     templates={templates}
+                    selectionRefusal={selectionRefusal}
                     specimen={adaptAddChargeSpecimen({
                         template: selected, subjectLabel: "Household", amount: selected.amount ?? "—", note: "",
                         period: "June 2026", balanceCents: 0, currency: "USD", previewSummary: null, previewChanges: [],
@@ -81,23 +85,49 @@ describe("Add › Charge on the account card", () => {
                 />,
             );
         });
-        const text = host.textContent ?? "";
-        expect(text).toContain("1 catalog fees");
-        expect(text).toContain("posts to 4010 · Activity Revenue");
-        const list = host.querySelector('[data-testid="addcharge-unavailable"]')!;
-        expect(list.textContent).toContain("Monthly Fee · $25.00 — Monthly — a recurring Catalog item");
-        expect(list.textContent).toContain("Unmapped Fee · $25.00 — Revenue category “Unmapped” is not mapped to a GL account");
+        return onSelect;
+    };
 
-        const trigger = host.querySelector<HTMLButtonElement>('[data-testid="addcharge-template"] button')!;
-        act(() => trigger.click());
+    it("offers only chargeable items: unsupported and blocked ones are dropped, a selection-only refusal stays choosable", () => {
+        const options = [
+            ...OPTIONS,
+            option("p-elsewhere", { label: "Site Fee" }),
+        ].map((o) => adaptChargeTemplateOption(o, "USD"));
+        /* As the host judges them for THIS selection: Site Fee is refused here, chargeable to someone. */
+        const judged = options.map((o) => (o.key === "p-elsewhere" ? { ...o, unavailableReason: "Ada: offered at a different location." } : o));
+        const choices = addChargeTypeChoices(judged, ["offerable", "unsupported", "blocked", "offerable"], false);
+        expect(choices.map((c) => c.key)).toEqual(["p-fee", "p-elsewhere"]);
+        expect(choices.every((c) => c.unavailableReason === null)).toBe(true);
+        /* Editing a template draft offers exactly that draft's template. */
+        expect(addChargeTypeChoices(judged.slice(0, 1), [undefined], true).map((c) => c.key)).toEqual(["p-fee"]);
+    });
+
+    it("lists the choices by name and price with no explanatory text, and states the account", () => {
+        const choices = addChargeTypeChoices(
+            OPTIONS.map((o) => adaptChargeTemplateOption(o, "USD")),
+            OPTIONS.map((o) => o.availability),
+            false,
+        );
+        mount(choices);
+        const text = host.textContent ?? "";
+        expect(text).toContain("Posts to 4010 · Activity Revenue");
+        expect(text).not.toContain("catalog fees");
+        expect(text).not.toContain("Monthly Fee");
+        expect(text).not.toContain("not available here");
+        expect(text).not.toContain("recurring Catalog item");
+        expect(host.querySelector('[data-testid="addcharge-unavailable"]')).toBeNull();
+
+        act(() => host.querySelector<HTMLButtonElement>('[data-testid="addcharge-template"] button')!.click());
         const opts = optionsIn(document.body);
-        const byText = (s: string) => opts.find((o) => (o.textContent ?? "").startsWith(s))!;
-        expect(byText("Alpha Fee").getAttribute("aria-disabled")).toBeNull();
-        expect(byText("Monthly Fee").getAttribute("aria-disabled")).toBe("true");
-        expect(byText("Monthly Fee").textContent).toContain("not available here");
-        expect(byText("Unmapped Fee").getAttribute("aria-disabled")).toBe("true");
-        act(() => byText("Unmapped Fee").click());
-        expect(onSelect).not.toHaveBeenCalledWith("p-unmapped");
+        expect(opts.map((o) => o.textContent)).toEqual(["Alpha Fee · $25.00"]);
+        expect(opts[0]!.getAttribute("aria-disabled")).toBeNull();
+    });
+
+    it("says a selection-only refusal once, beside Applies to, and offers no Add for it", () => {
+        const [alpha] = OPTIONS.map((o) => adaptChargeTemplateOption(o, "USD"));
+        mount([alpha!], "Ada: offered at a different location.");
+        expect(host.querySelector("[data-addcharge-selection-refusal]")?.textContent).toBe("Ada: offered at a different location.");
+        expect(host.querySelector<HTMLButtonElement>("[data-addcharge-submit]")?.disabled).toBe(true);
     });
 });
 
@@ -138,13 +168,14 @@ describe("Bulk charge", () => {
         expect(calls.some((c) => c.url.includes("charge-templates"))).toBe(false);
         const date = host.querySelector('[data-testid="bulk-charge-service-date"] input') as HTMLInputElement | null;
         expect(date?.value ?? host.querySelector('[data-testid="bulk-charge-service-date"]')?.textContent ?? "").toMatch(/2026-06-29|Jun 29, 2026|06\/29\/2026/);
-        const unavailable = host.querySelector('[data-financials-bulk-charge-unavailable="true"]')!;
-        expect(unavailable.textContent).toContain("Monthly Fee");
-        expect(unavailable.textContent).toContain("not mapped to a GL account");
+        /* Only what can be charged is offered — by name and price, with no reasons beside it. */
+        expect(host.textContent).not.toContain("Monthly Fee");
+        expect(host.textContent).not.toContain("not mapped to a GL account");
+        expect(host.querySelector('[data-financials-bulk-charge-empty="true"]')).toBeNull();
 
         act(() => host.querySelector<HTMLButtonElement>('[data-testid="bulk-charge-template"] button')!.click());
-        const opts = optionsIn(document.body);
-        expect(opts.find((o) => o.textContent?.startsWith("Monthly Fee"))?.getAttribute("aria-disabled")).toBe("true");
+        const opts = optionsIn(document.body).filter((o) => o.getAttribute("data-option-value"));
+        expect(opts.map((o) => o.textContent)).toEqual(["Alpha Fee · $25.00"]);
         act(() => opts.find((o) => o.textContent?.startsWith("Alpha Fee"))!.click());
         expect(host.querySelector('[data-financials-bulk-charge-amount="configured"]')?.textContent).toBe("$25.00 · configured in Catalog");
         expect(host.textContent).toContain("Posts to 4010 · Activity Revenue");
@@ -169,5 +200,21 @@ describe("Bulk charge", () => {
         const confirm = host.querySelector('[data-financials-bulk-charge-confirm="true"]');
         /* Only the one ready household is offered for creation: one charge at the configured price. */
         expect(confirm?.textContent).toBe("Create 1 charge · $25.00");
+    });
+});
+
+describe("Bulk charge with nothing chargeable", () => {
+    it("shows one actionable line instead of unusable options", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+            url.startsWith("/api/admin/financials/bulk-charge-targets")
+                ? new Response(JSON.stringify({ ok: true, businessDate: "2026-06-29", catalog: { ok: true, options: OPTIONS.slice(1) }, households: [] }))
+                : new Response("{}", { status: 404 }),
+        ));
+        act(() => root.render(<FinancialsBulkAddCharge siteLocationId="" onCommitted={() => {}} />));
+        await flush();
+        expect(host.querySelector('[data-financials-bulk-charge-empty="true"]')?.textContent)
+            .toBe("Add a one-time item with a GL Code in Organization › Financials › Catalog.");
+        expect(host.querySelector<HTMLButtonElement>('[data-testid="bulk-charge-template"] button')?.disabled).toBe(true);
+        expect(host.textContent).not.toContain("Monthly Fee");
     });
 });

@@ -1778,6 +1778,9 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  /* The command's own width decides its field layout — a phone's Focus Panel is ~240px wide. */
+  container-type: inline-size;
+  container-name: alloy-addcharge;
 }
 .alloy-os-addcharge__title {
   margin: 0 0 3px;
@@ -1843,6 +1846,19 @@
   align-items: baseline;
   padding: 2px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+/*
+ * NARROW: LABEL ABOVE VALUE. Beside a 116px label column, a ~240px command left the Charge type
+ * select ~60px ("Act…") and ran the override amount into its own "required" mark. Stacked, every
+ * value gets the full width; wide commands keep the two-column form unchanged.
+ */
+@container alloy-addcharge (max-width: 380px) {
+  .alloy-os-addcharge__field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    align-items: start;
+    padding: 4px 0;
+  }
 }
 .alloy-os-addcharge__field-label {
   font-size: 0.64rem;
@@ -3734,8 +3750,16 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
     gap: 0 16px;
 }
+/*
+ * Label ABOVE value in the pair, as in the date cells beside it. A 64px label column could not
+ * hold "Amount · required", so the mark ran into the override's amount input.
+ */
 .alloy-os-addcharge__pair > .alloy-os-addcharge__field {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    align-items: start;
+    /* The taller half (an override's summary) must not push the other half's control down. */
+    align-content: start;
 }
 .alloy-os-addcharge__dates {
     display: grid;
