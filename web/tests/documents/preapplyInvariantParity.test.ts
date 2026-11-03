@@ -28,6 +28,19 @@ describe("pre-apply invariants", () => {
         expect(tail).toContain("tests passed=% failed=0");
     });
 
+    it("D10-M1 verdict store: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {
+        const migration = read("certification/documents-v1/pending-migrations/20261216090000_documents_malware_verdicts.sql");
+        const single = read("certification/invariants/documents-malware-verdicts.sql");
+        const invariant = read("certification/invariants/documents-malware-verdicts-preapply.sql");
+        expect(migration.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(2);
+        const substituted = migration.split("GRANT EXECUTE ON FUNCTION").join("GRANT ALL ON FUNCTION");
+        expect(invariant.startsWith(substituted)).toBe(true);
+        expect(invariant.endsWith(single)).toBe(true);
+        const banner = invariant.slice(substituted.length, invariant.length - single.length);
+        expect(banner.startsWith(BANNER)).toBe(true);
+        expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
+    });
+
     it("D10-A1 atomic open: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {
         const migration = read("certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql");
         const single = read("certification/invariants/processing-open-case-atomic.sql");

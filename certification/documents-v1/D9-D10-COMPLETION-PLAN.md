@@ -114,7 +114,7 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | D10-A3 staging apply `20261215093000` | — | — | — | — | — | — | After A1 and A2, merge, then `database.apply_promoted_migration` (DEC-7) |
 | D10-S1 WS11 link + access rules | Draft SQL only | — | — | — | — | — | **Communications H3** |
 | D10-S2 storage boundary | ✔ increment 1 | — | — | ✔ #1627 | ✔ (unwired) | — | Re-prove with H3 on a certenv |
-| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`, invariant not run) | — | — | — | — | — | **Documents security H4** review. A pre-apply variant is possible, like archive (it needs only GRANT EXECUTE written as GRANT ALL) |
+| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`) | `documents-malware-verdicts-preapply.sql` prepared, **not run** | — | — | — | — | **Documents security H4** review. Its pre-apply invariant can run before the review; the apply cannot |
 | D10-M2 scanner integration | ✔ `e0dfa2121`, unwired | — | — | — | — | — | **DEC-6** engine and host (H4) |
 | D10-F1 Resend fetcher wiring | Adapter ✔, not wired | — | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
 | D10-V1 full inbound path | Synthetic suites green | — | — | — | — | — | After S1, M2, A3 on a certenv |
@@ -145,8 +145,18 @@ runner verifies that from an independent connection.
 | `documents-d9-application-filing.sql` (`aa5c43e4…`) | Application-as-actor filing and replacement with no user | staging-tip certenv |
 | `documents-d9-3-archive-preapply.sql` (`b4f15bbd…`) | Archive and staff restore, archived unavailable everywhere | staging-tip certenv |
 | `processing-open-case-atomic-preapply.sql` (`64c2461b…`) | D10-A1 single session; the SQL half of the 24 h handoff | staging-tip certenv |
+| `documents-malware-verdicts-preapply.sql` (`560163d1…`) | D10-M1 verdict store (I1–I6 cases of the reviewed invariant), migration inside the rollback | staging-tip certenv |
 
-All three pass the installed toolkit's `analyzeRollbackSafety` statically. **None has run.**
+All four pass the installed toolkit's `analyzeRollbackSafety` statically. **None has run.**
+
+**Attempt, 2026-11-03.**
+- Push `gar_522ee0ddcaf319` ✔ (`agent/documents` = `c1875434429c`).
+- `certenv-dec617feb5` ✔ (`gar_6b20b5a338ded9`; staging `7e9b242c`, 550 migrations through `20261214090000`, lease to
+  2026-11-04 18:57Z).
+- Target hold recorded clear ✔ (`gar_6782eecf7d63aa`).
+- The three rollback cards were approved, then failed before any SQL ran (`gar_d57a9cfde73a12`, `gar_eb51079d9339d5`,
+  `gar_8bf70cddb32a8e`). Execution never receives the filing lane: toolkit defect HC-C, Host Capacity. They are refiled
+  after the fix.
 
 **Order of requests** (each its own operator approval; payloads under `.vacilando-payloads/d9d10-*.json`):
 1. `repository.push` of `agent/documents` at the certified candidate. A rollback source must be on a sanctioned
