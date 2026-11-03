@@ -169,6 +169,9 @@ There is no second room model and no second site model anywhere in this API.
 | Which documents are filed for this child, family or parent? | `GET /api/v1/documents` |
 | What is this one document? | `GET /api/v1/documents/{id}` |
 | Let me download it now | `GET /api/v1/documents/{id}/download-link` |
+| I want to send a document | `POST /api/v1/document-uploads`, then its bytes to `POST /api/v1/document-uploads/content` |
+| File what I sent to this child, family or parent | `POST /api/v1/document-filings` |
+| Also link it to a sibling or the household | `POST /api/v1/document-subjects` (and `POST /api/v1/document-subjects/unlink` to remove that link) |
 | What attendance has been recorded? | `GET /api/v1/attendance-events` |
 | Record that something happened | `POST /api/v1/attendance-events` |
 
@@ -301,7 +304,7 @@ in the same order.
 
 ## 9. Submitting facts and performing operations
 
-Ten write operations exist, and they come in two shapes.
+Fifteen write operations exist, and they come in three shapes.
 
 **Nine are service-state operations** — starting, ending and voiding an
 enrollment; assigning, moving and cancelling a placement; setting, changing and
@@ -312,7 +315,11 @@ conflict condition for each.
 only endpoint, and it carries three intents — `original`, `correction` and
 `reversal`. The rest of this section is about it.
 
-All ten are **governed**, not CRUD. You assert an intent; Alloy decides whether
+**Five are document writes** — create an upload, send its content, file the
+document, and add or remove a secondary link. They are the only writes that take an
+`Idempotency-Key` header; see the specification's §10a.1.
+
+All fifteen are **governed**, not CRUD. You assert an intent; Alloy decides whether
 it may be performed. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on
 this API.
 
@@ -331,8 +338,9 @@ Send up to 200 events. Each receives its **own** outcome, and the call returns
 
 ### Retrying is safe
 
-You do not send an idempotency key. Replay identity is derived from **your own
-event identifier**, scoped to your Installation.
+For attendance you do not send an idempotency key. Replay identity is derived from **your own
+event identifier**, scoped to your Installation. Document writes are different: send an
+`Idempotency-Key` header with each one, and reuse it when you retry.
 
 **If a submission times out, retry it unchanged.** You cannot create a duplicate
 by retrying, and you do not need to reconcile first. Two callers submitting the
@@ -410,7 +418,7 @@ which of the three you are looking at without reconstructing it. It is an
 append-only ledger: nothing is ever edited or removed, and the effective truth is
 what remains after corrections and reversals are applied.
 
-So the surface is **ten HTTP write operations** covering **twelve domain intents**,
+So the surface is **fifteen HTTP write operations** covering **seventeen domain intents**,
 because Attendance carries three through one endpoint. Counting either way is
 fine; mixing the two is what causes confusion.
 

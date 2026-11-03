@@ -3076,6 +3076,831 @@
           }
         }
       }
+    },
+    "/api/v1/document-uploads": {
+      "post": {
+        "operationId": "createDocumentUpload",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Declare a document upload",
+        "description": "Declares one file and writes nothing. Answers an opaque `upload_id`, valid for one hour and bound to this installation and to the declared format, size and SHA-256. Send the bytes next to `POST /api/v1/document-uploads/content`.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  },
+                  "byte_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4194304
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "mime_type",
+                  "byte_size",
+                  "sha256"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The upload was declared.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The declared size exceeds 4 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Alloy does not store this format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-uploads/content": {
+      "post": {
+        "operationId": "completeDocumentUpload",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Send an upload's bytes",
+        "description": "The raw file bytes (at most 4 MiB), screened before anything is stored. Creates one document that is not yet filed and that only this installation can file. A retry converges on the same document.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The upload_id returned by POST /api/v1/document-uploads."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already received \u2014 the same document is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivedDocument"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Received.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivedDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such upload is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The upload expired (upload_expired), or this Idempotency-Key was used for different content (idempotency_conflict).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body exceeds 4 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The bytes are not the declared format (CONTENT_MISMATCH) or were refused by screening (SCREENING_REFUSED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The bytes do not match the declared size and SHA-256 (checksum_mismatch).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The file could not be stored; nothing was recorded as received. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The upload could not be recorded or completed; nothing was done. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-filings": {
+      "post": {
+        "operationId": "fileDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "File a document this installation uploaded",
+        "description": "Files a received document to a visible child, household or parent/guardian, under the same rules Alloy staff file under. A type that needs review refuses REVIEW_REQUIRED; a type whose sensitivity is not standard refuses TYPE_NOT_AVAILABLE_EXTERNALLY. The Idempotency-Key is the filing key: a retry returns the committed result.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "new_document",
+                      "new_version"
+                    ],
+                    "default": "new_document"
+                  },
+                  "type_key": {
+                    "type": "string"
+                  },
+                  "primary": {
+                    "type": "object",
+                    "properties": {
+                      "subject_type": {
+                        "type": "string",
+                        "enum": [
+                          "child",
+                          "household",
+                          "person"
+                        ]
+                      },
+                      "subject_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "subject_type",
+                      "subject_id"
+                    ]
+                  },
+                  "contexts": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "subject_type": {
+                          "type": "string",
+                          "enum": [
+                            "child",
+                            "household",
+                            "person"
+                          ]
+                        },
+                        "subject_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "subject_type",
+                        "subject_id"
+                      ]
+                    }
+                  },
+                  "target_document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already filed under this key \u2014 the committed result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentFilingResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Filed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentFilingResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already filed under another key (ALREADY_FILED), or quarantined (DOCUMENT_QUARANTINED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The filing rules refuse it (e.g. TYPE_UNAVAILABLE, REVIEW_REQUIRED, TYPE_NOT_AVAILABLE_EXTERNALLY, SUBJECT_NOT_RELATED, NEW_VERSION_REQUIRED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "A file copy failed; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The filing could not be recorded; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-subjects": {
+      "post": {
+        "operationId": "linkDocumentSubject",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Add a secondary link",
+        "description": "Adds a secondary (context) link from a document this installation can read to a visible child, household or parent/guardian. The owner never changes.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject_type": {
+                    "type": "string",
+                    "enum": [
+                      "child",
+                      "household",
+                      "person"
+                    ]
+                  },
+                  "subject_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "subject_type",
+                  "subject_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Linked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSubjectLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The subject is the document's owner, which cannot be changed through the API (primary_subject_immutable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The change could not be recorded; nothing was changed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-subjects/unlink": {
+      "post": {
+        "operationId": "unlinkDocumentSubject",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Remove a secondary link",
+        "description": "Removes a secondary (context) link. The owner link can never be removed through the API. Nothing is deleted.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject_type": {
+                    "type": "string",
+                    "enum": [
+                      "child",
+                      "household",
+                      "person"
+                    ]
+                  },
+                  "subject_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "subject_type",
+                  "subject_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unlinked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSubjectLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The subject is the document's owner, which cannot be changed through the API (primary_subject_immutable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The change could not be recorded; nothing was changed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4985,6 +5810,122 @@
             "format": "date-time"
           }
         }
+      },
+      "DocumentUpload": {
+        "type": "object",
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "description": "Opaque. Send it back as the upload_id query parameter of POST /api/v1/document-uploads/content."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "max_bytes": {
+            "type": "integer"
+          },
+          "content_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "expires_at",
+          "max_bytes",
+          "content_url"
+        ]
+      },
+      "ReceivedDocument": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "quarantined"
+            ],
+            "description": "quarantined: flagged by screening; it can never be filed through the API."
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "status",
+          "replay"
+        ]
+      },
+      "DocumentFilingResult": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filed_document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "new_document",
+              "new_version"
+            ]
+          },
+          "doc_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "filed_document_id",
+          "mode",
+          "doc_type",
+          "replay"
+        ]
+      },
+      "DocumentSubjectLink": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subject_type": {
+            "type": "string",
+            "enum": [
+              "child",
+              "household",
+              "person"
+            ]
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "subject_type",
+          "subject_id",
+          "linked"
+        ]
       }
     },
     "responses": {

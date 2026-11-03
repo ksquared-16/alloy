@@ -55,11 +55,13 @@ describe("REPO facts the proposal relies on", () => {
 });
 
 describe("increment 1 has landed as proposed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6)", () => {
-    it("documents.read and the four operations exist; writes stay absent", () => {
+    it("documents.read and the four operations exist; writes arrived only with the ratified D9.2 contract, under their own scope", () => {
         const catalog = read("web/lib/platform/external/scopeCatalog.ts");
         expect(catalog).toMatch(/"documents\.read": \{/);
         expect(catalog).toMatch(/listDocumentCategories[\s\S]*listDocuments[\s\S]*getDocument[\s\S]*getDocumentDownloadLink/);
-        expect(catalog).not.toMatch(/["']documents\.write["']/);
+        // D9.2 (2026-11-03): the write is a separate grant; documents.read still grants no write.
+        expect(catalog).toMatch(/"documents\.write": \{/);
+        expect(catalog).toMatch(/fileDocument: \{ operationId: "fileDocument", scope: "documents\.write"/);
     });
 });
 

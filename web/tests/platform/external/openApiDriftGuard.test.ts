@@ -148,11 +148,18 @@ describe("public OpenAPI drift guard", () => {
         // externally material.
         // D9.1 (user-approved 2026-10-30, OPWORK_AA660DC9554D_SPRINT_5D62877D85D6) added the four read-only document
         // paths: standard documents of visible children, households and parents/guardians — no write.
+        // D9.2 (user-ratified 2026-11-03, Q1–Q8, OPWORK_AA660DC9554D_SPRINT_AFD07879C606) added the five document write
+        // intents under documents.write: upload, its content, filing, and adding / removing a secondary link.
         expect(Object.keys(spec.paths).sort()).toEqual([
             "/api/v1/attendance-events",
             "/api/v1/children",
             "/api/v1/context",
             "/api/v1/document-categories",
+            "/api/v1/document-filings",
+            "/api/v1/document-subjects",
+            "/api/v1/document-subjects/unlink",
+            "/api/v1/document-uploads",
+            "/api/v1/document-uploads/content",
             "/api/v1/documents",
             "/api/v1/documents/{id}",
             "/api/v1/documents/{id}/download-link",

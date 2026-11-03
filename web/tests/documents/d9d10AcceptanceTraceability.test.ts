@@ -62,17 +62,24 @@ describe("capabilities the document says to reuse exist, and the document names 
 });
 
 describe("the gaps the document states are still gaps", () => {
-    // D9.1 landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): the read scope and its four operations now exist. What
-    // §1.3 still lists as remaining — writes, uploads, filing through the API — is still absent.
-    it("D9.1 implemented: documents.read and four read operations; no documents WRITE scope or operation yet", () => {
+    // D9.1 landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): the read scope and its four operations. D9.2 (user-ratified
+    // 2026-11-03, Q1–Q8, OPWORK_AA660DC9554D_SPRINT_AFD07879C606) added documents.write and exactly five POST intents.
+    // Still absent (D9.3): review, versions, validity, requirements, expiration, history, archive — and never a PUT,
+    // PATCH or DELETE on a document path.
+    it("D9.1 + D9.2: documents.read (four GETs) and documents.write (exactly five POST intents); nothing else", () => {
         const catalog = read("web/lib/platform/external/scopeCatalog.ts");
         expect(catalog).toMatch(/"documents\.read": \{/);
-        for (const op of ["listDocumentCategories", "listDocuments", "getDocument", "getDocumentDownloadLink"]) expect(catalog).toContain(op);
-        expect(catalog).not.toMatch(/["']documents\.write["']/);
+        expect(catalog).toMatch(/"documents\.write": \{/);
+        for (const op of ["listDocumentCategories", "listDocuments", "getDocument", "getDocumentDownloadLink", "createDocumentUpload", "completeDocumentUpload", "fileDocument", "linkDocumentSubject", "unlinkDocumentSubject"]) expect(catalog).toContain(op);
         const spec = JSON.parse(read("docs/api/openapi/alloy-public-api.v1.json")) as { paths?: Record<string, Record<string, unknown>> };
         const docPaths = Object.entries(spec.paths ?? {}).filter(([p]) => p.includes("document"));
-        expect(docPaths.map(([p]) => p).sort()).toEqual(["/api/v1/document-categories", "/api/v1/documents", "/api/v1/documents/{id}", "/api/v1/documents/{id}/download-link"]);
-        for (const [, methods] of docPaths) expect(Object.keys(methods)).toEqual(["get"]);
+        const reads = ["/api/v1/document-categories", "/api/v1/documents", "/api/v1/documents/{id}", "/api/v1/documents/{id}/download-link"];
+        const writes = ["/api/v1/document-filings", "/api/v1/document-subjects", "/api/v1/document-subjects/unlink", "/api/v1/document-uploads", "/api/v1/document-uploads/content"];
+        expect(docPaths.map(([p]) => p).sort()).toEqual([...reads, ...writes].sort());
+        for (const [p, methods] of docPaths) expect(Object.keys(methods), p).toEqual(reads.includes(p) ? ["get"] : ["post"]);
+        for (const later of ["submitDocumentReview", "replaceDocumentVersion", "setDocumentValidity", "listSubjectRequirements", "listDocumentHistory", "archiveDocument"]) {
+            expect(catalog, `${later} is D9.3`).not.toContain(later);
+        }
     });
 
     it("D10: WS11's communication_message_attachments is planned but in no migration", () => {

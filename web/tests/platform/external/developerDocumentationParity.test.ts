@@ -44,6 +44,7 @@ const WORD: Record<number, string> = {
     16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen", 20: "twenty",
     21: "twenty-one", 22: "twenty-two", 23: "twenty-three", 24: "twenty-four", 25: "twenty-five",
     26: "twenty-six", 27: "twenty-seven", 28: "twenty-eight", 29: "twenty-nine", 30: "thirty",
+    31: "thirty-one", 32: "thirty-two", 33: "thirty-three", 34: "thirty-four", 35: "thirty-five",
 };
 
 describe("the specification describes the surface that exists", () => {
@@ -258,8 +259,10 @@ describe("the write surface is not described as one intent per operation", () =>
     it("states the operation/intent split where it states a count", () => {
         const guide = read(GUIDE).toLowerCase();
         expect(guide).toContain(`${WORD[writes.length]} http write operations`);
+        // One intent per write operation, except attendance submission, which carries three (original, correction,
+        // reversal) through one endpoint — derived, so a new write cannot leave the stated count behind.
         expect(guide, "the guide must name the domain-intent count alongside the operation count")
-            .toContain("twelve domain intents");
+            .toContain(`${WORD[writes.length + 2]} domain intents`);
     });
 
     it("never equates the operation count with the intent count", () => {

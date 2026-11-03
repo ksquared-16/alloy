@@ -20,7 +20,7 @@ at `/api/v1`, and described by a governed OpenAPI 3.1 document.
 | **Authentication** | Exchange `client_id` + `client_secret` for a 15-minute opaque bearer token. No refresh tokens, no OAuth redirect flow. |
 | **First call** | `GET /api/v1/context` — tells you which organization you are acting for, what you may do, and where. |
 | **Reference** | [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json) — OpenAPI 3.1, complete, and kept in step with the runtime by a drift guard in both directions. |
-| **Surface** | 26 operations across 22 paths: 1 token exchange, 14 reads, 10 governed writes, and `GET /context`. |
+| **Surface** | 31 operations across 27 paths: 1 token exchange, 14 reads, 15 governed writes, and `GET /context`. |
 | **Pagination & sync** | `next_cursor` within one pass, `sync_token` between passes, `updated_since` for reconciliation. |
 | **Rate limits** | 30 token exchanges/min, 600 reads/min, 120 writes/min — reads and writes have independent budgets. |
 | **Errors** | A single JSON envelope with `type`, `code`, `message` and `request_id` on every refusal. |
@@ -137,7 +137,7 @@ scopes:   attendance.write, children.read
 boundary: locations = [Downtown Campus, Riverside]
 ```
 
-The fourteen grantable scopes:
+The fifteen grantable scopes:
 
 | Scope | Grants |
 |---|---|
@@ -152,6 +152,7 @@ The fourteen grantable scopes:
 | `staff.contact.read` | Read email and phone for staff already visible through staff access |
 | `attendance.read` | Read attendance history for visible children |
 | `documents.read` | Read standard documents of visible children, their households and parents or guardians, the folder hierarchy, and ten-minute download links |
+| `documents.write` | Upload standard documents, file them to visible children, households and parents or guardians, and add or remove their secondary links |
 | `enrollment.write` | Start, end and void enrollments; assign, move and cancel placements |
 | `schedule.write` | Set, change and cancel schedule assignments |
 | `attendance.write` | Submit attendance facts, including corrections and reversals |
