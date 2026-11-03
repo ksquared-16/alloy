@@ -13,6 +13,12 @@
  * the gesture named the Work View. This file certifies that those facts reach the operator, and that
  * nothing beyond them is invented.
  *
+ * REVISED 2026-11-02: the work unit is no longer printed. The shell humanised the route slug
+ * (`waitlist` → "Waitlist"), but a slug is whatever the view was keyed at creation, and an unrenamed
+ * one read "New work view 3" under the loader. The configured label is not known in this window, so
+ * the destination is carried as a hidden marker (`data-destination-work-unit`) and only the subject,
+ * when the gesture carried one, is named.
+ *
  * The phase TIMELINE — when structure commits, when meaning arrives, the coherence window — is not
  * certifiable here, because it needs a provisioned surface against a real tenant. It is measured on
  * the deployed build by the Slice 10 timeline harness.
@@ -87,8 +93,8 @@ test.describe("the pre-commit window names the destination", () => {
         const s = await read(page);
         expect(s.destinationShell, "the shell must report itself as a destination shell").toBe(true);
         expect(s.workUnitAttr).toBe("waitlist");
-        // Humanised from the operator's own route — not a configured label, which is not known yet.
-        expect(s.destinationText).toContain("Waitlist");
+        // Carried, never printed: a humanised slug is not the configured label, which is not known yet.
+        expect(s.destinationText).not.toContain("Waitlist");
         // The single calm loader is RETAINED. The surface really is still preparing, and saying so
         // remains truthful; Phase 0 adds destination evidence, it does not claim readiness.
         expect(s.thinkingPresent).toBe(true);
@@ -130,7 +136,8 @@ test.describe("the pre-commit window names the destination", () => {
         const s = await read(page);
         expect(s.subjectText).toBe("Wrigley Kurzman");
         expect(s.workUnitAttr).toBe("new-leads");
-        expect(s.destinationText).toContain("New leads");
+        expect(s.destinationText).toContain("Wrigley Kurzman");
+        expect(s.destinationText).not.toContain("New leads");
     });
 
     test("with nothing known the shell is exactly what it always was — no empty destination frame", async ({ page }) => {

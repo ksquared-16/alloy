@@ -142,7 +142,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         is_active?: boolean;
     };
     if (ru.is_active === false) return tourPublicErr("Rule inactive", 400);
-    if (ru.location_id != null && String(ru.location_id).trim() !== "" && String(ru.location_id).trim() !== link.location_id) {
+    // Only the location's own rules offer new times (a legacy organization-wide rule does not).
+    if (ru.location_id == null || String(ru.location_id).trim() !== link.location_id) {
         return tourPublicErr("Slot rule does not match link location", 400);
     }
 

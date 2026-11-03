@@ -340,8 +340,14 @@ export function FormEmbedClient({
     showPreviewBanner = false,
     initialResolve = null,
     tourRequest = null,
+    brandOverride,
 }: {
     token: string;
+    /**
+     * A host that owns the frame's brand (a tour: the school's brand, `resolveTourPublicBrand`). When
+     * set, it replaces the form's own resolve brand for this rendering only; the form is unchanged.
+     */
+    brandOverride?: ParticipantBrand | null;
     showPreviewBanner?: boolean;
     tourRequest?: PublicFormTourRequest | null;
     /**
@@ -389,6 +395,9 @@ export function FormEmbedClient({
     // The tenant's own brand, resolved server-side from the authored form metadata. Held here and
     // applied by the frame so the conversation and the artifact review cannot theme differently.
     const [brand, setBrand] = useState<ParticipantBrand | null>(null);
+    // Read through a ref: the host's brand applies to every resolve without re-running the bootstrap.
+    const brandOverrideRef = useRef(brandOverride);
+    brandOverrideRef.current = brandOverride;
     /*
      * EMBEDDED IN AN ORGANIZATION'S PAGE → no chrome of our own. The host page ("Contact Us — North
      * Campus") already establishes the organization, site and purpose; our brand bar and the form's own
@@ -575,7 +584,7 @@ export function FormEmbedClient({
 
             if (json.data.packet_terminal) {
                 setPacketProgress(json.data.packet ?? null);
-            setBrand(json.data.brand ?? null);
+            setBrand(brandOverrideRef.current !== undefined ? brandOverrideRef.current : (json.data.brand ?? null));
                 setPacketAlreadyDone(true);
                 setSchema(null);
                 setPhase("ready");
@@ -678,7 +687,7 @@ export function FormEmbedClient({
                 }
             })();
             setPacketProgress(json.data.packet ?? null);
-            setBrand(json.data.brand ?? null);
+            setBrand(brandOverrideRef.current !== undefined ? brandOverrideRef.current : (json.data.brand ?? null));
             setMarketingConsentOffered(json.data.marketing_consent_offered === true);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));

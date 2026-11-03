@@ -1,7 +1,7 @@
 import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { TOUR_TOO_SOON_MESSAGE, isTourStartAllowed } from "@/lib/tours/bookings/tourEarliestDate";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
+import { computeAvailableTourSlots, type TourSlotRuleAuthority } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { assertTourIntervalOperating } from "@/lib/operatingCalendar/operatingCalendarServer";
 import { offeredSlotCapacity } from "@/lib/tours/availability/internalCompute";
 import { TOUR_BOOKING_SLOT_CAPACITY_METADATA_KEY } from "@/lib/tours/bookings/tourSlotCapacity";
@@ -94,7 +94,9 @@ async function assertSlotAvailableForWrite(
         startAt: Date;
         endAt: Date;
         excludeBookingId?: string | null;
-    }
+    },
+    /** Server-controlled; only `confirmTourBooking` passes `legacy_pending_confirmation`. */
+    ruleAuthority: TourSlotRuleAuthority = "location"
 ): Promise<number> {
     const padMs = 5 * 60 * 1000;
     const from = new Date(params.startAt.getTime() - padMs);
@@ -106,7 +108,7 @@ async function assertSlotAvailableForWrite(
         from,
         to,
         excludeBookingId: params.excludeBookingId ?? null,
-    });
+    }, ruleAuthority);
     const capacity = offeredSlotCapacity(slots, {
         startAt: params.startAt.toISOString(),
         endAt: params.endAt.toISOString(),
@@ -610,14 +612,22 @@ export async function confirmTourBooking(
             if (existing.status_key !== "pending_approval") {
                 return { ok: false, message: "tour_bookings: confirm only allowed from pending_approval" };
             }
-            await assertSlotAvailableForWrite(supabase, {
-                orgId,
-                locationId: existing.location_id,
-                userId: existing.requested_by_user_id,
-                startAt: new Date(existing.start_at),
-                endAt: new Date(existing.end_at),
-                excludeBookingId: existing.id,
-            });
+            // Approving the booking exactly as it was requested (times, location and host are the
+            // fetched row's, and only status changes). It may have been booked under a legacy
+            // organization-wide rule, so this one check still counts those rules; capacity, overlap
+            // and the operating calendar apply as for any write. Reschedule never gets this.
+            await assertSlotAvailableForWrite(
+                supabase,
+                {
+                    orgId,
+                    locationId: existing.location_id,
+                    userId: existing.requested_by_user_id,
+                    startAt: new Date(existing.start_at),
+                    endAt: new Date(existing.end_at),
+                    excludeBookingId: existing.id,
+                },
+                "legacy_pending_confirmation"
+            );
             return {
                 ok: true,
                 existing,

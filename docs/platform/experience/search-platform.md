@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-10
+last_reviewed: 2026-11-02
 supersedes: []
 ---
 
@@ -344,6 +344,51 @@ Worked example — **Lennon Kurzman → Waitlist**; **Kurzman Family → All + T
 disjoint, because Waitlist is child-grain while All and Tours are family-grain.
 
 Full doctrine: `docs/platform/runtime/stage-work-view-queue-canonical-model.md` §10.
+
+## A cohort destination opens the row's whole panel
+
+Choosing "Enrollment — Waitlist" under Lennon is choosing **Lennon's row in that cohort**. The
+operator lands on the panel that row composes, every card visible, exactly as a click on the row in
+the Waitlist view gives. A cohort destination — a staged process, or a Billing / Assignments
+projection — therefore names **no card and no item**: `operational_member_id` already selects the
+row, and a named card would be ELEVATED, zooming the panel into one card the operator then has to
+back out of.
+
+The shared destination → selection mapping (`operatorFocusSelectionFromDestination`) accepts a
+`focus_panel` destination with no card and dispatches no card focus. Search, the record's Go to and
+the Children card's "X's work" all use it, so none of them can zoom where the others don't.
+Card-naming destinations — Household, Assignment, and the per-process fallback with no proven
+cohort — are unchanged: there the card IS the answer.
+
+While the Work View loads, the boot shell prints the subject's name when the gesture carried it,
+and **no destination name**. The configured view label is not known in that window, and the route
+slug is not a label — an unrenamed Work View keeps the slug it was created with ("new work view 3").
+The slug and view id stay as hidden certification markers.
+
+## A parent or household reaches its household's processes
+
+A parent participates in no process; only children do. A parent (or household) result therefore
+carries **one destination per business process the household is in**, each landing on the
+household selected in that process's Work View — whole panel, no card zoomed. This does not
+contradict participant-grain navigation: the household is offered family-grain cohorts only, and
+never inherits a child's Work View.
+
+- **Staged processes (Enrollment, …)** — `buildHouseholdProcessContexts` evaluates the household's
+  children's case at **family grain**, with the same family predicates a child's fallback uses; the
+  case is the row. Two cases in one process are ambiguous and offer nothing; an unproven cohort is
+  not offered.
+- **Billing** — `loadHouseholdProjectionContexts` reads each household-grain projection cohort ONCE
+  for the whole candidate set, through Billing's own `fin.read` gate (the operator's `userId`
+  reaches `runSearch` for this). A child-grain projection never substitutes for the household.
+- **Never restated.** A process the subject already holds is not offered twice.
+- **Reach still governs.** A process the operator cannot reach is never offered; a refused Billing
+  cohort (no `fin.read`) offers nothing. Clicking the parent itself still opens the parent's record.
+- **Cost.** One extra `process_instances` read, paid only when a parent or household matched and
+  has children; the Billing cohorts load alongside it.
+
+Worked example (`web/tests/search/searchParentHouseholdProcessDestinations.test.ts`) — Search →
+**Kelly Kurzman**, a parent → an Enrollment destination opens the household's case row in that
+family cohort, and a Billing destination opens the household's own Billing row.
 
 ## Related doctrine
 

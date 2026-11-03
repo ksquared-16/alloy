@@ -41,6 +41,8 @@ export type RunSearchArgs = {
     dimensions: AdminAccessScopeDimensions;
     rawQ: string;
     limit?: number;
+    /** The operator — Billing's capability gate reads it. Absent, no Billing context is offered. */
+    userId?: string | null;
 };
 
 function clampLimit(n: number | undefined): number {
@@ -85,6 +87,7 @@ export async function runSearch(args: RunSearchArgs): Promise<Omit<SearchRespons
         envelope,
         processConfig,
         candidates,
+        projection: args.userId ? { userId: args.userId, dimensions } : null,
     });
 
     // 5. Assemble + rank.

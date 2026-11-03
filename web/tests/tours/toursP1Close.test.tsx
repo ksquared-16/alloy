@@ -165,13 +165,17 @@ describe("D1 — effective identity = published form → location → organizati
         expect(await loadPublishedTourCalendarForm(fakeSupabase({ form_public_links: [publishedLink()] }), { orgId: ORG, locationId: LOC })).toBeNull();
     });
 
+    // Superseded for TOURS by the Tours review 2026-11-02: a tour uses the school's brand unless the school
+    // explicitly chooses the form's (`resolveTourPublicBrand`). A form on its own link keeps form → location.
     it("the public page and the settings read go through the same loaders (no second precedence)", () => {
         const loader = web("lib/branding/loadPublicBrand.ts");
         expect(loader).toMatch(/resolvePublicFormBrand[\s\S]*loadPublishedFormBrandLayer\(supabase, params\)/);
         const route = web("app/api/admin/public-brand/route.ts");
         expect(route).toContain("loadPublishedTourCalendarForm(supabase, { orgId: ctx.orgId, locationId })");
-        expect(route).toContain("effective: resolveEffectivePublicBrand({ form: publishedForm?.formLayer ?? null, ...layers })");
+        expect(route).toContain("effective: resolveTourPublicBrand({ form: publishedForm?.formLayer ?? null, ...layers })");
+        expect(route).toContain("published_form_brand: publishedForm ? resolveEffectivePublicBrand({ form: publishedForm.formLayer, ...layers }) : null");
         const panel = web("app/adminV2/settings/tours/availability/TourPublicBrandPanel.tsx");
+        expect(panel).toContain("const preview = resolveTourPublicBrand(");
         expect(panel).toContain("form: publishedForm?.formLayer ?? null, location: cleaned(draft)");
         expect(panel).toContain('data-testid={`tours-brand-${key}-form-wins`}');
         expect(panel).toContain('data-testid="tours-brand-published-form"');

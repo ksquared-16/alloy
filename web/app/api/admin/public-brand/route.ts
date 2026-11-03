@@ -4,7 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { loadPublicBrandLayers } from "@/lib/branding/loadPublicBrand";
-import { resolveEffectivePublicBrand } from "@/lib/branding/publicBrand";
+import { resolveEffectivePublicBrand, resolveTourPublicBrand, tourBrandUsesForm } from "@/lib/branding/publicBrand";
 import { hasPublicBrandOrganizationCapability } from "@/lib/access/publicBrandAuthority";
 import { hasToursCapability, TOURS_CONFIGURE } from "@/lib/access/toursAuthority";
 import { loadPublishedTourCalendarForm } from "@/lib/tours/publicCalendar/publishedTourCalendarBrand";
@@ -17,10 +17,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * The organization brand, the location's override and the effective result with each field's source,
  * so the Tours settings can say "inherited from the organization" or "set for this location".
  *
- * At a location with a published tour calendar, `published_form` is the form that calendar opens into
- * and `effective` includes that form's own brand layer — exactly what the public tour page resolves
- * (form → location → organization → platform). `effective_without_form` is what a form that sets no
- * brand of its own would show.
+ * `effective` is what the TOUR shows — the public tour page, its form step and the website button all
+ * resolve it through `resolveTourPublicBrand`: location → organization → platform, with the attached
+ * form's own brand leading only under the explicit `tour_brand_source: "form"` (`tour_uses_form_brand`).
+ * At a location with a published tour calendar, `published_form` is the form that calendar opens into;
+ * `published_form_brand` is what that form shows on its OWN link (form → location → organization), so
+ * the screen can say where each colour comes from. `effective_without_form` is the school's brand alone.
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -41,8 +43,10 @@ export async function GET(request: NextRequest) {
         organization: layers.organization,
         location: layers.location,
         published_form: publishedForm,
-        effective: resolveEffectivePublicBrand({ form: publishedForm?.formLayer ?? null, ...layers }),
+        effective: resolveTourPublicBrand({ form: publishedForm?.formLayer ?? null, ...layers }),
         effective_without_form: resolveEffectivePublicBrand(layers),
+        published_form_brand: publishedForm ? resolveEffectivePublicBrand({ form: publishedForm.formLayer, ...layers }) : null,
+        tour_uses_form_brand: tourBrandUsesForm(layers),
         can_edit_organization: access.ok && hasPublicBrandOrganizationCapability(access),
         can_edit_location: access.ok && hasToursCapability(access, TOURS_CONFIGURE),
     });

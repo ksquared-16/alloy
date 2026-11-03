@@ -8,7 +8,7 @@ import {
 import { operatorWorkUnitHrefFromWorkViewSlug } from "@/lib/admin/canonicalOperatorRoutes";
 import { historyProjectionMode } from "@/lib/experience/surfaceHost/historyProjectionMode";
 import { operatorFocusSelectionFromDestination } from "@/lib/runtime/focus/operatorFocusSelection";
-import { SEARCH_CARD_KEYS, resolveSearchDestinations } from "@/lib/search/searchDestinations";
+import { resolveSearchDestinations } from "@/lib/search/searchDestinations";
 import { processOffersChildGrainAt } from "@/lib/search/searchOperationalMemberships";
 import type { SearchSubject } from "@/lib/search/searchContracts";
 import type {
@@ -17,13 +17,15 @@ import type {
 } from "@/lib/search/searchProcessConfiguration";
 
 /**
- * SELECTING A CHILD'S BUSINESS PROCESS OPENS THAT PROCESS — NOT THE CHILD CARD.
+ * SELECTING A CHILD'S BUSINESS PROCESS OPENS THE CHILD'S WHOLE PANEL IN THAT PROCESS.
  *
- * The reported defect: Search → a child → "Enrollment" brought up the Children card with the child
- * selected. The operator chose the PROCESS. These pin, end to end through the shared builder and
+ * The reported defects, in order: Search → a child → "Enrollment" first brought up the Children card
+ * with the child selected, then the process card — each ZOOMED into one card. The operator chose the
+ * child's row in that process, and expects that row's whole panel, every card visible, exactly as a
+ * click on the row in the Work View gives. These pin, end to end through the shared builder and
  * resolver (the same pair the durable record's `Go to` and the Children card's "X's work" use):
  *
- *   child grain    → the process card, on the child's own participation row
+ *   child grain    → the child's own participation row, no card elevated
  *   no child grain → the child's OWN case, evaluated at family grain — never the first family
  *   two cases      → no process destination at all; the record still opens
  *   plain child    → still the child's record
@@ -162,10 +164,10 @@ describe("Enrollment — a child-grain process opens ITS focus panel", () => {
     );
     const waitlist = destinations.find((d) => d.key === "work_view:enrollment:waitlist_view")!;
 
-    it("targets the PROCESS card, never the Children card", () => {
+    it("names NO card — the child's whole panel opens, not one card zoomed", () => {
         expect(waitlist).toBeTruthy();
-        expect(waitlist.card_key).toBe(SEARCH_CARD_KEYS.currentWork);
-        expect(waitlist.card_key).not.toBe(SEARCH_CARD_KEYS.children);
+        expect(waitlist.card_key ?? null).toBeNull();
+        expect(waitlist.item_id ?? null).toBeNull();
         expect(waitlist.context_key).toBe("enrollment");
     });
 
@@ -175,13 +177,10 @@ describe("Enrollment — a child-grain process opens ITS focus panel", () => {
         expect(waitlist.operational_member_id).toBe(PARTICIPATION);
     });
 
-    it("the ONE destination → selection mapping carries the process card through unchanged", () => {
+    it("the ONE destination → selection mapping selects the child's row and elevates no card", () => {
         const selection = operatorFocusSelectionFromDestination(waitlist)!;
-        expect(selection.card_focus).toEqual({
-            card_key: SEARCH_CARD_KEYS.currentWork,
-            item_id: CHILD,
-            context_key: "enrollment",
-        });
+        expect(selection).not.toBeNull();
+        expect(selection.card_focus).toBeNull();
         expect(selection.operational_member_id).toBe(PARTICIPATION);
         expect(selection.host_work_view_id).toBe("waitlist_view");
     });
@@ -204,7 +203,7 @@ describe("Assignments — child grain wins where the process has it", () => {
     it("opens the Assignments process on the child's row, not the family catch-all", () => {
         const ds = processDestinations(destinationsFor([row("assignments")], config(ASSIGNMENTS)), "assignments");
         expect(ds.map((d) => d.key)).toEqual(["work_view:assignments:all_children"]);
-        expect(ds[0].card_key).toBe(SEARCH_CARD_KEYS.currentWork);
+        expect(ds[0].card_key ?? null).toBeNull();
         expect(ds[0].operational_member_id).toBe("pi-lennon-assignments");
     });
 });
@@ -215,7 +214,7 @@ describe("Billing — no child grain ⇒ the child's OWN family-grain participat
     it("falls back to the child's own case, selected as the FAMILY row", () => {
         expect(ds.map((d) => d.key)).toEqual(["work_view:billing:all_work"]);
         const [all] = ds;
-        expect(all.card_key).toBe(SEARCH_CARD_KEYS.currentWork);
+        expect(all.card_key ?? null).toBeNull();
         expect(all.host_entity_id).toBe(CASE);
         // A family lens rows at the case — the member IS the case, never the child's participation.
         expect(all.operational_member_id).toBe(CASE);

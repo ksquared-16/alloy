@@ -82,28 +82,26 @@ describe("a Search destination and a manual row click select the same member", (
         expect(clicked!.entityType).toBe("child");
     });
 
-    it("the SAME Work View, host and ASPECT ride along with it", () => {
+    it("the SAME Work View and host ride along with it, and NO card aspect", () => {
         const destination = searchDestination();
 
         expect(destination.host_work_view_id).toBe("waitlist_children");
         expect(destination.host_work_unit_key).toBe(UNIT);
         // Host stays the CASE — the Focus Panel composes against it.
         expect(destination.host_entity_id).toBe(CASE);
-        // …and the ASPECT item stays the DURABLE child, which is what the Children card focuses.
-        expect(destination.item_id).toBe(DURABLE_CHILD);
+        // …and no card or item: the row's whole panel opens, exactly as a manual row click opens it.
+        expect(destination.card_key ?? null).toBeNull();
+        expect(destination.item_id ?? null).toBeNull();
     });
 
-    it("HOST, MEMBER and ASPECT ITEM are three different objects for a child", () => {
-        // The separation this sprint locks. Collapsing any two of them reintroduces the defect.
+    it("HOST and MEMBER are two different objects for a child", () => {
+        // The separation this sprint locks. Collapsing them reintroduces the defect.
         const destination = searchDestination();
 
         expect(destination.host_entity_id).toBe(CASE);
         expect(destination.operational_member_id).toBe(PARTICIPATION);
-        expect(destination.item_id).toBe(DURABLE_CHILD);
-
         expect(destination.operational_member_id).not.toBe(destination.host_entity_id);
-        expect(destination.operational_member_id).not.toBe(destination.item_id);
-        expect(destination.host_entity_id).not.toBe(destination.item_id);
+        expect(destination.operational_member_id).not.toBe(DURABLE_CHILD);
     });
 
     it("the OLD behaviour — sending the host — would be refused by the runtime", () => {

@@ -9,12 +9,14 @@ import { assertLocationInOrg } from "@/lib/tours/schedules/tourScheduleWrites";
 import { readTourScheduleScopeLocation } from "@/lib/tours/schedules/tourScheduleRouteSupport";
 import { resolvePublicBaseUrl } from "@/lib/tours/public/resolvePublicBaseUrl";
 import { projectTourCalendarShareLinks, type TourCalendarShareLinkRow } from "@/lib/tours/publicCalendar/tourCalendarShare";
+import { measureTourCalendarReadiness } from "@/lib/tours/publicCalendar/tourCalendarReadiness";
 
 /**
  * GET /api/admin/tours/calendar-links?location_id=
  *
  * The location's intake links as Preview & Share rows: which one publishes the tour calendar, its
- * hosted address, and whether it may be framed. Read-only — publishing is the existing link PATCH
+ * hosted address, whether it may be framed, and — for a published one — whether a family opening it can
+ * actually book (`readiness`, measured with the public page's own resolver). Read-only — publishing is the existing link PATCH
  * (`tour_calendar`), which keeps its own `tours.configure` + forms authority checks.
  *
  * Needs `tours.configure`: the hosted addresses carry the links' public tokens, so only people who
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     const { data: rows, error } = await supabase
         .from("form_public_links")
-        .select("id, form_definition_id, is_active, expires_at, allowed_embed_origins, metadata")
+        .select("id, form_definition_id, is_active, expires_at, allowed_embed_origins, metadata, created_at")
         .eq("org_id", ctx.orgId)
         .eq("metadata->>default_location_id", scope.locationId)
         .order("created_at", { ascending: false });
@@ -56,8 +58,18 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    const projected = projectTourCalendarShareLinks(linkRows, { locationId: scope.locationId, baseUrl: resolvePublicBaseUrl(), formTitles });
+    // A published calendar is measured with the public page's own checks — "live" is never just saved config.
+    const links = await Promise.all(
+        projected.map(async (link) =>
+            link.calendarPublished ?
+                { ...link, readiness: await measureTourCalendarReadiness(supabase, { orgId: ctx.orgId, locationId: scope.locationId!, link }).catch(() => null) }
+            :   link
+        )
+    );
+
     return NextResponse.json({
-        links: projectTourCalendarShareLinks(linkRows, { locationId: scope.locationId, baseUrl: resolvePublicBaseUrl(), formTitles }),
+        links,
         // Publishing is the link PATCH, which also needs forms authoring.
         can_publish: hasFormsCapability(access, FORMS_AUTHOR),
     });
