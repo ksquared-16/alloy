@@ -154,9 +154,9 @@ describe("the one rule — what manual Add Charge may incur from the catalog", (
     });
 
     it.each([
-        ["p-annual", "catalog_recurring_not_manual", /Annual — a recurring Catalog item.*set its frequency to One-time/],
+        ["p-annual", "catalog_recurring_not_manual", /^Annual — a recurring Catalog item/],
         ["p-session", "catalog_metered_not_manual", /usage-priced Catalog item/],
-        ["p-addon", "catalog_addon_not_manual", /Add-on — Add charge adds one-time fees only/],
+        ["p-addon", "catalog_addon_not_manual", /^Add-on — not charged by Add charge/],
         ["p-package", "catalog_addon_not_manual", /package/i],
         ["p-deposit", "catalog_deposit_not_manual", /held money/],
         ["p-program", "catalog_program_scoped", /one program/],
@@ -166,6 +166,9 @@ describe("the one rule — what manual Add Charge may incur from the catalog", (
         if (e.status === "offerable") return;
         expect(e.code).toBe(code);
         expect(e.reason).toMatch(reason);
+        /* Short, and never a workaround: no reason tells the operator to change the item's frequency. */
+        expect(e.reason).not.toMatch(/frequency|One-time/i);
+        expect(e.reason.length).toBeLessThan(90);
     });
 
     it("no unsupported reason names a billing flow that does not exist (measured 2026-10-30: none bills these)", () => {

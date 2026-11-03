@@ -171,27 +171,27 @@ function unsupportedReason(product: CommercialProductDef): { code: string; reaso
     if (product.commercialType === "deposit") {
         return {
             code: "catalog_deposit_not_manual",
-            reason: "Deposit — held money, not a charge. Add charge adds one-time fees only, and deposits are not collected from the Catalog yet.",
+            reason: "Deposit — held money, not a charge.",
         };
     }
     if (product.commercialType === "addon") {
         return {
             code: "catalog_addon_not_manual",
             reason: product.behavior.package != null
-                ? "Add-on package — Add charge adds one-time fees only, and packages are not sold from the Catalog yet."
-                : "Add-on — Add charge adds one-time fees only, and add-ons are not charged from the Catalog yet.",
+                ? "Add-on package — not charged by Add charge."
+                : "Add-on — not charged by Add charge.",
         };
     }
     if (cadence && RECURRING_CADENCES.has(cadence)) {
         return {
             code: "catalog_recurring_not_manual",
-            reason: `${frequencyLabel(cadence)} — a recurring Catalog item. Add charge adds one-time fees only, and recurring Catalog items are not billed by any flow yet. To charge it here, set its frequency to One-time.`,
+            reason: `${frequencyLabel(cadence)} — a recurring Catalog item, not charged by Add charge.`,
         };
     }
     if (cadence) {
         return {
             code: "catalog_metered_not_manual",
-            reason: `${frequencyLabel(cadence)} — a usage-priced Catalog item. Add charge adds one-time fees only, and usage-priced Catalog items are not billed by any flow yet.`,
+            reason: `${frequencyLabel(cadence)} — a usage-priced Catalog item, not charged by Add charge.`,
         };
     }
     return null;
@@ -235,7 +235,7 @@ export function evaluateCatalogCharge(
             status: "unsupported",
             product,
             code: "catalog_program_scoped",
-            reason: "Offered for one program only — a manual charge carries no program to check that against, so it cannot be added here.",
+            reason: "Offered for one program only — not charged by Add charge.",
         };
     }
     if (!(product.amountCents > 0)) {

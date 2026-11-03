@@ -8075,7 +8075,7 @@ export default function FinancialsCard({
                                 {vm.unavailableReason}
                             </span>
                         ) : null}
-                        {vm.chargeTemplates.length > 0 ? (
+                        {vm.chargeTemplates.some((tpl) => tpl.availability === "offerable") ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <button
@@ -8088,13 +8088,12 @@ export default function FinancialsCard({
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
-                                    {vm.chargeTemplates.map((tpl) => (
+                                    {/* Only what can be charged here — an item Add charge refuses is not a menu entry. */}
+                                    {vm.chargeTemplates.filter((tpl) => tpl.availability === "offerable").map((tpl) => (
                                         <DropdownMenuItem
                                             key={tpl.id}
                                             data-financials-charge-template={tpl.id}
                                             data-financials-charge-availability={tpl.availability}
-                                            disabled={tpl.availability !== "offerable"}
-                                            title={tpl.unavailableReason ?? undefined}
                                             onSelect={() => void preview(tpl.id, tpl.label)}
                                         >
                                             {/* The tenant's own label. Never `template_key`. */}
