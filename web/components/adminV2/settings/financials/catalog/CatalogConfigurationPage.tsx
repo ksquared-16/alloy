@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { Plus, Search } from "lucide-react";
 import {
     ConfigurationEmptyState,
@@ -932,9 +934,17 @@ function CatalogItemDialog({
 
     const stepLabel = ITEM_DIALOG_STEPS[step];
 
-    return (
+    /*
+     * PORTALED, ABOVE THE SHELL. Rendered in place, the dialog sat inside the content column, which
+     * is its own stacking context (`relative z-10 isolate`) — so its `fixed inset-0 z-50` competed
+     * only within that column, and the navigation rail (`z-[100]`) drew over it. On a phone the rail
+     * covered the dialog's left edge and the start of every GL Code in its menu. The same constant
+     * and portal the Communications channel dialog uses for the same reason.
+     */
+    const dialog = (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/25 p-4"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/25 p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="catalog-item-dialog-title"
@@ -1274,4 +1284,5 @@ function CatalogItemDialog({
             </div>
         </div>
     );
+    return typeof document === "undefined" ? dialog : createPortal(dialog, document.body);
 }

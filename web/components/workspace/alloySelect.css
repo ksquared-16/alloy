@@ -84,6 +84,21 @@
   bottom: calc(100% + 2px);
 }
 
+/*
+ * Floating: fixed to the viewport so a clipping ancestor (a dialog's scroll body, a card) cannot
+ * cut it off. Top/bottom, left, width and max-height are set inline from the trigger's position;
+ * these rules only release the in-flow anchoring and lift it above the surrounding content.
+ */
+.alloy-select__list.alloy-select__list--floating {
+  position: fixed;
+  top: auto;
+  bottom: auto;
+  right: auto;
+  min-width: 0;
+  z-index: 1000;
+  overscroll-behavior: contain;
+}
+
 .alloy-select__option {
   padding: 6px 10px;
   font-size: 12px;

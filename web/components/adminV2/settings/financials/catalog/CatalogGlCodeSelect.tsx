@@ -73,6 +73,8 @@ export function CatalogGlCodeSelect({
                 aria-label="GL Code"
                 className="mt-1"
                 testId={`${testId}-input`}
+                /* The dialog's scrolling body clipped the in-flow menu; it floats above it instead. */
+                floating
             />
             {error ?
                 <p className="mt-1 text-xs text-red-700">{error}</p>

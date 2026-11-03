@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
 // The primitive carries its own presentation so it renders correctly on every surface
 // that imports it — not only inside the operator runtime shell that used to own these
@@ -12,6 +12,47 @@ export type AlloySelectOption = { value: string; label: string; disabled?: boole
 
 /** Menu max-height (220px) + the 2px offset, so the flip decision matches the CSS. */
 const MENU_SPACE_PX = 222;
+
+/** A floating menu's tallest list, the shortest it will shrink to, and its gap from the viewport edge. */
+const FLOATING_MAX_HEIGHT_PX = 320;
+const FLOATING_MIN_HEIGHT_PX = 120;
+const FLOATING_EDGE_PX = 8;
+
+/**
+ * WHERE A FLOATING MENU GOES — fixed to the viewport beside its trigger, so no clipping ancestor
+ * (a card, a dialog's scroll body) can cut it off. Below by default; above when below cannot hold
+ * it and above holds more. Its height is what the chosen side allows, never past the edge; its
+ * left edge is clamped so a trigger near the right edge keeps the whole menu on screen. Pure and
+ * exported, so the geometry is locked without a browser.
+ */
+export function placeFloatingMenu(
+    /** The trigger's `getBoundingClientRect()` — layout-viewport coordinates. */
+    trigger: { top: number; bottom: number; left: number; width: number },
+    viewport: {
+        /** The layout viewport (`innerWidth`/`innerHeight`) that `position: fixed` is measured in. */
+        layoutWidth: number;
+        layoutHeight: number;
+        /** The VISIBLE part of it (`visualViewport`): smaller on a phone with the keyboard up. */
+        visibleTop?: number;
+        visibleLeft?: number;
+        visibleWidth?: number;
+        visibleHeight?: number;
+    },
+): { top?: number; bottom?: number; left: number; width: number; maxHeight: number; above: boolean } {
+    const vTop = viewport.visibleTop ?? 0;
+    const vLeft = viewport.visibleLeft ?? 0;
+    const vWidth = viewport.visibleWidth ?? viewport.layoutWidth;
+    const vHeight = viewport.visibleHeight ?? viewport.layoutHeight;
+    const belowSpace = vTop + vHeight - trigger.bottom - FLOATING_EDGE_PX - 2;
+    const aboveSpace = trigger.top - vTop - FLOATING_EDGE_PX - 2;
+    const above = belowSpace < FLOATING_MIN_HEIGHT_PX * 2 && aboveSpace > belowSpace;
+    const maxHeight = Math.max(FLOATING_MIN_HEIGHT_PX, Math.min(FLOATING_MAX_HEIGHT_PX, above ? aboveSpace : belowSpace));
+    const width = Math.max(0, Math.min(trigger.width, vWidth - FLOATING_EDGE_PX * 2));
+    const left = Math.min(Math.max(trigger.left, vLeft + FLOATING_EDGE_PX), vLeft + vWidth - FLOATING_EDGE_PX - width);
+    return above
+        ? { bottom: viewport.layoutHeight - trigger.top + 2, left, width, maxHeight, above }
+        : { top: trigger.bottom + 2, left, width, maxHeight, above };
+}
 
 /**
  * How long typed characters keep composing one prefix. Matches the WAI-ARIA listbox
@@ -81,10 +122,19 @@ export function AlloySelect({
     "aria-label": ariaLabel,
     className,
     triggerClassName,
+    floating = false,
 }: {
     value: string;
     onChange: (value: string) => void;
     options: readonly AlloySelectOption[];
+    /**
+     * Render the menu fixed to the viewport, above everything around it, instead of inside the
+     * control's box. For a select inside a clipping container — a dialog's scrolling body, a card
+     * with `overflow: hidden` — where the in-flow menu is cut off. It stays a DOM descendant of the
+     * control, so focus, keyboard, outside-click and the enclosing layer's interaction rules are
+     * unchanged; only its box moves. Re-placed on scroll and resize while open.
+     */
+    floating?: boolean;
     disabled?: boolean;
     placeholder?: string;
     valueLabelHint?: string | null;
@@ -112,6 +162,7 @@ export function AlloySelect({
 }) {
     const [open, setOpen] = useState(false);
     const [dropUp, setDropUp] = useState(false);
+    const [floatStyle, setFloatStyle] = useState<CSSProperties | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
@@ -181,10 +232,38 @@ export function AlloySelect({
         [entries],
     );
 
+    /** Where a floating menu goes now, from the trigger's live position. */
+    const measureFloating = useCallback((): { above: boolean; style: CSSProperties } | null => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (!rect) return null;
+        const vv = window.visualViewport;
+        const p = placeFloatingMenu(rect, {
+            layoutWidth: window.innerWidth,
+            layoutHeight: window.innerHeight,
+            visibleTop: vv?.offsetTop,
+            visibleLeft: vv?.offsetLeft,
+            visibleWidth: vv?.width,
+            visibleHeight: vv?.height,
+        });
+        return { above: p.above, style: { top: p.top, bottom: p.bottom, left: p.left, width: p.width, maxHeight: p.maxHeight } };
+    }, []);
+
     // Open on the current selection so ArrowDown starts from where the operator is.
     const openList = useCallback(() => {
         const idx = entries.findIndex((e) => e.value === value);
         setActiveIndex(idx >= 0 ? idx : 0);
+        if (floating) {
+            /*
+             * Placed in the SAME render that opens it. A menu first rendered hidden and placed a
+             * frame later could not take focus — `focus()` on a `visibility: hidden` option is a
+             * no-op — so the keyboard operator opened a list with nothing focused.
+             */
+            const p = measureFloating();
+            setDropUp(p?.above ?? false);
+            setFloatStyle(p?.style ?? null);
+            setOpen(true);
+            return;
+        }
         // Configuration forms are dense and often sit low in a scroll container. Opening
         // downward there puts the options off-screen, so flip when there is no room below
         // and there is room above. Measured at open time, not on every render.
@@ -195,7 +274,33 @@ export function AlloySelect({
                 : false,
         );
         setOpen(true);
-    }, [entries, value]);
+    }, [entries, value, floating, measureFloating]);
+
+    /* A floating menu is placed before paint and follows its trigger while the page moves. */
+    useLayoutEffect(() => {
+        if (!open || !floating) {
+            setFloatStyle(null);
+            return;
+        }
+        const place = () => {
+            const p = measureFloating();
+            if (!p) return;
+            setDropUp(p.above);
+            setFloatStyle(p.style);
+        };
+        place();
+        /* Capture: a scroll in ANY ancestor (the dialog body) moves the trigger. */
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        window.visualViewport?.addEventListener("resize", place);
+        window.visualViewport?.addEventListener("scroll", place);
+        return () => {
+            window.removeEventListener("scroll", place, true);
+            window.removeEventListener("resize", place);
+            window.visualViewport?.removeEventListener("resize", place);
+            window.visualViewport?.removeEventListener("scroll", place);
+        };
+    }, [open, floating]);
 
     // Move DOM focus with the active option so screen readers and the browser's
     // own focus ring follow the keyboard.
@@ -332,7 +437,13 @@ export function AlloySelect({
                     id={listId}
                     ref={listRef}
                     role="listbox"
-                    className={clsx("alloy-select__list", dropUp && "alloy-select__list--above")}
+                    className={clsx(
+                        "alloy-select__list",
+                        dropUp && "alloy-select__list--above",
+                        floating && "alloy-select__list--floating",
+                    )}
+                    style={floating ? (floatStyle ?? { visibility: "hidden" }) : undefined}
+                    data-alloy-select-floating={floating ? (dropUp ? "above" : "below") : undefined}
                     aria-label={ariaLabel}
                     aria-activedescendant={`${listId}-opt-${activeIndex}`}
                 >
