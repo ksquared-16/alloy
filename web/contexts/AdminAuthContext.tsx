@@ -74,11 +74,29 @@ export function AdminAuthProvider({
     const keys = Array.isArray(roleKeys) ? roleKeys.map((k) => String(k).trim()).filter(Boolean) : [];
     const normalizedCompatRole = safeRole.trim().toLowerCase();
     const canMutate = keys.length > 0 ? hasPortalAdminMutateAccess(keys) : normalizedCompatRole === "admin";
-    // Absent stays absent. Mapping an omitted prop onto `[]` here would erase the distinction the
-    // field exists to carry, one line before every reader receives it.
+    /*
+     * A NESTED MOUNT THAT OMITS THE GRANTS INHERITS THEM FROM THE SHELL ABOVE IT — for the same
+     * principal in the same org only. The Workspace and Settings providers nest inside the root
+     * layout's, which resolved the grants, and each passed none: the inner `null` shadowed the
+     * outer answer, so a surface reading `permissionKeys` (Add Charge's "Change amount", gated on
+     * fin.adjust) hid itself from every operator who held the grant. Inheriting is not deciding:
+     * the keys are the root's own resolution, and every action still authorizes on the server.
+     */
+    const parent = useContext(AdminAuthContext);
+    const inherited =
+        permissionKeys == null
+        && parent?.permissionKeys != null
+        && parent.userId !== ""
+        && parent.userId === safeUserId
+        && parent.orgId !== ""
+        && parent.orgId === safeOrgId
+            ? parent.permissionKeys
+            : null;
+    // Otherwise absent stays absent. Mapping an omitted prop onto `[]` here would erase the
+    // distinction the field exists to carry, one line before every reader receives it.
     const safePermissionKeys = Array.isArray(permissionKeys)
         ? permissionKeys.map((k) => String(k).trim()).filter(Boolean)
-        : null;
+        : inherited;
     const value: AdminAuthContextValue = {
         userEmail: safeEmail,
         userId: safeUserId,
