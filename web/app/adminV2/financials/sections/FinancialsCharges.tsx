@@ -37,6 +37,7 @@ import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
 import FinancialsBulkAddCharge from "@/app/adminV2/financials/sections/FinancialsBulkAddCharge";
+import FinancialsAnnualCatalogBilling from "@/app/adminV2/financials/sections/FinancialsAnnualCatalogBilling";
 import FinancialsTuitionBilling from "@/app/adminV2/financials/sections/FinancialsTuitionBilling";
 import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
@@ -206,7 +207,7 @@ export default function FinancialsCharges({
     const [error, setError] = useState<string | null>(null);
     const [nonce, setNonce] = useState(0);
     const [open, setOpen] = useState<OpenCharge | null>(null);
-    const [dialog, setDialog] = useState<"tuition" | "bulk" | null>(null);
+    const [dialog, setDialog] = useState<"tuition" | "annual" | "bulk" | null>(null);
 
     /*
      * ── ESCAPE CLOSES THE LAYER, NEVER THE FINANCIALS APP (W7-F021, measured on deployed) ──────
@@ -338,6 +339,14 @@ export default function FinancialsCharges({
                             data-financials-open-tuition-billing="true"
                         >
                             Tuition billing
+                        </button>
+                        <button
+                            type="button"
+                            className="alloy-os-chargedetail__action alloy-os-chargedetail__action--secondary"
+                            onClick={() => setDialog("annual")}
+                            data-financials-open-annual-catalog="true"
+                        >
+                            Annual fees
                         </button>
                         <button
                             type="button"
@@ -539,6 +548,11 @@ export default function FinancialsCharges({
             {dialog === "tuition" ? (
                 <CommandDialog overlay="tuition_billing" title="Tuition billing" iconName="Repeat" onClose={() => setDialog(null)}>
                     <FinancialsTuitionBilling onCommitted={refresh} siteSelected={siteSelected} />
+                </CommandDialog>
+            ) : null}
+            {dialog === "annual" ? (
+                <CommandDialog overlay="annual_catalog_billing" title="Annual fees" iconName="Repeat" onClose={() => setDialog(null)}>
+                    <FinancialsAnnualCatalogBilling />
                 </CommandDialog>
             ) : null}
             {dialog === "bulk" ? (
