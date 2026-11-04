@@ -7,6 +7,7 @@
  * migration (with only the substitution named below), the banner, then the assertions — and the atomic-open one ends in
  * the reviewed single-session invariant unchanged.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,7 +43,9 @@ describe("pre-apply invariants", () => {
     });
 
     it("D10 activation gates: the pending migration unchanged, then the banner, then rollback-only assertions", () => {
-        const migration = read("certification/documents-v1/pending-migrations/20261220090000_documents_d10_activation_gates.sql");
+        const migration = read("supabase/migrations/20261220090000_documents_d10_activation_gates.sql");
+        // Proven by gar_550ba1d16c11d8 (11/0, rollback verified, certenv at staging 98fdf5c9) at ac423e463. A byte change needs the proof again.
+        expect(createHash("sha256").update(migration).digest("hex")).toBe("1196606e40ece37e73146bfa053fa3e4654a64be6a8a056ef9c9c2ba11a1032a");
         const single = read("certification/invariants/documents-d10-activation-gates.sql");
         const invariant = read("certification/invariants/documents-d10-activation-gates-preapply.sql");
         expect(migration).not.toMatch(/GRANT EXECUTE|REVOKE EXECUTE/);
