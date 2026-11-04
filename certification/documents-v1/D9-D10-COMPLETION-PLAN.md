@@ -112,11 +112,11 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | D10-A1 single-session atomic open | ✔ invariant (increment 1) | ✔ `processing-open-case-atomic-preapply.sql` PASSED on `certenv-dec617feb5` (`gar_6bf71cba9a81ce`, rollback verified) | — | — | — | — | Documents: certenv run (§8) |
 | D10-A2 two-session race | Runner `qaProcessingAtomicOpenRace.mjs` (`ca340723e`) | — | — | — | — | — | **Host Capacity H1**: register fixture `processing_atomic_open_race`. Its precondition needs the migration applied **on the certenv** (an isolated apply, not staging) |
 | D10-A3 staging apply `20261215093000` | ✔ moved back into `supabase/migrations` unchanged (`f04e450c…`), after A1 and A2 (race `ifx_3672b4b0fb183df0`, 25/0) | ✔ certenv | — | — | — | — | Increment 3: release → PR → merge (fails `hosted_migration_behind` by design) → `database.apply_promoted_migration` (DEC-7) → merge → parity census |
-| D10-S1 WS11 link + access rules | Draft SQL only | — | — | — | — | — | **Communications H3** |
+| D10-S1 WS11 link + access rules | ✔ Communications `e1bbcae7`, integrated locally; migration `20261218090000` | ✔ `gar_fbb1fdb3499e5f` 6/6 on certenv-c16a4714cf (staging 79c8452e) | — | — | — | — | Promotion: its merge approval applies it to staging |
 | D10-S2 storage boundary | ✔ increment 1 | — | — | ✔ #1627 | ✔ (unwired) | — | Re-prove with H3 on a certenv |
-| D10-M1 verdict store | ✔ `fd72f0cf0`; revised for the Access & Identity review B1–B4 + D-N1–D-N3, held as `20261219090000` (`D10-MALWARE-VERDICT-STORE-REVIEW-RESPONSE.md`) | Pre-review PASS `gar_e8431537a03bc9` (history; covers none of the revised bytes). Revised pre-apply invariant **not run** | — | — | — | — | Isolated certenv build → rollback run → A&I re-review → un-hold (version above the then-current ledger head) |
+| D10-M1 verdict store | ✔ revised for Access & Identity B1–B4 and N1–N9 (N7 open, N8 partly), held as `20261219090000` (`D10-MALWARE-VERDICT-STORE-REVIEW-RESPONSE.md`) | ✔ `gar_cb89b85461b635` 12/0 on certenv-8c22d9f3c6 (pre-review PASS `gar_e8431537a03bc9` kept as history) | — | — | — | — | A&I re-review → un-hold above the ledger head → merge-authorized apply; O2 role and credential is a separate security decision |
 | D10-M2 scanner integration | ✔ `e0dfa2121`, unwired | — | — | — | — | — | **DEC-6** engine and host (H4) |
-| D10-F1 Resend fetcher wiring | Adapter ✔, not wired | — | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
+| D10-F1 Resend fetcher wiring | ✔ wired with per-org credentials only, behind `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED` (OFF) | — | — | — | — | — | **DEC-8** enables, after hosted proof of storage and scanning |
 | D10-V1 full inbound path | Synthetic suites green | — | — | — | — | — | After S1, M2, A3 on a certenv |
 | D10-H1 hosted inbound proof | — | — | — | — | — | — | DEC-2 + DEC-8 |
 | Paperwork accountability | — | — | — | — | — | — | **Enrollment / BP H5**, DEC-9 |
