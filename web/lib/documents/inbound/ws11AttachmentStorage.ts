@@ -223,6 +223,8 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
             const documentId = inboundAttachmentDocumentId(orgId, messageId, attachmentId);
             const already = await readDocument(orgId, documentId);
             if (already) return link(already, messageId, attachmentId);
+            // A delete that landed after this delivery's findStored: never re-create it (the attachment is held).
+            if (await wasDeleted(orgId, documentId)) throw new Error("ws11 store: attachment was deleted");
 
             const checksumSha256 = createHash("sha256").update(bytes).digest("hex");
             const versionId = newId();

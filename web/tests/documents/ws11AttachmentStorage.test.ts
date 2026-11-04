@@ -331,6 +331,18 @@ describe("an operator's audited delete is final: a redelivery never re-creates t
         db.seed("documents", [{ id: docId, org_id: ORG, status: "uploaded", current_version_id: "v1", checksum_sha256: "x", metadata: {} }]);
         expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ documentId: docId, status: "uploaded" });
     });
+
+    it("a delete that lands between findStored and store: store refuses, nothing is uploaded or inserted", async () => {
+        const db = seededDb();
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        db.seed("workflow_events", [deletion(docId)]);
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids });
+        await expect(
+            s.store({ orgId: ORG, messageId: MSG, attachmentId: "att-1", filename: "a.pdf", mimeType: "application/pdf", bytes: new Uint8Array([1, 2, 3]), status: "quarantined", screening: {} as never }),
+        ).rejects.toThrow("attachment was deleted");
+        expect(db.uploadCalls).toHaveLength(0);
+        expect(db.rows("documents")).toHaveLength(0);
+    });
 });
 
 describe("the system audit principal", () => {
