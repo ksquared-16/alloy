@@ -17,7 +17,7 @@ const BANNER = "\n-- ═══════════════════�
 
 describe("pre-apply invariants", () => {
     it("D9.3 archive: the pending migration, unchanged, then the banner and assertions", () => {
-        const migration = read("certification/documents-v1/pending-migrations/20261217090000_documents_d9_3_archive.sql");
+        const migration = read("supabase/migrations/20261217090000_documents_d9_3_archive.sql");
         const invariant = read("certification/invariants/documents-d9-3-archive-preapply.sql");
         expect(invariant.startsWith(migration)).toBe(true);
         expect(invariant.slice(migration.length).startsWith(BANNER)).toBe(true);
@@ -42,7 +42,7 @@ describe("pre-apply invariants", () => {
     });
 
     it("D10-A1 atomic open: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {
-        const migration = read("certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql");
+        const migration = read("supabase/migrations/20261215093000_processing_open_case_atomic.sql");
         const single = read("certification/invariants/processing-open-case-atomic.sql");
         const invariant = read("certification/invariants/processing-open-case-atomic-preapply.sql");
         expect(migration.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(1);
