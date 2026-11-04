@@ -45,19 +45,21 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 ## 3. Scanner and inbound-attachment gates (this sprint)
 
 Pending migration `20261220090000_documents_d10_activation_gates.sql` (held in `pending-migrations/` until its isolated
-proof), invariant `certification/invariants/documents-d10-activation-gates.sql` (11 cases).
+proof), invariant `certification/invariants/documents-d10-activation-gates.sql` (11 cases). Proof: certenv
+`certenv-e88b6e0070` (staging `98fdf5c9`, 554) built `gar_c91bde2bd4cfa2`; rollback test `gar_9825da434a1cf6` pinned to
+`86432a8f1` and pre-apply `ffaae8fa…` (awaiting approval). With the file in place, `tests/access` shows no new failure.
 
 | Gate | Change | Kind | State |
 |---|---|---|---|
-| Q2 release honours verdicts (incl. D9.3 restore) | DB trigger refuses quarantined/archived → available while any version is unsafe; routes pre-check and map 409 | migration + TS | SQL done (cases 2–5); TS in progress |
-| W2 no availability before a verdict | Inbound stored `quarantined` with `screening.malware_hold='awaiting_verdict'`; structural result kept in metadata; trigger needs a clean verdict on the current version | migration + TS | SQL done (cases 6–7); TS in progress |
-| N8 bounded rescans, terminal failure | Per-version attempt counter with doubling backoff (`note_document_malware_scan_attempt`); `object_missing` detail; terminal `failed` at the cap | migration + TS | SQL done (case 8); TS in progress |
-| N7 re-evaluation after a verdict | Scheduled-work handler re-runs the filing decision for scan-held inbound documents; inert while the scanner is off; no schedule row until activation | TS | Next |
-| N5 host time | Engine requires `signatureClock: "UTC"` acknowledgement; DEC-6 runs clamd with `TZ=UTC` | TS + operator config | TS in progress; config is DEC-6 |
-| W1 linked-document delete | Read links before audit; audit names them; delete links after audit, before the row; storage after commit; include `email_attachment` case sources; deletion marker stops ws11 re-creating a deleted attachment | TS | In progress |
+| Q2 release honours verdicts (incl. D9.3 restore) | DB trigger refuses quarantined/archived → available while any version is unsafe; routes pre-check and map 409 | migration + TS | Done: SQL cases 2–5; routes `2563350d0` (409 MALWARE_UNSAFE / MALWARE_SCAN_PENDING, 503 fail-closed) |
+| W2 no availability before a verdict | Inbound stored `quarantined` with `screening.malware_hold='awaiting_verdict'`; structural result kept in metadata; trigger needs a clean verdict on the current version | migration + TS | Done: SQL cases 6–7; TS `454f6e411`, `86432a8f1`; **Communications agreed** |
+| N8 bounded rescans, terminal failure | Per-version attempt counter with doubling backoff (`note_document_malware_scan_attempt`); `object_missing` detail; terminal `failed` at the cap | migration + TS | Done: SQL case 8; TS `2563350d0` (maxAttempts 6, base 300 s, max 6 h) |
+| N7 re-evaluation after a verdict | Scheduled-work handler re-runs the filing decision for scan-held inbound documents; inert while the scanner is off; no schedule row until activation | TS | Done `62ac95cf6`: handler body, unregistered and unscheduled; flag `DOCUMENTS_MALWARE_SCANNER_ENABLED` off |
+| N5 host time | Engine requires `signatureClock: "UTC"` acknowledgement; DEC-6 runs clamd with `TZ=UTC` | TS + operator config | TS done `2563350d0`; host config is DEC-6 |
+| W1 linked-document delete | Read links before audit; audit names them; delete links after audit, before the row; storage after commit; include `email_attachment` case sources; deletion marker stops ws11 re-creating a deleted attachment | TS | Done `454f6e411`, `c8f59030e`, `86432a8f1`; **Communications agreed**; residual: a delete landing between store's marker check and its INSERT (DB guard at DEC-8) |
 | W3 (Communications) | WS11 trigger function: `search_path = public, pg_temp`; EXECUTE revoked from PUBLIC, anon, authenticated; case 11 proves the trigger still enforces | migration | Done; **Communications agreed** |
 | Q1 follow-up | Verdict writer's quarantine predicate lower-cased; case 1 incl. `Archived` and `restricted` (the case-13 follow-up) | migration | Done |
-| Banner follow-up | Garbled sentence in the applied migration's pre-apply banner | comment | Next (comment-only; that file's proof is historical) |
+| Banner follow-up | Garbled sentence in the applied migration's pre-apply banner | comment | Done `8c3aca28a` |
 | O2 writer identity | Design: NOLOGIN `malware_scan_writer`, login member held by the scanner host, `pg_has_role(session_user, …)` assertion, direct Postgres connection; open design gaps: audit write without the service key, bytes without the service key, separate scanner runtime | design → migration later | Needs A&I review, then **role approval and persistent-access approval** (Kelly) before any role or credential exists |
 
 Scanner, retrieval and provider traffic stay OFF until DEC-6 (engine/host), O2 approvals and DEC-8 (retrieval) are
@@ -71,6 +73,8 @@ granted. No role, credential or migration apply is created by this work without 
 | `opportunityHeaderActionExposure` | CRM / Opportunity drawer | `0cf7c4a52` (2026-06-10) replaced `OpportunityDrawerHeaderActionsMenu` with `RecordDrawerManageMenu`; the test still expects the old name |
 | `grantSeedEnumeration` (RL-8) | Access & Identity | Red before `530ba383`; expected 66 grants, got 61; cause not yet isolated |
 | `childcareFieldCatalogDoctrine` | Fields / Configuration | Red before `530ba383`; 28 legacy fields visible; last input change `75702c0e7` (Staff) |
+| `orgParameterizedRpcBoundary` (+ 12 more `tests/access` files, 21 tests) | Access & Identity (flags Medical #1560 `20261204090000`) | Identical on clean staging `98fdf5c9` |
+| 13 `tests/communications` files (18 tests) | Communications | Identical on clean staging `98fdf5c9`; Communications routing to Kelly |
 
 ## 5. Scope decisions (not in the MVP unless Kelly decides)
 
