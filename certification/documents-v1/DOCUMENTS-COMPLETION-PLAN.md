@@ -44,10 +44,12 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 
 ## 3. Scanner and inbound-attachment gates (this sprint)
 
-Pending migration `20261220090000_documents_d10_activation_gates.sql` (held in `pending-migrations/` until its isolated
-proof), invariant `certification/invariants/documents-d10-activation-gates.sql` (11 cases). Proof: certenv
-`certenv-e88b6e0070` (staging `98fdf5c9`, 554) built `gar_c91bde2bd4cfa2`; rollback test `gar_9825da434a1cf6` pinned to
-`86432a8f1` and pre-apply `ffaae8fa…` (awaiting approval). With the file in place, `tests/access` shows no new failure.
+Migration `supabase/migrations/20261220090000_documents_d10_activation_gates.sql` (sha256 `1196606e…`, hash-locked by
+`preapplyInvariantParity.test.ts`), invariant `certification/invariants/documents-d10-activation-gates.sql` (11 cases).
+**Proven:** `gar_550ba1d16c11d8` PASSED 11/0, rolled back, on `certenv-e88b6e0070` (staging `98fdf5c9`, 554), pinned to
+`ac423e463` (receipt `d10-gates-rollback-receipt.gar_550ba1d16c11d8.json`); the first card `gar_9825da434a1cf6` was refused
+by the static analyzer (ALTER FUNCTION, DO UPDATE, TRUNCATE privilege list) and fixed without behaviour change. Moved
+byte-identically into `supabase/migrations` at `0aecec1ce`. **Merging applies it to staging.**
 
 | Gate | Change | Kind | State |
 |---|---|---|---|
