@@ -64,9 +64,10 @@ export type DocumentAuditEvent =
     | "document_restored";
 
 /**
- * The closed vocabulary of automated writers. A new one is added here, deliberately. Naming a process grants nothing:
- * what it may do is decided by the code that uses it and by the database (e.g. only `malware_scan_worker` may record a
- * malware verdict — `record_document_malware_verdict`).
+ * The closed vocabulary of automated writers. A new one is added here, deliberately. Naming a process grants nothing
+ * and proves nothing: it is a label. For example, `record_document_malware_verdict` writes `malware_scan_worker` itself,
+ * but the database enforces only that a service_role caller recorded the verdict, not which process it was. An enforced
+ * scanner identity is a separate, unbuilt boundary (the verdict-store review response, O2).
  */
 export const DOCUMENT_SYSTEM_PROCESSES = ["inbound_email_attachment", "malware_scan_worker", "api_upload_escalation"] as const;
 export type DocumentSystemProcess = (typeof DOCUMENT_SYSTEM_PROCESSES)[number];
