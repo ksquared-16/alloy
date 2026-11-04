@@ -185,6 +185,39 @@ BEGIN
     IF (SELECT title FROM public.documents WHERE id = d_up) <> 'g up renamed' THEN RAISE EXCEPTION 'CASE 10 FAILED'; END IF;
     passed := passed + 1;
 
-    RAISE NOTICE 'PASS documents d10 activation gates: lower-case quarantine predicate incl. restricted, unsafe release and unarchive refused, scan hold needs clean, bounded attempts, grants, W3';
-    RAISE NOTICE 'tests passed=% failed=0', passed;
+    -- Seed for CASE 11 (run below as service_role): a thread and inbound message in o1, a document in o1 and one in o2.
+    INSERT INTO public.communication_threads (id, org_id, primary_entity_type, primary_entity_id, channel, recipient_key) VALUES
+        ('d10a0000-0000-4000-8000-0000000000a1', o1, 'person', 'd10a0000-0000-4000-8000-0000000000b1', 'email', 'd10g-parent@example.invalid');
+    INSERT INTO public.communication_messages (id, org_id, thread_id, channel, direction, status, provider, provider_message_id, metadata) VALUES
+        ('d10a0000-0000-4000-8000-0000000000c1', o1, 'd10a0000-0000-4000-8000-0000000000a1', 'email', 'inbound', 'received', 'resend', 'd10g-resend-1', '{}');
+    INSERT INTO public.documents (id, org_id, title, original_filename, mime_type, byte_size, checksum_sha256, bucket, storage_path, status) VALUES
+        ('d10a0000-0000-4000-8000-0000000000d1', o1, 'g link', 'l.pdf', 'application/pdf', 10, sha, 'org_documents', o1::text || '/pos_intake/g-link.pdf', 'quarantined'),
+        ('d10a0000-0000-4000-8000-0000000000d2', o2, 'g foreign', 'f.pdf', 'application/pdf', 10, sha, 'org_documents', o2::text || '/pos_intake/g-foreign.pdf', 'uploaded');
+    PERFORM set_config('d10g.org', o1::text, true);
+    PERFORM set_config('d10g.passed', passed::text, true);
 END $$;
+SET LOCAL ROLE service_role;
+DO $system_writer$
+DECLARE
+    o1 uuid := current_setting('d10g.org')::uuid;
+    passed integer := current_setting('d10g.passed')::integer;
+    msg text;
+BEGIN
+    IF current_user <> 'service_role' THEN RAISE EXCEPTION 'CASE 11 SETUP: running as %, not service_role', current_user; END IF;
+    -- CASE 11 (G5 positive control): after the W3 revoke the WS11 tenant trigger still fires for the system writer — a
+    -- same-organization link is written, a document of another organization is refused.
+    INSERT INTO public.communication_message_attachments (org_id, message_id, document_id, provider_attachment_id, disposition)
+    VALUES (o1, 'd10a0000-0000-4000-8000-0000000000c1', 'd10a0000-0000-4000-8000-0000000000d1', 'att-1', 'attachment');
+    msg := NULL;
+    BEGIN
+        INSERT INTO public.communication_message_attachments (org_id, message_id, document_id, provider_attachment_id, disposition)
+        VALUES (o1, 'd10a0000-0000-4000-8000-0000000000c1', 'd10a0000-0000-4000-8000-0000000000d2', 'att-2', 'attachment');
+    EXCEPTION WHEN check_violation THEN msg := SQLERRM; END;
+    IF msg IS NULL OR msg NOT LIKE 'communication_message_attachments: document %' THEN
+        RAISE EXCEPTION 'CASE 11 FAILED: cross-organization link (%)', coalesce(msg, 'accepted');
+    END IF;
+    passed := passed + 1;
+    RAISE NOTICE 'PASS documents d10 activation gates: lower-case quarantine predicate incl. restricted, unsafe release and unarchive refused, scan hold needs clean, bounded attempts, grants, W3 with its trigger still enforcing';
+    RAISE NOTICE 'tests passed=% failed=0', passed;
+END
+$system_writer$;
