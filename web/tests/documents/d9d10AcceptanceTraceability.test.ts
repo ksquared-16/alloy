@@ -89,10 +89,12 @@ describe("the gaps the document states are still gaps", () => {
         for (const never of ["set_primary", "deleteDocument", "reopenDocumentReview", "setDocumentSensitivity", "listAllDocuments"]) expect(catalog).not.toContain(never);
     });
 
-    it("D10: WS11's communication_message_attachments is planned and created by exactly one (pending) migration", () => {
+    it("D10: WS11's communication_message_attachments is planned and created by exactly one migration", () => {
         expect(read("docs/platform/planning/conversation-platform-v1/CONVERSATION-PLATFORM-V1-PLAN.md")).toContain("communication_message_attachments");
         const dir = resolve(ROOT, "supabase/migrations");
-        const hits = readdirSync(dir).filter((f) => f.endsWith(".sql") && readFileSync(resolve(dir, f), "utf8").includes("communication_message_attachments"));
+        // Later migrations may name the table (20261220090000 hardens its trigger function, W3); only one creates it.
+        const creates = /CREATE TABLE (IF NOT EXISTS )?public\.communication_message_attachments\b/;
+        const hits = readdirSync(dir).filter((f) => f.endsWith(".sql") && creates.test(readFileSync(resolve(dir, f), "utf8")));
         expect(hits).toEqual(["20261218090000_communication_message_attachments.sql"]);
     });
 
