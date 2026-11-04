@@ -539,7 +539,7 @@ BEGIN
     EXCEPTION WHEN check_violation THEN IF SQLERRM NOT LIKE 'document_unavailable%' THEN RAISE; END IF;
     END;
     BEGIN
-        PERFORM public.document_file_as_version(v_org, d_in, d_a, 'org_documents', v_org || '/filed/' || d_a || '/' || d_in || '-in.pdf', NULL, NULL, 'd93-fav', actor, NULL, NULL);
+        PERFORM public.document_file_as_version(v_org, d_in, d_a, 'org_documents', v_org || '/filed/' || d_a || '/' || d_in || '-in.pdf', NULL, NULL, 'd93-file-as-version', actor, NULL, NULL);
         RAISE EXCEPTION '2b: filed onto an archived document';
     EXCEPTION WHEN check_violation THEN IF SQLERRM NOT LIKE 'document_filing_target_unavailable%' THEN RAISE; END IF;
     END;
