@@ -332,6 +332,14 @@ describe("an operator's audited delete is final: a redelivery never re-creates t
         expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ documentId: docId, status: "uploaded" });
     });
 
+    it("an unrecognised recorded structural result is read as quarantined (fail closed)", async () => {
+        const db = seededDb();
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        db.seed("documents", [{ id: docId, org_id: ORG, status: "quarantined", current_version_id: "v1", checksum_sha256: "x", metadata: { screening: { structural_status: "Clean?" } } }]);
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids });
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ structural: "quarantined" });
+    });
+
     it("a delete that lands between findStored and store: store refuses, nothing is uploaded or inserted", async () => {
         const db = seededDb();
         const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");

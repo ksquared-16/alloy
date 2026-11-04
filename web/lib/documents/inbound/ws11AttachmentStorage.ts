@@ -87,7 +87,8 @@ type DocRow = {
 /** The persisted structural result; the status only for a legacy row that never recorded one. */
 function structuralOf(status: string | null, screening: Record<string, unknown> | null | undefined): "clean" | "quarantined" {
     const recorded = screening?.structural_status;
-    if (typeof recorded === "string" && recorded.trim()) return recorded.trim() === "quarantined" ? "quarantined" : "clean";
+    // Fail closed: only a recorded `uploaded` (D1c-1's clean outcome) is structurally clean; anything else is quarantined.
+    if (typeof recorded === "string" && recorded.trim()) return recorded.trim() === "uploaded" ? "clean" : "quarantined";
     return structuralFromStatus(status);
 }
 

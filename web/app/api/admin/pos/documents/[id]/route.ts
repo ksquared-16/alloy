@@ -195,6 +195,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         auditedDeletion = true;
 
         // Safe to discard. Remove case-source links, the opened case(s), the message links, the row, then the files.
+        // These are separate calls, not one transaction: a failure after the link delete and before the row delete leaves
+        // the row without its link, and the next inbound delivery re-links it (the row wins) — harmless, and retryable.
         const { error: delSrcErr } = await supabase
             .from("processing_case_sources")
             .delete()
