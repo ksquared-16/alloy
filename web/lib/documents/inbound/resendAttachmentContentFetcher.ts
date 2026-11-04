@@ -1,6 +1,7 @@
 /**
- * D10 — `AttachmentContentFetcher` over Resend's PUBLISHED per-attachment contract. NOT enabled in production:
- * `makeInboundAttachmentFilingDeps` still receives no fetcher, so every attachment stays held.
+ * D10 — `AttachmentContentFetcher` over Resend's PUBLISHED per-attachment contract. NOT enabled in production: it is
+ * composed with the organization's binding credential in `lib/communications/email/inboundAttachmentRetrieval.ts`, behind
+ * `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED`, which defaults OFF — so every attachment stays held.
  *
  * THE CONTRACT (public documentation only; no account, mailbox or API call was used to establish it):
  *   1. `GET https://api.resend.com/emails/receiving/{email_id}/attachments/{id}`, `Authorization: Bearer <key>` →
@@ -151,7 +152,7 @@ export async function fetchResendAttachmentContent(params: {
 /**
  * The `AttachmentContentFetcher` port: the organization's own credential, resolved from the message's provider
  * binding by the injected resolver (Communications' `resolveInboundRetrievalCredential` path), never the environment
- * and never passed in by the caller. Not wired into production.
+ * and never passed in by the caller. Composed by `makeInboundAttachmentContentFetcher`; off unless the flag is on.
  */
 export function makeResendAttachmentContentFetcher(deps: {
     resolveApiKey: (args: { orgId: string; providerBindingId: string | null }) => Promise<{ ok: true; apiKey: string } | { ok: false; reason: string }>;

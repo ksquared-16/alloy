@@ -61,6 +61,7 @@ import {
     fileInboundAttachmentsForPersistedMessage,
     makeInboundAttachmentFilingDeps,
 } from "@/lib/documents/inbound/inboundAttachmentHook";
+import { inboundAttachmentFilingOptions } from "@/lib/communications/email/inboundAttachmentRetrieval";
 
 export const EMAIL_PROVIDER = "resend";
 
@@ -82,8 +83,8 @@ export type InboundEmailIngestionDeps = {
     now?: () => string;
     /**
      * D10 — file the persisted message's attachments into Processing (Documents). Defaults to the production wiring,
-     * which holds every attachment before a byte is read: there is no attachment-content fetcher and no malware scanner
-     * yet. Called only with a message this ingestion persisted (or resolved) under its owning organization, and isolated:
+     * which holds every attachment before a byte is read: the attachment-content fetcher is behind
+     * INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED (OFF) and there is no malware scanner yet. Called only with a message this ingestion persisted (or resolved) under its owning organization, and isolated:
      * whatever it does or throws, the ingestion outcome is already fixed.
      */
     fileAttachments?: (ref: { orgId: string; messageId: string }) => Promise<unknown>;
@@ -130,7 +131,14 @@ async function handOffAttachments(deps: InboundEmailIngestionDeps, ref: { orgId:
         const file =
             deps.fileAttachments ??
             ((r: { orgId: string; messageId: string }) =>
-                fileInboundAttachmentsForPersistedMessage({ supabase: deps.supabase, filing: makeInboundAttachmentFilingDeps(deps.supabase) }, r));
+                fileInboundAttachmentsForPersistedMessage(
+                    {
+                        supabase: deps.supabase,
+                        // INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED, OFF by default: no fetcher, no link — the old default.
+                        filing: makeInboundAttachmentFilingDeps(deps.supabase, inboundAttachmentFilingOptions(deps.supabase)),
+                    },
+                    r,
+                ));
         await file(ref);
     } catch (e) {
         console.warn("[inbound-email] attachment filing hand-off failed", e instanceof Error ? e.message : e);
