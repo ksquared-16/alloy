@@ -1,14 +1,19 @@
 /**
  * D10 — the WS11 attachment storage boundary, implemented over the EXISTING document storage sequence (the admin upload
  * route): audit first, object under `<org>/pos_intake/`, one `documents` row whose D2 insert trigger writes version 1.
- * No new table, no new bucket, no new framework.
+ * Storage needs no new table, bucket or framework; the message link below is the one addition, and it is opt-in.
  *
  * IDEMPOTENCY WITHOUT A NEW TABLE. The document id is derived from (organization, Communications message id, provider
  * attachment id). The same attachment is therefore always the same `documents` primary key: `findStored` is a primary-key
  * read, and two concurrent deliveries collide on that key — the loser removes ONLY the object it uploaded itself (never a
- * row, never the winner's object) and returns the winner's document. Communications' planned
- * `communication_message_attachments` link (certification/documents-v1/D10-WS11-ATTACHMENT-STORAGE-DRAFT.sql) stays
- * theirs to create; nothing here depends on it or duplicates it.
+ * row, never the winner's object) and returns the winner's document.
+ *
+ * THE MESSAGE LINK (`linkAttachments`, migration 20261218090000). With it on, `store` also records the
+ * `communication_message_attachments` row (message, document, provider attachment id) — on a fresh store AND when the
+ * document already exists, so a crash between the two writes heals on the next delivery — and `findStored` reports a
+ * document only once its link exists, which is what sends that next delivery back through `store`. The link converges on
+ * its own UNIQUE (message_id, provider_attachment_id): a concurrent writer's row is success, not failure. Off (the
+ * default, and production until the migration is applied and retrieval is enabled), nothing here reads or writes it.
  *
  * RETRIEVAL. Bytes come only through `fetchContent`, a port Communications implements under the ORGANIZATION'S
  * credential (`resolveInboundRetrievalCredential` from the message's provider binding — never the environment, never a
@@ -26,6 +31,7 @@ import type { AttachmentStorageBoundary, StoredAttachment } from "@/lib/document
 export const INBOUND_ATTACHMENT_BUCKET = "org_documents";
 const AUDIT_ROUTE = "communications/inbound/email-attachment";
 const UNIQUE_VIOLATION = "23505";
+const MESSAGE_ATTACHMENTS_TABLE = "communication_message_attachments";
 
 /** Result model of Communications' received-email fetcher: retryable vs permanent, never an exception. */
 export type AttachmentContentResult =
@@ -64,6 +70,8 @@ export type Ws11AttachmentStorageDeps = {
     /** Null until Communications ships attachment-content retrieval: the boundary is then unavailable. */
     fetchContent: AttachmentContentFetcher | null;
     bucket?: string;
+    /** Record `communication_message_attachments`. Needs migration 20261218090000; off by default. */
+    linkAttachments?: boolean;
     audit?: (input: DocumentAuditInput) => Promise<DocumentAuditResult>;
     newId?: () => string;
 };
@@ -73,6 +81,7 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
     const bucket = deps.bucket ?? INBOUND_ATTACHMENT_BUCKET;
     const audit = deps.audit ?? recordDocumentAudit;
     const newId = deps.newId ?? randomUUID;
+    const linkAttachments = deps.linkAttachments === true;
 
     async function readDocument(orgId: string, documentId: string): Promise<StoredAttachment | null> {
         const { data, error } = await db
@@ -85,11 +94,46 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
         return data ? toStored(data as DocRow) : null;
     }
 
+    async function isLinked(orgId: string, messageId: string, attachmentId: string, documentId: string): Promise<boolean> {
+        const { data, error } = await db
+            .from(MESSAGE_ATTACHMENTS_TABLE)
+            .select("document_id")
+            .eq("org_id", orgId)
+            .eq("message_id", messageId)
+            .eq("provider_attachment_id", attachmentId)
+            .maybeSingle();
+        if (error) throw new Error(`ws11 findStored link: ${error.code ?? "unknown"}`);
+        const linked = (data as { document_id?: string } | null)?.document_id;
+        if (linked && linked !== documentId) throw new Error("ws11 findStored link: names another document");
+        return Boolean(linked);
+    }
+
+    /** Idempotent: a row already there (ours, or a concurrent delivery's) is the outcome wanted. */
+    async function link(stored: StoredAttachment, messageId: string, attachmentId: string): Promise<StoredAttachment> {
+        if (!linkAttachments) return stored;
+        const { error } = await db.from(MESSAGE_ATTACHMENTS_TABLE).insert({
+            org_id: stored.orgId,
+            message_id: messageId,
+            document_id: stored.documentId,
+            provider_attachment_id: attachmentId,
+            disposition: "attachment",
+        });
+        if (error && error.code !== UNIQUE_VIOLATION) throw new Error(`ws11 store: message link failed (${error.code ?? "unknown"})`);
+        if (error && !(await isLinked(stored.orgId, messageId, attachmentId, stored.documentId))) {
+            throw new Error("ws11 store: message link conflicts");
+        }
+        return stored;
+    }
+
     return {
         available: deps.fetchContent !== null,
 
         async findStored({ orgId, messageId, attachmentId }) {
-            return readDocument(orgId, inboundAttachmentDocumentId(orgId, messageId, attachmentId));
+            const documentId = inboundAttachmentDocumentId(orgId, messageId, attachmentId);
+            const found = await readDocument(orgId, documentId);
+            // An unlinked document is "not stored yet": `store` finds it, writes no second object, and adds the link.
+            if (found && linkAttachments && !(await isLinked(orgId, messageId, attachmentId, documentId))) return null;
+            return found;
         },
 
         async retrieve({ orgId, messageId, attachmentId }) {
@@ -122,7 +166,7 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
         async store({ orgId, messageId, attachmentId, filename, mimeType, bytes, status, screening }) {
             const documentId = inboundAttachmentDocumentId(orgId, messageId, attachmentId);
             const already = await readDocument(orgId, documentId);
-            if (already) return already;
+            if (already) return link(already, messageId, attachmentId);
 
             const checksumSha256 = createHash("sha256").update(bytes).digest("hex");
             const versionId = newId();
@@ -176,11 +220,11 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
                 await db.storage.from(bucket).remove([storagePath]).catch(() => undefined);
                 if (error.code === UNIQUE_VIOLATION) {
                     const winner = await readDocument(orgId, documentId);
-                    if (winner) return winner;
+                    if (winner) return link(winner, messageId, attachmentId);
                 }
                 throw new Error(`ws11 store: document insert failed (${error.code ?? "unknown"})`);
             }
-            return { documentId, orgId, status, versionId, checksumSha256 };
+            return link({ documentId, orgId, status, versionId, checksumSha256 }, messageId, attachmentId);
         },
     };
 }

@@ -82,15 +82,16 @@ export function makeInboundCaseAnnotator(supabase: SupabaseClient): NonNullable<
 }
 
 /**
- * Production wiring. `fetchContent` is null until Communications ships attachment-content retrieval; malware scanning is
- * unavailable until D1c-2. Neither may be supplied by a stand-in: structural screening is not a scanner.
+ * Production wiring. With no options: no fetcher and no message link — the default. Communications passes its
+ * flag-gated options (`inboundAttachmentFilingOptions`, `INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED`, OFF); malware
+ * scanning is unavailable until D1c-2. Neither may be supplied by a stand-in: structural screening is not a scanner.
  */
 export function makeInboundAttachmentFilingDeps(
     supabase: SupabaseClient,
-    opts: { fetchContent?: AttachmentContentFetcher | null } = {},
+    opts: { fetchContent?: AttachmentContentFetcher | null; linkAttachments?: boolean } = {},
 ): InboundAttachmentFilingDeps {
     return {
-        storage: createWs11AttachmentStorage({ supabase, fetchContent: opts.fetchContent ?? null }),
+        storage: createWs11AttachmentStorage({ supabase, fetchContent: opts.fetchContent ?? null, linkAttachments: opts.linkAttachments === true }),
         malware: UNAVAILABLE_MALWARE_SCAN,
         processing: makeProcessingCaseDbDeps(supabase),
         annotateCase: makeInboundCaseAnnotator(supabase),

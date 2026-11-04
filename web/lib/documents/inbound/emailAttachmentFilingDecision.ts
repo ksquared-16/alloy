@@ -13,8 +13,9 @@
  * No subject is ever proposed: the case lands in the existing "Needs a record" lane (`awaiting_subject`).
  *
  * ── WHAT EXISTS AND WHAT DOES NOT (measured, not assumed) ──
- *   storage            ABSENT. Communications records attachment metadata only ("Retrieval and storage are WS11");
- *                      no migration creates `communication_message_attachments`.
+ *   storage            ABSENT in production. The pieces exist — createWs11AttachmentStorage, the org-credential Resend
+ *                      fetcher and the pending `communication_message_attachments` migration (20261218090000) — behind
+ *                      INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED, which is OFF; the migration is not applied.
  *   structural screen  PRESENT. D1c-1 `decideIngestion` is the screening every outside file already passes; it is not
  *                      antivirus and never claims a file is "safe".
  *   malware scanning   ABSENT. D1c-2 is deferred. No scanner is invented; without one every attachment holds.
@@ -105,7 +106,7 @@ export type FilingCapability = { storage: boolean; structuralScreening: boolean;
 
 /** The real state today. Changed only by the change that ships each capability. */
 export const EMAIL_ATTACHMENT_FILING_CAPABILITY: Readonly<FilingCapability> = Object.freeze({
-    /** WS11: retrieval + `communication_message_attachments` + bytes stored as `documents`. Absent. */
+    /** WS11: retrieval + `communication_message_attachments` + bytes stored as `documents`. Built, switched OFF. */
     storage: false,
     /** D1c-1 `decideIngestion`, already applied to every outside file. Present. */
     structuralScreening: true,
@@ -133,8 +134,8 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
         key: "ws11_attachment_storage",
         owner: "Communications (Conversation Platform WS11)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.storage ? "ready" : "missing",
-        proof: "the per-attachment adapter exists and is NOT enabled: makeResendAttachmentContentFetcher (lib/documents/inbound/resendAttachmentContentFetcher.ts) follows Resend's published contract — GET api.resend.com/emails/receiving/{email_id}/attachments/{id} with the organization's key, then the signed inbound-cdn.resend.com download_url (one hour) with no credentials, no redirects, a size cap and one deadline; never the raw message. Storage half: createWs11AttachmentStorage. Missing for enablement: the binding-credential resolver wired to it, and a live proof of the documented contract (unspecified in the docs: download auth, error codes, size limits)",
-        next: "Communications wires resolveApiKey to resolveInboundRetrievalCredential and passes the fetcher to makeInboundAttachmentFilingDeps after a live contract proof and the scanner exist",
+        proof: "the per-attachment adapter exists and is NOT enabled: makeResendAttachmentContentFetcher (lib/documents/inbound/resendAttachmentContentFetcher.ts) follows Resend's published contract — GET api.resend.com/emails/receiving/{email_id}/attachments/{id} with the organization's key, then the signed inbound-cdn.resend.com download_url (one hour) with no credentials, no redirects, a size cap and one deadline; never the raw message. Storage half: createWs11AttachmentStorage, with the communication_message_attachments link (migration 20261218090000, pending). Wired: resolveInboundAttachmentRetrievalKey (the message binding's org-owned credential through resolveInboundRetrievalCredential, never the deployment key) feeds the fetcher, passed to makeInboundAttachmentFilingDeps by the ingestion hand-off behind INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED (OFF). Missing for enablement: the migration's apply, and a live proof of the documented contract (unspecified in the docs: download auth, error codes, size limits)",
+        next: "apply 20261218090000 (separate approval), then DEC-8: switch INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED on after a live contract proof and the scanner exist",
     },
     {
         key: "d1c2_malware_scanning",
