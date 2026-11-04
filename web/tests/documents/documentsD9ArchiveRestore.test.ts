@@ -72,6 +72,11 @@ const archiveRecord = (by: string | null, previous = "uploaded") => ({
 let db: InMemorySupabase;
 let unarchiveMigrated: boolean;
 let unarchiveCalls: Array<Record<string, unknown>>;
+/** `document_malware_effective_verdict` by version id (none recorded by default); `verdictError` makes it fail. */
+let verdicts: Record<string, string>;
+let verdictError: boolean;
+/** An error `document_unarchive` raises instead of restoring (the D10 guard's race backstop). */
+let unarchiveRaises: string | null;
 
 function doc(id: string, over: Record<string, unknown>) {
     return {
@@ -87,6 +92,9 @@ beforeEach(() => {
     db = new InMemorySupabase();
     unarchiveMigrated = true;
     unarchiveCalls = [];
+    verdicts = {};
+    verdictError = false;
+    unarchiveRaises = null;
     db.seed("work_units", [{ id: WU, org_id: ORG, department_id: DEPT }]);
     db.seed("customers", [{ id: H, org_id: ORG, name: "Okafor household" }]);
     db.seed("customer_persons", []);
@@ -125,9 +133,15 @@ beforeEach(() => {
     // `document_unarchive` with its migration's contract (20261217090000): org-scoped row, archived only, back to
     // metadata.archive.previous_status, restore facts appended to the archive record. Everything else answers as before.
     (db as unknown as { rpc: unknown }).rpc = async (fn: string, args: Record<string, unknown> = {}) => {
+        if (fn === "document_malware_effective_verdict") {
+            if (verdictError) return { data: null, error: { message: "permission denied" } };
+            const v = verdicts[String(args.p_version_id)];
+            return { data: v ? [{ verdict_id: "f0000000-0000-4000-8000-0000000000a9", verdict: v, document_id: "x", version_id: args.p_version_id, checksum_sha256: "0".repeat(64) }] : [], error: null };
+        }
         if (fn !== "document_unarchive") return { data: false, error: null };
         if (!unarchiveMigrated) return { data: null, error: { code: "PGRST202", message: "Could not find the function public.document_unarchive" } };
         unarchiveCalls.push(args);
+        if (unarchiveRaises) return { data: null, error: { code: "23514", message: unarchiveRaises } };
         const row = db.rows("documents").find((d) => d.id === args.p_document_id && d.org_id === args.p_org_id);
         if (!row) return { data: null, error: { message: "document_archive_not_found" } };
         if (row.status !== "archived") return { data: null, error: { message: "document_unarchive_not_archived" } };
@@ -247,3 +261,61 @@ describe("staff restore", () => {
         expect(db.rows("documents").find((d) => d.id === D.byApp)!.status).toBe("archived");
     });
 });
+
+describe("Q2 / W2: a restore honours the malware verdict store", () => {
+    const version = (id: string) => `ea${id.slice(2)}`;
+    const OLD = "eb000000-0000-4000-8000-0000000000a2";
+    const status = (id: string) => db.rows("documents").find((d) => d.id === id)!.status;
+
+    it("an unsafe verdict on ANY version → 409 MALWARE_UNSAFE, no audit, no document_unarchive", async () => {
+        db.seed("document_versions", [{ id: OLD, org_id: ORG, document_id: D.byStaff, version_number: 0, source: "document_insert", created_at: "2026-10-19T00:00:00Z" }]);
+        for (const unsafe of ["infected", "suspicious"]) {
+            verdicts = { [OLD]: unsafe, [version(D.byStaff)]: "clean" };
+            as(P.admin);
+            expect(await restore(D.byStaff, { reason: REASON })).toMatchObject({ status: 409, body: { code: "MALWARE_UNSAFE" } });
+        }
+        expect(audits("document_restored")).toHaveLength(0);
+        expect(unarchiveCalls).toHaveLength(0);
+        expect(status(D.byStaff)).toBe("archived");
+    });
+
+    it("held for a verdict: the current version must be clean", async () => {
+        const row = db.rows("documents").find((d) => d.id === D.byApp)!;
+        row.metadata = { ...(row.metadata as object), screening: { malware_hold: "awaiting_verdict" } };
+        as(P.admin);
+        for (const current of [undefined, "failed"]) {
+            verdicts = current ? { [version(D.byApp)]: current } : {};
+            expect(await restore(D.byApp, { reason: REASON })).toMatchObject({ status: 409, body: { code: "MALWARE_SCAN_PENDING" } });
+        }
+        expect(audits("document_restored")).toHaveLength(0);
+        expect(unarchiveCalls).toHaveLength(0);
+        verdicts = { [version(D.byApp)]: "clean" };
+        expect(await restore(D.byApp, { reason: REASON })).toMatchObject({ status: 200, body: { status: "uploaded" } });
+    });
+
+    it("a clean or failed verdict without a hold restores as before", async () => {
+        verdicts = { [version(D.byStaff)]: "failed" };
+        as(P.admin);
+        expect(await restore(D.byStaff, { reason: REASON })).toMatchObject({ status: 200, body: { status: "verified" } });
+        expect(audits("document_restored")).toHaveLength(1);
+    });
+
+    it("verdicts that cannot be read refuse the restore before the audit (fail closed)", async () => {
+        verdictError = true;
+        as(P.admin);
+        expect(await restore(D.byApp, { reason: REASON })).toMatchObject({ status: 503, body: { code: "MALWARE_VERDICT_UNAVAILABLE" } });
+        expect(audits("document_restored")).toHaveLength(0);
+        expect(unarchiveCalls).toHaveLength(0);
+        expect(status(D.byApp)).toBe("archived");
+    });
+
+    it("the database guard's refusals from document_unarchive (race backstop) map to the same 409s", async () => {
+        as(P.admin);
+        for (const [message, code] of [["document_malware_unsafe", "MALWARE_UNSAFE"], ["document_malware_scan_pending", "MALWARE_SCAN_PENDING"]]) {
+            unarchiveRaises = message;
+            expect(await restore(D.byApp, { reason: REASON })).toMatchObject({ status: 409, body: { code } });
+        }
+        expect(status(D.byApp)).toBe("archived");
+    });
+});
+
