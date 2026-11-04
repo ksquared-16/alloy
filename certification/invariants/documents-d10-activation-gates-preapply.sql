@@ -182,7 +182,7 @@ CREATE INDEX IF NOT EXISTS idx_dmsa_due ON public.document_malware_scan_attempts
 ALTER TABLE public.document_malware_scan_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_malware_scan_attempts FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON public.document_malware_scan_attempts FROM PUBLIC, anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.document_malware_scan_attempts FROM service_role;
+REVOKE ALL ON public.document_malware_scan_attempts FROM service_role;
 GRANT SELECT ON public.document_malware_scan_attempts TO service_role;
 
 -- Records one deferred attempt for a version of this organization and returns the new count. Backoff doubles from
@@ -210,15 +210,20 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.document_versions WHERE id = p_version_id AND org_id = p_org_id) THEN
         RAISE EXCEPTION 'note_document_malware_scan_attempt: version not found' USING ERRCODE = 'P0002';
     END IF;
-    INSERT INTO public.document_malware_scan_attempts AS a (version_id, org_id, attempts, last_detail, next_attempt_at)
+    -- First attempt inserts; a later one updates under the row lock (two statements, so each write names its table).
+    INSERT INTO public.document_malware_scan_attempts (version_id, org_id, attempts, last_detail, next_attempt_at)
     VALUES (p_version_id, p_org_id, 1, left(coalesce(nullif(btrim(p_detail), ''), 'unspecified'), 120), now() + make_interval(secs => p_base_seconds))
-    ON CONFLICT (version_id) DO UPDATE
-       SET attempts = a.attempts + 1,
-           last_detail = EXCLUDED.last_detail,
-           next_attempt_at = now() + make_interval(secs => least(p_max_seconds::bigint, p_base_seconds::bigint * (2::bigint ^ least(a.attempts, 30))::bigint)),
-           updated_at = now()
-     WHERE a.org_id = p_org_id
-    RETURNING a.attempts INTO v_attempts;
+    ON CONFLICT (version_id) DO NOTHING
+    RETURNING attempts INTO v_attempts;
+    IF v_attempts IS NULL THEN
+        UPDATE public.document_malware_scan_attempts AS a
+           SET attempts = a.attempts + 1,
+               last_detail = left(coalesce(nullif(btrim(p_detail), ''), 'unspecified'), 120),
+               next_attempt_at = now() + make_interval(secs => least(p_max_seconds::bigint, p_base_seconds::bigint * (2::bigint ^ least(a.attempts, 30))::bigint)),
+               updated_at = now()
+         WHERE a.version_id = p_version_id AND a.org_id = p_org_id
+        RETURNING a.attempts INTO v_attempts;
+    END IF;
     IF v_attempts IS NULL THEN
         RAISE EXCEPTION 'note_document_malware_scan_attempt: version belongs to another organization' USING ERRCODE = '42501';
     END IF;
@@ -226,8 +231,24 @@ BEGIN
 END
 $fn$;
 
--- G5 (W3). Body unchanged; only its configuration and grants.
-ALTER FUNCTION public.validate_communication_message_attachment_org() SET search_path = public, pg_temp;
+-- G5 (W3). Identical to 20261218090000 except the search_path line; then its grants.
+CREATE OR REPLACE FUNCTION public.validate_communication_message_attachment_org()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.communication_messages m WHERE m.id = NEW.message_id AND m.org_id = NEW.org_id) THEN
+        RAISE EXCEPTION 'communication_message_attachments: message % is not in org %', NEW.message_id, NEW.org_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.documents d WHERE d.id = NEW.document_id AND d.org_id = NEW.org_id) THEN
+        RAISE EXCEPTION 'communication_message_attachments: document % is not in org %', NEW.document_id, NEW.org_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn$;
 REVOKE ALL ON FUNCTION public.validate_communication_message_attachment_org() FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.documents_refuse_unsafe_release() FROM PUBLIC, anon, authenticated, service_role;
@@ -253,7 +274,8 @@ BEGIN
         RAISE EXCEPTION 'G1/G3: a client role can execute a new function';
     END IF;
     IF has_table_privilege('authenticated', 'public.document_malware_scan_attempts', 'SELECT')
-       OR has_table_privilege('service_role', 'public.document_malware_scan_attempts', 'UPDATE') THEN
+       OR has_table_privilege('service_role', 'public.document_malware_scan_attempts', 'UPDATE')
+       OR has_table_privilege('service_role', 'public.document_malware_scan_attempts', 'DELETE') THEN
         RAISE EXCEPTION 'G3: scan attempts are writable or readable outside the function';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_documents_refuse_unsafe_release' AND tgrelid = 'public.documents'::regclass) THEN
