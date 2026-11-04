@@ -279,10 +279,10 @@ describe("the Supabase port", () => {
 });
 
 describe("the migration has the shape the repair depends on", () => {
-    // Held out of supabase/migrations (operator decision 2026-11-02): it is not applied anywhere, and a promoted but
-    // unapplied migration would put the staging ledger BEHIND. D10 stays held without it (see "D10 requires the atomic
-    // open" above). It moves back into supabase/migrations, byte for byte, when its apply is approved.
-    const sql = readFileSync(resolve(ROOT, "certification/documents-v1/pending-migrations/20261215093000_processing_open_case_atomic.sql"), "utf8");
+    // Moved back into supabase/migrations byte for byte (sha256 f04e450c…) after its invariant and two-session race passed
+    // on certenv-dec617feb5. The staging apply is a separate governed approval; D10 stays held until it lands (see "D10
+    // requires the atomic open" above).
+    const sql = readFileSync(resolve(ROOT, "supabase/migrations/20261215093000_processing_open_case_atomic.sql"), "utf8");
     const code = sql.replace(/--[^\n]*/g, "");
 
     it("both inserts sit inside ONE exception block that catches unique_violation, re-reads the winner and re-raises otherwise", () => {
