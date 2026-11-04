@@ -12,6 +12,7 @@ import {
     emailAttachmentSourceKey,
     type InboundAttachmentInput,
 } from "@/lib/documents/inbound/emailAttachmentFilingDecision";
+import { isInboundAttachmentRetrievalEnabled } from "@/lib/communications/email/inboundAttachmentRetrieval";
 
 const ROOT = resolve(__dirname, "../../..");
 const ORG = "0a000000-0000-4000-8000-0000000000d1";
@@ -37,10 +38,13 @@ describe("today's capabilities are the measured ones", () => {
         expect(decideInboundAttachmentFiling(input())).toEqual({ action: "hold", reasons: ["storage_unavailable", "malware_scanning_unavailable"] });
     });
 
-    it("the storage flag matches the tree: no migration creates communication_message_attachments", () => {
+    it("the storage flag matches production: the WS11 link migration is in the tree, but retrieval is OFF by default", () => {
+        // The table's migration exists (pending; its apply is a separate approval), so a file is no longer the measure.
+        // Storage is live only when Communications switches retrieval on, which the default environment does not.
         const dir = resolve(ROOT, "supabase/migrations");
-        const ws11 = readdirSync(dir).filter((f) => f.endsWith(".sql") && readFileSync(resolve(dir, f), "utf8").includes("communication_message_attachments"));
-        expect(ws11.length > 0).toBe(EMAIL_ATTACHMENT_FILING_CAPABILITY.storage);
+        const ws11 = readdirSync(dir).filter((f) => f.endsWith(".sql") && readFileSync(resolve(dir, f), "utf8").includes("CREATE TABLE IF NOT EXISTS public.communication_message_attachments"));
+        expect(ws11).toEqual(["20261218090000_communication_message_attachments.sql"]);
+        expect(isInboundAttachmentRetrievalEnabled({})).toBe(EMAIL_ATTACHMENT_FILING_CAPABILITY.storage);
     });
 
     it("structural screening is the real D1c-1 ingestion screen", () => {

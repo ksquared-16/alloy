@@ -9,7 +9,7 @@
  *     a byte is read, and no document, storage object, case or source is written.
  * Not proven here: a provider attachment-content API (none exists in the repository), a scanner, or any database.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -317,6 +317,22 @@ describe("the default wiring is production: everything held before a byte is rea
         expect(outcome.status).toBe("persisted");
         for (const t of DOCUMENT_SIDE) expect(store.tables[t] ?? [], t).toEqual([]);
         // The client has no storage API at all: any retrieval or upload attempt would have failed the hook, not passed.
+    });
+
+    it("with INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED on, the default call site still reads no byte while no scanner exists", async () => {
+        vi.stubEnv("INBOUND_EMAIL_ATTACHMENT_RETRIEVAL_ENABLED", "true");
+        const fetchSpy = vi.fn(async () => new Response("unexpected", { status: 599 }));
+        vi.stubGlobal("fetch", fetchSpy);
+        try {
+            const store = makeStore(guardianSeed);
+            const outcome = await ingestResendInboundEmail(event({ attachments: ATTACHMENTS }), deps(store.client()));
+            expect(outcome.status).toBe("persisted");
+            expect(fetchSpy).not.toHaveBeenCalled();
+            for (const t of [...DOCUMENT_SIDE, "communication_message_attachments"]) expect(store.tables[t] ?? [], t).toEqual([]);
+        } finally {
+            vi.unstubAllEnvs();
+            vi.unstubAllGlobals();
+        }
     });
 
     it("the same production deps, observed directly: each attachment held with the missing capabilities named", async () => {
