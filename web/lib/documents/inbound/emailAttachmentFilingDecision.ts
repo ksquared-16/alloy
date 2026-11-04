@@ -75,6 +75,8 @@ export type HoldReason =
     | "message_ownership_ambiguous"
     | "not_an_attachment"
     | "attachment_not_stored"
+    /** An operator deleted the stored document through the audited delete: a redelivery never re-creates it. */
+    | "attachment_deleted"
     | "retrieval_failed"
     | "stored_in_another_organization"
     | "screening_refused"

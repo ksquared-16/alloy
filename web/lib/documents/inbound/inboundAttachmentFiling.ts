@@ -16,12 +16,24 @@
  * Filing is then the existing document path: the case appears in the filing queue and is filed by `commitDocumentFiling`
  * under `processing_case:<case>:document:<document>`; nothing here files, proposes a subject, or sends a message.
  *
+ * MALWARE HOLD. Every newly stored attachment is written `quarantined` with `metadata.screening.malware_hold =
+ * "awaiting_verdict"` — never available before a malware verdict, whatever structural screening said. The structural
+ * result is kept beside it (`screening.structural_status`), and `structural` is read from THAT, never from the document
+ * status: a structurally clean file held for its scan is not a structurally quarantined one. Releasing it after a clean
+ * verdict is a separate governed transition (the database refuses it otherwise: `document_malware_scan_pending`); until
+ * then the gate holds it as `document_unavailable`. Nothing here updates a stored row.
+ *
+ * DELETED ATTACHMENTS. The stored document's id is derived from (organization, message, attachment), so a provider
+ * redelivery after an operator's audited delete would re-create it. `findStored` reports such an attachment as
+ * deleted, and it is held (`attachment_deleted`) without being retrieved or stored again.
+ *
  * The production boundaries are the measured reality: storage and malware scanning are UNAVAILABLE, so every attachment
  * is held with its reasons until the owning slices ship (`EMAIL_ATTACHMENT_FILING_DEPENDENCIES`).
  */
 import { decideIngestion } from "@/lib/documents/screenedIngestion";
 import { sniffPublicUploadKind } from "@/lib/documents/documentContentSignature";
 import { PUBLIC_UPLOAD_MAX_FILE_BYTES } from "@/lib/documents/publicUploadGuard";
+import { QUARANTINED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
 import { openNonFormProcessingCaseFromSource } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { isAtomicProcessingOpenUnavailable } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import type { ProcessingCaseDeps } from "@/lib/pos/processingCase/types";
@@ -48,7 +60,33 @@ export type InboundMessageForFiling = {
  * The stored document, and the exact version WS11 wrote (`documents.current_version_id` + its SHA-256). A malware
  * verdict releases a file only when it names this version; a row without them can never be released on a scan.
  */
-export type StoredAttachment = { documentId: string; orgId: string; status: string | null; versionId?: string | null; checksumSha256?: string | null };
+export type StoredAttachment = {
+    documentId: string;
+    orgId: string;
+    status: string | null;
+    versionId?: string | null;
+    checksumSha256?: string | null;
+    /**
+     * The persisted STRUCTURAL screening result (`metadata.screening.structural_status`), independent of `status`: a
+     * document held for its malware scan is `quarantined` by status and may still be structurally clean. Absent on a
+     * legacy row, whose status is then the only evidence.
+     */
+    structural?: "clean" | "quarantined" | null;
+};
+
+/**
+ * An attachment whose stored document an operator deleted through the audited delete. Its id is stable, so without this
+ * a redelivery would fetch and re-create it; instead it is held and never retrieved again.
+ */
+export type DeletedAttachment = { documentId: string; orgId: string; deleted: true };
+
+/** Every newly stored attachment carries this hold until a clean verdict about its exact version releases it. */
+export const INBOUND_ATTACHMENT_MALWARE_HOLD = "awaiting_verdict" as const;
+
+/** A legacy row (no `structural_status`): its status is the structural result it was stored with. */
+export function structuralFromStatus(status: string | null): "clean" | "quarantined" {
+    return status === QUARANTINED_DOCUMENT_STATUS ? "quarantined" : "clean";
+}
 
 /**
  * The WS11 contract this pipeline consumes. Communications owns its implementation; `store` must be idempotent on
@@ -56,7 +94,8 @@ export type StoredAttachment = { documentId: string; orgId: string; status: stri
  */
 export interface AttachmentStorageBoundary {
     readonly available: boolean;
-    findStored(args: { orgId: string; messageId: string; attachmentId: string }): Promise<StoredAttachment | null>;
+    /** The stored attachment whatever its status, a deletion marker after an audited delete, or null (never stored). */
+    findStored(args: { orgId: string; messageId: string; attachmentId: string }): Promise<StoredAttachment | DeletedAttachment | null>;
     retrieve(args: { orgId: string; messageId: string; attachmentId: string }): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
     store(args: {
         orgId: string;
@@ -139,12 +178,19 @@ export async function fileInboundEmailAttachments(
         const orgId = message.orgId;
 
         // 2–3. Reuse what is stored; otherwise retrieve, screen as an outside file, store.
-        let stored = await deps.storage.findStored({ orgId, messageId: message.id, attachmentId: a.id }).catch(() => undefined);
-        if (stored === undefined) {
+        const found = await deps.storage.findStored({ orgId, messageId: message.id, attachmentId: a.id }).catch(() => undefined);
+        if (found === undefined) {
             held(["attachment_not_stored"]);
             continue;
         }
-        let structural: "clean" | "quarantined" | "refused" | null = stored ? (stored.status === "quarantined" ? "quarantined" : "clean") : null;
+        // Deliberately deleted: never fetched or stored again under its stable id.
+        if (found && "deleted" in found) {
+            held(["attachment_deleted"], found.documentId);
+            continue;
+        }
+        let stored: StoredAttachment | null = found;
+        // From the persisted structural result, never from the status (a scan-held file is `quarantined` by status).
+        let structural: "clean" | "quarantined" | "refused" | null = stored ? (stored.structural ?? structuralFromStatus(stored.status)) : null;
         if (!stored) {
             if (typeof a.size === "number" && a.size > PUBLIC_UPLOAD_MAX_FILE_BYTES) {
                 held(["screening_refused"]);
@@ -173,8 +219,9 @@ export async function fileInboundEmailAttachments(
                 filename: a.filename,
                 mimeType: CANONICAL_MIME[kind],
                 bytes: got.bytes,
-                status: screened.status,
-                screening: screened.screening,
+                // Never available before a malware verdict: the structural result is kept beside the hold, not in the status.
+                status: QUARANTINED_DOCUMENT_STATUS,
+                screening: { ...screened.screening, structural_status: screened.status, malware_hold: INBOUND_ATTACHMENT_MALWARE_HOLD },
                 })
                 // One attachment's storage failure holds that attachment; the others still proceed, and a redelivery retries.
                 .catch(() => null);

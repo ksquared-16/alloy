@@ -255,6 +255,11 @@ describe("composed with WS11 storage and the pipeline (fake transport, in-memory
         });
         const processing = cases();
         const message = { id: MSG, orgId: ORG, ownership: "owned" as const, attachments: [{ id: ATT, filename: "shots.pdf", content_type: "application/pdf", content_disposition: "attachment", size: PDF.byteLength }] };
+        // Stored scan-held (`quarantined`, malware_hold): held until the governed release a clean verdict authorizes,
+        // modelled here by the test — WS11 never updates a documents row.
+        const held = await fileInboundEmailAttachments({ storage, malware: verdicts, processing }, message);
+        expect(held[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"] });
+        for (const r of db.rows("documents")) r.status = "uploaded";
         const first = await fileInboundEmailAttachments({ storage, malware: verdicts, processing }, message);
         const second = await fileInboundEmailAttachments({ storage, malware: verdicts, processing }, message);
         expect(first[0].outcome).toBe("case_opened");

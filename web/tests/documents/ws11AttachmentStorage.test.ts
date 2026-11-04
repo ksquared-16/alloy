@@ -103,6 +103,17 @@ const storeArgs = (bytes = pdf()) => ({
     screening: { status: "clean" },
 });
 
+/**
+ * Stands in for the governed release a clean, version-bound verdict will authorize — NOT part of ws11, which never
+ * updates a documents row: a structurally clean, scan-held row becomes `uploaded`.
+ */
+function releaseScanHeld(db: InMemorySupabase) {
+    for (const r of db.rows("documents")) {
+        const screening = (r.metadata as { screening?: Record<string, unknown> } | null)?.screening;
+        if (screening?.malware_hold === "awaiting_verdict" && screening.structural_status === "uploaded") r.status = "uploaded";
+    }
+}
+
 /** A test double answering about exactly the version it is asked about. Not a scanner. */
 const boundVerdicts = (verdict: "clean" | "infected" = "clean"): MalwareScanBoundary => ({
     available: true,
@@ -182,7 +193,7 @@ describe("storage: the existing document sequence, idempotent on the attachment"
         expect(rows[0].checksum_sha256).toMatch(/^[0-9a-f]{64}$/);
         expect((rows[0].metadata as Record<string, unknown>).processing_intent).toBe("store_document");
         expect((rows[0].metadata as Record<string, unknown>).inbound_email).toEqual({ communication_message_id: MSG, attachment_id: "att-1" });
-        expect(stored).toEqual({ documentId: docId, orgId: ORG, status: "uploaded", versionId: rows[0].current_version_id, checksumSha256: rows[0].checksum_sha256 });
+        expect(stored).toEqual({ documentId: docId, orgId: ORG, status: "uploaded", versionId: rows[0].current_version_id, checksumSha256: rows[0].checksum_sha256, structural: "clean" });
         expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toEqual(stored);
         expect(await s.findStored({ orgId: OTHER, messageId: MSG, attachmentId: "att-1" })).toBeNull();
     });
@@ -238,6 +249,90 @@ describe("storage: the existing document sequence, idempotent on the attachment"
     });
 });
 
+describe("the malware hold: structural is read from the persisted result, never from the status", () => {
+    const held = (structural: "uploaded" | "quarantined") => ({
+        ...storeArgs(),
+        status: "quarantined",
+        screening: { status: structural === "uploaded" ? "clean" : "flagged", structural_status: structural, malware_hold: "awaiting_verdict" },
+    });
+
+    it("a scan-held, structurally clean document is stored quarantined and reported structurally CLEAN", async () => {
+        const db = seededDb();
+        const a = okAudit();
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: a.audit, newId: ids });
+        const stored = await s.store(held("uploaded"));
+        const row = db.rows("documents")[0];
+        expect(row.status).toBe("quarantined");
+        expect((row.metadata as { screening: Record<string, unknown> }).screening).toMatchObject({ structural_status: "uploaded", malware_hold: "awaiting_verdict" });
+        expect(a.events[0].detail).toMatchObject({ screening_status: "quarantined", structural_status: "uploaded", malware_hold: "awaiting_verdict" });
+        expect(stored).toMatchObject({ status: "quarantined", structural: "clean" });
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ status: "quarantined", structural: "clean" });
+    });
+
+    it("a structurally quarantined one stays structurally quarantined", async () => {
+        const db = seededDb();
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids });
+        await s.store(held("quarantined"));
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ status: "quarantined", structural: "quarantined" });
+    });
+
+    it.each([
+        ["quarantined", "quarantined"],
+        ["uploaded", "clean"],
+    ])("a legacy row (no structural_status) with status %s falls back to %s", async (status, structural) => {
+        const db = seededDb();
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        db.seed("documents", [{ id: docId, org_id: ORG, status, current_version_id: "v1", checksum_sha256: "x", metadata: { screening: { status: "clean" } } }]);
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids });
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toEqual({ documentId: docId, orgId: ORG, status, versionId: "v1", checksumSha256: "x", structural });
+    });
+});
+
+describe("an operator's audited delete is final: a redelivery never re-creates the attachment", () => {
+    const deletion = (documentId: string, event = "document_delete_authorized", org = ORG) => ({
+        id: `ev-${documentId}-${event}`,
+        org_id: org,
+        event_type: event,
+        entity_type: "documents",
+        entity_id: documentId,
+        payload: {},
+    });
+
+    it("no row and a recorded deletion: findStored reports it deleted; the pipeline holds it without a fetch or a store", async () => {
+        const db = seededDb();
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        db.seed("workflow_events", [deletion(docId)]);
+        const f = fakeFetcher();
+        const storage = createWs11AttachmentStorage({ supabase: db as never, fetchContent: f.fetchContent, audit: okAudit().audit, newId: ids });
+        expect(await storage.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toEqual({ documentId: docId, orgId: ORG, deleted: true });
+        const r = await fileInboundAttachmentsForPersistedMessage(
+            { supabase: db as never, filing: { storage, malware: boundVerdicts("clean"), processing: makeProcessingCaseDbDeps(withAtomicOpen(db) as never) } },
+            { orgId: ORG, messageId: MSG },
+        );
+        expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["attachment_deleted"], documentId: docId });
+        expect(f.calls).toHaveLength(0);
+        expect(db.uploadCalls).toHaveLength(0);
+        expect(db.rows("documents")).toHaveLength(0);
+        expect(db.rows("processing_cases")).toHaveLength(0);
+    });
+
+    it("unaffected: another event, another document's or another organization's deletion, or a row that still exists", async () => {
+        const db = seededDb();
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        db.seed("workflow_events", [
+            deletion(docId, "document_delete_failed"),
+            deletion(inboundAttachmentDocumentId(ORG, MSG, "att-2")),
+            deletion(docId, "document_delete_authorized", OTHER),
+        ]);
+        const s = createWs11AttachmentStorage({ supabase: db as never, fetchContent: fakeFetcher().fetchContent, audit: okAudit().audit, newId: ids });
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toBeNull();
+        // A delete that was authorized but never removed the row: the row is what is stored.
+        db.seed("workflow_events", [deletion(docId)]);
+        db.seed("documents", [{ id: docId, org_id: ORG, status: "uploaded", current_version_id: "v1", checksum_sha256: "x", metadata: {} }]);
+        expect(await s.findStored({ orgId: ORG, messageId: MSG, attachmentId: "att-1" })).toMatchObject({ documentId: docId, status: "uploaded" });
+    });
+});
+
 describe("the system audit principal", () => {
     it("is recorded as a named process; an unnamed process is refused", async () => {
         const db = new InMemorySupabase();
@@ -285,9 +380,14 @@ describe("the Communications hook", () => {
             processing: makeProcessingCaseDbDeps(db as never),
             annotateCase: makeInboundCaseAnnotator(db as never),
         };
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        // Stored scan-held: no case until the governed release a clean verdict authorizes (modelled here, not by ws11).
+        const held = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
+        expect(held.status === "filed" && held.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"], documentId: docId });
+        expect(db.rows("processing_cases")).toHaveLength(0);
+        releaseScanHeld(db);
         const first = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
         const second = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
-        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
         expect(first.status === "filed" && first.outcomes[0]).toMatchObject({ outcome: "case_opened", documentId: docId });
         expect(second.status === "filed" && second.outcomes[0]).toMatchObject({ outcome: "case_existing", documentId: docId });
         expect(f.calls).toHaveLength(1);
@@ -308,6 +408,8 @@ describe("the Communications hook", () => {
             processing: makeProcessingCaseDbDeps(db as never),
             annotateCase: makeInboundCaseAnnotator(db as never),
         };
+        await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
+        releaseScanHeld(db);
         const r = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
         expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["processing_atomic_open_unavailable"] });
         expect(db.rows("processing_cases")).toHaveLength(0);
@@ -332,7 +434,8 @@ describe("the Communications hook", () => {
             processing: makeProcessingCaseDbDeps(db as never),
         };
         const r = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
-        expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["malware_verdict_unbound"] });
+        expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable", "malware_verdict_unbound"] });
+        expect(db.rows("documents")[0].status).toBe("quarantined");
         expect(db.rows("documents")).toHaveLength(1);
         expect(db.rows("processing_cases")).toHaveLength(0);
     });

@@ -15,6 +15,15 @@
  * its own UNIQUE (message_id, provider_attachment_id): a concurrent writer's row is success, not failure. Off (the
  * default, and production until the migration is applied and retrieval is enabled), nothing here reads or writes it.
  *
+ * MALWARE HOLD. A row is stored as the pipeline asks — `quarantined`, `metadata.screening.malware_hold` — and this
+ * boundary never UPDATEs a `documents` row. `structural` is read from `metadata.screening.structural_status`, so a
+ * structurally clean file held for its scan is never reported as structurally quarantined; a legacy row without it
+ * falls back to its status.
+ *
+ * DELETION. An operator's audited delete (`document_delete_authorized` on the document, recorded before the row goes)
+ * removes the row AND its message link. Because the id is stable, `findStored` checks that record whenever no row
+ * exists, and reports the attachment as deleted: the pipeline then holds it and nothing is fetched or re-created.
+ *
  * RETRIEVAL. Bytes come only through `fetchContent`, a port Communications implements under the ORGANIZATION'S
  * credential (`resolveInboundRetrievalCredential` from the message's provider binding — never the environment, never a
  * key passed through here). The repository holds no attachment-content contract for the provider; none is invented.
@@ -26,12 +35,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { recordDocumentAudit, type DocumentAuditInput, type DocumentAuditResult } from "@/lib/documents/documentAudit";
 import { processingIntentMetadata } from "@/lib/pos/processingImportIntent";
-import type { AttachmentStorageBoundary, StoredAttachment } from "@/lib/documents/inbound/inboundAttachmentFiling";
+import {
+    structuralFromStatus,
+    type AttachmentStorageBoundary,
+    type DeletedAttachment,
+    type StoredAttachment,
+} from "@/lib/documents/inbound/inboundAttachmentFiling";
 
 export const INBOUND_ATTACHMENT_BUCKET = "org_documents";
 const AUDIT_ROUTE = "communications/inbound/email-attachment";
 const UNIQUE_VIOLATION = "23505";
 const MESSAGE_ATTACHMENTS_TABLE = "communication_message_attachments";
+/** The event the audited document delete (`DELETE /api/admin/pos/documents/[id]`) records before removing anything. */
+const DOCUMENT_DELETE_EVENT = "document_delete_authorized";
 
 /** Result model of Communications' received-email fetcher: retryable vs permanent, never an exception. */
 export type AttachmentContentResult =
@@ -59,10 +75,31 @@ function sanitizeFilename(name: string): string {
     return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 180) || "file";
 }
 
-type DocRow = { id: string; org_id: string; status: string | null; current_version_id: string | null; checksum_sha256: string | null };
+type DocRow = {
+    id: string;
+    org_id: string;
+    status: string | null;
+    current_version_id: string | null;
+    checksum_sha256: string | null;
+    metadata?: { screening?: Record<string, unknown> | null } | null;
+};
+
+/** The persisted structural result; the status only for a legacy row that never recorded one. */
+function structuralOf(status: string | null, screening: Record<string, unknown> | null | undefined): "clean" | "quarantined" {
+    const recorded = screening?.structural_status;
+    if (typeof recorded === "string" && recorded.trim()) return recorded.trim() === "quarantined" ? "quarantined" : "clean";
+    return structuralFromStatus(status);
+}
 
 function toStored(row: DocRow): StoredAttachment {
-    return { documentId: row.id, orgId: row.org_id, status: row.status, versionId: row.current_version_id, checksumSha256: row.checksum_sha256 };
+    return {
+        documentId: row.id,
+        orgId: row.org_id,
+        status: row.status,
+        versionId: row.current_version_id,
+        checksumSha256: row.checksum_sha256,
+        structural: structuralOf(row.status, row.metadata?.screening),
+    };
 }
 
 export type Ws11AttachmentStorageDeps = {
@@ -86,12 +123,26 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
     async function readDocument(orgId: string, documentId: string): Promise<StoredAttachment | null> {
         const { data, error } = await db
             .from("documents")
-            .select("id, org_id, status, current_version_id, checksum_sha256")
+            .select("id, org_id, status, current_version_id, checksum_sha256, metadata")
             .eq("org_id", orgId)
             .eq("id", documentId)
             .maybeSingle();
         if (error) throw new Error(`ws11 findStored: ${error.code ?? "unknown"}`);
         return data ? toStored(data as DocRow) : null;
+    }
+
+    /** True when an operator deleted this document through the audited delete. A read failure throws (held, not fetched). */
+    async function wasDeleted(orgId: string, documentId: string): Promise<boolean> {
+        const { data, error } = await db
+            .from("workflow_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("entity_type", "documents")
+            .eq("entity_id", documentId)
+            .eq("event_type", DOCUMENT_DELETE_EVENT)
+            .limit(1);
+        if (error) throw new Error(`ws11 findStored deletion: ${error.code ?? "unknown"}`);
+        return (data ?? []).length > 0;
     }
 
     async function isLinked(orgId: string, messageId: string, attachmentId: string, documentId: string): Promise<boolean> {
@@ -131,8 +182,13 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
         async findStored({ orgId, messageId, attachmentId }) {
             const documentId = inboundAttachmentDocumentId(orgId, messageId, attachmentId);
             const found = await readDocument(orgId, documentId);
+            if (!found) {
+                // No row: never stored, or deliberately deleted. A deleted attachment is never re-fetched or re-created.
+                if (await wasDeleted(orgId, documentId)) return { documentId, orgId, deleted: true } satisfies DeletedAttachment;
+                return null;
+            }
             // An unlinked document is "not stored yet": `store` finds it, writes no second object, and adds the link.
-            if (found && linkAttachments && !(await isLinked(orgId, messageId, attachmentId, documentId))) return null;
+            if (linkAttachments && !(await isLinked(orgId, messageId, attachmentId, documentId))) return null;
             return found;
         },
 
@@ -180,7 +236,14 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
                 event: "document_upload_authorized",
                 subject: { type: "documents", id: documentId },
                 route: AUDIT_ROUTE,
-                detail: { communication_message_id: messageId, attachment_id: attachmentId, byte_size: bytes.byteLength, screening_status: status },
+                detail: {
+                    communication_message_id: messageId,
+                    attachment_id: attachmentId,
+                    byte_size: bytes.byteLength,
+                    screening_status: status,
+                    ...(typeof screening.structural_status === "string" ? { structural_status: screening.structural_status } : {}),
+                    ...(typeof screening.malware_hold === "string" ? { malware_hold: screening.malware_hold } : {}),
+                },
             });
             if (!recorded.ok) throw new Error("ws11 store: audit unavailable");
 
@@ -224,7 +287,7 @@ export function createWs11AttachmentStorage(deps: Ws11AttachmentStorageDeps): At
                 }
                 throw new Error(`ws11 store: document insert failed (${error.code ?? "unknown"})`);
             }
-            return link({ documentId, orgId, status, versionId, checksumSha256 }, messageId, attachmentId);
+            return link({ documentId, orgId, status, versionId, checksumSha256, structural: structuralOf(status, screening) }, messageId, attachmentId);
         },
     };
 }
