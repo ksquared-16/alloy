@@ -103,8 +103,8 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | D9.2 write surface (Q1–Q8) | ✔ `2181bf936`…`30f71b2ee` | ✔ `documents-d9-application-filing.sql` PASSED on `certenv-dec617feb5` (`gar_46d2274f98232f`, rollback verified) | — | — | — | — | Documents: run on certenv (§8). Then hosted D9-H2 (`D9-2-3-HOSTED-QA-PLAN.md`) after deploy |
 | D9.2 24 h unfiled-upload handoff | ✔ `88ebd3848`, 13 + 2 tests | ✔ SQL half (one case per upload) in `processing-open-case-atomic-preapply.sql` PASSED (`gar_6bf71cba9a81ce`) | — | — | — | — | **Inert until D10-A3** applies the atomic open. Hosted W-ES after that apply |
 | D9.3 lifecycle (review, validity, replacement, archive, reads) | ✔ `6b3c80f8f`, `aae87158f` | ✔ Replacement with no user in the application-filing invariant PASSED (`gar_46d2274f98232f`) | — | — | — | — | Hosted W-RV1…W-RQ1 with `documents.review` (§2 of the D9.2/3 plan) |
-| D9.3 archive migration `20261217090000` | Recorded `880238d8e` | ✘ `documents-d9-3-archive-preapply.sql` ASSERTION_FAILED at 2b (`gar_4b91d26b244e19`): a test defect, fixed, **re-run pending** | — | — | — | — | Certenv run (§8), then **apply approval** (DEC-7). Until applied: 503 `archive_unavailable` |
-| D9.3 staff restore | ✔ `01141ac30`: archived listing, restore route, library section, 8 tests | In the archive pre-apply invariant (`document_unarchive`) | — | — | — | — | Same apply as archive. Hosted W-AR2 |
+| D9.3 archive migration `20261217090000` | Recorded `880238d8e` | ✔ `documents-d9-3-archive-preapply.sql` PASSED on `certenv-dec617feb5` (`gar_b55de8a1627166` at `a9b157312`, after the 2b key fix; first run `gar_4b91d26b244e19` kept) | — | — | — | — | Certenv run (§8), then **apply approval** (DEC-7). Until applied: 503 `archive_unavailable` |
+| D9.3 staff restore | ✔ `01141ac30`: archived listing, restore route, library section, 8 tests | ✔ In the archive pre-apply invariant (`document_unarchive`), PASSED (`gar_b55de8a1627166`) | — | — | — | — | Same apply as archive. Hosted W-AR2 |
 | D9 10 MB uploads | Option A recorded (`D9-UPLOAD-LIMIT-10MB-PATH.md` §Assessment) | — | — | — | — | — | **Kelly: in or out of this program** (DEC-10). 4 MiB stays until recorded |
 | D9-N1 / N2 (no org-wide feed; no medical / identity / custody externally) | ✔ ratified, enforced | — | — | — | — | — | — |
 | D10-Q1 filing queue | ✔ increment 1 | — | — | ✔ #1627 | ✔ | — | Verify in D10-V1 |
@@ -114,7 +114,7 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | D10-A3 staging apply `20261215093000` | — | — | — | — | — | — | After A1 and A2, merge, then `database.apply_promoted_migration` (DEC-7) |
 | D10-S1 WS11 link + access rules | Draft SQL only | — | — | — | — | — | **Communications H3** |
 | D10-S2 storage boundary | ✔ increment 1 | — | — | ✔ #1627 | ✔ (unwired) | — | Re-prove with H3 on a certenv |
-| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`) | `documents-malware-verdicts-preapply.sql` prepared, **not run** | — | — | — | — | **Documents security H4** review. Its pre-apply invariant can run before the review; the apply cannot |
+| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`) | ✔ `documents-malware-verdicts-preapply.sql` PASSED on `certenv-dec617feb5` (`gar_e8431537a03bc9` at `a9b157312`) | — | — | — | — | **Documents security H4** review. Its pre-apply invariant can run before the review; the apply cannot |
 | D10-M2 scanner integration | ✔ `e0dfa2121`, unwired | — | — | — | — | — | **DEC-6** engine and host (H4) |
 | D10-F1 Resend fetcher wiring | Adapter ✔, not wired | — | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
 | D10-V1 full inbound path | Synthetic suites green | — | — | — | — | — | After S1, M2, A3 on a certenv |
@@ -147,8 +147,8 @@ runner verifies that from an independent connection.
 | `processing-open-case-atomic-preapply.sql` (`64c2461b…`) | D10-A1 single session; the SQL half of the 24 h handoff | staging-tip certenv |
 | `documents-malware-verdicts-preapply.sql` (`560163d1…`) | D10-M1 verdict store (I1–I6 cases of the reviewed invariant), migration inside the rollback | staging-tip certenv |
 
-All four pass the installed toolkit's `analyzeRollbackSafety` statically. Two have passed on the certenv; the archive
-invariant failed on a test defect and is fixed; the verdict-store invariant has not run.
+All four pass the installed toolkit's `analyzeRollbackSafety` statically. All four have PASSED on `certenv-dec617feb5`
+(rollback verified each time; no table, catalog, ledger or sequence change).
 
 **Attempt, 2026-11-03.**
 - Push `gar_522ee0ddcaf319` ✔ (`agent/documents` = `c1875434429c`).
@@ -167,8 +167,12 @@ invariant failed on a test defect and is fixed; the verdict-store invariant has 
 - `gar_4b91d26b244e19` (after `gar_eb51079d9339d5`), archive: **ASSERTION_FAILED**, `document_filing_key_required` at
   assertion 2b. The test passed filing key `'d93-fav'`, which is 7 characters, and `document_file_as_version` requires 8–200
   and checks the key first. So the call never reached the archived-target check that 2b asserts. Section 1 and 2a
-  passed before it. Product code is not implicated. The key is now `'d93-file-as-version'`; the file re-runs from the
-  pushed candidate that carries the fix.
+  passed before it. Product code is not implicated. The key is now `'d93-file-as-version'`.
+- Push `gar_bc859a99ed898e` ✔ (`agent/documents` = `a9b157312`).
+- `gar_b55de8a1627166` (after `gar_4b91d26b244e19`), archive re-run at `a9b157312` (`c83d9966…`): **PASSED**.
+- `gar_e8431537a03bc9`, D10-M1 verdict store at `a9b157312` (`560163d1…`): **PASSED**.
+- Race prerequisite: push `gar_b4e1868ffd095c` ✔ (`agent/documents-race-proof` = `c02153a92`). The certenv apply of
+  `20261215093000` and the isolated QA run for `processing_atomic_open_race` (HC-B) follow, each with its own approval.
 
 **Order of requests** (each its own operator approval; payloads under `.vacilando-payloads/d9d10-*.json`):
 1. `repository.push` of `agent/documents` at the certified candidate. A rollback source must be on a sanctioned
