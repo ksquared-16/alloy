@@ -18,9 +18,9 @@ const BANNER = "\n-- ═══════════════════�
 const code = (sql: string) => sql.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
 
 describe("the migration", () => {
-    it("is the newest version in supabase/migrations, so it applies after everything staging already carries", () => {
+    // "Newest version" held only until WS11 merged (PR #1632, applied to staging); later migrations follow it.
+    it("is the only migration at its version in supabase/migrations", () => {
         const versions = readdirSync(resolve(ROOT, "supabase/migrations")).filter((f) => /^\d{14}_.*\.sql$/.test(f)).sort();
-        expect(versions.at(-1)).toBe(MIGRATION_FILE);
         expect(versions.filter((f) => f.startsWith("20261218090000"))).toEqual([MIGRATION_FILE]);
     });
 

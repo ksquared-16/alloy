@@ -29,7 +29,7 @@ describe("pre-apply invariants", () => {
     });
 
     it("D10-M1 verdict store: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {
-        const migration = read("certification/documents-v1/pending-migrations/20261219090000_documents_malware_verdicts.sql");
+        const migration = read("supabase/migrations/20261219090000_documents_malware_verdicts.sql");
         const single = read("certification/invariants/documents-malware-verdicts.sql");
         const invariant = read("certification/invariants/documents-malware-verdicts-preapply.sql");
         expect(migration.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(3);

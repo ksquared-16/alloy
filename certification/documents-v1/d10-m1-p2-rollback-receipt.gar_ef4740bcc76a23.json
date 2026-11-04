@@ -1,0 +1,128 @@
+{
+  "request_id": "gar_ef4740bcc76a23",
+  "action_key": "database.run_rollback_invariant_test",
+  "status": "complete",
+  "run_id": "erun2_f1924f9fbeb09c64",
+  "lane_id": "lane_aa660dc9554d",
+  "policy_decision": "operator_approved",
+  "operator_approval": {
+    "decision": "approved",
+    "actor": "operator",
+    "at": "2026-11-04T18:54:05.320Z"
+  },
+  "trusted_host_action_id": "tha_7ab6e1d6f2626a",
+  "inputs": {
+    "target": "certenv-0362902def",
+    "expectedSha": "d159dcd10febcd1c8863ce51956c8f1d787f78a5",
+    "expected_repo_head": "d159dcd10febcd1c8863ce51956c8f1d787f78a5",
+    "testPath": "certification/invariants/documents-malware-verdicts-preapply.sql",
+    "expectedHash": "7ec5a848f8b4d81b7ae77ada790f063980519b45dd6c51b153d384b5b3b45091",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/documents"
+  },
+  "decision_timing": {
+    "submitted_at": "2026-11-04T18:54:05.497Z",
+    "accepted_at": "2026-11-04T18:54:05.321Z",
+    "authorization_persisted_at": "2026-11-04T18:54:05.350Z",
+    "execution_started_at": "2026-11-04T18:54:05.902Z",
+    "execution_settled_at": "2026-11-04T18:54:38.199Z"
+  },
+  "result": {
+    "outcome": "PASSED",
+    "code": null,
+    "detail": "ran to the end; rolled back; no change persisted",
+    "target": "certenv-0362902def",
+    "target_id": "certenv-0362902def@127.0.0.1:56201",
+    "env_id": "ALLOY_LOCAL_CERTIFICATION",
+    "expected_sha": "d159dcd10febcd1c8863ce51956c8f1d787f78a5",
+    "test_path": "certification/invariants/documents-malware-verdicts-preapply.sql",
+    "expected_hash": "7ec5a848f8b4d81b7ae77ada790f063980519b45dd6c51b153d384b5b3b45091",
+    "timeout_ms": 15000,
+    "started_at": "2026-11-04T18:54:05.643Z",
+    "identity_digest": "22e15334b4268f3859c823f5b778e09a19635ce9230770f4401fbf125de32e13",
+    "certenv": {
+      "owner_lane": "lane_aa660dc9554d",
+      "lease_expires_at": "2026-11-05T18:38:18.906Z",
+      "hold_revision": 1,
+      "hold_record_sha256": "1c73a43c67d7afe515bf46605cb83bd8586a18877787e7b5e3d74cc17ae14f02",
+      "migration_manifest_sha256": "0c83f72d9e31bb2f1cb65afdcdfbbc17ada5ef2adfad7aca751cac64e3e86d2b",
+      "migration_head": "20261218090000",
+      "server_identity_nonce_sha256": "98c0d2189ea826a54bdb5fec14aa94935e6ffe270c57c7d7d54bebede5ea0bde",
+      "source_relation": "equals_sanctioned_certification_ref"
+    },
+    "executed": true,
+    "statements": 31,
+    "written_tables": [
+      "auth.users",
+      "public.document_versions",
+      "public.documents",
+      "public.orgs",
+      "public.role_definitions",
+      "public.role_permission_grants",
+      "public.user_access_profiles",
+      "public.user_roles",
+      "public.workflow_events"
+    ],
+    "exit_status": 0,
+    "reached_end": true,
+    "killed": false,
+    "output": "BEGIN\n                                                ?column?                                                 \n---------------------------------------------------------------------------------------------------------\n(1 row)\n\nDO\nSET\nSET\nSET\nSET\nCREATE TABLE\nCREATE INDEX\nCREATE INDEX\nCREATE INDEX\nALTER TABLE\nALTER TABLE\nREVOKE\nREVOKE\nREVOKE\nGRANT\nCREATE FUNCTION\nDROP TRIGGER\nCREATE TRIGGER\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE FUNCTION\nREVOKE\nREVOKE\nGRANT\nREVOKE\nREVOKE\nGRANT\nREVOKE\nREVOKE\nGRANT\nREVOKE\nREVOKE\nREVOKE\nREVOKE\nDO\n           ?column?            \n-------------------------------\n vac_rollback_test_reached_end\n(1 row)\n\nROLLBACK\n",
+    "error": "NOTICE:  trigger \"trg_dmv_refuse_update\" for relation \"public.document_malware_verdicts\" does not exist, skipping\nNOTICE:  PASS document_malware_verdicts: audit binding, bytes, label, clean needs known labels and fresh signatures, idempotency conflicts, unsafe dominance, member-only revocation with the revoke capability, only the effective verdict revocable, revocation leaves pending, quarantine only from available, append-only, new version held, client-unreachable, cascade\nNOTICE:  tests passed=16 failed=0\n",
+    "fingerprint_before": {
+      "catalog": "594010828878b564c22638bd3e256dbd",
+      "sequences": "0bad5bc6654bc7d71f4a78b0057e9cb7",
+      "ledger": "553:20261218090000",
+      "seqvalues": "auth.refresh_tokens_id_seq=null,cron.jobid_seq=2,cron.runid_seq=3,graphql.seq_schema_version=10944,net.http_request_queue_id_seq=null,supabase_functions.hooks_id_seq=null",
+      "background": "3",
+      "table|auth.users": "1:25dfa1c76dbc7e0d88ad4c0df08bd786",
+      "table|public.document_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.documents": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.orgs": "2:adb20faa8e09f9e09671d79a234fb890",
+      "table|public.role_definitions": "10:ee1917a156612c6d39d4bcd06f928d14",
+      "table|public.role_permission_grants": "318:55e5a57439588044a0778c9999b93edf",
+      "table|public.user_access_profiles": "1:d2ec912a4176cbf469bf17e2c73bb3bc",
+      "table|public.user_roles": "1:de18bc136b3d440611b931ad49903ba3",
+      "table|public.workflow_events": "0:d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "fingerprint_after": {
+      "catalog": "594010828878b564c22638bd3e256dbd",
+      "sequences": "bf6eb5c18474a2b9b58fbe63f1e7f79b",
+      "ledger": "553:20261218090000",
+      "seqvalues": "auth.refresh_tokens_id_seq=null,cron.jobid_seq=2,cron.runid_seq=3,graphql.seq_schema_version=10974,net.http_request_queue_id_seq=null,supabase_functions.hooks_id_seq=null",
+      "background": "3",
+      "table|auth.users": "1:25dfa1c76dbc7e0d88ad4c0df08bd786",
+      "table|public.document_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.documents": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "table|public.orgs": "2:adb20faa8e09f9e09671d79a234fb890",
+      "table|public.role_definitions": "10:ee1917a156612c6d39d4bcd06f928d14",
+      "table|public.role_permission_grants": "318:55e5a57439588044a0778c9999b93edf",
+      "table|public.user_access_profiles": "1:d2ec912a4176cbf469bf17e2c73bb3bc",
+      "table|public.user_roles": "1:de18bc136b3d440611b931ad49903ba3",
+      "table|public.workflow_events": "0:d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "verification": {
+      "verified": true,
+      "changed": [],
+      "compared": [
+        "catalog",
+        "ledger",
+        "table|auth.users",
+        "table|public.document_versions",
+        "table|public.documents",
+        "table|public.orgs",
+        "table|public.role_definitions",
+        "table|public.role_permission_grants",
+        "table|public.user_access_profiles",
+        "table|public.user_roles",
+        "table|public.workflow_events"
+      ],
+      "sequences_changed": [],
+      "nonrolled_platform_effects": [
+        "graphql.seq_schema_version"
+      ],
+      "background_activity": false
+    },
+    "rollback": "executor ROLLBACK (no transaction control permitted in the test)",
+    "finished_at": "2026-11-04T18:54:38.157Z",
+    "audit_written": true
+  }
+}
