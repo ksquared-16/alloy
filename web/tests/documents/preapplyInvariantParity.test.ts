@@ -41,6 +41,21 @@ describe("pre-apply invariants", () => {
         expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
     });
 
+    it("D10 activation gates: the pending migration unchanged, then the banner, then rollback-only assertions", () => {
+        const migration = read("certification/documents-v1/pending-migrations/20261220090000_documents_d10_activation_gates.sql");
+        const single = read("certification/invariants/documents-d10-activation-gates.sql");
+        const invariant = read("certification/invariants/documents-d10-activation-gates-preapply.sql");
+        expect(migration).not.toMatch(/GRANT EXECUTE|REVOKE EXECUTE/);
+        expect(invariant.startsWith(migration)).toBe(true);
+        expect(invariant.endsWith(single)).toBe(true);
+        const banner = invariant.slice(migration.length, invariant.length - single.length);
+        expect(banner.startsWith(BANNER)).toBe(true);
+        expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
+        const code = single.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+        expect(code).not.toMatch(/schema_migrations|\bCOMMIT\b|\bROLLBACK\b/i);
+        expect(single).toContain("tests passed=% failed=0");
+    });
+
     it("D10-A1 atomic open: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {
         const migration = read("supabase/migrations/20261215093000_processing_open_case_atomic.sql");
         const single = read("certification/invariants/processing-open-case-atomic.sql");
