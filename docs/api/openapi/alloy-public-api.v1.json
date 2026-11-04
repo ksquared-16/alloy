@@ -52,7 +52,7 @@
     },
     {
       "name": "Documents",
-      "description": "Read-only standard-sensitivity documents of visible children, their households and their parents or guardians (D9.1)."
+      "description": "Standard-sensitivity documents of visible children, their households and their parents or guardians: read (D9.1), upload, file and link (D9.2), and review, validity, replacement, archive, history and requirements (D9.3)."
     }
   ],
   "paths": {
@@ -2845,6 +2845,16 @@
               "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
             },
             "description": "Only documents of this type."
+          },
+          {
+            "name": "expires_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "D9.3: only documents whose current version expires strictly before this date (YYYY-MM-DD). Undated documents never match. Still one subject per query."
           }
         ],
         "responses": {
@@ -3066,6 +3076,1825 @@
           },
           "429": {
             "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{id}/reviews": {
+      "get": {
+        "operationId": "listDocumentReviews",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List a document's review decisions and validity records",
+        "description": "Every review decision and validity record of one visible document, oldest first. `actor_kind` says whether staff or an application recorded it; reasons are staff notes and are never returned. A document you cannot read returns an empty page.\n\nRequires the `documents.read` scope.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The document id."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentReviewPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{id}/history": {
+      "get": {
+        "operationId": "listDocumentHistory",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List a document's history",
+        "description": "What happened to one visible document and when: committed changes (uploads, versions, filing, links, reviews, validity) and system events. Refused attempts, link issuance, reasons and names are never returned. A document you cannot read returns an empty page.\n\nRequires the `documents.read` scope.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The document id."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentHistoryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-requirements": {
+      "get": {
+        "operationId": "listDocumentRequirements",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List document requirements for one child, household or parent",
+        "description": "The live document requirements of ONE visible subject, evaluated by Alloy's own rules: `missing`, `pending_review`, `satisfied`, `waived`, `expired` or `blocked`, with due date, validity and the evidence documents you can read. A requirement on a medical, identity, custody or restricted document type returns only its key and state. Waivers are read-only. **Exactly one subject filter** is required; there is no organization-wide requirement feed. A subject you cannot see returns an empty page.\n\nRequires the `documents.read` scope.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this child."
+          },
+          {
+            "name": "household_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this household."
+          },
+          {
+            "name": "person_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Documents owned by this parent or guardian."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequirementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not exactly one of child_id, household_id or person_id (subject_filter_required).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-uploads": {
+      "post": {
+        "operationId": "createDocumentUpload",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Declare a document upload",
+        "description": "Declares one file and writes nothing. Answers an opaque `upload_id`, valid for one hour and bound to this installation and to the declared format, size and SHA-256. Send the bytes next to `POST /api/v1/document-uploads/content`.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  },
+                  "byte_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4194304
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "mime_type",
+                  "byte_size",
+                  "sha256"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The upload was declared.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The declared size exceeds 4 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Alloy does not store this format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-uploads/content": {
+      "post": {
+        "operationId": "completeDocumentUpload",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Send an upload's bytes",
+        "description": "The raw file bytes (at most 4 MiB), screened before anything is stored. Creates one document that is not yet filed and that only this installation can file. A retry converges on the same document.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The upload_id returned by POST /api/v1/document-uploads."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already received \u2014 the same document is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivedDocument"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Received.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivedDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such upload is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The upload expired (upload_expired), or this Idempotency-Key was used for different content (idempotency_conflict).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body exceeds 4 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The bytes are not the declared format (CONTENT_MISMATCH) or were refused by screening (SCREENING_REFUSED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The bytes do not match the declared size and SHA-256 (checksum_mismatch).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The file could not be stored; nothing was recorded as received. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The upload could not be recorded or completed; nothing was done. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-filings": {
+      "post": {
+        "operationId": "fileDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "File a document this installation uploaded",
+        "description": "Files a received document to a visible child, household or parent/guardian, under the same rules Alloy staff file under. A type that needs review refuses REVIEW_REQUIRED; a type whose sensitivity is not standard refuses TYPE_NOT_AVAILABLE_EXTERNALLY. The Idempotency-Key is the filing key: a retry returns the committed result.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "new_document",
+                      "new_version"
+                    ],
+                    "default": "new_document"
+                  },
+                  "type_key": {
+                    "type": "string"
+                  },
+                  "primary": {
+                    "type": "object",
+                    "properties": {
+                      "subject_type": {
+                        "type": "string",
+                        "enum": [
+                          "child",
+                          "household",
+                          "person"
+                        ]
+                      },
+                      "subject_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "subject_type",
+                      "subject_id"
+                    ]
+                  },
+                  "contexts": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "subject_type": {
+                          "type": "string",
+                          "enum": [
+                            "child",
+                            "household",
+                            "person"
+                          ]
+                        },
+                        "subject_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "subject_type",
+                        "subject_id"
+                      ]
+                    }
+                  },
+                  "target_document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already filed under this key \u2014 the committed result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentFilingResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Filed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentFilingResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already filed under another key (ALREADY_FILED), or quarantined (DOCUMENT_QUARANTINED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The filing rules refuse it (e.g. TYPE_UNAVAILABLE, REVIEW_REQUIRED, TYPE_NOT_AVAILABLE_EXTERNALLY, SUBJECT_NOT_RELATED, NEW_VERSION_REQUIRED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "A file copy failed; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The filing could not be recorded; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-subjects": {
+      "post": {
+        "operationId": "linkDocumentSubject",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Add a secondary link",
+        "description": "Adds a secondary (context) link from a document this installation can read to a visible child, household or parent/guardian. The owner never changes.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject_type": {
+                    "type": "string",
+                    "enum": [
+                      "child",
+                      "household",
+                      "person"
+                    ]
+                  },
+                  "subject_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "subject_type",
+                  "subject_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Linked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSubjectLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The subject is the document's owner, which cannot be changed through the API (primary_subject_immutable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The change could not be recorded; nothing was changed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-subjects/unlink": {
+      "post": {
+        "operationId": "unlinkDocumentSubject",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Remove a secondary link",
+        "description": "Removes a secondary (context) link. The owner link can never be removed through the API. Nothing is deleted.\n\nRequires the `documents.write` scope. A write never grants a read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject_type": {
+                    "type": "string",
+                    "enum": [
+                      "child",
+                      "household",
+                      "person"
+                    ]
+                  },
+                  "subject_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "subject_type",
+                  "subject_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unlinked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSubjectLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document or subject is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The subject is the document's owner, which cannot be changed through the API (primary_subject_immutable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The change could not be recorded; nothing was changed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-reviews": {
+      "post": {
+        "operationId": "submitDocumentReview",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Accept or reject a document's current version",
+        "description": "Records the FIRST review decision on the current version of a visible standard document. Reopening a review, or changing a recorded decision, stays with staff and is refused 403 REREVIEW_NOT_AUTHORIZED. A rejection needs a reason. Submitting the decision the version already carries returns 200 with replay true.\n\nRequires the `documents.review` scope. A write never grants a read.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.review",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "accepted",
+                      "rejected"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Required for a rejection."
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "version_id",
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The version already carries this decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentReviewResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentReviewResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.review, or has no authorized location. Also REREVIEW_NOT_AUTHORIZED: the version has already been decided, or a reopen was asked for.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document is available to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not the current version (NOT_CURRENT_VERSION).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The review could not be recorded; nothing was decided. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-validity": {
+      "post": {
+        "operationId": "setDocumentValidity",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Record a document's validity dates",
+        "description": "Records the effective and expiration dates (YYYY-MM-DD, or null) of the current version of a visible standard document. The review is untouched. The same dates again return 200 with changed false.\n\nRequires the `documents.write` scope. A write never grants a read.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "effective_on": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
+                  "expires_on": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "version_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unchanged \u2014 the version already had these dates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentValidityResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentValidityResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document is available to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not the current version (NOT_CURRENT_VERSION).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The dates could not be recorded; nothing was set. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-versions": {
+      "post": {
+        "operationId": "replaceDocumentVersion",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Replace a document with a new version",
+        "description": "Files a completed upload this installation received (`upload_document_id`, from completeDocumentUpload) as the next version of a visible standard document, under the same filing rules Alloy staff use. The document type decides whether replacement is allowed (TYPE_REPLACEMENT_NOT_ALLOWED, TYPE_NEW_DOCUMENT_REQUIRED). The new version starts unreviewed. The Idempotency-Key is the filing key: a retry returns the committed result.\n\nRequires the `documents.write` scope. A write never grants a read.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "upload_document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "upload_document_id",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already filed under this key \u2014 the committed result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentReplacementResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Filed as the next version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentReplacementResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document is available to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The upload was already filed (ALREADY_FILED), or is quarantined (DOCUMENT_QUARANTINED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The filing rules refuse it (e.g. TYPE_REPLACEMENT_NOT_ALLOWED, TYPE_NEW_DOCUMENT_REQUIRED, TYPE_NOT_AVAILABLE_EXTERNALLY).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "A file copy failed; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The filing could not be recorded; nothing was filed. Retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-archives": {
+      "post": {
+        "operationId": "archiveDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Archive a document",
+        "description": "Archives a visible standard document: it leaves every list, link and requirement's evidence. Nothing is deleted \u2014 versions, reviews and history are kept, and only Alloy staff can restore it. A retry with the same Idempotency-Key returns 200 with replay true. **Availability:** returns 503 archive_unavailable until the archive database change is applied to the environment.\n\nRequires the `documents.write` scope. A write never grants a read.\n\n**Verification status (D9.3):** implemented and proven by the route-level test suite; it has not yet been exercised over HTTP against a running server, which this specification otherwise requires before a claim is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "documents.write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8\u2013184 visible ASCII characters. A retry with the same key converges on the same result; the same key with different content is 409 idempotency_conflict.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 184
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already archived under this key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentArchiveResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentArchiveResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold documents.write, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document is available to this installation. Missing, in another organization, outside the boundary, unavailable and withheld by sensitivity are one answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The document cannot be archived (DOCUMENT_UNAVAILABLE).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Archiving is not available yet (archive_unavailable), or the archive could not be recorded. Nothing was archived.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4985,6 +6814,597 @@
             "format": "date-time"
           }
         }
+      },
+      "DocumentUpload": {
+        "type": "object",
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "description": "Opaque. Send it back as the upload_id query parameter of POST /api/v1/document-uploads/content."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "max_bytes": {
+            "type": "integer"
+          },
+          "content_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "expires_at",
+          "max_bytes",
+          "content_url"
+        ]
+      },
+      "ReceivedDocument": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "quarantined"
+            ],
+            "description": "quarantined: flagged by screening; it can never be filed through the API."
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "status",
+          "replay"
+        ]
+      },
+      "DocumentFilingResult": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filed_document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "new_document",
+              "new_version"
+            ]
+          },
+          "doc_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "filed_document_id",
+          "mode",
+          "doc_type",
+          "replay"
+        ]
+      },
+      "DocumentSubjectLink": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subject_type": {
+            "type": "string",
+            "enum": [
+              "child",
+              "household",
+              "person"
+            ]
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "subject_type",
+          "subject_id",
+          "linked"
+        ]
+      },
+      "DocumentReviewResult": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "version_id",
+          "review_status",
+          "replay"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "review_status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ]
+          },
+          "replay": {
+            "type": "boolean",
+            "description": "True when the version already carried this decision; nothing new was recorded."
+          }
+        }
+      },
+      "DocumentValidityResult": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "version_id",
+          "effective_on",
+          "expires_on",
+          "changed"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "effective_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "expires_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "False when the version already had these dates; nothing new was recorded."
+          }
+        }
+      },
+      "DocumentReplacementResult": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "upload_document_id",
+          "version_id",
+          "version_number",
+          "replay"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "upload_document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "version_number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DocumentArchiveResult": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "archived",
+          "replay"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DocumentReview": {
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "version_id",
+          "kind",
+          "decision",
+          "previous_review_status",
+          "effective_on",
+          "expires_on",
+          "actor_kind",
+          "recorded_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "review",
+              "validity"
+            ]
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "accepted",
+              "rejected",
+              "reopened",
+              null
+            ]
+          },
+          "previous_review_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "expires_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "actor_kind": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "application"
+            ],
+            "description": "Who recorded it. Never a person's name or id."
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentHistoryEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "kind",
+          "action",
+          "version_number",
+          "occurred_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "committed",
+              "system"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "What happened, in one operator-readable phrase. Never a reason, note, path or name."
+          },
+          "version_number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentRequirement": {
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "Standard requirement",
+            "required": [
+              "id",
+              "requirement_key",
+              "label",
+              "document_type_key",
+              "policy",
+              "state",
+              "blocking",
+              "due_on",
+              "valid_until",
+              "expiring_soon",
+              "evidence",
+              "restricted"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "requirement_key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "document_type_key": {
+                "type": "string"
+              },
+              "policy": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "missing",
+                  "pending_review",
+                  "satisfied",
+                  "waived",
+                  "expired",
+                  "blocked"
+                ]
+              },
+              "blocking": {
+                "type": "boolean"
+              },
+              "due_on": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "expiring_soon": {
+                "type": "boolean"
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "accepted",
+                  "pending",
+                  "expired"
+                ],
+                "properties": {
+                  "accepted": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "pending": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "expired": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "description": "Ids of evidence documents this installation can itself read; others are omitted."
+              },
+              "restricted": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "Restricted requirement",
+            "description": "A requirement on a medical, identity, custody or restricted document type: its key and state only.",
+            "required": [
+              "id",
+              "requirement_key",
+              "state",
+              "restricted"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "requirement_key": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "missing",
+                  "pending_review",
+                  "satisfied",
+                  "waived",
+                  "expired",
+                  "blocked"
+                ]
+              },
+              "restricted": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          }
+        ]
+      },
+      "DocumentReviewPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentReview"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "DocumentHistoryPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentHistoryEntry"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "DocumentRequirementPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentRequirement"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
       }
     },
     "responses": {

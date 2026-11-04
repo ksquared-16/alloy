@@ -148,14 +148,30 @@ describe("public OpenAPI drift guard", () => {
         // externally material.
         // D9.1 (user-approved 2026-10-30, OPWORK_AA660DC9554D_SPRINT_5D62877D85D6) added the four read-only document
         // paths: standard documents of visible children, households and parents/guardians — no write.
+        // D9.2 (user-ratified 2026-11-03, Q1–Q8, OPWORK_AA660DC9554D_SPRINT_AFD07879C606) added the five document write
+        // intents under documents.write: upload, its content, filing, and adding / removing a secondary link.
+        // D9.3 (same ratification, Q3/Q5/Q8) added review (documents.review), validity, replacement and archive intents,
+        // and three reads: a document's reviews, its history, and one subject's document requirements.
         expect(Object.keys(spec.paths).sort()).toEqual([
             "/api/v1/attendance-events",
             "/api/v1/children",
             "/api/v1/context",
+            "/api/v1/document-archives",
             "/api/v1/document-categories",
+            "/api/v1/document-filings",
+            "/api/v1/document-requirements",
+            "/api/v1/document-reviews",
+            "/api/v1/document-subjects",
+            "/api/v1/document-subjects/unlink",
+            "/api/v1/document-uploads",
+            "/api/v1/document-uploads/content",
+            "/api/v1/document-validity",
+            "/api/v1/document-versions",
             "/api/v1/documents",
             "/api/v1/documents/{id}",
             "/api/v1/documents/{id}/download-link",
+            "/api/v1/documents/{id}/history",
+            "/api/v1/documents/{id}/reviews",
             "/api/v1/enrollments",
             "/api/v1/enrollments/end",
             "/api/v1/enrollments/void",

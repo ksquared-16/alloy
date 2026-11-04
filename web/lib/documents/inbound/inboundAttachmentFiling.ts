@@ -8,7 +8,7 @@
  *   3. retrieval (WS11) and the canonical D1c-1 ingestion of a file from an outside sender: size cap, byte sniffing
  *      (`sniffPublicUploadKind` — PDF, PNG, JPEG; the declared type is never trusted) and `decideIngestion` —
  *      refused is never stored, flagged is stored `quarantined` (the existing review queue), clean is stored;
- *   4. malware scanning, when the policy requires it and a scanner exists;
+ *   4. malware scanning — a clean verdict bound to the stored version, always required (structural screening never releases);
  *   5. the gate (`decideInboundAttachmentFiling`), then ONE Processing case through the existing non-form opener,
  *      `source_kind = 'email_attachment'`, `source_id = document id`, with `requireAtomic`: only the one-transaction
  *      `open_processing_case_with_primary_source` may open it. Where that function is not in the database yet the
@@ -26,13 +26,11 @@ import { openNonFormProcessingCaseFromSource } from "@/lib/pos/processingCase/ma
 import { isAtomicProcessingOpenUnavailable } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import type { ProcessingCaseDeps } from "@/lib/pos/processingCase/types";
 import {
-    DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
     EMAIL_ATTACHMENT_FILING_CAPABILITY,
     decideInboundAttachmentFiling,
     emailAttachmentSourceKey,
     preStorageHolds,
     type FilingCapability,
-    type FilingPolicy,
     type HoldReason,
     type InboundOwnership,
     type MalwareVerdict,
@@ -100,7 +98,6 @@ export type InboundAttachmentFilingDeps = {
     storage: AttachmentStorageBoundary;
     malware: MalwareScanBoundary;
     processing: ProcessingCaseDeps;
-    policy?: FilingPolicy;
     now?: () => Date;
     /**
      * Marks the case as a document to file (`processing_intent = store_document`) and records where it came from. Run on
@@ -125,7 +122,6 @@ export async function fileInboundEmailAttachments(
         structuralScreening: EMAIL_ATTACHMENT_FILING_CAPABILITY.structuralScreening,
         malwareScanning: deps.malware.available,
     };
-    const policy = deps.policy ?? DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY;
     const out: AttachmentFilingOutcome[] = [];
 
     for (const a of message.attachments) {
@@ -135,7 +131,7 @@ export async function fileInboundEmailAttachments(
         const base = { message: { id: message.id, ownership: message.ownership, orgId: message.orgId }, attachment: { id: a.id, disposition: a.content_disposition } };
 
         // 1. Nothing is retrieved or stored while any of these hold.
-        const early = preStorageHolds(base, capability, policy);
+        const early = preStorageHolds(base, capability);
         if (early.length > 0 || !message.orgId) {
             held(early.length ? early : ["message_not_owned"]);
             continue;
@@ -189,16 +185,16 @@ export async function fileInboundEmailAttachments(
             structural = screened.status === "quarantined" ? "quarantined" : "clean";
         }
 
-        // 4. Malware verdict, only where the policy requires one and a scanner exists.
+        // 4. Malware verdict. Without a scanner step 1 already held the attachment; structural screening never substitutes.
         const malware =
-            policy.requireMalwareScan && deps.malware.available
+            deps.malware.available
                 ? await deps.malware
                       .verdict({ orgId, documentId: stored.documentId, versionId: stored.versionId ?? null, checksumSha256: stored.checksumSha256 ?? null })
                       .catch((): MalwareVerdict => ({ verdict: "failed", subject: null }))
                 : null;
 
         // 5. The gate, then one case.
-        const decision = decideInboundAttachmentFiling({ ...base, stored, structural, malware }, capability, policy);
+        const decision = decideInboundAttachmentFiling({ ...base, stored, structural, malware }, capability);
         if (decision.action === "hold") {
             held(decision.reasons, stored.documentId);
             continue;

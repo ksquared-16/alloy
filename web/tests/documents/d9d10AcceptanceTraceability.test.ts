@@ -62,17 +62,31 @@ describe("capabilities the document says to reuse exist, and the document names 
 });
 
 describe("the gaps the document states are still gaps", () => {
-    // D9.1 landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): the read scope and its four operations now exist. What
-    // §1.3 still lists as remaining — writes, uploads, filing through the API — is still absent.
-    it("D9.1 implemented: documents.read and four read operations; no documents WRITE scope or operation yet", () => {
+    // D9.1 landed (OPWORK_AA660DC9554D_SPRINT_5D62877D85D6): the read scope and its four operations. D9.2 (user-ratified
+    // 2026-11-03, Q1–Q8, OPWORK_AA660DC9554D_SPRINT_AFD07879C606) added documents.write and exactly five POST intents.
+    // Still absent (D9.3): review, versions, validity, requirements, expiration, history, archive — and never a PUT,
+    // PATCH or DELETE on a document path.
+    it("D9.1–D9.3: documents.read (seven GETs), documents.write (eight POST intents), documents.review (one); nothing else", () => {
         const catalog = read("web/lib/platform/external/scopeCatalog.ts");
-        expect(catalog).toMatch(/"documents\.read": \{/);
-        for (const op of ["listDocumentCategories", "listDocuments", "getDocument", "getDocumentDownloadLink"]) expect(catalog).toContain(op);
-        expect(catalog).not.toMatch(/["']documents\.write["']/);
+        for (const scope of ["documents.read", "documents.write", "documents.review"]) expect(catalog).toMatch(new RegExp(`"${scope.replace(".", "\\.")}": \\{`));
+        const ops = [
+            "listDocumentCategories", "listDocuments", "getDocument", "getDocumentDownloadLink", "listDocumentReviews", "listDocumentHistory", "listDocumentRequirements",
+            "createDocumentUpload", "completeDocumentUpload", "fileDocument", "linkDocumentSubject", "unlinkDocumentSubject", "setDocumentValidity", "replaceDocumentVersion", "archiveDocument",
+            "submitDocumentReview",
+        ];
+        for (const op of ops) expect(catalog).toContain(op);
+        expect(catalog).toMatch(/submitDocumentReview: \{[^}]*scope: "documents\.review"/);
         const spec = JSON.parse(read("docs/api/openapi/alloy-public-api.v1.json")) as { paths?: Record<string, Record<string, unknown>> };
         const docPaths = Object.entries(spec.paths ?? {}).filter(([p]) => p.includes("document"));
-        expect(docPaths.map(([p]) => p).sort()).toEqual(["/api/v1/document-categories", "/api/v1/documents", "/api/v1/documents/{id}", "/api/v1/documents/{id}/download-link"]);
-        for (const [, methods] of docPaths) expect(Object.keys(methods)).toEqual(["get"]);
+        const reads = ["/api/v1/document-categories", "/api/v1/documents", "/api/v1/documents/{id}", "/api/v1/documents/{id}/download-link", "/api/v1/documents/{id}/reviews", "/api/v1/documents/{id}/history", "/api/v1/document-requirements"];
+        const writes = [
+            "/api/v1/document-filings", "/api/v1/document-subjects", "/api/v1/document-subjects/unlink", "/api/v1/document-uploads", "/api/v1/document-uploads/content",
+            "/api/v1/document-reviews", "/api/v1/document-validity", "/api/v1/document-versions", "/api/v1/document-archives",
+        ];
+        expect(docPaths.map(([p]) => p).sort()).toEqual([...reads, ...writes].sort());
+        for (const [p, methods] of docPaths) expect(Object.keys(methods), p).toEqual(reads.includes(p) ? ["get"] : ["post"]);
+        // Never external: changing the owner, deleting, re-reviewing, raising sensitivity, an organization-wide feed.
+        for (const never of ["set_primary", "deleteDocument", "reopenDocumentReview", "setDocumentSensitivity", "listAllDocuments"]) expect(catalog).not.toContain(never);
     });
 
     it("D10: WS11's communication_message_attachments is planned but in no migration", () => {
@@ -107,7 +121,12 @@ describe("the gaps the document states are still gaps", () => {
             }
         };
         walk(dir);
-        const offenders = files.filter((f) => /remind|escalat/i.test(readFileSync(f, "utf8")));
+        // D9.2's unfiled-upload escalation (operator-approved 2026-11-03) hands an unfiled API upload to Processing. It is
+        // not requirement accountability, and must never become it: it may not read or write requirements.
+        const UPLOAD_ESCALATION = ["external/unfiledApiUploadEscalation.ts", "external/externalDocumentWrites.ts", "documentAudit.ts"].map((f) => resolve(dir, f));
+        for (const f of UPLOAD_ESCALATION.slice(0, 2)) expect(readFileSync(f, "utf8"), f).not.toMatch(/documents\/requirements\/|document_requirement/);
+        // A caller of the late-filing close names it; the name is not an escalation of its own.
+        const offenders = files.filter((f) => !UPLOAD_ESCALATION.includes(f) && /remind|escalat/i.test(readFileSync(f, "utf8").replace(/resolveEscalatedUploadCase|unfiledApiUploadEscalation/g, "")));
         expect(offenders).toEqual([]);
         const d6 = read("supabase/migrations/20261212090000_documents_d6_requirements.sql");
         expect(d6).not.toMatch(/\b(owner|assignee|responsible)[a-z_]*\s+(uuid|text)/i);

@@ -6,7 +6,7 @@
  *   Communications receives and owns the message (`ingestResendInboundEmail`, ownership `resolveInboundEmailOwnership`,
  *   one receipt per provider message id)  →  WS11 retrieves and stores the attachment as a `documents` row
  *   →  D1c-1 structural screening (`decideIngestion`: refuse = nothing stored, quarantine = stored unavailable, clean)
- *   →  [malware scanning, D1c-2, when the organization's policy requires it]
+ *   →  malware scanning, D1c-2 (always required; there is no structural-only release)
  *   →  ONE Processing case, `source_kind = 'email_attachment'`, `source_id = <document id>` (idempotent at the database:
  *      `uq_pcs_primary_source_once (org_id, source_kind, source_id) WHERE role='primary'`)
  *   →  the document filing queue  →  `commitDocumentFiling` under `processing_case:<case>:document:<document>`.
@@ -17,7 +17,7 @@
  *                      no migration creates `communication_message_attachments`.
  *   structural screen  PRESENT. D1c-1 `decideIngestion` is the screening every outside file already passes; it is not
  *                      antivirus and never claims a file is "safe".
- *   malware scanning   ABSENT. D1c-2 is deferred. No scanner is invented; a policy that requires one holds everything.
+ *   malware scanning   ABSENT. D1c-2 is deferred. No scanner is invented; without one every attachment holds.
  * A capability is changed only by the change that ships it.
  */
 import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
@@ -113,14 +113,11 @@ export const EMAIL_ATTACHMENT_FILING_CAPABILITY: Readonly<FilingCapability> = Ob
     malwareScanning: false,
 });
 
-export type FilingPolicy = { requireMalwareScan: boolean };
-
 /**
- * The default policy: an email attachment from an arbitrary sender is NOT released on structural screening alone. An
- * organization may decide otherwise (parity with the public upload paths, which store on structural screening); that is
- * a product decision, passed in explicitly — never a default.
+ * There is no filing policy. An email attachment from an arbitrary sender is released only by a clean malware verdict
+ * bound to its exact stored version. Structural screening (D1c-1) alone NEVER releases one — not by default, not by an
+ * organization's choice, not by a caller's argument. A missing, failed, pending or unbound verdict holds.
  */
-export const DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY: Readonly<FilingPolicy> = Object.freeze({ requireMalwareScan: true });
 
 export type FilingDependency = {
     key: "ws11_attachment_storage" | "d1c2_malware_scanning" | "communications_ingestion_hook" | "processing_atomic_open";
@@ -143,8 +140,8 @@ export const EMAIL_ATTACHMENT_FILING_DEPENDENCIES: readonly FilingDependency[] =
         key: "d1c2_malware_scanning",
         owner: "Documents security (D1c-2, deferred in D5)",
         state: EMAIL_ATTACHMENT_FILING_CAPABILITY.malwareScanning ? "ready" : "missing",
-        proof: "a MalwareScanBoundary whose verdict names the exact stored version — document id, documents.current_version_id and its SHA-256 — from a trusted scanner; any other verdict holds (malware_verdict_unbound), a scanner error holds (malware_rejected), no verdict = not scanned. Structural screening is not a scanner. Alternatively an explicit organization policy accepting D1c-1 structural screening alone (not enabled)",
-        next: "choose a scanner within existing services (no new paid provider without approval), or the policy decision",
+        proof: "a MalwareScanBoundary whose verdict names the exact stored version — document id, documents.current_version_id and its SHA-256 — from a trusted scanner; any other verdict holds (malware_verdict_unbound), a scanner error holds (malware_rejected), no verdict = not scanned. Structural screening is not a scanner and never releases an attachment",
+        next: "author the verdict store (pending migration) and a scanner integration; choosing, provisioning and enabling a scanner are separate operator decisions",
     },
     {
         key: "communications_ingestion_hook",
@@ -170,11 +167,10 @@ export function emailAttachmentSourceKey(messageId: string, attachmentId: string
 export function preStorageHolds(
     input: Pick<InboundAttachmentInput, "message" | "attachment">,
     capability: FilingCapability = EMAIL_ATTACHMENT_FILING_CAPABILITY,
-    policy: FilingPolicy = DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
 ): HoldReason[] {
     const reasons: HoldReason[] = [];
     if (!capability.storage) reasons.push("storage_unavailable");
-    if (policy.requireMalwareScan && !capability.malwareScanning) reasons.push("malware_scanning_unavailable");
+    if (!capability.malwareScanning) reasons.push("malware_scanning_unavailable");
     if (input.message.ownership === "cross_org_ambiguous") reasons.push("message_ownership_ambiguous");
     else if (input.message.ownership !== "owned" || !input.message.orgId) reasons.push("message_not_owned");
     // Inline images and link parts are not documents a family sent.
@@ -185,9 +181,8 @@ export function preStorageHolds(
 export function decideInboundAttachmentFiling(
     input: InboundAttachmentInput,
     capability: FilingCapability = EMAIL_ATTACHMENT_FILING_CAPABILITY,
-    policy: FilingPolicy = DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
 ): AttachmentFilingDecision {
-    const reasons = preStorageHolds(input, capability, policy);
+    const reasons = preStorageHolds(input, capability);
 
     if (input.structural === "refused") reasons.push("screening_refused");
     const stored = input.stored;
@@ -199,7 +194,8 @@ export function decideInboundAttachmentFiling(
         if (input.structural === "quarantined" || isDocumentUnavailable(stored.status)) reasons.push("document_unavailable");
     }
 
-    if (policy.requireMalwareScan && capability.malwareScanning) {
+    // Without a scanner the attachment is already held (`malware_scanning_unavailable`); with one, only a bound clean verdict passes.
+    if (capability.malwareScanning) {
         const v = input.malware?.verdict ?? null;
         if (v === null || v === "pending") reasons.push("malware_pending");
         else if (v !== "clean") reasons.push("malware_rejected");

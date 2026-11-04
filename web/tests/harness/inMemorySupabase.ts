@@ -112,6 +112,23 @@ export class InMemorySupabase {
     }
 }
 
+/**
+ * A PostgREST column reference: a plain column, or a JSON path (`metadata->filing`, `metadata->>source`,
+ * `metadata->a->>b`). `->>` yields text, as Postgres does; a missing key is null.
+ */
+function pick(r: Row, col: string): unknown {
+    if (!col.includes("->")) return r[col];
+    const parts = col.split(/(->>|->)/);
+    let v: unknown = r[parts[0]];
+    for (let i = 1; i < parts.length; i += 2) {
+        const asText = parts[i] === "->>";
+        v = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>)[parts[i + 1]] : undefined;
+        if (v === undefined) return null;
+        if (asText && v !== null) v = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+    return v ?? null;
+}
+
 class QueryBuilder implements PromiseLike<Result> {
     private op: "select" | "insert" | "update" | "delete" = "select";
     private filters: Filter[] = [];
@@ -153,19 +170,19 @@ class QueryBuilder implements PromiseLike<Result> {
         return this;
     }
     eq(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] === val);
+        this.filters.push((r) => pick(r, col) === val);
         return this;
     }
     neq(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] !== val);
+        this.filters.push((r) => pick(r, col) !== val);
         return this;
     }
     in(col: string, vals: unknown[]): this {
-        this.filters.push((r) => vals.includes(r[col]));
+        this.filters.push((r) => vals.includes(pick(r, col)));
         return this;
     }
     is(col: string, val: unknown): this {
-        this.filters.push((r) => (val === null ? r[col] == null : r[col] === val));
+        this.filters.push((r) => (val === null ? pick(r, col) == null : pick(r, col) === val));
         return this;
     }
     /**
@@ -185,19 +202,19 @@ class QueryBuilder implements PromiseLike<Result> {
         return this;
     }
     gt(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] != null && String(r[col]) > String(val));
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) > String(val));
         return this;
     }
     gte(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] != null && String(r[col]) >= String(val));
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) >= String(val));
         return this;
     }
     lt(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] != null && String(r[col]) < String(val));
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) < String(val));
         return this;
     }
     lte(col: string, val: unknown): this {
-        this.filters.push((r) => r[col] != null && String(r[col]) <= String(val));
+        this.filters.push((r) => pick(r, col) != null && String(pick(r, col)) <= String(val));
         return this;
     }
     /** Sorts as Postgres would (string comparison; nulls last). Keyset pagination depends on it. */

@@ -51,9 +51,13 @@ export type OperationContext = {
     readonly actorLabel: string;
     /** Today, in the organization's terms, as the canonical services expect it. */
     readonly todayYmd: string;
+    /** The request's headers (e.g. `Idempotency-Key`). Credentials were already consumed above; never echo them. */
+    readonly headers: Headers;
+    /** The request's query string, for an operation whose body is bytes rather than JSON. */
+    readonly query: URLSearchParams;
 };
 
-export type OperationRefusal = { code: string; message: string; status?: 400 | 403 | 404 | 409 | 422 };
+export type OperationRefusal = { code: string; message: string; status?: 400 | 403 | 404 | 409 | 413 | 415 | 422 | 502 | 503 };
 
 export type OperationDefinition<TResult> = {
     route: string;
@@ -66,6 +70,14 @@ export type OperationDefinition<TResult> = {
      * Returning a refusal produces a governed error. Throwing is treated as an internal failure and
      * never leaks its message: canonical services raise errors carrying table and constraint names.
      */
+    /**
+     * `json` (default): a JSON object. `bytes`: the raw body, at most `maxBodyBytes`, handed to `perform` as
+     * `{ bytes: Uint8Array }`. A larger declared or actual body is refused 413 before `perform` runs.
+     */
+    bodyKind?: "json" | "bytes";
+    maxBodyBytes?: number;
+    /** The partner-facing sentence for a body over `maxBodyBytes` (e.g. the documents upload limit, in MiB and bytes). */
+    tooLargeMessage?: string;
     perform: (
         body: Record<string, unknown>,
         ctx: OperationContext,
@@ -109,16 +121,22 @@ export function classifyDomainError(error: unknown): OperationRefusal | null {
  * `code` (`validation_failed`) is what distinguishes it from a 400. Deriving the class here means a
  * new refusal status cannot quietly acquire the fallback class again.
  */
-export const TYPE_FOR_STATUS: Record<number, "invalid_request" | "forbidden_scope" | "not_found" | "conflict"> = {
+export const TYPE_FOR_STATUS: Record<number, "invalid_request" | "forbidden_scope" | "not_found" | "conflict" | "internal_error"> = {
     400: "invalid_request",
     403: "forbidden_scope",
     404: "not_found",
     409: "conflict",
+    // The body is the caller's to correct (size, format), like a 422.
+    413: "invalid_request",
+    415: "invalid_request",
     422: "invalid_request",
+    // A dependency (storage, the audit) was unavailable: nothing was done, and the request may be retried.
+    502: "internal_error",
+    503: "internal_error",
 };
 
 /** A refusal with no status is a 400, and a 400 is `invalid_request`. */
-function typeForStatus(status: number | undefined): "invalid_request" | "forbidden_scope" | "not_found" | "conflict" {
+function typeForStatus(status: number | undefined): "invalid_request" | "forbidden_scope" | "not_found" | "conflict" | "internal_error" {
     return (status === undefined ? undefined : TYPE_FOR_STATUS[status]) ?? "invalid_request";
 }
 
@@ -206,14 +224,30 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
         }
 
         let body: Record<string, unknown>;
-        try {
-            const parsed: unknown = await request.json();
-            if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-                return fail("invalid_request", "invalid_request", "The request body must be a JSON object.");
+        if (def.bodyKind === "bytes") {
+            const max = def.maxBodyBytes ?? 0;
+            const declared = Number(request.headers.get("content-length") ?? "NaN");
+            if (Number.isFinite(declared) && declared > max) {
+                return fail("payload_too_large", "invalid_request", def.tooLargeMessage ?? `The body exceeds ${max} bytes.`, 413);
             }
-            body = parsed as Record<string, unknown>;
-        } catch {
-            return fail("invalid_request", "invalid_request", "The request body must be valid JSON.");
+            let bytes: Uint8Array;
+            try {
+                bytes = new Uint8Array(await request.arrayBuffer());
+            } catch {
+                return fail("invalid_request", "invalid_request", "The request body could not be read.");
+            }
+            if (bytes.byteLength > max) return fail("payload_too_large", "invalid_request", def.tooLargeMessage ?? `The body exceeds ${max} bytes.`, 413);
+            body = { bytes };
+        } else {
+            try {
+                const parsed: unknown = await request.json();
+                if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+                    return fail("invalid_request", "invalid_request", "The request body must be a JSON object.");
+                }
+                body = parsed as Record<string, unknown>;
+            } catch {
+                return fail("invalid_request", "invalid_request", "The request body must be valid JSON.");
+            }
         }
 
         const sites = await resolveBoundarySites(supabase, ctx.principal);
@@ -238,6 +272,8 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             boundaryMode,
             actorLabel: ctx.principal.applicationSlug,
             todayYmd: new Date().toISOString().slice(0, 10),
+            headers: request.headers,
+            query: request.nextUrl?.searchParams ?? new URL(request.url).searchParams,
         };
 
         let outcome: Awaited<ReturnType<typeof def.perform>>;

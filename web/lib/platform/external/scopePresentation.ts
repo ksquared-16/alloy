@@ -65,7 +65,15 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
     },
     "documents.read": {
         title: "Family documents",
-        detail: "Read standard documents filed for visible children, their households and their parents or guardians, and download them through links that expire in ten minutes. Medical, identity, custody and restricted documents are never shared.",
+        detail: "Read standard documents filed for visible children, their households and their parents or guardians, their review and change history and which documents each record still needs, and download them through links that expire in ten minutes. Medical, identity, custody and restricted documents are never shared.",
+    },
+    "documents.write": {
+        title: "Send family documents",
+        detail: "Upload standard documents and file them to visible children, their households and their parents or guardians, add or remove their secondary links, record their validity dates, replace them with a new version and archive them. Files are screened before they are stored. Approving a document needs its own permission; changing who it belongs to and deleting it are never allowed, and medical, identity, custody and restricted document types cannot be filed.",
+    },
+    "documents.review": {
+        title: "Approve family documents",
+        detail: "Accept or reject the current version of a visible standard document. Each version is decided once: reopening or changing a decision stays with your staff. Medical, identity, custody and restricted documents are never shared.",
     },
     "relationships.read": {
         title: "Parents and guardians",

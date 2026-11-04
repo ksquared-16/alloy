@@ -85,6 +85,19 @@ export type LibraryDocument = {
     validity?: DocumentValidity | null;
     /** D8: where a form-produced document came from (form, submission, artifact kind, integrity), when it did. */
     form_provenance?: FormArtifactProvenance | null;
+    /** D9.3: present only in the archived listing — the document's own archive record (`metadata.archive`). */
+    archive?: LibraryArchiveRecord | null;
+};
+
+/**
+ * D9.3: what staff see of an archive before restoring it. `by` is `application` when an `/api/v1` installation archived
+ * it (no user actor), `staff` otherwise. The archive key is never shown: it names the installation's idempotency key.
+ */
+export type LibraryArchiveRecord = {
+    archived_at: string | null;
+    reason: string | null;
+    by: "application" | "staff";
+    previous_status: string | null;
 };
 
 export type DocumentLibrary = {

@@ -7,7 +7,7 @@
  * Organization is logical — subject, then Studio category and type — never storage folders. A subject chip narrows the
  * library on the server. Version history and the document's history load only when a document is expanded; the type
  * vocabulary loads only when the upload form opens. Every write goes through the canonical routes (upload, versions)
- * and invalidates the library cache.
+ * and invalidates the library cache. Archived documents (D9.3) are listed and restored in their own collapsed section.
  *
  * What is shown is what the record holds: review and validity appear only when the version carries them, and the list
  * itself derives nothing. Readiness ("required / missing / pending review / waived") is the D6 Documents evaluator's
@@ -26,6 +26,7 @@ import type { DocumentHistoryEntry } from "@/lib/documents/library/documentHisto
 import type { DocumentTypeSummary } from "@/lib/documents/configuration/documentConfigurationService";
 import { invalidateDocumentRequirementWork } from "@/lib/documents/requirements/documentRequirementWorkClient";
 
+import ArchivedDocumentsSection from "./ArchivedDocumentsSection";
 import DocumentReadinessPanel from "./DocumentReadinessPanel";
 
 type Props = {
@@ -291,6 +292,7 @@ export default function DocumentLibraryPanel({ anchor, initialFocus = null, canM
             )}
 
             {library?.truncated ? <p className="text-[11px] text-alloy-midnight/50">Showing the most recent documents. Narrow to one person to see more.</p> : null}
+            {library ? <ArchivedDocumentsSection anchor={anchor} focus={focus} canMutate={canMutate} onRestored={afterWrite} /> : null}
             {message ? (
                 <p className="text-[12px] text-alloy-midnight/70" role="status" data-testid="document-library-message">
                     {message}

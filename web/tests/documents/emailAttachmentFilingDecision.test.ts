@@ -6,7 +6,6 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-    DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY,
     EMAIL_ATTACHMENT_FILING_CAPABILITY,
     EMAIL_ATTACHMENT_FILING_DEPENDENCIES,
     decideInboundAttachmentFiling,
@@ -22,7 +21,6 @@ const VER = "5e000000-0000-4000-8000-0000000000d1";
 const SHA = "a".repeat(64);
 const BOUND = { documentId: DOC, versionId: VER, checksumSha256: SHA };
 const ALL = { storage: true, structuralScreening: true, malwareScanning: true };
-const STRUCTURAL_ONLY = { requireMalwareScan: false };
 
 const input = (over: Partial<InboundAttachmentInput> = {}): InboundAttachmentInput => ({
     message: { id: MSG, ownership: "owned", orgId: ORG },
@@ -36,7 +34,6 @@ const input = (over: Partial<InboundAttachmentInput> = {}): InboundAttachmentInp
 describe("today's capabilities are the measured ones", () => {
     it("storage absent, structural screening present, malware scanning absent; the default policy requires a malware scan", () => {
         expect(EMAIL_ATTACHMENT_FILING_CAPABILITY).toEqual({ storage: false, structuralScreening: true, malwareScanning: false });
-        expect(DEFAULT_EMAIL_ATTACHMENT_FILING_POLICY).toEqual({ requireMalwareScan: true });
         expect(decideInboundAttachmentFiling(input())).toEqual({ action: "hold", reasons: ["storage_unavailable", "malware_scanning_unavailable"] });
     });
 
@@ -104,11 +101,15 @@ describe("the gate, with every capability present", () => {
         });
     }
 
-    it("a structural-only policy is an explicit choice: it releases on D1c-1 alone, and still holds quarantine", () => {
+    it("structural screening alone never releases: no scanner holds, whatever a caller passes", () => {
         const noScanner = { storage: true, structuralScreening: true, malwareScanning: false };
-        expect(decideInboundAttachmentFiling(input({ malware: null }), noScanner, STRUCTURAL_ONLY).action).toBe("open_processing_case");
-        expect(decideInboundAttachmentFiling(input({ malware: null }), noScanner).action).toBe("hold");
-        const q = decideInboundAttachmentFiling(input({ structural: "quarantined", stored: { documentId: DOC, orgId: ORG, status: "quarantined" }, malware: null }), noScanner, STRUCTURAL_ONLY);
-        expect(q).toEqual({ action: "hold", reasons: ["document_unavailable"] });
+        const d = decideInboundAttachmentFiling(input({ malware: null }), noScanner);
+        expect(d).toEqual({ action: "hold", reasons: ["malware_scanning_unavailable"] });
+        // A legacy structural-only policy argument has no effect: the gate takes no policy.
+        const legacy = (decideInboundAttachmentFiling as (...a: unknown[]) => ReturnType<typeof decideInboundAttachmentFiling>)(
+            input({ malware: null }), noScanner, { requireMalwareScan: false });
+        expect(legacy.action).toBe("hold");
+        // A "clean" verdict without a scanner capability is ignored, never trusted.
+        expect(decideInboundAttachmentFiling(input({ malware: { verdict: "clean", subject: null } }), noScanner).action).toBe("hold");
     });
 });

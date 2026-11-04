@@ -150,7 +150,7 @@ export type RequirementEvaluation = {
 export type RenewalState = "pending" | "rejected" | null;
 
 /** Unavailable statuses (as `UNAVAILABLE_DOCUMENT_STATUSES`) other than quarantine never count, either way. */
-const NEVER_EVIDENCE = new Set(["deleted", "restricted", "superseded"]);
+const NEVER_EVIDENCE = new Set(["deleted", "restricted", "superseded", "archived"]);
 
 /** The current version's review outcome alone (D6). */
 function reviewClass(doc: EvidenceDocument, typeReviewRequired: boolean): "accepted" | "pending" | "rejected" {

@@ -287,7 +287,7 @@ describe("the evaluator: missing / pending review / satisfied / waived / blocked
         expect(run({ documents: [d("r", "uploaded", "rejected"), d("p", "uploaded", "pending")] })!.state).toBe("pending_review");
     });
     it("deleted, restricted and superseded documents are never evidence", () => {
-        for (const s of ["deleted", "restricted", "superseded"]) expect(run({ documents: [d("x", s, "accepted")] })!.state).toBe("missing");
+        for (const s of ["deleted", "restricted", "superseded", "archived"]) expect(run({ documents: [d("x", s, "accepted")] })!.state).toBe("missing");
     });
     it("an active, unexpired waiver on a waivable requirement → waived (not blocking); never evidence", () => {
         const e = run({ waivers: [waiver] })!;

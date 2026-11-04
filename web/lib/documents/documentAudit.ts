@@ -49,7 +49,27 @@ export type DocumentAuditEvent =
     // D7: validity dates (effective / expiration) recorded on a document's current version, before they are written.
     | "document_version_validity_set"
     | "person_profile_photo_set"
-    | "person_profile_photo_cleared";
+    | "person_profile_photo_cleared"
+    // D1c-2: a malware verdict recorded by the scan process, or a human revocation of one — recorded BEFORE the store
+    // writes it. The payload names ids, verdict and engine labels only: never a URL, a path or content.
+    | "document_malware_verdict_recorded"
+    | "document_malware_verdict_revoked"
+    // D9.2: an `/api/v1` upload its installation never filed, handed to Processing after the grace period (recorded
+    // BEFORE the case opens), and that case closed because the document was filed after all (recorded BEFORE it closes).
+    | "document_unfiled_upload_escalated"
+    | "document_unfiled_upload_case_resolved"
+    // D9.3: a document archived (the only external removal; nothing is deleted), recorded BEFORE `document_archive`; and
+    // its staff restore, recorded BEFORE `document_unarchive`.
+    | "document_archived"
+    | "document_restored";
+
+/**
+ * The closed vocabulary of automated writers. A new one is added here, deliberately. Naming a process grants nothing:
+ * what it may do is decided by the code that uses it and by the database (e.g. only `malware_scan_worker` may record a
+ * malware verdict — `record_document_malware_verdict`).
+ */
+export const DOCUMENT_SYSTEM_PROCESSES = ["inbound_email_attachment", "malware_scan_worker", "api_upload_escalation"] as const;
+export type DocumentSystemProcess = (typeof DOCUMENT_SYSTEM_PROCESSES)[number];
 
 export type DocumentAuditInput = {
     orgId: string;
@@ -62,7 +82,7 @@ export type DocumentAuditInput = {
      */
     actorPrincipal?:
         | { kind: "application"; applicationId: string; installationId: string; credentialId: string }
-        | { kind: "system"; process: "inbound_email_attachment" };
+        | { kind: "system"; process: DocumentSystemProcess };
     event: DocumentAuditEvent;
     /** `documents` for an event about one document, `persons` for the photo pointer, the configuration table for D3/D6. */
     subject: {
@@ -79,7 +99,7 @@ export type DocumentAuditResult = { ok: true; eventId: string } | { ok: false; e
 export async function recordDocumentAudit(input: DocumentAuditInput): Promise<DocumentAuditResult> {
     // An action is always attributable: a user, or a named application principal — never neither.
     if (!input.actorUserId && !input.actorPrincipal) return { ok: false, error: "actor_required" };
-    if (input.actorPrincipal?.kind === "system" && input.actorPrincipal.process !== "inbound_email_attachment") return { ok: false, error: "actor_required" };
+    if (input.actorPrincipal?.kind === "system" && !(DOCUMENT_SYSTEM_PROCESSES as readonly string[]).includes(input.actorPrincipal.process)) return { ok: false, error: "actor_required" };
     try {
         const eventId = await emitEvent({
             org_id: input.orgId,

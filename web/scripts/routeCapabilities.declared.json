@@ -1835,6 +1835,14 @@
         "reason": "Documents V1 / D1a (2026-10-20). Was ctx.role !== \"admin\", the compatibility projection, which refused ops (granted documents.write in every organization) and could express no custom role. The document's subject must also be inside the caller's department/site scope, with the same predicate the list and the signer use."
       }
     },
+    "app/api/admin/documents/[id]/restore/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "documents.write",
+        "helper": "requireDocumentWrite",
+        "reason": "Documents V1 / D9.3 (2026-11-03). Staff restore of an archived document. documents.write AND documents read admission, the subject inside the actor's scope and every sensitive class cleared (else 404 / 403). Only an archived document (409 NOT_ARCHIVED); a written reason; document_restored recorded before public.document_unarchive (pending archive migration, not applied; until then 503 archive_unavailable). Returns the document to its pre-archive status; nothing else changes. No /api/v1 route reaches it."
+      }
+    },
     "app/api/admin/documents/[id]/screening/route.ts": {
       "POST": {
         "status": "declared",
@@ -1921,6 +1929,14 @@
         "capability": "documents.write",
         "helper": "requireDocumentWrite",
         "reason": "Documents V1 / D6, D7 (2026-10-27). Records the review (accepted/rejected/reopened) of a document's current version through document_review_version, appended to the version's review history. Also requires the full document access decision (organization, subject scope, sensitivity, availability), so a quarantined document cannot be reviewed; a rejection or reopen needs a reason; changing an already decided review additionally needs processing.documents.manage and a reason; audited first."
+      }
+    },
+    "app/api/admin/documents/archived/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "requireDocumentRead",
+        "reason": "Documents V1 / D9.3 (2026-11-03). The archived documents of a household library, for restore. Same admission and disclosure as the library (readable anchor, primary-owner subject scope, sensitivity), over archived rows only, each with its archive record. Never lists quarantined, deleted, restricted or superseded documents."
       }
     },
     "app/api/admin/documents/library/route.ts": {
@@ -5994,6 +6010,78 @@
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.1, user-approved 2026-10-30). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Organization configuration only (active categories and published types); no subject data."
+      }
+    },
+    "app/api/v1/document-archives/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.3, user-ratified 2026-11-03, Q3/Q5), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Only a readable document. recordDocumentAudit document_archived before public.document_archive (pending migration, not applied; until then 503 archive_unavailable). The document becomes unavailable; nothing is deleted. A retry with the same key answers from the document's own archive record."
+      }
+    },
+    "app/api/v1/document-requirements/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.3, user-ratified 2026-11-03). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Live requirements of exactly one visible child, household or parent/guardian (subjectVisibility), evaluated by evaluateSubjects; a non-standard document type is reported as key and state only; evidence ids only for documents the installation can read. No organization-wide query."
+      }
+    },
+    "app/api/v1/document-reviews/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.review via the scope catalog (D9.3, user-ratified 2026-11-03, Q3/Q5), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Only a document the installation can read through the D9.1 authority (listExternalDocuments), its CURRENT version only, the FIRST decision only (accepted, or rejected with a reason): reopening or changing a decision is refused 403 REREVIEW_NOT_AUTHORIZED, and document_review_version is always called with p_rereview false. recordDocumentAudit document_version_reviewed naming application, installation and credential before the decision; p_actor NULL. Anything out of reach is one 404."
+      }
+    },
+    "app/api/v1/document-validity/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.3, user-ratified 2026-11-03, Q3/Q5), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Only a readable document's CURRENT version; dates are YYYY-MM-DD and never inverted. recordDocumentAudit document_version_validity_set before document_set_version_validity; p_actor NULL; the review is untouched. Anything out of reach is one 404."
+      }
+    },
+    "app/api/v1/document-versions/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.3, user-ratified 2026-11-03, Q3/Q5), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Delegates to commitDocumentFilingAsApplication in new_version mode: only an upload this installation received, onto a document it can read, standard sensitivity, the type's replacement policy, the document_file_as_version transaction, filing key ext:<installation>:<key>. Audit names the application; p_actor NULL. Anything out of reach is one 404."
+      }
+    },
+    "app/api/v1/documents/[id]/history/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.3, user-ratified 2026-11-03). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). buildDocumentHistory of one document visible through listExternalDocuments, projected to committed and system entries without detail lines, paths or names. An unreadable document answers an empty page."
+      }
+    },
+    "app/api/v1/documents/[id]/reviews/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.read via the scope catalog (D9.3, user-ratified 2026-11-03). The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites (public.list_external_locations). Review decisions and validity records of one document visible through listExternalDocuments; actor reported only as staff or application; reasons are never published. An unreadable document answers an empty page."
+      }
+    },
+    "app/api/v1/document-filings/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Delegates to commitDocumentFilingAsApplication: the staff filing rules and the document_file transaction, admitting only a document this installation received, subjects visible through the D9.1 external authorities (child, household, active parent/guardian), standard resulting sensitivity, never a pre-accepted review, requested sensitivity or processing case; every not-found is one 404. Audit names the application, installation and credential; p_actor is NULL."
+      }
+    },
+    "app/api/v1/document-subjects/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Adds a context link only, on a document the installation can read (listExternalDocuments) to a subject it can see (subjectVisibility); the primary owner is never changed (409). recordDocumentAudit document_subject_changed before the change; document_link_subject with a NULL actor."
+      }
+    },
+    "app/api/v1/document-subjects/unlink/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Removes a context link only; the owner link is refused 409 primary_subject_immutable. Same visibility and audit-first rules as linking; document_unlink_subject with a NULL actor. Nothing is deleted."
+      }
+    },
+    "app/api/v1/document-uploads/content/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Raw bytes, at most 4 MiB, refused 413 before perform when declared larger. The upload id must verify, belong to this installation and match the bytes' size and SHA-256. The admin upload's checks in its order: storable format, bytes match the format, D1c-1 structural screening before storage, recordDocumentAudit (document_upload_authorized naming application, installation and credential) before the object is written, then one unfiled documents row marked received_via this installation. The object path carries the SHA-256; an insert failure removes the object. Retries converge on the same document id."
+      }
+    },
+    "app/api/v1/document-uploads/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope documents.write via the scope catalog (D9.2, user-ratified 2026-11-03, Q1-Q8), with the write budget, through externalOperationRoute. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites and an installation with no authorized site is refused. Requires an Idempotency-Key. Writes nothing: answers an opaque upload id signed (purpose-separated HMAC over an existing platform secret) over organization, installation, declared format, size and SHA-256, expiring in one hour."
       }
     },
     "app/api/v1/documents/[id]/download-link/route.ts": {

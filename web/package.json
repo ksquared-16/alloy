@@ -110,6 +110,8 @@
     "dev:qa:authz-subject-fixture-reset": "node scripts/qaAuthzSubjectFixtureReset.mjs",
     "dev:qa:documents-household-fixture-ensure": "node scripts/qaDocumentsHouseholdFixtureEnsure.mjs",
     "dev:qa:documents-household-fixture-reset": "node scripts/qaDocumentsHouseholdFixtureReset.mjs",
+    "test:qa:processing-atomic-open-race": "node scripts/qaProcessingAtomicOpenRace.mjs run",
+    "dev:qa:processing-atomic-open-race-reset": "node scripts/qaProcessingAtomicOpenRace.mjs reset",
     "dev:qa:documents-forms-residue-reset": "node scripts/qaDocumentsFormsResidueReset.mjs",
     "dev:qa:financials-historical-draft-fixture": "tsx --tsconfig tsconfig.json scripts/qa/financialsHistoricalDraftFixture.ts",
     "test:qa:financials-isolated": "node scripts/qa/financialsIsolatedTests.mjs",

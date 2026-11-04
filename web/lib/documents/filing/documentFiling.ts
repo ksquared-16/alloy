@@ -33,8 +33,8 @@ import {
     documentSubjectInActorScope,
     type DocumentActor,
 } from "@/lib/documents/assertDocumentAccess";
-import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
-import { QUARANTINED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
+import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit, type DocumentAuditInput } from "@/lib/documents/documentAudit";
+import { isDocumentUnavailable, QUARANTINED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
 import {
     actorMayReadSensitivity,
     classForDeclaredSensitivity,
@@ -51,6 +51,7 @@ import {
     type PublishedDocumentTypePolicy,
 } from "@/lib/documents/configuration/documentTypeEnforcement";
 import { householdForAnchor } from "@/lib/documents/library/documentLibrary";
+import { EXTERNAL_DOCUMENT_SUBJECT_TYPES, listExternalDocuments, subjectVisibility } from "@/lib/documents/external/externalDocumentAuthority";
 
 export type FilingSubjectRef = { subject_type: DocumentSubjectType; subject_id: string };
 
@@ -230,6 +231,141 @@ async function existingOfType(supabase: SupabaseClient, orgId: string, docType: 
         .map(({ id, title, created_at }) => ({ id, title, created_at }));
 }
 
+/**
+ * WHO is filing, and what that principal may reach. The filing RULES (type policy, format, review, replacement,
+ * household relation) and the transaction are the same for every principal — one filing path (documents-forms-api
+ * :70-74). Only these decisions differ:
+ *   - a signed-in user: the document write permission, the one access decision, the actor's scope and clearance —
+ *     exactly the checks this module always made;
+ *   - an application principal (D9.2, `/api/v1`): only a document this installation itself received, subjects the
+ *     installation can see through the D9.1 external authorities, `standard` sensitivity only, never a pre-accepted
+ *     review, and the audit names application, installation and credential — never a user.
+ */
+export type FilingAuthority = {
+    readonly kind: "user" | "application";
+    readonly orgId: string | null;
+    readonly actorUserId: string | null;
+    readonly actorPrincipal?: DocumentAuditInput["actorPrincipal"];
+    /** Refusal before anything is read, or null. */
+    preflight(req: DocumentFilingRequest): FilingFailure | null;
+    /** The received document: null = may file it, else the refusal (404 when it must stay indistinguishable). */
+    receivedAccess(documentId: string): Promise<FilingFailure | null>;
+    targetVisible(documentId: string): Promise<boolean>;
+    subjectVisible(s: FilingSubjectRef): Promise<boolean>;
+    sensitivityRefusal(resulting: DeclaredDocumentSensitivity, docType: string | null): FilingFailure | null;
+    /** May this principal be answered from a committed record (a replay)? */
+    replayVisible(filedDocumentId: string): Promise<boolean>;
+};
+
+/** A signed-in user — the checks this module has always made, unchanged. */
+export function userFilingAuthority(supabase: SupabaseClient, actor: DocumentActor): FilingAuthority {
+    const orgId = actor.ok && actor.orgId ? actor.orgId : null;
+    return {
+        kind: "user",
+        orgId,
+        actorUserId: actor.userId ?? null,
+        preflight() {
+            if (!actor.ok || !actor.orgId) return fail(401, "UNAUTHENTICATED", "Sign in to file documents.");
+            if (!(actor.permissionKeys ?? []).includes(DOCUMENT_WRITE_PERMISSION)) {
+                return fail(403, "DOCUMENTS_WRITE_REQUIRED", "You do not have permission to file documents.");
+            }
+            return null;
+        },
+        async receivedAccess(documentId) {
+            const decision = await assertDocumentAccess({ supabase, actor, documentId, operation: "download" });
+            if (decision.outcome === "allowed") return null;
+            if (decision.outcome === "blocked" && decision.code === "DOCUMENT_RESTRICTED") {
+                const row = orgId ? await readDocument(supabase, orgId, documentId) : null;
+                if (row?.status === QUARANTINED_DOCUMENT_STATUS) {
+                    return fail(409, "DOCUMENT_QUARANTINED", "This document is held by screening and cannot be filed until it is released.");
+                }
+                return fail(409, "DOCUMENT_UNAVAILABLE", "This document is not available to file.");
+            }
+            const http = documentAccessHttp(decision);
+            return fail(http.status, String(http.body.code ?? "NOT_FOUND"), String(http.body.error ?? "Document not found."));
+        },
+        async targetVisible(documentId) {
+            const t = await assertDocumentAccess({ supabase, actor, documentId, operation: "download" });
+            return t.outcome === "allowed";
+        },
+        async subjectVisible(s) {
+            return (
+                isDocumentOwnerSubjectType(s.subject_type) &&
+                isUuid(s.subject_id) &&
+                !!orgId &&
+                documentSubjectInActorScope(supabase, orgId, actor.scope, { entityType: legacyEntityTypeForSubject(s.subject_type), entityId: s.subject_id })
+            );
+        },
+        sensitivityRefusal(resulting, docType) {
+            return actorMayReadSensitivity(actor, sensitivityClasses(resulting, docType))
+                ? null
+                : fail(403, "SENSITIVITY_CLEARANCE_REQUIRED", "You are not cleared for this document's sensitivity.");
+        },
+        async replayVisible(filedDocumentId) {
+            if (!actor.ok || !actor.orgId || !(actor.permissionKeys ?? []).includes(DOCUMENT_WRITE_PERMISSION)) return false;
+            const access = await assertDocumentAccess({ supabase, actor, documentId: filedDocumentId, operation: "preview" });
+            return access.outcome === "allowed";
+        },
+    };
+}
+
+/** The installation that received a document through `/api/v1` (set by `completeDocumentUpload`). */
+export function receivedByInstallation(doc: { metadata?: Record<string, unknown> | null } | null): string | null {
+    const r = (doc?.metadata as { received_via?: { kind?: unknown; installation_id?: unknown } } | null | undefined)?.received_via;
+    return r && r.kind === "api_v1" && typeof r.installation_id === "string" ? r.installation_id : null;
+}
+
+export type ApplicationFilingContext = {
+    organizationId: string;
+    installationId: string;
+    boundaryMode: "org_wide" | "locations";
+    siteIds: readonly string[];
+    principal: { applicationId: string; installationId: string; credentialId: string };
+};
+
+/** An application principal (D9.2). Everything outside its rules answers like a missing record. */
+export function applicationFilingAuthority(supabase: SupabaseClient, ctx: ApplicationFilingContext): FilingAuthority {
+    const boundary = { organizationId: ctx.organizationId, installationId: ctx.installationId, boundaryMode: ctx.boundaryMode, siteIds: [...ctx.siteIds] };
+    const vis = subjectVisibility(supabase, boundary);
+    const externallyVisible = async (documentId: string) => {
+        const r = await listExternalDocuments(supabase, boundary, { documentId }, { limit: 1, cursorSort: null, cursorId: null, updatedSince: null });
+        return r.ok && r.rows.some((row) => row.id === documentId);
+    };
+    return {
+        kind: "application",
+        orgId: ctx.organizationId,
+        actorUserId: null,
+        actorPrincipal: { kind: "application", applicationId: ctx.principal.applicationId, installationId: ctx.principal.installationId, credentialId: ctx.principal.credentialId },
+        preflight(req) {
+            if (req.reviewAccepted) return fail(422, "BAD_FILING", "A review cannot be accepted when filing through the API.");
+            if (req.sensitivity) return fail(422, "BAD_FILING", "Sensitivity is not set through the API.");
+            if (req.processingCaseId) return fail(422, "BAD_FILING", "A processing case is not named through the API.");
+            return null;
+        },
+        async receivedAccess(documentId) {
+            const doc = await readDocument(supabase, ctx.organizationId, documentId);
+            // Only what THIS installation received; anything else is indistinguishable from absent.
+            if (!doc || receivedByInstallation(doc) !== ctx.installationId) return fail(404, "NOT_FOUND", "Document not found.");
+            if (doc.status === QUARANTINED_DOCUMENT_STATUS) {
+                return fail(409, "DOCUMENT_QUARANTINED", "This document is held by screening and cannot be filed.");
+            }
+            if (isDocumentUnavailable(doc.status)) return fail(404, "NOT_FOUND", "Document not found.");
+            return null;
+        },
+        targetVisible: externallyVisible,
+        async subjectVisible(s) {
+            if (!(EXTERNAL_DOCUMENT_SUBJECT_TYPES as readonly string[]).includes(s.subject_type) || !isUuid(s.subject_id)) return false;
+            return vis.isVisible({ type: s.subject_type as "child" | "household" | "person", id: s.subject_id });
+        },
+        sensitivityRefusal(resulting) {
+            return resulting === "standard"
+                ? null
+                : fail(422, "TYPE_NOT_AVAILABLE_EXTERNALLY", "This document type cannot be filed through the API.");
+        },
+        replayVisible: externallyVisible,
+    };
+}
+
 type Evaluated = {
     doc: DocRow;
     policy: PublishedDocumentTypePolicy | null;
@@ -243,44 +379,27 @@ type Evaluated = {
  * Steps 1–4. Authorization failures return a FilingFailure (they are not "problems" an operator can fix in the form);
  * policy and completeness issues are returned as `problems`.
  */
-async function evaluate(supabase: SupabaseClient, actor: DocumentActor, req: DocumentFilingRequest): Promise<Evaluated | FilingFailure> {
-    if (!actor.ok || !actor.orgId) return fail(401, "UNAUTHENTICATED", "Sign in to file documents.");
-    if (!(actor.permissionKeys ?? []).includes(DOCUMENT_WRITE_PERMISSION)) {
-        return fail(403, "DOCUMENTS_WRITE_REQUIRED", "You do not have permission to file documents.");
-    }
-    const orgId = actor.orgId;
+async function evaluate(supabase: SupabaseClient, auth: FilingAuthority, req: DocumentFilingRequest): Promise<Evaluated | FilingFailure> {
+    const pre = auth.preflight(req);
+    if (pre) return pre;
+    const orgId = auth.orgId as string;
     if (!isUuid(req.documentId)) return fail(404, "NOT_FOUND", "Document not found.");
 
-    // 1. The received document, through the one access decision.
-    const decision = await assertDocumentAccess({ supabase, actor, documentId: req.documentId, operation: "download" });
-    if (decision.outcome !== "allowed") {
-        if (decision.outcome === "blocked" && decision.code === "DOCUMENT_RESTRICTED") {
-            const row = await readDocument(supabase, orgId, req.documentId);
-            if (row?.status === QUARANTINED_DOCUMENT_STATUS) {
-                return fail(409, "DOCUMENT_QUARANTINED", "This document is held by screening and cannot be filed until it is released.");
-            }
-            return fail(409, "DOCUMENT_UNAVAILABLE", "This document is not available to file.");
-        }
-        const http = documentAccessHttp(decision);
-        return fail(http.status, String(http.body.code ?? "NOT_FOUND"), String(http.body.error ?? "Document not found."));
-    }
+    // 1. The received document, through the principal's access decision.
+    const refused = await auth.receivedAccess(req.documentId);
+    if (refused) return refused;
     const doc = await readDocument(supabase, orgId, req.documentId);
     if (!doc) return fail(404, "NOT_FOUND", "Document not found.");
 
     const problems: FilingProblem[] = [];
-    const scope = actor.scope;
-    const visible = async (s: FilingSubjectRef) =>
-        isDocumentOwnerSubjectType(s.subject_type) &&
-        isUuid(s.subject_id) &&
-        documentSubjectInActorScope(supabase, orgId, scope, { entityType: legacyEntityTypeForSubject(s.subject_type), entityId: s.subject_id });
+    const visible = (s: FilingSubjectRef) => auth.subjectVisible(s);
 
     if (req.mode === "new_version") {
         if (!isUuid(req.targetDocumentId)) {
             problems.push({ code: "TARGET_REQUIRED", message: "Choose the existing document this becomes a new version of." });
             return { doc, policy: null, target: null, resulting: null, existing: [], problems };
         }
-        const t = await assertDocumentAccess({ supabase, actor, documentId: req.targetDocumentId, operation: "download" });
-        if (t.outcome !== "allowed") return fail(404, "TARGET_NOT_FOUND", "The existing document was not found.");
+        if (!(await auth.targetVisible(req.targetDocumentId))) return fail(404, "TARGET_NOT_FOUND", "The existing document was not found.");
         const target = await readDocument(supabase, orgId, req.targetDocumentId);
         if (!target) return fail(404, "TARGET_NOT_FOUND", "The existing document was not found.");
         const resolved = await resolveDocumentTypePolicy(supabase, orgId, target.doc_type);
@@ -295,9 +414,8 @@ async function evaluate(supabase: SupabaseClient, actor: DocumentActor, req: Doc
             if (policy.review_required && !req.reviewAccepted) problems.push({ code: "REVIEW_REQUIRED", message: `${policy.label} needs a review before filing.` });
         }
         const resulting = resultingSensitivity(target.sensitivity, policy, null);
-        if (!actorMayReadSensitivity(actor, sensitivityClasses(resulting, target.doc_type))) {
-            return fail(403, "SENSITIVITY_CLEARANCE_REQUIRED", "You are not cleared for this document's sensitivity.");
-        }
+        const clearance = auth.sensitivityRefusal(resulting, target.doc_type);
+        if (clearance) return clearance;
         return { doc, policy, target, resulting, existing: [], problems };
     }
 
@@ -349,9 +467,8 @@ async function evaluate(supabase: SupabaseClient, actor: DocumentActor, req: Doc
 
     // 4. Clearance for the class the document will have.
     const resulting = resultingSensitivity(doc.sensitivity, policy, req.sensitivity ?? null);
-    if (!actorMayReadSensitivity(actor, sensitivityClasses(resulting, policy?.key ?? doc.doc_type))) {
-        return fail(403, "SENSITIVITY_CLEARANCE_REQUIRED", "You are not cleared for this document's sensitivity.");
-    }
+    const clearance = auth.sensitivityRefusal(resulting, policy?.key ?? doc.doc_type);
+    if (clearance) return clearance;
     return { doc, policy, target: null, resulting, existing, problems };
 }
 
@@ -365,7 +482,7 @@ export async function previewDocumentFiling(
     actor: DocumentActor,
     req: DocumentFilingRequest,
 ): Promise<{ ok: true; preview: DocumentFilingPreview } | FilingFailure> {
-    const ev = await evaluate(supabase, actor, req);
+    const ev = await evaluate(supabase, userFilingAuthority(supabase, actor), req);
     if ("ok" in ev) return ev;
     const filed = filedAlready(ev.doc);
     const problems = filed ? [{ code: "ALREADY_FILED", message: "This document has already been filed." }, ...ev.problems] : ev.problems;
@@ -408,14 +525,36 @@ export async function commitDocumentFiling(
     req: DocumentFilingRequest,
     route: string = FILING_ROUTE,
 ): Promise<{ ok: true; result: DocumentFilingResult } | FilingFailure> {
+    return commitFiling(supabase, userFilingAuthority(supabase, actor), req, route);
+}
+
+/** D9.2: an application principal files a document it received, through the same rules and transaction. */
+export async function commitDocumentFilingAsApplication(
+    supabase: SupabaseClient,
+    ctx: ApplicationFilingContext,
+    req: DocumentFilingRequest,
+    route: string,
+): Promise<{ ok: true; result: DocumentFilingResult } | FilingFailure> {
+    const r = await commitFiling(supabase, applicationFilingAuthority(supabase, ctx), req, route);
+    // A partner never learns whether a record exists outside its reach: every "not found" is the same NOT_FOUND.
+    if (!r.ok && r.status === 404) return fail(404, "NOT_FOUND", "Not found.");
+    return r;
+}
+
+async function commitFiling(
+    supabase: SupabaseClient,
+    auth: FilingAuthority,
+    req: DocumentFilingRequest,
+    route: string,
+): Promise<{ ok: true; result: DocumentFilingResult } | FilingFailure> {
     if (typeof req.filingKey !== "string" || req.filingKey.length < 8 || req.filingKey.length > 200) {
         return fail(400, "BAD_FILING", "The filing request is not valid.");
     }
-    const ev = await evaluate(supabase, actor, req);
+    const ev = await evaluate(supabase, auth, req);
     if ("ok" in ev) {
         // A retry of a filing that already committed is answered from the committed record, even though the document is
         // now `superseded` (new_version) and therefore refused by the access decision.
-        const replay = await replayFromRecord(supabase, actor, req);
+        const replay = await replayFromRecord(supabase, auth, req);
         if (replay) return { ok: true, result: replay };
         return ev;
     }
@@ -423,7 +562,7 @@ export async function commitDocumentFiling(
     const existingKey = (doc.metadata?.filing as { key?: unknown } | undefined)?.key;
     if (existingKey === req.filingKey) {
         // Already committed under this key: answer from the record, write nothing, record nothing new.
-        const replay = await replayFromRecord(supabase, actor, req);
+        const replay = await replayFromRecord(supabase, auth, req);
         if (replay) return { ok: true, result: replay };
     }
     if (filedAlready(doc)) return fail(409, "ALREADY_FILED", "This document has already been filed.");
@@ -431,8 +570,10 @@ export async function commitDocumentFiling(
         const first = ev.problems[0];
         return fail(PROBLEM_STATUS[first.code] ?? 422, first.code, first.message, ev.problems);
     }
-    const orgId = actor.orgId as string;
-    const userId = actor.userId as string;
+    const orgId = auth.orgId as string;
+    // Null for an application principal: attribution is the audit's actorPrincipal (installation, credential).
+    const userId = auth.actorUserId;
+    const actorFields = { actorUserId: userId, ...(auth.actorPrincipal ? { actorPrincipal: auth.actorPrincipal } : {}) };
 
     // 5. Recorded before the effect.
     const detail = {
@@ -446,7 +587,7 @@ export async function commitDocumentFiling(
         review_accepted: req.reviewAccepted,
         resulting_sensitivity: ev.resulting,
     };
-    const audit = await recordDocumentAudit({ orgId, actorUserId: userId, event: "document_filing_authorized", subject: { type: "documents", id: doc.id }, route, detail });
+    const audit = await recordDocumentAudit({ orgId, ...actorFields, event: "document_filing_authorized", subject: { type: "documents", id: doc.id }, route, detail });
     if (!audit.ok) return fail(DOCUMENT_AUDIT_UNAVAILABLE.status, "AUDIT_UNAVAILABLE", "Filing is unavailable because the audit could not be recorded.");
 
     // 6. The transaction.
@@ -525,7 +666,7 @@ export async function commitDocumentFiling(
     if (!result.replay) {
         await recordDocumentAudit({
             orgId,
-            actorUserId: userId,
+            ...actorFields,
             event: "document_filed",
             subject: { type: "documents", id: result.filed_document_id },
             route,
@@ -544,15 +685,15 @@ async function compensateCopy(supabase: SupabaseClient, orgId: string, bucket: s
 }
 
 /** A committed filing with this key, read from the received document's filing record (org-scoped, write-authorized). */
-async function replayFromRecord(supabase: SupabaseClient, actor: DocumentActor, req: DocumentFilingRequest): Promise<DocumentFilingResult | null> {
-    if (!actor.ok || !actor.orgId || !(actor.permissionKeys ?? []).includes(DOCUMENT_WRITE_PERMISSION) || !isUuid(req.documentId)) return null;
-    const doc = await readDocument(supabase, actor.orgId, req.documentId);
+async function replayFromRecord(supabase: SupabaseClient, auth: FilingAuthority, req: DocumentFilingRequest): Promise<DocumentFilingResult | null> {
+    if (!auth.orgId || !isUuid(req.documentId)) return null;
+    if (auth.kind === "application" && auth.preflight(req)) return null;
+    const doc = await readDocument(supabase, auth.orgId, req.documentId);
     const filing = doc?.metadata?.filing as Record<string, unknown> | undefined;
     if (!doc || !filing || filing.key !== req.filingKey) return null;
     const filedId = filing.mode === "new_version" ? String(filing.target_document_id ?? "") : doc.id;
     // The filed document must still be one the actor may open; otherwise the replay is not theirs to see.
-    const access = await assertDocumentAccess({ supabase, actor, documentId: filedId, operation: "preview" });
-    if (access.outcome !== "allowed") return null;
+    if (!(await auth.replayVisible(filedId))) return null;
     return {
         replay: true,
         mode: filing.mode === "new_version" ? "new_version" : "new_document",

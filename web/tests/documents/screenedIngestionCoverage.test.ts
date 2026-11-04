@@ -41,6 +41,8 @@ const SCREENED: Record<string, string> = {
     "app/api/admin/documents/[id]/versions/route.ts": "app/api/admin/documents/[id]/versions/route.ts",
     // D10: the WS11 adapter stores what the inbound-attachment pipeline screened (its only caller).
     "lib/documents/inbound/ws11AttachmentStorage.ts": "lib/documents/inbound/inboundAttachmentFiling.ts",
+    // D9.2: an application principal's upload through /api/v1 — screened in the same module, before the object is written.
+    "lib/documents/external/externalDocumentWrites.ts": "lib/documents/external/externalDocumentWrites.ts",
 };
 /** Server-generated writers: the bytes are produced by the platform, not received. */
 const GENERATED = new Set(["lib/forms/pdf/createGeneratedPdfForSubmission.ts", "lib/forms/pdf/persistSignedEnrollmentArtifact.ts"]);

@@ -23,7 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assertEntityDrawerRecordReadable, type AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { filterDocumentRowsInActorScope } from "@/lib/documents/assertDocumentAccess";
-import { isDocumentUnavailable } from "@/lib/documents/documentAvailability";
+import { ARCHIVED_DOCUMENT_STATUS, isDocumentUnavailable } from "@/lib/documents/documentAvailability";
 import { filterDocumentRowsBySensitivity } from "@/lib/documents/documentSensitivity";
 import { listCategories, listTypes } from "@/lib/documents/configuration/documentConfigurationService";
 import type { ValidityPolicy } from "@/lib/documents/configuration/documentTypePolicy";
@@ -42,6 +42,7 @@ import {
     type LibrarySubjectType,
     type LibraryVersion,
     type LibraryDocument,
+    type LibraryArchiveRecord,
 } from "@/lib/documents/library/documentLibraryModel";
 
 export * from "@/lib/documents/library/documentLibraryModel";
@@ -236,10 +237,20 @@ type DocRow = {
     metadata?: Record<string, unknown> | null;
 };
 
+function archiveRecordOf(metadata: Record<string, unknown> | null): LibraryArchiveRecord {
+    const a = (metadata?.archive ?? null) as Record<string, unknown> | null;
+    return {
+        archived_at: str(a?.archived_at),
+        reason: str(a?.reason),
+        by: str(a?.archived_by) ? "staff" : "application",
+        previous_status: str(a?.previous_status),
+    };
+}
+
 export async function buildDocumentLibrary(
     supabase: SupabaseClient,
     actor: LibraryActor,
-    input: { anchor: LibrarySubjectRef; focus?: LibrarySubjectRef | null },
+    input: { anchor: LibrarySubjectRef; focus?: LibrarySubjectRef | null; listing?: "available" | "archived" },
 ): Promise<LibraryResult> {
     const { orgId } = actor;
     const anchor = input.anchor;
@@ -308,7 +319,12 @@ export async function buildDocumentLibrary(
         ),
     );
     if (docReads.some((r) => r.error)) return { ok: false, status: 500, code: "LIBRARY_READ_FAILED" };
-    const available = docReads.flatMap((r) => (r.data ?? []) as DocRow[]).filter((d) => !isDocumentUnavailable(d.status));
+    // D9.3: the archived listing is the same household, scope and sensitivity disclosure over `archived` rows only — so
+    // staff can find and restore what was archived, and nothing else unavailable (quarantined, deleted…) appears.
+    const archivedListing = input.listing === "archived";
+    const available = docReads
+        .flatMap((r) => (r.data ?? []) as DocRow[])
+        .filter((d) => (archivedListing ? str(d.status) === ARCHIVED_DOCUMENT_STATUS : !isDocumentUnavailable(d.status)));
     const inScope = await filterDocumentRowsInActorScope(supabase, orgId, actor.scope, available);
     const disclosed = await filterDocumentRowsBySensitivity(supabase, orgId, { roleKeys: [...actor.roleKeys], permissionKeys: [...actor.permissionKeys] }, inScope);
 
@@ -418,6 +434,7 @@ export async function buildDocumentLibrary(
             current_version: current,
             version_count: versions.length,
             form_provenance: formProvenance.get(d.id) ?? null,
+            ...(archivedListing ? { archive: archiveRecordOf(d.metadata ?? null) } : {}),
             validity: current
                 ? evaluateDocumentValidity({
                       policy: (t?.published?.validity_policy ?? null) as ValidityPolicy | null,
