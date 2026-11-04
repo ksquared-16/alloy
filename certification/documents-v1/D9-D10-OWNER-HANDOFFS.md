@@ -85,7 +85,7 @@ Objective `OPWORK_AA660DC9554D_SPRINT_AFD07879C606`, lane `lane_aa660dc9554d`, 2
 ## H4 — Documents security (D1c-2): review the verdict store and scanner integration (D10-M1 / D10-M2)
 
 > Authored by Documents, not applied and not enabled:
-> - `certification/documents-v1/pending-migrations/20261216090000_documents_malware_verdicts.sql`
+> - `certification/documents-v1/pending-migrations/20261219090000_documents_malware_verdicts.sql` (revised 2026-11-04 for the review; was `20261216090000`)
 > - `certification/invariants/documents-malware-verdicts.sql` (9 rollback cases, not run)
 > - `web/lib/documents/malware/malwareVerdictStore.ts`, `malwareScan.ts`, `clamdEngine.ts`
 >

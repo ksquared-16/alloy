@@ -114,7 +114,7 @@ Prep §3 is design only and is not named in the operator's D9/D10 instruction. I
 | D10-A3 staging apply `20261215093000` | ✔ moved back into `supabase/migrations` unchanged (`f04e450c…`), after A1 and A2 (race `ifx_3672b4b0fb183df0`, 25/0) | ✔ certenv | — | — | — | — | Increment 3: release → PR → merge (fails `hosted_migration_behind` by design) → `database.apply_promoted_migration` (DEC-7) → merge → parity census |
 | D10-S1 WS11 link + access rules | Draft SQL only | — | — | — | — | — | **Communications H3** |
 | D10-S2 storage boundary | ✔ increment 1 | — | — | ✔ #1627 | ✔ (unwired) | — | Re-prove with H3 on a certenv |
-| D10-M1 verdict store | ✔ `fd72f0cf0` (pending `20261216090000`) | ✔ `documents-malware-verdicts-preapply.sql` PASSED on `certenv-dec617feb5` (`gar_e8431537a03bc9` at `a9b157312`) | — | — | — | — | **Documents security H4** review. Its pre-apply invariant can run before the review; the apply cannot |
+| D10-M1 verdict store | ✔ `fd72f0cf0`; revised for the Access & Identity review B1–B4 + D-N1–D-N3, held as `20261219090000` (`D10-MALWARE-VERDICT-STORE-REVIEW-RESPONSE.md`) | Pre-review PASS `gar_e8431537a03bc9` (history; covers none of the revised bytes). Revised pre-apply invariant **not run** | — | — | — | — | Isolated certenv build → rollback run → A&I re-review → un-hold (version above the then-current ledger head) |
 | D10-M2 scanner integration | ✔ `e0dfa2121`, unwired | — | — | — | — | — | **DEC-6** engine and host (H4) |
 | D10-F1 Resend fetcher wiring | Adapter ✔, not wired | — | — | — | — | — | **H3** wiring behind a disabled flag; **DEC-8** activation |
 | D10-V1 full inbound path | Synthetic suites green | — | — | — | — | — | After S1, M2, A3 on a certenv |
