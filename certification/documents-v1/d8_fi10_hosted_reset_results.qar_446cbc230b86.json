@@ -1,0 +1,56 @@
+{
+  "purge_d8_enr": {
+    "status": 200,
+    "purged": true
+  },
+  "fact_end_0": 200,
+  "delete_preview": {
+    "opportunities": 1,
+    "enrollment_records": 0,
+    "parents": 1,
+    "children": 3,
+    "customer_members": 3,
+    "customers": 1,
+    "placement_candidates": 0
+  },
+  "lead_delete": 200,
+  "form_delete_f1": 409,
+  "form_archive_f1": 200,
+  "form_delete_f2": 409,
+  "form_archive_f2": 200,
+  "after": {
+    "requirement_d8_enr": 404,
+    "doc_a_f1": 404,
+    "doc_b_f2": 404,
+    "doc_b_f1": 404,
+    "doc_c_cert": 404,
+    "doc_a_cert": 404,
+    "submission_a_f1": 404,
+    "submission_b_f2": 404,
+    "submission_b_f1": 404,
+    "household_library": 404
+  },
+  "all_deletable_gone": true,
+  "recorded_residue": [
+    {
+      "table": "person_health_facts",
+      "id": "acca87e0-f803-4a58-866b-4d2cca933a69",
+      "state": "ended",
+      "why": "append-only by design; no delete route; no FK to the child, so it outlives lead deletion"
+    },
+    {
+      "table": "form_definitions (+ its published version)",
+      "id": "7bcb7819-a943-4efa-8a1b-4a0192e689de",
+      "key": "qa_446cbc230b86_d8f1",
+      "state": "archived",
+      "why": "a form with a published version can only be archived through the product"
+    },
+    {
+      "table": "form_definitions (+ its published version)",
+      "id": "60f8bec3-41d0-43aa-a3bd-ad419205ed3a",
+      "key": "qa_446cbc230b86_d8f2",
+      "state": "archived",
+      "why": "a form with a published version can only be archived through the product"
+    }
+  ]
+}
