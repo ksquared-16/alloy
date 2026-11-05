@@ -1,0 +1,40 @@
+{
+  "trusted_host_action_id": "tha_b7eea831f46a5a",
+  "query_hash": "397418fd2dd7456b200969f19bccc61a64ca7758cf0599879841d94ba4ed3eb5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-05T03:37:17.736Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b7eea831f46a5a",
+    "query_hash": "397418fd2dd7456b200969f19bccc61a64ca7758cf0599879841d94ba4ed3eb5",
+    "authorization_id": "grnt_17efbacab9d04fed",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-05T03:37:21.238Z",
+    "question_ids": [
+      "d9_qa_secondary_sites"
+    ],
+    "questions": {
+      "d9_qa_secondary_sites": {
+        "question_id": "d9_qa_secondary_sites",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "ad53fee2-2570-460f-9300-f0e106c473b6",
+            "org_name": "ZZ Alloy QA — Cross-Org",
+            "location_count": 0,
+            "active_site_count": 0,
+            "oldest_active_site_id": null,
+            "locations": []
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
