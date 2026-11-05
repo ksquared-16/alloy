@@ -755,6 +755,125 @@ describe("DELETE /api/admin/pos/documents/[id] — audited before it acts", () =
         as(P.ops);
         expect((await del(DOC.intake)).status).toBe(403);
     });
+
+    describe("D10 — an inbound email attachment's message links and email_attachment case", () => {
+        const LINKS = "communication_message_attachments";
+        const MSG_1 = "3e000000-0000-4000-8000-0000000000a1";
+        const CASE_E = "ca5e0000-0000-4000-8000-0000000000a1";
+
+        function seedInboundAttachment() {
+            db.seed(LINKS, [
+                { org_id: ORG_A, message_id: MSG_1, document_id: DOC.intake, provider_attachment_id: "att-1", disposition: "attachment" },
+                // Another document's link in the same organization: never touched.
+                { org_id: ORG_A, message_id: MSG_1, document_id: DOC.opp2, provider_attachment_id: "att-2", disposition: "attachment" },
+            ]);
+            db.seed("processing_cases", [{ id: CASE_E, org_id: ORG_A, status: "received", case_type: null, metadata: {} }]);
+            db.seed("processing_case_sources", [{ org_id: ORG_A, processing_case_id: CASE_E, source_kind: "email_attachment", source_id: DOC.intake, role: "primary" }]);
+        }
+
+        /** Records every write (and storage removal) in the order the route issues them. */
+        function traceWrites(target: InMemorySupabase): string[] {
+            const order: string[] = [];
+            const from = target.from.bind(target);
+            target.from = ((table: string) => {
+                const b = from(table);
+                for (const op of ["insert", "update", "delete"] as const) {
+                    const orig = (b[op] as (...a: unknown[]) => unknown).bind(b);
+                    (b as unknown as Record<string, unknown>)[op] = (...a: unknown[]) => {
+                        order.push(`${op}:${table}`);
+                        return orig(...a);
+                    };
+                }
+                return b;
+            }) as typeof target.from;
+            const storage = Object.getOwnPropertyDescriptor(InMemorySupabase.prototype, "storage")!.get!.bind(target);
+            Object.defineProperty(target, "storage", {
+                configurable: true,
+                get: () => ({
+                    from: (bucket: string) => {
+                        const s = storage().from(bucket);
+                        return { ...s, remove: async (paths: string[]) => { order.push("remove:storage"); return s.remove(paths); } };
+                    },
+                }),
+            });
+            return order;
+        }
+
+        it("reads the links, names them in the audit, removes them after it and before the row; the object goes last", async () => {
+            as(P.admin);
+            seedInboundAttachment();
+            const order = traceWrites(db);
+            const res = await del(DOC.intake);
+            expect(res.status).toBe(200);
+            expect(res.body).toMatchObject({ data: { deleted: true, removed_cases: 1 } });
+
+            const audit = auditRows("document_delete_authorized");
+            expect(audit).toHaveLength(1);
+            expect(audit[0].payload).toMatchObject({
+                processing_case_ids: [CASE_E],
+                removed_message_attachment_links: [{ message_id: MSG_1, provider_attachment_id: "att-1", disposition: "attachment" }],
+            });
+            expect(order).toEqual([
+                "insert:workflow_events",
+                "delete:processing_case_sources",
+                "delete:processing_cases",
+                `delete:${LINKS}`,
+                "delete:documents",
+                "remove:storage",
+            ]);
+            expect(db.rows(LINKS)).toEqual([expect.objectContaining({ document_id: DOC.opp2, provider_attachment_id: "att-2" })]);
+            expect(db.rows("processing_case_sources")).toEqual([]);
+            expect(db.rows("processing_cases").some((c) => c.id === CASE_E)).toBe(false);
+            expect(db.rows("documents").some((r) => r.id === DOC.intake)).toBe(false);
+            expect(db.objects.has(`${BUCKET}/${ORG_A}/pos_intake/intake.txt`)).toBe(false);
+        });
+
+        it("an email_attachment case is guarded like a document case: a completed one refuses, touching nothing", async () => {
+            as(P.admin);
+            seedInboundAttachment();
+            (db.rows("processing_cases").find((c) => c.id === CASE_E) as Record<string, unknown>).status = "completed";
+            const res = await del(DOC.intake);
+            expect(res.status).toBe(409);
+            expect(auditRows("document_delete_authorized")).toHaveLength(0);
+            expect(db.rows(LINKS)).toHaveLength(2);
+            expect(db.rows("documents").some((r) => r.id === DOC.intake)).toBe(true);
+        });
+
+        it("a link read failure refuses with a 500 before anything is written", async () => {
+            as(P.admin);
+            seedInboundAttachment();
+            const from = db.from.bind(db);
+            const failing = {
+                select: () => failing,
+                eq: () => failing,
+                then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: "42P01", message: "relation does not exist" } }).then(ok),
+            };
+            db.from = ((table: string) => (table === LINKS ? failing : from(table))) as typeof db.from;
+            const order = traceWrites(db);
+            const res = await del(DOC.intake);
+            expect(res.status).toBe(500);
+            expect(order).toEqual([]);
+            expect(auditRows()).toHaveLength(0);
+            expect(db.rows("documents").some((r) => r.id === DOC.intake)).toBe(true);
+            expect(db.removeCalls).toHaveLength(0);
+        });
+
+        it("a storage removal failure after the row is gone is logged, not a 500", async () => {
+            as(P.admin);
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            const storage = Object.getOwnPropertyDescriptor(InMemorySupabase.prototype, "storage")!.get!.bind(db);
+            Object.defineProperty(db, "storage", {
+                configurable: true,
+                get: () => ({ from: (bucket: string) => ({ ...storage().from(bucket), remove: async () => ({ data: null, error: { message: "bucket down" } }) }) }),
+            });
+            const res = await del(DOC.intake);
+            expect(res.status).toBe(200);
+            expect(db.rows("documents").some((r) => r.id === DOC.intake)).toBe(false);
+            expect(auditRows("document_delete_failed")).toHaveLength(0);
+            expect(warn).toHaveBeenCalledWith("[POS_DOC_DELETE_STORAGE]", expect.objectContaining({ document_id: DOC.intake }));
+            warn.mockRestore();
+        });
+    });
 });
 
 // ── 9. Profile photo set / clear ───────────────────────────────────────────────────────────────

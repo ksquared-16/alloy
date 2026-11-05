@@ -10,6 +10,7 @@ import { documentSubjectInActorScope, requireDocumentRead, requireDocumentWrite 
 import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { ARCHIVED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
+import { checkReleaseVerdicts, releaseRefusalFromDbError } from "@/lib/documents/malware/releaseVerdictGate";
 
 /**
  * POST /api/admin/documents/[id]/restore { reason } — D9.3: staff restore of an archived document.
@@ -23,6 +24,11 @@ import { ARCHIVED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
  * nothing is restored (503 AUDIT_UNAVAILABLE). The database function returns the document to the status it had before
  * the archive and keeps the archive record, adding who restored it, when and why. Nothing else changes: no version,
  * review, subject or file is touched.
+ *
+ * MALWARE (Q2 / W2). Before the audit, the document's malware verdicts are read: any version found infected or suspicious
+ * is a 409 MALWARE_UNSAFE, a document held for a verdict whose current version is not clean is a 409
+ * MALWARE_SCAN_PENDING, and verdicts that cannot be read refuse the restore (503 MALWARE_VERDICT_UNAVAILABLE). The
+ * database guard raises the same refusals inside `document_unarchive`, and they map to the same 409s.
  *
  * `document_unarchive` is part of the pending archive migration (`20261217090000_documents_d9_3_archive.sql`, NOT
  * applied). Until a database has it this answers 503 `archive_unavailable` — and no document can be archived there.
@@ -50,12 +56,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("documents")
-        .select("id, status, doc_type, entity_type, entity_id, metadata")
+        .select("id, status, doc_type, entity_type, entity_id, metadata, current_version_id")
         .eq("org_id", ctx.orgId)
         .eq("id", documentId)
         .maybeSingle();
     if (error) return NextResponse.json({ error: "The document could not be read.", code: "READ_FAILED" }, { status: 500 });
-    const row = data as { id: string; status: string | null; doc_type: string | null; entity_type: string | null; entity_id: string | null; metadata: Record<string, unknown> | null } | null;
+    const row = data as { id: string; status: string | null; doc_type: string | null; entity_type: string | null; entity_id: string | null; metadata: Record<string, unknown> | null; current_version_id?: string | null } | null;
     const notFound = NextResponse.json({ ok: false, error: "Document not found", code: "NOT_FOUND" }, { status: 404 });
     if (!row) return notFound;
     if (
@@ -73,6 +79,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (row.status !== ARCHIVED_DOCUMENT_STATUS) {
         return NextResponse.json({ ok: false, error: "This document is not archived.", code: "NOT_ARCHIVED" }, { status: 409 });
     }
+
+    const gate = await checkReleaseVerdicts(supabase, { orgId: ctx.orgId, documentId: row.id, currentVersionId: row.current_version_id ?? null, metadata: row.metadata });
+    if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status });
 
     const archive = (row.metadata?.archive as Record<string, unknown> | undefined) ?? {};
     const audit = await recordDocumentAudit({
@@ -100,6 +109,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ ok: false, error: "This document is not archived.", code: "NOT_ARCHIVED" }, { status: 409 });
         }
         if (/document_archive_not_found/.test(rpcError.message ?? "")) return notFound;
+        const refusal = releaseRefusalFromDbError(rpcError);
+        if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
         return NextResponse.json({ ok: false, error: "The document could not be restored.", code: "RESTORE_FAILED" }, { status: 500 });
     }
     const status = (restored as { status?: unknown } | null)?.status;

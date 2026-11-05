@@ -7,6 +7,7 @@
  * migration (with only the substitution named below), the banner, then the assertions — and the atomic-open one ends in
  * the reviewed single-session invariant unchanged.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -39,6 +40,23 @@ describe("pre-apply invariants", () => {
         const banner = invariant.slice(substituted.length, invariant.length - single.length);
         expect(banner.startsWith(BANNER)).toBe(true);
         expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
+    });
+
+    it("D10 activation gates: the pending migration unchanged, then the banner, then rollback-only assertions", () => {
+        const migration = read("supabase/migrations/20261220090000_documents_d10_activation_gates.sql");
+        // Proven by gar_550ba1d16c11d8 (11/0, rollback verified, certenv at staging 98fdf5c9) at ac423e463. A byte change needs the proof again.
+        expect(createHash("sha256").update(migration).digest("hex")).toBe("1196606e40ece37e73146bfa053fa3e4654a64be6a8a056ef9c9c2ba11a1032a");
+        const single = read("certification/invariants/documents-d10-activation-gates.sql");
+        const invariant = read("certification/invariants/documents-d10-activation-gates-preapply.sql");
+        expect(migration).not.toMatch(/GRANT EXECUTE|REVOKE EXECUTE/);
+        expect(invariant.startsWith(migration)).toBe(true);
+        expect(invariant.endsWith(single)).toBe(true);
+        const banner = invariant.slice(migration.length, invariant.length - single.length);
+        expect(banner.startsWith(BANNER)).toBe(true);
+        expect(banner.split("\n").every((l) => l === "" || l.startsWith("--"))).toBe(true);
+        const code = single.split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+        expect(code).not.toMatch(/schema_migrations|\bCOMMIT\b|\bROLLBACK\b/i);
+        expect(single).toContain("tests passed=% failed=0");
     });
 
     it("D10-A1 atomic open: the pending migration with only GRANT EXECUTE → GRANT ALL, then the reviewed invariant unchanged", () => {

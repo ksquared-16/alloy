@@ -29,6 +29,11 @@ async function documentReadableByCaller(supabase: ReturnType<typeof createAdminC
 
 export const dynamic = "force-dynamic";
 
+/** D10 (migration 20261218090000): an inbound message's link to the document an attachment was stored as. */
+const MESSAGE_ATTACHMENTS_TABLE = "communication_message_attachments";
+/** The case-source kinds whose `source_id` is a document id. */
+const DOCUMENT_ID_SOURCE_KINDS = ["document", "email_attachment"];
+
 /**
  * PATCH /api/admin/pos/documents/[id] — update operator display name (title only).
  * Original filename remains unchanged for audit.
@@ -78,6 +83,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  * `document_delete_failed`. The stored object is removed only when its path lies inside this
  * organization's prefix — a row is never allowed to aim the service-role client at another tenant's
  * file — and a row whose path does not is refused outright rather than half-deleted.
+ *
+ * D10: an inbound email attachment is linked to its message by `communication_message_attachments` (FK ON DELETE
+ * RESTRICT, kept) and opens its case as `source_kind = 'email_attachment'`. Both are read before the audit (a read
+ * failure refuses with nothing written), named in it, and removed with the document. The row goes BEFORE its stored
+ * objects: an object is removed only once the row is gone, so a failure part-way never leaves a row without its file.
  */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -121,12 +131,25 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             return jsonError("This document's stored file is not inside this organization, so it cannot be deleted here.", 409);
         }
 
-        // Processing cases this document is a source of.
+        // D10: the inbound-message links naming this document. Read before anything is written; a failure refuses.
+        const { data: linkRows, error: linkErr } = await supabase
+            .from(MESSAGE_ATTACHMENTS_TABLE)
+            .select("message_id, provider_attachment_id, disposition")
+            .eq("org_id", ctx.orgId)
+            .eq("document_id", documentId);
+        if (linkErr) throw new Error(linkErr.message);
+        const messageLinks = ((linkRows ?? []) as Array<{ message_id: string; provider_attachment_id: string; disposition: string | null }>).map((l) => ({
+            message_id: l.message_id,
+            provider_attachment_id: l.provider_attachment_id,
+            disposition: l.disposition,
+        }));
+
+        // Processing cases this document is a source of (an upload's, or an inbound email attachment's).
         const { data: srcRows, error: srcErr } = await supabase
             .from("processing_case_sources")
             .select("processing_case_id")
             .eq("org_id", ctx.orgId)
-            .eq("source_kind", "document")
+            .in("source_kind", DOCUMENT_ID_SOURCE_KINDS)
             .eq("source_id", documentId);
         if (srcErr) throw new Error(srcErr.message);
         const caseIds = [...new Set((srcRows ?? []).map((r) => (r as { processing_case_id: string }).processing_case_id))];
@@ -162,6 +185,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
                 document_entity_id: doc.entity_id,
                 doc_type: doc.doc_type,
                 processing_case_ids: caseIds,
+                removed_message_attachment_links: messageLinks,
                 had_stored_file: Boolean(doc.bucket && doc.storage_path),
             },
         });
@@ -170,12 +194,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         }
         auditedDeletion = true;
 
-        // Safe to discard. Remove case-source links, the opened case(s), the file, the row.
+        // Safe to discard. Remove case-source links, the opened case(s), the message links, the row, then the files.
+        // These are separate calls, not one transaction: a failure after the link delete and before the row delete leaves
+        // the row without its link, and the next inbound delivery re-links it (the row wins) — harmless, and retryable.
         const { error: delSrcErr } = await supabase
             .from("processing_case_sources")
             .delete()
             .eq("org_id", ctx.orgId)
-            .eq("source_kind", "document")
+            .in("source_kind", DOCUMENT_ID_SOURCE_KINDS)
             .eq("source_id", documentId);
         if (delSrcErr) throw new Error(delSrcErr.message);
 
@@ -188,15 +214,20 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             if (delCaseErr) throw new Error(delCaseErr.message);
         }
 
-        // Every stored file of the document: each version's and the row's own. Best-effort — an object already gone is
-        // not a failure. The version rows go with the document row (ON DELETE CASCADE).
+        // The links are ON DELETE RESTRICT: removed explicitly (and named in the audit above), never cascaded.
+        if (messageLinks.length > 0) {
+            const { error: delLinkErr } = await supabase
+                .from(MESSAGE_ATTACHMENTS_TABLE)
+                .delete()
+                .eq("org_id", ctx.orgId)
+                .eq("document_id", documentId);
+            if (delLinkErr) throw new Error(delLinkErr.message);
+        }
+
+        // Every stored file of the document: each version's and the row's own. Listed BEFORE the row goes — the version
+        // rows go with it (ON DELETE CASCADE).
         const stored = await documentStoredObjects(supabase, ctx.orgId, [documentId]);
         if (!stored.ok) throw new Error(stored.error);
-        for (const object of stored.objects) {
-            if (!isStoragePathWithinOrg(object.storagePath, ctx.orgId)) continue;
-            const { error: rmErr } = await supabase.storage.from(object.bucket).remove([object.storagePath]);
-            if (rmErr) console.warn("[POS_DOC_DELETE_STORAGE]", { document_id: documentId, error: rmErr.message });
-        }
 
         const { error: delDocErr } = await supabase
             .from("documents")
@@ -204,6 +235,17 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             .eq("org_id", ctx.orgId)
             .eq("id", documentId);
         if (delDocErr) throw new Error(delDocErr.message);
+
+        // Only after the row is gone. Best-effort — an object already gone, or a removal that fails, is logged; it is
+        // never a 500 that would leave the deletion looking undone.
+        for (const object of stored.objects) {
+            if (!isStoragePathWithinOrg(object.storagePath, ctx.orgId)) continue;
+            const rm = await supabase.storage
+                .from(object.bucket)
+                .remove([object.storagePath])
+                .catch((e: unknown) => ({ error: { message: e instanceof Error ? e.message : "remove threw" } }));
+            if (rm.error) console.warn("[POS_DOC_DELETE_STORAGE]", { document_id: documentId, error: rm.error.message });
+        }
 
         return jsonData({ deleted: true, document_id: documentId, removed_cases: caseIds.length });
     } catch (e) {

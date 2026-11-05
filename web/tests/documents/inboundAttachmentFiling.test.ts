@@ -28,32 +28,44 @@ const enc = (s: string) => new Uint8Array(Buffer.from(s, "latin1"));
 const pdf = (extra = "") =>
     enc("%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R " + extra + " >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
 
+/**
+ * In-memory WS11. Like the real adapter it reports `structural` from the persisted `screening.structural_status`, never
+ * from the status. `release()` stands in for the governed release a clean verdict will authorize (not part of this
+ * pipeline): a structurally clean, scan-held row becomes `uploaded`. `deleted` models an operator's audited delete.
+ */
 function memoryStorage(bytesById: Record<string, Uint8Array>, docOrg = ORG) {
-    const rows = new Map<string, StoredAttachment & { key: string }>();
+    const rows = new Map<string, StoredAttachment & { key: string; screening: Record<string, unknown> }>();
+    const deleted = new Set<string>();
     const calls = { retrieve: 0, store: 0 };
     let n = 0;
     const storage: AttachmentStorageBoundary = {
         available: true,
-        async findStored({ messageId, attachmentId }) {
-            return rows.get(`${messageId}:${attachmentId}`) ?? null;
+        async findStored({ orgId, messageId, attachmentId }) {
+            const key = `${messageId}:${attachmentId}`;
+            if (deleted.has(key)) return { documentId: `deleted:${key}`, orgId, deleted: true as const };
+            return rows.get(key) ?? null;
         },
         async retrieve({ attachmentId }) {
             calls.retrieve += 1;
             const b = bytesById[attachmentId];
             return b ? { ok: true as const, bytes: b } : { ok: false as const, reason: "provider_unavailable" };
         },
-        async store({ messageId, attachmentId, status }) {
+        async store({ messageId, attachmentId, status, screening }) {
             calls.store += 1;
             const key = `${messageId}:${attachmentId}`;
             const existing = rows.get(key);
             if (existing) return existing;
             n += 1;
-            const row = { key, documentId: `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`, orgId: docOrg, status, versionId: `5e000000-0000-4000-8000-${String(n).padStart(12, "0")}`, checksumSha256: "c".repeat(64) };
+            const structural = screening.structural_status === "quarantined" ? ("quarantined" as const) : ("clean" as const);
+            const row = { key, documentId: `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`, orgId: docOrg, status, versionId: `5e000000-0000-4000-8000-${String(n).padStart(12, "0")}`, checksumSha256: "c".repeat(64), structural, screening };
             rows.set(key, row);
             return row;
         },
     };
-    return { storage, rows, calls };
+    const release = () => {
+        for (const r of rows.values()) if (r.screening.malware_hold === "awaiting_verdict" && r.structural === "clean") r.status = "uploaded";
+    };
+    return { storage, rows, calls, deleted, release };
 }
 
 /**
@@ -128,9 +140,26 @@ describe("today, in production wiring: everything is held and nothing is retriev
 });
 
 describe("with storage and a scanner present (synthetic boundaries)", () => {
-    it("a clean, owned attachment: stored once, screened, ONE email_attachment case on the document, no subject", async () => {
+    it("a new attachment is stored QUARANTINED with its malware hold and its structural result kept apart; nothing opens", async () => {
         const mem = memoryStorage({ "att-1": pdf() });
         const cases = memoryCases();
+        const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
+        // Held only because the document is not released yet — not as a structural refusal or quarantine.
+        expect(out).toEqual([
+            { attachmentId: "att-1", sourceKey: `email_attachment:${MSG}:att-1`, outcome: "held", reasons: ["document_unavailable"], documentId: "d0000000-0000-4000-8000-000000000001" },
+        ]);
+        const row = [...mem.rows.values()][0];
+        expect(row.status).toBe("quarantined");
+        expect(row.screening).toMatchObject({ structural_status: "uploaded", malware_hold: "awaiting_verdict" });
+        expect(row.structural).toBe("clean");
+        expect(cases.cases).toHaveLength(0);
+    });
+
+    it("a clean, owned attachment, once released: stored once, screened, ONE email_attachment case on the document, no subject", async () => {
+        const mem = memoryStorage({ "att-1": pdf() });
+        const cases = memoryCases();
+        await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
+        mem.release();
         const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
         expect(out).toHaveLength(1);
         expect(out[0]).toMatchObject({ outcome: "case_opened", documentId: "d0000000-0000-4000-8000-000000000001" });
@@ -145,6 +174,8 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         const mem = memoryStorage({ "att-1": pdf() });
         const cases = memoryCases();
         const deps = { storage: mem.storage, malware: scanner("clean"), processing: cases.deps };
+        await fileInboundEmailAttachments(deps, message());
+        mem.release();
         const first = await fileInboundEmailAttachments(deps, message());
         const second = await fileInboundEmailAttachments(deps, message());
         expect(first[0].outcome).toBe("case_opened");
@@ -157,6 +188,8 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         const mem = memoryStorage({ "att-1": pdf() });
         const cases = memoryCases();
         const deps = { storage: mem.storage, malware: scanner("clean"), processing: cases.deps };
+        await fileInboundEmailAttachments(deps, message());
+        mem.release();
         const [a, b] = await Promise.all([fileInboundEmailAttachments(deps, message()), fileInboundEmailAttachments(deps, message())]);
         expect([a[0].outcome, b[0].outcome].sort()).toEqual(["case_existing", "case_opened"]);
         expect(cases.cases).toHaveLength(1);
@@ -172,6 +205,8 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         void _drop;
         for (const [cases, processing] of [[missing, missing.deps], [noPort, legacyOnly as ProcessingCaseDeps]] as const) {
             const mem = memoryStorage({ "att-1": pdf() });
+            await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing }, message());
+            mem.release();
             const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing }, message());
             expect(out[0]).toMatchObject({ outcome: "held", reasons: ["processing_atomic_open_unavailable"], documentId: "d0000000-0000-4000-8000-000000000001" });
             expect(cases.cases).toHaveLength(0);
@@ -195,6 +230,8 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
     it("a document stored in another organization is never opened as a case here", async () => {
         const mem = memoryStorage({ "att-1": pdf() }, OTHER);
         const cases = memoryCases();
+        await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
+        mem.release();
         const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
         expect(out[0]).toMatchObject({ outcome: "held", reasons: ["stored_in_another_organization"] });
         expect(cases.cases).toHaveLength(0);
@@ -211,6 +248,9 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
             ] }),
         );
         expect(out[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"] });
+        expect([...mem.rows.values()][0]).toMatchObject({ status: "quarantined", structural: "quarantined", screening: { structural_status: "quarantined", malware_hold: "awaiting_verdict" } });
+        // A structural quarantine is never released by the malware path.
+        mem.release();
         expect([...mem.rows.values()][0].status).toBe("quarantined");
         expect(out[1]).toMatchObject({ outcome: "held", reasons: ["screening_refused"] });
         expect(mem.calls.store).toBe(1); // the refused file was never stored
@@ -254,7 +294,8 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
             const mem = memoryStorage({ "att-1": pdf() });
             const cases = memoryCases();
             const out = await fileInboundEmailAttachments({ storage: mem.storage, malware, processing: cases.deps }, message());
-            expect(out[0]).toMatchObject({ outcome: "held", reasons: [reason] });
+            // Still scan-held (`document_unavailable`), and the verdict could not release it anyway.
+            expect(out[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable", reason] });
             expect(cases.cases).toHaveLength(0);
         }
         // Storage that cannot name the version: even the bound test double cannot release it.
@@ -262,7 +303,7 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         const versionless: typeof mem.storage = { ...mem.storage, store: async (x) => ({ ...(await mem.storage.store(x)), versionId: null }) };
         const cases = memoryCases();
         const out = await fileInboundEmailAttachments({ storage: versionless, malware: scanner("clean"), processing: cases.deps }, message());
-        expect(out[0]).toMatchObject({ outcome: "held", reasons: ["malware_verdict_unbound"] });
+        expect(out[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable", "malware_verdict_unbound"] });
         expect(cases.cases).toHaveLength(0);
     });
 
@@ -276,6 +317,9 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
             if (fail) { fail = false; throw new Error("lost"); }
         };
         const deps = { storage: mem.storage, malware: scanner("clean"), processing: cases.deps, annotateCase };
+        await fileInboundEmailAttachments(deps, message());
+        mem.release();
+        expect(seen).toHaveLength(0);
         const first = await fileInboundEmailAttachments(deps, message());
         const second = await fileInboundEmailAttachments(deps, message());
         expect(first[0].outcome).toBe("case_opened");
@@ -290,12 +334,46 @@ describe("with storage and a scanner present (synthetic boundaries)", () => {
         const mem = memoryStorage({ "a1": pdf(), "a2": pdf() });
         const flaky: typeof mem.storage = { ...mem.storage, store: async (x) => { if (x.attachmentId === "a1") throw new Error("bucket down"); return mem.storage.store(x); } };
         const cases = memoryCases();
-        const out = await fileInboundEmailAttachments(
+        const deliver = () => fileInboundEmailAttachments(
             { storage: flaky, malware: scanner("clean"), processing: cases.deps },
             message({ attachments: ["a1", "a2"].map((id) => ({ id, filename: `${id}.pdf`, content_type: "application/pdf", content_disposition: "attachment", size: 400 })) }),
         );
+        await deliver();
+        mem.release();
+        const out = await deliver();
         expect(out.map((o) => o.outcome)).toEqual(["held", "case_opened"]);
         expect(out[0]).toMatchObject({ reasons: ["attachment_not_stored"] });
+    });
+
+    it("structural is read from the persisted result; a legacy row without one falls back to its status", async () => {
+        const legacy = (status: string): AttachmentStorageBoundary => ({
+            ...memoryStorage({}).storage,
+            findStored: async () => ({ documentId: "d0000000-0000-4000-8000-0000000000aa", orgId: ORG, status, versionId: "5e000000-0000-4000-8000-0000000000aa", checksumSha256: "c".repeat(64) }),
+        });
+        const quarantined = await fileInboundEmailAttachments({ storage: legacy("quarantined"), malware: scanner("clean"), processing: memoryCases().deps }, message());
+        expect(quarantined[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"] });
+        const uploaded = await fileInboundEmailAttachments({ storage: legacy("uploaded"), malware: scanner("clean"), processing: memoryCases().deps }, message());
+        expect(uploaded[0]).toMatchObject({ outcome: "case_opened", documentId: "d0000000-0000-4000-8000-0000000000aa" });
+        // A released row whose RECORDED structural result is quarantined stays held, whatever its status says.
+        const recorded: AttachmentStorageBoundary = {
+            ...memoryStorage({}).storage,
+            findStored: async () => ({ documentId: "d0000000-0000-4000-8000-0000000000ab", orgId: ORG, status: "uploaded", versionId: "5e000000-0000-4000-8000-0000000000ab", checksumSha256: "c".repeat(64), structural: "quarantined" }),
+        };
+        const held = await fileInboundEmailAttachments({ storage: recorded, malware: scanner("clean"), processing: memoryCases().deps }, message());
+        expect(held[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"] });
+    });
+
+    it("an attachment an operator deleted is held as attachment_deleted: never retrieved, stored or opened again", async () => {
+        const mem = memoryStorage({ "att-1": pdf() });
+        mem.deleted.add(`${MSG}:att-1`);
+        const cases = memoryCases();
+        const out = await fileInboundEmailAttachments({ storage: mem.storage, malware: scanner("clean"), processing: cases.deps }, message());
+        expect(out).toEqual([
+            { attachmentId: "att-1", sourceKey: `email_attachment:${MSG}:att-1`, outcome: "held", reasons: ["attachment_deleted"], documentId: `deleted:${MSG}:att-1` },
+        ]);
+        expect(mem.calls).toEqual({ retrieve: 0, store: 0 });
+        expect(mem.rows.size).toBe(0);
+        expect(cases.cases).toHaveLength(0);
     });
 
     it("structural screening alone never releases: without a scanner nothing is retrieved, stored or opened", async () => {

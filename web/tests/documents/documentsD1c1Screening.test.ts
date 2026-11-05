@@ -211,3 +211,105 @@ describe("review queue and release", () => {
         expect(db.rows("documents").find((d) => d.id === id)!.status).toBe("quarantined");
     });
 });
+
+describe("Q2 / W2: a release honours the malware verdict store", () => {
+    const V1 = "ea000000-0000-4000-8000-0000000000c1";
+    const V2 = "ea000000-0000-4000-8000-0000000000c2";
+    let verdicts: Record<string, string | null>;
+    let verdictError: boolean;
+    let verdictCalls: Array<Record<string, unknown>>;
+
+    /** A quarantined document with two versions (V2 current); `document_malware_effective_verdict` answers from `verdicts`. */
+    async function quarantinedWithVersions(metadata: Record<string, unknown> = {}) {
+        as(P.admin);
+        const id = docId((await upload(jsPdf(), "scripted.pdf", "application/pdf")).body);
+        const row = db.rows("documents").find((d) => d.id === id)!;
+        row.current_version_id = V2;
+        row.metadata = { ...(row.metadata as object), screening: { ...((row.metadata as { screening?: object }).screening ?? {}), ...metadata } };
+        db.seed("document_versions", [
+            { id: V1, org_id: ORG, document_id: id, version_number: 1 },
+            { id: V2, org_id: ORG, document_id: id, version_number: 2 },
+            // Another organization's version of the same id is never asked about.
+            { id: "ea000000-0000-4000-8000-0000000000cf", org_id: OTHER_ORG, document_id: id, version_number: 1 },
+        ]);
+        return id;
+    }
+    beforeEach(() => {
+        verdicts = {};
+        verdictError = false;
+        verdictCalls = [];
+        const base = (db as unknown as { rpc: (n: string, a?: Record<string, unknown>) => Promise<unknown> }).rpc;
+        (db as unknown as { rpc: unknown }).rpc = async (name: string, args: Record<string, unknown> = {}) => {
+            if (name !== "document_malware_effective_verdict") return base(name, args);
+            verdictCalls.push(args);
+            if (verdictError) return { data: null, error: { message: "permission denied" } };
+            const v = verdicts[String(args.p_version_id)] ?? null;
+            return { data: v ? [{ verdict_id: "f0000000-0000-4000-8000-0000000000c1", verdict: v, document_id: "x", version_id: args.p_version_id, checksum_sha256: "0".repeat(64) }] : [], error: null };
+        };
+    });
+    const released = (id: string) => db.rows("workflow_events").some((e) => e.event_type === "document_released" && e.entity_id === id);
+    const status = (id: string) => db.rows("documents").find((d) => d.id === id)!.status;
+    const REASON = "Reviewed the findings with the family";
+
+    it("an unsafe verdict on ANY version → 409 MALWARE_UNSAFE, no audit, still quarantined", async () => {
+        for (const unsafe of ["infected", "suspicious"]) {
+            const id = await quarantinedWithVersions();
+            verdicts = { [V1]: unsafe, [V2]: "clean" };
+            const r = await release(id, { action: "release", reason: REASON });
+            expect(r).toMatchObject({ status: 409, body: { code: "MALWARE_UNSAFE" } });
+            expect(released(id)).toBe(false);
+            expect(status(id)).toBe("quarantined");
+        }
+        expect(verdictCalls.every((a) => a.p_org_id === ORG)).toBe(true);
+        expect(verdictCalls.map((a) => a.p_version_id)).not.toContain("ea000000-0000-4000-8000-0000000000cf");
+    });
+
+    it("held for a verdict: the current version must be clean (pending / failed → 409 MALWARE_SCAN_PENDING)", async () => {
+        for (const current of [null, "failed"]) {
+            const id = await quarantinedWithVersions({ malware_hold: "awaiting_verdict" });
+            verdicts = { [V1]: "clean", [V2]: current };
+            expect(await release(id, { action: "release", reason: REASON })).toMatchObject({ status: 409, body: { code: "MALWARE_SCAN_PENDING" } });
+            expect(released(id)).toBe(false);
+            expect(status(id)).toBe("quarantined");
+        }
+        const id = await quarantinedWithVersions({ malware_hold: "awaiting_verdict" });
+        verdicts = { [V2]: "clean" };
+        expect((await release(id, { action: "release", reason: REASON })).status).toBe(200);
+        expect(status(id)).toBe("uploaded");
+    });
+
+    it("no verdicts, or clean / failed without a hold → the existing release", async () => {
+        for (const v of [{}, { [V1]: "failed", [V2]: "clean" }] as Array<Record<string, string | null>>) {
+            const id = await quarantinedWithVersions();
+            verdicts = v;
+            expect((await release(id, { action: "release", reason: REASON })).status).toBe(200);
+            expect(released(id)).toBe(true);
+            expect(status(id)).toBe("uploaded");
+        }
+    });
+
+    it("verdicts that cannot be read refuse the release (fail closed), before the audit", async () => {
+        const id = await quarantinedWithVersions();
+        verdictError = true;
+        expect(await release(id, { action: "release", reason: REASON })).toMatchObject({ status: 503, body: { code: "MALWARE_VERDICT_UNAVAILABLE" } });
+        expect(released(id)).toBe(false);
+        expect(status(id)).toBe("quarantined");
+    });
+
+    it("the database guard's refusals (race backstop) map to the same 409s", async () => {
+        for (const [message, code] of [["document_malware_unsafe", "MALWARE_UNSAFE"], ["document_malware_scan_pending", "MALWARE_SCAN_PENDING"]]) {
+            const id = await quarantinedWithVersions();
+            const realFrom = db.from.bind(db);
+            (db as unknown as { from: unknown }).from = (table: string) => {
+                const b = realFrom(table);
+                if (table !== "documents") return b;
+                const failing = { eq: () => failing, then: (ok: (r: unknown) => unknown) => Promise.resolve({ data: null, error: { code: "23514", message } }).then(ok) };
+                (b as unknown as { update: unknown }).update = () => failing;
+                return b;
+            };
+            expect(await release(id, { action: "release", reason: REASON })).toMatchObject({ status: 409, body: { code } });
+            (db as unknown as { from: unknown }).from = realFrom;
+            expect(status(id)).toBe("quarantined");
+        }
+    });
+});

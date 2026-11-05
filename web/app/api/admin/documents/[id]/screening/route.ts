@@ -11,6 +11,7 @@ import { documentSubjectInActorScope, requireDocumentRead } from "@/lib/document
 import { actorMayReadSensitivity, resolveDocumentSensitivity } from "@/lib/documents/documentSensitivity";
 import { DOCUMENT_AUDIT_UNAVAILABLE, recordDocumentAudit } from "@/lib/documents/documentAudit";
 import { QUARANTINED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailability";
+import { checkReleaseVerdicts, releaseRefusalFromDbError } from "@/lib/documents/malware/releaseVerdictGate";
 
 /**
  * POST /api/admin/documents/[id]/screening { action: "release", reason } releases a quarantined document (D1c-1).
@@ -25,6 +26,11 @@ import { QUARANTINED_DOCUMENT_STATUS } from "@/lib/documents/documentAvailabilit
  * released (503 AUDIT_UNAVAILABLE). The release sets status `uploaded` and keeps the original screening record, adding who
  * released it, when, and why. Releasing never re-runs extraction or opens a Processing case; that stays an explicit
  * operator action.
+ *
+ * MALWARE (Q2 / W2). Before the audit, the document's malware verdicts are read: any version found infected or suspicious
+ * is a 409 MALWARE_UNSAFE, a document held for a verdict whose current version is not clean is a 409
+ * MALWARE_SCAN_PENDING, and verdicts that cannot be read refuse the release (503 MALWARE_VERDICT_UNAVAILABLE). The
+ * database guard raises the same refusals on the status change itself, and they map to the same 409s.
  *
  * Releasing a file is a human judgement on the screening findings. It does not make the file malware-free, and the record
  * never says so. To discard a quarantined file instead, use the audited document delete.
@@ -55,12 +61,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("documents")
-        .select("id, status, doc_type, entity_type, entity_id, metadata")
+        .select("id, status, doc_type, entity_type, entity_id, metadata, current_version_id")
         .eq("org_id", ctx.orgId)
         .eq("id", documentId)
         .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const row = data as { id: string; status: string | null; doc_type: string | null; entity_type: string | null; entity_id: string | null; metadata: Record<string, unknown> | null } | null;
+    const row = data as { id: string; status: string | null; doc_type: string | null; entity_type: string | null; entity_id: string | null; metadata: Record<string, unknown> | null; current_version_id?: string | null } | null;
     // Another organization's id, an absent id and an out-of-scope id are indistinguishable.
     const notFound = NextResponse.json({ ok: false, error: "Document not found", code: "NOT_FOUND" }, { status: 404 });
     if (!row) return notFound;
@@ -79,6 +85,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (row.status !== QUARANTINED_DOCUMENT_STATUS) {
         return NextResponse.json({ ok: false, error: "This document is not quarantined.", code: "NOT_QUARANTINED" }, { status: 409 });
     }
+
+    const gate = await checkReleaseVerdicts(supabase, { orgId: ctx.orgId, documentId: row.id, currentVersionId: row.current_version_id ?? null, metadata: row.metadata });
+    if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status });
 
     const screening = (row.metadata?.screening as Record<string, unknown> | undefined) ?? {};
     const audit = await recordDocumentAudit({
@@ -101,7 +110,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .eq("org_id", ctx.orgId)
         .eq("id", row.id)
         .eq("status", QUARANTINED_DOCUMENT_STATUS);
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    if (upErr) {
+        const refusal = releaseRefusalFromDbError(upErr);
+        if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
+        return NextResponse.json({ error: upErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true, document_id: row.id, status: "uploaded", released_at: releasedAt });
 }

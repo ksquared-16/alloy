@@ -48,6 +48,17 @@ const enc = (s: string) => new Uint8Array(Buffer.from(s, "latin1"));
 const PDF = enc("%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
 const ON = { [INBOUND_ATTACHMENT_RETRIEVAL_FLAG]: "true" };
 
+/**
+ * Stands in for the governed release a clean, version-bound verdict will authorize (ws11 stores every attachment
+ * `quarantined` with `metadata.screening.malware_hold` and never updates a row): a structurally clean one is released.
+ */
+function releaseScanHeld(db: InMemorySupabase) {
+    for (const r of db.rows("documents")) {
+        const screening = (r.metadata as { screening?: Record<string, unknown> } | null)?.screening;
+        if (screening?.malware_hold === "awaiting_verdict" && screening.structural_status === "uploaded") r.status = "uploaded";
+    }
+}
+
 afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -257,9 +268,13 @@ describe("composed ON: message → storage → fetcher → org credential → do
         const { db } = seededDb();
         const t = fakeResend();
         const filing = composed(db, t.fetchImpl);
+        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
+        const held = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
+        expect(held.status === "filed" && held.outcomes[0]).toMatchObject({ outcome: "held", reasons: ["document_unavailable"], documentId: docId });
+        expect(db.rows("documents")).toEqual([expect.objectContaining({ id: docId, status: "quarantined" })]);
+        releaseScanHeld(db);
         const first = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
         const second = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
-        const docId = inboundAttachmentDocumentId(ORG, MSG, "att-1");
         expect(first.status === "filed" && first.outcomes[0]).toMatchObject({ outcome: "case_opened", documentId: docId });
         expect(second.status === "filed" && second.outcomes[0]).toMatchObject({ outcome: "case_existing", documentId: docId });
         expect(t.calls).toHaveLength(2);
@@ -282,6 +297,7 @@ describe("composed ON: message → storage → fetcher → org credential → do
         expect(db.rows("processing_cases")).toEqual([]);
 
         db.failInsertInto.delete(LINKS);
+        releaseScanHeld(db);
         const again = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
         expect(again.status === "filed" && again.outcomes[0]).toMatchObject({ outcome: "case_opened" });
         expect(db.uploadCalls).toHaveLength(1);
@@ -330,6 +346,8 @@ describe("composed ON: message → storage → fetcher → org credential → do
         const t = fakeResend();
         const filing = { ...composed(db, t.fetchImpl), storage: createWs11AttachmentStorage({ supabase: db as never, fetchContent: makeInboundAttachmentContentFetcher(db as never, { fetchImpl: t.fetchImpl }), audit: okAudit, newId: ids }) };
         db.failInsertInto.add(LINKS);
+        await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
+        releaseScanHeld(db);
         const r = await fileInboundAttachmentsForPersistedMessage({ supabase: db as never, filing }, { orgId: ORG, messageId: MSG });
         expect(r.status === "filed" && r.outcomes[0]).toMatchObject({ outcome: "case_opened" });
         expect(db.rows(LINKS)).toEqual([]);
