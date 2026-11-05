@@ -1,7 +1,8 @@
 # Documents V1 — itemized completion plan (D1–D10)
 
 Lane `lane_aa660dc9554d`. Maintained by Documents. Started 2026-11-04 against staging `98fdf5c9b217` (PR #1633; ledger
-head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). Sprint `OPWORK_AA660DC9554D_SPRINT_E514C44C24C0`
+head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). **Updated 2026-11-05: staging `bce11ed7c1c0` (PR #1634,
+D10 activation gates), ledger head `20261220090000`, 555 migrations (census `gar_4f6b6842b0990b`).** Sprint `OPWORK_AA660DC9554D_SPRINT_E514C44C24C0`
 (successor to `…73A9D7625863`, which is VERIFIED and awaiting the Director's Accept/Close).
 
 **Engineering proof is not acceptance.** "Proven" below means a receipt (QA run `qar_*`, governed request `gar_*`, or an
@@ -38,7 +39,7 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 |---|---|---|
 | `…E460BCD09185` R4 hosted | **Done**: R4 35/35 `qar_bc811ffc7da1`; D7 invariant `gar_3c51d48448eba3`; residue reset `gar_14477ac6a0bcd8`; census 20/20 `gar_bcf58ca61c3f22` bound by `gar_6c56f9fdac73a5`. Conditions never marked | Record the evidence and close (Director); regression covers later Forms changes |
 | `…A1EE0FDEF21C` Revision 4 R2/R4/R5 hosted | **Not proven**: `qar_b1cc8a9bbe81` ran no driver phase (shared-child ensure `gar_bbbdf3ca3762f2` failed on dropped `customers.status`); closed clean (census `gar_6220f001645b72`) | Re-run R2 (packet-session scope, out-of-scope writes fix `e1c511967`, `scoped_author`, link scope) and R5 shared child on hosted |
-| `…12706A6E51FA` fixture repair | c1–c3 satisfied; repair shipped #1625 (`530ba383`). R5 invariant refused twice (sha unreachable pre-merge); now runnable. Registry re-pin of `5942fb82` unverified | Run the R5 invariant and verify the re-pin; close |
+| `…12706A6E51FA` fixture repair | c1–c3 satisfied; repair shipped #1625 (`530ba383`). **R5 invariant PASSED 5/5 `gar_344131761fa15c`** (isolated certenv at staging `98fdf5c9`; receipt `r5-shared-child-rollback-receipt.gar_344131761fa15c.json`). Registry re-pin of `5942fb82` unverified | Verify the re-pin; close (Director) |
 | `…6A4F60B1555E` preparation | Deliverables exist; superseded by `…AFD07879C606` | Close as superseded |
 | D9-H1 / D9-H2 | Never run (not stale; undone). The race fixture H1 is done (`ifx_3672b4b0fb183df0`); the D9 QA plan / credential path (Host Capacity H2) is open and blocks both | Host Capacity registers the plan; Kelly DEC-1/DEC-2 |
 
@@ -49,7 +50,7 @@ Migration `supabase/migrations/20261220090000_documents_d10_activation_gates.sql
 **Proven:** `gar_550ba1d16c11d8` PASSED 11/0, rolled back, on `certenv-e88b6e0070` (staging `98fdf5c9`, 554), pinned to
 `ac423e463` (receipt `d10-gates-rollback-receipt.gar_550ba1d16c11d8.json`); the first card `gar_9825da434a1cf6` was refused
 by the static analyzer (ALTER FUNCTION, DO UPDATE, TRUNCATE privilege list) and fixed without behaviour change. Moved
-byte-identically into `supabase/migrations` at `0aecec1ce`. **Merging applies it to staging.**
+byte-identically into `supabase/migrations` at `0aecec1ce`. **Merged in PR #1634 (`bce11ed7c1c0`, `gar_dd4ed126659626`) and applied to staging** (census `gar_4f6b6842b0990b`: head `20261220090000`, 555).
 
 | Gate | Change | Kind | State |
 |---|---|---|---|
