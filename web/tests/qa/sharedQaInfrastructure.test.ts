@@ -127,6 +127,9 @@ describe("shared QA B2 registry — B1 identity parity", () => {
     expect(QA_STRUCTURE.departments.qa_d2.id).toBe("609d088b-0446-4a7f-b529-f971fb5d73c8");
     expect(QA_STRUCTURE.sites.qa_north.id).toBe("21c9be10-f6e9-4048-ab4c-939ddbe0f0b7");
     expect(QA_STRUCTURE.sites.qa_south.id).toBe("cfb73302-3bbe-49db-b173-876fda776a6d");
+    expect(QA_STRUCTURE.sites.qa_secondary_site.id).toBe("4f89f324-dbc5-4815-8431-38ffec891398");
+    expect(QA_STRUCTURE.sites.qa_secondary_site.org).toBe("qa_secondary");
+    expect(Object.values(QA_STRUCTURE.sites).filter((s) => s.org === "qa_secondary")).toHaveLength(1);
   });
 
   it("mirrors B1 identity emails and plan keys", () => {
