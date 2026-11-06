@@ -1,0 +1,16 @@
+{
+  "delete_lead_b": 200,
+  "after": {
+    "sub_s_r5_shared": 404,
+    "sub_s_r5_only": 404,
+    "sub_s_r5_oppa": 404,
+    "sub_s_r5_oppb": 404,
+    "opp_lead_a": 404,
+    "opp_lead_b": 404
+  },
+  "product_teardown_gone": true,
+  "left_for_registered_resets": {
+    "qa_documents_forms_residue_reset": "run packet qa_<run>_r2pkt, its items, links and sessions; the run form's public links",
+    "qa_documents_shared_child_reset": "whatever ac000000- rows the product deletion did not take (normally none)"
+  }
+}
