@@ -33,7 +33,9 @@ RUN = sys.argv[1]
 PHASE = sys.argv[2]
 TAG = f"qa-authz-{RUN}"
 SUFFIX = RUN.split("_", 1)[1]
-KEY_PREFIX = f"qa_{SUFFIX}_"
+# QA_KEY_ATTEMPT (e.g. "a3_") re-runs inside one QA run after an attempt whose published forms were archived: the keys
+# keep the run prefix, so qa_documents_forms_residue_reset (which matches qa_<run>_ by prefix) still removes them.
+KEY_PREFIX = f"qa_{SUFFIX}_" + os.environ.get("QA_KEY_ATTEMPT", "")
 STATE_FILE = os.path.join(HERE, f"d8_fi10_hosted_fixture_ids.{RUN}.json")
 RESULTS_FILE = os.path.join(HERE, f"d8_fi10_hosted_cert_results.{RUN}.json")
 RESET_FILE = os.path.join(HERE, f"d8_fi10_hosted_reset_results.{RUN}.json")
