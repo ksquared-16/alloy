@@ -9,8 +9,8 @@
 -- ACTIVE `parent` / `guardian` person_child_relationships edge to a visible child.
 --   QA Shared (:org):         H1 household; C1 child of H1 enrolled at QA North; C2 child of H1 enrolled at QA South;
 --                             G1 an ACTIVE `parent` of C1; E1 only an ACTIVE `emergency_contact` of C1 (never visible).
---   QA Secondary (:org_b):    HB household; CB child of HB enrolled at QA Secondary's oldest active site (QA Secondary
---                             has no registered site; the T_B / T_WB installations are org_wide, so any site serves).
+--   QA Secondary (:org_b):    HB household; CB child of HB enrolled at the registered QA Secondary site
+--                             qa_secondary_site (Director-approved 2026-11-06; created only by the QA structure ensure).
 -- Both QA orgs are fixed here; the runner supplies :org (QA Shared only) and :qa_run_id. QA Secondary is never chosen
 -- by a caller, and no other organization is ever written.
 -- Documents are NOT created here: the harness uploads the tagged (qa-d9r-<qa_run_id> / qa-d9w-<qa_run_id>) documents
@@ -63,6 +63,7 @@ end $$;
 \set org_b 'ad53fee2-2570-460f-9300-f0e106c473b6'
 \set qa_north '21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'
 \set qa_south 'cfb73302-3bbe-49db-b173-876fda776a6d'
+\set qa_secondary_site '4f89f324-dbc5-4815-8431-38ffec891398'
 \set h1 'd9000000-0000-4000-8000-000000000101'
 \set g1 'd9000000-0000-4000-8000-000000000111'
 \set e1 'd9000000-0000-4000-8000-000000000112'
@@ -92,13 +93,14 @@ end $$;
 
 select not exists (
     select 1 from public.locations l
-     where l.org_id = :'org_b'::uuid
+     where l.id = :'qa_secondary_site'::uuid
+       and l.org_id = :'org_b'::uuid
        and l.location_type = 'site'
        and l.is_active
   ) as d9_secondary_site_missing \gset
 \if :d9_secondary_site_missing
 do $$ begin
-  raise exception 'QA Secondary has no active site for the CB enrollment; this fixture never creates QA structure';
+  raise exception 'qa_secondary_site (4f89f324-dbc5-4815-8431-38ffec891398) is missing from QA Secondary, is not a site or is inactive; this fixture never creates QA structure';
 end $$;
 \endif
 
@@ -247,7 +249,7 @@ values
   (:'enr_c2'::uuid, :'org'::uuid, :'c2'::uuid, :'h1'::uuid, :'qa_south'::uuid, 'active', current_date, 'qa_fixture',
    jsonb_build_object('qa_run_id', :'qa_run_id', 'fixture_family', :'family', 'fixture_key', 'C2_at_qa_south')),
   (:'enr_cb'::uuid, :'org_b'::uuid, :'cb'::uuid, :'hb'::uuid,
-   (select l.id from public.locations l where l.org_id = :'org_b'::uuid and l.location_type = 'site' and l.is_active order by l.created_at, l.id limit 1),
+   :'qa_secondary_site'::uuid,
    'active', current_date, 'qa_fixture',
    jsonb_build_object('qa_run_id', :'qa_run_id', 'fixture_family', :'family', 'fixture_key', 'CB_at_qa_secondary'));
 

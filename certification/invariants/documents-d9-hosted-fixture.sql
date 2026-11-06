@@ -29,9 +29,10 @@ BEGIN
     INSERT INTO public.locations (id, org_id, label, location_type)
     VALUES ('cfb73302-3bbe-49db-b173-876fda776a6d'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'QA South', 'site');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.locations WHERE org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND location_type = 'site' AND is_active) THEN
-    INSERT INTO public.locations (id, org_id, label, location_type)
-    VALUES ('e9000000-0000-4000-8000-0000000000b1'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid, 'inv QA Secondary site', 'site');
+  -- The registered QA structure row qa_secondary_site, exactly as the QA structure ensure creates it (the fixture never does).
+  IF NOT EXISTS (SELECT 1 FROM public.locations WHERE id = '4f89f324-dbc5-4815-8431-38ffec891398'::uuid) THEN
+    INSERT INTO public.locations (id, org_id, label, location_type, is_active, external_source, metadata)
+    VALUES ('4f89f324-dbc5-4815-8431-38ffec891398'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid, 'ZZ Alloy QA — Cross-Org Site', 'site', true, 'alloy_qa_structure', '{"qa_structure": true}'::jsonb);
   END IF;
   INSERT INTO public.customers (id, org_id, name, status_key) VALUES
     ('e9000000-0000-4000-8000-0000000000c1'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'inv unrelated household', 'active'),
@@ -50,7 +51,7 @@ BEGIN
      'e9000000-0000-4000-8000-0000000000c1'::uuid, '21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'active', current_date, 'inv'),
     ('e9000000-0000-4000-8000-0000000000d3'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid, 'e9000000-0000-4000-8000-0000000000d2'::uuid,
      'e9000000-0000-4000-8000-0000000000d1'::uuid,
-     (SELECT l.id FROM public.locations l WHERE l.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND l.location_type = 'site' AND l.is_active ORDER BY l.created_at, l.id LIMIT 1),
+     '4f89f324-dbc5-4815-8431-38ffec891398'::uuid,
      'active', current_date, 'inv');
   RAISE NOTICE 'SETUP QA orgs, QA sites, a third organization and unrelated people present';
 END $$;
@@ -108,7 +109,8 @@ BEGIN
   )) THEN RAISE EXCEPTION 'CASE 1 FAILED: guard d9_permanent_sites_missing should be false'; END IF;
   IF (not exists (
     select 1 from public.locations l
-     where l.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
+     where l.id = '4f89f324-dbc5-4815-8431-38ffec891398'::uuid
+       and l.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid
        and l.location_type = 'site'
        and l.is_active
   )) THEN RAISE EXCEPTION 'CASE 1 FAILED: guard d9_secondary_site_missing should be false'; END IF;
@@ -178,7 +180,7 @@ BEGIN
       ('d9000000-0000-4000-8000-000000000142'::uuid, '4acc9386-c485-486f-aa1f-05d83499d142'::uuid, 'd9000000-0000-4000-8000-000000000122'::uuid, 'd9000000-0000-4000-8000-000000000101'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid, 'active', current_date, 'qa_fixture',
        jsonb_build_object('qa_run_id', 'qar_00000000d9e0', 'fixture_family', 'documents_d9_external', 'fixture_key', 'C2_at_qa_south')),
       ('d9000000-0000-4000-8000-000000000241'::uuid, 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid, 'd9000000-0000-4000-8000-000000000221'::uuid, 'd9000000-0000-4000-8000-000000000201'::uuid,
-       (select l.id from public.locations l where l.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid and l.location_type = 'site' and l.is_active order by l.created_at, l.id limit 1),
+       '4f89f324-dbc5-4815-8431-38ffec891398'::uuid,
        'active', current_date, 'qa_fixture',
        jsonb_build_object('qa_run_id', 'qar_00000000d9e0', 'fixture_family', 'documents_d9_external', 'fixture_key', 'CB_at_qa_secondary'));
   END LOOP;
@@ -211,14 +213,16 @@ BEGIN
           WHERE person_id = 'd9000000-0000-4000-8000-000000000112'::uuid AND relationship_type = 'emergency_contact' AND status = 'active') <> 1 THEN
     RAISE EXCEPTION 'CASE 2 FAILED: G1 is not the active parent of C1, or E1 is more than an emergency contact'; END IF;
   IF (SELECT site_location_id FROM public.child_enrollment_agreements WHERE id = 'd9000000-0000-4000-8000-000000000241'::uuid)
-     IS DISTINCT FROM (SELECT l.id FROM public.locations l WHERE l.org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND l.location_type = 'site' AND l.is_active ORDER BY l.created_at, l.id LIMIT 1) THEN
-    RAISE EXCEPTION 'CASE 2 FAILED: CB is not enrolled at QA Secondary''s oldest active site'; END IF;
+     IS DISTINCT FROM '4f89f324-dbc5-4815-8431-38ffec891398'::uuid THEN
+    RAISE EXCEPTION 'CASE 2 FAILED: CB is not enrolled at qa_secondary_site'; END IF;
   IF (SELECT count(*) FROM public.customers WHERE id IN ('e9000000-0000-4000-8000-0000000000c1'::uuid, 'e9000000-0000-4000-8000-0000000000d1'::uuid, 'e9000000-0000-4000-8000-0000000000a1'::uuid)) <> 3
      OR (SELECT count(*) FROM public.customer_members WHERE id IN ('e9000000-0000-4000-8000-0000000000c2'::uuid, 'e9000000-0000-4000-8000-0000000000d2'::uuid)) <> 2
      OR (SELECT count(*) FROM public.persons WHERE id = 'e9000000-0000-4000-8000-0000000000c4'::uuid) <> 1
      OR (SELECT count(*) FROM public.person_child_relationships WHERE id = 'e9000000-0000-4000-8000-0000000000c5'::uuid) <> 1
      OR (SELECT count(*) FROM public.child_enrollment_agreements WHERE id IN ('e9000000-0000-4000-8000-0000000000c3'::uuid, 'e9000000-0000-4000-8000-0000000000d3'::uuid)) <> 2
-     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2 THEN
+     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2
+     OR (SELECT count(*) FROM public.locations WHERE id = '4f89f324-dbc5-4815-8431-38ffec891398'::uuid AND org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND location_type = 'site' AND is_active
+           AND label = 'ZZ Alloy QA — Cross-Org Site' AND external_source = 'alloy_qa_structure' AND metadata = '{"qa_structure": true}'::jsonb) <> 1 THEN
     RAISE EXCEPTION 'CASE % FAILED: an unrelated row was touched', '2'; END IF;
   RAISE NOTICE 'CASE 2 PASS ensure: 12 rows, D9.1 visibility shape, idempotent over two runs, unrelated rows untouched';
 END $$;
@@ -351,7 +355,9 @@ BEGIN
      OR (SELECT count(*) FROM public.persons WHERE id = 'e9000000-0000-4000-8000-0000000000c4'::uuid) <> 1
      OR (SELECT count(*) FROM public.person_child_relationships WHERE id = 'e9000000-0000-4000-8000-0000000000c5'::uuid) <> 1
      OR (SELECT count(*) FROM public.child_enrollment_agreements WHERE id IN ('e9000000-0000-4000-8000-0000000000c3'::uuid, 'e9000000-0000-4000-8000-0000000000d3'::uuid)) <> 2
-     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2 THEN
+     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2
+     OR (SELECT count(*) FROM public.locations WHERE id = '4f89f324-dbc5-4815-8431-38ffec891398'::uuid AND org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND location_type = 'site' AND is_active
+           AND label = 'ZZ Alloy QA — Cross-Org Site' AND external_source = 'alloy_qa_structure' AND metadata = '{"qa_structure": true}'::jsonb) <> 1 THEN
     RAISE EXCEPTION 'CASE % FAILED: an unrelated row was touched', '4'; END IF;
   RAISE NOTICE 'CASE 4 PASS reset after a partial teardown: zero residue, idempotent, unrelated rows untouched';
 END $$;
@@ -398,7 +404,9 @@ BEGIN
      OR (SELECT count(*) FROM public.persons WHERE id = 'e9000000-0000-4000-8000-0000000000c4'::uuid) <> 1
      OR (SELECT count(*) FROM public.person_child_relationships WHERE id = 'e9000000-0000-4000-8000-0000000000c5'::uuid) <> 1
      OR (SELECT count(*) FROM public.child_enrollment_agreements WHERE id IN ('e9000000-0000-4000-8000-0000000000c3'::uuid, 'e9000000-0000-4000-8000-0000000000d3'::uuid)) <> 2
-     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2 THEN
+     OR (SELECT count(*) FROM public.locations WHERE id IN ('21c9be10-f6e9-4048-ab4c-939ddbe0f0b7'::uuid, 'cfb73302-3bbe-49db-b173-876fda776a6d'::uuid)) <> 2
+     OR (SELECT count(*) FROM public.locations WHERE id = '4f89f324-dbc5-4815-8431-38ffec891398'::uuid AND org_id = 'ad53fee2-2570-460f-9300-f0e106c473b6'::uuid AND location_type = 'site' AND is_active
+           AND label = 'ZZ Alloy QA — Cross-Org Site' AND external_source = 'alloy_qa_structure' AND metadata = '{"qa_structure": true}'::jsonb) <> 1 THEN
     RAISE EXCEPTION 'CASE % FAILED: an unrelated row was touched', '5'; END IF;
   RAISE NOTICE 'CASE 5 PASS another organization: refused by the guard, and out of reach of every delete';
 END $$;
