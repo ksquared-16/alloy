@@ -97,5 +97,11 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
 - **D9**: Kelly decides the permanent QA Secondary site (QA Secondary has 0 locations, `gar_2b45ec486871f9`); then pin its id in the
   ensure → final hashes (ensure `6d03b12e…` changes; reset `87909bad…`, census `e7e8d3d1…` expected unchanged; invariant `f74ff3a8…`
   may change) → isolated rollback proof → Host Capacity registers plan and app (DEC-1/DEC-2) → D9-H1/H2 hosted.
+  **Update 2026-11-06:** site reserved (`qa_secondary_site` `4f89f324…`, Director-approved, objective `…EC2D612945FC`) and pinned
+  (`0ae2facbb`): ensure `bcfa19c3…`, reset `87909bad…`, invariant `b4a3f54e…`, census `e7e8d3d1…`. Host Capacity's Alloy patch
+  `a147d52a` carried byte for byte (`ae335d0b7`, runner pin `5a432824…` verified by Host Capacity). **Deadline:** the site-apply
+  authorization ends 2026-11-13T21:00Z, so the D9 promotion must reach staging before then (otherwise a new toolkit release is needed).
+  **Constraint:** no hosted QA run may be open when Host Capacity files the apply (it refuses if a QA org has any member besides its admin).
+  Pre-apply census `gar_a508b640f9a68e`: QA Secondary 0 locations, id unused.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
