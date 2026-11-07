@@ -103,5 +103,9 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
   authorization ends 2026-11-13T21:00Z, so the D9 promotion must reach staging before then (otherwise a new toolkit release is needed).
   **Constraint:** no hosted QA run may be open when Host Capacity files the apply (it refuses if a QA org has any member besides its admin).
   Pre-apply census `gar_a508b640f9a68e`: QA Secondary 0 locations, id unused.
+  **Update 2026-11-07:** follow-on sprint `OPWORK_AA660DC9554D_SPRINT_CEB0BC1E82E7` (linked fix-forward of E514, card
+  `gar_a12d57d41d5d3f`). Rollback invariant `b4a3f54e` PASSED 5/0 on isolated `certenv-9fdf80b942` (staging `bce11ed7`, 555) at
+  `ebab80497`, `gar_fce137457e05b6` (hold `gar_1f187f3e540b4a`); fingerprints equal before/after
+  (`d9-hosted/d9_rollback_invariant.gar_fce137457e05b6.json`). Candidate carries no `supabase/` change.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
