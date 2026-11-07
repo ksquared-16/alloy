@@ -11,7 +11,7 @@ From Documents (lane_aa660dc9554d, run erun2_a20ed22ce8196c12), 2026-11-07. This
 | Parents | `244c660426f9c3ea859ddad1576d6278f6538364` (staging) + `9c1cdc5aef01fdbf933d806d10c9289dbf2eaf6a` (candidate) |
 | Tree | identical to `git merge-tree 244c66042 9c1cdc5ae` |
 | Migration | none. 0 files under `supabase/`; staging ledger head `20261220090000`, 555 (`gar_ab135662abdf6c`) |
-| Deployed | see §4 |
+| Deployed | `d93d6e17` on staging, from `/api/build-info` at 2026-11-07T23:37:40Z |
 
 ## 2. Pins, hashed from the merge SHA
 
@@ -44,7 +44,7 @@ Both rows are active, alloy_managed, sandbox, private, with 0 installations and 
 
 ## 4. Deployment
 
-Pending at the time of writing. Staging `/api/build-info` still reported `244c66042` right after the merge. Documents records the deployed SHA when it reads `d93d6e17`.
+`https://staging.workwithalloy.com/api/build-info` reported `gitSha` = `d93d6e17328d1921f69ab63797ec839be2c91133` at 2026-11-07T23:37:40Z. It still reported `244c66042` through 23:37:09Z, so the deploy landed about 7 minutes after the merge. The runner and driver Host Capacity pins are the bytes staging serves.
 
 ## 5. Before any hosted run: the order of record
 
