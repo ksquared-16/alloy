@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_0483b5e4435534",
+  "query_hash": "3ede50b4378816ff599ca8edfd7a1e1e074378f66240dd8e07cbefec90bbd0eb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-11-07T21:45:42.690Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0483b5e4435534",
+    "query_hash": "3ede50b4378816ff599ca8edfd7a1e1e074378f66240dd8e07cbefec90bbd0eb",
+    "authorization_id": "grnt_af2feafd3f7245ae",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-11-07T21:45:45.559Z",
+    "question_ids": [
+      "d9_app_d9-documents-read-cert",
+      "d9_app_d9-documents-scope-cert"
+    ],
+    "questions": {
+      "d9_app_d9-documents-read-cert": {
+        "question_id": "d9_app_d9-documents-read-cert",
+        "row_count": null,
+        "rows": [
+          {
+            "slug": "d9-documents-read-cert",
+            "present": true,
+            "id": "e8a1591c-1593-481c-aba1-bd28e2bd25f1",
+            "status": "active",
+            "ownership_mode": "alloy_managed",
+            "environment": "sandbox",
+            "distribution_mode": "private",
+            "publisher": "alloy-platform",
+            "created_at": "2026-11-07T17:02:59.441992+00:00",
+            "installations": 0,
+            "credentials": 0
+          }
+        ]
+      },
+      "d9_app_d9-documents-scope-cert": {
+        "question_id": "d9_app_d9-documents-scope-cert",
+        "row_count": null,
+        "rows": [
+          {
+            "slug": "d9-documents-scope-cert",
+            "present": false,
+            "id": null,
+            "status": null,
+            "ownership_mode": null,
+            "environment": null,
+            "distribution_mode": null,
+            "publisher": null,
+            "created_at": null,
+            "installations": 0,
+            "credentials": 0
+          }
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}
