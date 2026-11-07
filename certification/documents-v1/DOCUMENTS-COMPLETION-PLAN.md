@@ -119,5 +119,9 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
   Documents delivered both: runner `web/scripts/qaDocumentsD9ExternalFixture.mjs` `5af9cd7a…` and driver `certification/documents-v1/d9_hosted_read_cert.py` `6f1b52c8…`, tested locally (`d9-hosted/HOST-CAPACITY-D9-H1-RUNNER-AND-DRIVER-HANDOFF.md`). The plan doc is unchanged.
   DEC-1 card 1 is verified (census `gar_2a22421ec34dd3`: read-cert `e8a1591c…`, 0 installations, 0 credentials). Card 2 `gar_a78b56f6f2dad6` (scope-cert) is filed.
   Next: promote to staging → Host Capacity pins both from staging, plus the Director's plan-bytes approval naming the driver → DEC-2.
+  **Update 2026-11-07 (D9-H1 promotion):** pushed `9c1cdc5ae` (`gar_3f4208eb5634e2`); PR #1636 (`gar_474d9691621e8c`), CI green; no migration (ledger census `gar_ab135662abdf6c`: head `20261220090000`, 555); merge card `gar_fd378c21733152` awaiting the operator.
+  DEC-1 card 2 is **verified** by fresh census `gar_76a42698e09b9b`: scope-cert `be5776d8-3edd-4036-9b31-2095a8ca29da`, active, alloy_managed, sandbox, private, 0 installations, 0 credentials. Read-cert `e8a1591c…` is still 0/0.
+  Hosted run order reconciled with the governed plan (`d9-hosted/D9-H1-HOSTED-RUN-ORDER.md`): pre-write census; cleanup and reset before the close; close → residue census → close-bind for `ZERO_RESIDUE`.
+  Case 11 now has a read-only census, `d9-hosted/d9-link-audit-census.sql` (`837416d1…`), plus a receipt join.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
