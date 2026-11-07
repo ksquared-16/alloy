@@ -1,0 +1,29 @@
+{
+  "pos_delete_txt": 200,
+  "pos_delete_tpl": 200,
+  "pos_delete_held": 200,
+  "lead_delete": 200,
+  "after": {
+    "doc_enr": 404,
+    "doc_imm1": 404,
+    "doc_imm2": 404,
+    "doc_dl": 404,
+    "doc_cust": 404,
+    "doc_amb": 404,
+    "doc_dup": 404,
+    "doc_txt": 404,
+    "doc_tpl": 404,
+    "doc_held": 404,
+    "case_enr": 404,
+    "case_imm1": 404,
+    "case_imm2": 404,
+    "case_dl": 404,
+    "case_cust": 404,
+    "case_amb": 404,
+    "case_dup": 404,
+    "case_txt": 404,
+    "case_tpl": 404,
+    "household_library": 404
+  },
+  "all_gone": true
+}

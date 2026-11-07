@@ -437,6 +437,10 @@ if PHASE == "orphans":
     out = {}
     for v in ("", "-ui"):
         path = os.path.join(HERE, f"d4_hosted_fixture_ids{v}.{RUN}.json")
+        if not os.path.exists(path):
+            # The -ui household exists only when the D4.7 UI ensure ran on this run (qar_446cbc230b86 crashed here).
+            out[v or "wu1"] = {"state_file": "absent", "swept": False}
+            continue
         ids = json.load(open(path))
         orphan = ids.get("adult2")
         if not orphan or ids.get("adult2_removed"):
@@ -462,13 +466,17 @@ if PHASE == "orphans":
             "payload": {"customer_id": hh, "source_entity_type": "opportunity", "source_record_id": tmp, "source_opportunity_id": tmp,
                         "scope": "this_opportunity", "selected_person_id": orphan, "role_key": "billing_contact"},
         })
+        link_status = s
         print(f"link orphan{v}: status={s} ok={(b or {}).get('ok') if isinstance(b, dict) else None} error={json.dumps((b or {}).get('error')) if isinstance(b, dict) else None}")
         s, b = call(f"/api/admin/opportunities/{tmp}/delete-preview", A)
         pv = (b or {}).get("preview") or {} if isinstance(b, dict) else {}
+        preview_status = s
         print(f"preview{v}: blocked={pv.get('blocked')} counts={json.dumps(pv.get('counts'))}")
         s, b = call(f"/api/admin/opportunities/{tmp}/delete", A, "POST", b"{}", "application/json")
         print(f"sweep delete{v}: status={s} ok={(b or {}).get('ok') if isinstance(b, dict) else None}")
-        out[v or "wu1"] = {"link": s, "preview_parents": (pv.get("counts") or {}).get("parents"), "delete": s}
+        # Each status is its own call's: `s` is reassigned by every call, so recording it once reported delete's as link's.
+        out[v or "wu1"] = {"orphan_person": orphan, "link": link_status, "preview": preview_status,
+                           "preview_parents": (pv.get("counts") or {}).get("parents"), "delete": s}
         if s == 200:
             ids["adult2_removed"] = True
             json.dump(ids, open(path, "w"), indent=2)

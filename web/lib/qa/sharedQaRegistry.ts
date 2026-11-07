@@ -90,6 +90,13 @@ export const QA_STRUCTURE = Object.freeze({
       id: "cfb73302-3bbe-49db-b173-876fda776a6d",
       name: "QA South",
     }),
+    /* The one permanent QA Secondary site: the D9 cross-organization enrollment target (Director-approved 2026-11-06). */
+    qa_secondary_site: Object.freeze({
+      key: "qa_secondary_site",
+      org: "qa_secondary",
+      id: "4f89f324-dbc5-4815-8431-38ffec891398",
+      name: "ZZ Alloy QA — Cross-Org Site",
+    }),
   }),
 } as const);
 

@@ -276,15 +276,17 @@ async function main() {
     });
     if (error) fail("department_ensure_failed", error.message);
   }
+  // Each site is created in its own registered org (QA Shared's two, and QA Secondary's one).
   for (const s of Object.values(QA_STRUCTURE.sites)) {
+    const siteOrgId = QA_ORGS[s.org as QaOrgKey].id;
     const { data: row } = await supabase.from("locations").select("id,label,org_id").eq("id", s.id).maybeSingle();
     if (row) {
-      if ((row as { org_id: string }).org_id !== sharedId) fail("structure_identity_mismatch", `site ${s.id} wrong org`);
+      if ((row as { org_id: string }).org_id !== siteOrgId) fail("structure_identity_mismatch", `site ${s.id} wrong org`);
       continue;
     }
     const { error } = await supabase.from("locations").insert({
       id: s.id,
-      org_id: sharedId,
+      org_id: siteOrgId,
       label: s.name,
       location_type: "site",
       is_active: true,

@@ -1,0 +1,82 @@
+{
+  "schema": "documents.final_hosted_regression.v1",
+  "qa_run_id": "qar_446cbc230b86",
+  "plan_key": "authz_q1",
+  "target": "alloy_staging_web",
+  "staging": {
+    "web_git_sha": "bce11ed7c1c0c72c4fe0ce60ddac68ac82b27f7f",
+    "backend_git_commit": "841becb4428e84c81997dc9aefc7dc134edce2e3"
+  },
+  "open": {
+    "request": "gar_2fd962067e898a",
+    "trusted_host_action": "tha_bca438c36955e5",
+    "refile_of": "gar_4b4afce2d37d83",
+    "operator_approved_at": "2026-11-05T03:35:28.142Z",
+    "lease_expires_at": "2026-11-05T09:35:28.509Z"
+  },
+  "registered_fixture_ensures": {
+    "qa_authz_fixture_ensure": "gar_fc20f3fcee4ffd",
+    "qa_authz_subject_fixture_ensure": "gar_19729d43f1b420",
+    "qa_authz_subject_fixture_ensure_secondary": "gar_fa5177f7029b94",
+    "qa_documents_shared_child_ensure": {
+      "request": "gar_4c4109afa36b8d",
+      "status": "failed",
+      "failure": "fixture_content_mismatch: certification/fixtures/qa-documents-shared-child-ensure.sql is 5942fb82d66f, the registration pins e4613956f0a1",
+      "wrote": "nothing (refused before execution)"
+    }
+  },
+  "suites": {
+    "Q1/D1a (q1_hosted_authz_cert)": "90/90",
+    "D1b (d1b_hosted_security_cert certify)": "37/37",
+    "D1b lead deletion (d1b lead_delete)": "7/7",
+    "D1c-1 (d1c1_hosted_screening_cert certify + vendor_refusal in a fresh rate-limit window)": "29/29 (28/29 in certify: the public vendor-application probe got 429 RATE_LIMITED from D1b's own rate probes seconds earlier; vendor_refusal re-run at 04:03Z passed 415 SCREENING_REFUSED)",
+    "D2 (d2_hosted_foundation_cert)": "40/40",
+    "D3 (d3_hosted_studio_cert)": "40/40",
+    "D4/D4.7 (d4_hosted_library_cert)": "41/41",
+    "D5 (d5_hosted_filing_cert)": "59/59",
+    "D6 (d6_hosted_requirements_cert)": "75/75",
+    "D7 (d7_hosted_lifecycle_cert)": "116/116",
+    "D8/FI-10 (d8_fi10_hosted_cert)": "59/59",
+    "R4 (r4_hosted_restricted_personas_cert certify)": "35/35"
+  },
+  "total_passed": "628/628 executed cases",
+  "not_run": {
+    "R2 (packet-session scope, out-of-scope writes e1c511967, scoped_author, link scope) and R5 shared child": "ensure_r2r5 requires qa_documents_shared_child_ensure, which the registry refuses (stale pin e4613956 vs staging 5942fb82). No partial R2/R5 certification exists by design.",
+    "Q2 unsafe release / unsafe restore / archived restore": "unreachable under this approval: archiving is only /api/v1/document-archives (needs D9 developer credentials) and an unsafe or pending verdict needs the scanner writer; both excluded. Hosted Q2 shows only the verdict-free release (D1c-1 release cases).",
+    "d1a_hosted_cert.py": "uses the deployed staging session, not a run persona; outside the card. D1a access is covered by Q1 (90/90).",
+    "browser (Playwright) walks": "not run; API certifications only."
+  },
+  "product_finding": "D4 lead deletion still orphans the add_parent_guardian adult linked only through customer_persons; the driver's orphans sweep removed it (link 200, preview parents 2, delete 200). The orphans phase then raised FileNotFoundError on the absent -ui state file after finishing the main household, so d4_hosted_orphan_sweep_results was not written.",
+  "driver_teardowns": {
+    "r4 reset": "all_gone",
+    "d3": "remaining_tagged_configuration 0",
+    "d2": "ok (2)",
+    "d1c1": "ok (2)",
+    "d1b": "ok (2, household)",
+    "q1": "ok (5)",
+    "d4": "library 404, household library 404",
+    "d5": "all_gone",
+    "d6": "all_gone",
+    "d7": "all_gone",
+    "d8": "all_gone (published forms archived, then removed by forms residue reset)"
+  },
+  "registered_resets": {
+    "qa_documents_forms_residue_reset": "gar_cfeb04b3310726 (form_definitions 3, versions 3)",
+    "qa_documents_shared_child_reset": "gar_39967005209645 (residue 0)",
+    "qa_authz_subject_fixture_reset": "gar_c0ad46e9a9d1b3",
+    "qa_authz_subject_fixture_reset_secondary": "gar_d333cb111559f2",
+    "qa_authz_fixture_reset": "gar_b4aa03bf3333c2"
+  },
+  "close": {
+    "phase1": "gar_2e6853a29c3ae3 (tha_965ceece7c568e): access_clean true, sessions_removed true, every pool identity remaining_roles 0 / remaining_profiles 0",
+    "census": "gar_ebc757f2a2961e (query 7957a51a, census_run_at 2026-11-05T04:08:57.519Z): 20/20 true; retained by design: mutation_events 598, workflow_events 1142, 6 ended health facts",
+    "bind": "gar_fd4a1f452cf5d4 (tha_30c6d0730a778a): verdict ZERO_RESIDUE, 9 QA custom roles grants 0, all identities signed out"
+  },
+  "excluded_and_not_done": [
+    "D9 tests",
+    "QA Secondary site",
+    "developer application",
+    "credentials",
+    "scanner, retrieval or provider traffic"
+  ]
+}

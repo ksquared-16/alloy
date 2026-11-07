@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_1eb91cf432b7e0",
+  "trusted_host_action_id": "tha_2023a0b42f6461",
   "query_hash": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-10-21T21:18:19.399Z",
+    "executed_at": "2026-11-05T02:14:40.643Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_1eb91cf432b7e0",
+    "trusted_host_action_id": "tha_2023a0b42f6461",
     "query_hash": "b71b6a37c6024aae41bf60a51f31b34baa4f2421088bb9341c5657ce4f2e2a46",
-    "authorization_id": "grnt_a13bdd7e86534349",
+    "authorization_id": "grnt_334d37e0f0f94d78",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-10-21T21:18:28.438Z",
+    "census_run_at": "2026-11-05T02:14:43.609Z",
     "question_ids": [
       "b2a00_identity",
       "b2a01_audited_functions",
@@ -29,8 +29,8 @@
         "row_count": null,
         "rows": [
           {
-            "ledger_head": "20261203090000",
-            "ledger_rows": 537,
+            "ledger_head": "20261220090000",
+            "ledger_rows": 555,
             "current_database": "postgres",
             "server_version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit"
           }
@@ -67,11 +67,11 @@
         "rows": [
           {
             "qa_shared_id": "4acc9386-c485-486f-aa1f-05d83499d142",
-            "qa_shared_present": false,
-            "qa_shared_name": null,
+            "qa_shared_present": true,
+            "qa_shared_name": "ZZ Alloy QA",
             "qa_secondary_id": "ad53fee2-2570-460f-9300-f0e106c473b6",
-            "qa_secondary_present": false,
-            "qa_secondary_name": null,
+            "qa_secondary_present": true,
+            "qa_secondary_name": "ZZ Alloy QA — Cross-Org",
             "firefly_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
             "firefly_present": true,
             "firefly_name": "Firefly Early Learning"

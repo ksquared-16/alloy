@@ -1,0 +1,8 @@
+{
+  "lead_delete": 200,
+  "after": {
+    "doc_imm-c1": 404,
+    "household_library": 404
+  },
+  "all_gone": true
+}

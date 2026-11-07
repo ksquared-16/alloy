@@ -1,0 +1,579 @@
+{
+  "run": "qar_b74d93c3d853",
+  "phase": "certify_r2r5",
+  "contract_sha256": "beb34123ebff24c422895b5201670613a479deb9c058b7fefa65f4b873c7d5d2",
+  "summary": {
+    "passed": 65,
+    "total": 65
+  },
+  "sections": {
+    "R2-packet": {
+      "passed": 14,
+      "total": 14
+    },
+    "R2-writes": {
+      "passed": 19,
+      "total": 19
+    },
+    "R2-authoring": {
+      "passed": 18,
+      "total": 18
+    },
+    "R2-links": {
+      "passed": 6,
+      "total": 6
+    },
+    "R5-shared": {
+      "passed": 8,
+      "total": 8
+    }
+  },
+  "results": [
+    {
+      "section": "R2-packet",
+      "case": "control: the unrestricted admin lists all three run sessions",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "list shows the in-scope (L1) session and neither the L2 nor the child-only (KU) session",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "session of the in-scope session is served",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "session of the QA D2 opportunity session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "session of the child-only, out-of-scope child session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-rollup of the in-scope session is served",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-rollup of the QA D2 opportunity session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-rollup of the child-only, out-of-scope child session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-insight of the in-scope session is served",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-insight of the QA D2 opportunity session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review-insight of the child-only, out-of-scope child session \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review of the in-scope session is admitted past the scope gate (409: not completed)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 409,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "review of the QA D2 session \u2192 404 (scope)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-packet",
+      "case": "another organization's admin \u2192 404 on our session",
+      "persona": "cross_org_admin",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "submit on s_opp2 (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "generate-document on s_opp2 (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": "SUBMISSION_NOT_FOUND"
+    },
+    {
+      "section": "R2-writes",
+      "case": "manual-link on s_opp2 (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "confirm-linkage on s_opp2 (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "s_opp2 unchanged after the refused writes (admin read: same subject, no generated document)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "submit on s_ku (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "generate-document on s_ku (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": "SUBMISSION_NOT_FOUND"
+    },
+    {
+      "section": "R2-writes",
+      "case": "manual-link on s_ku (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "confirm-linkage on s_ku (out of scope) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "s_ku unchanged after the refused writes (admin read: same subject, no generated document)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "confirm-linkage on in-scope s_opp1 is admitted past the scope gate (200 / 409)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 409,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "manual-link of in-scope s_opp1 to its own opportunity is admitted past the scope gate (200 / 409)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 409,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "packet link minted from the in-scope L1 opportunity \u2192 201",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "packet link minted from the out-of-scope child KU \u2192 404 (scope gate before mint)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "submit of its own in-scope draft (L1) \u2192 200",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "manual-link of an in-scope submission ONTO the QA D2 opportunity \u2192 404 (a write's target is scoped too)",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "packet link metadata naming L2 as prefill source (no launch) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "packet link launched from L1, enrollment selection of the out-of-scope child KU \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-writes",
+      "case": "packet link launched from L1, metadata children [K1, KU] (not only the first is read) \u2192 404, names nothing",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "roster of the QA D2 lead \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "roster of the out-of-scope child KU \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "compose anchored on the QA D2 lead \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "compose on L1 naming KU \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "compose on L1 naming [K1, KU] \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "compose on L1 naming an L2 household recipient \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "link mint whose metadata names L2 as existing-record prefill source \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "link mint from L1 whose metadata selects [K1, KU] \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "PATCH of the link naming L2 \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "PATCH re-pointing the subject-less link at L2 \u2192 404",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "refusals wrote no link (admin list unchanged)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "roster of L1 lists K1",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "compose on L1 with K1 and an L1 recipient \u2192 201",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "link mint launched from L1 \u2192 201",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "subject-less intake link mint \u2192 201",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 201,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "PATCH of the subject-less link \u2192 200",
+      "persona": "scoped_author",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "capability control: scoped_forms (no forms.author) on compose \u2192 403 \u2014 not a scope proof",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R2-authoring",
+      "case": "capability control: scoped_forms on the roster \u2192 403 \u2014 not a scope proof",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 403,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "form link list keeps L1's and the subject-less link, drops L2's",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "control: the admin's form link list has all three",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "packet link list keeps L1's, drops L2's and KU's",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "preview-payload prefilled from in-scope L1 \u2192 200",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "preview-payload prefilled from QA D2 L2 \u2192 404",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R2-links",
+      "case": "preview-payload prefilled from out-of-scope child KU \u2192 404",
+      "persona": "scoped_forms",
+      "pass": true,
+      "status": 404,
+      "code": null
+    },
+    {
+      "section": "R5-shared",
+      "case": "before: the four R5 submissions exist",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null,
+      "before": {
+        "s_r5_shared": 200,
+        "s_r5_only": 200,
+        "s_r5_oppa": 200,
+        "s_r5_oppb": 200
+      }
+    },
+    {
+      "section": "R5-shared",
+      "case": "delete-preview of lead A: not blocked; exactly its own and ONLY_A's submissions; one child; household retained",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "will_delete": {
+        "form_submissions": 2,
+        "customer_members": 1,
+        "customers": 0
+      },
+      "will_retain": {
+        "customer_members": 1,
+        "customers": 1
+      }
+    },
+    {
+      "section": "R5-shared",
+      "case": "lead A deleted through the audited product route",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R5-shared",
+      "case": "lead A's own submission and ONLY_A's child-only submission are gone",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null,
+      "after": {
+        "s_r5_shared": 200,
+        "s_r5_only": 404,
+        "s_r5_oppa": 404,
+        "s_r5_oppb": 200
+      }
+    },
+    {
+      "section": "R5-shared",
+      "case": "SHARED's child-only submission survives (SHARED is still on lead B)",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R5-shared",
+      "case": "lead B's submission is untouched",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null
+    },
+    {
+      "section": "R5-shared",
+      "case": "ONLY_A is gone; SHARED is kept",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": null,
+      "code": null
+    },
+    {
+      "section": "R5-shared",
+      "case": "lead B and household H remain; B's preview now takes SHARED and its submission",
+      "persona": "fixture_admin",
+      "pass": true,
+      "status": 200,
+      "code": null,
+      "will_delete": {
+        "form_submissions": 2,
+        "customer_members": 1,
+        "customers": 1
+      }
+    }
+  ]
+}

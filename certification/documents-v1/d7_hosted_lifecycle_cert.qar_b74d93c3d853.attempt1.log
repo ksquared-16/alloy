@@ -1,0 +1,60 @@
+organization date 2026-11-06
+PASS [setup][fixture_admin] no pre-existing live child requirement for the run's types :: status=200 code=None {"clash": []}
+FAIL [D7.2-review][fixture_admin] immunization requirement published :: status=400 code=None {"problems": null}
+PASS [D7.2-review][fixture_admin] immunization record uploaded for Kid One :: status=200 code=None
+FAIL [D7.2-review][fixture_admin] review required → pending review (not satisfied) :: status=200 code=None {"state": null}
+PASS [D7.2-review][fixture_admin] a rejection without a reason is refused :: status=400 code=REASON_REQUIRED
+PASS [D7.2-review][doc_reader] reviewing needs documents.write and the document's clearance :: status=403 code=None
+PASS [D7.2-review][ocr] reviewing needs documents.write and the document's clearance :: status=403 code=None
+PASS [D7.2-review][scoped_ops] reviewing needs documents.write and the document's clearance :: status=403 code=None
+PASS [D7.2-review][no_docs] reviewing needs documents.write and the document's clearance :: status=403 code=None
+PASS [D7.2-review][processing_only] reviewing needs documents.write and the document's clearance :: status=403 code=None
+PASS [D7.2-review][cross_org_admin] another organization: review not found :: status=404 code=NOT_FOUND
+PASS [D7.2-review][fixture_admin] first decision: rejected with a reason :: status=200 code=None
+FAIL [D7.2-review][fixture_admin] rejected evidence does not satisfy :: status=200 code=None {"state": null, "blocked_reason": null}
+PASS [D7.2-review][fixture_admin] changing a decided review without a reason is refused :: status=400 code=REASON_REQUIRED
+PASS [D7.2-review][fixture_admin] re-review (rejected → accepted) with reason by Documents administration :: status=200 code=None
+FAIL [D7.2-review][fixture_admin] accepted evidence satisfies :: status=200 code=None
+PASS [D7.2-review][fixture_admin] reopening without a reason is refused :: status=400 code=REASON_REQUIRED
+PASS [D7.2-review][fixture_admin] reopen (accepted → pending) with reason :: status=200 code=None
+FAIL [D7.2-review][fixture_admin] reopened evidence is pending review again :: status=200 code=None
+PASS [D7.2-review][fixture_admin] accepted again after reopen :: status=200 code=None
+PASS [D7.2-review][fixture_admin] append-only history keeps every decision with what it replaced :: status=200 code=None {"review_entries": ["Review accepted", "Review reopened", "Review accepted (was rejected)", "Review rejected"]}
+PASS [D7.2-review][cross_org_admin] another organization: history not found :: status=404 code=NOT_FOUND
+PASS [D7.2-review][doc_reader] reader without health.view: a medical document's history is not disclosed :: status=403 code=SENSITIVE_DOCUMENT
+PASS [D7.1-validity][fixture_admin] periodic reconfirmation (12 months): derived from the review date, valid :: status=200 code=None {"status_": "valid", "expires_on": "2027-11-05", "expected": "2027-11-05"}
+FAIL [D7.1-validity][fixture_admin] readiness reports valid-through from the same evaluator :: status=200 code=None {"valid_until": null}
+PASS [D7.1-validity][doc_reader] recording dates needs documents.write and clearance :: status=403 code=None
+PASS [D7.1-validity][ocr] recording dates needs documents.write and clearance :: status=403 code=None
+PASS [D7.1-validity][cross_org_admin] another organization: validity not found :: status=404 code=NOT_FOUND
+PASS [D7.1-validity][fixture_admin] an inverted range is refused :: status=400 code=VALIDITY_RANGE_INVERTED
+PASS [D7.1-validity][fixture_admin] an impossible date is refused :: status=400 code=BAD_DATE
+PASS [D7.1-validity][fixture_admin] a recorded expiration inside the warning window: expiring soon :: status=200 code=None {"validity": {"status": "expiring_soon", "expires_on": "2026-11-11", "expires_source": "recorded", "effective_on": null, "warn_from": "2026-10-12", "days_remaining": 5}}
+FAIL [D7.1-validity][fixture_admin] readiness: still satisfied, expiring soon, valid through the recorded day :: status=200 code=None {"state": null, "valid_until": null}
+FAIL [D7.1-validity][fixture_admin] work: an expiring-soon renewal row due on the last valid day, never overdue, never blocking :: status=200 code=None {"rows": []}
+FAIL [D7.1-validity][fixture_admin] attention de-duplication: a document a requirement row names is not repeated :: status=200 code=None
+PASS [D7.1-validity][fixture_admin] recording dates leaves the review untouched :: status=200 code=None {"review_statuses": ["accepted"]}
+PASS [D7.1-validity][fixture_admin] the date change is in the append-only history :: status=200 code=None {"actions": ["Validity recorded: expires 2026-11-11", "Review accepted", "Review reopened", "Review accepted (was rejected)", "Review rejected", "Uploaded", "Associated (primary owner: child)"]}
+PASS [D7.1-validity][fixture_admin] a recorded past expiration: expired :: status=200 code=None
+FAIL [D7.1-validity][fixture_admin] readiness: expired evidence no longer satisfies; blocking :: status=200 code=None {"state": null}
+FAIL [D7.1-validity][fixture_admin] work: an expired row naming the document :: status=200 code=None {"rows": []}
+PASS [D7.1-validity][fixture_admin] a future effective date: not yet effective :: status=200 code=None
+FAIL [D7.1-validity][fixture_admin] readiness: a not-yet-effective document does not satisfy :: status=200 code=None {"state": null}
+PASS [D7.1-validity][fixture_admin] dates restored to expiring soon (renewal setup) :: status=200 code=None
+PASS [D7.3-renewal][fixture_admin] a renewal needs a reason (≥10 characters) :: status=400 code=REASON_REQUIRED
+PASS [D7.3-renewal][fixture_admin] a replacement screening would quarantine is refused before storage :: status=415 code=SCREENING_REFUSED {"versions": 1}
+PASS [D7.3-renewal][doc_reader] renewal needs documents.write and clearance :: status=403 code=None
+PASS [D7.3-renewal][cross_org_admin] another organization: renewal not found :: status=404 code=NOT_FOUND
+PASS [D7.3-renewal][fixture_admin] renewal stores a replacement version of the same document :: status=200 code=None {"version_number": 2, "validity_recorded": true}
+FAIL [D7.3-renewal][fixture_admin] the earlier accepted, in-force version keeps satisfying while the renewal awaits review :: status=200 code=None {"state": null, "renewal_pending": null, "valid_until": null}
+PASS [D7.3-renewal][fixture_admin] only the current version is reviewed :: status=409 code=NOT_CURRENT_VERSION
+PASS [D7.3-renewal][fixture_admin] the renewal's first decision: accepted :: status=200 code=None
+FAIL [D7.3-renewal][fixture_admin] accepted renewal moves valid-through to the new date; no renewal pending :: status=200 code=None {"valid_until": null}
+PASS [D7.3-renewal][fixture_admin] earlier versions are kept :: status=200 code=None {"versions": 2}
+PASS [D7.3-renewal][fixture_admin] work: the renewal row is gone once the renewal is accepted :: status=200 code=None
+PASS [D7.3-renewal][fixture_admin] a renewal can be rejected with a reason :: status=200 code=None
+FAIL [D7.3-renewal][fixture_admin] a rejected renewal does not unseat the accepted, in-force version :: status=200 code=None {"state": null}
+Traceback (most recent call last):
+  File "/Users/vacilando/Code/alloy-worktrees/documents/certification/documents-v1/d7_hosted_lifecycle_cert.py", line 479, in <module>
+    rimm, dimm = reqs["imm"], docs["imm-c1"]
+KeyError: 'imm'

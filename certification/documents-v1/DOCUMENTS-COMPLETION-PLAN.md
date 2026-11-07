@@ -1,7 +1,8 @@
 # Documents V1 — itemized completion plan (D1–D10)
 
 Lane `lane_aa660dc9554d`. Maintained by Documents. Started 2026-11-04 against staging `98fdf5c9b217` (PR #1633; ledger
-head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). Sprint `OPWORK_AA660DC9554D_SPRINT_E514C44C24C0`
+head `20261219090000`, 554 migrations, census `gar_c36ad46bf0a7bf`). **Updated 2026-11-06: R2/R5 hosted proven on `qar_b74d93c3d853`.** **Updated 2026-11-05: staging `bce11ed7c1c0` (PR #1634,
+D10 activation gates), ledger head `20261220090000`, 555 migrations (census `gar_4f6b6842b0990b`).** Sprint `OPWORK_AA660DC9554D_SPRINT_E514C44C24C0`
 (successor to `…73A9D7625863`, which is VERIFIED and awaiting the Director's Accept/Close).
 
 **Engineering proof is not acceptance.** "Proven" below means a receipt (QA run `qar_*`, governed request `gar_*`, or an
@@ -20,7 +21,7 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 | D4 / D4.7 library | yes (#1597, #1599) | 41/41; D4.7 `qar_da541c487abf`, ZERO_RESIDUE | — | Documents | Final regression |
 | D5 filing | yes | 59/59 `qar_c6e20cc02979`; also `qar_4246ac22ece0` | — | Documents | Final regression |
 | D6 requirements | yes | 75/75 `qar_4246ac22ece0`; census `gar_53d6744eb1cf1a` | BP stage readiness not hosted (BP lane); context doc calls residue "open debt" though closed | Documents; BP lane | Correct the context doc; final regression |
-| D7 / D8 review, forms evidence | yes (#1611, #1612) | R1 158/158, D8 59/59, browser 19/19 `qar_8fb0e1ffabcf` (`7d7c8037`); D7 invariant `gar_3c51d48448eba3` | R2 / R5 hosted (below) | Documents | See §2 |
+| D7 / D8 review, forms evidence | yes (#1611, #1612) | R1 158/158, D8 59/59, browser 19/19 `qar_8fb0e1ffabcf` (`7d7c8037`); D7 invariant `gar_3c51d48448eba3`; **R2/R5 hosted 65/65, D7 116/116, D8 59/59, D7/D8 browser 17/17 `qar_b74d93c3d853` (`bce11ed7`), ZERO_RESIDUE** | D6 browser walk precondition unscripted (2/6) | Documents | Script the D6 walk setup |
 | D9.1 read API | yes (#1627) | local only | **D9-H1 never run**: no developer application registered, no D9 QA plan | Host Capacity (H2 plan `documents_d9_read_v1`); Kelly (DEC-1, DEC-2) | Register plan and app; hosted QA run |
 | D9.2 writes + 24 h handoff | yes (#1630) | certenv `gar_46d2274f98232f`; atomic-open `gar_6bf71cba9a81ce` | **D9-H2** hosted W-* cases | Host Capacity, then Documents | After D9-H1 |
 | D9.3 archive / restore | yes; `20261217090000` applied | `gar_b55de8a1627166` | Hosted W-RV / W-AR; Q2 restore guard (this sprint) | Documents | Q2 below; hosted with D9-H2 |
@@ -37,8 +38,8 @@ re-checked by one final hosted regression on the final staging SHA — not rebui
 | Obligation | State in receipts | Action |
 |---|---|---|
 | `…E460BCD09185` R4 hosted | **Done**: R4 35/35 `qar_bc811ffc7da1`; D7 invariant `gar_3c51d48448eba3`; residue reset `gar_14477ac6a0bcd8`; census 20/20 `gar_bcf58ca61c3f22` bound by `gar_6c56f9fdac73a5`. Conditions never marked | Record the evidence and close (Director); regression covers later Forms changes |
-| `…A1EE0FDEF21C` Revision 4 R2/R4/R5 hosted | **Not proven**: `qar_b1cc8a9bbe81` ran no driver phase (shared-child ensure `gar_bbbdf3ca3762f2` failed on dropped `customers.status`); closed clean (census `gar_6220f001645b72`) | Re-run R2 (packet-session scope, out-of-scope writes fix `e1c511967`, `scoped_author`, link scope) and R5 shared child on hosted |
-| `…12706A6E51FA` fixture repair | c1–c3 satisfied; repair shipped #1625 (`530ba383`). R5 invariant refused twice (sha unreachable pre-merge); now runnable. Registry re-pin of `5942fb82` unverified | Run the R5 invariant and verify the re-pin; close |
+| `…A1EE0FDEF21C` Revision 4 R2/R4/R5 hosted | **Proven 2026-11-06**: R2/R5 65/65 on `qar_b74d93c3d853` (staging `bce11ed7`; open `gar_0a6cebb096f26c`; receipt `hosted_r2r5_regression.qar_b74d93c3d853.json`); R4 35/35 `qar_446cbc230b86`. Closed ZERO_RESIDUE (census `gar_80c1d40f2f1658` 20/20, R5 census `gar_749deee090760c` 6/6, bind `gar_24c310d8901470`) | Record the evidence and close (Director) |
+| `…12706A6E51FA` fixture repair | c1–c3 satisfied; repair shipped #1625 (`530ba383`). **R5 invariant PASSED 5/5 `gar_344131761fa15c`** (isolated certenv at staging `98fdf5c9`; receipt `r5-shared-child-rollback-receipt.gar_344131761fa15c.json`). Re-pin **verified**: toolkit `9b96a0e02283` pins `5942fb82` at `bce11ed7`; first hosted ensure `gar_fc15d0c02f072d` seeded | Close (Director) |
 | `…6A4F60B1555E` preparation | Deliverables exist; superseded by `…AFD07879C606` | Close as superseded |
 | D9-H1 / D9-H2 | Never run (not stale; undone). The race fixture H1 is done (`ifx_3672b4b0fb183df0`); the D9 QA plan / credential path (Host Capacity H2) is open and blocks both | Host Capacity registers the plan; Kelly DEC-1/DEC-2 |
 
@@ -49,7 +50,7 @@ Migration `supabase/migrations/20261220090000_documents_d10_activation_gates.sql
 **Proven:** `gar_550ba1d16c11d8` PASSED 11/0, rolled back, on `certenv-e88b6e0070` (staging `98fdf5c9`, 554), pinned to
 `ac423e463` (receipt `d10-gates-rollback-receipt.gar_550ba1d16c11d8.json`); the first card `gar_9825da434a1cf6` was refused
 by the static analyzer (ALTER FUNCTION, DO UPDATE, TRUNCATE privilege list) and fixed without behaviour change. Moved
-byte-identically into `supabase/migrations` at `0aecec1ce`. **Merging applies it to staging.**
+byte-identically into `supabase/migrations` at `0aecec1ce`. **Merged in PR #1634 (`bce11ed7c1c0`, `gar_dd4ed126659626`) and applied to staging** (census `gar_4f6b6842b0990b`: head `20261220090000`, 555).
 
 | Gate | Change | Kind | State |
 |---|---|---|---|
@@ -86,5 +87,25 @@ granted. No role, credential or migration apply is created by this work without 
 ## 6. Final hosted residue check
 
 Every closed Documents hosted run is bound ZERO_RESIDUE (`qar_8fb0e1ffabcf`, `qar_bc811ffc7da1`, `qar_b1cc8a9bbe81`, and
-earlier). Owed: one fresh census at the close of the final hosted regression (and D9-H1/H2 when run), including the
-D9 `d9w_zr_*` checks once that plan is registered.
+earlier). Final regression `qar_446cbc230b86` (bind `gar_fd4a1f452cf5d4`) and R2/R5 run `qar_b74d93c3d853` (bind `gar_24c310d8901470`,
+R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, including the `d9w_zr_*` checks, once that plan is registered.
+
+## 7. Remaining for the staging review
+
+- **Q2 unsafe release / restore, archived restore**: unreachable on hosted until the scanner writer (O2 role + persistent-access
+  approvals) or D9 credentials exist; or a registered verdict fixture (Host Capacity + approval). Proven by SQL cases 2–5 and route tests only.
+- **D9**: Kelly decides the permanent QA Secondary site (QA Secondary has 0 locations, `gar_2b45ec486871f9`); then pin its id in the
+  ensure → final hashes (ensure `6d03b12e…` changes; reset `87909bad…`, census `e7e8d3d1…` expected unchanged; invariant `f74ff3a8…`
+  may change) → isolated rollback proof → Host Capacity registers plan and app (DEC-1/DEC-2) → D9-H1/H2 hosted.
+  **Update 2026-11-06:** site reserved (`qa_secondary_site` `4f89f324…`, Director-approved, objective `…EC2D612945FC`) and pinned
+  (`0ae2facbb`): ensure `bcfa19c3…`, reset `87909bad…`, invariant `b4a3f54e…`, census `e7e8d3d1…`. Host Capacity's Alloy patch
+  `a147d52a` carried byte for byte (`ae335d0b7`, runner pin `5a432824…` verified by Host Capacity). **Deadline:** the site-apply
+  authorization ends 2026-11-13T21:00Z, so the D9 promotion must reach staging before then (otherwise a new toolkit release is needed).
+  **Constraint:** no hosted QA run may be open when Host Capacity files the apply (it refuses if a QA org has any member besides its admin).
+  Pre-apply census `gar_a508b640f9a68e`: QA Secondary 0 locations, id unused.
+  **Update 2026-11-07:** follow-on sprint `OPWORK_AA660DC9554D_SPRINT_CEB0BC1E82E7` (linked fix-forward of E514, card
+  `gar_a12d57d41d5d3f`). Rollback invariant `b4a3f54e` PASSED 5/0 on isolated `certenv-9fdf80b942` (staging `bce11ed7`, 555) at
+  `ebab80497`, `gar_fce137457e05b6` (hold `gar_1f187f3e540b4a`); fingerprints equal before/after
+  (`d9-hosted/d9_rollback_invariant.gar_fce137457e05b6.json`). Candidate carries no `supabase/` change.
+- **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
+- **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).

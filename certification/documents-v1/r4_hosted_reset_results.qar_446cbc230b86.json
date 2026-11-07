@@ -1,0 +1,22 @@
+{
+  "fact_end": 200,
+  "delete_L1": 200,
+  "delete_L2": 200,
+  "form_delete": 409,
+  "form_archive": 200,
+  "after": {
+    "sub_s_opp1": 404,
+    "sub_s_opp2": 404,
+    "sub_s_ku": 404,
+    "sub_s_sf_opp1": 404,
+    "doc_plain": 404,
+    "doc_medical": 404,
+    "opp_L1": 404,
+    "opp_L2": 404
+  },
+  "all_gone": true,
+  "retained_by_design": {
+    "form_definition": "published form archived (Forms never deletes a published definition)",
+    "health_fact": "ended, retained (health facts are never deleted)"
+  }
+}

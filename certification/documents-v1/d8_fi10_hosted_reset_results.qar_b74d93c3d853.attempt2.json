@@ -1,0 +1,41 @@
+{
+  "purge_d8_enr": {
+    "status": 200,
+    "purged": true
+  },
+  "delete_preview": {
+    "opportunities": 1,
+    "enrollment_records": 0,
+    "parents": 1,
+    "children": 3,
+    "customer_members": 3,
+    "customers": 1,
+    "placement_candidates": 0
+  },
+  "lead_delete": 200,
+  "form_delete_f1": 400,
+  "form_archive_f1": 400,
+  "form_delete_f2": 400,
+  "form_archive_f2": 400,
+  "after": {
+    "requirement_d8_enr": 404,
+    "household_library": 404
+  },
+  "all_deletable_gone": true,
+  "recorded_residue": [
+    {
+      "table": "form_definitions (+ its published version)",
+      "id": null,
+      "key": "qa_b74d93c3d853_d8f1",
+      "state": "active",
+      "why": "a form with a published version can only be archived through the product"
+    },
+    {
+      "table": "form_definitions (+ its published version)",
+      "id": null,
+      "key": "qa_b74d93c3d853_d8f2",
+      "state": "active",
+      "why": "a form with a published version can only be archived through the product"
+    }
+  ]
+}

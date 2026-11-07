@@ -1,0 +1,13 @@
+{
+  "wu1": {
+    "orphan_person": "25e418a9-ef8a-4e85-b482-42d4d885f019",
+    "link": 200,
+    "preview": 200,
+    "preview_parents": 2,
+    "delete": 200
+  },
+  "-ui": {
+    "state_file": "absent",
+    "swept": false
+  }
+}
