@@ -110,5 +110,10 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
   **Merged:** checkpoint `ick_e669365eb584`, release `spr_94bd084674f9`, PR #1635 → staging `244c660426f9` (`gar_e74ba4788e4c11`),
   no migration (ledger 555, `gar_f224849460b974`), deployed 15:24Z; `ensureSharedQaTenant.ts` = pin `5a432824…`. Handed to Host Capacity
   (`d9-hosted/HOST-CAPACITY-D9-MERGE-HANDOFF.md`). Next: Host Capacity applies the site by 2026-11-13T21:00Z; then D9-H1/H2 hosted.
+  **Update 2026-11-07 (site applied):** Host Capacity applied the site (`gar_af1506759626e6`). Census `gar_b20d712864397c` confirms QA Secondary has 1 active site, `4f89f324…` (query `397418fd…`, results `fe688ecd…`; handoff sha256 `4a9b8fe4…047ae`, verified).
+  The fixture SQL is on staging with its final bytes (ensure `bcfa19c3…`, reset `87909bad…`, census `e7e8d3d1…`).
+  **Blocker:** H2. The installed toolkit `add6fbe3b094` has no D9 QA plan, no `qa_d9_*` reconciliation and no installation or credential path. Requested in `d9-hosted/HOST-CAPACITY-D9-H2-PLAN-REQUEST.md`.
+  DEC-1 step 1: card `gar_29824c819882e0` (`d9-documents-read-cert`) is filed. `d9-documents-scope-cert` follows once that card leaves the pending state (the gateway collapses two pending registrations from one lane).
+  Then: Host Capacity plan, release and install, plus plan-bytes approval → DEC-2 `qa_run_open` (hosted authority declared) → D9-H1 → close → census.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
