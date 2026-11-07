@@ -115,5 +115,9 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
   **Blocker:** H2. The installed toolkit `add6fbe3b094` has no D9 QA plan, no `qa_d9_*` reconciliation and no installation or credential path. Requested in `d9-hosted/HOST-CAPACITY-D9-H2-PLAN-REQUEST.md`.
   DEC-1 step 1: card `gar_29824c819882e0` (`d9-documents-read-cert`) is filed. `d9-documents-scope-cert` follows once that card leaves the pending state (the gateway collapses two pending registrations from one lane).
   Then: Host Capacity plan, release and install, plus plan-bytes approval → DEC-2 `qa_run_open` (hosted authority declared) → D9-H1 → close → census.
+  **Update 2026-11-07 (plan registered, pins delivered):** Host Capacity `bf44bdc4` registered `documents_d9_read_v1` (contract `1e9daebb…`, not opened). Its runner and driver were null (awaiting_alloy_pins).
+  Documents delivered both: runner `web/scripts/qaDocumentsD9ExternalFixture.mjs` `5af9cd7a…` and driver `certification/documents-v1/d9_hosted_read_cert.py` `6f1b52c8…`, tested locally (`d9-hosted/HOST-CAPACITY-D9-H1-RUNNER-AND-DRIVER-HANDOFF.md`). The plan doc is unchanged.
+  DEC-1 card 1 is verified (census `gar_2a22421ec34dd3`: read-cert `e8a1591c…`, 0 installations, 0 credentials). Card 2 `gar_a78b56f6f2dad6` (scope-cert) is filed.
+  Next: promote to staging → Host Capacity pins both from staging, plus the Director's plan-bytes approval naming the driver → DEC-2.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
