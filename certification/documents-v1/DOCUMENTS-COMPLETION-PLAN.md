@@ -107,5 +107,8 @@ R5 fixture census attached) are both ZERO_RESIDUE. Owed: D9-H1/H2 censuses, incl
   `gar_a12d57d41d5d3f`). Rollback invariant `b4a3f54e` PASSED 5/0 on isolated `certenv-9fdf80b942` (staging `bce11ed7`, 555) at
   `ebab80497`, `gar_fce137457e05b6` (hold `gar_1f187f3e540b4a`); fingerprints equal before/after
   (`d9-hosted/d9_rollback_invariant.gar_fce137457e05b6.json`). Candidate carries no `supabase/` change.
+  **Merged:** checkpoint `ick_e669365eb584`, release `spr_94bd084674f9`, PR #1635 → staging `244c660426f9` (`gar_e74ba4788e4c11`),
+  no migration (ledger 555, `gar_f224849460b974`), deployed 15:24Z; `ensureSharedQaTenant.ts` = pin `5a432824…`. Handed to Host Capacity
+  (`d9-hosted/HOST-CAPACITY-D9-MERGE-HANDOFF.md`). Next: Host Capacity applies the site by 2026-11-13T21:00Z; then D9-H1/H2 hosted.
 - **D4 orphaned guardian** (CRM lead deletion, not Documents): reproduced on `bce11ed7` (`d4_hosted_orphan_sweep_results.qar_b74d93c3d853.json`).
 - **Browser walks**: D7/D8 17/17 on `bce11ed7`; D6 walk needs its setup scripted; Focus Panel child Documents card is a Human-QA decision (D7.4).
