@@ -32,7 +32,7 @@ Where they disagree, the governed plan decides, because the gateway enforces it.
 | 5 | Driver `cleanup`: revoke and disconnect anything still active, delete tagged documents, verify 404. Verdict `CLEAN` | Documents | Sessions still present |
 | 6 | **Case 11 census**: `database.read_census` of `d9-link-audit-census.sql` (§3). Read-only; audit rows are retained by design, so it reads the same before or after the document delete. It runs after `certify`, before the close | Documents | Contract §4 case 11 |
 | 7 | `qa_d9_external_fixture_reset`: the `d9000000-` namespace is empty in its own transaction | Documents (governed reconciliation) | Needs the run still OPEN |
-| 8 | `environment.qa_run_close` #1: closes access and removes sessions; sets `closed_at`. Expected verdict `ACCESS_CLEAN_FIXTURES_UNVERIFIED`. This is not a failure | Documents (operator approval) | — |
+| 8 | `environment.qa_run_close` #1: closes access and removes sessions; sets `closed_at`. Expected verdict `ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED` (constant `ACCESS_CLEAN_FIXTURES_UNVERIFIED`). This is not a failure | Documents (operator approval) | — |
 | 9 | **Residue census**: `database.read_census` of `d9-residue-census.sql` (`e7e8d3d1…`) from an execution run other than step 2's. All 15 checks true | Documents | Runs after `closed_at` |
 | 10 | `environment.qa_run_close` #2 with `residueCensusRequestId` = step 9 → **`ZERO_RESIDUE`** | Documents (operator approval) | Binds the census |
 
@@ -71,7 +71,26 @@ The receipt is `d9r_link_audit_census.<qar>.json`, which records the census requ
 | Where | Says | Resolution |
 |---|---|---|
 | Handoff §4 steps 4–5; contract §6.4 | census, then `qa_run_close` "with the census attached" | Superseded by §2 steps 8–10 (close, census, close-bind). The gateway rejects a census read before `closed_at` |
-| Driver `cleanup` output field `next` | `[reset, residue census, qa_run_close]` | Advisory text in a receipt. It decides nothing. **Left unchanged** so the pinned driver hash `6f1b52c8…` holds; this document is the order of record |
+| Driver `cleanup` output field `next` (line 439, written to `d9r_hosted_reset_results.<qar>.json`) and the module docstring (lines 18–19) | `[reset, residue census, qa_run_close]`: one close, census before it, checks named as `d9_zr_*` only | Advisory text. The driver acts on neither, and neither decides anything. **Left unchanged** so the pinned driver hash `6f1b52c8…` holds; this document is the order of record. When step 5 prints `next`, continue with step 6, not with `next`. The census must pass all 15 registered checks (`d9_zr_*`, `d9w_zr_*`, `d9_xo_*`), not only `d9_zr_*` |
 | Contract §6.3 | authz_q1 20-check census plus D9 checks | The registered residue census is `d9-residue-census.sql` (15 checks). The contract is not edited: its hash is pinned, and the plan approval binds it |
 | Handoff §7.3 | ensure → preflight → … (no pre-write census) | Step 2 restores contract §5 "before writes" |
 | Handoff §3 / §5 | case 11 "needs a read-only census after the run" | Step 6 and §3, with a concrete query and join |
+
+## 5. Verified against the installed toolkit
+
+Host Capacity checked §1 against toolkit main `d73e0b59` (`D9-H1-CLOSE-ORDER-VERIFICATION-FOR-DOCUMENTS.md`, lane
+`lane_25ad3858de4d`; certified in Tier 1 suite `documents-d9-read-plan-registration` D9R9). Documents re-read every row
+on 2026-11-08 against the installed toolkit `b29c7c849b5a`. All of them hold:
+
+| Rule | Installed source |
+|---|---|
+| Census after `closed_at` | `verifyResidueCensus`: `executedAt > closedAt`. On close #1, `closed_at` is unset while the census is checked, so it cannot bind. A census that fails to bind does not fail the close |
+| Close #2 re-states the verdict | `executeQaRunCloseSync` `already_closed` branch: `closeVerdict` with the census → `ZERO_RESIDUE`. A close #2 naming a census needs operator approval: only one that names none auto-executes |
+| Close #2 needs no lease | `evaluateClose`: the lane check applies only to a `live` run, and a closed run is `already_closed` |
+| Reset needs the OPEN run | `reconciliation-preflight.mjs`: exactly one OPEN, `live` hosted run of the plan, else `qa_run_not_open` |
+| Close removes sessions | `rmSync(qaRunSessionDir(run))` |
+| Residue census pin | `QA_PLANS.documents_d9_read_v1.residue_census`: `e7e8d3d1…`, 15 checks, `alloy_deployed_primary` |
+| Driver pin and approval | `driver.sha256` and `documents_d9_read_plan_approved.driver_sha256` are both `6f1b52c8…`, equal to the bytes here. The approval's `run_order_of_record` names this file at `841035a3f`. This revision changes only labels (the step 8 verdict string and the §4 driver row), not the order |
+
+Not yet satisfied: `documents_d9_read_v1` is absent from `opened.eligible_plans`, which takes a separate reviewed
+change. Kelly's DEC-2 `environment.qa_run_open` is also still needed.
