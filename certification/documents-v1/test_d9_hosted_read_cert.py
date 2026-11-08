@@ -30,6 +30,11 @@ class Product:
         self.apps = {"d9-documents-read-cert": str(uuid.uuid4()), "d9-documents-scope-cert": str(uuid.uuid4()), "alloy-cert-sandbox": str(uuid.uuid4())}
         self.inst, self.creds, self.tokens, self.docs = {}, {}, {}, {}
         self.secrets = set()
+        # workflow_events document_link_issued, per document: what the staff history reads (documentHistory.ts).
+        self.link_events, self.late_audits = {}, []
+
+    def audit_link(self, did):
+        self.link_events.setdefault(did, []).append(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
     # the D9.1 read authority
     def visible(self, inst, doc):
@@ -139,6 +144,15 @@ class Handler(BaseHTTPRequestHandler):
             P.docs[did] = {"org": org, "entity_id": f[b"entity_id"].decode(), "doc_type": f[b"doc_type"].decode(),
                            "sensitivity": "standard", "quarantined": js, "version": 1}
             return self.reply(200, {"document": {"id": did}, **({"screening": {"verdict": "quarantine"}} if js else {})})
+        m = re.fullmatch(r"/api/admin/documents/([^/]+)/history", path)
+        if m and method == "GET":
+            # GET /api/admin/documents/{id}/history at d93d6e17: {ok, document_id, entries}; a link issuance is kind "access".
+            doc = P.docs.get(m.group(1))
+            if not doc or doc["org"] != org:
+                return self.reply(404, {"ok": False, "error": "Not found"})
+            entries = [{"at": doc.get("created_at", ""), "kind": "committed", "action": "Uploaded", "detail": None, "version_number": 1}]
+            entries += [{"at": at, "kind": "access", "action": "Download link issued", "detail": None, "version_number": None} for at in P.link_events.get(m.group(1), [])]
+            return self.reply(200, {"ok": True, "document_id": m.group(1), "entries": entries})
         m = re.fullmatch(r"/api/admin/documents/([^/]+)/(sensitivity|versions)", path)
         if m:
             doc = P.docs[m.group(1)]
@@ -167,6 +181,8 @@ class Handler(BaseHTTPRequestHandler):
             P.tokens[t] = c["inst"]
             P.secrets.add(t)
             return self.reply(200, {"access_token": t, "token_type": "Bearer", "expires_in": 900})
+        while P.late_audits:
+            P.audit_link(P.late_audits.pop())
         t = (self.headers.get("authorization") or "")[7:]
         inst = P.inst.get(P.tokens.get(t, ""))
         rid = str(uuid.uuid4())
@@ -176,7 +192,11 @@ class Handler(BaseHTTPRequestHandler):
             code = t if "echo_token" in P.defects else "insufficient_scope"
             return self.reply(403, {"error": {"code": code, "type": "forbidden_scope", "request_id": rid}})
         nf = lambda: self.reply(404, {"error": {"code": "not_found", "type": "not_found", "message": "Document not found.", "request_id": rid}}, {"x-request-id": rid})
-        pub = lambda k, d: {"id": k, "title": "t", "current_version": {"id": "v", "number": d["version"]}, "subjects": [{"id": d["entity_id"]}]}
+        # toPublicDocument (documentResources.ts at d93d6e17): the full allow-listed field set, nothing else.
+        pub = lambda k, d: {"id": k, "title": "t", "type": {"key": d["doc_type"], "label": None}, "category_path": [],
+                            "subjects": [{"type": "child" if d["entity_id"] in CHILD_SITE else "household" if d["entity_id"] == H1 else "person", "id": d["entity_id"], "role": "primary"}],
+                            "current_version": {"id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{k}/{d['version']}")), "number": d["version"], "content_type": "application/pdf", "size_bytes": 512, "received_at": "2026-11-08T17:23:00.000Z"},
+                            "review_status": None, "valid_until": None, "updated_at": "2026-11-08T17:23:00.000Z"}
         if path == "/api/v1/document-categories":
             return self.reply(200, {"data": [{"key": "general", "parent_key": None}], "next_cursor": None, "sync_token": "s"})
         if path == "/api/v1/documents":
@@ -193,13 +213,22 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             d = P.docs.get(m.group(1))
             if not d or not P.visible(inst, d):
+                if m.group(2) and "audit_refused_link" in P.defects and d:
+                    P.audit_link(m.group(1))
                 return nf()
+            # singleResourceThroughCollection (documentResources.ts:94 at d93d6e17): one resource answers {"data": {...}}.
+            one = (lambda body: body) if "flat_single_resource" in P.defects else (lambda body: {"data": body})
             if m.group(2):
                 exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=3600 if "long_link" in P.defects else 599)).isoformat()
                 url = f"https://ikaxilmwmrmbagoidedu.supabase.co/storage/v1/object/sign/x?token={uuid.uuid4().hex}"
                 P.secrets.add(url)
-                return self.reply(200, {"document_id": m.group(1), "url": url, "expires_at": exp})
-            return self.reply(200, pub(m.group(1), d))
+                # externalDocumentDownloadSource: recordDocumentAudit, then createSignedUrl, then the response.
+                if "audit_after_response" in P.defects:
+                    P.late_audits.append(m.group(1))
+                elif "audit_missing" not in P.defects:
+                    P.audit_link(m.group(1))
+                return self.reply(200, one({"document_id": m.group(1), "url": url, "expires_at": exp}))
+            return self.reply(200, one(pub(m.group(1), d)))
         return nf()
 
 
@@ -260,7 +289,9 @@ class D9DriverTest(unittest.TestCase):
         self.assertEqual(self.drive("certify"), 0, self.transcript)
         res = self.written("d9r_hosted_results")
         self.assertEqual(res["verdict"], "PASS", [c for c in res["cases"] if not c["pass"]])
-        self.assertEqual(sorted({c["case"] for c in res["cases"]}), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14])
+        self.assertEqual(sorted({c["case"] for c in res["cases"]}), list(range(1, 15)))
+        c11 = [c for c in res["cases"] if c["case"] == 11]
+        self.assertEqual([(c["as"], c["links_issued_before"], c["links_issued_after"]) for c in c11], [("T_B", 0, 0), ("T_A", 0, 1), ("T_A", 1, 2)])
         self.assert_access_closed()
         self.assertEqual(self.drive("cleanup"), 0, self.transcript)
         self.assertEqual(self.written("d9r_hosted_reset_results")["verdict"], "CLEAN")
@@ -271,6 +302,30 @@ class D9DriverTest(unittest.TestCase):
             self.assertLessEqual(set(row), {"installation_id", "credential_id", "token_exp", "persona", "credential_revoke_status", "disconnect_status"})
         self.assert_no_secret_anywhere()
         self.assertEqual(self.drive("cleanup"), 0, "cleanup is idempotent")
+
+    def test_flat_single_resource_reproduces_exactly_the_hosted_failures(self):
+        """qar_7d7ec3d86bdd: the driver read detail and link bodies flat; staging answers {"data": {...}}. Against a flat
+        product the fixed driver must still FAIL those five, and nothing else: the envelope is required, not tolerated."""
+        self.start({"flat_single_resource"})
+        self.drive("preflight"), self.drive("docs")
+        self.assertEqual(self.drive("certify"), 1)
+        res = self.written("d9r_hosted_results")
+        failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+        self.assertEqual(failed, [(6, 0), (10, 1), (10, 2), (12, 0), (14, 0)])
+        self.assertIsNone(res["stop"])
+        self.assert_access_closed()
+
+    def test_case_11_ordering_defects_fail_case_11(self):
+        for defect, who in (("audit_after_response", "T_A"), ("audit_missing", "T_A"), ("audit_refused_link", "T_B")):
+            with self.subTest(defect=defect):
+                self.start({defect})
+                self.drive("preflight"), self.drive("docs")
+                self.assertEqual(self.drive("certify"), 1, defect)
+                res = self.written("d9r_hosted_results")
+                bad = {(c["case"], c["as"]) for c in res["cases"] if not c["pass"]}
+                self.assertIn((11, who), bad, defect)
+                self.assert_access_closed()
+                self.tearDown()
 
     def test_held_document_returned_is_a_security_stop_and_access_still_closes(self):
         self.start({"leak_held"})
@@ -334,6 +389,17 @@ class D9DriverTest(unittest.TestCase):
         self.start()
         self.assertNotEqual(self.drive("preflight", base="https://example.com"), 0)
         self.assertIn("refused", self.transcript)
+
+
+class HostedRunRecordTest(unittest.TestCase):
+    def test_hosted_run_qar_7d7ec3d86bdd_stays_recorded_as_run(self):
+        """The receipt of the hosted run is evidence, not a fixture: 35 passed, 5 failed, the five named, verdict FAIL."""
+        with open(os.path.join(HERE, "d9r_hosted_results.qar_7d7ec3d86bdd.json")) as f:
+            res = json.load(f)
+        self.assertEqual((res["passed"], res["failed"], res["verdict"], res["stop"]), (35, 5, "FAIL", None))
+        failed = sorted((c["case"], c.get("call_index", 0)) for c in res["cases"] if not c["pass"])
+        self.assertEqual(failed, [(6, 0), (10, 1), (10, 2), (12, 0), (14, 0)])
+        self.assertTrue(res["close"]["all_closed"])
 
 
 if __name__ == "__main__":

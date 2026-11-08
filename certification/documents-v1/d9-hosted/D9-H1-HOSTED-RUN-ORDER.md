@@ -1,6 +1,6 @@
 # D9-H1 hosted run order for `documents_d9_read_v1`, reconciled with the governed plan
 
-Documents, 2026-11-07. This sets the order for the one hosted run. It reconciles three sources:
+Documents, 2026-11-07; case 11 criterion 3 and the driver rows revised 2026-11-08 for driver `bfed4a96…` (steps unchanged). This sets the order for a hosted run. It reconciles three sources:
 
 - the contract `D9-1-HOSTED-QA-PLAN.md` (`1e9daebb…`, pinned, not edited);
 - `HOST-CAPACITY-D9-H1-RUNNER-AND-DRIVER-HANDOFF.md` §4 and §7;
@@ -24,7 +24,7 @@ Where they disagree, the governed plan decides, because the gateway enforces it.
 
 | # | Step | Who | Gate it satisfies |
 |---|---|---|---|
-| 0 | Pins at the staging merge (runner `5af9cd7a…` on both entries, driver `6f1b52c8…`); plan-bytes approval naming the driver; `eligible_plans`; release and install | Host Capacity, Director | `documents_d9_read_plan_approved`, `awaiting_alloy_pins` cleared |
+| 0 | Pins: runner `5af9cd7a…` on both entries (staging merge); driver `bfed4a96…` (vendored from Documents, as this file is); plan-bytes approval naming that driver, recorded in the same toolkit change as the driver pin; `eligible_plans`; release and install | Host Capacity, Director | `documents_d9_read_plan_approved` bound to the registered driver |
 | 1 | `environment.qa_run_open` with `hosted_qa_authority` declared. Set the lease to cover steps 2–9, including operator approval waits (the R2/R5 run waited twice on reset approvals) | Kelly (DEC-2) | — |
 | 2 | **Pre-write census**: `database.read_census` of `d9-residue-census.sql` (`e7e8d3d1…`). Every `d9_zr_*` / `d9w_zr_*` check true and `d9_zr_qa_orgs_resolve` true | Documents | Contract §5 "before writes". This step was missing from the handoff's §7.3 sequence |
 | 3 | `qa_d9_external_fixture_ensure` | Documents (governed reconciliation) | Open run |
@@ -57,12 +57,22 @@ No census covered it. The residue census's `d9_xo_link_audit_untagged` asks only
 
 1. **Exactly two rows on `T_A`'s installation.** That installation is `installations.T_A.installation_id`. Each row has `credential_id` = `T_A`'s credential and `document_id` = `documents.D_STD_C.id`. Two rows means case 12 made two audited calls.
 2. **No refused call is audited.** Zero rows on `T_B`, `T_L` or `T_N`'s installations. On `T_A`'s installation, no row has a `document_id` other than `D_STD_C`. That covers the held-document and `D_B` link calls in cases 7 and 8.
-3. **Audited before the response.** Order `T_A`'s rows by `created_at`, and the case 10 calls by `call_index`. For each call `i`: `sent_at ≤ row_i.created_at ≤ response_at`.
-   - `created_at` is the database clock and the call times are the driver host's clock. The driver records no server clock.
-   - The join reports each row's margin to both window edges.
-   - A row outside its window by more than 2 s fails the case.
-   - A row inside the window, but within 2 s of an edge, is reported as timing **inconclusive** (clock-bounded), not as a pass. It goes to Kelly.
-   - What the hosted census cannot see is that the audit is written before the URL is signed. That order is the route's, proven by code (`externalDocumentAuthority.ts`: `recordDocumentAudit`, then `createSignedUrl`, with `audit_unavailable` refusing) and by the D9.1 route tests.
+3. **Audited before the response — decided without a clock** (driver `bfed4a96…`, case 11 rows in `d9r_hosted_results.<qar>.json`).
+   Around each case 10 call the driver reads `D_STD_C`'s staff history as `fixture_admin`
+   (`GET /api/admin/documents/{id}/history`, read-only; `document_link_issued` appears there as kind `access`,
+   "Download link issued") and counts those entries:
+   - one read **completes before** call `i` is sent, one is **sent after** call `i`'s response arrives;
+   - call `i` passes only if the count goes from `N` to exactly `N + 1` (expected 0 → 1, then 1 → 2);
+   - across the refused `T_B` link call on `D_STD_C` (case 8) the count must not change (expected 0 → 0).
+   This is request happens-before, not a comparison of two clocks: the row did not exist before the call and was
+   committed and readable by the first request after the response. It needs no margin and has no inconclusive band.
+   The order **inside** the request (audit committed, then the URL signed, `audit_unavailable` refusing the link) is the
+   route's, locked by `web/tests/platform/external/documentsResource.test.ts` ("audited before it is minted", "no audit
+   record, no link"); together they prove case 11. The census join still checks criteria 1 and 2 and that the census's
+   two `T_A` rows are the two the history counted.
+   - The clock comparison (`sent_at ≤ created_at ≤ response_at`, margins to both edges) is still reported, as
+     information only. It decides nothing. It is how `qar_7d7ec3d86bdd` was judged (driver `6f1b52c8…`, no history
+     reads): margins of 0.08–0.78 s, recorded as **timing inconclusive**, and that record stands.
 
 The receipt is `d9r_link_audit_census.<qar>.json`, which records the census request id, the query hash and the join verdict.
 
@@ -71,7 +81,9 @@ The receipt is `d9r_link_audit_census.<qar>.json`, which records the census requ
 | Where | Says | Resolution |
 |---|---|---|
 | Handoff §4 steps 4–5; contract §6.4 | census, then `qa_run_close` "with the census attached" | Superseded by §2 steps 8–10 (close, census, close-bind). The gateway rejects a census read before `closed_at` |
-| Driver `cleanup` output field `next` (line 439, written to `d9r_hosted_reset_results.<qar>.json`) and the module docstring (lines 18–19) | `[reset, residue census, qa_run_close]`: one close, census before it, checks named as `d9_zr_*` only | Advisory text. The driver acts on neither, and neither decides anything. **Left unchanged** so the pinned driver hash `6f1b52c8…` holds; this document is the order of record. When step 5 prints `next`, continue with step 6, not with `next`. The census must pass all 15 registered checks (`d9_zr_*`, `d9w_zr_*`, `d9_xo_*`), not only `d9_zr_*` |
+| Driver `cleanup` output field `next` and the module docstring | Driver `6f1b52c8…`: `[reset, residue census, qa_run_close]`, one close, census before it | **Corrected in driver `bfed4a96…`**: both now name this order (case 11 census, reset, close #1, residue census after `closed_at` with all 15 checks, close #2). This document stays the order of record |
+| Driver `6f1b52c8…` cases 6, 10, 12, 14 | Read `id`, `url`, `document_id`, `current_version` at the top level | The deployed single-resource routes answer `{"data": {...}}` (`documentResources.ts` `singleResourceThroughCollection`). `qar_7d7ec3d86bdd` recorded those five as **failed** (35 passed, 5 failed); they stay failed. Driver `bfed4a96…` reads the envelope and still fails a flat body |
+| §1 "census dedupes within one execution run" | Steps 2 and 9 from different execution runs | Installed toolkit `d956e89b9bfe` declares `database.read_census` `reuseAuthorized: () => false`: each request is a new observation. Same-run filing is fine; prove freshness by a distinct trusted-host action id and `census_run_at` after `closed_at` (as `qar_7d7ec3d86bdd` did) |
 | Contract §6.3 | authz_q1 20-check census plus D9 checks | The registered residue census is `d9-residue-census.sql` (15 checks). The contract is not edited: its hash is pinned, and the plan approval binds it |
 | Handoff §7.3 | ensure → preflight → … (no pre-write census) | Step 2 restores contract §5 "before writes" |
 | Handoff §3 / §5 | case 11 "needs a read-only census after the run" | Step 6 and §3, with a concrete query and join |
@@ -90,7 +102,7 @@ on 2026-11-08 against the installed toolkit `b29c7c849b5a`. All of them hold:
 | Reset needs the OPEN run | `reconciliation-preflight.mjs`: exactly one OPEN, `live` hosted run of the plan, else `qa_run_not_open` |
 | Close removes sessions | `rmSync(qaRunSessionDir(run))` |
 | Residue census pin | `QA_PLANS.documents_d9_read_v1.residue_census`: `e7e8d3d1…`, 15 checks, `alloy_deployed_primary` |
-| Driver pin and approval | `driver.sha256` and `documents_d9_read_plan_approved.driver_sha256` are both `6f1b52c8…`, equal to the bytes here. The approval's `run_order_of_record` names this file at `841035a3f`. This revision changes only labels (the step 8 verdict string and the §4 driver row), not the order |
+| Driver pin and approval | **Pending re-pin.** Installed today: `driver.sha256` and `documents_d9_read_plan_approved.driver_sha256` are both `6f1b52c8…` (the driver `qar_7d7ec3d86bdd` ran). The driver here is `bfed4a96…`; the gate (`planEvidenceBound`) refuses until both fields name it. Earlier text of this row: The approval's `run_order_of_record` names this file at `841035a3f`. This revision changes only labels (the step 8 verdict string and the §4 driver row), not the order |
 
 Not yet satisfied: `documents_d9_read_v1` is absent from `opened.eligible_plans`, which takes a separate reviewed
 change. Kelly's DEC-2 `environment.qa_run_open` is also still needed.

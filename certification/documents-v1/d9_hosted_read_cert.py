@@ -15,8 +15,9 @@ cross_org_admin (QA Secondary) sessions.
              D9 installation, deletes every tagged document, then re-reads each to prove it is gone. Exits 1 if
              anything remains.
 
-After cleanup the operator runs qa_d9_external_fixture_reset, then d9-residue-census.sql (zero residue is the census
-verdict, not this driver's), then environment.qa_run_close.
+After cleanup, follow the run order of record (d9-hosted/D9-H1-HOSTED-RUN-ORDER.md): the case 11 link-audit census,
+qa_d9_external_fixture_reset, qa_run_close #1, then d9-residue-census.sql (all 15 registered checks) read after closed_at,
+then qa_run_close #2 naming that census. Zero residue is the census verdict, not this driver's.
 
 SECRET-BLIND. A client secret, an access token or a signed link url is held in memory only. Every line printed and
 every file written passes through emit(), which stops the run (exit 3) rather than write anything containing one.
@@ -140,6 +141,14 @@ def j(path, persona, body, method="POST"):
 def err(b):
     e = b.get("error") if isinstance(b, dict) else None
     return e if isinstance(e, dict) else {"code": b.get("code") if isinstance(b, dict) else None}
+
+
+def one(b):
+    """The deployed single-resource envelope: GET /documents/{id} and /download-link answer {"data": {...}}
+    (singleResourceThroughCollection, documentResources.ts at d93d6e17). A bare object is not that contract and reads as
+    empty, so a case built on it fails; it never passes on a shape the product does not serve."""
+    d = b.get("data") if isinstance(b, dict) else None
+    return d if isinstance(d, dict) else {}
 
 
 def tiny_pdf(label):
@@ -296,6 +305,16 @@ def certify():
                     return s, b, raw, got, sync
             return 0, {}, b"", got, sync
 
+        def links_issued(did):
+            """Case 11 without a clock: the document's audited link issuances as the staff history reads them
+            (GET /api/admin/documents/{id}/history; workflow_events document_link_issued -> kind "access"). Read-only.
+            None when it cannot be read, which fails the case that asked."""
+            s, b, _, _ = call(f"/api/admin/documents/{did}/history", A)
+            entries = b.get("entries") if isinstance(b, dict) else None
+            if s != 200 or not isinstance(entries, list):
+                return None
+            return sum(1 for e in entries if isinstance(e, dict) and e.get("kind") == "access" and e.get("action") == "Download link issued")
+
         def not_found_shape(raw, headers):
             body = json.loads(raw)
             body.get("error", {}).pop("request_id", None)
@@ -326,7 +345,7 @@ def certify():
         # 6 detail
         s, b, raw, _ = v1("T_A", f"/documents/{d['D_STD_C']}")
         text = raw.decode(errors="replace").lower()
-        case(6, "detail", "T_A", "D_STD_C", s, b, raw, s == 200 and (b or {}).get("id") == d["D_STD_C"]
+        case(6, "detail", "T_A", "D_STD_C", s, b, raw, s == 200 and one(b).get("id") == d["D_STD_C"]
              and not any(k in text for k in ("storage_path", "bucket", "\"url\"", "http://", "https://")))
         # 7 indistinguishable 404 (and 8: T_A → D_B)
         shapes = set()
@@ -343,10 +362,15 @@ def certify():
         case(7, "404 body and header set byte-identical", "T_A", "all of the above", 200 if len(shapes) == 1 else 0, {}, b"", len(shapes) == 1, distinct_shapes=len(shapes))
         # 8 cross-org
         for path, label in ((f"/documents/{d['D_STD_C']}", "D_STD_C"), (f"/documents/{d['D_STD_C']}/download-link", "D_STD_C link")):
+            before = links_issued(d["D_STD_C"]) if label.endswith("link") else None
             s, b, raw, _ = v1("T_B", path)
             if s == 200:
                 stop = stop or f"security stop: T_B received 200 for {label}"
             case(8, "cross-org", "T_B", label, s, b, raw, s == 404)
+            if label.endswith("link"):
+                after = links_issued(d["D_STD_C"])
+                case(11, "refused link call not audited", "T_B", label, s, {}, b"", s == 404 and before is not None and after == before,
+                     links_issued_before=before, links_issued_after=after)
         s, b, raw, got, _ = listed("T_B", f"child_id={C1}")
         case(8, "cross-org list", "T_B", "child_id=C1", s, b, raw, s == 200 and not got)
         # 9 locations boundary
@@ -360,20 +384,29 @@ def certify():
         case(9, "in-boundary detail", "T_L", "D_STD_C", s, b, raw, s == 200)
         # 10 + 12 download link, new per call (11 is the census's: these times are its input)
         for i in (1, 2):
+            before = links_issued(d["D_STD_C"])
             sent = now()
             s, b, raw, _ = v1("T_A", f"/documents/{d['D_STD_C']}/download-link")
             got_at = now()
-            url = (b or {}).get("url") or ""
+            after = links_issued(d["D_STD_C"])
+            r = one(b)
+            url = r.get("url") or ""
             if url:
                 _secrets.add(url)
                 links.append(url)
-            exp = (b or {}).get("expires_at")
+            exp = r.get("expires_at")
             ttl = (datetime.datetime.fromisoformat(exp.replace("Z", "+00:00")) - got_at).total_seconds() if exp else None
             host = urllib.parse.urlparse(url).hostname or ""
-            case(10, "download link", "T_A", "D_STD_C", s, b, raw, s == 200 and (b or {}).get("document_id") == d["D_STD_C"]
-                 and ttl is not None and 0 < ttl <= 600 and host.endswith(".supabase.co") and "path" not in (b or {}),
+            case(10, "download link", "T_A", "D_STD_C", s, b, raw, s == 200 and r.get("document_id") == d["D_STD_C"]
+                 and ttl is not None and 0 < ttl <= 600 and host.endswith(".supabase.co") and "path" not in r and "path" not in (b or {}),
                  call_index=i, sent_at=sent.isoformat(), response_at=got_at.isoformat(), url_host=host,
                  url_sha256=hashlib.sha256(url.encode()).hexdigest(), ttl_seconds=ttl)
+            # 11: the audit row is committed and readable by the first request after the response: absent from the
+            # history read that completed before the call was sent, present in the one sent after its response arrived.
+            # Happens-before, not clocks. That the audit precedes the signing inside the request is the route's order,
+            # locked by web/tests/platform/external/documentsResource.test.ts ("no audit record, no link").
+            case(11, "audit visible after link response", "T_A", "D_STD_C", s, {}, b"",
+                 s == 200 and before is not None and after == before + 1, call_index=i, links_issued_before=before, links_issued_after=after)
         case(12, "new link per call", "T_A", "D_STD_C x2", 200 if len(set(links)) == 2 else 0, {}, b"", len(set(links)) == 2)
         # 13 paging
         s, b, raw, got, sync = listed("T_A", f"child_id={C1}&limit=1")
@@ -381,7 +414,7 @@ def certify():
              and sync is not None, pages_ids=len(got))
         # 14 version-current
         s, b, raw, _ = v1("T_A", f"/documents/{d['D_SUP']}")
-        case(14, "version-current", "T_A", "D_SUP", s, b, raw, s == 200 and ((b or {}).get("current_version") or {}).get("number") == 2)
+        case(14, "version-current", "T_A", "D_SUP", s, b, raw, s == 200 and (one(b).get("current_version") or {}).get("number") == 2)
     except RuntimeError as e:
         stop = stop or f"setup stop: {e}"
     finally:
@@ -436,7 +469,8 @@ def cleanup():
         if s1 not in (200, 404) or s2 != 404:
             out["remaining"].append(f"document {key} delete={s1} verify={s2}")
     out["verdict"] = "CLEAN" if not out["remaining"] else "RESIDUE"
-    out["next"] = ["qa_d9_external_fixture_reset", "database.read_census d9-residue-census.sql (all d9_zr_* true)", "environment.qa_run_close"]
+    out["next"] = ["database.read_census d9-link-audit-census.sql (case 11)", "qa_d9_external_fixture_reset", "environment.qa_run_close #1",
+                   "database.read_census d9-residue-census.sql after closed_at (all 15 registered checks)", "environment.qa_run_close #2 naming that census"]
     emit(out, RESET_FILE)
     emit(line=f"cleanup {out['verdict']}: {len(out['installations'])} installations closed, {len(out['documents'])} documents removed; remaining={out['remaining']}")
     return 0 if out["verdict"] == "CLEAN" else 1
