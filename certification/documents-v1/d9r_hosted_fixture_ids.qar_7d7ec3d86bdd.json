@@ -1,0 +1,86 @@
+{
+  "documents": {
+    "D_B": {
+      "id": "44a53fe9-364b-45ac-a3c6-6e148991a4ab",
+      "owner": "cross_org_admin"
+    },
+    "D_CUS": {
+      "id": "a05e1c01-9641-46b1-9ada-6b852f573b95",
+      "owner": "fixture_admin"
+    },
+    "D_MED": {
+      "id": "aa066221-a235-47dc-bcdf-fc3e4f30fc46",
+      "owner": "fixture_admin"
+    },
+    "D_PID": {
+      "id": "7293cbe4-7e7c-4f50-8d7e-5627c9bdeed8",
+      "owner": "fixture_admin"
+    },
+    "D_QUA": {
+      "id": "99bcfefb-9180-4066-8501-10cd7a516b82",
+      "owner": "fixture_admin"
+    },
+    "D_RES": {
+      "id": "8a093c41-0a04-4966-be76-fe42ffd793a1",
+      "owner": "fixture_admin"
+    },
+    "D_SOUTH": {
+      "id": "5fa084a1-c65d-478d-a77b-4cefd942e07d",
+      "owner": "fixture_admin"
+    },
+    "D_STD_C": {
+      "id": "8abce264-a874-414d-839d-6ea961e93b79",
+      "owner": "fixture_admin"
+    },
+    "D_STD_E": {
+      "id": "4ec2e79c-b800-49b4-9fc7-619285b75a89",
+      "owner": "fixture_admin"
+    },
+    "D_STD_G": {
+      "id": "db733a35-5809-4c9b-808a-843783259796",
+      "owner": "fixture_admin"
+    },
+    "D_STD_H": {
+      "id": "8b1d1ec4-cb94-4db4-8945-fba6a4c6ac6e",
+      "owner": "fixture_admin"
+    },
+    "D_SUP": {
+      "id": "8cf5ddf4-c4ab-474c-941c-eb1004407f6c",
+      "owner": "fixture_admin"
+    }
+  },
+  "installations": {
+    "T_A": {
+      "credential_id": "dfb8d936-924d-4440-b952-0a0cfdee99aa",
+      "credential_revoke_status": 200,
+      "disconnect_status": 200,
+      "installation_id": "276fda26-89c5-4f3d-9353-e4bdbc3108e9",
+      "persona": "fixture_admin",
+      "token_exp": "2026-11-08T17:38:45.716542+00:00"
+    },
+    "T_B": {
+      "credential_id": "9b91f099-7ce3-401f-b6af-3dd4fa7dc4eb",
+      "credential_revoke_status": 200,
+      "disconnect_status": 200,
+      "installation_id": "630abbf6-1996-4776-ae12-a6628f566d7a",
+      "persona": "cross_org_admin",
+      "token_exp": "2026-11-08T17:38:47.673629+00:00"
+    },
+    "T_L": {
+      "credential_id": "21d43177-b2a0-4e8b-b9a8-5757ff6402e7",
+      "credential_revoke_status": 200,
+      "disconnect_status": 200,
+      "installation_id": "b8d9a82e-2222-4d3f-bf2e-e63264083055",
+      "persona": "fixture_admin",
+      "token_exp": "2026-11-08T17:38:49.539787+00:00"
+    },
+    "T_N": {
+      "credential_id": "cd41ac2f-cb23-44c0-b194-4d2fd115b5ae",
+      "credential_revoke_status": 200,
+      "disconnect_status": 200,
+      "installation_id": "843741a7-9d2b-4fd9-abed-14f1322fa325",
+      "persona": "cross_org_admin",
+      "token_exp": "2026-11-08T17:38:51.552048+00:00"
+    }
+  }
+}

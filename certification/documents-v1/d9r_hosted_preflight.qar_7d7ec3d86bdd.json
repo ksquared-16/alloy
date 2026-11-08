@@ -1,0 +1,36 @@
+{
+  "at": "2026-11-08T17:23:14.958768+00:00",
+  "checks": {
+    "cross_org_admin:d9-documents-read-cert": {
+      "already_installed": false,
+      "id": "e8a1591c-1593-481c-aba1-bd28e2bd25f1",
+      "ok": true,
+      "status": 200
+    },
+    "cross_org_admin:d9-documents-scope-cert": {
+      "already_installed": false,
+      "id": "be5776d8-3edd-4036-9b31-2095a8ca29da",
+      "ok": true,
+      "status": 200
+    },
+    "fixture_admin:d9-documents-read-cert": {
+      "already_installed": false,
+      "id": "e8a1591c-1593-481c-aba1-bd28e2bd25f1",
+      "ok": true,
+      "status": 200
+    },
+    "fixture_admin:d9-documents-scope-cert": {
+      "already_installed": false,
+      "id": "be5776d8-3edd-4036-9b31-2095a8ca29da",
+      "ok": true,
+      "status": 200
+    },
+    "served_sha_contains_d9_1": {
+      "ok": true,
+      "requires": "daf87893f879",
+      "served": "d93d6e17328d1921f69ab63797ec839be2c91133"
+    }
+  },
+  "qa_run_id": "qar_7d7ec3d86bdd",
+  "verdict": "READY"
+}
