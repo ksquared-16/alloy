@@ -38,3 +38,9 @@ only: no D9 write or review testing, no scanner or retrieval traffic.
 
 `d9r_residue_census.prewrite.*`, `d9r_residue_census.postclose.*`, `d9r_link_audit_census.*` (verdict) and
 `.raw.*`, and the driver's `d9r_hosted_{fixture_ids,preflight,results,reset_results}.*` for this run.
+
+## Follow-up (2026-11-08, after the run)
+
+Driver `bfed4a96…` (Documents `6376729c8`) reads the envelope and proves case 11's order by history counts, not
+clocks. It does not change this run: its five failures stay failed and case 11 stays timing inconclusive. Re-pin
+request: `HOST-CAPACITY-D9-H1-DRIVER-REPIN.md`; rerun path: `D9-H1-RERUN-PATH.md`.
