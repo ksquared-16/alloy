@@ -11,7 +11,7 @@ preflight, ZERO_RESIDUE. This run is a separate result and does not rewrite any 
 
 ## Result
 
-**43 passed, 0 failed. Case 10 PASS ×2. Case 11 PASS.** Close: see Steps 8–10.
+**43 passed, 0 failed. Case 10 PASS ×2. Case 11 PASS. Closed ZERO_RESIDUE.**
 
 | Case | Checks | Result |
 |---|---|---|
@@ -53,11 +53,13 @@ Case 11's clock comparison (information only) shows the same skew: the two `T_A`
 | 5 | Driver `cleanup` | — | CLEAN: 12 installations closed, 12 documents removed, remaining none |
 | 6 | Case 11 link-audit census `837416d1` | `gar_21e2724df48425` (`tha_b114607ba3d371`) | 4/4 checks, 04:20:25.870Z; 6 D9 link rows, exactly 2 on this run's T_A installation `3fd353d1` (credential `999881c8`, `D_STD_C` `8339bfae`); 0 on T_B/T_L/T_N; the other 4 are `qar_7d7ec3d86bdd`'s and `qar_143a8fbcad49`'s on their own installations; `CASE_11_PASS` |
 | 7 | `qa_d9_external_fixture_reset` | `gar_ebc00bc28229f2` (`tha_fbd21818e2acba`) | exit 0, residue 0 |
-| 8 | `qa_run_close` #1 | `gar_bafb6741591720` | pending |
-| 9 | Post-close residue census `e7e8d3d1` | — | pending |
-| 10 | `qa_run_close` #2 naming step 9 | — | pending |
+| 8 | `qa_run_close` #1 | `gar_bafb6741591720` (`tha_15170bcd52f42b`) | CLOSED 04:26:20.166Z, `ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED`, sessions removed |
+| 9 | Post-close residue census `e7e8d3d1` | `gar_1c6b4dff8003ab` (`tha_aab008c4d255f3`) | 15/15 true, 04:27:04.272Z (executed 04:26:58.077Z, after `closed_at`; a different execution from step 2's `tha_4387db63a8dd1d`); retained now 12 revoked installations, 62 security-audit rows, 6 link rows (this run's 4, 20 and 2 added) |
+| 10 | `qa_run_close` #2 naming step 9 | `gar_65ca85e4aebbd8` (`tha_22e120b38c2ce1`) | **`ZERO_RESIDUE`**, residue census `gar_1c6b4dff8003ab` bound |
+
+Every write and close step executed under a recorded operator approval.
 
 ## Receipts
 
-`d9r_residue_census.prewrite.qar_242c9c123886.json`, `d9r_link_audit_census.qar_242c9c123886.json` (verdict) and `.raw.`,
+`d9r_residue_census.prewrite.qar_242c9c123886.json`, `d9r_residue_census.postclose.qar_242c9c123886.json`, `d9r_link_audit_census.qar_242c9c123886.json` (verdict) and `.raw.`,
 and `../d9r_hosted_{preflight,fixture_ids,results,reset_results}.qar_242c9c123886.json`.
