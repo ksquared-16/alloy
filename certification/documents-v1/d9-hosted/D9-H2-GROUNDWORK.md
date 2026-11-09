@@ -53,8 +53,18 @@ codes split, W-F3 medical = 422, W-L1 200/`related`, W-V1 first change 201, §5 
 |---|---|---|
 | 1. Documents the staff delete refuses (quarantined, superseded, aged) | **Built.** `qa_d9_write_fixture_reset.sql` (`48845473…`) removes every D9 write document in the two QA orgs with its versions, links, review events and escalation cases in one transaction and asserts none remain; it replaces the aged-upload reset. `storage.objects` is delete-protected by trigger, so the SQL returns the object list and the runner removes exactly those through the Storage API and re-reads | `c790e6290`; local alloy-cert run inside a rolled-back transaction (shims for columns local lacks) |
 | 2. Staging wake | **Resolved, nothing to build.** Clock running (`gar_4caf1a889368b3`: 13,940 wakes, last 268 s before); deployed wake calls `escalateUnfiledApiUploads` | `a5af9bb6c` |
-| 3. Aged-upload runner | **Built.** Sibling runner `web/scripts/qaDocumentsD9WriteFixture.mjs` (`7f071160…`), modes `aged-ensure` / `write-reset`, npm scripts `dev:qa:documents-d9-aged-upload-ensure` / `dev:qa:documents-d9-write-fixture-reset`; pinned D9-H1 runner `5af9cd7a…` untouched. Ensure now `e3f3ee30…` | `c790e6290`; runner tests 56 green 4/4 |
-| 4. W-C1 write census | **Built.** `d9w-write-audit-census.sql` (`c502b280…`), 11 checks + 2 data rows; placed after certify and before cleanup (run order step 7) | `1e877bd81`; local read-only run with stand-ins for two tables local lacks |
+| 3. Aged-upload runner | **Built.** Sibling runner `web/scripts/qaDocumentsD9WriteFixture.mjs` (`7f071160…`), modes `aged-ensure` / `write-reset`, npm scripts `dev:qa:documents-d9-aged-upload-ensure` / `dev:qa:documents-d9-write-fixture-reset`; pinned D9-H1 runner `5af9cd7a…` untouched. Ensure now `e3f3ee30…` | `c790e6290`; runner tests green 4/4: 56 = 33 write-runner (`qaDocumentsD9WriteFixtureRunner.test.ts`) + 23 D9-H1 runner (unchanged) |
+| 4. W-C1 write census | **Built.** `d9w-write-audit-census.sql` (`c6e455e3…`, was `c502b280…`), 11 checks + 2 data rows; placed after certify and before cleanup (run order step 7) | `1e877bd81`, `e2681b8c1`; local read-only run with stand-ins for two tables local lacks (at `c502b280…`; not repeated after `e2681b8c1`, local `alloy-cert` database down) |
+
+**Reconciliation (`e2681b8c1`, 2026-11-09).** The reset/runner (`c790e6290`) and the W-C1 census (`1e877bd81`)
+were cross-checked:
+- The reset's target predicate matches residue-census check `07` (`d9w_zr_tagged_documents`).
+- W-C1 `d9w_c1_tagged_documents_in_qa` now also reads `storage_path`, like the reset's security stop and the residue census.
+- The census header names step 7.
+- The driver (`be122692…`, was `7c496842…`; docstring and cleanup `next` only, 12 tests green 3/3) names the run order:
+  W-C1 before cleanup, then `qa_d9_write_fixture_reset` at step 9 for what the staff delete refuses.
+- Run order: step 0 pins `qa_d9_aged_upload_ensure` and `qa_d9_write_fixture_reset` in place of `qa_d9_aged_upload_*`; the §1 resets row names steps 9/10; open items 3 and 5 are closed.
+- New open item 6: the pinned D9-H1 `qa_d9_external_fixture_reset.sql` still names the superseded aged reset in a comment, left as it is to keep that pin.
 
 **Product finding (W-C1).** Upload, filing, archive and restore store their authorizing audit id. Review / validity events
 (`document_version_review_events`), context link / unlink (`document_subjects`) and the 24 h escalation case do **not**:
