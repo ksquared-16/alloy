@@ -85,8 +85,9 @@ async function wake(): Promise<NextResponse> {
         // only — held while that function is absent), and a case whose upload was filed late is closed. Counts only.
         let apiUploadsEscalated: Omit<Awaited<ReturnType<typeof escalateUnfiledApiUploads>>, "outcomes"> | null = null;
         try {
-            const r = await escalateUnfiledApiUploads({ supabase, processing: makeProcessingCaseDbDeps(supabase) });
-            apiUploadsEscalated = { scanned: r.scanned, opened: r.opened, existing: r.existing, repaired: r.repaired, held: r.held, skipped: r.skipped, failed: r.failed, resolved: r.resolved, truncated: r.truncated };
+            // This wake's own database clock stamp: the only time a later-wake confirmation may carry (never the app clock).
+            const r = await escalateUnfiledApiUploads({ supabase, processing: makeProcessingCaseDbDeps(supabase), wakeClockAt: result.clockRecordedAt });
+            apiUploadsEscalated = { scanned: r.scanned, opened: r.opened, existing: r.existing, repaired: r.repaired, held: r.held, skipped: r.skipped, failed: r.failed, resolved: r.resolved, confirmed: r.confirmed, confirm_failed: r.confirm_failed, truncated: r.truncated };
         } catch {
             apiUploadsEscalated = null;
         }

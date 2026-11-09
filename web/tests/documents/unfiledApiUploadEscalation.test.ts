@@ -197,6 +197,192 @@ describe("escalation after the 24-hour grace period", () => {
     });
 });
 
+describe("later-wake confirmation (D9-H2 W-ES: a second wake adds nothing)", () => {
+    const W1 = "2026-11-04T11:55:00.123456+00:00"; // the wake that opens the case
+    const W2 = "2026-11-04T12:00:00.654321+00:00"; // the next wake: the first later one
+    const W3 = "2026-11-04T12:05:00.000001+00:00";
+    const esc = () => (db.rows("processing_cases")[0].metadata as Record<string, Record<string, unknown>>)[API_UPLOAD_ESCALATION_KEY];
+
+    /** trg_processing_cases_updated_at: every UPDATE of a case refreshes updated_at (the fake has no triggers). */
+    let tick = 0;
+    function installUpdatedAtTrigger() {
+        const real = db.from.bind(db);
+        (db as unknown as { from: unknown }).from = (t: string) => {
+            const q = real(t);
+            if (t !== "processing_cases") return q;
+            const update = q.update.bind(q);
+            (q as unknown as { update: unknown }).update = (patch: Record<string, unknown>) =>
+                update({ ...patch, updated_at: `2026-11-04T12:00:00.${String(++tick).padStart(6, "0")}+00:00` });
+            return q;
+        };
+    }
+    beforeEach(() => {
+        tick = 0;
+        installUpdatedAtTrigger();
+    });
+
+    function failCaseUpdates() {
+        const real = db.from.bind(db);
+        (db as unknown as { from: unknown }).from = (t: string) => {
+            const q = real(t);
+            if (t !== "processing_cases") return q;
+            const failing: Record<string, unknown> = {};
+            failing.eq = () => failing;
+            failing.is = () => failing;
+            failing.select = async () => ({ data: null, error: { message: "down" } });
+            (q as unknown as { update: unknown }).update = () => failing;
+            return q;
+        };
+        return () => ((db as unknown as { from: unknown }).from = real);
+    }
+
+    /** Another writer changes the case between this wake's read and its write (a staff action, the filing close…). */
+    function concurrentWriterAfterNextCaseRead(patch: Record<string, unknown>) {
+        const real = db.from.bind(db);
+        let armed = true;
+        (db as unknown as { from: unknown }).from = (t: string) => {
+            const q = real(t);
+            if (t !== "processing_cases" || !armed) return q;
+            const maybeSingle = q.maybeSingle.bind(q);
+            (q as unknown as { maybeSingle: unknown }).maybeSingle = async () => {
+                // PostgREST returns a snapshot; the fake returns live rows, so copy before the concurrent write lands.
+                const live = await maybeSingle();
+                const read = { ...live, data: live.data ? JSON.parse(JSON.stringify(live.data)) : live.data };
+                if (armed) {
+                    armed = false;
+                    const row = db.rows("processing_cases")[0];
+                    row.metadata = { ...(row.metadata as Record<string, unknown>), ...patch };
+                    row.updated_at = `2026-11-04T12:00:01.${String(++tick).padStart(6, "0")}+00:00`;
+                }
+                return read;
+            };
+            return q;
+        };
+        return () => ((db as unknown as { from: unknown }).from = real);
+    }
+
+    it("the opening wake never confirms; the first later wake stamps its own clock once, with no audit and no second case", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        const first = await run({ wakeClockAt: W1 });
+        expect(first).toMatchObject({ opened: 1, confirmed: 0 });
+        expect(esc().confirmed_by_wake_at).toBeUndefined();
+        const audited = audits.length;
+
+        const second = await run({ wakeClockAt: W2 });
+        expect(second).toMatchObject({ opened: 0, existing: 1, confirmed: 1, confirm_failed: 0, failed: 0 });
+        expect(second.outcomes[0]).toMatchObject({ document_id: D(1), outcome: "case_existing", confirmation: "stamped" });
+        expect(esc().confirmed_by_wake_at).toBe(W2);
+        expect(esc()).toMatchObject({ kind: "api_v1_unfiled_upload", document_id: D(1) }); // the annotation is kept
+        expect(audits.length).toBe(audited);
+        expect(db.rows("processing_cases")).toHaveLength(1);
+        expect(db.rows("processing_case_sources")).toHaveLength(1);
+        expect(db.rows("documents")[0].metadata).not.toHaveProperty("filing"); // still unfiled
+    });
+
+    it("is write-once: a third wake never moves the stamp", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        await run({ wakeClockAt: W1 });
+        await run({ wakeClockAt: W2 });
+        const third = await run({ wakeClockAt: W3 });
+        expect(third).toMatchObject({ existing: 1, confirmed: 0 });
+        expect(third.outcomes[0]).toMatchObject({ confirmation: "already_confirmed" });
+        expect(esc().confirmed_by_wake_at).toBe(W2);
+    });
+
+    it("fails closed without this wake's database clock stamp: nothing is written", async () => {
+        for (const wakeClockAt of [undefined, null, "", "yesterday", "2026-11-04T12:00:00", "1730721600000", "2026-11-04", "2026-13-40T99:99:99Z", "2026-11-04T24:00:00Z"]) {
+            db = new InMemorySupabase();
+            installAtomicOpen(db);
+            db.seed("documents", [apiUpload(D(1))]);
+            await run({ wakeClockAt: W1 });
+            const r = await run({ wakeClockAt });
+            expect(r, String(wakeClockAt)).toMatchObject({ existing: 1, confirmed: 0, confirm_failed: 0 });
+            expect(r.outcomes[0]).toMatchObject({ confirmation: "no_wake_clock" });
+            expect(esc().confirmed_by_wake_at, String(wakeClockAt)).toBeUndefined();
+        }
+    });
+
+    it("a failed confirmation write leaves the stamp absent and the wake intact; the next wake stamps its own time", async () => {
+        db.seed("documents", [apiUpload(D(1)), apiUpload(D(2))]);
+        await run({ wakeClockAt: W1 });
+        const restore = failCaseUpdates();
+        const r = await run({ wakeClockAt: W2 });
+        restore();
+        expect(r).toMatchObject({ existing: 2, confirmed: 0, confirm_failed: 2, opened: 0 });
+        expect(r.outcomes.every((o) => o.outcome === "case_existing" && o.confirmation === "failed")).toBe(true);
+        for (const c of db.rows("processing_cases")) {
+            expect((c.metadata as Record<string, Record<string, unknown>>)[API_UPLOAD_ESCALATION_KEY].confirmed_by_wake_at).toBeUndefined();
+        }
+        const next = await run({ wakeClockAt: W3 });
+        expect(next).toMatchObject({ confirmed: 2 });
+        for (const c of db.rows("processing_cases")) {
+            expect((c.metadata as Record<string, Record<string, unknown>>)[API_UPLOAD_ESCALATION_KEY].confirmed_by_wake_at).toBe(W3);
+        }
+    });
+
+    it("never overwrites a concurrent write: the confirmation is compare-and-set on updated_at; the next wake retries", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        await run({ wakeClockAt: W1 });
+        installUpdatedAtTrigger();
+        const restore = concurrentWriterAfterNextCaseRead({ staff_note: "kept", processing_intent: "store_document" });
+        const r = await run({ wakeClockAt: W2 });
+        restore();
+        expect(r).toMatchObject({ existing: 1, confirmed: 0, confirm_failed: 1 });
+        expect(r.outcomes[0]).toMatchObject({ confirmation: "conflict" });
+        const meta = db.rows("processing_cases")[0].metadata as Record<string, unknown>;
+        expect(meta.staff_note).toBe("kept"); // the concurrent writer's key survives
+        expect(esc().confirmed_by_wake_at).toBeUndefined();
+
+        installUpdatedAtTrigger();
+        const next = await run({ wakeClockAt: W3 });
+        expect(next).toMatchObject({ confirmed: 1, confirm_failed: 0 });
+        expect(esc().confirmed_by_wake_at).toBe(W3);
+        expect((db.rows("processing_cases")[0].metadata as Record<string, unknown>).staff_note).toBe("kept");
+    });
+
+    it("a case never updated since it opened (updated_at null) is guarded too", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        db.seed("processing_cases", [{ id: "ca000000-0000-4000-8000-0000000000dd", org_id: ORG, status: "received", updated_at: null,
+            metadata: { [API_UPLOAD_ESCALATION_KEY]: { kind: "api_v1_unfiled_upload", document_id: D(1) } } }]);
+        db.seed("processing_case_sources", [{ org_id: ORG, processing_case_id: "ca000000-0000-4000-8000-0000000000dd", source_kind: "upload", source_id: D(1), role: "primary" }]);
+        const r = await run({ wakeClockAt: W2 });
+        expect(r.outcomes[0]).toMatchObject({ confirmation: "stamped" });
+        expect(esc().confirmed_by_wake_at).toBe(W2);
+    });
+
+    it("a wake that converges on a concurrently committed case is not a later-wake confirmation (it audited its own attempt)", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        db.seed("processing_cases", [{ id: "ca000000-0000-4000-8000-0000000000ff", org_id: ORG, status: "received", metadata: {} }]);
+        (db as unknown as { rpc: unknown }).rpc = async () => {
+            db.seed("processing_case_sources", [{ org_id: ORG, processing_case_id: "ca000000-0000-4000-8000-0000000000ff", source_kind: "upload", source_id: D(1), role: "primary" }]);
+            return { data: null, error: { code: "40001", message: "serialization failure" } };
+        };
+        const r = await run({ wakeClockAt: W2 });
+        expect(r.outcomes[0]).toMatchObject({ outcome: "case_existing" });
+        expect(r.outcomes[0]).not.toHaveProperty("confirmation");
+        expect(r.confirmed).toBe(0);
+        expect(audits).toHaveLength(1); // the attempt was audited: the census's one-audit check sees it
+    });
+
+    it("an annotation repair is not a confirmation", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        db.seed("processing_cases", [{ id: "ca000000-0000-4000-8000-0000000000ee", org_id: ORG, status: "received", metadata: {} }]);
+        db.seed("processing_case_sources", [{ org_id: ORG, processing_case_id: "ca000000-0000-4000-8000-0000000000ee", source_kind: "upload", source_id: D(1), role: "primary" }]);
+        const r = await run({ wakeClockAt: W2 });
+        expect(r).toMatchObject({ repaired: 1, confirmed: 0 });
+        expect(esc().confirmed_by_wake_at).toBeUndefined();
+    });
+
+    it("a filed upload is no longer selected, so no wake after the filing can confirm it", async () => {
+        db.seed("documents", [apiUpload(D(1))]);
+        await run({ wakeClockAt: W1 });
+        db.rows("documents")[0].metadata = { ...(db.rows("documents")[0].metadata as Record<string, unknown>), filing: { key: "late" } };
+        const r = await run({ wakeClockAt: W2 });
+        expect(r.outcomes.map((o) => o.document_id)).not.toContain(D(1));
+        expect(esc().confirmed_by_wake_at).toBeUndefined();
+    });
+});
+
 describe("late filing", () => {
     async function escalated() {
         db.seed("documents", [apiUpload(D(1))]);
