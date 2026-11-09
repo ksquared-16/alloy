@@ -66,11 +66,17 @@ were cross-checked:
 - Run order: step 0 pins `qa_d9_aged_upload_ensure` and `qa_d9_write_fixture_reset` in place of `qa_d9_aged_upload_*`; the §1 resets row names steps 9/10; open items 3 and 5 are closed.
 - New open item 6: the pinned D9-H1 `qa_d9_external_fixture_reset.sql` still names the superseded aged reset in a comment, left as it is to keep that pin.
 
+**Promotion candidate (2026-11-09, run `erun2_1f62f591db430c59`).**
+- Production build rc=0 at `5bd35cbdb` (tree `cceee120…`).
+- The census `c6e455e3…` ran on local `alloy-cert`: 11 checks + 2 data rows; `effects_present` false (local holds no D9 write effects). It ran in a read-only transaction with stand-ins for `document_version_review_events` / `document_subjects`, rolled back.
+- W-C1 timestamps are assessed in `D9-H2-W-C1-TIMESTAMP-ASSESSMENT.md`.
+- Runner and plan pins are handed off in `HOST-CAPACITY-D9-H2-RUNNER-AND-PLAN-PINS.md`.
+
 **Product finding (W-C1).** Upload, filing, archive and restore store their authorizing audit id. Review / validity events
 (`document_version_review_events`), context link / unlink (`document_subjects`) and the 24 h escalation case do **not**:
 for those the census proves audit-first by same-database timestamps and matching document / version / subject, not by id.
 It cannot say which audit row authorized which effect when one document has several. Whether W-C1 accepts that, or the
-product adds the audit id, is Kelly's decision.
+product adds the audit id, is Kelly's decision. The assessment recommends a census-only fix first (option A).
 
 ## 4. Approvals after that (none requested yet)
 
