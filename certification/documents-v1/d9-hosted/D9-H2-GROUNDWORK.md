@@ -35,12 +35,29 @@ Census `gar_d394ba319fd7ab` (`tha_356ae896166dae`, 04:39:20Z), `d9w-precondition
 So W-AR / W-AR2 (archive, restore) and W-ES (24 h handoff) may be asserted live. No migration apply is needed for D9-H2.
 P1 (deployed code) is staging `5db26b46`, which contains #1630; the driver's preflight re-checks `submitDocumentReview` in `/api/v1/openapi`.
 
-## 3. Still to build (Documents, unblocked)
+## 3. Built locally (not run on hosted)
 
-1. Hosted write driver `d9_hosted_write_cert.py` and its local tests, on the `d9_hosted_read_cert.py` pattern (W-S1 … W-C1; `T_W`, `T_WB`, `T_WL`, `T_R`, with `T_A` for verification reads only).
-2. Run order of record for the write plan, the same shape as `D9-H1-HOSTED-RUN-ORDER.md` (pre-write census, ensure, driver, cleanup, write census, resets, close #1, post-close census, close #2).
-3. `qa_d9_aged_upload_ensure` / `_reset` SQL and its runner entry (plan §3, W-ES): Documents authors it, Host Capacity registers it.
-4. A Host Capacity plan request (`documents_d9_write_v1`, or a revision of `documents_d9_read_v1`), naming the five applications, eight installations, the reconciliations and the registered residue census `e7e8d3d1` (it already carries the `d9w_zr_*` checks).
+| Artifact | Commit | sha256 | Local proof |
+|---|---|---|---|
+| Write driver `d9_hosted_write_cert.py` (`preflight → install → docs → certify → cleanup`) | `4d1c6c3bd` | `7c496842…` | 12 tests, green 5/5 (`test_d9_hosted_write_cert.py` `7d4dd8a4…`); 19 planted defects each fail their row |
+| Run order draft `D9-H2-HOSTED-RUN-ORDER.md` | `6ddad4daa` | `138a3fb8…` | review only |
+| `qa_d9_aged_upload_ensure.sql` / `_reset.sql` | `6ddad4daa` | `e4225517…` / `b2718542…` | ran on local `alloy-cert`: guards refuse, reset runs, ensure insert shape checked in a rolled-back transaction |
+
+The driver records contract discrepancies in its docstring (served code decides: collection routes, bare bodies, W-U2/W-U3
+codes split, W-F3 medical = 422, W-L1 200/`related`, W-V1 first change 201, §5 says 4 installations but §2.2 lists 5).
+
+## 3a. Open before a plan request
+
+1. **Cleanup gap.** The audited staff delete answers 404 / 409 for the quarantined upload, the superseded replacement
+   upload and the aged upload, so driver cleanup will report RESIDUE. A registered reset must remove them (extend the
+   aged-upload reset or add one), or the run cannot close ZERO_RESIDUE.
+2. **Staging wake clock.** Vercel crons do not fire on staging (Preview); the external scheduler is unconfirmed, and no
+   governed action calls the wake. W-ES records `not_run` if no case appears; the second-wake row is always `not_run`.
+   Live W-ES needs the scheduler confirmed or a governed wake action (Host Capacity).
+3. **Runner.** The pinned runner `qaDocumentsD9ExternalFixture.mjs` (`5af9cd7a…`) has two fixed modes. The aged-upload
+   modes need a runner change (new sha256, staging merge, re-pin) or a sibling runner.
+4. **W-C1 write census** query not yet written.
+5. `d9-documents-write-scope-cert` registration (its own run).
 
 ## 4. Approvals after that (none requested yet)
 
