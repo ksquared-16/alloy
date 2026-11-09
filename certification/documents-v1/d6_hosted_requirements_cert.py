@@ -1,6 +1,6 @@
 """Documents V1 / D6 — hosted document requirement certification (authz_q1 personas).
 
-Usage: d6_hosted_requirements_cert.py <qa_run_id> ensure|certify|reset
+Usage: d6_hosted_requirements_cert.py <qa_run_id> ensure|certify|walk-seed|reset
 
 A run-scoped HOUSEHOLD FIXTURE (one adult, two children, one case) and run-scoped REQUIREMENTS (keys `qa_<run>_…`, the
 namespace the D6 QA fixture purge is bound to), built and removed only through the deployed product's own audited routes,
@@ -14,8 +14,13 @@ as the run's fixture_admin session:
            organization isolation. Since D7 (migration 20261213090000) the re-review step expects D7 semantics — a
            reason is required to change a decided review, and the history keeps every decision — so this driver
            certifies a build that carries D7; its 73/74 record on 1492a2dd (pre-D7) stands as it was run.
+  walk-seed  after certify, for the browser walk: R_ENR re-published as a required v3 "enrollment form (browser)",
+           Kid One satisfied, Kid Two missing; verified through readiness and work.
   reset    archive → DELETE …/requirements/[id]?qa_run_id=<run> (document_requirement_purge, versions and waivers by
            cascade) → POS delete of the quarantined upload → lead deletion of the household → verifies every id is gone.
+
+Order inside one authz_q1 run: ensure → certify → walk-seed → d6_hosted_browser_walk.mjs → reset. The walk reads the
+fixture walk-seed leaves, so it must run before reset tears it down.
 
 Synthetic names/emails only (qa-d6-<run>-*@example.com); titles and file names carry qa-authz-<run>. Never prints a
 cookie, signed URL, storage path or content.
@@ -465,6 +470,75 @@ if PHASE == "certify":
     json.dump({"run": RUN, "summary": summary, "results": results}, open(RESULTS_FILE, "w"), indent=2)
     print("SUMMARY", json.dumps(summary))
     sys.exit(0 if summary["passed"] == summary["total"] else 1)
+
+# ------------------------------------------------------------------------------------------------------------ walk-seed
+# The browser walk (d6_hosted_browser_walk.mjs) needs a LIVE required child requirement labelled "enrollment form
+# (browser)", satisfied for Kid One and missing for Kid Two. Certify ends with R_ENR revised to an optional v2, which makes
+# no work, so the walk found nothing to list (qar_b74d93c3d853: 2/6). On 1492a2dd (5/8) R_ENR was re-published by hand as a
+# required v3; this phase is that step, written down: a new required version of the same run-keyed R_ENR (so `reset`
+# purges it with the rest), published over the current one by compare-and-swap. Kid One stays satisfied by certify's
+# enrollment upload (re-uploaded only if absent); Kid Two has none. Idempotent: a published "(browser)" required version
+# is left as it is. It then reads readiness and work back and exits non-zero unless the walk's preconditions hold.
+WALK_LABEL = f"{TAG} enrollment form (browser)"
+if PHASE == "walk-seed":
+    ids = load()
+    A = "fixture_admin"
+    c1, c2, hh = ids["child1"], ids["child2"], ids["household"]
+    renr = (ids.get("requirements") or {}).get("enr")
+    if not renr:
+        print("walk-seed: no R_ENR in the state file; run certify first")
+        sys.exit(1)
+    out = {"requirement_id": renr}
+
+    def versions():
+        s, b = call(f"{CFG}/{renr}", A)
+        return s, ((b or {}).get("versions") or []) if isinstance(b, dict) else []
+
+    s, vs = versions()
+    pub = next((v for v in vs if v.get("status") == "published"), None)
+    if s != 200 or not pub:
+        print(f"walk-seed: R_ENR not readable or not published: status={s} published={bool(pub)}")
+        sys.exit(1)
+    if pub.get("label") == WALK_LABEL and pub.get("policy") == "required":
+        print(f"walk-seed: already published as required v{pub.get('version_number')}")
+        out["published_version"] = pub.get("version_number")
+    else:
+        body = {"label": WALK_LABEL, "document_type_key": "enrollment_document", "subject_type": "child", "scope": {"kind": "all"},
+                "timing": {"kind": "within_days", "days": 14}, "policy": "required", "waivable": True,
+                "effective_from": None, "effective_until": None}
+        s, b = j(f"{CFG}/{renr}/draft", A, body, "PUT")
+        vid = (b or {}).get("version_id") if isinstance(b, dict) else None
+        print(f"draft: status={s} code={code_of(b)} version={(b or {}).get('version_number') if isinstance(b, dict) else None}")
+        s, b = j(f"{CFG}/{renr}/validate", A, {"version_id": vid})
+        print(f"validate: status={s} valid={(b or {}).get('valid') if isinstance(b, dict) else None}")
+        s, b = j(f"{CFG}/{renr}/publish", A, {"version_id": vid, "expected_published_version_id": pub["id"]})
+        print(f"publish: status={s} code={code_of(b)}")
+        if s != 200:
+            sys.exit(1)
+        out["published_version"] = (b or {}).get("version_number")
+    if not (ids.get("docs") or {}).get("enr_c1"):
+        s, b, d = upload_for_child(A, c1, "enrollment_document", "enrollment-form")
+        print(f"upload child 1: status={s} has_id={bool(d)}")
+        if d:
+            ids.setdefault("docs", {})["enr_c1"] = d
+            save(ids)
+
+    s, b = call(f"/api/admin/documents/requirements/readiness?subject_type=household&subject_id={hh}", A)
+    states = {}
+    for sub in (((b or {}).get("readiness") or {}).get("subjects") or []) if isinstance(b, dict) else []:
+        for e in sub.get("requirements") or []:
+            if e["requirement_id"] == renr:
+                states[sub["subject"]["subject_id"]] = (e.get("state"), e.get("blocking"))
+    s2, b2 = call("/api/admin/documents/requirements/work", A)
+    rows = {r["id"] for r in ((b2 or {}).get("rows") or [])} if isinstance(b2, dict) else set()
+    out["kid_one"] = states.get(c1)
+    out["kid_two"] = states.get(c2)
+    out["work_kid_one"] = f"document_requirement:{renr}:child:{c1}" in rows
+    out["work_kid_two"] = f"document_requirement:{renr}:child:{c2}" in rows
+    out["ready"] = (s == 200 and s2 == 200 and (states.get(c1) or (None,))[0] == "satisfied"
+                    and states.get(c2) == ("missing", True) and out["work_kid_two"] and not out["work_kid_one"])
+    print("WALK-SEED", json.dumps(out))
+    sys.exit(0 if out["ready"] else 1)
 
 # ----------------------------------------------------------------------------------------------------------------- reset
 if PHASE == "reset":

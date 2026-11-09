@@ -1,5 +1,8 @@
 // Documents V1 / D6 — hosted browser walk of the D6 surfaces, as the QA run's fixture_admin session.
 // Usage: node d6_hosted_browser_walk.mjs <qa_run_id>   (run from web/ so `playwright` resolves)
+// Precondition: `d6_hosted_requirements_cert.py <run> walk-seed` has just exited 0 in the same run (after certify, before
+// reset). It leaves the fixture this walk reads: R_ENR live as a required "enrollment form (browser)", Kid One satisfied,
+// Kid Two missing. Without it W1, W3, W4 and W5 have nothing to find (qar_b74d93c3d853: 2/6).
 // Visible controls only (role/text locators); screenshots in d6-human-qa/. Never prints cookies or URLs with tokens.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(process.cwd() + "/package.json")("playwright");
