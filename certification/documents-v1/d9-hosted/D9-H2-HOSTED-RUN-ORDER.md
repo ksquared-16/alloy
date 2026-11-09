@@ -49,10 +49,10 @@ Sources: the contract `D9-2-3-HOSTED-QA-PLAN.md` (not edited); the D9-H1 order o
 | 4 | Driver `preflight` (P1 served SHA and `submitDocumentReview` in `/api/v1/openapi`; all write applications active and not installed in either org) → `install` (T_W, T_WB, T_WL, T_R, T_A; one credential each, held in memory only) | Documents | §2.2 |
 | 5 | `qa_d9_aged_upload_ensure`: one 25-hour-old unfiled upload in QA Shared, `received_via` = T_W (resolved by the SQL) | Documents (governed reconciliation) | W-ES precondition |
 | 6 | Driver `docs` / `certify`: W-S1 … W-RQ1, W-AR, W-AR2 (P4 holds per `gar_d394ba319fd7ab`), then W-ES: wait for the case (bounded by the clock reading), confirm it in the Processing documents queue as `fixture_admin`, wait for a second wake (no second case), then T_W files the aged upload late → the case closes. `finally` revokes every credential and disconnects every installation | Documents | Cases W-* |
-| 7 | Driver `cleanup`: revoke and disconnect anything still active; delete every `qa-d9w-<run>` document (the aged upload included) through the audited admin delete; verify 404. Verdict `CLEAN` | Documents | Sessions still present |
+| 7 | Driver `cleanup`: revoke and disconnect anything still active; delete every `qa-d9w-<run>` document the audited staff delete accepts, verify 404. The staff delete refuses the quarantined upload and the superseded replacement upload (404) and the aged upload once its case is completed (409): cleanup reports them as remaining, and step 9 removes them. Verdict `CLEAN` or `RESIDUE` listing only those | Documents | Sessions still present |
 | 8 | **Write census (W-C1)**, read-only: every effect in a QA org, and every effect's audit row written first. Query `d9w-write-audit-census.sql` (sha256 in its commit; 11 checks, 2 data rows). **It must run after `certify` and before `cleanup` (step 7)**: the effects it links to their audit rows live on the run's documents, which cleanup deletes, so read after cleanup it passes vacuously (`d9w_c1_effects_present` false, `d9w_c1_effects` counts 0). Proposed: move this step between 6 and 7 | Documents | Plan §4 W-C1 |
-| 9 | `qa_d9_aged_upload_reset`: the W-ES Processing case and, if cleanup missed it, the aged row; asserts none remain | Documents (governed reconciliation) | Needs the run OPEN; before the external reset |
-| 10 | `qa_d9_external_fixture_reset` (refuses while a document still references C1; step 7 and step 9 remove them) | Documents (governed reconciliation) | Needs the run OPEN |
+| 9 | `qa_d9_write_fixture_reset` (supersedes the aged-upload reset): removes every remaining D9 write document in the two QA orgs (the census's `d9w_zr_tagged_documents` predicate: quarantined, superseded and aged included), their versions, subject links and review events, and every escalation or source case; asserts no row residue in the same transaction; then the runner removes the listed stored objects through the Storage API and re-reads `storage.objects` (any left = failure) | Documents (governed reconciliation) | Needs the run OPEN; after step 8, before the external reset |
+| 10 | `qa_d9_external_fixture_reset` (refuses while a document still references C1; steps 7 and 9 remove them) | Documents (governed reconciliation) | Needs the run OPEN |
 | 11 | `environment.qa_run_close` #1 → `ACCESS_CLEAN_FIXTURE_RESIDUE_UNVERIFIED` | Documents (operator approval) | — |
 | 12 | **Post-close residue census** `e7e8d3d1`, a new `tha_`, `census_run_at` after `closed_at`, all 15 true | Documents | Runs after `closed_at` |
 | 13 | `environment.qa_run_close` #2 with `residueCensusRequestId` = step 12 → **`ZERO_RESIDUE`** | Documents (operator approval) | — |
@@ -61,22 +61,27 @@ Any security stop in step 6 still goes through steps 7 and 9–13; access closes
 
 ## 4. Runner entries Host Capacity must add (proposed)
 
-On the D9-H1 pattern (`lib/reconciliation-registry.mjs`), fixture safety `qa_documents_d9_external`, plan as registered:
+Sibling runner `web/scripts/qaDocumentsD9WriteFixture.mjs` (sha256 `7f071160d9b73a6db49ce3c70ca531b8ad227bc2eb6735a034d4bb42b7d13828`); the pinned D9-H1 runner
+`qaDocumentsD9ExternalFixture.mjs` (`5af9cd7a…`) is unchanged. Same gates and inputs (`psql -v org=… -v qa_run_id=…`).
+On the D9-H1 pattern (`lib/reconciliation-registry.mjs`): environments `staging`; fixture safety `qa_documents_d9_external`;
+`qa_plan` the write plan; `purpose` `documents_d9_external_write`; `apply_env` `DRY_RUN=0, CERT_FIXTURE_APPLY=1, SYNTHETIC_ONLY=1`;
+frozen context `ORG_ID` = QA Shared `4acc9386-c485-486f-aa1f-05d83499d142`; `QA_RUN_ID` from the ledger; `supportsDryRun: false`.
 
-| key | runner | fixture | frozen context |
-|---|---|---|---|
-| `qa_d9_aged_upload_ensure` | a runner mode such as `dev:qa:documents-d9-aged-upload-ensure` | `d9-hosted/qa_d9_aged_upload_ensure.sql` | `ORG_ID` = QA Shared `4acc9386-…`; `QA_RUN_ID` from the ledger |
-| `qa_d9_aged_upload_reset` | `dev:qa:documents-d9-aged-upload-reset` | `d9-hosted/qa_d9_aged_upload_reset.sql` | same |
+| key | runner (npm script) | fixture | fixture sha256 | result shape |
+|---|---|---|---|---|
+| `qa_d9_aged_upload_ensure` | `dev:qa:documents-d9-aged-upload-ensure` | `certification/documents-v1/d9-hosted/qa_d9_aged_upload_ensure.sql` | `e3f3ee30e3eaeba2c956471a27a44150fc122df28ec7665731bf90fad71a1c3b` | `seeded` / `failed` |
+| `qa_d9_write_fixture_reset` | `dev:qa:documents-d9-write-fixture-reset` | `certification/documents-v1/d9-hosted/qa_d9_write_fixture_reset.sql` | `48845473fde8593206e4dac1c81dbabb0f08187cdfd67b5e346475d99ec17d94` | `reset` / `failed` |
 
-The pinned runner `web/scripts/qaDocumentsD9ExternalFixture.mjs` (`5af9cd7a…`) has a fixed mode table of the two
-external fixtures, so the new modes need a runner change (a new sha256 and a staging merge) or a sibling runner. The
-SQL takes only `:org` and `:qa_run_id`, as the existing runner passes them (`psql -v org=… -v qa_run_id=…`). T_W is
-resolved inside the SQL, so no new runner input is needed.
+`qa_d9_write_fixture_reset` also needs the trusted env's `SUPABASE_URL` (the staging project) and `SUPABASE_SERVICE_ROLE_KEY`
+in the runner's environment: SQL cannot delete stored bytes (`storage.objects` has `protect_objects_delete`; the Storage
+API is the only removal path). With objects to remove and no key, the runner fails `storage_unreachable` after the rows
+are gone; a rerun with the key removes the bytes (rows already absent, so it lists only orphans under the census predicate).
+The runner must reach staging through a merge before it can be pinned (its sha256 is read on `origin/staging`).
 
 ## 5. Open
 
 1. Is the staging external scheduler running? (`scheduled_work_clock` census; step 2.)
 2. If it is not, a governed wake action (Host Capacity), or W-ES recorded as not run.
 3. The write driver's `install` / `certify` split (§2), and the W-C1 census query.
-4. Runner change versus sibling runner for the aged-upload modes (§4).
-5. The admin delete of a document whose object never existed (the aged upload) is expected to succeed. Storage `remove` of a missing path is not an error. Confirm against the route; if it refuses, step 9's reset removes the row instead.
+4. ~~Runner change versus sibling runner~~: sibling runner (§4); needs a staging merge before pinning.
+5. The admin delete of a document whose object never existed (the aged upload) is expected to succeed. Storage `remove` of a missing path is not an error. Confirm against the route; if it refuses, step 9's reset removes the row instead (it does in any case).

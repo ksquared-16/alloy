@@ -13,7 +13,7 @@
 -- The D2 insert trigger adds its version 1 row, exactly as it does for the real upload.
 -- Differences from a real upload, on purpose:
 --   * no upload_audit_event_id: no document_upload_authorized audit is forged for an upload that never happened;
---   * fixture markers metadata.fixture_family / metadata.qa_run_id, so the reset removes only this row;
+--   * fixture markers metadata.fixture_family / metadata.qa_run_id (removed by qa_d9_write_fixture_reset with the other D9 write rows);
 --   * NO STORAGE OBJECT. SQL cannot write bucket bytes. Nothing on the W-ES path reads them: the wake reads only the
 --     row (source, filing, received_via, status, created_at) and opens the case; a late new_document filing by T_W
 --     copies no object (only new_version filings copy). The plan's "object uploaded by the same reconciliation" is
@@ -109,7 +109,7 @@ end $$;
 select exists (select 1 from public.documents d where d.id = :'aged'::uuid and coalesce(d.metadata->>'qa_run_id', '') <> :'qa_run_id') as aged_other_run \gset
 \if :aged_other_run
 do $$ begin
-  raise exception 'the D9 aged upload belongs to another QA run; run qa_d9_aged_upload_reset first';
+  raise exception 'the D9 aged upload belongs to another QA run; run qa_d9_write_fixture_reset first';
 end $$;
 \endif
 
